@@ -22,7 +22,6 @@ const applyFlow = readHook("useApplyFlow.ts");
 const answers = readHook("useApplicationAnswers.ts");
 const cover = readHook("useCoverLetter.ts");
 const polish = readHook("usePolishPipeline.ts");
-const polishServer = readFileSync(new URL("../../../server/ai/polish.ts", import.meta.url), "utf8");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
 const prepareTab = readFileSync(new URL("../../sections/tabs/PrepareTab.tsx", import.meta.url), "utf8");
@@ -359,16 +358,6 @@ assert.doesNotMatch(
 );
 assert.match(polish, /polishRunLockRef/, "Polish has a synchronous double-run lock");
 assert.match(polish, /inputFingerprintRef\.current = inputFingerprint/, "Polish tracks live semantic inputs");
-assert.match(
-  polish,
-  /reviewTarget: snapshot\.target,[\s\S]{0,100}?snapshot\.target === "proposal" \? snapshot\.suggestions : \[\]/,
-  "Review identifies whether it audits the current draft or the Tailor proposal"
-);
-assert.match(
-  polishServer,
-  /reviewTarget === "proposal" && Array\.isArray\(body\.suggestedChanges\)[\s\S]{0,100}?: \[\]/,
-  "the server never reapplies prior suggestions when reviewing the current edited draft"
-);
 
 // Settings owns one persisted Resume workflow choice. Every visible Polish
 // action must run that same selection; no document-local override may silently
@@ -381,7 +370,7 @@ assert.doesNotMatch(
 );
 assert.match(
   app,
-  /onPolish=\{\(\) => \{[\s\S]{0,160}?lastResumePolishModeRef\.current = "manual";[\s\S]{0,80}?void handlePolish\(\);[\s\S]{0,20}?\}\}/,
+  /onPolish=\{\(\) => void handlePolish\(\)\}/,
   "the Resume document action dispatches the current Settings-owned workflow"
 );
 assert.doesNotMatch(
@@ -799,7 +788,7 @@ assert.match(
 );
 assert.match(
   prepareTab,
-  /Candidate gaps[\s\S]{0,700}?candidateGaps/,
+  /Candidate gaps[\s\S]{0,700}?reviewGaps/,
   "Prepare exposes candidate-to-job gaps beside the prepared brief"
 );
 assert.equal(
@@ -861,13 +850,13 @@ assert.match(
 );
 assert.match(
   prepareDecisionCheckpoint,
-  /assessment\.strengths[\s\S]{0,900}?<strong>Core gaps<\/strong>[\s\S]{0,900}?eligibilityQuestions/,
-  "Initial Fit separates strengths, core requirement gaps, and eligibility questions"
+  /initialFit\.strengths[\s\S]{0,900}?<strong>Blockers<\/strong>[\s\S]{0,900}?initialFit\.gaps/,
+  "Initial Fit distinguishes hard blockers from strengths and lower-severity gaps"
 );
 assert.match(
-  prepareDecisionCheckpoint,
-  /requirement\.importance === "CORE" && requirement\.coverage !== "COVERED"/,
-  "the decision checkpoint derives core gaps from the canonical requirement ledger"
+  app,
+  /blockers: liveInitialFitResult\.review\.gaps[\s\S]{0,180}?gap\.severity === "BLOCKER"[\s\S]{0,260}?gap\.severity !== "BLOCKER"/,
+  "the decision checkpoint derives blockers and general gaps from disjoint severity groups"
 );
 assert.ok(
   app.indexOf("const savedInitialFitMatchesApplication =") <
@@ -886,13 +875,13 @@ assert.match(
 );
 assert.match(
   prepareApplicationRail,
-  /\{submissionAssessment \? \([\s\S]{0,300}?Resume readiness[\s\S]{0,800}?Current review[\s\S]{0,200}?Historical review/,
-  "Prepare keeps post-polish submission readiness separate from Initial Fit"
+  /\{fitAssessment \? \([\s\S]{0,300}?Proposal fit[\s\S]{0,800}?Current final audit[\s\S]{0,200}?Historical final audit/,
+  "Prepare keeps the post-polish recruiter judgment separate as optional Proposal fit"
 );
 assert.match(
   app,
-  /const prepareSubmissionAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
-  "Prepare prefers current submission readiness and otherwise labels a matching saved assessment as historical"
+  /const prepareFitAssessment =[\s\S]{0,900}?provenance: "current"[\s\S]{0,900}?provenance: "saved"/,
+  "Prepare prefers the current recruiter audit and otherwise labels a matching saved audit as historical"
 );
 const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
@@ -1263,7 +1252,7 @@ assert.match(
 );
 assert.match(
   variantRecommendation,
-  /if \(best\.matchWeight <= 0 \|\| lead < minimumLead\) return null/,
+  /if \(best\.score <= 0 \|\| lead < minimumLead\) return null/,
   "a tie or negligible edge is not presented as a recommendation"
 );
 assert.match(
@@ -1571,6 +1560,11 @@ assert.match(
   "re-Apply preserves unrelated tracker fields before overlaying the complete prepared snapshot"
 );
 assert.match(
+  applyFlow,
+  /:\s*existing\?\.review\s*\?\s*\{\s*review:\s*existing\.review\s*\}/,
+  "re-Apply without a fresh Review preserves the saved candidate-gap snapshot"
+);
+assert.match(
   app,
   /hidden=\{activeOutputTab !== "materials"\}/,
   "Materials stays mounted and is semantically hidden when another output tab is active"
@@ -1629,17 +1623,17 @@ assert.match(
 
 assert.match(
   reviewRail,
-  /const invalidDropCount = Math\.max\(0, \(result\.droppedSuggestions\?\.total \?\? 0\) - unsupportedDropCount\)[\s\S]*if \(!assessment && !suggestions\.length && unsupportedDropCount === 0 && invalidDropCount === 0\) return null/,
+  /const invalidDropCount = Math\.max\(0, \(result\.droppedSuggestions\?\.total \?\? 0\) - unsupportedDropCount\)[\s\S]*if \(!sr && !suggestions\.length && unsupportedDropCount === 0 && invalidDropCount === 0\) return null/,
   "the review rail remains visible for all-drop results and separates invalid response-shape drops"
 );
 assert.match(
   reviewRail,
-  /\{unsupportedDropCount\} AI[\s\S]*wording was not supported by your resume or honest context/,
+  /\{unsupportedDropCount\} AI[\s\S]*wording wasn.t supported by your resume or honest context/,
   "unsupported AI edits remain visible as evidence-grounding rejections"
 );
 assert.match(
   reviewRail,
-  /\{invalidDropCount\} AI[\s\S]*not be applied safely/,
+  /\{invalidDropCount\} \{unsupportedDropCount > 0 \? "additional AI " : "AI "\}[\s\S]*not be applied safely/,
   "invalid AI edits are visible with grammatical copy whether or not unsupported edits also exist"
 );
 assert.doesNotMatch(
@@ -1863,23 +1857,8 @@ assert.match(
 );
 assert.match(
   applyFlow,
-  /result\?\.tailored === true && usedBase[\s\S]{0,160}?undefined[\s\S]{0,160}?result\?\.submissionAssessment/,
-  "a rejected Tailor proposal cannot attach its submission assessment to the base resume"
-);
-assert.match(
-  applyFlow,
-  /resumeUsed: usedBase[\s\S]{0,220}?submissionAssessment:[\s\S]{0,220}?resumePolishMode: usedBase[\s\S]{0,80}?undefined/,
-  "Apply persists readiness and polish-mode attribution against the resume that actually went out"
-);
-assert.match(
-  polish,
-  /polishedText:[\s\S]{0,120}?source: "ai",\s*tailored: true/,
-  "Tailor results carry explicit in-memory provenance"
-);
-assert.match(
-  polish,
-  /snapshot\.target === "current"[\s\S]{0,420}?source: "ai",\s*tailored: false/,
-  "Review-only results remain classified as the audited base resume"
+  /\.\.\.\(materialSelection\.resume[\s\S]{0,500}?fitScore: headlineScore[\s\S]{0,500}?resumeUsed:/,
+  "re-Apply updates resume-derived fit metadata only when Resume is included"
 );
 assert.match(
   answers,
@@ -1903,13 +1882,13 @@ assert.match(
 );
 assert.match(
   app,
-  /const prepareSubmissionAssessment =[\s\S]{0,260}?provenance: "current"[\s\S]{0,220}?provenance: "saved"/,
-  "Prepare distinguishes a current submission assessment from a historical saved snapshot"
+  /const prepareReviewGapsProvenance = currentReviewAvailable[\s\S]{0,180}?"saved"[\s\S]{0,100}?"none"/,
+  "Prepare distinguishes a current recruiter audit from an explicitly historical saved snapshot"
 );
 assert.match(
   prepareTab,
-  /candidateGapsProvenance === "current"[\s\S]{0,140}?No candidate gaps identified by the current Initial Fit assessment/,
-  "a current Initial Fit assessment with zero gaps is not presented as if no assessment ran"
+  /reviewGapsProvenance === "current"[\s\S]{0,140}?No candidate gaps identified by the current recruiter audit/,
+  "a current recruiter audit with zero gaps is not presented as if no audit ran"
 );
 assert.match(
   app,

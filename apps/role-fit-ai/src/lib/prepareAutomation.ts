@@ -1,52 +1,32 @@
-import type {
-  FitAssessment,
-  FitVerdict
-} from "../../shared/fitAssessmentContract.ts";
-import { FIT_VERDICT_RANK } from "./fitVerdict.ts";
+import type { StrictReviewVerdict } from "../resume/types.ts";
 
 export const AUTO_POLISH_THRESHOLDS = [
-  "OFF",
+  "off",
   "STRETCH",
-  "REASONABLE_FIT",
-  "STRONG_FIT"
+  "REASONABLE FIT",
+  "STRONG FIT"
 ] as const;
 
 export type AutoPolishThreshold = (typeof AUTO_POLISH_THRESHOLDS)[number];
 
 const AUTO_POLISH_THRESHOLD_SET: ReadonlySet<unknown> = new Set(AUTO_POLISH_THRESHOLDS);
 
-export type AutoPolishDecision =
-  | { action: "RUN"; reason: string }
-  | { action: "WAIT"; reason: string }
-  | { action: "SKIP"; reason: string };
+// Higher is a stronger fit. The comparison stays categorical so automation
+// follows the model-authored verdict instead of inventing a second score rule.
+const VERDICT_RANK: Record<StrictReviewVerdict, number> = {
+  "DON'T APPLY": 0,
+  STRETCH: 1,
+  "REASONABLE FIT": 2,
+  "STRONG FIT": 3
+};
 
 export function isAutoPolishThreshold(value: unknown): value is AutoPolishThreshold {
   return AUTO_POLISH_THRESHOLD_SET.has(value);
 }
 
 export function meetsAutoPolishThreshold(
-  verdict: FitVerdict,
+  verdict: StrictReviewVerdict,
   threshold: AutoPolishThreshold
 ): boolean {
-  return threshold !== "OFF" && FIT_VERDICT_RANK[verdict] >= FIT_VERDICT_RANK[threshold];
-}
-
-export function decideAutoPolish(
-  assessment: FitAssessment,
-  threshold: AutoPolishThreshold
-): AutoPolishDecision {
-  if (threshold === "OFF") return { action: "SKIP", reason: "Disabled in Settings." };
-  if (assessment.confidence === "LOW") {
-    return { action: "WAIT", reason: "Initial Fit has low confidence; review it before polishing." };
-  }
-  if (assessment.eligibility.status === "NOT_SATISFIED") {
-    return { action: "SKIP", reason: "A required eligibility condition is not satisfied." };
-  }
-  if (assessment.eligibility.status === "UNCERTAIN") {
-    return { action: "WAIT", reason: "Confirm the unresolved eligibility conditions before polishing." };
-  }
-  if (!meetsAutoPolishThreshold(assessment.verdict, threshold)) {
-    return { action: "SKIP", reason: "Initial Fit is below the configured threshold." };
-  }
-  return { action: "RUN", reason: "The configured fit threshold was met." };
+  return threshold !== "off" && VERDICT_RANK[verdict] >= VERDICT_RANK[threshold];
 }

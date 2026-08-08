@@ -33,7 +33,7 @@ export const ACTION_VERBS = [
   // Strong action verbs the local polisher's chooseActionVerb can emit (and that
   // recur in real bullets). Listed here so startsWithAction credits them in
   // bulletQuality — otherwise the polisher's own "Deployed …"/"Resolved …"
-  // output, and genuine bullets led by these verbs, classified as having no action verb.
+  // output, and genuine bullets led by these verbs, scored as having no action verb.
   "automated",
   "containerized",
   "coordinated",
@@ -184,7 +184,7 @@ const STOP_WORDS = new Set([
   "your",
   // Generic JD-prose filler that is not a skill and forms no useful skill bigram.
   // Excluding it keeps the editor's mechanical missing-keyword hints from being
-  // padded with prose noise. These hints do not assess or review the resume.
+  // padded with prose noise. These hints do not score or review the resume.
   "ability",
   "code",
   "deep",
@@ -205,7 +205,7 @@ const STOP_WORDS = new Set([
   "team",
   "teams",
   "within",
-  // The stored/matched job text is this app's OWN jobExtract analysis output
+  // The stored/scored job text is this app's OWN jobExtract analysis output
   // (src/lib/jobExtract.ts), not raw prose: 66/67 saved JDs literally contain the
   // section headers "Tech Stack / Keywords:", "Seniority Signals:", "Domain
   // Signals:", and "Company / Product Context:". Those scaffold tokens are NOT
@@ -271,7 +271,7 @@ export function extractKeywords(source: string, limit = 18) {
     bump(word, 1);
     // Capture multi-word skills ("machine learning", "project management",
     // "incident response") that single-token frequency misses — this is what
-    // keeps matching useful for roles outside the built-in web-dev catalog.
+    // makes the score work for roles outside the built-in web-dev catalog.
     const next = tokens[i + 1];
     if (next && isContentWord(next)) bump(`${word} ${next}`, 1.5);
   }

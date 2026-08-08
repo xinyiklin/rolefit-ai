@@ -2,8 +2,10 @@ import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
 import type { Application } from "../../../hooks/useApplications";
+import { VERDICT_LABEL, verdictPillClass } from "../../../lib/fitVerdict";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
-import type { SubmissionAssessment } from "../../../../shared/fitAssessmentContract.ts";
+import { displayVerdictReason } from "../../../lib/verdictReason";
+import type { StrictReviewVerdict } from "../../../resume/types";
 
 // Preparation is one of the readiness checks, so its progress earns rail space
 // only while something is actually happening or a message is outstanding.
@@ -12,15 +14,17 @@ export type PrepareActivity = {
   message: string;
 };
 
-export type PrepareSubmissionAssessment = {
-  assessment: SubmissionAssessment;
+export type PrepareFitAssessment = {
+  verdict: StrictReviewVerdict;
+  score: number | null;
+  reason: string;
   provenance: "current" | "saved";
 };
 
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
   decisionCheckpoint: ReactNode;
-  submissionAssessment: PrepareSubmissionAssessment | null;
+  fitAssessment: PrepareFitAssessment | null;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -31,7 +35,7 @@ type PrepareApplicationRailProps = {
 export function PrepareApplicationRail({
   activity,
   decisionCheckpoint,
-  submissionAssessment,
+  fitAssessment,
   linkedApplication,
   readiness,
   isApplying,
@@ -59,18 +63,19 @@ export function PrepareApplicationRail({
 
         {decisionCheckpoint}
 
-        {submissionAssessment ? (
+        {fitAssessment ? (
           <div className="prepare-fit">
-            <p className="prepare-page__eyebrow">Resume readiness</p>
+            <p className="prepare-page__eyebrow">Proposal fit</p>
             <div className="prepare-fit__summary">
-              <strong className="verdict-pill">
-                {submissionAssessment.assessment.readiness.replace(/_/g, " ").toLowerCase()}
+              <strong className={`verdict-pill ${verdictPillClass(fitAssessment.verdict)}`}>
+                {VERDICT_LABEL[fitAssessment.verdict]}
               </strong>
               <span>
-                {submissionAssessment.provenance === "current" ? "Current review" : "Historical review"}
+                {fitAssessment.score === null ? "" : `${fitAssessment.score}/100 · `}
+                {fitAssessment.provenance === "current" ? "Current final audit" : "Historical final audit"}
               </span>
             </div>
-            <p>{submissionAssessment.assessment.summary}</p>
+            {fitAssessment.reason ? <p>{displayVerdictReason(fitAssessment.reason)}</p> : null}
           </div>
         ) : null}
 

@@ -32,8 +32,8 @@ for provider, prompt, sanitizer, and review work.
   and capped per application. Every byte served back is a download (narrow
   content type, `nosniff`, no inline render).
   Application records persist Initial Fit as a compact historical checkpoint
-  separate from the later submission-readiness assessment. Its sanitizer must
-  reject malformed categorical assessments, unsafe resume names, and
+  separate from the later review/base/tailored comparison. Its sanitizer must
+  reject non-integer or band-inconsistent scores, unsafe resume names, and
   noncanonical timestamps without dropping the otherwise valid application.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion

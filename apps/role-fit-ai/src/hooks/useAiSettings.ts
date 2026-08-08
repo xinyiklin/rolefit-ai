@@ -28,12 +28,13 @@ export function useAiSettings() {
     () => saved.stageCustomInstructions ?? {}
   );
   // Default "tailor" (no review) — preserve the user's choice once they opt in.
+  // Legacy strictReview boolean is migrated to polishStages in settings.ts coerce().
   const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "both");
   const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.resumeAutoPolishThreshold ?? "OFF"
+    saved.resumeAutoPolishThreshold ?? "off"
   );
   const [coverAutoPolishThreshold, setCoverAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.coverAutoPolishThreshold ?? "OFF"
+    saved.coverAutoPolishThreshold ?? "off"
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
@@ -158,8 +159,8 @@ export function useAiSettings() {
     setCustomInstructions("");
     setStageCustomInstructions({});
     setPolishStages("both");
-    setResumeAutoPolishThreshold("OFF");
-    setCoverAutoPolishThreshold("OFF");
+    setResumeAutoPolishThreshold("off");
+    setCoverAutoPolishThreshold("off");
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork(true);
     setRequiresSponsorship(false);

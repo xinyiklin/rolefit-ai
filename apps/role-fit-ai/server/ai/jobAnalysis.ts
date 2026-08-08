@@ -245,7 +245,7 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
   return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
 }
 
-// workAuth is an eligibility fact that can yield NOT_SATISFIED and LIMITED_FIT;
+// workAuth is an ELIGIBILITY-BLOCKER fact — it can force a DON'T APPLY verdict and
 // persists into the application tracker — so it gets the same anti-fabrication
 // discipline as every other analyzed field (the old code passed it through
 // ungrounded). Keep it only when the SPECIFIC authorization class the model named

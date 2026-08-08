@@ -1,12 +1,12 @@
 // Probes for the shared section model (src/resume/sections.ts) — the single source
-// of truth the client analyzer/parser and the server parser all import. It is plain
+// of truth the client scorer/parser and the server parser all import. It is plain
 // ESM, so this eval imports it directly (no esbuild bundle needed).
 //
 //   node src/resume/__evals__/sections-eval.mjs
 //
 // The load-bearing invariant: a SUB-SECTION (Coursework/Awards/…) is a section
 // HEADER for the parser (so it splits into its own editor section) but is NOT a
-// TOP-LEVEL header for the analyzer (so a dated sub-section under Education never
+// TOP-LEVEL header for the scorer (so a dated sub-section under Education never
 // clears the date-shield and inflates seniority).
 
 import { BULLET_GLYPHS, inferSectionType, isEducationHeading, isSectionHeader, isSummaryHeading, isTopLevelSectionHeader } from "../sections.ts";
@@ -22,7 +22,7 @@ const checks = [
   ["job-title collision is NOT a header", !isSectionHeader("Education Coordinator")],
   [">4-word line is NOT a header", !isSectionHeader("Software Engineering Experience at BigCo")],
 
-  // ── isTopLevelSectionHeader (analyzer/rewrite boundary: top-level ONLY)
+  // ── isTopLevelSectionHeader (scorer/rewrite boundary: top-level ONLY)
   ["top-level experience", isTopLevelSectionHeader("EXPERIENCE")],
   ["top-level experience variant", isTopLevelSectionHeader("Employment History")],
   ["top-level education", isTopLevelSectionHeader("Education")],
@@ -42,7 +42,7 @@ const checks = [
   ["experience is standard", inferSectionType("Experience") === "standard"],
   ["education is standard", inferSectionType("Education") === "standard"],
 
-  // ── isEducationHeading (analyzer date-shield trigger)
+  // ── isEducationHeading (scorer date-shield trigger)
   ["education heading", isEducationHeading("Education")],
   ["ALL-CAPS education", isEducationHeading("EDUCATION")],
   ["academic background variant", isEducationHeading("Academic Background")],

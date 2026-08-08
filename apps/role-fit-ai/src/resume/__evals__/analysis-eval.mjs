@@ -89,7 +89,7 @@ assert.deepEqual(analyzeResumeText("", ""), { missingKeywords: [], trimmedBullet
   assert.deepEqual(
     Object.keys(result).sort(),
     ["missingKeywords", "trimmedBulletGroups"],
-    "analyzeResumeText returns only the two mechanical fields — no fit verdict, coverage, or recommendation (Initial Fit's sole responsibility)"
+    "analyzeResumeText returns only the two mechanical fields — no score, verdict, coverage, or recommendation (AI Review's sole responsibility)"
   );
 }
 

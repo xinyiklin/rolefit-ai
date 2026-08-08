@@ -1,9 +1,9 @@
 // Live tailor quality + consistency harness: drives the real handlePolish
 // route N times with IDENTICAL input (the local base resume vs a captured job
-// description) and grades the runs on consistency, style, grounding, and
-// submission readiness.
+// description) and grades the runs on consistency, style, grounding, and fit
+// movement.
 //
-// Privacy: prints ONLY shape-level metrics (counts, categorical states, target ids,
+// Privacy: prints ONLY shape-level metrics (counts, scores, target ids,
 // flagged tokens). Full route responses are written to the gitignored
 // workspace/tailor-eval/ for manual inspection. Never prints resume
 // or JD text.
@@ -21,7 +21,7 @@
 //
 // Reading the output:
 //   - suggestionCounts + targetJaccard: do runs converge on the same weak spots
-//   - readiness values: submission-review consistency
+//   - aiTailored spread: reviewer scoring consistency
 //   - banned / suspectNewTokens: brochure vocabulary / possible ungrounded terms
 //     (suspect tokens are heuristic — verbs like "Hardened" are benign; any
 //     TECH-looking token here warrants opening the saved run JSON)
@@ -124,7 +124,7 @@ const TECH_TOKEN = /\b[A-Z][A-Za-z0-9.#+]{1,14}(?:\.[a-z]{2,3})?\b/g;
 const COMMON_WORDS = /^(The|And|For|With|Via|Into|From|When|While|Across|Built|Designed|Implemented|Reduced|Added|Migrated|Automated|Debugged|Hardened|Gathered|Collected|Translated|Coordinated|Supported|Worked|Led|Wrote|Tuned|Using|Per|Each|That|This|Then|Over|Under|All|Its|Their|Real|New|More|Most|One|Two|Single|Page|Data|Code|Team|User|Users|Job|Jobs|Add|Metric)$/i;
 
 async function runOnce(n) {
-  const req = mockReq({ provider: PROVIDER, model: MODEL, tailorScope: scope, jobText, stages: "both", includeCoverLetter: false, honestContext: "", customInstructions: "" });
+  const req = mockReq({ provider: PROVIDER, model: MODEL, tailorScope: scope, jobText, strictReview: true, includeCoverLetter: false, honestContext: "", customInstructions: "" });
   const res = mockRes();
   const t0 = Date.now();
   await handlePolish(req, res);
@@ -152,9 +152,11 @@ async function runOnce(n) {
     placeholders: (allProposed.match(/\[add[^\]]*\]/gi) ?? []).length,
     suspectNewTokens,
     evidenceAll: sugg.every((s) => (s.evidence ?? "").length > 0),
-    readiness: data.submissionAssessment?.readiness ?? null,
-    missingEvidence: (data.submissionAssessment?.missingEvidence ?? []).slice(0, 8),
-    unsupportedClaimCount: (data.submissionAssessment?.unsupportedClaims ?? []).length,
+    aiBase: data.aiScore?.base ?? null,
+    aiTailored: data.aiScore?.tailored ?? null,
+    verdict: data.strictReview?.verdict ?? null,
+    gapKeywords: (data.strictReview?.gaps ?? []).map((g) => g.gap).slice(0, 8),
+    riskFlagCount: (data.strictReview?.riskFlags ?? []).length,
     changeSummaryCount: (data.changeSummary ?? []).length
   };
 }
@@ -179,15 +181,14 @@ if (ok.length >= 2) {
       jac.push(Math.round(100 * inter / Math.max(1, new Set([...A, ...B]).size)));
     }
   }
-  const readinesses = ok.map((r) => r.readiness ?? "missing");
-  const readinessStates = new Set(readinesses);
+  const tailored = ok.map((r) => r.aiTailored).filter((v) => v !== null);
+  const spread = tailored.length ? Math.max(...tailored) - Math.min(...tailored) : null;
   const bannedAny = ok.some((r) => r.banned.length);
   console.log(
     `\nConsistency: targetJaccard%=[${jac.join(",")}] suggestionCounts=[${ok.map((r) => r.suggestions).join(",")}] ` +
-    `readiness=[${readinesses.join(",")}]`
+    `aiTailored=[${tailored.join(",")}] spread=${spread ?? "n/a"} verdicts=[${ok.map((r) => r.verdict).join(",")}]`
   );
   if (bannedAny) { console.log("FAIL: banned brochure vocabulary in proposed text"); exitCode = 1; }
-  if (readinesses.includes("missing")) { console.log("FAIL: submission assessment missing"); exitCode = 1; }
-  if (readinessStates.size > 1) { console.log("WARN: submission readiness varied across identical runs"); }
+  if (spread !== null && spread > 10) { console.log(`WARN: aiTailored spread ${spread} > 10`); }
 }
 process.exit(exitCode);

@@ -50,11 +50,9 @@ own a second resume model, editor, layout engine, or PDF implementation.
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
-- Initial Fit produces the sole categorical `FitAssessment`: verdict,
-  confidence, eligibility, requirement ledger, and advisory recommendation.
-  The server validates and grounds it; deterministic policy alone decides
-  automation. Post-polish Review produces a separate `SubmissionAssessment`
-  about document readiness and never changes candidate fit.
+- AI Review is the sole owner of fit score, coverage, verdict, reason, gaps,
+  and recommendation. The server validates the response contract and
+  anti-fabrication-sensitive edits; it does not calculate a replacement review.
 - A failed Job analysis, Tailor, or Review stage stops the selected pipeline.
   Job analysis may retain a deterministic local brief for inspection, but a
   failed AI-backed analysis cannot auto-launch Tailor or Review.
@@ -142,10 +140,10 @@ or workspace state, keep it here and expose the smallest host seam instead.
   post-commit export; the pre-commit naming prompt remains interactive.
 - Extension intake always requires AI-backed job analysis and lands on Prepare.
   A successful fresh preparation then follows the ordinary required continuation:
-  safely settle the selected resume, run one categorical Initial Fit assessment against the whole
+  safely settle the selected resume, run one-score Initial Fit against the whole
   visible resume, and independently evaluate the Resume and Cover Letter
   automation thresholds. Initial Fit reuses Recruiter Audit configuration but is
-  persisted separately from the post-polish readiness review. The extension
+  persisted separately from the post-polish review/comparison. The extension
   never supplies its own automation command. The app may rank actual saved
   resume and cover-letter contents against weighted prepared-job sections and
   auto-select a meaningful unique winner while its editor is clean and not

@@ -78,7 +78,7 @@ V3 client of the local RoleFit server.
 - Request only permissions required by the current import/container behavior.
   The keyboard path added none.
 - The extension may extract the visible posting and query duplicate status. It
-  never reads the workspace resume and never produces a fit assessment.
+  never reads the workspace resume and never calculates a fit score/verdict.
 - Keep all server access fixed to local RoleFit routes. The localhost server
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an

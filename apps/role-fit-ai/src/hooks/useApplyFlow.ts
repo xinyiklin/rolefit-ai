@@ -24,7 +24,7 @@ import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
-import type { OutputTab } from "../sections/shared";
+import type { FitComparison, OutputTab } from "../sections/shared";
 import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
@@ -48,9 +48,10 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
+  headlineScore: number | null;
+  fitComparison: FitComparison | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
   initialFitAudit: ApplicationInitialFitAudit | null;
-  resumePolishMode?: Application["resumePolishMode"];
   applications: Application[];
   linkedApplicationId: string | null;
   findForTarget: (url: string, desc: string) => Application | undefined;
@@ -98,9 +99,10 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
+  headlineScore,
+  fitComparison,
   pipelineAiUsage,
   initialFitAudit,
-  resumePolishMode,
   applications,
   linkedApplicationId,
   findForTarget,
@@ -258,18 +260,13 @@ export function useApplyFlow({
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
     setIsCommittingApply(true);
     setApplySaveError("");
+    const sr = result?.strictReview;
     const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
     const acceptedStructuredSuggestions =
       hasStructuredSuggestions &&
       Boolean(result?.polishedText) &&
       normalizeDocumentSnapshot(currentResumeText) !== normalizeDocumentSnapshot(result?.polishedText ?? "");
-    const usedBase =
-      result?.tailored !== true ||
-      !result.polishedText ||
-      (hasStructuredSuggestions && !acceptedStructuredSuggestions);
-    const submissionAssessment = result?.tailored === true && usedBase
-      ? undefined
-      : result?.submissionAssessment;
+    const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
     const materialSelection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     // A duplicate scan in handleApply may have already identified which record
     // this apply should merge into (exact/high confidence, user-confirmed when
@@ -345,11 +342,42 @@ export function useApplyFlow({
       initialFitAudit: initialFitAudit ?? undefined,
       ...(materialSelection.resume
         ? {
+            fitScore: headlineScore,
+            baseFitScore: fitComparison?.base ?? null,
+            tailoredFitScore: fitComparison?.tailored ?? null,
+            fitScoreSource: fitComparison?.source ?? null,
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
-            submissionAssessment: submissionAssessment ?? undefined,
-            resumePolishMode: usedBase
-              ? undefined
-              : resumePolishMode ?? existing?.resumePolishMode
+            missingRequiredSkills: result?.missingRequiredSkills?.length
+              ? result.missingRequiredSkills
+              : undefined,
+            ...(sr
+              ? {
+                  review: {
+                    verdict: sr.verdict,
+                    verdictReason: sr.verdictReason,
+                    riskFlags: sr.riskFlags.map((r) => ({
+                      risk: r.risk,
+                      suggestion: r.suggestion
+                    })),
+                    gaps: sr.gaps.map((g) => ({
+                      gap: g.gap,
+                      severity: g.severity,
+                      evidenceType: g.evidenceType,
+                      canHonestlyAdd: g.canHonestlyAdd,
+                      evidence: g.evidence,
+                      suggestedEdit: g.suggestedEdit
+                    })),
+                    recommendation: {
+                      applyAsIs: sr.recommendation.applyAsIs,
+                      reason: sr.recommendation.reason,
+                      coverLetterAngle: sr.recommendation.coverLetterAngle,
+                      topEdits: sr.recommendation.topEdits
+                    }
+                  }
+                }
+              : existing?.review
+                ? { review: existing.review }
+                : {})
           }
         : {})
     };

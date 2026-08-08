@@ -2,8 +2,8 @@
 
 A Manifest V3 popup (Chrome / Edge / Firefox) that prepares job postings in
 RoleFit AI. Click the toolbar icon to see whether you've already tracked or
-applied to that posting and open it in a fresh Prepare tab. Initial Fit runs only
-in the main app after RoleFit selects the resume variant to assess.
+applied to that posting and open it in a fresh Prepare tab. Fit score, coverage,
+and verdict are produced only by AI Review in the main app.
 
 Two ways to import the posting you are reading:
 
@@ -149,15 +149,14 @@ keeps the new posting out of older visible tabs while still allowing a
 no-strand fallback if the new tab never opens or closes before draining the
 import inbox entry.
 
-Duplicate detection is a workflow gate, not a fit assessment. A warning found before or
+Duplicate detection is a workflow gate, not a score. A warning found before or
 after Job analysis asks the user to continue the current pipeline or stop; stopping
 prevents all later selected AI stages.
 
 The extension does not read the workspace base resume or calculate a local fit
-estimate. Initial Fit in the app returns a categorical verdict, confidence,
-eligibility result, and evidence-linked requirement ledger. The server validates
-that contract and the later document-readiness assessment. Both still require
-human review.
+estimate. AI Review in the app returns the score, coverage, and verdict; the
+server validates its response shape and anti-fabrication-sensitive edits. Its
+output still requires human review.
 
 No build or bundler — `popup.js` is a plain ES module loaded directly by
 `popup.html`. There is nothing to compile.

@@ -304,13 +304,13 @@ function fixtureToTailorScope(resumeText) {
   };
 }
 
-async function runFixture(fixture, withReview) {
+async function runFixture(fixture, strictReview) {
   const req = mockReq({
     provider: PROVIDER,
     model: MODEL,
     tailorScope: fixtureToTailorScope(fixture.resumeText),
     jobText: fixture.jobText,
-    stages: withReview ? "both" : "tailor",
+    strictReview,
     includeCoverLetter: false,
     honestContext: fixture.honestContext || "",
     customInstructions: ""
@@ -336,7 +336,7 @@ function findLeak(polishedText, forbidden) {
 }
 
 // Was the missing skill honestly surfaced as a not-addable gap? Checks both the
-// route's grounded missingRequiredSkills output.
+// route's flattened missingRequiredSkills and strict-review gaps.
 function gapSurfaced(data, skill) {
   const needle = skill.toLowerCase();
   const matches = (kw) => {
@@ -346,7 +346,10 @@ function gapSurfaced(data, skill) {
   const fromMissing = (data.missingRequiredSkills ?? []).some(
     (m) => matches(m.keyword) && m.canHonestlyAdd === false
   );
-  return fromMissing;
+  const fromGaps = (data.strictReview?.gaps ?? []).some(
+    (g) => matches(g.gap) && g.canHonestlyAdd === false
+  );
+  return fromMissing || fromGaps;
 }
 
 function skillPresent(polishedText, expected) {
@@ -359,8 +362,21 @@ function suggestedText(data) {
     .join("\n");
 }
 
+// Strict-review rewrites and gap suggestedEdits are also copy-into-resume
+// surfaces, so a leaked skill there is just as much a fabrication as one in
+// polishedText. Fold them into the scanned surface.
+function strictReviewText(data) {
+  const sr = data.strictReview;
+  if (!sr || typeof sr !== "object") return "";
+  const rewrites = (sr.rewrites ?? [])
+    .map((rewrite) => `${rewrite?.rewrite ?? ""}\n${(rewrite?.hits ?? []).join(" ")}`)
+    .join("\n");
+  const gapEdits = (sr.gaps ?? []).map((gap) => String(gap?.suggestedEdit ?? "")).join("\n");
+  return `${rewrites}\n${gapEdits}`;
+}
+
 function tailoredSurface(data) {
-  return `${String(data.polishedText ?? "")}\n${suggestedText(data)}`;
+  return `${String(data.polishedText ?? "")}\n${suggestedText(data)}\n${strictReviewText(data)}`;
 }
 
 function notFlaggedAsCannotAdd(data, skill) {
@@ -368,12 +384,15 @@ function notFlaggedAsCannotAdd(data, skill) {
   const blockedMissing = (data.missingRequiredSkills ?? []).some(
     (m) => String(m.keyword ?? "").toLowerCase().includes(needle) && m.canHonestlyAdd === false
   );
-  return !blockedMissing;
+  const blockedGap = (data.strictReview?.gaps ?? []).some(
+    (g) => String(g.gap ?? "").toLowerCase().includes(needle) && g.canHonestlyAdd === false
+  );
+  return !blockedMissing && !blockedGap;
 }
 
 async function main() {
   console.log(
-    `Anti-fabrication eval — provider=${PROVIDER} model=${MODEL || "(default)"} modes=${MODES.map((withReview) => withReview ? "tailor+review" : "tailor").join(",")} negative=${NEGATIVE_FIXTURES.length} positive=${POSITIVE_FIXTURES.length}\n`
+    `Anti-fabrication eval — provider=${PROVIDER} model=${MODEL || "(default)"} modes=${MODES.map((strict) => strict ? "strict-review" : "polish").join(",")} negative=${NEGATIVE_FIXTURES.length} positive=${POSITIVE_FIXTURES.length}\n`
   );
 
   let fabrications = 0;
@@ -383,7 +402,7 @@ async function main() {
   let totalChecks = 0;
 
   for (const strict of MODES) {
-    const modeLabel = strict ? "tailor+review" : "tailor";
+    const modeLabel = strict ? "strict-review" : "polish";
     for (const fixture of NEGATIVE_FIXTURES) {
       totalChecks++;
       process.stdout.write(`• [${modeLabel}] ${fixture.name} (must not add "${fixture.skill}") ... `);

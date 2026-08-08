@@ -129,17 +129,17 @@ owns:
   first (`stages: "tailor"`), then Review
   (`stages: "review"`) with only the sanitized suggestions from that same run.
   A headless `stages: "both"` request instead runs targeted suggestions first,
-  then runs its submission-readiness audit and optional cover pass in parallel.
-  No single model response is forced to suggest edits, audit candidate fit, and revise a letter
+  then runs its strict audit and optional cover pass in parallel. No single
+  model response is forced to suggest edits, score, audit, and revise a letter
   at the same time. The optional cover leg remains only for older/headless
   clients and runs only when they supply a candidate-authored source letter.
   Review-only skips the suggestion pass and audits the
   current edited draft exactly as submitted; it must not regenerate or replay
   stale tailoring changes. The suggestion pass
   returns only structured `suggestedChanges` (no full-text rewrite and no fit
-  judgment). When the audit does not return a usable submission assessment,
-  the Review stage fails visibly and the client does not calculate or
-  substitute a local readiness judgment;
+  score — scoring belongs exclusively to the audit pass). When the audit does
+  not return a usable review and score, the Review stage fails visibly and the
+  client does not calculate or substitute a local fit judgment;
   the `polishedText` preview is derived server-side by applying only sanitized
   suggestions to the scoped text. Every applied suggestion has passed the
   current deterministic grounding and sanitization gates before the audit,
@@ -148,9 +148,12 @@ owns:
   sends a structured `tailorScope` of user-selected editable sections instead
   of the full resume; identity, contact, education, and any omitted sections remain
   locked out of the rewrite prompt unless the user selects them. In a combined
-  run, Review receives the server-derived polished resume after suggestion
-  grounding and sanitization. Review-only receives the current edited draft.
-  The Tailor stage supplies the primary provider for suggestion generation, cover-letter
+  run, the audit pass receives the clipped original sections plus the SANITIZED
+  proposed changes (`<proposed_changes>`, slim JSON) instead of a second full
+  resume copy — the polished resume is derivable from them, and dropping the
+  redundant copy cuts the audit prompt by up to ~28k chars. Review-only instead
+  receives the current edited draft as its audit target. The Tailor stage
+  supplies the primary provider for suggestion generation, cover-letter
   revision, and application answers. The Review stage can use its own
   provider/model (request `audit*`
   fields, resolved by `resolveAuditProviderRequest`); when audit fields are
@@ -159,22 +162,27 @@ owns:
   editor's resume output. A `/api/polish` response that ran Tailor echoes the
   resolved `provider` / `model` / `reasoningEffort` plus `attempts`
   (tailor-pass dispatch count); Review-only intentionally omits `attempts`
-  because it made no Tailor dispatch. Whenever Review ran (`review` or `both`),
-  the response carries `auditProvider`, `auditModel`, `auditReasoningEffort`, and
-  `auditAttempts`, so same-provider review remains distinguishable from no review.
-  The response also reports `coverStatus: "off" | "ok" | "failed"`; clients must not infer cover state
+  because it made no Tailor dispatch. Whenever the review pass ran (stages
+  `review` / `both`, i.e.
+  `strictReview`), the response ALWAYS carries `auditProvider` / `auditModel` /
+  `auditReasoningEffort` (the resolved audit values, even when identical to the
+  primary) plus `auditAttempts` — so "review ran with the same provider" is
+  distinguishable from "no review". The response also reports
+  `coverStatus: "off" | "ok" | "failed"`; clients must not infer cover state
   from a missing letter, and a cover failure must not discard successful
   tailor/review results. The client surfaces "reviewed by" when either the
   audit provider or audit model differs from the Tailor configuration.
   `/api/fit-audit` is the automatic Prepare decision checkpoint. It reuses the
-  Recruiter Audit provider resolution and usage attribution, but uses the
-  categorical `FitAssessment` prompt and validation path. Its request binds the
-  successful `preparationId`, prepared job text, settled resume filename and document version, whole visible non-identity
+  Recruiter Audit provider resolution, prompt, grounding, sanitizer, verdict
+  bands, and usage attribution, but requires the unchanged base resume as both
+  internal audit inputs and returns one public score rather than a base/tailored
+  pair. Its request binds the successful `preparationId`, prepared job text,
+  settled resume filename and document version, whole visible non-identity
   resume evidence, honest context, provider/model/effort, and review
   instructions into a versioned fingerprint. The server rejects mismatched
-  identity or malformed assessment; the client aborts or marks stale any
-  response whose live fingerprint changed. This route never rewrites a
-  document and never substitutes a local fit judgment.
+  identity, malformed review, or score/verdict inconsistency; the client aborts
+  or marks stale any response whose live fingerprint changed. This route never
+  rewrites a document and never substitutes a local score.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -333,8 +341,9 @@ owns:
   connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
-  the base resume or calculates a local fit assessment. Initial Fit runs only
-  in the app after resume selection; its output still requires human review.
+  the base resume or calculates a local fit estimate. Fit score, coverage, and
+  verdict come only from AI Review in the app; its output still requires human
+  review.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
   upload, save, reload; source development defaults to `workspace/`,
   while packaged runs use `app.getPath("userData")/workspace/`).
@@ -343,8 +352,8 @@ owns:
 
 Deterministic keyword and mechanical resume analysis live in focused client
 helpers under `src/resume/` and `src/resumeEngine.ts`. They may describe text or
-evidence, but never produce fit, eligibility, or submission-readiness judgments.
-Keep those AI contracts out of `server.ts` orchestration.
+evidence, but never calculate a fit score or verdict. Keep that logic and the AI
+Review judgment out of `server.ts` orchestration.
 
 When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
@@ -372,46 +381,33 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   data, never instructions. Prompt budgets are structural: clip individual
   fields/arrays before `JSON.stringify` (or parse, shrink, and re-serialize),
   never character-slice serialized JSON into an invalid payload.
-- `sanitize.ts` — missing-skill and structured Tailor suggestion validation.
-  It accepts only the editor's inline-mark vocabulary and rejects other markup,
-  LaTeX commands, newlines, ungrounded claims, and unsafe target shapes.
+- `sanitize.ts` — missing-skill, structured suggestion, and strict-review
+  response validation (`sanitizeStrictReview`: enum
+  fallbacks, string clips, array caps, markup rejection on rewrites).
+  The markup gate allows exactly the editor's inline-mark vocabulary
+  (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
+  tokens in `currentText` and a faithful suggestion echoes them; all other
+  tags, LaTeX commands, and newlines still reject. `sanitizeTailorSuggestions`
+  takes an optional drop-stats collector and the route warns (shape-only)
+  when a reply's suggestions are ALL dropped — a silent all-drop is
+  otherwise indistinguishable from "no changes needed".
   Hit-keyword grounding: a suggestion whose claimed JD
   keyword appears in `proposedText` but whose significant words exist
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- `fitAssessmentValidation.ts` validates both AI judgment boundaries. Initial
-  Fit returns one categorical `FitAssessment` with confidence, eligibility,
-  canonical requirement evidence, and an advisory recommendation. Review
-  returns a separate `SubmissionAssessment` for requirement visibility,
-  unsupported claims, missing evidence, presentation issues, and readiness.
-  Each requirement retains and displays an exact `sourceRequirement` excerpt
-  from the posting; candidate evidence is accepted only as a normalized exact
-  source quotation, so an inserted token or model-authored polarity inversion
-  fails closed. Source excerpts are unique within a ledger, and eligibility
-  rows must be disjoint from capability requirements. The shared parser permits
-  all 40 requirement-derived strengths, concerns, and missing-evidence rows;
-  independent advice lists remain capped at 16.
-  Initial Fit `MISSING` requires explicit adverse evidence or a minimum-years
-  mismatch whose candidate duration is anchored to the same qualification;
-  ranges use their lower bound, duration anchors match whole tokens rather than
-  prefixes, and ambiguity remains `UNCERTAIN`. Sponsorship polarity is resolved
-  per clause after normalizing common contractions, bounded adverbs, and
-  alphanumeric modifiers such as H-1B. `No need for [modifier] sponsorship`
-  is positive; generic `have no` detection applies only to explicit
-  qualification-absence nouns. Submission visibility uses a separate
-  rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when common
-  contracted, possessive, experiential, and adjectival negative forms have been
-  rejected and relevant evidence positively establishes the qualification and
-  `canSurfaceInResume=true`. Eligibility never changes the fit verdict, and
-  `CONFIRM_ELIGIBILITY` is valid only while eligibility is unresolved.
-  Summary, reason, explanation, strength, concern, and missing-evidence prose
-  is derived from the validated ledger; remaining presentation advice passes
-  the existing technology, proper-claim, numeric, and outcome gates. Invalid
-  output fails its stage, and document review never overwrites candidate fit.
+- AI Review owns the complete fit judgment. Its response contains one
+  evidence table (`strictReview.coverage`), one verdict and reason, and one
+  numeric comparison (`aiScore.base` / `aiScore.tailored`). The server validates
+  JSON shape, exact enums, numeric bounds, and that the tailored score belongs
+  to the declared verdict band. It does not recalculate scores, reinterpret
+  coverage statuses, count missing rows into caps, or replace the verdict.
+  Invalid or incomplete review output fails the Review stage instead of being
+  repaired into a different judgment. Suggestion and rewrite evidence still
+  passes the existing anti-fabrication sanitizers before reaching the editor.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used only
   to ground facts extracted by the job analyzer. Eligibility judgment belongs
-  to Initial Fit; this module does not gate or select a verdict.
+  to AI Review; this module does not gate, score, or select a verdict.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of
@@ -460,7 +456,7 @@ The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/polish` receives the Tailor config as `provider` / `model` /
-`reasoningEffort`, the Review pass receives the Review config as `audit*`
+`reasoningEffort`, the strict-review pass receives the Review config as `audit*`
 fields, `/api/cover-letter` receives the Cover config, and
 `/api/application-answers` receives the Answers config. Cover and Answers ran on
 the Tailor config before they became separately configurable; an install that
@@ -550,21 +546,24 @@ The AI must:
   missing required skills as gaps instead
 - add bracketed placeholders where facts or metrics are missing
 - return a concise `changeSummary` (what changed and why, or why nothing
-  needed to); the reviewed document is derived server-side from sanitized
-  suggestions, and the editor remains the final source of truth
-- keep candidate fit and document readiness separate. Initial Fit distinguishes
-  absent, uncertain, adjacent, and covered requirements and treats acceptable
-  alternatives or ranges as one requirement. Authorization, citizenship,
-  clearance, and other eligibility conditions independently affect automation
-  and recommendation, never the capability verdict. Post-polish Review
-  evaluates only whether the document visibly and defensibly communicates
-  existing evidence; it returns categorical readiness and grounded prioritized
-  issues, never a second fit verdict or before/after comparison
+  needed to); the selected-section text preview used for scoring/audit is
+  derived server-side from the sanitized suggestions, and the editor
+  remains the final source of truth
+- make one holistic, evidence-backed fit judgment: the strict reviewer returns
+  `aiScore`, `strictReview.verdict`, `strictReview.verdictReason`, and a concise
+  `strictReview.coverage` table in the same response. Score and verdict must use
+  the documented bands (85-100 STRONG FIT, 70-84 REASONABLE FIT, 46-69 STRETCH,
+  0-45 DON'T APPLY). The model must distinguish a genuinely absent requirement
+  from a differently worded or adjacent qualification, avoid duplicating one
+  requirement into several gaps, and treat acceptable ranges such as 0-6 years
+  as ranges. No score lift is allowed unless proposed changes make existing
+  evidence materially clearer. The server rejects malformed or band-inconsistent
+  output but never calculates a replacement score or verdict
 - write bullets as engineering accomplishments in plain language — no
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length
   so the one-page layout survives
-- keep submission review non-rewriting: in a combined run it compares the original
+- keep strict review non-rewriting: in a combined run it compares the original
   scope with the sanitized tailored result; in review-only it audits the
   current edited draft as-is
 
@@ -597,7 +596,7 @@ disabled for Job analysis. If an AI-backed Job analysis request fails, the
 local brief may be retained for inspection but the selected stage remains failed. Tailor, Review,
 cover-letter tailoring, and application-answer failures have no local
 substitutes. No
-locally generated draft, fit assessment, or readiness assessment stands in.
+locally generated draft, score, review, or verdict stands in.
 
 ## Job Posting Import
 

@@ -10,40 +10,22 @@ assert.equal(automaticResumeStages("tailor"), "tailor", "Tailor-only remains Tai
 assert.equal(automaticResumeStages("both"), "both", "Tailor plus final audit remains both");
 assert.equal(automaticResumeStages("review"), "both", "Review-only is upgraded so automatic Resume never skips Tailor");
 
-const assessment = {
-  verdict: "REASONABLE_FIT",
-  confidence: "HIGH",
-  summary: "Candidate covers the core requirements.",
-  verdictReason: "Direct evidence covers the role.",
-  eligibility: { status: "SATISFIED", items: [] },
-  requirements: [],
-  strengths: [],
-  concerns: [],
-  recommendation: { action: "APPLY", reason: "Apply." }
-};
-
 assert.deepEqual(
   prepareAutomationDecision(
-    { assessment },
+    { verdict: "REASONABLE FIT" },
     "STRETCH",
-    "STRONG_FIT"
+    "STRONG FIT"
   ),
-  {
-    resume: { action: "RUN", reason: "The configured fit threshold was met." },
-    coverLetter: { action: "SKIP", reason: "Initial Fit is below the configured threshold." }
-  },
+  { resume: true, coverLetter: false },
   "the two threshold policies evaluate independently against one audit verdict"
 );
 assert.deepEqual(
   prepareAutomationDecision(
-    { assessment: { ...assessment, verdict: "STRONG_FIT" } },
-    "OFF",
-    "REASONABLE_FIT"
+    { verdict: "STRONG FIT" },
+    "off",
+    "REASONABLE FIT"
   ),
-  {
-    resume: { action: "SKIP", reason: "Disabled in Settings." },
-    coverLetter: { action: "RUN", reason: "The configured fit threshold was met." }
-  },
+  { resume: false, coverLetter: true },
   "turning Resume automation off never suppresses a qualifying Cover policy"
 );
 
@@ -56,28 +38,8 @@ const coverDispatch = orchestrationSource.indexOf("await runCoverLetterRef.curre
 assert.ok(resumeDispatch > 0 && coverDispatch > resumeDispatch, "qualified actions run sequentially from one audit decision");
 assert.match(
   orchestrationSource.slice(resumeDispatch, coverDispatch),
-  /!coverNeedsHandling[\s\S]{0,180}?decision\.coverLetter\.action !== "RUN"[\s\S]{0,180}?currentAuditFingerprintRef\.current !== expectedFingerprint/,
+  /if \(!decision\.coverLetter \|\| currentAuditFingerprintRef\.current !== expectedFingerprint\) return/,
   "Cover dispatch depends on its own decision and current audit, not Resume success"
-);
-assert.match(
-  orchestrationSource,
-  /const resumeDecisionKey =[\s\S]{0,180}?`resume:\$\{decision\.resume\.action\}:\$\{decision\.resume\.reason\}`/,
-  "Resume policy reevaluation has its own deduplication key"
-);
-assert.match(
-  orchestrationSource,
-  /const coverDecisionKey =[\s\S]{0,180}?`cover:\$\{decision\.coverLetter\.action\}:\$\{decision\.coverLetter\.reason\}`/,
-  "Cover policy reevaluation has its own deduplication key"
-);
-assert.doesNotMatch(
-  orchestrationSource,
-  /const decisionKey =/,
-  "changing one policy cannot make the other policy's unchanged RUN decision dispatch again"
-);
-assert.match(
-  orchestrationSource,
-  /await activeResumeRun\.promise/,
-  "Cover waits for an already-active Resume run without coupling their policy keys"
 );
 
 const coverSource = readFileSync(new URL("../../hooks/useCoverLetter.ts", import.meta.url), "utf8");

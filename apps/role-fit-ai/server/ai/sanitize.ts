@@ -1,5 +1,6 @@
-// Validation and reconciliation for structured tailoring output. Kept separate
-// from provider clients so response-shaping rules are easy to find and test.
+// Validation + reconciliation for the structured fields a polish/strict-review
+// reply returns (fit scores, missing-skill gaps). Kept separate from the
+// provider clients so the response-shaping rules are easy to find and test.
 
 import {
   findUngroundedClaimTerm,
@@ -35,6 +36,7 @@ type EntryGrounding = { type: string; text: string };
 // dropStats collector: reason -> count.
 type DropStats = Record<string, number>;
 // Optional entry-scoped grounder for one-click review rewrites.
+type RewriteGrounder = (originalText: string) => string;
 
 export function sanitizeMissingRequiredSkills(raw: unknown, jobText: unknown = "", grounding: unknown = "") {
   if (!Array.isArray(raw)) return [];
@@ -62,6 +64,7 @@ export function sanitizeMissingRequiredSkills(raw: unknown, jobText: unknown = "
     .filter(Boolean)
     .slice(0, 8);
 }
+
 export function clippedString(value: unknown, max: number): string {
   return String(value ?? "").replace(/\s+/g, " ").trim().slice(0, max);
 }
@@ -104,7 +107,7 @@ const EVIDENCE_BOILERPLATE = new Set([
   "states", "that", "the", "this", "three", "tool", "tools", "used", "user", "uses", "using", "with", "within"
 ]);
 
-export function evidenceIsGrounded(value: unknown, grounding: unknown): boolean {
+function evidenceIsGrounded(value: unknown, grounding: unknown): boolean {
   // Keep internal periods for names such as node.js/.NET, but free sentence-end
   // punctuation before tokenizing. Without this, every normal evidence sentence
   // ended in an impossible token such as "review." or "powerpoint." and was
@@ -230,7 +233,7 @@ export function hasUngroundedNumericClaim(value: unknown, grounding: unknown): b
   return findUngroundedNumericClaim(value, grounding) !== null;
 }
 
-export function gapIsGroundedInJob(value: unknown, jobText: unknown): boolean {
+function gapIsGroundedInJob(value: unknown, jobText: unknown): boolean {
   const tokens = [...new Set((String(value ?? "").toLowerCase().match(/\.net\b|[a-z0-9][a-z0-9.#+]*/g) ?? [])
     .filter((token) => !GAP_BOILERPLATE.has(token)))];
   if (!tokens.length) return false;
@@ -563,4 +566,380 @@ export function summarizeDroppedSuggestions(dropStats: unknown) {
   }
   if (total <= 0) return null;
   return { total, unsupported, reasons: { ...dropStats } };
+}
+
+// Strict-review enums, mirrored from the strict-review prompt + the client's
+// StrictReview type in src/resume/types.ts. The client dereferences fields like
+// sr.verdict.replace(...) and gap.severity.toLowerCase() directly, so every value
+// must be a known string and every array must exist.
+const VERDICTS = new Set(["STRONG FIT", "REASONABLE FIT", "STRETCH", "DON'T APPLY"]);
+const GAP_SEVERITIES = new Set(["BLOCKER", "HIGH", "MEDIUM", "LOW"]);
+export const COVERAGE_STATUSES = new Set(["covered", "missing", "adjacent"]);
+const COVERAGE_CATEGORIES = new Set(["Required tech", "Required experience", "Required years", "Preferred"]);
+
+export function enumValue(value: unknown, allowed: Set<string>, fallback: string): string {
+  const candidate = String(value ?? "").trim().toUpperCase();
+  // Verdicts/severities are upper-case; coverage status + evidenceType are
+  // lower-case, so match against the set in its own case.
+  if (allowed.has(candidate)) return candidate;
+  const lower = String(value ?? "").trim().toLowerCase();
+  if (allowed.has(lower)) return lower;
+  return fallback;
+}
+
+function exactEnumValue(value: unknown, allowed: Set<string>): string | null {
+  const candidate = String(value ?? "").trim();
+  const upper = candidate.toUpperCase();
+  if (allowed.has(upper)) return upper;
+  const lower = candidate.toLowerCase();
+  return allowed.has(lower) ? lower : null;
+}
+
+// AI Review owns the fit judgment. The server validates only the response
+// contract: both numbers must be finite 0-100 values, and the model-authored
+// tailored score must agree with the model-authored verdict's documented band.
+// A contradictory reply is unusable and gets retried by the user/provider; the
+// server never changes either half to manufacture agreement.
+export function sanitizeAiFitScore(raw: unknown, verdict: unknown) {
+  if (!raw || typeof raw !== "object") return null;
+  const source = raw as Record<string, unknown>;
+  if (typeof source.base !== "number" || typeof source.tailored !== "number") return null;
+  if (!Number.isFinite(source.base) || !Number.isFinite(source.tailored)) return null;
+  if (!Number.isInteger(source.base) || !Number.isInteger(source.tailored)) return null;
+  if (source.base < 0 || source.base > 100 || source.tailored < 0 || source.tailored > 100) return null;
+  const normalizedVerdict = exactEnumValue(verdict, VERDICTS);
+  if (!normalizedVerdict) return null;
+  const tailored = source.tailored;
+  const inBand =
+    normalizedVerdict === "STRONG FIT" ? tailored >= 85 :
+    normalizedVerdict === "REASONABLE FIT" ? tailored >= 70 && tailored <= 84 :
+    normalizedVerdict === "STRETCH" ? tailored >= 46 && tailored <= 69 :
+    tailored <= 45;
+  if (!inBand) return null;
+  return {
+    base: source.base,
+    tailored,
+    liftReason: clippedString(source.liftReason, 300)
+  };
+}
+
+// Per-rewrite grounder for the strict-review "apply rewrite" path. A review
+// rewrite carries only original/rewrite text (no target id), yet the client
+// applies it one-click into the bullet whose text matches `original`
+// (ReviewRail findBullet). Corpus grounding there let the REVIEW pass re-inject
+// the exact misattribution the tailor gate now drops (e.g. "Python/Node" onto a
+// pure-Node bullet, grounded by a Skills-row "Python"). This matches the
+// rewrite's `original` back to the STANDARD entry that contains it and grounds
+// against THAT entry's own text + honest context. Ambiguous or unmatched text
+// fails closed to the original text + honest context: the client applies by text
+// match, so corpus grounding could otherwise authorize a fact from the wrong
+// entry. Returns a lowercased grounding string ready for findUngroundedJdTerm.
+export function makeRewriteGrounder(scope: TailorScopeInput, honestContext: unknown, _corpusGrounding: unknown): RewriteGrounder {
+  const entryGrounding = buildEntryGroundingMap(scope, honestContext);
+  const honest = String(honestContext ?? "");
+  // Mirror the client's ReviewRail `normalize` EXACTLY: stripInlineMarks removes
+  // <b>/<i>/<u> to "" (NOT to a space), then collapse whitespace + trim +
+  // lowercase. This must match so the server grounds against the SAME bullet the
+  // client will apply the rewrite to (its findBullet uses exact normalized bullet
+  // equality).
+  const norm = (t: unknown): string => String(t ?? "").replace(/<\/?(?:b|i|u)>/gi, "").replace(/\s+/g, " ").trim().toLowerCase();
+  // Index each STANDARD-entry BULLET by its normalized text -> that entry's
+  // grounding text, matching the client's findBullet (exact normalized equality,
+  // first match). A substring match over the whole entry blob mis-routes: if
+  // entry A's bullet contains entry B's shorter bullet as a substring and A
+  // carries a JD tech B lacks, the server would ground against A while the client
+  // applies to B — landing the fabrication on B. Bullet texts that normalize
+  // identically across DIFFERENT entries are AMBIGUOUS (the client picks first; we
+  // cannot know which) and therefore fail closed rather than grounding a
+  // fabrication against the wrong entry.
+  const bulletGrounding = new Map<string, string>();
+  const ambiguous = new Set<string>();
+  if (scope && Array.isArray(scope.sections)) {
+    for (const section of scope.sections) {
+      const type = section?.type === "skills" ? "skills" : section?.type === "summary" ? "summary" : "standard";
+      const sectionId = clippedString(section?.id, 120);
+      if (type !== "standard" || !sectionId || !Array.isArray(section?.entries)) continue;
+      for (const entry of section.entries) {
+        const entryId = clippedString(entry?.id, 120);
+        const info = entryId ? entryGrounding.get(`${sectionId}::${entryId}`) : null;
+        if (!info || !Array.isArray(entry?.bullets)) continue;
+        for (const bullet of entry.bullets) {
+          const key = norm(bullet?.text);
+          if (!key) continue;
+          const prior = bulletGrounding.get(key);
+          if (prior && prior !== info.text) ambiguous.add(key);
+          else bulletGrounding.set(key, info.text);
+        }
+      }
+    }
+  }
+  return (originalText: string): string => {
+    const needle = norm(originalText);
+    // An ambiguous original matches REAL bullets in multiple entries — its text
+    // is genuine resume content, so it may stay in the grounding corpus.
+    if (needle && ambiguous.has(needle)) return `${originalText}\n${honest}`.toLowerCase();
+    const grounding = needle ? bulletGrounding.get(needle) : undefined;
+    if (grounding) return grounding;
+    // Fail closed: an original that matches no known scope bullet is
+    // model-authored text. Grounding against it would let a fabricated
+    // original/rewrite pair license itself, so ground against honest context
+    // only and let the term/numeric gates drop the unsupported rewrite.
+    return honest.toLowerCase();
+  };
+}
+
+// Numeric claims are stricter than technology attribution: a percentage/date/
+// count from another bullet in the same role cannot license changing this target
+// bullet's metric. Match the rewrite original to its exact current bullet and
+// ground numbers against that field plus honest context only.
+export function makeRewriteNumericGrounder(scope: TailorScopeInput, honestContext: unknown): RewriteGrounder {
+  const honest = String(honestContext ?? "");
+  const normalize = (value: unknown): string => String(value ?? "")
+    .replace(/<\/?(?:b|i|u)>/gi, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+  const bullets = new Map<string, string>();
+  if (scope && Array.isArray(scope.sections)) {
+    for (const section of scope.sections) {
+      if (!Array.isArray(section?.entries)) continue;
+      for (const entry of section.entries) {
+        if (!Array.isArray(entry?.bullets)) continue;
+        for (const bullet of entry.bullets) {
+          const key = normalize(bullet?.text);
+          if (key) bullets.set(key, `${String(bullet?.text ?? "")}\n${honest}`);
+        }
+      }
+    }
+  }
+  // Fail closed on an unmatched original (see makeRewriteGrounder): numbers in
+  // a rewrite whose original is not a real scope bullet must ground against
+  // honest context alone, never against the model's own text.
+  return (originalText: string): string => bullets.get(normalize(originalText)) ?? honest;
+}
+
+// Validate and clamp the strict-review object before it reaches the client.
+// Returns null for non-objects so the UI simply omits the review pane. Every
+// field the client reads is forced to a safe type, invalid enum rows are
+// dropped rather than converted into model judgments, arrays are capped, and rewrite/suggestedEdit text that smuggles
+// LaTeX/HTML/newlines is dropped via the same containsStructuredMarkup gate the
+// applyable tailor suggestions use.
+//
+// jobText + grounding gate the APPLYABLE rewrite/suggestedEdit text through the
+// same findUngroundedJdTerm check the tailor path uses: a one-click rewrite is
+// written straight into a resume bullet, so a JD skill it introduces that is
+// absent from the polished resume + honest context is fabrication. An ungrounded
+// rewrite is dropped entirely; an ungrounded suggestedEdit is blanked (the gap
+// itself still shows, just without the unsupported paste-ready copy).
+export function sanitizeStrictReview(
+  raw: unknown,
+  jobText: string = "",
+  grounding: string = "",
+  options: {
+    rewriteGrounder?: RewriteGrounder;
+    rewriteNumericGrounder?: RewriteGrounder;
+    suggestedEditNumericGrounding?: unknown;
+  } = {}
+) {
+  if (!raw || typeof raw !== "object") return null;
+  // Model output: read fields defensively off a record view (never validated).
+  const src = raw as Record<string, unknown>;
+  const verdict = exactEnumValue(src.verdict, VERDICTS);
+  if (!verdict) return null;
+  const jobLower = String(jobText ?? "").toLowerCase();
+  const groundingLower = String(grounding ?? "").toLowerCase();
+  // Optional entry-scoped grounder for one-click rewrites (see makeRewriteGrounder);
+  // absent (2-3 arg callers, e.g. probes) -> corpus grounding, unchanged behavior.
+  const rewriteGrounder = typeof options.rewriteGrounder === "function" ? options.rewriteGrounder : null;
+  const rewriteNumericGrounder = typeof options.rewriteNumericGrounder === "function" ? options.rewriteNumericGrounder : null;
+  const suggestedEditNumericGrounding = String(options.suggestedEditNumericGrounding ?? "");
+
+  // Coverage is part of the AI review itself. Validate shape and enum values but
+  // do not reinterpret, rescore, or downgrade the model's semantic judgment.
+  // Invalid rows are omitted instead of being coerced to "missing" (which would
+  // silently create a local negative judgment the AI never made).
+  const coverage = (Array.isArray(src.coverage) ? src.coverage : [])
+    .map((row) => {
+      if (!row || typeof row !== "object") return null;
+      const keyword = clippedString(row.keyword ?? row.requirement, 180);
+      const categoryCandidate = clippedString(row.category, 80);
+      const category = COVERAGE_CATEGORIES.has(categoryCandidate) ? categoryCandidate : null;
+      const status = exactEnumValue(row.status ?? row.tailoredStatus, COVERAGE_STATUSES);
+      // A coverage row asserts that `keyword` is a real JD requirement. Validate
+      // that claim without changing the AI-owned covered/missing/adjacent status.
+      if (!keyword || !category || !status || !gapIsGroundedInJob(keyword, jobText)) return null;
+      return {
+        category,
+        keyword,
+        status,
+        where: clippedString(row.where ?? row.tailoredEvidence, 300)
+      };
+    })
+    .filter((row): row is NonNullable<typeof row> => Boolean(row))
+    .slice(0, 12);
+
+  const gaps = (Array.isArray(src.gaps) ? src.gaps : [])
+    .map((gap) => {
+      if (!gap || typeof gap !== "object") return null;
+      const gapText = clippedString(gap.gap, 300);
+      if (!gapText) return null;
+      // Free-form gaps are model claims too. A hallucinated requirement must not
+      // reach the UI as if the job actually required it.
+      if (!gapIsGroundedInJob(gapText, jobText)) return null;
+      const severity = exactEnumValue(gap.severity, GAP_SEVERITIES);
+      // Do not synthesize a MEDIUM judgment when the model violates the enum.
+      if (!severity) return null;
+      let suggestedEdit = clippedString(gap.suggestedEdit, 1400);
+      // A suggestedEdit is rendered as inline copy the user may paste into a
+      // bullet; blank smuggled markup the same way tailor suggestions do.
+      // Keep the gap itself so a malformed paste-ready edit cannot hide an
+      // otherwise usable gap from the review pane.
+      if (suggestedEdit && containsStructuredMarkup(gap.suggestedEdit)) suggestedEdit = "";
+      // Blank a paste-ready edit that introduces an ungrounded JD skill term —
+      // the gap stays visible, but we don't hand the user unsupported copy.
+      if (suggestedEdit && findUngroundedJdTerm(suggestedEdit, jobLower, groundingLower)) suggestedEdit = "";
+      // Gaps have no stable resume target, so an existing number elsewhere in
+      // the resume cannot authorize paste-ready metric copy. Only an explicit
+      // user attestation in honestContext can ground a newly suggested number.
+      if (suggestedEdit && hasUngroundedNumericClaim(suggestedEdit, suggestedEditNumericGrounding)) suggestedEdit = "";
+      if (suggestedEdit && findUngroundedClaimTerm(suggestedEdit, groundingLower)) suggestedEdit = "";
+      if (suggestedEdit && findUngroundedOutcomeClaim(suggestedEdit, groundingLower)) suggestedEdit = "";
+      const rawEvidenceType = EVIDENCE_TYPES.has(String(gap.evidenceType)) ? String(gap.evidenceType) : "none";
+      let evidence = clippedString(gap.evidence, 300);
+      const noEvidence = !evidence || /\b(?:no evidence|not in (?:the )?resume|missing|unsupported)\b/i.test(evidence);
+      const supportGrounded = gapClaimIsGrounded(gapText, groundingLower)
+        && evidenceIsGrounded(evidence, groundingLower);
+      const evidenceType = rawEvidenceType !== "none" && !supportGrounded ? "none" : rawEvidenceType;
+      if (!supportGrounded && !noEvidence) evidence = "";
+      return {
+        gap: gapText,
+        severity,
+        evidenceType,
+        canHonestlyAdd: evidenceType === "exact" && supportGrounded ? gap.canHonestlyAdd === true : false,
+        evidence,
+        suggestedEdit
+      };
+    })
+    // Typed predicate (erasable) drops the map's null members from the type too.
+    .filter((gap): gap is NonNullable<typeof gap> => Boolean(gap))
+    .slice(0, 8);
+
+  const rewrites = (Array.isArray(src.rewrites) ? src.rewrites : [])
+    .map((item) => {
+      if (!item || typeof item !== "object") return null;
+      const original = clippedString(item.original, 1400);
+      const rewrite = clippedString(item.rewrite, 1400);
+      if (!original || !rewrite) return null;
+      // The client offers a one-click "apply" of rewrite text into the resume;
+      // it must be plain prose, never LaTeX/HTML/multi-line markup.
+      if (containsStructuredMarkup(item.rewrite)) return null;
+      // Same JD-term grounding the tailor path enforces: a rewrite is applied
+      // directly into a bullet, so an ungrounded JD skill in it is fabrication.
+      // Ground against the STANDARD entry this rewrite targets (matched via its
+      // `original`) so the review path can't reintroduce a misattribution the
+      // tailor gate drops; corpus fallback for unmatched originals.
+      const rewriteGrounding = rewriteGrounder ? rewriteGrounder(original) : groundingLower;
+      if (findUngroundedJdTerm(rewrite, jobLower, rewriteGrounding)) return null;
+      const numericGrounding = rewriteNumericGrounder ? rewriteNumericGrounder(original) : rewriteGrounding;
+      if (hasUngroundedNumericClaim(rewrite, numericGrounding)) return null;
+      if (findUngroundedClaimTerm(rewrite, rewriteGrounding)) return null;
+      if (findUngroundedOutcomeClaim(rewrite, rewriteGrounding)) return null;
+      // `hits` render as "✓ <keyword>" chips claiming this rewrite now COVERS
+      // those JD keywords. The rewrite TEXT is grounded above, but the claimed
+      // matches were not — a model could leave the text nearly unchanged and
+      // stamp fabricated ✓ coverage (the tailor path grounds its hits for the
+      // same anti-fab reason; this review path did not). Keep a hit only when
+      // the rewrite text actually surfaces it AND it is grounded in the resume/
+      // honest context — dropping the individual false chip, not the honest
+      // rewrite. isTermGrounded is token-anchored (alias/inflection/phrase-aware,
+      // short-token safe: Go, CI/CD, k8s↔kubernetes). Known safe-direction limit:
+      // a MULTI-WORD hit whose wording differs from the text by a plural or word
+      // order (isGrounded's phrase branch is a literal substring) drops that one
+      // chip — it under-credits, never fabricates; the rewrite still shows.
+      const hits = (Array.isArray(item.hits) ? (item.hits as unknown[]) : [])
+        .map((hit) => clippedString(hit, 80))
+        .filter(Boolean)
+        .filter((kw) => isTermGrounded(kw, rewrite) && isTermGrounded(kw, rewriteGrounding))
+        .slice(0, 6);
+      return { original, rewrite, hits };
+    })
+    // Typed predicate (erasable) drops the map's null members from the type too.
+    .filter((item): item is NonNullable<typeof item> => Boolean(item))
+    .slice(0, 4);
+
+  // Advisory prose surfaces (riskFlags[].suggestion, recommendation.topEdits[],
+  // recommendation.coverLetterAngle) are model free text the user reads as
+  // guidance; a JD skill term they name that is absent from the polished resume +
+  // honest context is fabrication the same way an ungrounded rewrite is. Run each
+  // through the prose-mode findUngroundedJdTerm backstop used for suggestedEdit:
+  // company/role proper nouns are allowed (proseMode skips the capitalized-token
+  // detector), but curated branded tools / lowercase tech concepts still gate.
+  // On a flagged term, BLANK the string (or DROP the topEdits item) — never drop
+  // the whole parent object, so an honest risk flag or recommendation still
+  // shows. verdictReason is deliberately NOT rewritten: it explains the AI's
+  // own verdict and the server no longer substitutes a deterministic verdict.
+  // Thin local alias over the shared prose-grounding predicate (jobLower/
+  // groundingLower are already lower-cased above).
+  const proseIsUngrounded = (text: unknown) =>
+    proseHasUngroundedTerm(text, jobLower, groundingLower)
+    || Boolean(findUngroundedOutcomeClaim(text, groundingLower));
+
+  const riskFlags = (Array.isArray(src.riskFlags) ? src.riskFlags : [])
+    .map((flag) => {
+      if (!flag || typeof flag !== "object") return null;
+      const risk = clippedString(flag.risk, 300);
+      if (!risk) return null;
+      let suggestion = clippedString(flag.suggestion, 300);
+      if (proseIsUngrounded(suggestion)) suggestion = "";
+      return {
+        bullet: clippedString(flag.bullet, 300),
+        risk,
+        suggestion
+      };
+    })
+    // Typed predicate (erasable) drops the map's null members from the type too.
+    .filter((flag): flag is NonNullable<typeof flag> => Boolean(flag))
+    .slice(0, 3);
+
+  const rawRec = (src.recommendation && typeof src.recommendation === "object" ? src.recommendation : {}) as Record<string, unknown>;
+  let coverLetterAngle = clippedString(rawRec.coverLetterAngle, 1400);
+  if (proseIsUngrounded(coverLetterAngle)) coverLetterAngle = "";
+  const recommendation = {
+    applyAsIs: rawRec.applyAsIs === true,
+    reason: clippedString(rawRec.reason, 300),
+    topEdits: (Array.isArray(rawRec.topEdits) ? rawRec.topEdits : [])
+      .map((edit) => clippedString(edit, 300))
+      .filter(Boolean)
+      .filter((edit) => !proseIsUngrounded(edit))
+      .slice(0, 3),
+    coverLetterAngle
+  };
+
+  return {
+    verdict,
+    verdictReason: clippedString(src.verdictReason, 300),
+    coverage,
+    gaps,
+    rewrites,
+    riskFlags,
+    recommendation
+  };
+}
+
+export function missingRequiredSkillsFromStrictReview(
+  strictReview: { gaps?: unknown } | null | undefined,
+  jobText: unknown = "",
+  grounding: unknown = ""
+) {
+  if (!strictReview || !Array.isArray(strictReview.gaps)) return [];
+  return sanitizeMissingRequiredSkills(
+    strictReview.gaps.map((gap) => ({
+      keyword: gap.gap,
+      evidenceType: gap.evidenceType,
+      canHonestlyAdd: gap.canHonestlyAdd,
+      reason: gap.evidence || gap.suggestedEdit
+    })),
+    jobText,
+    grounding
+  );
 }

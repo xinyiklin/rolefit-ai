@@ -5,6 +5,17 @@ export function displayCompany(app: Application) {
   return app.company?.trim() || app.title.split(/[|·-]/)[0]?.trim() || "Unknown company";
 }
 
+/**
+ * Return only a persisted, provider-backed fit score.
+ */
+export function fitScore(app: Application) {
+  return typeof app.fitScore === "number"
+    ? app.fitScore
+    : typeof app.tailoredFitScore === "number"
+      ? app.tailoredFitScore
+      : null;
+}
+
 export function parseDate(value?: string) {
   if (!value) return null;
   const trimmed = value.trim();

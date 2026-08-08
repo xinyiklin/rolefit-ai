@@ -37,15 +37,15 @@ as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
 one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction or
 candidate-review gaps. Resume proposals remain constrained by server-side
-grounding and anti-fabrication checks. Initial Fit owns categorical candidate
-assessment; Review owns later document readiness. Candidate gaps restored from a saved Apply record are labeled
+grounding and anti-fabrication checks, with a recruiter audit for fit scoring
+and gap analysis. Candidate gaps restored from a saved Apply record are labeled
 historical until an audit runs against the current materials.
 
 Every successful fresh preparation continues through safe resume-variant
 selection and an automatic Initial Fit audit of that exact selected document.
-Initial Fit uses the Recruiter Audit provider and the whole visible resume plus
-trusted candidate context as evidence. It returns a verdict, confidence,
-eligibility, requirement ledger, and advisory recommendation. Settings provides independent inclusive
+Initial Fit uses the Recruiter Audit provider and the whole visible resume as
+evidence, returns one score/verdict decision checkpoint, and never exposes a
+fabricated base/tailored comparison. Settings provides independent inclusive
 thresholds for Resume and Cover Letter automation; either can be Off, neither
 gates the other, and neither silently accepts a proposal or changes the Apply
 package. Manual Polish remains available after any result or failure.
@@ -221,10 +221,9 @@ disappears into the task. Quiet competence, not salesmanship.
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
     Prepare always continues a successful fresh preparation through settled
-    resume selection and Initial Fit. It shows that categorical baseline
-    separately from later submission readiness, persists both independently on
-    Apply, labels restored results historical, and never substitutes a local
-    estimate or lets document review overwrite candidate fit.
+    resume selection and Initial Fit. It shows that baseline separately from a
+    later Proposal fit, persists the baseline independently on Apply, labels a
+    restored baseline historical, and never substitutes a local estimate.
 11. Preserve safe extension intake: a claimed extension posting always runs
     AI-backed job analysis and lands on Prepare. Only a successful analysis may
     continue through the ordinary required Initial Fit flow; the extension does

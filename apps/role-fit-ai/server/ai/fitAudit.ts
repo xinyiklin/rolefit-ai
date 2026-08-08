@@ -11,8 +11,8 @@ import { UserSafeAiError } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveReviewOnlyProviderRequest } from "./providers.ts";
 import {
-  ASSESSMENT_JOB_CHAR_LIMIT,
-  ASSESSMENT_RESUME_CHAR_LIMIT
+  STRICT_REVIEW_JOB_CHAR_LIMIT,
+  STRICT_REVIEW_RESUME_CHAR_LIMIT
 } from "./prompts.ts";
 import {
   reviewFailureFromReason,
@@ -42,8 +42,8 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
     const preparationId = boundedString(body.preparationId, 120) ?? "";
     const resumeFileName = boundedString(body.resumeFileName, 240) ?? "";
     const resumeDocumentVersion = boundedString(body.resumeDocumentVersion, 240) ?? "";
-    const jobText = boundedString(body.jobText, ASSESSMENT_JOB_CHAR_LIMIT);
-    const resumeText = boundedString(body.resumeText, ASSESSMENT_RESUME_CHAR_LIMIT);
+    const jobText = boundedString(body.jobText, STRICT_REVIEW_JOB_CHAR_LIMIT);
+    const resumeText = boundedString(body.resumeText, STRICT_REVIEW_RESUME_CHAR_LIMIT);
     const honestContext = boundedString(body.honestContext ?? "", 8_000);
     const customInstructions = boundedString(body.customInstructions ?? "", 4_000);
 
@@ -84,6 +84,7 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
       provider: resolved,
       jobText,
       resumeText,
+      suggestedChanges: [],
       honestContext,
       customInstructions,
       signal: request.signal
@@ -101,7 +102,10 @@ export async function handleFitAudit(req: IncomingMessage, res: ServerResponse):
       fingerprint,
       resumeFileName,
       resumeDocumentVersion,
-      assessment: outcome,
+      score: outcome.score,
+      verdict: outcome.review.verdict,
+      verdictReason: outcome.review.verdictReason,
+      review: outcome.review,
       completedAt,
       usage: {
         source: "ai",

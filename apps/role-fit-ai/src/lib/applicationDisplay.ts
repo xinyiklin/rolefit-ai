@@ -1,9 +1,9 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
-import type { FitVerdict } from "../../shared/fitAssessmentContract.ts";
-import { parseDate } from "./applicationFacts.ts";
-import { VERDICT_LABEL, VERDICT_TONE } from "./fitVerdict.ts";
+import type { StrictReviewVerdict } from "../resume/types";
+import { fitScore, parseDate } from "./applicationFacts";
+import { VERDICT_LABEL, VERDICT_TONE, verdictFromScore } from "./fitVerdict";
 
-export { displayCompany, parseDate } from "./applicationFacts.ts";
+export { displayCompany, fitScore, parseDate } from "./applicationFacts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
@@ -15,17 +15,32 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
 };
 
 export const BOARD_STATUSES: ApplicationStatus[] = [
-  "interested", "applied", "interviewing", "offer", "rejected", "withdrawn"
+  "interested",
+  "applied",
+  "interviewing",
+  "offer",
+  "rejected",
+  "withdrawn"
 ];
 
 export type ApplicationActivityGroup = "active" | "inactive";
-export const ACTIVITY_STATUS_GROUPS: Record<ApplicationActivityGroup, readonly ApplicationStatus[]> = {
+
+export const ACTIVITY_STATUS_GROUPS: Record<
+  ApplicationActivityGroup,
+  readonly ApplicationStatus[]
+> = {
   active: ["interested", "applied", "interviewing", "offer"],
   inactive: ["rejected", "withdrawn"]
 };
-export type ApplicationActivityFilter = "all" | ApplicationActivityGroup | ApplicationStatus;
 
-export function activityGroupForFilter(filter: ApplicationActivityFilter): ApplicationActivityGroup | null {
+export type ApplicationActivityFilter =
+  | "all"
+  | ApplicationActivityGroup
+  | ApplicationStatus;
+
+export function activityGroupForFilter(
+  filter: ApplicationActivityFilter
+): ApplicationActivityGroup | null {
   if (filter === "all") return null;
   if (filter === "active" || filter === "inactive") return filter;
   return ACTIVITY_STATUS_GROUPS.active.includes(filter) ? "active" : "inactive";
@@ -35,14 +50,20 @@ export function isInactiveApplication(app: Pick<Application, "status">): boolean
   return app.status === "rejected" || app.status === "withdrawn";
 }
 
-export function matchesActivityFilter(app: Pick<Application, "status">, filter: ApplicationActivityFilter): boolean {
+export function matchesActivityFilter(
+  app: Pick<Application, "status">,
+  filter: ApplicationActivityFilter
+): boolean {
   if (filter === "all") return true;
   if (filter === "inactive") return isInactiveApplication(app);
   if (filter === "active") return !isInactiveApplication(app);
   return app.status === filter;
 }
 
-export function activityCount(applications: Application[], filter: Exclude<ApplicationActivityFilter, "all">): number {
+export function activityCount(
+  applications: Application[],
+  filter: Exclude<ApplicationActivityFilter, "all">
+): number {
   return applications.filter((app) => matchesActivityFilter(app, filter)).length;
 }
 
@@ -51,18 +72,44 @@ export function displayRole(app: Application) {
 }
 
 export function companyInitials(name: string) {
-  const words = name.replace(/[^a-z0-9\s]/gi, " ").split(/\s+/).filter(Boolean);
+  const words = name
+    .replace(/[^a-z0-9\s]/gi, " ")
+    .split(/\s+/)
+    .filter(Boolean);
   if (!words.length) return "?";
-  return words.slice(0, 2).map((word) => word[0]?.toUpperCase()).join("");
+  return words
+    .slice(0, 2)
+    .map((word) => word[0]?.toUpperCase())
+    .join("");
 }
 
-export function appFitVerdict(app: Application): {
-  verdict: FitVerdict;
-  label: string;
-  tone: "strong" | "good" | "stretch" | "weak";
-} | null {
-  const verdict = app.initialFitAudit?.assessment.verdict;
-  return verdict ? { verdict, label: VERDICT_LABEL[verdict], tone: VERDICT_TONE[verdict] } : null;
+// Score -> tone (fit-color class only). Thresholds mirror the AI Review contract
+// (STRONG FIT >=85, REASONABLE FIT >=70, STRETCH >=46, DON'T APPLY <46) and
+// verdictFromScore in lib/fitVerdict.ts — keep in sync. The
+// fit LABEL now always comes from the shared verdict vocabulary (appFitVerdict /
+// fitVerdict.ts) so the tracker and review pane never disagree.
+// The old fitLabel "Strong/Good/Stretch/Weak match" vocabulary was removed — it
+// was the source of the tracker-vs-review mismatch.
+export function fitTone(score: number | null) {
+  if (score === null) return "neutral";
+  if (score >= 85) return "strong";
+  if (score >= 70) return "good";
+  if (score >= 46) return "stretch";
+  return "weak";
+}
+
+// The application's fit as a VERDICT band, in the SAME vocabulary the review
+// pane and resume header use — so the tracker can never show "Good match" while
+// strict review says "Reasonable fit". Prefer the verdict captured at apply time
+// (the AI review verdict); otherwise derive it from a non-local stored score.
+// Label AND tone come from the same verdict so they agree.
+export function appFitVerdict(
+  app: Application
+): { verdict: StrictReviewVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
+  const stored = app.review?.verdict as StrictReviewVerdict | undefined;
+  const verdict = stored && VERDICT_LABEL[stored] ? stored : verdictFromScore(fitScore(app));
+  if (!verdict) return null;
+  return { verdict, label: VERDICT_LABEL[verdict], tone: VERDICT_TONE[verdict] };
 }
 
 export function nextAction(app: Application) {
@@ -75,29 +122,46 @@ export function nextAction(app: Application) {
 }
 
 export function priorityFor(app: Application) {
+  // An explicit choice in the detail modal wins over the derived guess.
   if (app.priority) return app.priority;
+  const score = fitScore(app);
+  if (score !== null && score >= 85) return "High";
   if (app.status === "interviewing" || app.status === "offer") return "High";
-  if (app.status === "rejected" || app.status === "withdrawn") return "Low";
+  // Below the STRETCH floor (46, the DON'T APPLY boundary) — not just below 65 —
+  // so a 46-64 "Stretch" reads Medium priority, consistent with its label.
+  if (score !== null && score < 46) return "Low";
   return "Medium";
 }
 
 const SALARY_PERIOD_LABEL: Record<string, string> = { yr: "/yr", mo: "/mo", hr: "/hr" };
 
-export function formatSalary(comp: Pick<Application, "salaryMin" | "salaryMax" | "salaryCurrency" | "salaryPeriod">) {
+// Compact compensation string from the stored min/max/currency/period, e.g.
+// "$160k – $200k /yr" or "USD 120,000 /yr". Returns "" when nothing is set.
+export function formatSalary(
+  comp: Pick<Application, "salaryMin" | "salaryMax" | "salaryCurrency" | "salaryPeriod">
+) {
   const { salaryMin, salaryMax, salaryCurrency, salaryPeriod } = comp;
   const hasMin = typeof salaryMin === "number";
   const hasMax = typeof salaryMax === "number";
   if (!hasMin && !hasMax) return "";
   const currency = (salaryCurrency || "").trim().toUpperCase();
-  const symbols: Record<string, string> = { USD: "$", GBP: "£", EUR: "€", JPY: "¥", CAD: "C$", AUD: "A$" };
-  const symbol = symbols[currency] ?? "";
-  const fmt = (value: number) => symbol
-    ? value >= 1000 && value % 1000 === 0 ? `${symbol}${value / 1000}k` : `${symbol}${value.toLocaleString()}`
-    : value.toLocaleString();
+  // Job analysis can emit non-USD currencies, so render their native symbol
+  // (falls back to an ISO-code prefix for anything unmapped).
+  const CURRENCY_SYMBOL: Record<string, string> = {
+    USD: "$", GBP: "£", EUR: "€", JPY: "¥", CAD: "C$", AUD: "A$"
+  };
+  const symbol = CURRENCY_SYMBOL[currency] ?? "";
+  const fmt = (value: number) => {
+    if (symbol) {
+      return value >= 1000 && value % 1000 === 0 ? `${symbol}${value / 1000}k` : `${symbol}${value.toLocaleString()}`;
+    }
+    return value.toLocaleString();
+  };
   const prefix = symbol ? "" : currency ? `${currency} ` : "";
-  const range = hasMin && hasMax
-    ? `${fmt(salaryMin as number)} – ${fmt(salaryMax as number)}`
-    : fmt((hasMin ? salaryMin : salaryMax) as number);
+  const range =
+    hasMin && hasMax
+      ? `${fmt(salaryMin as number)} – ${fmt(salaryMax as number)}`
+      : fmt((hasMin ? salaryMin : salaryMax) as number);
   const period = salaryPeriod ? ` ${SALARY_PERIOD_LABEL[salaryPeriod] ?? ""}`.trimEnd() : "";
   return `${prefix}${range}${period}`.trim();
 }
@@ -105,17 +169,30 @@ export function formatSalary(comp: Pick<Application, "salaryMin" | "salaryMax" |
 export function formatCompactDate(iso: string) {
   if (!iso) return "";
   const date = parseDate(iso);
-  return date ? date.toLocaleDateString([], { month: "short", day: "numeric" }) : iso;
+  return date
+    ? date.toLocaleDateString([], { month: "short", day: "numeric" })
+    : iso;
 }
 
 export function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+export function averageFit(applications: Application[]) {
+  const scores = applications.map(fitScore).filter((score): score is number => typeof score === "number");
+  if (!scores.length) return null;
+  return Math.round(scores.reduce((sum, score) => sum + score, 0) / scores.length);
+}
+
 export function statusCount(applications: Application[], status: ApplicationStatus) {
   return applications.filter((app) => app.status === status).length;
 }
 
+// Compact display host for a posting link: http(s) only — anything else returns
+// "" and the caller skips rendering a link (one safety rule everywhere a stored
+// URL becomes clickable). Strips the leading "www." so boards read as short
+// chips. Shared by TrackerInspector's "Found on" chips and the duplicate-review
+// modal's member links.
 export function hostLabel(url: string): string {
   const trimmed = url.trim();
   if (!/^https?:\/\//i.test(trimmed)) return "";
@@ -124,4 +201,18 @@ export function hostLabel(url: string): string {
   } catch {
     return "";
   }
+}
+
+// Average fit-score lift from tailoring (tailoredFitScore - baseFitScore), across
+// applications where both scores are recorded. Returns null when no data.
+export function averageLift(applications: Application[]): number | null {
+  const withLift = applications.filter(
+    (app) => typeof app.baseFitScore === "number" && typeof app.tailoredFitScore === "number"
+  );
+  if (!withLift.length) return null;
+  const total = withLift.reduce(
+    (sum, app) => sum + Number(app.tailoredFitScore) - Number(app.baseFitScore),
+    0
+  );
+  return Math.round(total / withLift.length);
 }

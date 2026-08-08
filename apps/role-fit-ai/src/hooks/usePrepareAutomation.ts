@@ -2,8 +2,7 @@ import { useEffect, useRef, useState } from "react";
 
 import type { InitialFitAudit } from "../lib/initialFitAudit.ts";
 import {
-  decideAutoPolish,
-  type AutoPolishDecision,
+  meetsAutoPolishThreshold,
   type AutoPolishThreshold
 } from "../lib/prepareAutomation.ts";
 import type { CoverLetterRunOutcome } from "./useCoverLetter.ts";
@@ -18,18 +17,18 @@ export function automaticResumeStages(
 }
 
 export type PrepareAutomationDecision = {
-  resume: AutoPolishDecision;
-  coverLetter: AutoPolishDecision;
+  resume: boolean;
+  coverLetter: boolean;
 };
 
 export function prepareAutomationDecision(
-  audit: Pick<InitialFitAudit, "assessment">,
+  audit: Pick<InitialFitAudit, "verdict">,
   resumeThreshold: AutoPolishThreshold,
   coverThreshold: AutoPolishThreshold
 ): PrepareAutomationDecision {
   return {
-    resume: decideAutoPolish(audit.assessment, resumeThreshold),
-    coverLetter: decideAutoPolish(audit.assessment, coverThreshold)
+    resume: meetsAutoPolishThreshold(audit.verdict, resumeThreshold),
+    coverLetter: meetsAutoPolishThreshold(audit.verdict, coverThreshold)
   };
 }
 
@@ -58,10 +57,10 @@ type UsePrepareAutomationArgs = {
   runCoverLetter: () => Promise<CoverLetterRunOutcome>;
 };
 
-function settledDecisionState(decision: AutoPolishDecision): PrepareAutomationActionState {
-  if (decision.action === "WAIT") return { status: "waiting", note: decision.reason };
-  if (decision.action === "SKIP") return { status: "skipped", reason: decision.reason };
-  return { status: "running" };
+function skippedReason(threshold: AutoPolishThreshold): string {
+  return threshold === "off"
+    ? "Automatic polish is off."
+    : `Initial Fit is below the ${threshold} threshold.`;
 }
 
 function resumeAction(outcome: ResumePolishOutcome): PrepareAutomationActionState {
@@ -107,11 +106,7 @@ export function usePrepareAutomation({
     resume: { status: "idle" },
     coverLetter: { status: "idle" }
   });
-  const handledDecisionsRef = useRef(new Set<string>());
-  const activeResumeRunRef = useRef<{
-    auditFingerprint: string;
-    promise: Promise<void>;
-  } | null>(null);
+  const handledAuditsRef = useRef(new Set<string>());
   const currentAuditFingerprintRef = useRef(audit?.fingerprint ?? "");
   const runResumeRef = useRef(runResume);
   const runCoverLetterRef = useRef(runCoverLetter);
@@ -136,90 +131,52 @@ export function usePrepareAutomation({
   }, [audit]);
 
   useEffect(() => {
-    if (!audit) return;
+    if (!audit || handledAuditsRef.current.has(audit.fingerprint)) return;
     const decision = prepareAutomationDecision(audit, resumeThreshold, coverThreshold);
-    const expectedFingerprint = audit.fingerprint;
-    const resumeDecisionKey = [
-      expectedFingerprint,
-      `resume:${decision.resume.action}:${decision.resume.reason}`
-    ].join("|");
-    const coverDecisionKey = [
-      expectedFingerprint,
-      `cover:${decision.coverLetter.action}:${decision.coverLetter.reason}`
-    ].join("|");
-    const resumeNeedsHandling = !handledDecisionsRef.current.has(resumeDecisionKey);
-    const coverCanStart = decision.coverLetter.action !== "RUN" || coverSelectionSettled;
-    const coverNeedsHandling = coverCanStart && !handledDecisionsRef.current.has(coverDecisionKey);
-    if (!resumeNeedsHandling && !coverNeedsHandling) {
-      if (decision.coverLetter.action === "RUN" && !coverSelectionSettled) {
-        setState((current) => current.auditFingerprint === expectedFingerprint
-          ? { ...current, coverLetter: { status: "waiting", note: "Selecting the best saved cover letter." } }
-          : current);
-      }
+    if (decision.coverLetter && !coverSelectionSettled) {
+      setState({
+        auditFingerprint: audit.fingerprint,
+        resume: decision.resume
+          ? { status: "waiting", note: "Waiting for saved materials to settle." }
+          : { status: "skipped", reason: skippedReason(resumeThreshold) },
+        coverLetter: { status: "waiting", note: "Selecting the best saved cover letter." }
+      });
       return;
     }
 
-    if (resumeNeedsHandling) handledDecisionsRef.current.add(resumeDecisionKey);
-    if (coverNeedsHandling) handledDecisionsRef.current.add(coverDecisionKey);
-    setState((current) => {
-      const sameAudit = current.auditFingerprint === expectedFingerprint;
-      return {
-        auditFingerprint: expectedFingerprint,
-        resume: resumeNeedsHandling
-          ? settledDecisionState(decision.resume)
-          : sameAudit ? current.resume : { status: "idle" },
-        coverLetter: coverNeedsHandling
-          ? decision.coverLetter.action === "RUN"
-            ? { status: "waiting", note: decision.resume.action === "RUN" ? "Waiting for Resume automation." : "Ready to start." }
-            : settledDecisionState(decision.coverLetter)
-          : decision.coverLetter.action === "RUN" && !coverSelectionSettled
-            ? { status: "waiting", note: "Selecting the best saved cover letter." }
-            : sameAudit ? current.coverLetter : { status: "idle" }
-      };
+    handledAuditsRef.current.add(audit.fingerprint);
+    const expectedFingerprint = audit.fingerprint;
+    setState({
+      auditFingerprint: expectedFingerprint,
+      resume: decision.resume
+        ? { status: "running" }
+        : { status: "skipped", reason: skippedReason(resumeThreshold) },
+      coverLetter: decision.coverLetter
+        ? { status: "waiting", note: decision.resume ? "Waiting for Resume automation." : "Ready to start." }
+        : { status: "skipped", reason: skippedReason(coverThreshold) }
     });
 
     void (async () => {
-      let currentResumeRun: Promise<void> | null = null;
-      if (resumeNeedsHandling && decision.resume.action === "RUN") {
-        currentResumeRun = (async () => {
-          try {
-            const outcome = await runResumeRef.current(automaticResumeStages(polishStages));
-            if (currentAuditFingerprintRef.current !== expectedFingerprint) return;
-            setState((current) => ({ ...current, resume: resumeAction(outcome) }));
-          } catch (error) {
-            if (currentAuditFingerprintRef.current !== expectedFingerprint) return;
-            setState((current) => ({
-              ...current,
-              resume: {
-                status: "failed",
-                reason: error instanceof Error ? error.message : "Resume automation failed."
-              }
-            }));
-          }
-        })();
-        activeResumeRunRef.current = {
-          auditFingerprint: expectedFingerprint,
-          promise: currentResumeRun
-        };
-        await currentResumeRun;
+      if (decision.resume) {
+        try {
+          const outcome = await runResumeRef.current(automaticResumeStages(polishStages));
+          if (currentAuditFingerprintRef.current !== expectedFingerprint) return;
+          setState((current) => ({ ...current, resume: resumeAction(outcome) }));
+        } catch (error) {
+          if (currentAuditFingerprintRef.current !== expectedFingerprint) return;
+          setState((current) => ({
+            ...current,
+            resume: {
+              status: "failed",
+              reason: error instanceof Error ? error.message : "Resume automation failed."
+            }
+          }));
+        }
       }
 
       // Cover is an independent policy decision. A failed/stopped Resume action
       // never suppresses a threshold-qualified cover proposal.
-      if (
-        !coverNeedsHandling ||
-        decision.coverLetter.action !== "RUN" ||
-        currentAuditFingerprintRef.current !== expectedFingerprint
-      ) return;
-      const activeResumeRun = activeResumeRunRef.current;
-      if (
-        activeResumeRun &&
-        activeResumeRun.auditFingerprint === expectedFingerprint &&
-        activeResumeRun.promise !== currentResumeRun
-      ) {
-        await activeResumeRun.promise;
-      }
-      if (currentAuditFingerprintRef.current !== expectedFingerprint) return;
+      if (!decision.coverLetter || currentAuditFingerprintRef.current !== expectedFingerprint) return;
       setState((current) => ({ ...current, coverLetter: { status: "running" } }));
       try {
         const outcome = await runCoverLetterRef.current();

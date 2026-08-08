@@ -1,7 +1,7 @@
 // /api/polish route handler. The route is intentionally multi-pass: a
-// suggestion pass first, then the optional submission-readiness audit and optional
+// suggestion pass first, then the optional strict recruiter audit and optional
 // cover letter IN PARALLEL, so one model response is not forced to rewrite,
-// tailor, audit, and draft a letter at once. The polished preview is never
+// score, audit, and draft a letter at once. The polished preview is never
 // model-authored: it is derived by applying suggestions that passed the current
 // deterministic grounding/sanitization gates to the scoped text.
 // Provider config, prompts, provider clients, response sanitizing, and error
@@ -32,6 +32,9 @@ import { findUngroundedClaimTerm, findUngroundedOutcomeClaim, proseHasUngrounded
 import { reviseGroundedCoverLetter } from "./coverLetter.ts";
 import {
   hasUngroundedNumericClaim,
+  makeRewriteGrounder,
+  makeRewriteNumericGrounder,
+  missingRequiredSkillsFromStrictReview,
   sanitizeMissingRequiredSkills,
   sanitizeTailorSuggestions,
   summarizeDroppedSuggestions
@@ -266,7 +269,20 @@ function scopeToText(scope: NormalizedScope, suggestions: PolishSuggestion[] = [
   return lines.join("\n").trim();
 }
 
-// The submission-review pass fails closed unless its complete, evidence-grounded assessment validates.
+// Recruiter Audit owns the entire fit judgment; the shared runner validates:
+//
+//   1. sanitizeStrictReview validates the review's shape, enums, and grounding.
+//   2. A review with no requirement rows OR a blank verdict reason is an empty
+//      shell — rejected so a verdict never displays without inspectable support.
+//   3. sanitizeAiFitScore validates the AI-authored score against numeric bounds
+//      and the model's own verdict band.
+//
+// A score that fails step 3 (missing, non-integer, out of range, or
+// band-inconsistent — e.g. STRONG FIT paired with a tailored 82) makes the
+// entire Review output unusable. Score, verdict, coverage, and recommendation
+// are one model-authored judgment contract. The server never repairs or
+// substitutes either half. See recruiterAudit.ts; this route consumes its
+// all-or-nothing outcome below.
 export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -281,7 +297,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
   try {
     const body = await readAiJsonBody(req, 1_000_000);
     const tailorScope = normalizeTailorScope(body.tailorScope);
-    // scopeText feeds the submission-review context and includes read-only
+    // scopeText feeds the strict-review/context picture and includes read-only
     // context sections; the GATE below measures editable text only so a
     // context-only request (no tailorable sections) is rejected.
     const scopeText = scopeToText(tailorScope);
@@ -289,23 +305,21 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const includeCoverLetter = body.includeCoverLetter === true;
     const sourceCoverLetterText = String(body.sourceCoverLetterText ?? "").slice(0, 35_000);
-    // The explicit stage keeps tailoring and submission review independently runnable.
-    if (body.stages !== "tailor" && body.stages !== "review" && body.stages !== "both") {
-      sendJson(res, 400, { error: "Choose tailor, review, or both before polishing." });
-      return;
-    }
-    const stages = body.stages;
+    const strictReview = body.strictReview === true;
+    // `stages` lets the client run the tailor pass and the strict-review pass
+    // independently. Back-compat: callers that only send `strictReview`
+    // (e.g. the fabrication eval) still get the legacy mapping —
+    // strictReview:true ≡ "both", strictReview:false ≡ "tailor".
+    //   tailor: run the tailor provider call, skip the review pass (today's
+    //           strictReview:false behavior).
+    //   both:   tailor + review (today's strictReview:true behavior).
+    //   review: skip the tailor provider call; audit prior (untrusted) client
+    //           suggestions re-sanitized against the scope. No cover letter.
+    const stages = (body.stages === "tailor" || body.stages === "review" || body.stages === "both")
+      ? body.stages
+      : (strictReview ? "both" : "tailor");
     const runTailor = stages !== "review";
     const runReview = stages !== "tailor";
-    const reviewTarget = !runTailor
-      ? body.reviewTarget === "current" || body.reviewTarget === "proposal"
-        ? body.reviewTarget
-        : null
-      : null;
-    if (!runTailor && !reviewTarget) {
-      sendJson(res, 400, { error: "Choose the current draft or Tailor proposal before reviewing." });
-      return;
-    }
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
 
@@ -324,9 +338,13 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     provider = resolved.provider;
     const { apiKey, model, reasoningEffort } = resolved;
 
-    // Tailor pass. Review-only skips its provider entirely. A proposal review
-    // re-sanitizes that run's suggestions against the original scope; a current
-    // review deliberately ignores suggestions and audits the edited scope as-is.
+    // Tailor pass. In review-only mode there are no model-authored suggestions
+    // to generate, so even the tailor prompt is not constructed: this avoids
+    // serializing a large scope and doing prompt-only work for a pass that will
+    // never dispatch. Suggestions instead come from
+    // the request body (a prior tailor response round-tripped through the client,
+    // hence UNTRUSTED). Both paths feed the SAME sanitizer against the scope, so
+    // client-provided suggestions are never trusted unsanitized.
     const tailorStats: AttemptStats = {};
     let parsed: unknown;
     if (runTailor) {
@@ -346,11 +364,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         signal: request.signal
       }, tailorStats);
     } else {
-      parsed = {
-        suggestedChanges: reviewTarget === "proposal" && Array.isArray(body.suggestedChanges)
-          ? body.suggestedChanges
-          : []
-      };
+      parsed = { suggestedChanges: Array.isArray(body.suggestedChanges) ? body.suggestedChanges : [] };
     }
     // Model output (or the review-only body echo): read fields defensively.
     const parsedObj = parsed as { suggestedChanges?: unknown; missingRequiredSkills?: unknown; changeSummary?: unknown };
@@ -388,10 +402,15 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // sanitized suggestions to the scoped text. Every applied suggestion has
     // passed the current deterministic grounding/sanitization gates, and the
     // audit/cover passes judge exactly the text the editor can end up with. Zero
-    // sanitized suggestions is a valid outcome (the scope needs no edits) — the
+    // sanitized suggestions is a valid outcome (the scope already fits) — the
     // preview is then the unchanged scope.
     const polishedText = scopeToText(tailorScope, suggestedChanges);
 
+    // Grounding corpus for secondary prose: the resume the user actually ends
+    // up with (every applied suggestion already passed sanitization) plus honest
+    // context. A JD skill term an audit rewrite or cover letter introduces that
+    // is absent from here is unsupported.
+    const groundingText = `${polishedText}\n${honestContext}`;
     // changeSummary is free model prose. With no accepted edits, no model prose
     // can truthfully describe a resume change, so omit the entire section and
     // let the explicit withheld-edits note explain the outcome. Otherwise it may
@@ -425,10 +444,20 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
           mode: "comparison",
           provider: audit,
           jobText,
-          resumeText: polishedText,
+          resumeText: scopeText,
+          // The audit judges original + the sanitized change list (the polished
+          // resume is derivable from them); sending the polished copy too nearly
+          // doubled the audit prompt for no information.
+          suggestedChanges,
           honestContext,
           customInstructions,
-          signal: request.signal
+          signal: request.signal,
+          groundingText,
+          sanitizeOptions: {
+            rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
+            rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
+            suggestedEditNumericGrounding: honestContext
+          }
         }, auditStats);
     // No cover letter in review-only mode: the cover pass tailors prose off the
     // polished resume, which is purely a tailor-pass artifact. Shares the
@@ -456,15 +485,17 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // surviving retry) must NOT sink the request and discard the computed
     // suggestions/polishedText — especially with an independent reviewer that
     // can run on a different provider/key. allSettled isolates each: a rejected
-    // review falls back to a null submission assessment; a rejected
+    // review falls back to strictReview:null + reviewStatus:"failed"; a rejected
     // or blank cover returns "" + coverStatus:"failed".
     const [reviewSettled, coverSettled] = await Promise.allSettled([reviewPromise, coverPromise]);
     if (request.signal.aborted) throw new RequestAbortedError();
-    let reviewOutcome: RecruiterAuditOutcome = { submissionAssessment: null };
+    // Model output from the review pass: read the review and its AI-authored
+    // base/tailored score defensively. Neither is recomputed locally.
+    let reviewOutcome: RecruiterAuditOutcome = { strictReview: null, aiScore: null };
     if (reviewSettled.status === "fulfilled") {
       if (reviewSettled.value) reviewOutcome = reviewSettled.value;
     } else {
-      console.warn("[ai] submission review pass failed; returning primary rewrite without it", {
+      console.warn("[ai] strict review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
         errorName: reviewSettled.reason instanceof Error ? reviewSettled.reason.name : typeof reviewSettled.reason
       });
@@ -480,16 +511,32 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         errorName: coverSettled.reason instanceof Error ? coverSettled.reason.name : typeof coverSettled.reason
       });
     }
-    const { submissionAssessment } = reviewOutcome;
+    // AI Review owns score + verdict + coverage; the server only validates the
+    // contract. A missing/invalid/contradictory score invalidates the whole
+    // review rather than creating a scoreless success — see resolveReviewOutcome.
+    // The entry-scoped rewrite grounders keep the
+    // review pass from reintroducing a misattribution the tailor gate drops
+    // (match rewrite.original -> entry).
+    const { strictReview: strictReviewResult, aiScore } = reviewOutcome;
+
+    const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(
+      strictReviewResult,
+      jobText,
+      groundingText
+    );
 
     // reviewStatus lets the client distinguish a review that was never requested
     // from one that ran but produced nothing usable. "off" = review not run;
-    // "failed" = review requested but no usable submission assessment survived — whether
+    // "failed" = review requested but no usable strictReview survived — whether
     // the pass rejected, returned no parseable object, or its shape did not
-    // validate; "ok" = a sanitized submission assessment is returned.
+    // sanitize (strictReviewResult is null in every one of those cases, since it
+    // is only present in a valid shared audit outcome); "ok" = a sanitized
+    // strictReview plus its valid score is returned. resolveReviewOutcome returns
+    // both fields or neither, so a missing/invalid score is a failed Review, not
+    // a scoreless success. Absent field = legacy client.
     const reviewStatus = !runReview
       ? "off"
-      : (!submissionAssessment ? "failed" : "ok");
+      : (!strictReviewResult ? "failed" : "ok");
     const reviewFailure = reviewStatus !== "failed"
       ? null
       : reviewSettled.status === "rejected"
@@ -529,9 +576,10 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
         polishedText,
         suggestedChanges,
         changeSummary: [],
-        missingRequiredSkills: [],
+        missingRequiredSkills: strictMissingRequiredSkills,
         droppedSuggestions,
-        submissionAssessment,
+        aiScore,
+        strictReview: strictReviewResult,
         reviewStatus,
         ...reviewFailureEcho,
         coverStatus,
@@ -548,10 +596,11 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       coverLetterText: coverLetterText ?? "",
       coverStatus,
       changeSummary: honestChangeSummary,
-      missingRequiredSkills,
+      missingRequiredSkills: missingRequiredSkills.length ? missingRequiredSkills : strictMissingRequiredSkills,
       suggestedChanges,
       droppedSuggestions,
-      submissionAssessment,
+      aiScore,
+      strictReview: strictReviewResult,
       reviewStatus,
       ...reviewFailureEcho,
       model,

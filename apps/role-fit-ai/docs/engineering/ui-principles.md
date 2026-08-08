@@ -64,11 +64,10 @@ explicit View, Replace, and Prepare again paths. The structured brief leads the
 main column and one Application rail combines both material choices, readiness,
 the saved-application summary, a flat Initial Fit decision checkpoint,
 independent automation receipts, and Apply. Initial Fit advances from resume
-selection to audit to a categorical verdict, confidence, eligibility, and
-requirement ledger, with local Retry, Stop, and Re-audit controls. It shows the
-exact selected resume and provider provenance; a reopened saved checkpoint is
-historical. A later Review renders separately as resume submission readiness
-and never changes Initial Fit. Neither is estimated locally. Nothing on
+selection to audit to its one-score result, with local Retry, Stop, and Re-audit
+controls. It shows strengths, gaps, exact selected resume, and provider
+provenance; a reopened saved checkpoint is historical. A later Recruiter audit
+renders separately as Proposal fit. Neither is estimated locally. Nothing on
 the page is a card inside a card, and no status earns its own tinted panel or
 icon tile. Preparation
 progress is already a readiness check, so it takes rail space only while work is

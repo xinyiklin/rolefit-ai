@@ -42,7 +42,7 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     id: "review",
     label: "Audit",
     title: "Recruiter audit",
-    blurb: "Audits whether your draft communicates its evidence clearly.",
+    blurb: "Audits your draft like a recruiter and scores the fit.",
     settingsPrefix: "audit"
   },
   {

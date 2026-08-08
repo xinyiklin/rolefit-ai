@@ -41,11 +41,10 @@ and `docs/engineering/ui-principles.md`.
 - After preparation, the brief leads the main column and one Application rail
   owns both material choices, a flat Initial Fit checkpoint, independent
   automation receipts, readiness, saved-application summary, and Apply. Initial
-  Fit shows selection/audit progress, categorical verdict, confidence,
-  eligibility, requirement evidence,
+  Fit shows selection/audit progress, one-score result, evidence summary,
   provenance, Retry/Stop/Re-audit, and a historical label on restore. A later AI
-  Review appears separately as submission readiness and never changes or
-  overwrites Initial Fit.
+  Review appears separately as Proposal fit; never infer or recalculate either
+  verdict on Prepare.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing
   card.
@@ -85,7 +84,7 @@ and `docs/engineering/ui-principles.md`.
   unavailable, the live status otherwise. Keep note text wrapping rather than
   ellipsed — the trailing clause is recovery guidance.
 - Both materials rank actual saved document contents with one weighted
-  prepared-job ranker and auto-select a meaningful unique winner while the
+  prepared-job scorer and auto-select a meaningful unique winner while the
   corresponding editor is clean and not application-owned. The selector is the
   receipt; do not repeat counts or explanations underneath it. Only a blocked
   automatic replacement gets the compact `PreparedVariantRecommendation`

@@ -219,7 +219,7 @@ function isGrounded(groundingText: string, groundingTokens: Set<string>, term: s
 // company and role names included) and relies on the curated tech-skill lexicons
 // (detectors 2-4) instead, so "excited about Acme's roadmap" is NOT flagged while
 // "I have Kubernetes/Terraform/ML experience" still is. Resume-field surfaces
-// Tailor's resume-field surface leaves it off and runs all detectors.
+// (tailor + strict-review rewrites) leave it off and run all detectors.
 export function findUngroundedJdTerm(
   proposedText: unknown,
   jobLower: string,
@@ -519,7 +519,7 @@ export function findUngroundedProseProperClaimTerm(
 
 // Prose-surface grounding predicate: true when `text` names a JD skill term
 // absent from the grounding corpus. The one shared shape behind five hand-rolled
-// copies (submission-review advisory prose, the change summary, cover letters, and
+// copies (strict-review advisory prose, the change summary, cover letters, and
 // application answers/role descriptions) so the proseMode grounding contract
 // lives in one place. Callers pass ALREADY-LOWERCASED jobLower/groundingLower
 // (the same pre-lowercased contract findUngroundedJdTerm documents) and do their
