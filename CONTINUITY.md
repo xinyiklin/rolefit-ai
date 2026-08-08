@@ -20,6 +20,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   grammar as presentation metadata. A provider may quote the exact text visible
   in the resume without reproducing serialized bold/link/font/spacing tags;
   wording, polarity, numeric, and source-grounding checks remain unchanged.
+- [CODE] Submission Review now enumerates its exact importance and coverage
+  values, requires unsupported-claim rows to quote the resume, and makes
+  presentation advice explicitly optional and candidate-evidence-grounded.
+  Job-only technologies, names, numbers, metrics, and outcomes cannot become
+  resume advice merely because they appear in the posting.
 - [USER+CODE] Fit Assessment directly replaces the preview numerical contract.
   `FitAssessment` owns categorical verdict, confidence, eligibility, a unique
   evidence-linked requirement ledger, and an advisory recommendation;
@@ -65,6 +70,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   UNCONFIRMED because the in-app browser webview did not attach after its
   documented retry. Static UI review reported advisories only, and the new
   ledger typography was reconciled with the documented type roles.
+- [TOOL] Supersedes the verification limits above for the assessment-runtime
+  follow-up. The focused assessment, Initial Fit, Tailor sanitizer, AI workflow,
+  and client workflow probes passed; the RoleFit production/landing/desktop gate
+  passed with 77/77 offline evaluations; and the full repository gate passed,
+  including Typeset, editor, engine, 1,266,912 PDF/font parity checks, and all 40
+  generated font files. Live pasted-job QA completed Codex Initial Fit, Codex
+  standalone Submission Review, and Claude Tailor followed by Codex Review. A
+  rejected Review rendered **AI response rejected**, preserved the proposal,
+  and a Review-only retry completed without rerunning Tailor. Re-audit and Stop
+  remained available, and provider/model attribution rendered on Initial Fit.
+  Deterministic all-dropped, partial-success, gap-only, stale-input, and failure-
+  classification cases were exercised by the offline gates rather than a
+  production test hook.
 
 ## 2026-08-06
 
