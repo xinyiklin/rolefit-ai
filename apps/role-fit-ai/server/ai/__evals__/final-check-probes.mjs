@@ -132,6 +132,28 @@ const ownershipIssue = sanitizeFinalCheck(
 );
 assert.equal(ownershipIssue.status, "NEEDS_EVIDENCE", "unsupported leadership survives final-check sanitization");
 
+const unrelatedLeadershipIssue = sanitizeFinalCheck(
+  {
+    issues: [{
+      kind: "UNSUPPORTED",
+      sourceExcerpt: "Orchestrated JavaScript billing integrations",
+      detail: "The Orchestrated JavaScript billing ownership claim is unsupported.",
+      action: "Restore the supported ownership level."
+    }]
+  },
+  "Orchestrated JavaScript billing integrations.",
+  [
+    "Supported JavaScript billing integrations.",
+    "Led Kubernetes infrastructure migrations."
+  ].join("\n"),
+  jobText
+);
+assert.equal(
+  unrelatedLeadershipIssue.status,
+  "NEEDS_EVIDENCE",
+  "unrelated evidence-corpus leadership cannot suppress a target-specific ownership issue"
+);
+
 const stakeholderJob = "Partner with legal and finance stakeholders to coordinate quarterly compliance reviews.";
 const missingResponsibility = sanitizeFinalCheck(
   {

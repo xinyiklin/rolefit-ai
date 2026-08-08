@@ -99,11 +99,17 @@ editable documents.
   reserves at least two responsibility slots when available, caps qualifications
   at three, and permits at most one provider-added row. The server
   validates exact posting/candidate excerpts, rejects semantically unrelated
-  evidence, and derives the public result from the complete hidden basis. That
+  evidence, parses numeric thresholds before bounded alternatives, and requires
+  a valid provider assessment quorum before filling omitted rows conservatively.
+  An explicit `NOT_SHOWN` row is valid; an empty, malformed, unknown-id, or
+  undersized required basis is unavailable rather than a synthesized verdict.
+  The server derives the public result from the complete hidden basis. That
   basis is neither displayed nor stored. Strong and Reasonable require at least
-  three core requirements. Editing the posting, prepared requirements, resume,
-  candidate facts, or honest context hides the old verdict as out of date until
-  the user checks again. Initial Fit has no
+  three core requirements. The receipt fingerprints the complete provider
+  screening text and separately anchors the complete prepared brief displayed
+  after settlement. Editing any field in that brief, changing or clearing the
+  authoritative current resume, or changing candidate facts/honest context
+  hides the old verdict as out of date until the user checks again. Initial Fit has no
   score, confidence, visible requirement ledger, evidence quotes,
   recommendation, or analytics role, and it never silently sets tracker
   priority. Each material has an **Include** toggle and its
@@ -155,14 +161,20 @@ editable documents.
   role, employer, subtitle, date, identity, contact, and education fields remain
   read-only evidence. Large resumes prioritize material, job-relevant
   fields inside the prompt budget, validate replies only against fields actually
-  sent, and show how many editable fields were outside that pass. The source
+  sent, and show how many editable fields were outside that pass. Any upward
+  ownership rewrite is withheld unless evidence at that level is semantically
+  tied to the target's own work; leadership in an unrelated sibling bullet or
+  broad context cannot authorize it. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
 - **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
   Letter proposal toggles are independent and default off. Only Strong or
   Reasonable without an eligibility blocker may start an enabled proposal;
   a Check warning may still polish because Polish is not submission. Stretch,
   Limited, unavailable, and blocked outcomes remain manual. Changing the
-  selected resume reruns only Initial Fit, never Job analysis.
+  selected resume reruns only Initial Fit, never Job analysis. Retry always
+  resolves the same authoritative prepared-resume selection used by Prepare,
+  rejects the bundled starter and short/blank-origin stubs, and remains available
+  when Initial Fit is turned off and back on after a preparation.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,

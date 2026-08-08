@@ -345,6 +345,16 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
     null,
     "the starter can never become a current selection"
   );
+  check(
+    currentResumeSelection(baseState({ resumeOrigin: "blank", currentText: resumeText("Edited blank") })),
+    null,
+    "editing an unsaved blank document does not silently make it applicant-owned"
+  );
+  check(
+    currentResumeSelection(baseState({ resumeOrigin: "saved", currentText: "x".repeat(60) })),
+    null,
+    "a 40-79 character saved stub is unavailable for Initial Fit"
+  );
   for (const origin of ["saved", "uploaded", "application"]) {
     check(
       resumeIsApplicantOwned(baseState({ resumeOrigin: origin, currentText: STARTER })),

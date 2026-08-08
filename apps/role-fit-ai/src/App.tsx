@@ -95,7 +95,7 @@ import {
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
-import type { PreparedResumeSelection } from "./lib/preparedResume";
+import { currentResumeSelection } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
 import {
@@ -324,12 +324,8 @@ function App() {
   const [linkStatus, setLinkStatus] = useState("");
   // Surfaces polish-flow feedback in the workflow rail.
   const [polishStatus, setPolishStatus] = useState("");
-  // usePreparedResume is declared below useWorkspaceResume (it consumes the
-  // workspace loader), while useJobIntake is composed above it. One ref bridges
-  // that order, exactly as the retired fit-only selector did.
-  const resolvePreparedResumeRef = useRef<(jobText: string) => Promise<PreparedResumeSelection | null>>(
-    async () => null
-  );
+  // Resume seeding is composed before the workspace resolver but may clear a
+  // recommendation later, so this callback alone crosses that declaration order.
   const clearPreparedResumeRecommendationRef = useRef<() => void>(() => undefined);
   const autoProposalFitRef = useRef({ key: "", resumeStarted: false, coverStarted: false });
   // Both document kinds use the same recommendation and safe auto-selection
@@ -1172,6 +1168,88 @@ function App() {
     setExportStatus
   });
 
+  // Workspace state must be available before Job intake reads the current
+  // prepared-resume selection. The same authoritative snapshot drives initial
+  // preparation, Retry, stale-fit visibility, and manual variant adoption.
+  const {
+    baseResumeName,
+    baseResumeOptions,
+    baseResumeHistory,
+    workspaceStatus,
+    isSavingBaseResume,
+    isWorkspaceBootstrapping,
+    whenWorkspaceBootstrapped,
+    loadWorkspace,
+    loadStarterTemplate,
+    startBlankResume,
+    restoreBaseResume,
+    saveCurrentAsBaseResume,
+    loadBaseResumeVersion,
+    readBaseResumeCandidates,
+    readBaseResumeCandidatesRevision,
+    detachBaseResumeIdentity,
+    handleFileUpload
+  } = useWorkspaceResume({
+    confirm,
+    replacementGuard: resumeReplacementGuard,
+    seedResumeEditor,
+    fileName,
+    setResumeText,
+    setFileName,
+    setDocumentTitle,
+    setResult,
+    resetCoverWorkflow,
+    setFileError,
+    setFileStatus,
+    setPolishStatus,
+    resetExportStatuses,
+    setExportStatus,
+    seedResumeData,
+    setResumeOrigin,
+    currentResumeText,
+    resumeText,
+    editedResume,
+    docStyle
+  });
+
+  // Every live value the resolver's decision depends on, read at dispatch time
+  // rather than captured: preparation begins from an event, and a stale closure
+  // is exactly how "workspace still hydrating" became "no resume".
+  const preparedResumeStateRef = useRef<PreparedResumeResolverState>(null!);
+  preparedResumeStateRef.current = {
+    baseResumeName,
+    options: baseResumeOptions,
+    resumeOrigin,
+    applicationOwned: applicationOfRecordId !== null,
+    currentText: currentResumeText || resumeText,
+    documentTitle,
+    documentDirty: resumeDocumentDirty,
+    manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
+    savingBaseResume: isSavingBaseResume,
+    candidateRevision: readBaseResumeCandidatesRevision()
+  };
+  const readPreparedResumeState = useCallback(
+    () => ({
+      ...preparedResumeStateRef.current,
+      // Read the ref at resolution time: an authoritative snapshot can arrive
+      // while candidate I/O is in flight, before React republishes App state.
+      candidateRevision: readBaseResumeCandidatesRevision()
+    }),
+    [readBaseResumeCandidatesRevision]
+  );
+  const {
+    resolvePreparedResume,
+    clearPreparedResumeRecommendation,
+    resumeVariantRecommendation,
+    isResolvingPreparedResume
+  } = usePreparedResume({
+    readState: readPreparedResumeState,
+    whenWorkspaceBootstrapped,
+    readBaseResumeCandidates,
+    loadBaseResumeVersion
+  });
+  clearPreparedResumeRecommendationRef.current = clearPreparedResumeRecommendation;
+
   // ----- Job intake (job analysis/import flows) -----
   // Link analysis, pasted-posting analysis, the browser-extension inbox import, and
   // each entry point's Retry — extracted to
@@ -1212,20 +1290,9 @@ function App() {
     jobAnalysisRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
     runInitialFit,
-    resolvePreparedResume: (jobText: string) => resolvePreparedResumeRef.current(jobText),
+    resolvePreparedResume,
     candidateContext: () => requestHonestContext,
-    currentResume: () => {
-      const text = (currentResumeText || resumeText).trim();
-      if (!text) return null;
-      return {
-        text,
-        label: baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
-          || baseResumeName
-          || fileName
-          || documentTitle
-          || "Current resume"
-      };
-    },
+    currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
@@ -1389,89 +1456,6 @@ function App() {
 
   // ----- Handlers -----
 
-  // The workspace / base-resume cluster (state + handlers) lives in
-  // useWorkspaceResume; App passes in the editor/export/dialog dependencies it
-  // needs and reads back the workspace state + the handlers the Open menu wires up.
-  const {
-    baseResumeName,
-    baseResumeOptions,
-    baseResumeHistory,
-    workspaceStatus,
-    isSavingBaseResume,
-    isWorkspaceBootstrapping,
-    whenWorkspaceBootstrapped,
-    loadWorkspace,
-    loadStarterTemplate,
-    startBlankResume,
-    restoreBaseResume,
-    saveCurrentAsBaseResume,
-    loadBaseResumeVersion,
-    readBaseResumeCandidates,
-    readBaseResumeCandidatesRevision,
-    detachBaseResumeIdentity,
-    handleFileUpload
-  } = useWorkspaceResume({
-    confirm,
-    replacementGuard: resumeReplacementGuard,
-    seedResumeEditor,
-    fileName,
-    setResumeText,
-    setFileName,
-    setDocumentTitle,
-    setResult,
-    resetCoverWorkflow,
-    setFileError,
-    setFileStatus,
-    setPolishStatus,
-    resetExportStatuses,
-    setExportStatus,
-    seedResumeData,
-    setResumeOrigin,
-    currentResumeText,
-    resumeText,
-    editedResume,
-    docStyle
-  });
-
-  // Every live value the resolver's decision depends on, read at dispatch time
-  // rather than captured: preparation begins from an event, and a stale closure
-  // is exactly how "workspace still hydrating" became "no resume".
-  const preparedResumeStateRef = useRef<PreparedResumeResolverState>(null!);
-  preparedResumeStateRef.current = {
-    baseResumeName,
-    options: baseResumeOptions,
-    resumeOrigin,
-    applicationOwned: applicationOfRecordId !== null,
-    currentText: currentResumeText || resumeText,
-    documentTitle,
-    documentDirty: resumeDocumentDirty,
-    manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
-    savingBaseResume: isSavingBaseResume,
-    candidateRevision: readBaseResumeCandidatesRevision()
-  };
-  const readPreparedResumeState = useCallback(
-    () => ({
-      ...preparedResumeStateRef.current,
-      // Read the ref at resolution time: an authoritative snapshot can arrive
-      // while candidate I/O is in flight, before React republishes App state.
-      candidateRevision: readBaseResumeCandidatesRevision()
-    }),
-    [readBaseResumeCandidatesRevision]
-  );
-  const {
-    resolvePreparedResume,
-    clearPreparedResumeRecommendation,
-    resumeVariantRecommendation,
-    isResolvingPreparedResume
-  } = usePreparedResume({
-    readState: readPreparedResumeState,
-    whenWorkspaceBootstrapped,
-    readBaseResumeCandidates,
-    loadBaseResumeVersion
-  });
-  resolvePreparedResumeRef.current = resolvePreparedResume;
-  clearPreparedResumeRecommendationRef.current = clearPreparedResumeRecommendation;
-
   const handleSelectBaseResumeVariant = useCallback(
     async (fileName: string) => {
       if (
@@ -1493,8 +1477,7 @@ function App() {
               resumeLabel: loaded.label,
               candidateContext: requestHonestContext,
               requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(jobDescription)
-            },
-            importedJob?.sourceText || jobRawText || jobDescription
+            }
           );
         }
       } finally {
@@ -1504,10 +1487,8 @@ function App() {
     },
     [
       baseResumeName,
-      importedJob?.sourceText,
       jobDescription,
       jobPrepared,
-      jobRawText,
       loadBaseResumeVersion,
       refreshInitialFit,
       requestHonestContext,

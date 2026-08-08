@@ -294,8 +294,12 @@ for (const [label, targetId, replacement, honestContext = ""] of [
 
 for (const [sourceText, replacement] of [
   ["Supported JavaScript and SQL delivery for internal teams.", "Architected JavaScript and SQL delivery for internal teams."],
+  ["Contributed to JavaScript and SQL tools for internal teams.", "Managed JavaScript and SQL tools for internal teams."],
   ["Contributed to JavaScript and SQL tools for internal teams.", "Owned JavaScript and SQL tools for internal teams."],
-  ["Assisted with JavaScript and SQL tools for internal teams.", "Led JavaScript and SQL tools for internal teams."]
+  ["Assisted with JavaScript and SQL tools for internal teams.", "Led JavaScript and SQL tools for internal teams."],
+  ["Supported JavaScript and SQL tools for internal teams.", "Spearheaded JavaScript and SQL tools for internal teams."],
+  ["Supported JavaScript and SQL tools for internal teams.", "Oversaw JavaScript and SQL tools for internal teams."],
+  ["Supported JavaScript and SQL tools for internal teams.", "Orchestrated JavaScript and SQL tools for internal teams."]
 ]) {
   const ownershipTarget = { ...targets[0], currentText: sourceText, entryText: sourceText };
   const rejected = sanitizeResumeProposal(
@@ -308,6 +312,33 @@ for (const [sourceText, replacement] of [
   assert.equal(rejected.status, "WITHHELD", `${sourceText} cannot be inflated to ${replacement}`);
 }
 
+const siblingLeadershipTarget = {
+  ...targets[0],
+  currentText: "Supported JavaScript and SQL billing integrations.",
+  entryText: [
+    "Supported JavaScript and SQL billing integrations.",
+    "Led Kubernetes infrastructure migrations."
+  ].join("\n")
+};
+const siblingLeadership = sanitizeResumeProposal(
+  {
+    status: "PROPOSAL",
+    changes: [{
+      targetId: siblingLeadershipTarget.targetId,
+      replacement: "Managed JavaScript and SQL billing integrations."
+    }]
+  },
+  [siblingLeadershipTarget],
+  jobText,
+  siblingLeadershipTarget.entryText,
+  ""
+);
+assert.equal(
+  siblingLeadership.status,
+  "WITHHELD",
+  "an unrelated leadership bullet in the same entry cannot authorize target ownership"
+);
+
 const supportedLeadership = sanitizeResumeProposal(
   {
     status: "PROPOSAL",
@@ -316,7 +347,7 @@ const supportedLeadership = sanitizeResumeProposal(
   [targets[0]],
   jobText,
   scopeText,
-  "At Acme, I led the JavaScript and SQL delivery described in this entry."
+  "At Acme, I led the JavaScript and SQL delivery for internal operations teams."
 );
 assert.equal(supportedLeadership.status, "PROPOSAL", "explicit honest context may support an ownership increase");
 

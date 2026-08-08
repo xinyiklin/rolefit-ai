@@ -14,12 +14,31 @@ import {
   findUngroundedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
+  hasUnsupportedOwnershipIncrease,
   isClaimTermGroundedInSource
 } from "../grounding.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 
 const checks = [
+  ["every upward ownership step is gated",
+    hasUnsupportedOwnershipIncrease(
+      "Managed JavaScript billing integrations.",
+      "Contributed to JavaScript billing integrations.",
+      ""
+    )],
+  ["unrelated sibling leadership cannot authorize the target",
+    hasUnsupportedOwnershipIncrease(
+      "Oversaw JavaScript billing integrations.",
+      "Supported JavaScript billing integrations.",
+      "Led Kubernetes infrastructure migrations."
+    )],
+  ["tied honest evidence can substantiate the same ownership",
+    !hasUnsupportedOwnershipIncrease(
+      "Orchestrated JavaScript billing integrations.",
+      "Supported JavaScript billing integrations.",
+      "At Acme I orchestrated the JavaScript billing integrations."
+    )],
   ["ordinary outcome detector rejects invented outage/revenue results",
     findUngroundedOutcomeClaim("Prevented outages and protected revenue.", "Built a deterministic fallback.") === "prevent"],
   ["ordinary outcome detector accepts a result stated in evidence",

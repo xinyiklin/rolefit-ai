@@ -141,13 +141,20 @@ Good server verification covers:
   requirements from a broad full-brief pool with responsibility/qualification
   quotas, the provider must assess every id and may add only one, fewer than
   three core rows cannot produce Strong or Reasonable, semantically unrelated exact excerpts are downgraded,
-  preferred qualifications cannot depress the category, contradiction requires
+  empty/unknown/malformed/undersized required bases are unavailable while explicit
+  all-`NOT_SHOWN` assessments remain valid, numeric ranges use their lower bound,
+  numeric `or more` wording is not split as an alternative, empty distinctive-token
+  sets never become adjacent, bounded tool lists and degree equivalency remain
+  alternatives, preferred qualifications cannot depress the category, contradiction requires
   adverse evidence, the server derives all four category boundaries and
   eligibility states, public lists cap at three, and fit-only retries omit the
   Job analysis schema
 - resume proposal probes must keep category labels out of the target set, allow
   grounded list reordering/additions, reject category substitutions, job-only
-  skills, and unsupported ownership inflation, and preserve safe sibling edits
+  skills, every upward ownership inflation (including level 1 to 2), and
+  `spearheaded`/`oversaw`/`orchestrated` inflation; unrelated sibling or broad
+  context leadership cannot authorize the target, Final Check applies the same
+  target-tied rule, and safe sibling edits remain preserved
 - application storage probes must prove compact Initial Fit and Final Check
   snapshots round-trip while numeric scores, full recruiter reviews, and
   missing-skill compatibility fields are omitted at the storage boundary
@@ -186,7 +193,10 @@ Good server verification covers:
   fixture, console output, or provider request.
 - Resume Proposal has a separate synthetic-only live smoke harness:
   `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
-  It reads no workspace resume, prints only status/count summaries, writes full
+  Every run checks an aligned fixture where `NO_CHANGES` is valid and an
+  improvable fixture that must yield at least one safe proposal. It independently
+  verifies allowed target ids, locked skill labels, grounded tools/numbers/outcomes,
+  and target-specific ownership. It reads no workspace resume, prints only status/count summaries, writes full
   synthetic receipts under gitignored `workspace/resume-proposal-eval/`, and is
   never part of `npm test`.
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
@@ -275,6 +285,10 @@ Good frontend verification covers:
   calibration layer has category-boundary, source-anchor, preference, years,
   partial-survival, and eligibility adversarial probes in
   `server/ai/__evals__/quick-fit-probes.mjs`
+- `src/hooks/__evals__/quick-fit-lifecycle.mjs` executes combined-request and
+  fit-only provenance, full-brief edit invalidation, cleared-resume invalidation,
+  Retry toggle restoration, and zero-provider-dispatch cases for starter-only,
+  blank-origin edited, and 40-79-character stub documents
 - Initial Fit shows only verdict, selected resume, summary, up to three matches
   and gaps, and a relevant eligibility warning. It exposes no score, confidence,
   evidence ledger, quotations, recommendation, saved audit, or analytics metric

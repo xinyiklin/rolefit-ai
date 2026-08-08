@@ -244,20 +244,28 @@ owns:
   requirement. Each assessment carries an exact posting excerpt and, for
   covered/contradicted rows, an exact resume or candidate-context excerpt.
   `quickFit.ts` validates those anchors and their semantic relationship,
-  injects any omitted required row as `NOT_SHOWN`, normalizes preferred
+  parses years/ranges before bounded alternatives, and counts valid required ids
+  before filling omissions. Zero valid ids or fewer than half the required rows
+  makes the fit unavailable; explicit `NOT_SHOWN` rows count as valid assessments,
+  and omissions after quorum are injected conservatively. It normalizes preferred
   qualifications to supporting, and derives the
   public category, summary, matches, gaps, and eligibility. Strong and Reasonable
-  require at least three core rows. The client fingerprints the raw posting,
-  authoritative requirements, exact resume, and candidate context; any live input
-  change derives an out-of-date state and blocks automation and Apply persistence
-  until a fresh fit-only check settles. The hidden basis is
+  require at least three core rows. The client fingerprints the exact complete
+  screening payload. A separate settled baseline fingerprints the complete
+  displayed prepared brief, exact authoritative resume, and candidate context,
+  so the final AI brief does not invalidate its own combined request while any
+  later full-brief/resume/context change derives an out-of-date state and blocks
+  automation and Apply persistence until a fresh fit-only check settles. The hidden basis is
   never returned to the client or persisted. The two subsections are sanitized
   independently in BOTH directions: the server preserves valid job
   fields when fit is absent or invalid, and the client preserves a valid fit when
   the job half falls back to the deterministic local brief. Discarding one half
   with the other would waste the combined request the fast path exists to make.
   `mode: "initial-fit"` reuses this route for a compact fit-only
-  rerun after the selected resume changes. The
+  rerun after the selected resume changes. Retry reads the same authoritative
+  prepared-resume state as Prepare; sample/stub/blank-origin editor text is not
+  screened, and the prepared-job receipt—not a parallel boolean—owns Retry
+  availability across a toggle cycle. The
   route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
   a menu-entered key reaches the route only in that transient request and is
   never returned. The

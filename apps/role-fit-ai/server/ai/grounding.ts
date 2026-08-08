@@ -130,7 +130,7 @@ const LEADING_ACTION_VERBS = new Set([
 ]);
 
 const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
-  { level: 3, pattern: /\b(?:architect(?:ed|ing)?|led|lead|leading|owned|owning|drove|driven|directed|headed)\b/i },
+  { level: 3, pattern: /\b(?:architect(?:ed|ing)?|led|lead|leading|owned|owning|drove|driven|directed|headed|spearheaded|oversaw|orchestrated)\b/i },
   { level: 2, pattern: /\b(?:built|designed|implemented|developed|delivered|created|engineered|managed)\b/i },
   { level: 1, pattern: /\b(?:assisted|supported|contributed|helped|collaborated|coordinated|participated)\b/i }
 ];
@@ -142,9 +142,44 @@ export function ownershipStrength(value: string): number {
   return 0;
 }
 
-export function hasUnsupportedOwnershipIncrease(proposed: string, grounding: string): boolean {
+const OWNERSHIP_CONTEXT_STOPWORDS = new Set([
+  "and", "the", "for", "with", "that", "this", "from", "into", "across",
+  "work", "worked", "working", "role", "project", "projects", "team", "teams",
+  "service", "services", "system", "systems", "platform", "platforms", "tool", "tools",
+  "delivery", "delivered", "build", "built", "develop", "developed", "design", "designed",
+  "implement", "implemented", "manage", "managed", "lead", "led", "leading", "owned",
+  "owning", "drove", "driven", "directed", "headed", "architected", "spearheaded",
+  "oversaw", "orchestrated", "support", "supported", "assist", "assisted", "contributed",
+  "helped", "collaborated", "coordinated", "participated", "created", "engineered"
+]);
+
+function ownershipSupportSegments(value: string): string[] {
+  return value
+    .split(/(?:\r?\n|[.!?]+\s+)/)
+    .map((segment) => segment.replace(/^[\s\u2022\u00b7*\-]+/, "").trim())
+    .filter(Boolean);
+}
+
+function ownershipSupportIsTied(targetText: string, supportText: string): boolean {
+  const targetTokens = distinctiveTokenKeys(targetText, OWNERSHIP_CONTEXT_STOPWORDS);
+  if (!targetTokens.length) return false;
+  const supportTokens = new Set(distinctiveTokenKeys(supportText, OWNERSHIP_CONTEXT_STOPWORDS));
+  const overlap = targetTokens.filter((token) => supportTokens.has(token)).length;
+  return overlap >= Math.min(2, targetTokens.length) && overlap * 2 >= targetTokens.length;
+}
+
+export function hasUnsupportedOwnershipIncrease(
+  proposed: string,
+  currentText: string,
+  supportText: string,
+  semanticTarget = currentText || proposed
+): boolean {
   const proposedLevel = ownershipStrength(proposed);
-  return proposedLevel >= 3 && ownershipStrength(grounding) < proposedLevel;
+  if (proposedLevel <= ownershipStrength(currentText)) return false;
+  return !ownershipSupportSegments(supportText).some((segment) =>
+    ownershipStrength(segment) >= proposedLevel
+    && ownershipSupportIsTied(semanticTarget, segment)
+  );
 }
 
 function normalizePhrase(text: string): string {

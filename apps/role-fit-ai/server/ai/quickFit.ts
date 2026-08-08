@@ -158,10 +158,21 @@ function numberValue(raw: string): number | null {
 
 function statedYears(value: string): number[] {
   const result: number[] = [];
-  for (const match of value.matchAll(/\b(\d{1,2}|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s*(?:\+|plus)?\s+years?\b/gi)) {
-    const parsed = numberValue(match[1]);
-    if (parsed !== null) result.push(parsed);
-  }
+  const number = "(\\d{1,2}|zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)";
+  let remaining = value;
+  const consume = (pattern: RegExp, capture = 1) => {
+    remaining = remaining.replace(pattern, (...args: unknown[]) => {
+      const parsed = numberValue(String(args[capture] ?? ""));
+      if (parsed !== null) result.push(parsed);
+      return " ".repeat(String(args[0] ?? "").length);
+    });
+  };
+  // A range states its lower bound. Consume it before the generic form so
+  // "3-5 years" cannot be silently upgraded to five.
+  consume(new RegExp(`\\b${number}\\s*(?:-|\\u2013|\\u2014|to|through)\\s*${number}\\s+years?\\b`, "gi"));
+  consume(new RegExp(`\\b${number}\\s+(?:or\\s+(?:more|greater)|and\\s+above)\\s+years?\\b`, "gi"));
+  consume(new RegExp(`\\b${number}\\s+years?\\s+or\\s+(?:more|greater)\\b`, "gi"));
+  consume(new RegExp(`\\b${number}\\s*(?:\\+|plus)?\\s+years?\\b`, "gi"));
   return result;
 }
 
@@ -225,11 +236,31 @@ const RELATION_STOPWORDS = new Set([
 ]);
 
 function splitRequirementAlternatives(requirement: string): string[] {
-  const normalized = requirement.replace(/\beither\s+/i, "");
-  const alternatives = normalized.split(/\s+(?:or|and\/or)\s+/i).map((value) => value.trim()).filter(Boolean);
+  const normalized = requirement.replace(/\beither\s+/i, "").trim();
+  // Numeric thresholds use "or" grammatically, not as interchangeable skills.
+  if (/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty)\s+(?:years?\s+)?or\s+(?:more|less|greater|fewer)\b/i.test(normalized)) {
+    return [requirement];
+  }
+
+  // Education equivalency is a real alternative, but it must not inherit the
+  // degree prefix ("Bachelor degree equivalent experience" is nonsense).
+  const educationAlternative = normalized.match(/^(.*?\b(?:degree|bachelor(?:'s|s)?|master(?:'s|s)?|doctorate|ph\.?d)\b.*?)\s+or\s+((?:an?\s+)?equivalent(?:\s+professional)?\s+experience.*?)$/i);
+  if (educationAlternative) {
+    return [educationAlternative[1].trim(), educationAlternative[2].trim()];
+  }
+
+  const prefixMatch = normalized.match(/^(.*?\b(?:with|using|in|of|for)\s+)(.+)$/i);
+  const prefix = prefixMatch?.[1] ?? "";
+  const alternativesText = prefixMatch?.[2] ?? normalized;
+  const hasAlternativeJoin = /\s+(?:or|and\/or)\s+/i.test(alternativesText)
+    || /,\s*(?:or|and\/or)\s+/i.test(alternativesText);
+  if (!hasAlternativeJoin) return [requirement];
+  const alternatives = alternativesText
+    .split(/\s*,\s*(?:(?:or|and\/or)\s+)?|\s+(?:or|and\/or)\s+/i)
+    .map((value) => value.trim())
+    .filter(Boolean);
   if (alternatives.length <= 1) return [requirement];
-  const prefix = alternatives[0].match(/^(.*?\b(?:with|using|in|of|for)\s+)([^,;]+)$/i)?.[1] ?? "";
-  return alternatives.map((alternative, index) => index === 0 || !prefix ? alternative : `${prefix}${alternative}`);
+  return alternatives.map((alternative) => prefix ? `${prefix}${alternative}` : alternative);
 }
 
 function relationCoverageForOne(requirement: string, evidence: string): QuickFitBasisCoverage {
@@ -253,7 +284,9 @@ function relationCoverageForOne(requirement: string, evidence: string): QuickFit
   const requirementTokens = distinctiveTokenKeys(requirement, RELATION_STOPWORDS);
   const evidenceTokens = new Set(distinctiveTokenKeys(evidence, RELATION_STOPWORDS));
   const overlap = requirementTokens.filter((token) => evidenceTokens.has(token)).length;
-  const adjacent = overlap >= Math.min(2, requirementTokens.length);
+  const adjacent = requirementTokens.length > 0
+    && overlap > 0
+    && overlap >= Math.min(2, requirementTokens.length);
   if (!adjacent) return "NOT_SHOWN";
 
   const requiredYears = statedYears(requirement);
@@ -284,14 +317,21 @@ function relationCoverageCap(requirement: string, evidence: string): QuickFitBas
   return "NOT_SHOWN";
 }
 
-function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFitBasisItem[] {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return [];
+function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): {
+  basis: QuickFitBasisItem[];
+  validRequiredCount: number;
+  requiredCount: number;
+} {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
+    return { basis: [], validRequiredCount: 0, requiredCount: 0 };
+  }
   const rawBasis = (raw as Record<string, unknown>).basis;
-  if (!Array.isArray(rawBasis)) return [];
+  if (!Array.isArray(rawBasis)) return { basis: [], validRequiredCount: 0, requiredCount: 0 };
 
   const requiredRequirements = sanitizeRequiredRequirements(sources.requiredRequirements, sources.jobText);
   const requiredById = new Map(requiredRequirements.map((item) => [item.requirementId, item]));
   const requiredItems = new Map<string, QuickFitBasisItem>();
+  const validRequiredIds = new Set<string>();
   const seenRequirements = new Set(requiredRequirements.map((item) => normalizedExcerpt(item.sourceRequirement)));
   const extras: QuickFitBasisItem[] = [];
   for (const rawItem of rawBasis.slice(0, MAX_BASIS_ITEMS * 2)) {
@@ -318,6 +358,7 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
       ?? postingImportance(sourceRequirement, sources.jobText)
       ?? rawImportance as QuickFitBasisImportance;
     let coverage = rawCoverage as QuickFitBasisCoverage;
+    let validAssessment = coverage === "NOT_SHOWN";
     let evidenceSource: QuickFitEvidenceSource | undefined;
     let evidenceExcerpt: string | undefined;
 
@@ -334,6 +375,7 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
         && rawEvidenceExcerpt
         && sourceIncludesExcerpt(evidenceCorpus, rawEvidenceExcerpt)
       ) {
+        validAssessment = true;
         evidenceSource = rawEvidenceSource as QuickFitEvidenceSource;
         evidenceExcerpt = rawEvidenceExcerpt;
         const cap = relationCoverageCap(sourceRequirement, rawEvidenceExcerpt);
@@ -356,18 +398,25 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
         ? { evidenceSource, evidenceExcerpt }
         : {})
     };
-    if (requiredRequirement) requiredItems.set(requirementId, item);
+    if (requiredRequirement) {
+      requiredItems.set(requirementId, item);
+      if (validAssessment) validRequiredIds.add(requirementId);
+    }
     else if (extras.length < (requiredRequirements.length ? 1 : MAX_BASIS_ITEMS)) extras.push(item);
   }
-  return [
-    ...requiredRequirements.map((requirement) => requiredItems.get(requirement.requirementId) ?? {
-      requirementId: requirement.requirementId,
-      sourceRequirement: requirement.sourceRequirement,
-      importance: requirement.importance,
-      coverage: "NOT_SHOWN" as const
-    }),
-    ...extras
-  ].slice(0, MAX_BASIS_ITEMS);
+  return {
+    basis: [
+      ...requiredRequirements.map((requirement) => requiredItems.get(requirement.requirementId) ?? {
+        requirementId: requirement.requirementId,
+        sourceRequirement: requirement.sourceRequirement,
+        importance: requirement.importance,
+        coverage: "NOT_SHOWN" as const
+      }),
+      ...extras
+    ].slice(0, MAX_BASIS_ITEMS),
+    validRequiredCount: validRequiredIds.size,
+    requiredCount: requiredRequirements.length
+  };
 }
 
 type EligibilityCondition = "citizenship" | "sponsorship" | "work-authorization" | "clearance" | "license";
@@ -522,7 +571,8 @@ export type QuickFitSources = {
 };
 
 export function calibrateQuickFit(raw: unknown, sources: QuickFitSources): QuickFitResult | null {
-  const basis = sanitizeQuickFitBasis(raw, sources);
+  const { basis, validRequiredCount, requiredCount } = sanitizeQuickFitBasis(raw, sources);
+  if (requiredCount > 0 && validRequiredCount < Math.ceil(requiredCount / 2)) return null;
   const core = basis.filter((item) => item.importance === "CORE");
   if (!core.length) return null;
 

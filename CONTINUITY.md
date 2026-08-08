@@ -5,6 +5,30 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **The second re-review findings are repaired on the prepared-resume branch.**
+  Initial Fit Retry and visible-fit provenance now read the authoritative
+  `currentResumeSelection` snapshot, reject starter/blank-origin/stub documents,
+  hide a ready verdict when that selection disappears, and derive Retry from the
+  retained prepared-job receipt across setting toggles. Provenance records the
+  complete normalized screening payload and separately anchors the complete
+  displayed prepared brief, preventing both immediate combined-response staleness
+  and false freshness after edits outside selected requirements. Quick Fit parses
+  ranges/numeric thresholds before bounded alternatives, rejects zero-token
+  adjacency, and requires a valid provider-row quorum while preserving explicit
+  `NOT_SHOWN`. Resume Polish and Final Check gate every upward ownership step
+  against target-specific evidence, including spearheaded/oversaw/orchestrated.
+  The synthetic live Resume Proposal harness now runs aligned and improvable
+  fixtures and independently checks targets, labels, tools, numbers, outcomes,
+  and ownership; execution remains UNCONFIRMED because the environment requires
+  separate approval for a cost-bearing provider call. Browser race QA was
+  attempted but remains UNCONFIRMED because the in-app browser could not attach
+  a localhost tab after its documented recovery attempt. The same races have
+  executable offline lifecycle coverage. The aggregate `npm run check` exceeded
+  the tool's 10-minute bound in font generation; every constituent gate then
+  passed separately: root dependency/script contracts, engine type/evals/font
+  generation (including 1,266,912 shaping checks), editor, Typeset, RoleFit
+  production and landing builds, desktop contracts, and all 80 RoleFit offline
+  evaluations. No pull request was opened and nothing was merged.
 - [USER+CODE+TOOL] **The re-review repair is complete.** Initial Fit now sends a
   broad prepared-brief pool and selects
   an authoritative five with responsibility/qualification quotas, at most one

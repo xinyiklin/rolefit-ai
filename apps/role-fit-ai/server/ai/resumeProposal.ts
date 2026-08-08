@@ -219,7 +219,11 @@ function replacementIsSupported(
   const grounding = target.sectionType === "standard"
     ? target.entryText
     : wholeResumeGrounding;
-  if (hasUnsupportedOwnershipIncrease(replacement, `${grounding}\n${honestContext}`)) return false;
+  if (hasUnsupportedOwnershipIncrease(
+    replacement,
+    target.currentText,
+    `${target.entryText}\n${honestContext}`
+  )) return false;
   const lowerGrounding = grounding.toLowerCase();
   return !findUngroundedJdTerm(replacement, jobText.toLowerCase(), lowerGrounding)
     && !hasUngroundedNumericClaim(replacement, grounding)

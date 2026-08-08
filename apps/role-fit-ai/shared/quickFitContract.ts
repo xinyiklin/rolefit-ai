@@ -144,7 +144,8 @@ export type QuickFitSnapshot = {
 // is live workflow state only — the persisted snapshot above is unchanged.
 export type QuickFitProvenance = {
   resumeFingerprint: string;
-  jobFingerprint: string;
+  candidateContextFingerprint: string;
+  preparedJobFingerprint: string;
   inputFingerprint: string;
 };
 

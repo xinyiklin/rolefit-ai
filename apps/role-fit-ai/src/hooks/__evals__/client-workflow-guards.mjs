@@ -27,6 +27,7 @@ const documentCheckHook = readHook("useDocumentCheck.ts");
 const proposalDecisions = readHook("useResumeProposalDecisions.ts");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
+const quickFitLifecycle = readFileSync(new URL("../../lib/quickFitLifecycle.ts", import.meta.url), "utf8");
 const prepareTab = readFileSync(new URL("../../sections/tabs/PrepareTab.tsx", import.meta.url), "utf8");
 const preparedMaterialCard = readFileSync(
   new URL("../../sections/tabs/prepare/PreparedMaterialCard.tsx", import.meta.url),
@@ -1051,14 +1052,19 @@ assert.match(app, /quickFit=\{quickFitState\}[\s\S]{0,200}?onRetryInitialFit=\{\
 assert.doesNotMatch(app, /prepareFitAssessment|savedApplicationFitVerdict/,
   "Prepare no longer derives Initial Fit from saved or post-polish audit scores");
 assert.match(
-  intake,
-  /rawPosting: jobText\.trim\(\),[\s\S]{0,220}?requirements,[\s\S]{0,120}?resume: request\.resumeText\.trim\(\),[\s\S]{0,120}?candidateContext:/,
-  "Initial Fit provenance fingerprints the raw posting, authoritative requirements, resume, and candidate context"
+  quickFitLifecycle,
+  /jobText: screeningJobText\.trim\(\),[\s\S]{0,100}?\.\.\.normalizedRequest\(request\)/,
+  "Initial Fit provenance includes the complete screening text and normalized request"
 );
 assert.match(
   intake,
-  /quickFitState\.status === "ready"[\s\S]{0,420}?inputFingerprint[\s\S]{0,180}?status: "stale"/,
-  "a ready fit is derived as stale as soon as any exact screening input changes"
+  /quickFitState\.status === "ready"[\s\S]{0,260}?quickFitProvenanceIsStale\([\s\S]{0,180}?status: "stale"/,
+  "a ready fit delegates current-brief, resume, and candidate-context freshness to the executable lifecycle guard"
+);
+assert.match(
+  app,
+  /currentResume: \(\) => currentResumeSelection\(readPreparedResumeState\(\)\)/,
+  "Retry and visible-fit provenance read the authoritative prepared-resume selection"
 );
 assert.doesNotMatch(
   intake.match(/async function retryInitialFit\(\)[\s\S]*?\n  \}/)?.[0] ?? "",
@@ -1374,13 +1380,17 @@ assert.doesNotMatch(
 );
 assert.equal(
   app.match(/resolvePreparedResume\b(?!Ref)/g)?.length,
-  3,
-  "App holds exactly one resolver value: the hook result, the intake arg name, and the ref assignment"
+  2,
+  "App holds exactly one resolver value: the hook result and the direct intake argument"
 );
-assert.match(
-  app,
-  /resolvePreparedResumeRef\.current = resolvePreparedResume;/,
-  "the intake bridge always points at the live resolver"
+const preparedResolverComposition = app.indexOf("} = usePreparedResume({");
+const jobIntakeComposition = app.indexOf("} = useJobIntake({", preparedResolverComposition);
+const directResolverArgument = app.indexOf("\n    resolvePreparedResume,", jobIntakeComposition);
+assert.ok(
+  preparedResolverComposition >= 0
+    && jobIntakeComposition > preparedResolverComposition
+    && directResolverArgument > jobIntakeComposition,
+  "Job intake receives the live resolver directly after workspace composition"
 );
 assert.match(
   intake,

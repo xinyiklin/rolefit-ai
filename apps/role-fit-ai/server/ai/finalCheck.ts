@@ -53,11 +53,15 @@ function exactSourceExcerpt(value: unknown, max: number): string {
   return excerpt.length <= max ? excerpt : "";
 }
 
-function hasUngroundedClaimSignal(value: string, grounding: string): boolean {
+function hasUngroundedClaimSignal(
+  value: string,
+  grounding: string,
+  includeOwnership = false
+): boolean {
   return hasUngroundedNumericClaim(value, grounding)
     || Boolean(findUngroundedCuratedClaimTerm(value, grounding))
     || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }))
-    || hasUnsupportedOwnershipIncrease(value, grounding);
+    || (includeOwnership && hasUnsupportedOwnershipIncrease(value, "", grounding, value));
 }
 
 const ISSUE_DETAIL_STOPWORDS = new Set([
@@ -95,11 +99,11 @@ function issueHasExactSourceAnchor(
   if (!detailReferencesExcerpt(issue.detail, sourceExcerpt)) return false;
   if (issue.kind === "UNSUPPORTED") {
     return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt)
-      && hasUngroundedClaimSignal(sourceExcerpt, evidenceText);
+      && hasUngroundedClaimSignal(sourceExcerpt, evidenceText, true);
   }
   if (issue.kind === "MISSING") {
     return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt)
-      && (hasUngroundedClaimSignal(sourceExcerpt, currentDocument)
+      && (hasUngroundedClaimSignal(sourceExcerpt, currentDocument, true)
         || materialRequirementMissing(sourceExcerpt, currentDocument));
   }
   return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt);

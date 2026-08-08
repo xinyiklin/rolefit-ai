@@ -229,9 +229,13 @@ disappears into the task. Quiet competence, not salesmanship.
     rejects semantically unrelated evidence, and derives the category and
     visible copy from the complete hidden basis. That basis is never displayed
     or persisted. Strong and Reasonable require at least three core requirements.
-    A change to the posting, selected requirements, resume, candidate facts, or
-    honest context replaces the old verdict with an out-of-date state until the
-    user checks again.
+    The provider must return a valid assessment quorum; zero valid required ids
+    or too few valid rows is unavailable, while explicit `NOT_SHOWN` assessments
+    remain legitimate. The exact complete provider screening payload is recorded,
+    while the complete prepared brief displayed after a combined response is the
+    freshness baseline. A change anywhere in that brief, a changed or cleared
+    authoritative resume, or changed candidate facts/honest context replaces the
+    old verdict with an out-of-date state until the user checks again.
     Initial Fit never shows scores, confidence, evidence ledgers,
     recommendations, or saved/historical audit state there, and never silently
     sets tracker priority. The bundled starter
@@ -251,9 +255,9 @@ disappears into the task. Quiet competence, not salesmanship.
     not add persisted variant metadata or another document schema for this decision. When Initial
     Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
     independently in both directions; changing the selected resume reruns only
-    Initial Fit, and a fit is tied to the exact posting, prepared requirements,
-    resume, candidate facts, and honest context it actually screened rather than
-    to their names.
+    Initial Fit, and a fit records the exact complete posting/request it screened
+    while binding freshness to the complete prepared brief, authoritative resume,
+    candidate facts, and honest context rather than to names or a selected subset.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

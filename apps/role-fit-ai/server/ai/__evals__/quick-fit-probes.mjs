@@ -179,6 +179,46 @@ assert.deepEqual(
   "a missing required assessment is conservatively represented as NOT_SHOWN"
 );
 
+for (const [label, basis] of [
+  ["empty required basis", []],
+  ["unknown required ids", [item(coreRequirements[0], "CORE", "NOT_SHOWN", undefined, "RESUME", "required-99")]],
+  ["malformed required rows", [null, "not-an-object", { requirementId: "required-1" }]],
+  ["required rows with malformed evidence", requiredRequirements.map((required) => item(
+    required.sourceRequirement,
+    required.importance,
+    "DIRECT",
+    undefined,
+    "RESUME",
+    required.requirementId
+  ))],
+  ["too few valid required rows", [item(coreRequirements[0], "CORE", "DIRECT", evidence[0], "RESUME", "required-1")]]
+]) {
+  assert.equal(
+    calibrateQuickFit({ basis }, { jobText, resumeText, candidateContext: "", requiredRequirements }),
+    null,
+    `${label} is unavailable instead of synthesizing a legitimate Limited verdict`
+  );
+}
+
+const explicitAllNotShown = calibrateQuickFit(
+  {
+    basis: requiredRequirements.map((required) => item(
+      required.sourceRequirement,
+      required.importance,
+      "NOT_SHOWN",
+      undefined,
+      "RESUME",
+      required.requirementId
+    ))
+  },
+  { jobText, resumeText, candidateContext: "", requiredRequirements }
+);
+assert.equal(
+  explicitAllNotShown?.verdict,
+  "LIMITED",
+  "explicit valid NOT_SHOWN assessments remain a legitimate conservative result"
+);
+
 const unrelatedJob = "Required: Experience building distributed systems.";
 const unrelatedResume = "Built internal React dashboards for operations teams.";
 const semanticallyUnrelated = calibrateQuickFit(
@@ -338,10 +378,22 @@ for (const fixture of [
     label: "one satisfied OR alternative is usable evidence"
   },
   {
+    requirement: "Experience with AWS, Azure, or GCP.",
+    evidence: "Deployed production workloads on GCP.",
+    expected: "STRETCH",
+    label: "one satisfied Oxford-comma cloud alternative is usable evidence"
+  },
+  {
     requirement: "Bachelor degree or equivalent experience.",
     evidence: "Backend engineer with eight years of professional experience.",
     expected: "STRETCH",
     label: "equivalent experience can satisfy the education alternative"
+  },
+  {
+    requirement: "Experience required.",
+    evidence: "Software engineer.",
+    expected: "LIMITED",
+    label: "an empty distinctive-token set cannot become adjacent by zero-overlap arithmetic"
   },
   {
     requirement: "Healthcare industry experience.",
@@ -369,6 +421,18 @@ for (const fixture of [
   assert.equal(result?.verdict, fixture.expected, fixture.label);
   if (fixture.expected === "STRETCH") assert.deepEqual(result?.matches, [fixture.requirement], fixture.label);
   else assert.deepEqual(result?.gaps, [fixture.requirement], fixture.label);
+}
+
+for (const [requirement, evidence, expected, label] of [
+  ["5 or more years of backend experience required.", "Backend engineer with three years of backend experience.", "LIMITED", "or-more thresholds remain numeric requirements"],
+  ["3-5 years of backend experience required.", "Backend engineer with three years of backend experience.", "STRETCH", "experience ranges use the lower bound"],
+  ["3 to 5 years of backend experience required.", "Backend engineer with two years of backend experience.", "LIMITED", "worded ranges also use the lower bound"]
+]) {
+  const result = calibrateQuickFit(
+    { basis: [item(requirement, "CORE", "DIRECT", evidence)] },
+    { jobText: requirement, resumeText: evidence, candidateContext: "" }
+  );
+  assert.equal(result?.verdict, expected, label);
 }
 assert.equal(
   calibrateQuickFit(citizenBasis, {
