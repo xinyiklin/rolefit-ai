@@ -573,3 +573,52 @@ export function isClaimTermGroundedInSource(term: unknown, source: unknown): boo
   if (normalized === "r") return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(rawSource);
   return isTermGrounded(rawTerm, rawSource);
 }
+
+// ---------------------------------------------------------------------------
+// Distinctive-token anchoring. Owned here rather than by the job analyzer
+// because Initial Fit anchors its gaps against the posting with exactly the
+// same rule; two copies of a stopword list would drift into two definitions of
+// "grounded".
+
+// Generic connective tissue that appears in almost every posting — matching one
+// of these does NOT count toward a list item being anchored in the source.
+export const LIST_STOPWORDS = new Set([
+  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
+  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
+  "other", "using", "use", "used", "including", "include", "includes", "such",
+  "across", "within", "via", "ability", "able", "experience", "experienced",
+  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
+  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
+]);
+
+const ROLE_TOKEN_CANONICAL = new Map([
+  ["postgresql", "postgres"], ["postgres", "postgres"],
+  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
+  ["typescript", "typescript"], ["ts", "typescript"]
+]);
+
+// Light morphology keeps grounding paraphrase-friendly without turning it into
+// semantic guesswork: "building" can match "build" and "services" can match
+// "service", but an invented domain/tool still has no matching token.
+function tokenKey(token: string): string {
+  let key = token;
+  if (key.length > 5 && key.endsWith("ies")) key = `${key.slice(0, -3)}y`;
+  else if (key.length > 5 && key.endsWith("ing")) key = key.slice(0, -3).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("ed")) key = key.slice(0, -2).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("s")) key = key.slice(0, -1);
+  return ROLE_TOKEN_CANONICAL.get(key) ?? key;
+}
+
+// Lowercase, strip everything but alphanumerics — the same normalization the
+// job analyzer's list grounding uses.
+const normalizeForTokens = (value: unknown): string =>
+  String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+export function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
+  return [...new Set(normalizeForTokens(value)
+    .split(" ")
+    .filter((token: string) => token.length >= 3 && !stopwords.has(token))
+    .map(tokenKey)
+    .filter(Boolean))] as string[];
+}
+

@@ -24,8 +24,12 @@ import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
-import { findUngroundedCuratedClaimTerm } from "./grounding.ts";
-import { analyzeQuickFit, quickFitPromptSection, sanitizeQuickFit } from "./quickFit.ts";
+import {
+  LIST_STOPWORDS,
+  distinctiveTokenKeys,
+  findUngroundedCuratedClaimTerm
+} from "./grounding.ts";
+import { analyzeQuickFit, groundQuickFit, quickFitPromptSection, sanitizeQuickFit } from "./quickFit.ts";
 import type { QuickFitResult } from "../../shared/quickFitContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
@@ -156,48 +160,11 @@ function grounded(value: unknown, sourceNorm: string): boolean {
   return Boolean(v) && v.length >= 2 && sourceNorm.includes(v);
 }
 
-// Generic connective tissue that appears in almost every posting — matching one
-// of these does NOT count toward a list item being anchored in the source.
-const LIST_STOPWORDS = new Set([
-  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
-  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
-  "other", "using", "use", "used", "including", "include", "includes", "such",
-  "across", "within", "via", "ability", "able", "experience", "experienced",
-  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
-  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
-]);
-
 const ROLE_DESCRIPTION_STOPWORDS = new Set([
   ...LIST_STOPWORDS,
   "company", "business", "position", "candidate", "candidates", "looking", "seeking",
   "help", "helps", "helping", "join", "joining", "opportunity"
 ]);
-
-const ROLE_TOKEN_CANONICAL = new Map([
-  ["postgresql", "postgres"], ["postgres", "postgres"],
-  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
-  ["typescript", "typescript"], ["ts", "typescript"]
-]);
-
-// Light morphology keeps grounding paraphrase-friendly without turning it into
-// semantic guesswork: "building" can match "build" and "services" can match
-// "service", but an invented domain/tool still has no matching token.
-function tokenKey(token: string): string {
-  let key = token;
-  if (key.length > 5 && key.endsWith("ies")) key = `${key.slice(0, -3)}y`;
-  else if (key.length > 5 && key.endsWith("ing")) key = key.slice(0, -3).replace(/(.)\1$/, "$1");
-  else if (key.length > 4 && key.endsWith("ed")) key = key.slice(0, -2).replace(/(.)\1$/, "$1");
-  else if (key.length > 4 && key.endsWith("s")) key = key.slice(0, -1);
-  return ROLE_TOKEN_CANONICAL.get(key) ?? key;
-}
-
-function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
-  return [...new Set(norm(value)
-    .split(" ")
-    .filter((token) => token.length >= 3 && !stopwords.has(token))
-    .map(tokenKey)
-    .filter(Boolean))];
-}
 
 // Free-text fields need the same symbol/case-aware protection as techKeywords.
 // Otherwise generic token overlap lets clearance/business phrases ground an
@@ -476,17 +443,28 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
 export function sanitizePrepareAnalysisResponse(
   parsed: unknown,
   jobText: string,
-  fitRequested: boolean
+  // The Initial Fit inputs, or null when no screening was requested. The two
+  // subsections are sanitized independently on purpose: a weak job half must
+  // not discard a valid screening, and vice versa.
+  fitInput: InitialFitInput | null
 ): { fields: ReturnType<typeof sanitizeJobAnalysis>; initialFit?: QuickFitResult | null } {
   const source = parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : {};
-  const rawJob = fitRequested && source.job && typeof source.job === "object"
+  const rawJob = fitInput && source.job && typeof source.job === "object"
     ? source.job
     : source;
   return {
     fields: sanitizeJobAnalysis(rawJob, jobText),
-    ...(fitRequested ? { initialFit: sanitizeQuickFit(source.initialFit) } : {})
+    ...(fitInput
+      ? {
+          initialFit: groundQuickFit(sanitizeQuickFit(source.initialFit), {
+            jobText,
+            resumeText: fitInput.resumeText,
+            candidateContext: fitInput.candidateContext
+          })
+        }
+      : {})
   };
 }
 
@@ -515,7 +493,7 @@ export async function analyzeJobToFields({
     { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
     stats
   );
-  const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, Boolean(fitInput));
+  const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, fitInput);
   return {
     ...prepared,
     initialFitRequested: Boolean(fitInput),

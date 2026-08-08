@@ -227,13 +227,19 @@ export function extractedFromAiOrLocal(
   localExtracted?: ExtractedJobPosting,
   initialFitRequested = false
 ): JobAnalysisResult {
+  // The server sanitizes the job subsection and the Initial Fit subsection
+  // independently, so a valid screening can arrive beside job fields too weak
+  // to use. Discarding the fit with them threw away a good half of the one
+  // combined request and invited a second fit-only call; the two sources stay
+  // independent here for the same reason.
+  const initialFit = initialFitRequested ? sanitizeQuickFit(fields?.initialFit) : null;
   if (fields && hasUsableAiContent(fields)) {
     return {
       extracted: buildExtractedFromAi(fields, text, url),
       source: "ai",
       usage: aiUsageFromFields(fields),
       initialFitRequested,
-      initialFit: initialFitRequested ? sanitizeQuickFit(fields.initialFit) : null
+      initialFit
     };
   }
   return {
@@ -242,7 +248,7 @@ export function extractedFromAiOrLocal(
     usage: localFallbackUsage(aiRequest),
     failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502)),
     initialFitRequested,
-    initialFit: null
+    initialFit
   };
 }
 
