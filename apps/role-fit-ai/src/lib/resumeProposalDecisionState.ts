@@ -22,6 +22,7 @@ export function resumeProposalKey(result: PolishedResume | null): string {
     outcome: result?.polishOutcome ?? "",
     changes: (result?.suggestedChanges ?? []).map((suggestion) => ({
       targetId: suggestion.id,
+      target: suggestion.target,
       originalText: suggestion.currentText,
       proposedText: suggestion.proposedText,
       reason: suggestion.reason || ""

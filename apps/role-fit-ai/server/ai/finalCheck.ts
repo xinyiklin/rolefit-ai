@@ -13,7 +13,8 @@ import {
   LIST_STOPWORDS,
   distinctiveTokenKeys,
   findUngroundedCuratedClaimTerm,
-  findUngroundedOutcomeClaim
+  findUngroundedOutcomeClaim,
+  hasUnsupportedOwnershipIncrease
 } from "./grounding.ts";
 import { readAiJsonBody } from "./json.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
@@ -55,7 +56,8 @@ function exactSourceExcerpt(value: unknown, max: number): string {
 function hasUngroundedClaimSignal(value: string, grounding: string): boolean {
   return hasUngroundedNumericClaim(value, grounding)
     || Boolean(findUngroundedCuratedClaimTerm(value, grounding))
-    || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }));
+    || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }))
+    || hasUnsupportedOwnershipIncrease(value, grounding);
 }
 
 const ISSUE_DETAIL_STOPWORDS = new Set([
@@ -69,7 +71,16 @@ const ISSUE_DETAIL_STOPWORDS = new Set([
 function detailReferencesExcerpt(detail: string, sourceExcerpt: string): boolean {
   const excerptTokens = new Set(distinctiveTokenKeys(sourceExcerpt, ISSUE_DETAIL_STOPWORDS));
   const detailTokens = distinctiveTokenKeys(detail, ISSUE_DETAIL_STOPWORDS);
-  return excerptTokens.size > 0 && detailTokens.some((token) => excerptTokens.has(token));
+  const overlap = detailTokens.filter((token) => excerptTokens.has(token)).length;
+  return overlap >= 2 || (overlap > 0 && overlap / excerptTokens.size >= 0.5);
+}
+
+function materialRequirementMissing(requirement: string, currentDocument: string): boolean {
+  const requirementTokens = distinctiveTokenKeys(requirement, ISSUE_DETAIL_STOPWORDS);
+  if (!requirementTokens.length) return false;
+  const documentTokens = new Set(distinctiveTokenKeys(currentDocument, ISSUE_DETAIL_STOPWORDS));
+  const overlap = requirementTokens.filter((token) => documentTokens.has(token)).length;
+  return overlap === 0 || (requirementTokens.length >= 3 && overlap / requirementTokens.length < 1 / 3);
 }
 
 function issueHasExactSourceAnchor(
@@ -88,7 +99,8 @@ function issueHasExactSourceAnchor(
   }
   if (issue.kind === "MISSING") {
     return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt)
-      && hasUngroundedClaimSignal(sourceExcerpt, currentDocument);
+      && (hasUngroundedClaimSignal(sourceExcerpt, currentDocument)
+        || materialRequirementMissing(sourceExcerpt, currentDocument));
   }
   return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt);
 }

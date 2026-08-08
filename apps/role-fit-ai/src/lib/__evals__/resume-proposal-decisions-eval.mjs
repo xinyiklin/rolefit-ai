@@ -67,6 +67,16 @@ assert.notEqual(
   "the optional reason participates in proposal identity"
 );
 assert.notEqual(
+  resumeProposalKey(proposal({
+    suggestedChanges: [{
+      ...suggestion,
+      target: { ...suggestion.target, bulletId: "bullet-2" }
+    }]
+  })),
+  key,
+  "the full editor target path participates in proposal identity"
+);
+assert.notEqual(
   resumeProposalKey(proposal({ polishOutcome: "WITHHELD" })),
   key,
   "the proposal outcome participates in proposal identity"

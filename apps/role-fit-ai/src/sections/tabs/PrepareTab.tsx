@@ -107,13 +107,13 @@ export type PrepareTabProps = {
   isResolvingPreparedResume: boolean;
   // The loaded document is the bundled sample, not the applicant's resume.
   resumeIsStarterSample: boolean;
-  canTailor: boolean;
+  canPolishResume: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishOutputCurrent: boolean;
   polishOutcome?: PolishedResume["polishOutcome"];
   polishStatus: string;
-  onTailorPreparedResume: () => void | Promise<void>;
+  onPolishPreparedResume: () => void | Promise<void>;
   onReviewResume: () => void;
   includeCoverLetter: boolean;
   onIncludeCoverLetterChange: (included: boolean) => void;
@@ -170,13 +170,13 @@ export function PrepareTab({
   resumeVariantRecommendation,
   isResolvingPreparedResume,
   resumeIsStarterSample,
-  canTailor,
+  canPolishResume,
   isPolishing,
   polishProgress,
   polishOutputCurrent,
   polishOutcome,
   polishStatus,
-  onTailorPreparedResume,
+  onPolishPreparedResume,
   onReviewResume,
   includeCoverLetter,
   onIncludeCoverLetterChange,
@@ -296,7 +296,7 @@ export function PrepareTab({
         : !jobAnalysisProviderReady
           ? jobAnalysisProviderMessage
           : "";
-  const tailorHint = !jobPrepared
+  const polishResumeHint = !jobPrepared
     ? "Prepare the job first."
     : !resumeReady
       ? resumeIsStarterSample
@@ -306,16 +306,16 @@ export function PrepareTab({
         ? "Wait for the resume variant selection to finish."
         : isPolishing
           ? "Wait for the current polish to finish."
-          : !canTailor
+          : !canPolishResume
             ? polishStatus || "Finish the resume and AI setup before polishing."
             : "";
-  const canStartTailor = canTailor && !isPolishing && jobPrepared;
+  const canStartPolishResume = canPolishResume && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
     (polishProgress.polish.status === "failed" && polishOutcome !== "WITHHELD") ||
     polishProgress.polish.status === "stopped";
   // Success receipts duplicate the state line. Keep only blockers and failures.
-  const resumeNote = !canStartTailor && tailorHint
-    ? tailorHint
+  const resumeNote = !canStartPolishResume && polishResumeHint
+    ? polishResumeHint
     : resumeWorkflowNeedsAttention
       ? polishStatus
       : "";
@@ -758,9 +758,9 @@ export function PrepareTab({
                   <button
                     className="secondary-button is-compact"
                     type="button"
-                    onClick={() => void onTailorPreparedResume()}
-                    disabled={!canStartTailor}
-                    aria-describedby={!canStartTailor && tailorHint ? "prepare-resume-note" : undefined}
+                    onClick={() => void onPolishPreparedResume()}
+                    disabled={!canStartPolishResume}
+                    aria-describedby={!canStartPolishResume && polishResumeHint ? "prepare-resume-note" : undefined}
                   >
                     {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
                     {isPolishing ? "Polishing…" : "Polish"}

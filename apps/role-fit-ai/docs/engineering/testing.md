@@ -21,8 +21,8 @@ Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
 attaches the child's last output lines to the assertion so you can see which
 case broke without re-running.
 
-The live cover-letter quality eval is excluded via the runner's `LIVE` denylist:
-it drives a real provider, costs tokens, and needs a configured provider. Any
+The live cover-letter and Resume Proposal quality evals are excluded via the
+runner's `LIVE` denylist: they drive a real provider, cost tokens, and need a configured provider. Any
 new network/model eval must be added to `LIVE` so it stays out of `npm test`.
 
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
@@ -76,7 +76,7 @@ Good server verification covers:
 - normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
   `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
   provider dispatch. It prompts with flat `target-N` IDs only; only bullets and
-  Skills labels/lists are mutable, while standard role/employer/subtitle/date,
+  actual Skills lists are mutable, while category labels, standard role/employer/subtitle/date,
   education, and omitted sections never become targets. Oversized fixtures prove complete
   JSON stays within budget, later job-relevant targets survive, response ids
   outside the selected set are withheld, and the omitted count round-trips
@@ -138,15 +138,16 @@ Good server verification covers:
 - compact Initial Fit probes must prove that disabling it omits resume/context
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
   invalid fit preserves valid job fields, the server selects up to five
-  requirements from the full prepared job, the provider must assess every id
-  and may add only one, semantically unrelated exact excerpts are downgraded,
+  requirements from a broad full-brief pool with responsibility/qualification
+  quotas, the provider must assess every id and may add only one, fewer than
+  three core rows cannot produce Strong or Reasonable, semantically unrelated exact excerpts are downgraded,
   preferred qualifications cannot depress the category, contradiction requires
   adverse evidence, the server derives all four category boundaries and
   eligibility states, public lists cap at three, and fit-only retries omit the
   Job analysis schema
-- resume proposal probes must distinguish `skill-label` from `skill-list`, allow
-  controlled label changes and grounded list reordering/additions, reject both
-  swap directions and job-only skills, and preserve safe sibling edits
+- resume proposal probes must keep category labels out of the target set, allow
+  grounded list reordering/additions, reject category substitutions, job-only
+  skills, and unsupported ownership inflation, and preserve safe sibling edits
 - application storage probes must prove compact Initial Fit and Final Check
   snapshots round-trip while numeric scores, full recruiter reviews, and
   missing-skill compatibility fields are omitted at the storage boundary
@@ -183,6 +184,11 @@ Good server verification covers:
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
+- Resume Proposal has a separate synthetic-only live smoke harness:
+  `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
+  It reads no workspace resume, prints only status/count summaries, writes full
+  synthetic receipts under gitignored `workspace/resume-proposal-eval/`, and is
+  never part of `npm test`.
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`

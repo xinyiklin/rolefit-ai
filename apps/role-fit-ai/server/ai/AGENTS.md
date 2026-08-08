@@ -79,11 +79,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 
 - Resume Polish emits targeted suggestions grounded in the submitted
   resume/honest context. Never import JD-only skills or fabricate claims.
-  Only bullets and Skills category labels/lists are mutable targets; standard
+  Only bullets and actual Skills lists are mutable targets; category labels and standard
   entry role, employer, subtitle, and date fields remain read-only evidence.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
-  independently. Skill labels and lists retain separate semantics, so a label/list
-  swap or unsupported new list item is dropped without erasing safe siblings.
+  independently. A category phrase or unsupported new list item is dropped
+  without erasing safe siblings.
   Optional summary/gap failures never erase safe siblings, while an all-drop
   returns Withheld rather than a successful empty proposal.
 - Final Check audits the current edited draft only when enabled or explicitly

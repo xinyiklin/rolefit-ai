@@ -12,6 +12,7 @@ import {
   findUngroundedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
+  hasUnsupportedOwnershipIncrease,
   proseHasUngroundedTerm
 } from "./grounding.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
@@ -134,9 +135,8 @@ Rules:
 - Return only targetId values from editable_targets.
 - replacement must be a complete replacement for currentText, not instructions or commentary.
 - Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines.
-- skill-label describes only the category (for example Languages, Frameworks, Cloud & DevOps, Databases, Tools, or Platforms). Keep it to a short category phrase.
 - skill-list contains actual skills only. It may reorder, deduplicate, or surface skills already supported by the resume or candidate context.
-- Never move content between skill-label and skill-list. Never replace a category label with technologies, and never replace a skill list with a category label.
+- Skill category labels are locked and never appear in editable_targets. Never replace a skill list with a category label.
 - A new skill may come only from the resume or candidate context, never merely from the job description.
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
@@ -177,16 +177,6 @@ function isSkillCategoryLabel(value: string): boolean {
   return SKILL_CATEGORY_LABEL.test(normalizedSkillText(value));
 }
 
-function validSkillLabel(value: string): boolean {
-  const plain = stripInlineMarks(value);
-  const words = plain.match(/[A-Za-z0-9+#.-]+/g) ?? [];
-  return plain.length <= 60
-    && words.length >= 1
-    && words.length <= 5
-    && !/[,;|:\r\n.!?]/.test(plain)
-    && isSkillCategoryLabel(plain);
-}
-
 function splitSkillList(value: string): string[] {
   return stripInlineMarks(value)
     .split(/[,;|]/)
@@ -225,11 +215,11 @@ function replacementIsSupported(
   honestContext: string
 ): boolean {
   const wholeResumeGrounding = `${scopeText}\n${honestContext}`;
-  if (target.kind === "skill-label") return validSkillLabel(replacement);
   if (target.kind === "skill-list" && !validSkillList(replacement, target, wholeResumeGrounding)) return false;
   const grounding = target.sectionType === "standard"
     ? target.entryText
     : wholeResumeGrounding;
+  if (hasUnsupportedOwnershipIncrease(replacement, `${grounding}\n${honestContext}`)) return false;
   const lowerGrounding = grounding.toLowerCase();
   return !findUngroundedJdTerm(replacement, jobText.toLowerCase(), lowerGrounding)
     && !hasUngroundedNumericClaim(replacement, grounding)

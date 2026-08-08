@@ -18,6 +18,7 @@ export type QuickFitRequirementCandidate = {
   requirementId: string;
   sourceRequirement: string;
   importance: QuickFitBasisImportance;
+  kind: "QUALIFICATION" | "RESPONSIBILITY";
 };
 
 // Provider-only calibration input. The server validates these anchors and
@@ -81,17 +82,44 @@ export function quickFitRequirementCandidatesFromPreparedJob(
   const rankedRequired = sections.required
     .map((sourceRequirement, index) => ({ sourceRequirement, index, score: requiredMateriality(sourceRequirement) }))
     .sort((left, right) => right.score - left.score || left.index - right.index)
-    .slice(0, 5);
-  const selected = rankedRequired.map(({ sourceRequirement }) => sourceRequirement);
-  for (const responsibility of sections.responsibility) {
-    if (selected.length >= 5) break;
-    selected.push(responsibility);
-  }
-  return selected.map((sourceRequirement, index) => ({
-    requirementId: `required-${index + 1}`,
+    .slice(0, 6)
+    .map(({ sourceRequirement }) => ({ sourceRequirement, kind: "QUALIFICATION" as const }));
+  const responsibilities = sections.responsibility
+    .slice(0, 6)
+    .map((sourceRequirement) => ({ sourceRequirement, kind: "RESPONSIBILITY" as const }));
+  return [...rankedRequired, ...responsibilities].slice(0, 12).map(({ sourceRequirement, kind }, index) => ({
+    requirementId: `candidate-${index + 1}`,
     sourceRequirement,
-    importance: "CORE"
+    importance: "CORE",
+    kind
   }));
+}
+
+export function quickFitRequirementIsEmploymentEligibility(requirement: string): boolean {
+  return /\b(?:citizens?(?:hip)?|visa|sponsor(?:ship)?|work authoriz\w*|work authoris\w*|authoriz\w* to work|authoris\w* to work|green card|permanent resident|security clearance|ts\/sci|polygraph)\b/i.test(requirement);
+}
+
+// The provider sees five authoritative material requirements, not an arbitrary
+// prefix. Preserve a minimum responsibility representation whenever the brief
+// contains it, while never letting qualifications crowd above three slots.
+export function selectQuickFitRequirements(
+  candidates: QuickFitRequirementCandidate[]
+): QuickFitRequirementCandidate[] {
+  const seen = new Set<string>();
+  const usable = candidates.filter((candidate) => {
+    const key = candidate.sourceRequirement.normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+    if (!key || seen.has(key) || quickFitRequirementIsEmploymentEligibility(candidate.sourceRequirement)) return false;
+    seen.add(key);
+    return true;
+  });
+  const qualifications = usable.filter((candidate) => candidate.kind === "QUALIFICATION").slice(0, 3);
+  const responsibilities = usable.filter((candidate) => candidate.kind === "RESPONSIBILITY");
+  const selected = [...responsibilities.slice(0, 2), ...qualifications];
+  for (const candidate of responsibilities.slice(2)) {
+    if (selected.length === 5) break;
+    selected.push(candidate);
+  }
+  return selected.slice(0, 5);
 }
 
 export type QuickFitResult = {
@@ -117,12 +145,14 @@ export type QuickFitSnapshot = {
 export type QuickFitProvenance = {
   resumeFingerprint: string;
   jobFingerprint: string;
+  inputFingerprint: string;
 };
 
 export type QuickFitState =
   | { status: "disabled" }
   | { status: "running"; resumeLabel: string }
   | { status: "ready"; snapshot: QuickFitSnapshot; provenance: QuickFitProvenance }
+  | { status: "stale"; resumeLabel: string; message: string }
   | { status: "unavailable"; resumeLabel: string; message: string };
 
 const verdicts = new Set<string>(QUICK_FIT_VERDICTS);

@@ -129,6 +129,24 @@ const LEADING_ACTION_VERBS = new Set([
   "resolved", "analyzed", "evaluated", "researched", "prototyped"
 ]);
 
+const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
+  { level: 3, pattern: /\b(?:architect(?:ed|ing)?|led|lead|leading|owned|owning|drove|driven|directed|headed)\b/i },
+  { level: 2, pattern: /\b(?:built|designed|implemented|developed|delivered|created|engineered|managed)\b/i },
+  { level: 1, pattern: /\b(?:assisted|supported|contributed|helped|collaborated|coordinated|participated)\b/i }
+];
+
+export function ownershipStrength(value: string): number {
+  for (const { level, pattern } of OWNERSHIP_LEVELS) {
+    if (pattern.test(value)) return level;
+  }
+  return 0;
+}
+
+export function hasUnsupportedOwnershipIncrease(proposed: string, grounding: string): boolean {
+  const proposedLevel = ownershipStrength(proposed);
+  return proposedLevel >= 3 && ownershipStrength(grounding) < proposedLevel;
+}
+
 function normalizePhrase(text: string): string {
   return text.replace(/[-/]+/g, " ");
 }

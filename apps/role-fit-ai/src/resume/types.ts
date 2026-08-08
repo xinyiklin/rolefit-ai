@@ -1,4 +1,4 @@
-export type ResumeProposalField = "bullet" | "skill" | "skillLabel";
+export type ResumeProposalField = "bullet" | "skill";
 
 export type ResumeProposalTarget = {
   sectionId: string;

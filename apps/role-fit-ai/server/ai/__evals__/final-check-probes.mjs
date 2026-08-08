@@ -89,7 +89,7 @@ const paraphrased = sanitizeFinalCheck(
     issues: [{
       kind: "CLARITY",
       sourceExcerpt: "Built JavaScript and SQL tools for internal teams",
-      detail: "The JavaScript accomplishment does not make the candidate's ownership easy to scan.",
+      detail: "The JavaScript and SQL work does not make the candidate's ownership easy to scan.",
       action: "Clarify the supported scope and ownership."
     }]
   },
@@ -97,6 +97,56 @@ const paraphrased = sanitizeFinalCheck(
   evidenceText,
   jobText
 );
+
+assert.throws(
+  () => sanitizeFinalCheck(
+    {
+      issues: [{
+        kind: "CLARITY",
+        sourceExcerpt: "Built JavaScript and SQL tools for internal teams",
+        detail: "The JavaScript accomplishment is vague.",
+        action: "Clarify the work."
+      }]
+    },
+    currentResume,
+    evidenceText,
+    jobText
+  ),
+  /invalid document check/,
+  "one shared token cannot weakly attach feedback to a broad source excerpt"
+);
+
+const inflatedResume = "Architected JavaScript and SQL tools for internal teams.";
+const ownershipIssue = sanitizeFinalCheck(
+  {
+    issues: [{
+      kind: "UNSUPPORTED",
+      sourceExcerpt: "Architected JavaScript and SQL tools for internal teams",
+      detail: "The Architected JavaScript and SQL ownership claim is unsupported.",
+      action: "Restore the supported ownership level."
+    }]
+  },
+  inflatedResume,
+  "Supported JavaScript and SQL tools for internal teams.",
+  jobText
+);
+assert.equal(ownershipIssue.status, "NEEDS_EVIDENCE", "unsupported leadership survives final-check sanitization");
+
+const stakeholderJob = "Partner with legal and finance stakeholders to coordinate quarterly compliance reviews.";
+const missingResponsibility = sanitizeFinalCheck(
+  {
+    issues: [{
+      kind: "MISSING",
+      sourceExcerpt: stakeholderJob,
+      detail: "The legal and finance stakeholder coordination responsibility is missing.",
+      action: "Add supported stakeholder coordination evidence if available."
+    }]
+  },
+  currentResume,
+  evidenceText,
+  stakeholderJob
+);
+assert.equal(missingResponsibility.status, "REVIEW", "material nontechnical responsibilities can survive as missing");
 assert.equal(
   paraphrased.issues.length,
   1,

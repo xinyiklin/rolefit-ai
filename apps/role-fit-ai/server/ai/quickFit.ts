@@ -2,6 +2,8 @@ import {
   QUICK_FIT_BASIS_COVERAGE,
   QUICK_FIT_BASIS_IMPORTANCE,
   QUICK_FIT_EVIDENCE_SOURCES,
+  quickFitRequirementIsEmploymentEligibility,
+  selectQuickFitRequirements,
   type QuickFitBasisCoverage,
   type QuickFitBasisImportance,
   type QuickFitBasisItem,
@@ -75,25 +77,28 @@ function sanitizeRequiredRequirements(raw: unknown, jobText: string): QuickFitRe
     const sourceRequirement = text(source.sourceRequirement, 500);
     const requirementKey = normalizedExcerpt(sourceRequirement);
     const importance = text(source.importance, 24).toUpperCase();
+    const kind = text(source.kind, 24).toUpperCase() || "QUALIFICATION";
     if (
-      !/^required-[1-9][0-9]?$/.test(requirementId)
+      !/^(?:candidate|required)-[1-9][0-9]?$/.test(requirementId)
       || seenIds.has(requirementId)
       || seenRequirements.has(requirementKey)
       || !sourceIncludesExcerpt(jobText, sourceRequirement)
-      || eligibilityOnlyRequirement(sourceRequirement)
+      || quickFitRequirementIsEmploymentEligibility(sourceRequirement)
       || !basisImportance.has(importance)
+      || (kind !== "QUALIFICATION" && kind !== "RESPONSIBILITY")
     ) continue;
     seenIds.add(requirementId);
     seenRequirements.add(requirementKey);
     result.push({
       requirementId,
       sourceRequirement,
+      kind: kind as QuickFitRequirementCandidate["kind"],
       importance: postingImportance(sourceRequirement, jobText)
         ?? importance as QuickFitBasisImportance
     });
-    if (result.length === MAX_REQUIRED_REQUIREMENTS) break;
+    if (result.length === 12) break;
   }
-  return result;
+  return selectQuickFitRequirements(result).slice(0, MAX_REQUIRED_REQUIREMENTS);
 }
 
 function postingImportance(requirement: string, jobText: string): QuickFitBasisImportance | null {
@@ -168,17 +173,18 @@ function hasYearsMismatch(requirement: string, evidence: string): boolean {
     && Math.max(...candidate) < Math.max(...required);
 }
 
+function degreeRank(value: string): number {
+  if (/\b(?:doctorate|doctoral|ph\.?d)\b/i.test(value)) return 5;
+  if (/\bmaster(?:'s|s)?\b|\bmba\b|\bm\.s\.(?=\s|$)|\bms\b(?=\s+(?:degree|in\b))/i.test(value)) return 4;
+  if (/\bbachelor(?:'s|s)?\b|\bb\.[sa]\.(?=\s|$)|\b(?:bs|ba)\b(?=\s+(?:degree|in\b))/i.test(value)) return 3;
+  if (/\bassociate(?:'s|s)?\b/i.test(value)) return 2;
+  if (/\bhigh school\b|\bged\b/i.test(value)) return 1;
+  return 0;
+}
+
 function isExplicitContradiction(requirement: string, evidence: string): boolean {
   if (hasYearsMismatch(requirement, evidence)) return true;
 
-  const degreeRank = (value: string): number => {
-    if (/\b(?:doctorate|doctoral|ph\.?d)\b/i.test(value)) return 5;
-    if (/\bmaster(?:'s|s)?\b|\bm\.?s\.?\b|\bmba\b/i.test(value)) return 4;
-    if (/\bbachelor(?:'s|s)?\b|\bb\.?s\.?\b|\bb\.?a\.?\b/i.test(value)) return 3;
-    if (/\bassociate(?:'s|s)?\b/i.test(value)) return 2;
-    if (/\bhigh school\b|\bged\b/i.test(value)) return 1;
-    return 0;
-  };
   const requiredDegree = degreeRank(requirement);
   const candidateDegree = degreeRank(evidence);
   if (requiredDegree > 0 && candidateDegree > 0 && candidateDegree < requiredDegree) return true;
@@ -213,15 +219,41 @@ const RELATION_STOPWORDS = new Set([
   "build", "built", "building", "develop", "developed", "developing",
   "design", "designed", "maintain", "maintained", "manage", "managed",
   "partner", "partnered", "support", "supported", "deliver", "delivered",
-  "responsible", "responsibility", "knowledge", "proficiency"
+  "responsible", "responsibility", "knowledge", "proficiency", "industry",
+  "system", "systems", "platform", "platforms", "environment", "environments",
+  "workflow", "workflows"
 ]);
 
-function relationCoverageCap(requirement: string, evidence: string): QuickFitBasisCoverage {
+function splitRequirementAlternatives(requirement: string): string[] {
+  const normalized = requirement.replace(/\beither\s+/i, "");
+  const alternatives = normalized.split(/\s+(?:or|and\/or)\s+/i).map((value) => value.trim()).filter(Boolean);
+  if (alternatives.length <= 1) return [requirement];
+  const prefix = alternatives[0].match(/^(.*?\b(?:with|using|in|of|for)\s+)([^,;]+)$/i)?.[1] ?? "";
+  return alternatives.map((alternative, index) => index === 0 || !prefix ? alternative : `${prefix}${alternative}`);
+}
+
+function relationCoverageForOne(requirement: string, evidence: string): QuickFitBasisCoverage {
   if (isExplicitContradiction(requirement, evidence)) return "CONTRADICTED";
+  if (/\bequivalent\s+(?:professional\s+)?experience\b/i.test(requirement)
+    && /\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\+|plus)?\s+years?\b[^.]{0,80}\bexperience\b/i.test(evidence)) {
+    return "DIRECT";
+  }
+  const requiredDegree = degreeRank(requirement);
+  const evidenceDegree = degreeRank(evidence);
+  if (requiredDegree > 0 && evidenceDegree >= requiredDegree) {
+    const educationStopwords = new Set([
+      ...RELATION_STOPWORDS,
+      "required", "degree", "degrees", "bachelor", "bachelors", "master", "masters",
+      "doctorate", "doctoral", "associate", "education"
+    ]);
+    const fields = distinctiveTokenKeys(requirement, educationStopwords);
+    const evidenceTokens = new Set(distinctiveTokenKeys(evidence, educationStopwords));
+    if (fields.length === 0 || fields.some((field) => evidenceTokens.has(field))) return "DIRECT";
+  }
   const requirementTokens = distinctiveTokenKeys(requirement, RELATION_STOPWORDS);
   const evidenceTokens = new Set(distinctiveTokenKeys(evidence, RELATION_STOPWORDS));
   const overlap = requirementTokens.filter((token) => evidenceTokens.has(token)).length;
-  const adjacent = overlap > 0 && (overlap >= 2 || overlap * 3 >= requirementTokens.length);
+  const adjacent = overlap >= Math.min(2, requirementTokens.length);
   if (!adjacent) return "NOT_SHOWN";
 
   const requiredYears = statedYears(requirement);
@@ -229,7 +261,7 @@ function relationCoverageCap(requirement: string, evidence: string): QuickFitBas
   const yearsSatisfied = requiredYears.length === 0
     || (evidenceYears.length > 0 && Math.max(...evidenceYears) >= Math.max(...requiredYears));
   const requiresEducation = /\b(?:degree|bachelor|master|doctorate|doctoral|ph\.?d|associate)\b/i.test(requirement);
-  const showsEducation = /\b(?:degree|bachelor|master|doctorate|doctoral|ph\.?d|associate|b\.?s\.?|b\.?a\.?|m\.?s\.?|mba)\b/i.test(evidence);
+  const showsEducation = /\b(?:degree|bachelor|master|doctorate|doctoral|ph\.?d|associate|mba)\b|\b(?:b\.[sa]\.|m\.s\.)(?=\s|$)|\b(?:bs|ba|ms)\b(?=\s+(?:degree|in\b))/i.test(evidence);
   const curatedSkillMissing = Boolean(findUngroundedCuratedClaimTerm(requirement, evidence));
   const directOverlap = requirementTokens.length > 0
     && overlap >= Math.min(2, requirementTokens.length)
@@ -242,10 +274,14 @@ function relationCoverageCap(requirement: string, evidence: string): QuickFitBas
       : "ADJACENT";
 }
 
-function eligibilityOnlyRequirement(requirement: string): boolean {
-  return /\b(?:citizens?(?:hip)?|visa|sponsor(?:ship)?|work authoriz\w*|work authoris\w*|authoriz\w* to work|authoris\w* to work|green card|permanent resident|security clearance|ts\/sci|polygraph)\b/i.test(requirement)
-    || (/\b(?:license|licence|certification)\b/i.test(requirement)
-      && /\b(?:required|must|active|current|valid|possess|hold)\b/i.test(requirement));
+function relationCoverageCap(requirement: string, evidence: string): QuickFitBasisCoverage {
+  const alternatives = splitRequirementAlternatives(requirement);
+  if (alternatives.length === 1) return relationCoverageForOne(requirement, evidence);
+  const coverage = alternatives.map((alternative) => relationCoverageForOne(alternative, evidence));
+  if (coverage.includes("DIRECT")) return "DIRECT";
+  if (coverage.includes("ADJACENT")) return "ADJACENT";
+  if (coverage.every((value) => value === "CONTRADICTED")) return "CONTRADICTED";
+  return "NOT_SHOWN";
 }
 
 function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFitBasisItem[] {
@@ -273,7 +309,7 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
       !sourceRequirement
       || (!requiredRequirement && seenRequirements.has(requirementKey))
       || !sourceIncludesExcerpt(sources.jobText, sourceRequirement)
-      || eligibilityOnlyRequirement(sourceRequirement)
+      || quickFitRequirementIsEmploymentEligibility(sourceRequirement)
       || !basisImportance.has(rawImportance)
       || !basisCoverage.has(rawCoverage)
     ) continue;
@@ -321,7 +357,7 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
         : {})
     };
     if (requiredRequirement) requiredItems.set(requirementId, item);
-    else if (extras.length < MAX_BASIS_ITEMS - requiredRequirements.length) extras.push(item);
+    else if (extras.length < (requiredRequirements.length ? 1 : MAX_BASIS_ITEMS)) extras.push(item);
   }
   return [
     ...requiredRequirements.map((requirement) => requiredItems.get(requirement.requirementId) ?? {
@@ -433,6 +469,10 @@ function deriveVerdict(core: QuickFitBasisItem[]): QuickFitVerdict {
   const notShown = core.filter((item) => item.coverage === "NOT_SHOWN").length;
   const contradicted = core.filter((item) => item.coverage === "CONTRADICTED").length;
   const count = core.length;
+  if (count < 3) {
+    const overlap = direct + adjacent;
+    return overlap === 0 ? "LIMITED" : "STRETCH";
+  }
   if (
     contradicted === 0
     && notShown === 0
@@ -520,7 +560,7 @@ export function quickFitPromptSection({
 }): string {
   const required = sanitizeRequiredRequirements(requiredRequirements, String(jobText ?? ""));
   const requiredSection = required.length
-    ? `\nThe server selected these mandatory assessment candidates from the prepared job. Return exactly one basis row for every requirementId, copying its sourceRequirement exactly. If evidence is absent or uncertain, return NOT_SHOWN. You may add at most ${MAX_BASIS_ITEMS - required.length} other material requirement${MAX_BASIS_ITEMS - required.length === 1 ? "" : "s"} without a requirementId.\n\n<required_requirement_candidates>\n${fenceUntrusted(JSON.stringify(required))}\n</required_requirement_candidates>\n`
+    ? `\nThe server selected these authoritative assessment requirements from the prepared job. Return exactly one basis row for every requirementId, copying its sourceRequirement exactly. If evidence is absent or uncertain, return NOT_SHOWN. You may add at most one other material requirement without a requirementId.\n\n<required_requirement_candidates>\n${fenceUntrusted(JSON.stringify(required))}\n</required_requirement_candidates>\n`
     : "";
   return `Also produce a compact Initial Fit calibration basis using ONLY the selected resume and candidate context below.
 
@@ -531,7 +571,7 @@ ${required.length ? "Assess every server-selected candidate before any optional 
 - DIRECT means the candidate source explicitly demonstrates the requirement. ADJACENT means exact candidate evidence demonstrates related transferable work. NOT_SHOWN means no candidate evidence was found.
 - CONTRADICTED is allowed only for explicit adverse candidate evidence, such as a lower stated years total or an explicit lack of a mandatory qualification. Mere absence is NOT_SHOWN.
 - DIRECT, ADJACENT, and CONTRADICTED require evidenceSource plus an exact evidenceExcerpt from that source. NOT_SHOWN returns neither.
-- Eligibility conditions such as citizenship, sponsorship, work authorization, clearance, or licensing do not determine fit and must not be included as basis items.
+- Employment eligibility conditions such as citizenship, sponsorship, work authorization, or clearance do not determine fit and must not be included as basis items. A substantive required license or certification remains part of fit.
 - Do not return a verdict, summary, matches, gaps, eligibility result, score, confidence, ledger IDs, or recommendation. The server derives the public result.
 ${requiredSection}
 

@@ -5,8 +5,28 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
-- [USER+CODE+TOOL] **The branch-review accuracy findings are resolved locally;
-  no publish action was taken.** Initial Fit now requires every one of up to five
+- [USER+CODE+TOOL] **The re-review repair is complete.** Initial Fit now sends a
+  broad prepared-brief pool and selects
+  an authoritative five with responsibility/qualification quotas, at most one
+  provider extra, substantive license coverage, and a three-core floor for
+  Strong or Reasonable. OR/equivalent requirements, weak domain tokens, and
+  contextual degree abbreviations receive deterministic caps. Exact fit
+  provenance covers the raw posting, normalized requirements, resume, and
+  candidate context; edits derive a visible out-of-date state that blocks
+  automation and Apply persistence until a fresh retry screens the current
+  editor and prepared brief. Manual variant screening consumes the guarded
+  loader receipt. Resume Polish locks Skills category labels and rejects
+  unsupported leadership inflation. Final Check uses stronger detail anchors,
+  shares the ownership detector, and retains material nontechnical missing
+  requirements. Proposal decisions include the full editor target path. A
+  synthetic-only live Resume Proposal harness is available but was not run.
+  The complete repository gate passes, including production/landing builds,
+  desktop contracts/security, all 79 RoleFit offline evaluations, package
+  integrations, and deterministic layout/PDF/font checks. Browser QA was not
+  run because the visible stale state reuses the existing rail hierarchy. No
+  pull request was opened and nothing was merged.
+- [USER+CODE+TOOL] **The first branch-review accuracy findings were repaired and
+  later published as commit `ded6e35`.** Initial Fit now requires every one of up to five
   material RoleFit-selected requirements, including important items outside the
   clipped posting prefix, permits only one provider-added row, and caps exact but
   semantically unrelated evidence before deriving the public verdict. Prepared
@@ -20,8 +40,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   work-authorization scoring comment is corrected. The complete RoleFit gate
   passes: production and landing builds, desktop security/contracts, and all 79
   offline evaluations. Live-provider and browser QA were not run; the changes do
-  not alter provider count or rendered layout. No files were staged, committed,
-  pushed, merged, or opened as a pull request.
+  not alter provider count or rendered layout. That slice was committed and
+  pushed as `ded6e35`; no pull request was opened and nothing was merged.
 - [USER+CODE+TOOL] **The remaining accuracy and preview-cleanup slices are now in
   place.** Final Check requires a private exact source excerpt for every issue,
   validates it against the current document or posting, preserves valid

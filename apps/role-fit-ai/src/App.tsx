@@ -96,10 +96,12 @@ import {
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
 import type { PreparedResumeSelection } from "./lib/preparedResume";
-import { contentFingerprint } from "./lib/contentFingerprint";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
-import { quickFitAllowsAutoProposal } from "../shared/quickFitContract.ts";
+import {
+  quickFitAllowsAutoProposal,
+  quickFitRequirementCandidatesFromPreparedJob
+} from "../shared/quickFitContract.ts";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
@@ -1212,6 +1214,18 @@ function App() {
     runInitialFit,
     resolvePreparedResume: (jobText: string) => resolvePreparedResumeRef.current(jobText),
     candidateContext: () => requestHonestContext,
+    currentResume: () => {
+      const text = (currentResumeText || resumeText).trim();
+      if (!text) return null;
+      return {
+        text,
+        label: baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label
+          || baseResumeName
+          || fileName
+          || documentTitle
+          || "Current resume"
+      };
+    },
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
@@ -1470,19 +1484,17 @@ function App() {
       resumeManualVariantSelectionInFlightRef.current = true;
       setIsManuallySelectingResumeVariant(true);
       try {
-        const option = baseResumeOptions.find((entry) => entry.fileName === fileName);
-        const fitCandidate = runInitialFit && jobPrepared && option
-          ? (await readBaseResumeCandidates([option]))[0]
-          : undefined;
         const loaded = await loadBaseResumeVersion(fileName);
-        if (loaded && fitCandidate) {
+        if (loaded && runInitialFit && jobPrepared) {
           void refreshInitialFit(
-            importedJob?.sourceText || jobRawText || jobDescription,
+            jobDescription,
             {
-              resumeText: fitCandidate.text,
-              resumeLabel: fitCandidate.label,
-              candidateContext: requestHonestContext
-            }
+              resumeText: loaded.text,
+              resumeLabel: loaded.label,
+              candidateContext: requestHonestContext,
+              requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(jobDescription)
+            },
+            importedJob?.sourceText || jobRawText || jobDescription
           );
         }
       } finally {
@@ -1492,13 +1504,11 @@ function App() {
     },
     [
       baseResumeName,
-      baseResumeOptions,
       importedJob?.sourceText,
       jobDescription,
       jobPrepared,
       jobRawText,
       loadBaseResumeVersion,
-      readBaseResumeCandidates,
       refreshInitialFit,
       requestHonestContext,
       runInitialFit
@@ -1687,7 +1697,7 @@ function App() {
     coverLetterReady,
     isPreparing: applicationPreparationActive
   });
-  function handleTailorPreparedResume() {
+  function handlePolishPreparedResume() {
     if (
       !jobPrepared ||
       !canPolish ||
@@ -1708,8 +1718,7 @@ function App() {
     const { provenance } = quickFitState;
     if (!quickFitAllowsAutoProposal(fit)) return;
     const key = JSON.stringify({
-      job: provenance.jobFingerprint,
-      resume: provenance.resumeFingerprint,
+      input: provenance.inputFingerprint,
       verdict: fit.verdict,
       summary: fit.summary
     });
@@ -1717,18 +1726,8 @@ function App() {
       autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
     }
     const receipt = autoProposalFitRef.current;
-    // Content, not labels: two files can share a friendly label, editing a
-    // document never changes its label, and re-preparing a posting leaves the
-    // old label attached to a screening that no longer applies. A proposal may
-    // only start from the exact resume and posting the fit actually screened.
-    const fitInputsAreCurrent =
-      provenance.resumeFingerprint === contentFingerprint(currentResumeText || resumeText) &&
-      provenance.jobFingerprint ===
-        contentFingerprint(importedJob?.sourceText || jobRawText || jobDescription);
-
     const canStartResume =
       autoCreateResumeProposal &&
-      fitInputsAreCurrent &&
       jobPrepared &&
       canPolish &&
       !isPolishing &&
@@ -1742,7 +1741,6 @@ function App() {
 
     const canStartCover =
       autoCreateCoverLetterProposal &&
-      fitInputsAreCurrent &&
       coverLetterPreflight.canTailor &&
       resumeReady &&
       jobPrepared &&
@@ -2342,7 +2340,7 @@ function App() {
               isResolvingPreparedResume={isResolvingPreparedResume}
               resumeIsStarterSample={resumeIsStarterSample}
               isSelectingResume={isSavingBaseResume || isManuallySelectingResumeVariant}
-              canTailor={
+              canPolishResume={
                 canPolish &&
                 !isSavingBaseResume &&
                 !isManuallySelectingResumeVariant &&
@@ -2353,7 +2351,7 @@ function App() {
               polishOutputCurrent={polishOutputCurrent}
               polishOutcome={result?.polishOutcome}
               polishStatus={polishStatus}
-              onTailorPreparedResume={handleTailorPreparedResume}
+              onPolishPreparedResume={handlePolishPreparedResume}
               onReviewResume={() => setActiveOutputTab("resume")}
               includeCoverLetter={materialSelection.coverLetter}
               onIncludeCoverLetterChange={(coverLetter) =>

@@ -132,11 +132,11 @@ owns:
   material bullets, summaries, actual skill lists, and job-relevant fields
   without prefix-order bias. It serializes only complete target objects and
   validates the reply against exactly that selected set. Skills category labels
-  and actual skill lists use distinct semantic target kinds; label/list swaps
-  and job-only skill additions are rejected independently beside unknown,
+  are locked; actual skill lists remain targets. Category substitutions and
+  job-only skill additions are rejected independently beside unknown,
   duplicate, unchanged, malformed, and unsupported mutations. Optional
   feedback is tolerant while mutation validation stays strict. Only bullets and
-  Skills category labels/lists are mutable targets. Identity, contact,
+  actual Skills lists are mutable targets. Identity, contact,
   education, and standard-entry role/employer/subtitle/date fields remain
   read-only evidence; omitted sections are absent.
   `/api/final-check` is a separate optional operation over the actual current
@@ -237,14 +237,20 @@ owns:
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
   dispatch requests an independent `initialFit` subsection. The server first
-  selects up to five material requirements from the full prepared job; the
-  provider must assess every supplied id and may add at most one other material
+  receives a broad pool from the full prepared job, then selects up to five
+  authoritative requirements with at least two responsibilities when available
+  and no more than three qualifications. The provider must assess every supplied
+  id and may add at most one other material
   requirement. Each assessment carries an exact posting excerpt and, for
   covered/contradicted rows, an exact resume or candidate-context excerpt.
   `quickFit.ts` validates those anchors and their semantic relationship,
   injects any omitted required row as `NOT_SHOWN`, normalizes preferred
   qualifications to supporting, and derives the
-  public category, summary, matches, gaps, and eligibility. The hidden basis is
+  public category, summary, matches, gaps, and eligibility. Strong and Reasonable
+  require at least three core rows. The client fingerprints the raw posting,
+  authoritative requirements, exact resume, and candidate context; any live input
+  change derives an out-of-date state and blocks automation and Apply persistence
+  until a fresh fit-only check settles. The hidden basis is
   never returned to the client or persisted. The two subsections are sanitized
   independently in BOTH directions: the server preserves valid job
   fields when fit is absent or invalid, and the client preserves a valid fit when
@@ -350,7 +356,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `resumeScope.ts` — defensive normalization and plain-text serialization for
   the structured editable resume scope.
 - `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
-  construction (including distinct `skill-label` / `skill-list` semantics), the
+  construction (with category labels locked and `skill-list` semantics), the
   compact one-pass prompt/wire contract, deterministic per-edit grounding, and
   Proposal / No changes / Withheld derivation.
 - `finalCheck.ts` and `shared/finalCheckContract.ts` — the independent optional
@@ -533,7 +539,7 @@ The AI must:
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
 - never edit identity, contact, education, standard-entry role/employer/subtitle/date
-  fields, or omitted sections; only bullets and Skills labels/lists are mutable
+  fields, Skills category labels, or omitted sections; only bullets and actual Skills lists are mutable
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section

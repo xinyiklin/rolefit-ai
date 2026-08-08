@@ -8,6 +8,7 @@ import { buildQuickFitPrompts, calibrateQuickFit } from "../quickFit.ts";
 import {
   quickFitAllowsAutoProposal,
   quickFitRequirementCandidatesFromPreparedJob,
+  selectQuickFitRequirements,
   sanitizeQuickFit
 } from "../../../shared/quickFitContract.ts";
 
@@ -24,7 +25,7 @@ const resumeText = [
   "Built JavaScript services for internal teams.",
   "Designed SQL data models for reporting.",
   "Maintained internal tools used by operations.",
-  "Worked with product managers on delivery."
+  "Partnered with product teams on delivery."
 ].join("\n");
 
 const withoutFit = buildJobAnalysisPrompts({ jobText }).userPrompt;
@@ -112,7 +113,8 @@ const coreRequirements = [
 const requiredRequirements = coreRequirements.map((sourceRequirement, index) => ({
   requirementId: `required-${index + 1}`,
   sourceRequirement,
-  importance: "CORE"
+  importance: "CORE",
+  kind: index < 2 ? "RESPONSIBILITY" : "QUALIFICATION"
 }));
 
 assert.deepEqual(
@@ -134,7 +136,7 @@ const evidence = [
   "Built JavaScript services for internal teams.",
   "Designed SQL data models for reporting.",
   "Maintained internal tools used by operations.",
-  "Worked with product managers on delivery."
+  "Partnered with product teams on delivery."
 ];
 
 function calibrate(coverages, overrides = {}) {
@@ -212,6 +214,7 @@ const preferredDoesNotDepress = calibrateQuickFit(
     basis: [
       item(coreRequirements[0], "CORE", "DIRECT", evidence[0]),
       item(coreRequirements[1], "CORE", "DIRECT", evidence[1]),
+      item(coreRequirements[2], "CORE", "DIRECT", evidence[2]),
       item("Kubernetes experience.", "CORE", "NOT_SHOWN")
     ]
   },
@@ -232,8 +235,8 @@ const requiredCannotBeHiddenAsSupporting = calibrateQuickFit(
 );
 assert.equal(
   requiredCannotBeHiddenAsSupporting?.verdict,
-  "STRONG",
-  "an explicitly required item is server-normalized to core"
+  "STRETCH",
+  "an explicitly required item is server-normalized to core but an undersized basis cannot become Strong"
 );
 
 assert.equal(
@@ -301,9 +304,72 @@ const eligibilityExcludedFromFit = calibrateQuickFit(
 );
 assert.equal(
   eligibilityExcludedFromFit?.verdict,
-  "STRONG",
-  "eligibility requirements are excluded from the fit rubric even if the provider labels them core"
+  "STRETCH",
+  "eligibility requirements are excluded from the fit rubric and one remaining core item stays below the verdict floor"
 );
+
+const selectionPool = quickFitRequirementCandidatesFromPreparedJob([
+  "Required Qualifications:",
+  "- Must have seven years of backend experience.",
+  "- Bachelor degree or equivalent experience.",
+  "- AWS or Azure experience.",
+  "- Active nursing license required.",
+  "- SQL experience.",
+  "Core Responsibilities:",
+  "- Build reliable APIs.",
+  "- Partner with product teams.",
+  "- Lead incident reviews."
+].join("\n"));
+const selectedPool = selectQuickFitRequirements(selectionPool);
+assert.equal(selectionPool.length, 8, "the client supplies a broad candidate pool instead of truncating to five");
+assert.equal(selectedPool.length, 5);
+assert.equal(selectedPool.filter((candidate) => candidate.kind === "RESPONSIBILITY").length, 2);
+assert.equal(selectedPool.filter((candidate) => candidate.kind === "QUALIFICATION").length, 3);
+assert.ok(
+  selectedPool.some((candidate) => /license/i.test(candidate.sourceRequirement)),
+  "a substantive license requirement remains eligible for the fit basis"
+);
+
+for (const fixture of [
+  {
+    requirement: "Experience with AWS or Azure.",
+    evidence: "Deployed production workloads on Azure.",
+    expected: "STRETCH",
+    label: "one satisfied OR alternative is usable evidence"
+  },
+  {
+    requirement: "Bachelor degree or equivalent experience.",
+    evidence: "Backend engineer with eight years of professional experience.",
+    expected: "STRETCH",
+    label: "equivalent experience can satisfy the education alternative"
+  },
+  {
+    requirement: "Healthcare industry experience.",
+    evidence: "Delivered reporting products for the retail industry.",
+    expected: "LIMITED",
+    label: "a generic industry token cannot make unrelated domains adjacent"
+  },
+  {
+    requirement: "Master's degree required.",
+    evidence: "Maintained MS SQL Server reporting systems.",
+    expected: "LIMITED",
+    label: "MS SQL Server is not a master's degree"
+  },
+  {
+    requirement: "Bachelor's degree required.",
+    evidence: "B.S. in Computer Science.",
+    expected: "STRETCH",
+    label: "a dotted degree abbreviation remains recognized"
+  }
+]) {
+  const result = calibrateQuickFit(
+    { basis: [item(fixture.requirement, "CORE", "DIRECT", fixture.evidence)] },
+    { jobText: fixture.requirement, resumeText: fixture.evidence, candidateContext: "" }
+  );
+  assert.equal(result?.verdict, fixture.expected, fixture.label);
+  if (fixture.expected === "STRETCH") assert.deepEqual(result?.matches, [fixture.requirement], fixture.label);
+  else assert.deepEqual(result?.gaps, [fixture.requirement], fixture.label);
+}
 assert.equal(
   calibrateQuickFit(citizenBasis, {
     jobText: eligibilityJob,

@@ -40,7 +40,7 @@ export function currentTargetText(resume: ResumeData, suggestion: ResumeProposal
   if (suggestion.target.field === "bullet") {
     return entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text ?? null;
   }
-  return suggestion.target.field === "skillLabel" ? entry.titleLeft : entry.subtitleLeft;
+  return entry.subtitleLeft;
 }
 
 function applyTarget(actions: ResumeEditorActions, suggestion: ResumeProposalSuggestion, value: string): void {
@@ -50,7 +50,7 @@ function applyTarget(actions: ResumeEditorActions, suggestion: ResumeProposalSug
     if (bulletId) actions.updateBullet(sectionId, entryId, bulletId, value, true);
     return;
   }
-  actions.updateEntry(sectionId, entryId, field === "skillLabel" ? "titleLeft" : "subtitleLeft", value, true);
+  actions.updateEntry(sectionId, entryId, "subtitleLeft", value, true);
 }
 
 type UseResumeProposalDecisionsArgs = {

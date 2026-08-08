@@ -94,11 +94,16 @@ editable documents.
   Apply together. Initial Fit is a compact server-calibrated provider advisory
   for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
   up to three matches and gaps; and an eligibility warning only when relevant.
-  The provider must assess up to five material requirements selected by the
-  server from the full prepared job and may add at most one more. The server
+  The client supplies a broad qualification/responsibility pool from the full
+  prepared brief; the server selects up to five authoritative requirements,
+  reserves at least two responsibility slots when available, caps qualifications
+  at three, and permits at most one provider-added row. The server
   validates exact posting/candidate excerpts, rejects semantically unrelated
   evidence, and derives the public result from the complete hidden basis. That
-  basis is neither displayed nor stored. Initial Fit has no
+  basis is neither displayed nor stored. Strong and Reasonable require at least
+  three core requirements. Editing the posting, prepared requirements, resume,
+  candidate facts, or honest context hides the old verdict as out of date until
+  the user checks again. Initial Fit has no
   score, confidence, visible requirement ledger, evidence quotes,
   recommendation, or analytics role, and it never silently sets tracker
   priority. Each material has an **Include** toggle and its
@@ -143,10 +148,10 @@ editable documents.
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish** — one provider operation proposes grounded edits
-  through flat target IDs. The server distinguishes Skills category labels from
-  actual skill lists and drops malformed, unknown, unchanged, swapped, or
+  through flat target IDs. Skills category labels are locked; actual skill lists
+  remain editable. The server drops malformed, unknown, unchanged, swapped, or
   unsupported edits independently, so a bad optional note or one bad edit does
-  not discard safe siblings. Only bullets and Skills labels/lists are mutable;
+  not discard safe siblings. Only bullets and Skills lists are mutable;
   role, employer, subtitle, date, identity, contact, and education fields remain
   read-only evidence. Large resumes prioritize material, job-relevant
   fields inside the prompt budget, validate replies only against fields actually

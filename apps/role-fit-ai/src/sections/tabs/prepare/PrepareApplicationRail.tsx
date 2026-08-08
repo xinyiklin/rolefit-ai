@@ -104,6 +104,16 @@ export function PrepareApplicationRail({
             </p>
           ) : quickFit.status === "disabled" ? (
             <p>Off in Settings. You can continue directly to Polish.</p>
+          ) : quickFit.status === "stale" ? (
+            <>
+              <strong className="prepare-fit__empty">Fit out of date</strong>
+              <p>{quickFit.message}</p>
+              {canRetryInitialFit ? (
+                <button className="ghost-button is-compact" type="button" onClick={onRetryInitialFit}>
+                  Check again
+                </button>
+              ) : null}
+            </>
           ) : (
             <>
               <strong className="prepare-fit__empty">Initial Fit unavailable</strong>

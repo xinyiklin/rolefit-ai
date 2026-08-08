@@ -222,12 +222,16 @@ disappears into the task. Quiet competence, not salesmanship.
     slot.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
-    eligibility warning. The provider must assess up to five material
-    requirements selected by the server from the full prepared job and may add
-    at most one more. The server validates exact posting and candidate anchors,
+    eligibility warning. The server selects up to five authoritative material
+    requirements from a broad prepared-brief pool, preserving at least two core
+    responsibilities when available and no more than three qualifications; the
+    provider may add at most one more. The server validates exact posting and candidate anchors,
     rejects semantically unrelated evidence, and derives the category and
     visible copy from the complete hidden basis. That basis is never displayed
-    or persisted.
+    or persisted. Strong and Reasonable require at least three core requirements.
+    A change to the posting, selected requirements, resume, candidate facts, or
+    honest context replaces the old verdict with an out-of-date state until the
+    user checks again.
     Initial Fit never shows scores, confidence, evidence ledgers,
     recommendations, or saved/historical audit state there, and never silently
     sets tracker priority. The bundled starter
@@ -247,8 +251,9 @@ disappears into the task. Quiet competence, not salesmanship.
     not add persisted variant metadata or another document schema for this decision. When Initial
     Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
     independently in both directions; changing the selected resume reruns only
-    Initial Fit, and a fit is tied to the resume and posting it actually
-    screened rather than to their names.
+    Initial Fit, and a fit is tied to the exact posting, prepared requirements,
+    resume, candidate facts, and honest context it actually screened rather than
+    to their names.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

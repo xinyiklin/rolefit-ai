@@ -64,11 +64,11 @@ own a second resume model, editor, layout engine, or PDF implementation.
   Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
   education, standard-entry role/employer/subtitle/date fields, and omitted
-  sections stay locked; only bullets and Skills labels/lists are proposal
-  targets. The live resume
-  changes only through explicit Apply all, Accept, or edited acceptance. Skills
-  category labels and actual skill lists are distinct target kinds; swaps and
-  job-only skill insertions fail independently. When all editable targets do
+  sections and Skills category labels stay locked; only bullets and actual
+  Skills lists are proposal targets. The live resume
+  changes only through explicit Apply all, Accept, or edited acceptance. Skill
+  list category substitutions and job-only skill insertions fail independently.
+  When all editable targets do
   not fit the prompt budget, material and job-relevant targets win without
   prefix-order bias; only sent targets may be changed, and the rail states the
   omitted count quietly.

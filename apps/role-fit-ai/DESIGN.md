@@ -410,8 +410,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
   Initial Fit row follows the materials: show its verdict, selected resume,
   short summary, at most three matches and gaps, and an eligibility warning only
-  when relevant. Running, disabled, and unavailable/retry states use the same
-  flat hierarchy. Never add scores, confidence, evidence ledgers, quotes, or a
+  when relevant. Running, disabled, unavailable/retry, and out-of-date/check-again
+  states use the same flat hierarchy; an out-of-date fit never leaves the old
+  verdict visible. Never add scores, confidence, evidence ledgers, quotes, or a
   recommendation to this row.
 - **Automation:** the deterministic local brief renders before extension receipt
   and Job analysis progress settle. Initial Fit shares the normal Prepare

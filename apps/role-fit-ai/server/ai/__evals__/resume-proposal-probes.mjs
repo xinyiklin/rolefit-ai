@@ -69,8 +69,7 @@ const targets = flattenResumeTargets(scope);
 
 assert.deepEqual(targets.map((target) => target.targetId), [
   "target-1",
-  "target-2",
-  "target-3"
+  "target-2"
 ]);
 assert.equal(targets.some((target) => target.target.sectionId === "education-section"), false);
 assert.equal(targets.some((target) => /2024-present/i.test(target.currentText)), false);
@@ -82,9 +81,12 @@ assert.equal(
   "role, employer, and subtitle identity fields never become Resume Polish targets"
 );
 const skillListTarget = targets.find((target) => target.target.field === "skill");
-const skillLabelTarget = targets.find((target) => target.target.field === "skillLabel" && target.sectionType === "skills");
 assert.equal(skillListTarget?.kind, "skill-list", "the actual skills carry list semantics");
-assert.equal(skillLabelTarget?.kind, "skill-label", "the category title carries label semantics");
+assert.equal(
+  targets.some((target) => target.currentText === "Languages"),
+  false,
+  "skill category labels are locked and never become proposal targets"
+);
 const prompts = buildResumeProposalPrompts({
   jobText,
   targets,
@@ -93,9 +95,8 @@ const prompts = buildResumeProposalPrompts({
   customInstructions: ""
 });
 assert.match(prompts.userPrompt, /"targetId":"target-1"/);
-assert.match(prompts.userPrompt, /"kind":"skill-label"/);
 assert.match(prompts.userPrompt, /"kind":"skill-list"/);
-assert.match(prompts.userPrompt, /Never replace a category label with technologies/i);
+assert.match(prompts.userPrompt, /Skill category labels are locked/i);
 assert.doesNotMatch(prompts.userPrompt, /sectionId|entryId|bulletId|evidenceType|risk|hits/);
 for (const tag of ["editable_targets", "resume_context"]) {
   assert.match(
@@ -106,7 +107,7 @@ for (const tag of ["editable_targets", "resume_context"]) {
 }
 
 const longTargets = Array.from({ length: 90 }, (_, index) => ({
-  ...targets[2],
+  ...targets[0],
   targetId: `long-target-${index + 1}`,
   section: `Section ${Math.floor(index / 6) + 1}`,
   currentText: index === 89
@@ -209,7 +210,6 @@ const safeSkillEdits = sanitizeResumeProposal(
   {
     status: "PROPOSAL",
     changes: [
-      { targetId: skillLabelTarget.targetId, replacement: "Programming Languages" },
       { targetId: skillListTarget.targetId, replacement: "SQL, JavaScript, Python, Node.js" }
     ]
   },
@@ -222,14 +222,12 @@ assert.equal(safeSkillEdits.status, "PROPOSAL");
 assert.deepEqual(
   safeSkillEdits.changes.map(({ targetId, replacement }) => ({ targetId, replacement })),
   [
-    { targetId: skillLabelTarget.targetId, replacement: "Programming Languages" },
     { targetId: skillListTarget.targetId, replacement: "SQL, JavaScript, Python, Node.js" }
   ],
-  "a controlled category rename, reordering, and a skill grounded elsewhere in the resume are accepted"
+  "skill reordering and a skill grounded elsewhere in the resume are accepted"
 );
 
 for (const [label, targetId, replacement] of [
-  ["label replaced by technologies", skillLabelTarget.targetId, "JavaScript, SQL"],
   ["list replaced by a category", skillListTarget.targetId, "Languages"],
   ["unsupported job-only skill", skillListTarget.targetId, "JavaScript, SQL, Kubernetes"]
 ]) {
@@ -248,7 +246,7 @@ const partialSkills = sanitizeResumeProposal(
   {
     status: "PROPOSAL",
     changes: [
-      { targetId: skillLabelTarget.targetId, replacement: "JavaScript, SQL" },
+      { targetId: "target-999", replacement: "JavaScript, SQL" },
       { targetId: skillListTarget.targetId, replacement: "SQL, JavaScript" }
     ]
   },
@@ -260,7 +258,7 @@ const partialSkills = sanitizeResumeProposal(
 assert.deepEqual(
   partialSkills.changes.map(({ targetId, replacement }) => ({ targetId, replacement })),
   [{ targetId: skillListTarget.targetId, replacement: "SQL, JavaScript" }],
-  "an invalid skill label edit does not discard a safe sibling list edit"
+  "an invalid locked-label target does not discard a safe sibling list edit"
 );
 
 const withheld = sanitizeResumeProposal(
@@ -293,6 +291,34 @@ for (const [label, targetId, replacement, honestContext = ""] of [
   assert.equal(rejected.status, "WITHHELD", `unsupported ${label} is withheld`);
   assert.equal(rejected.changes.length, 0, `unsupported ${label} cannot mutate the resume`);
 }
+
+for (const [sourceText, replacement] of [
+  ["Supported JavaScript and SQL delivery for internal teams.", "Architected JavaScript and SQL delivery for internal teams."],
+  ["Contributed to JavaScript and SQL tools for internal teams.", "Owned JavaScript and SQL tools for internal teams."],
+  ["Assisted with JavaScript and SQL tools for internal teams.", "Led JavaScript and SQL tools for internal teams."]
+]) {
+  const ownershipTarget = { ...targets[0], currentText: sourceText, entryText: sourceText };
+  const rejected = sanitizeResumeProposal(
+    { status: "PROPOSAL", changes: [{ targetId: ownershipTarget.targetId, replacement }] },
+    [ownershipTarget],
+    jobText,
+    sourceText,
+    ""
+  );
+  assert.equal(rejected.status, "WITHHELD", `${sourceText} cannot be inflated to ${replacement}`);
+}
+
+const supportedLeadership = sanitizeResumeProposal(
+  {
+    status: "PROPOSAL",
+    changes: [{ targetId: targets[0].targetId, replacement: "Led JavaScript and SQL delivery for internal teams." }]
+  },
+  [targets[0]],
+  jobText,
+  scopeText,
+  "At Acme, I led the JavaScript and SQL delivery described in this entry."
+);
+assert.equal(supportedLeadership.status, "PROPOSAL", "explicit honest context may support an ownership increase");
 
 for (const removedQualifier of [
   { targetId: "target-999", replacement: "Software Engineer" },

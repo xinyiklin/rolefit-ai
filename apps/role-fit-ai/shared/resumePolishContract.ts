@@ -31,12 +31,12 @@ export type ResumePolishEditorTarget = {
   sectionId: string;
   entryId: string;
   bulletId?: string;
-  field: "bullet" | "skill" | "skillLabel";
+  field: "bullet" | "skill";
 };
 
 export type FlatResumeTarget = {
   targetId: string;
-  kind: "bullet" | "skill-label" | "skill-list";
+  kind: "bullet" | "skill-list";
   section: string;
   currentText: string;
   target: ResumePolishEditorTarget;
@@ -96,24 +96,17 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
       if (!entryId) continue;
       const grounding = entryText(entry);
       if (type === "skills") {
-        const addSkillField = (
-          field: "skill" | "skillLabel",
-          currentText: unknown,
-          kind: "skill-label" | "skill-list"
-        ) => {
-          const text = clean(currentText);
-          if (!text) return;
+        const text = clean(entry.subtitleLeft);
+        if (text) {
           targets.push({
-            kind,
+            kind: "skill-list",
             section: heading,
             currentText: text,
-            target: { sectionId, entryId, field },
+            target: { sectionId, entryId, field: "skill" },
             sectionType: type,
             entryText: grounding
           });
-        };
-        addSkillField("skill", entry.subtitleLeft, "skill-list");
-        addSkillField("skillLabel", entry.titleLeft, "skill-label");
+        }
       }
       const bullets = Array.isArray(entry.bullets) ? entry.bullets as ScopeBullet[] : [];
       for (const bullet of bullets) {

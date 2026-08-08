@@ -112,7 +112,7 @@ export type Application = {
   location?: string;
   jobType?: string;
   workAuth?: string;
-  // Explicit priority override; when unset the UI derives it from Initial Fit + stage.
+  // Explicit priority override; unset applications keep the default presentation.
   priority?: ApplicationPriority;
   // Compensation, as advertised or negotiated. Stored as plain integers in the
   // chosen currency; min/max may be set independently.

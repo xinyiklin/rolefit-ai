@@ -340,7 +340,7 @@ assert.match(
 );
 assert.match(
   app,
-  /if \(loaded && fitCandidate\) \{[\s\S]{0,80}?void refreshInitialFit\(/,
+  /if \(loaded && runInitialFit && jobPrepared\) \{[\s\S]{0,80}?void refreshInitialFit\(/,
   "resume selection releases its busy gate before the advisory fit-only request settles"
 );
 assert.match(
@@ -1041,10 +1041,30 @@ assert.match(
   /<p className="prepare-page__eyebrow">Initial Fit<\/p>[\s\S]{0,2400}?Initial Fit unavailable[\s\S]{0,500}?Retry fit check/,
   "Prepare treats compact Initial Fit failure as retryable and non-blocking"
 );
+assert.match(
+  prepareApplicationRail,
+  /quickFit\.status === "stale"[\s\S]{0,500}?Fit out of date[\s\S]{0,500}?Check again/,
+  "Prepare hides an obsolete verdict behind an explicit re-check state"
+);
 assert.match(app, /quickFit=\{quickFitState\}[\s\S]{0,200}?onRetryInitialFit=\{\(\) => void retryInitialFit\(\)\}\s*canRetryInitialFit=\{canRetryInitialFit\}/,
   "Prepare receives the current compact Initial Fit state and retry action");
 assert.doesNotMatch(app, /prepareFitAssessment|savedApplicationFitVerdict/,
   "Prepare no longer derives Initial Fit from saved or post-polish audit scores");
+assert.match(
+  intake,
+  /rawPosting: jobText\.trim\(\),[\s\S]{0,220}?requirements,[\s\S]{0,120}?resume: request\.resumeText\.trim\(\),[\s\S]{0,120}?candidateContext:/,
+  "Initial Fit provenance fingerprints the raw posting, authoritative requirements, resume, and candidate context"
+);
+assert.match(
+  intake,
+  /quickFitState\.status === "ready"[\s\S]{0,420}?inputFingerprint[\s\S]{0,180}?status: "stale"/,
+  "a ready fit is derived as stale as soon as any exact screening input changes"
+);
+assert.doesNotMatch(
+  intake.match(/async function retryInitialFit\(\)[\s\S]*?\n  \}/)?.[0] ?? "",
+  /latestInitialFitRef/,
+  "retry never replays the previous resume, brief, or candidate context"
+);
 const prepareFitStyles = prepareStyles.match(/\.prepare-fit\s*\{[\s\S]*?\n\}/)?.[0] ?? "";
 assert.notEqual(prepareFitStyles, "", "Prepare gives the fit summary a dedicated flat rail row");
 assert.match(prepareFitStyles, /border-top:/, "the fit row uses the rail's divider hierarchy");
@@ -1237,7 +1257,7 @@ assert.match(
 
 assert.match(
   app,
-  /function handleTailorPreparedResume()[\s\S]{0,600}?void handleResumePolish\(\{ revealResumeOnSuccess: false \}\);/,
+  /function handlePolishPreparedResume()[\s\S]{0,600}?void handleResumePolish\(\{ revealResumeOnSuccess: false \}\);/,
   "the prepared-job Resume Polish action remains explicit"
 );
 assert.doesNotMatch(
@@ -1295,6 +1315,16 @@ assert.match(
   resumeManualSelection,
   /!fileName\s*\|\|\s*fileName === baseResumeName\s*\|\|\s*resumeManualVariantSelectionInFlightRef\.current/,
   "resume manual selection ignores empty, current, and synchronous reentry requests"
+);
+assert.doesNotMatch(
+  resumeManualSelection,
+  /readBaseResumeCandidates/,
+  "manual selection does not pre-read candidate bytes before the authoritative loader"
+);
+assert.match(
+  resumeManualSelection,
+  /const loaded = await loadBaseResumeVersion\(fileName\);[\s\S]{0,420}?resumeText: loaded\.text,[\s\S]{0,80}?resumeLabel: loaded\.label/,
+  "Initial Fit uses the exact loader receipt adopted into the editor"
 );
 const coverManualSelectionStart = app.indexOf("const handleSelectPreparedCoverLetter = useCallback(");
 const coverManualSelectionEnd = app.indexOf("\n\n  useEffect(", coverManualSelectionStart);
@@ -1656,7 +1686,7 @@ assert.match(
 );
 assert.match(
   app,
-  /onTailorPreparedResume=\{handleTailorPreparedResume\}/,
+  /onPolishPreparedResume=\{handlePolishPreparedResume\}/,
   "Prepare routes Resume Polish through its inclusion-aware action"
 );
 assert.match(
@@ -1671,17 +1701,17 @@ assert.match(
 );
 assert.match(
   app,
-  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isResolvingPreparedResume[\s\S]{0,40}?\) return;/,
+  /function handlePolishPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isResolvingPreparedResume[\s\S]{0,40}?\) return;/,
   "the prepared-resume Polish handler fails closed while manual selection or ranking is active"
 );
 assert.match(
   app,
-  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isResolvingPreparedResume[\s\S]{0,20}?\}/,
+  /canPolishResume=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isResolvingPreparedResume[\s\S]{0,20}?\}/,
   "App disables Prepare Resume Polish during loading, manual selection, or variant ranking"
 );
 assert.match(
   prepareTab,
-  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isResolvingPreparedResume[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
+  /const polishResumeHint =[\s\S]{0,420}?isSelectingResume \|\| isResolvingPreparedResume[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canPolishResume/,
   "Prepare explains that Resume Polish is waiting for variant selection before generic blockers"
 );
 assert.match(
