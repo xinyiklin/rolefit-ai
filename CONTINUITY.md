@@ -16,6 +16,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   gap-only response completes without claiming the resume was tailored. No
   provider authentication, dispatch construction, Job analysis, client-facing
   assessment shape, or application persistence schema changed.
+- [CODE] Initial Fit evidence grounding treats the engine's closed inline-mark
+  grammar as presentation metadata. A provider may quote the exact text visible
+  in the resume without reproducing serialized bold/link/font/spacing tags;
+  wording, polarity, numeric, and source-grounding checks remain unchanged.
 - [USER+CODE] Fit Assessment directly replaces the preview numerical contract.
   `FitAssessment` owns categorical verdict, confidence, eligibility, a unique
   evidence-linked requirement ledger, and an advisory recommendation;

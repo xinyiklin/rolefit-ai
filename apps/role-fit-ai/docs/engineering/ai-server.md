@@ -400,9 +400,12 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   unsupported claims, missing evidence, presentation issues, and readiness.
   Each requirement retains and displays an exact `sourceRequirement` excerpt
   from the posting; candidate evidence is accepted only as a normalized exact
-  source quotation, so an inserted token or model-authored polarity inversion
-  fails closed. Source excerpts are unique within a ledger, and eligibility
-  rows must be disjoint from capability requirements. The shared parser permits
+  visible-source quotation. The normalization removes only the engine's closed
+  inline presentation-tag grammar, so a provider may quote the text the user
+  sees without reproducing serialized formatting metadata; inserted wording or
+  a model-authored polarity inversion still fails closed. Source excerpts are
+  unique within a ledger, and eligibility rows must be disjoint from capability
+  requirements. The shared parser permits
   all 40 requirement-derived strengths, concerns, and missing-evidence rows;
   independent advice lists remain capped at 16.
   Provider output does not own canonical ids, aggregate eligibility, display

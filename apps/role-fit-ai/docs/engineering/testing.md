@@ -249,6 +249,8 @@ Good frontend verification covers:
   falls back to a local judgment. Manual resume changes rerun once after loading; free edits
   mark stale without per-keystroke reruns
 - Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
+  including visible quotes whose stored resume source contains engine inline
+  presentation marks,
   duplicate and cross-ledger source requirements, one-token technology
   insertion, clause-level sponsorship polarity with contractions, adverbs,
   H-1B modifiers, and `no need for sponsorship` forms, `cannot relocate`,

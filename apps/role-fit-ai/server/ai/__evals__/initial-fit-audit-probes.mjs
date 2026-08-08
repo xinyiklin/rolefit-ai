@@ -63,6 +63,23 @@ assert.match(valid?.requirements[0]?.id ?? "", /^req-[a-z0-9-]+$/, "requirement 
 assert.match(valid?.eligibility.items[0]?.id ?? "", /^elig-[a-z0-9-]+$/, "eligibility ids are derived from the source requirement");
 assert.ok(parseFitAssessment(valid), "the canonical Initial Fit result round-trips through the shared parser");
 
+const visibleInlineMarkedEvidence = resolveInitialFitAuditOutcome({
+  fitAssessment: {
+    ...fitAssessment,
+    eligibility: { items: [] },
+    requirements: [{
+      ...requirement,
+      sourceRequirement: "Python is required.",
+      evidence: [{ source: "RESUME", excerpt: "Built production Python services." }]
+    }]
+  }
+}, "Python is required.", "Built <b>production Python</b> services.", "");
+assert.equal(
+  visibleInlineMarkedEvidence?.requirements[0]?.coverage,
+  "COVERED",
+  "exact visible evidence remains grounded when the resume source contains engine inline marks"
+);
+
 const ignoredAggregate = resolveInitialFitAuditOutcome({
   fitAssessment: {
     ...fitAssessment,

@@ -7,6 +7,7 @@ import {
   type RequirementAssessment,
   type SubmissionAssessment
 } from "../../shared/fitAssessmentContract.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type {
   AssessmentIssueCode,
   AssessmentIssuePhase,
@@ -44,7 +45,11 @@ function evidenceSourceText(
 }
 
 function normalizedSourceExcerpt(value: unknown): string {
-  return String(value ?? "")
+  // Resume evidence is visible text. Engine inline marks carry presentation
+  // and link metadata, so a provider may faithfully quote what the user sees
+  // without echoing those serialized tags. Remove only the engine's closed tag
+  // grammar before exact normalized containment; wording still cannot drift.
+  return stripInlineMarks(String(value ?? ""))
     .normalize("NFKC")
     .toLowerCase()
     .replace(/[’']/g, "'")
