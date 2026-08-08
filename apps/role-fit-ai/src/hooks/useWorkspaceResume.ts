@@ -43,6 +43,10 @@ export type BaseResumeOption = {
   kind: string;
 };
 
+// Where the document currently in the editor came from. Only `starter` is
+// sample content that must never be mistaken for the applicant's own resume.
+export type ResumeOrigin = "saved" | "uploaded" | "application" | "starter" | "blank";
+
 export type BaseResumeHistoryEntry = {
   key: string;
   originalName: string;
@@ -166,14 +170,36 @@ export function useWorkspaceResume({
   const [baseResumeOptions, setBaseResumeOptions] = useState<BaseResumeOption[]>([]);
   const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
   const [baseResumeCandidatesRevision, setBaseResumeCandidatesRevision] = useState(0);
+  const baseResumeCandidatesRevisionRef = useRef(0);
+  const baseResumeCandidateCacheRef = useRef<{ key: string; candidates: VariantCandidate[] } | null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
+  // What the document in the editor actually is. The bundled starter is sample
+  // content, so nothing that speaks for the candidate — readiness, Initial Fit,
+  // an automatic proposal — may treat it as the applicant's resume until it is
+  // saved as a real base.
+  const [resumeOrigin, setResumeOrigin] = useState<ResumeOrigin>("blank");
   const workspaceLoadGenerationRef = useRef(0);
   // This is the one-shot startup check, not a generic loading flag. It begins
   // true so the first paint does not claim the workspace is empty, then only
   // ever settles to false. Explicit Reload actions keep the current editor on
   // screen while their request runs.
   const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
+  // Callers that must not mistake "still hydrating" for "no resume" await this
+  // instead of sampling the boolean: an extension import can reach Prepare
+  // before the mount load returns, and a boolean read at that instant is a lie.
+  const workspaceBootstrapSettledRef = useRef<{ promise: Promise<void>; settle: () => void }>(null!);
+  if (!workspaceBootstrapSettledRef.current) {
+    let settle!: () => void;
+    const promise = new Promise<void>((resolve) => {
+      settle = resolve;
+    });
+    workspaceBootstrapSettledRef.current = { promise, settle };
+  }
+  const whenWorkspaceBootstrapped = useCallback(
+    () => workspaceBootstrapSettledRef.current.promise,
+    []
+  );
   const detachBaseResumeIdentity = useCallback(() => {
     setBaseResumeName("");
     saveLastBaseResumeName("");
@@ -274,7 +300,9 @@ export function useWorkspaceResume({
     // Names alone cannot reveal that an existing variant was overwritten or
     // restored. Advance the recommendation key for every authoritative
     // workspace snapshot so Prepare re-reads the actual saved bytes.
-    setBaseResumeCandidatesRevision((revision) => revision + 1);
+    baseResumeCandidatesRevisionRef.current += 1;
+    baseResumeCandidateCacheRef.current = null;
+    setBaseResumeCandidatesRevision(baseResumeCandidatesRevisionRef.current);
     // Only overwrite history when the response actually carries it. A partial
     // response (e.g. a caller that forgets the field) must not silently wipe the
     // Recent list — that was the "history disappears on save" bug.
@@ -311,7 +339,7 @@ export function useWorkspaceResume({
             saveLastBaseResumeName("");
           }
           setWorkspaceStatus("");
-          await applyWorkspaceBaseResume(workspace.baseResume, "");
+          if (await applyWorkspaceBaseResume(workspace.baseResume, "")) setResumeOrigin("saved");
           return;
         }
         setWorkspaceStatus("");
@@ -336,6 +364,7 @@ export function useWorkspaceResume({
               setResumeText(starterText);
               seedResumeEditor(starterText, "");
             }
+            setResumeOrigin("starter");
             setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
           } catch {
             // Corrupt bundled starter — leave the editor empty rather than seed
@@ -347,6 +376,14 @@ export function useWorkspaceResume({
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
     } finally {
       setIsWorkspaceBootstrapping(false);
+      // Only the startup load answers "which resume is loaded", and only while
+      // it is still the current one — a superseded run (Strict Mode's double
+      // mount, a Reload that overtook it) has applied nothing. Settles on
+      // failure too: an unreachable workspace is a terminal answer, not a
+      // reason to wait forever.
+      if (applyBaseResume && generation === workspaceLoadGenerationRef.current) {
+        workspaceBootstrapSettledRef.current.settle();
+      }
     }
   }
 
@@ -367,6 +404,7 @@ export function useWorkspaceResume({
         true
       );
       if (!applied) return;
+      setResumeOrigin("starter");
       saveLastBaseResumeName("");
       setBaseResumeName("");
       updateWorkspaceState(workspace);
@@ -393,6 +431,7 @@ export function useWorkspaceResume({
     // workspace files are deliberately untouched.
     replacementGuard.onReplacementCommitted();
     detachBaseResumeIdentity();
+    setResumeOrigin("blank");
     setFileName("");
     setDocumentTitle("Resume");
     setResumeText("");
@@ -440,6 +479,9 @@ export function useWorkspaceResume({
         setWorkspaceStatus("Saved the base resume, but its returned file could not be loaded. The current editor was kept.");
         return;
       }
+      // Saving is exactly the act that turns a starter or an upload into the
+      // applicant's own base resume.
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -530,6 +572,7 @@ export function useWorkspaceResume({
         setWorkspaceStatus("The restored base resume could not be loaded. The current editor was kept.");
         return;
       }
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -593,6 +636,7 @@ export function useWorkspaceResume({
         }
         return false;
       }
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -613,40 +657,54 @@ export function useWorkspaceResume({
   // Read every saved variant without adopting any of them into the editor.
   // Prepare uses this snapshot only for deterministic recommendation; the
   // existing guarded load path remains the sole document-replacement owner.
+  //
+  // One batch request, not one per variant: the select route answers with a
+  // whole workspace snapshot under the server's serialized workspace lock, so
+  // per-file reads were N sequential snapshots on the path to the first AI
+  // result. Results are cached against the authoritative candidate revision, so
+  // resolving and then displaying the same ranking costs one request in total.
   const readBaseResumeCandidates = useCallback(
     async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
-      const candidates = await Promise.all(
-        options.map(async (option): Promise<VariantCandidate | null> => {
-          try {
-            const response = await fetch("/api/workspace/base-resume/select", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fileName: option.fileName })
-            });
-            const workspace = (await response.json()) as Partial<JobWorkspace> & {
-              baseResume?: WorkspaceBaseResume;
-            };
-            if (!response.ok || !workspace.baseResume?.text) return null;
-            const prepared = prepareResumeText(
-              workspace.baseResume.text,
-              workspace.baseResume.kind === "resume"
-            );
-            return {
-              fileName: option.fileName,
-              label: option.label,
-              text:
-                prepared.kind === "resume"
-                  ? serializeResumeData(prepared.parsed.data)
-                  : prepared.text
-            };
-          } catch {
-            return null;
-          }
-        })
-      );
-      return candidates.filter(
-        (candidate): candidate is VariantCandidate => candidate !== null
-      );
+      const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
+      if (!fileNames.length) return [];
+      const cacheKey = `${baseResumeCandidatesRevisionRef.current}|${[...fileNames].sort().join(",")}`;
+      const cached = baseResumeCandidateCacheRef.current;
+      if (cached?.key === cacheKey) return cached.candidates;
+
+      let read: { fileName?: unknown; label?: unknown; kind?: unknown; text?: unknown }[];
+      try {
+        const response = await fetch("/api/workspace/base-resume/candidates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ fileNames })
+        });
+        const body = (await response.json()) as { candidates?: unknown };
+        if (!response.ok || !Array.isArray(body.candidates)) return [];
+        read = body.candidates as typeof read;
+      } catch {
+        return [];
+      }
+
+      const labels = new Map(options.map((option) => [option.fileName, option.label]));
+      const candidates: VariantCandidate[] = [];
+      for (const entry of read) {
+        const fileName = typeof entry?.fileName === "string" ? entry.fileName : "";
+        const text = typeof entry?.text === "string" ? entry.text : "";
+        if (!fileName || !text) continue;
+        try {
+          const prepared = prepareResumeText(text, entry.kind === "resume");
+          candidates.push({
+            fileName,
+            label: labels.get(fileName) ?? (typeof entry.label === "string" ? entry.label : fileName),
+            text: prepared.kind === "resume" ? serializeResumeData(prepared.parsed.data) : prepared.text
+          });
+        } catch {
+          // A variant that no longer parses is skipped, never ranked empty: the
+          // ranker's completeness rule turns the short list into no recommendation.
+        }
+      }
+      baseResumeCandidateCacheRef.current = { key: cacheKey, candidates };
+      return candidates;
     },
     []
   );
@@ -685,6 +743,7 @@ export function useWorkspaceResume({
     }
     replacementGuard.onReplacementCommitted();
 
+    setResumeOrigin("uploaded");
     setFileName(file.name);
     setFileError("");
     setFileStatus("");
@@ -720,6 +779,11 @@ export function useWorkspaceResume({
     workspaceStatus,
     isSavingBaseResume,
     isWorkspaceBootstrapping,
+    whenWorkspaceBootstrapped,
+    resumeOrigin,
+    // App owns the one transition this hook cannot see: restoring a tracked
+    // application seeds the editor directly, outside every workspace path.
+    markResumeOrigin: setResumeOrigin,
     loadWorkspace,
     loadStarterTemplate,
     startBlankResume,

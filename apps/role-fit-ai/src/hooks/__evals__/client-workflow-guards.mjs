@@ -1264,13 +1264,18 @@ assert.match(
 );
 assert.match(
   workspaceResume,
-  /const readBaseResumeCandidates = useCallback[\s\S]{0,1600}?Promise\.all/,
-  "workspace recommendation reads every available resume candidate without adopting it"
+  /const readBaseResumeCandidates = useCallback[\s\S]{0,900}?fetch\("\/api\/workspace\/base-resume\/candidates"/,
+  "candidate ranking reads every variant through one batch request, not one snapshot per file"
+);
+assert.doesNotMatch(
+  workspaceResume,
+  /const readBaseResumeCandidates = useCallback[\s\S]{0,1600}?base-resume\/select/,
+  "candidate ranking never falls back to the snapshot-per-file select route"
 );
 assert.match(
   workspaceResume,
-  /function updateWorkspaceState[\s\S]{0,800}?setBaseResumeCandidatesRevision\(\(revision\) => revision \+ 1\)/,
-  "authoritative workspace snapshots invalidate cached candidate-content rankings"
+  /function updateWorkspaceState[\s\S]{0,800}?baseResumeCandidatesRevisionRef\.current \+= 1;\s*baseResumeCandidateCacheRef\.current = null;/,
+  "authoritative workspace snapshots invalidate both the ranking key and the cached candidate bytes"
 );
 
 // Cover letters use the same safe auto-selection contract as resumes.
@@ -1337,8 +1342,8 @@ assert.match(
 );
 assert.match(
   coverLetterRepository,
-  /selectCoverLetterWorkspaceDocument\(option\.fileName\)[\s\S]{0,320}?catch\s*\{\s*return null;/,
-  "an unparseable saved letter is skipped rather than ranked as empty"
+  /fetch\("\/api\/workspace\/cover-letter\/candidates"[\s\S]{0,1200}?catch\s*\{[\s\S]{0,200}?\}\s*\}\s*return candidates;/,
+  "saved letters rank through one batch request, and an unparseable letter is skipped rather than ranked as empty"
 );
 assert.match(
   coverEditor,

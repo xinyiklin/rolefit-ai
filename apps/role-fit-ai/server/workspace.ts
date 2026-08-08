@@ -39,6 +39,8 @@ const baseResumeCandidates = [
 ];
 const baseResumeVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
 const MAX_BASE_RESUME_BYTES = 200_000;
+// A batch read is a convenience over one lock, not an unbounded workspace dump.
+const MAX_BASE_RESUME_CANDIDATES = 40;
 
 export class WorkspaceStorageError extends Error {
   constructor(message = "The base-resume workspace could not be read safely. Check the workspace files and try again.") {
@@ -406,6 +408,72 @@ export async function handleSelectBaseResume(
       error: error instanceof WorkspaceStorageError
         ? error.message
         : error instanceof Error ? error.message : "Base resume load failed."
+    });
+  }
+}
+
+// Ranking saved variants needs several resumes' bytes at once, before any
+// provider request. The select route answers with a whole workspace snapshot
+// (cover-letter state, starter, options, history, file list) and takes the
+// workspace lock per call, so N variants cost N serialized snapshots on the
+// critical path to the first AI result. This reads only the requested resumes,
+// under one lock, and returns nothing else.
+export async function handleBaseResumeCandidates(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations = defaultWorkspaceLocations
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readBody(req, 8_000));
+    const requested = Array.isArray(body.fileNames) ? body.fileNames : [];
+    if (!requested.length) {
+      sendJson(res, 400, { error: "List the base resume versions to read." });
+      return;
+    }
+    if (requested.length > MAX_BASE_RESUME_CANDIDATES) {
+      sendJson(res, 400, { error: "Too many base resume versions were requested at once." });
+      return;
+    }
+    const fileNames: string[] = [];
+    for (const requestedName of requested) {
+      const fileName = assertBaseResumeFileName(requestedName);
+      if (!fileNames.includes(fileName)) fileNames.push(fileName);
+    }
+    const candidates = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace(locations.workspaceDir);
+      const read: { fileName: string; label: string; kind: string; text: string }[] = [];
+      for (const fileName of fileNames) {
+        // One unreadable or invalid variant must not fail the batch. The ranker
+        // treats an incomplete candidate set as "no recommendation", which is
+        // the honest outcome; a 500 would leave Prepare with no selection at all.
+        try {
+          const baseResume = await readWorkspaceBaseResume(fileName, locations);
+          if (!baseResume.exists || !baseResume.text) continue;
+          read.push({
+            fileName,
+            label: baseResume.label ?? baseResumeLabel(fileName),
+            kind: baseResume.kind ?? "resume",
+            text: baseResume.text
+          });
+        } catch (error) {
+          if (error instanceof WorkspaceStorageError) continue;
+          throw error;
+        }
+      }
+      return read;
+    });
+    sendJson(res, 200, { candidates });
+  } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
+    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
+      error: error instanceof WorkspaceStorageError
+        ? error.message
+        : error instanceof Error ? error.message : "Base resume versions could not be read."
     });
   }
 }

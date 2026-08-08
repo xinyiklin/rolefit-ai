@@ -24,6 +24,8 @@ const DEFAULT_COVER_LETTER_FILE = "default.cover";
 const coverLetterVariantPattern = /^[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
 // A cover letter is one page of prose; the resume's 200KB cap is generous here.
 const MAX_COVER_LETTER_BYTES = 200_000;
+// A batch read is a convenience over one lock, not an unbounded workspace dump.
+const MAX_COVER_LETTER_CANDIDATES = 40;
 
 export type CoverLetterOption = { fileName: string; label: string };
 type CoverLetterHistoryEntry = { key: string; originalName: string; date: string };
@@ -266,6 +268,63 @@ export async function handleSelectCoverLetter(
       error: error instanceof WorkspaceStorageError
         ? error.message
         : error instanceof Error ? error.message : "Cover letter load failed."
+    });
+  }
+}
+
+// The resume batch read's counterpart: ranking saved letters needs several
+// documents at once, and the select route pays a workspace lock plus a
+// cover-letter snapshot per file. This reads only the requested letters under
+// one lock and returns nothing else.
+export async function handleCoverLetterCandidates(
+  req: IncomingMessage,
+  res: ServerResponse,
+  locations: WorkspaceLocations
+): Promise<void> {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "Use POST." });
+    return;
+  }
+
+  try {
+    const body = JSON.parse(await readBody(req, 8_000));
+    const requested = Array.isArray(body.fileNames) ? body.fileNames : [];
+    if (!requested.length) {
+      sendJson(res, 400, { error: "List the cover letter versions to read." });
+      return;
+    }
+    if (requested.length > MAX_COVER_LETTER_CANDIDATES) {
+      sendJson(res, 400, { error: "Too many cover letter versions were requested at once." });
+      return;
+    }
+    const fileNames: string[] = [];
+    for (const requestedName of requested) {
+      const fileName = assertCoverLetterFileName(requestedName);
+      if (!fileNames.includes(fileName)) fileNames.push(fileName);
+    }
+    const candidates = await withWorkspaceLock(async () => {
+      await ensureJobWorkspace(locations.workspaceDir);
+      const read: { fileName: string; label: string; text: string }[] = [];
+      for (const fileName of fileNames) {
+        // A missing or invalid letter is skipped, never fatal: the ranker's own
+        // completeness rule turns a short candidate list into no recommendation.
+        try {
+          const data = await readFile(join(coverLetterWorkspaceDir(locations), fileName));
+          read.push({ fileName, label: coverLetterLabel(fileName), text: validateCoverLetterText(data) });
+        } catch (error) {
+          if (isMissingFile(error) || error instanceof WorkspaceStorageError) continue;
+          throw error;
+        }
+      }
+      return read;
+    });
+    sendJson(res, 200, { candidates });
+  } catch (error) {
+    if (restoreConflictHandled(error, res)) return;
+    sendJson(res, error instanceof WorkspaceStorageError ? 500 : 400, {
+      error: error instanceof WorkspaceStorageError
+        ? error.message
+        : error instanceof Error ? error.message : "Cover letter versions could not be read."
     });
   }
 }
