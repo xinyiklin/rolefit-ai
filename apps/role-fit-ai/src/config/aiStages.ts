@@ -14,7 +14,7 @@ export type AiStageId = "job-analysis" | "resume-polish" | "final-check" | "cove
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
-  /** Short name used by the Copy-settings control and the progress rows. */
+  /** Name used by the Copy-from control. */
   readonly label: string;
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
@@ -27,46 +27,40 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     id: "job-analysis",
     label: "Job analysis",
     title: "Job analysis",
-    blurb: "Turns a job posting into a structured brief.",
+    blurb: "Structures the posting and, when enabled, checks Initial Fit.",
     settingsPrefix: "jobAnalysis"
   },
   {
     id: "resume-polish",
     label: "Resume Polish",
     title: "Resume Polish",
-    blurb: "Creates one grounded proposal for the sections you marked Polish.",
+    blurb: "Creates one grounded proposal for the resume sections marked Polish.",
     settingsPrefix: ""
   },
   {
     id: "final-check",
-    label: "Final Check",
-    title: "Final Check",
-    blurb: "Optionally checks the actual current resume after your edit decisions.",
+    label: "Document check",
+    title: "Check current document",
+    blurb: "Checks the current resume or cover letter after proposal decisions or later edits.",
     settingsPrefix: "finalCheck"
   },
   {
     id: "cover",
-    label: "Cover",
+    label: "Cover letter",
     title: "Cover letter",
-    blurb: "Revises the letter you wrote, from the Cover letter page.",
+    blurb: "Creates a grounded whole-letter proposal for you to accept or discard.",
     settingsPrefix: "cover"
   },
   {
     id: "answers",
-    label: "Q&A",
+    label: "Application questions",
     title: "Application questions",
-    blurb: "Drafts answers to an application's written questions.",
+    blurb: "Drafts grounded answers to an application's written questions.",
     settingsPrefix: "answers"
   }
 ];
 
 export const AI_STAGE_IDS: readonly AiStageId[] = AI_STAGES.map((stage) => stage.id);
-
-export function aiStage(id: AiStageId): AiStageDescriptor {
-  const found = AI_STAGES.find((stage) => stage.id === id);
-  if (!found) throw new Error(`Unknown AI stage: ${id}`);
-  return found;
-}
 
 /** The persisted [provider, model, effort] key triple for one stage. */
 export function stageSettingsKeys(stage: AiStageDescriptor): {

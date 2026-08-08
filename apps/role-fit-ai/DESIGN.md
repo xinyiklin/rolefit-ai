@@ -432,7 +432,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   Either or both materials may be excluded, so a prepared tracker-only
   application is valid. Re-Apply leaves any previously saved artifact intact
   when its card is excluded. Apply persists the complete corrected brief,
-  including benefits, while Tailor receives the benefits-excluded projection.
+  including benefits, while Resume Polish receives the benefits-excluded projection.
 
 ### Navigation
 

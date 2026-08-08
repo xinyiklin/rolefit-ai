@@ -34,7 +34,7 @@ export type CoverLetterPreflight = {
   hasCompletedGreeting: boolean;
   missingFields: MissingCoverLetterField[];
   // Template slots naming a private fact RoleFit cannot infer (a referral, a
-  // prior personal relationship). These are the only slots that block Tailor.
+  // prior personal relationship). These are the only slots that block Polish.
   privateSlots: CoverLetterTemplateSlot[];
   blockers: string[];
   resolved: ResolvedCoverLetterContext;
@@ -97,7 +97,7 @@ function completedGreeting(text: string): boolean {
   return Boolean(match?.[1]?.trim()) && !hasUnresolvedCoverLetterTokens(match?.[0] ?? "");
 }
 
-// A recipient the writer already named survives tailoring. Without one the
+// A recipient the writer already named survives polishing. Without one the
 // greeting falls back to the company hiring team — never a question.
 function authoredRecipient(text: string): string {
   const match = text.slice(0, 500).match(DIRECT_GREETING);
@@ -129,9 +129,9 @@ function field(
   return { key, label, reason };
 }
 
-// Resolves everything a tailoring request needs and reports only the facts that
+// Resolves everything a Polish request needs and reports only the facts that
 // genuinely cannot be resolved. A blank document, a bare template, or a letter
-// full of generative prompts is tailorable; a missing employer is not.
+// full of generative prompts can be polished; a missing employer cannot.
 export function buildCoverLetterPreflight({
   text,
   candidateName,

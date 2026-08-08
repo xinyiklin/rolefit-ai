@@ -30,7 +30,7 @@ export type PreparedResumeSelection = {
 
 // Why no resume could be resolved. "starter-only" is the case worth naming: the
 // bundled starter is long enough to pass every length test while being sample
-// content that must never be screened, tailored, or reported as ready.
+// content that must never be screened, polished, or reported as ready.
 export type PreparedResumeBlocker = "no-resume" | "starter-only";
 
 export type PreparedResumeDecision =

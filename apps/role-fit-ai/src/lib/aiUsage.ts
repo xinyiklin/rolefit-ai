@@ -1,4 +1,4 @@
-// Per-stage AI usage attribution, captured across Job analysis/Resume Polish/Final Check/
+// Per-stage AI usage attribution, captured across Job analysis/Resume Polish/Document check/
 // cover pipeline and snapshotted onto an Application at Apply time (see
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.

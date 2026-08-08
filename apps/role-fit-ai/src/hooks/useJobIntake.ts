@@ -461,7 +461,7 @@ export function useJobIntake({
       errorHeadline: "Duplicate application found",
       error: phase === "before"
         ? "Pipeline stopped before Job analysis. No AI request was made."
-        : "Job analysis completed. Tailor and Review were not run."
+        : "Job analysis completed. Polish was not started."
     };
   }
 
@@ -474,8 +474,8 @@ export function useJobIntake({
   // setJobDescription and set pipelineAiUsage["job-analysis"] to their own real usage.
   // A manual edit means whatever job analysis result was showing no longer describes
   // the text on screen, and there is no separate raw version to remember.
-  // (Deliberately does NOT drop tailor/review/cover: a manual edit keeps the
-  // polish result on screen, so its attribution still describes that output.)
+  // Deliberately keep later-stage usage: a manual edit leaves those outputs on
+  // screen, so their attribution still describes what the user can see.
   function handleManualJobDescriptionChange(value: string) {
     setJobDescription(value);
     // Typing or replacing source starts fresh intake immediately. Clear the
@@ -493,19 +493,12 @@ export function useJobIntake({
       : { status: "disabled" });
   }
 
-  // Fresh-import usage reset: every import path below clears the polish result
-  // (setResult(null)), so the PREVIOUS job's tailor/review/cover attribution is
-  // now orphaned — commitApply snapshots pipelineAiUsage onto the Application,
-  // and a stale row would record job A's providers on an unpolished job B.
-  // Mirrors handlePolish's fresh-run delete (usePolishPipeline) and
-  // handleLoadApplication's whole-map replace (App).
-  const freshJobAnalysisUsage = (usage: StageAiUsage) => (prev: Record<string, StageAiUsage>) => {
-    const next: Record<string, StageAiUsage> = { ...prev, "job-analysis": usage };
-    delete next.tailor;
-    delete next.review;
-    delete next.cover;
-    return next;
-  };
+  // Fresh intake clears every downstream output, so its usage snapshot starts
+  // with Job analysis only. Replacing the map prevents any current or future
+  // job-specific stage from leaking attribution across postings.
+  const freshJobAnalysisUsage = (usage: StageAiUsage) => () => ({
+    "job-analysis": usage
+  });
 
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
@@ -966,8 +959,8 @@ export function useJobIntake({
           setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
           return;
         }
-        // A successful or locally-fallback job analysis stops here. Tailor remains an
-        // explicit action in Prepare.
+        // A successful or locally-fallback job analysis stops here. Polish
+        // remains an explicit action in Prepare.
         const terminalState = jobAnalysisTerminalState(result, duplicateAfter.note);
         setJobAnalysisRetrySource("import");
         setJobAnalysisProgress(terminalState);

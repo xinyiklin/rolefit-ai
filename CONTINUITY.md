@@ -5,11 +5,33 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **Prepare's wrapped Initial Fit detail now remains inside
+  the Application rail panel.** The desktop two-pane scroller stretched the
+  rail's single grid item to the scrollport height, so a longer fit summary
+  continued below the card border. The panel now opts out of grid-item stretch
+  while retaining its full-scrollport minimum height; shorter content still
+  fills the rail and longer content establishes the card's real height. A
+  focused red/green layout contract and the complete RoleFit gate pass with 77
+  offline evaluations. Live browser QA remains UNCONFIRMED under the flag-first
+  policy.
+- [USER+CODE+TOOL] **The Applications inspector now contains long AI usage
+  identifiers and full-width controls instead of widening the workspace.** Its
+  implicit auto grid column used the longest provider/model value as a
+  max-content floor, which pulled the fit strip, ledger rows, and form fields
+  past the card and created a page-level horizontal scrollbar. The inspector
+  now owns one `minmax(0, 1fr)` track; the existing value-wrapping and control
+  bounds can therefore operate against the card width. A red/green layout
+  contract locks that source rule. The complete RoleFit production, landing,
+  desktop, and 76-evaluation gate passes with loopback access; live browser QA
+  remains UNCONFIRMED under the flag-first policy.
 - [USER+CODE+TOOL] **AI stage and provider catalogs now match their current
   contracts.** RoleFit still supports exactly five independently configurable
   stages and the existing five integrations; no speculative provider was added.
   The stale configurable `tailor` id and historical tracker provenance migrate
   to `resume-polish` while the original unprefixed provider fields remain stable.
+  Settings calls the `final-check` request **Check current document**, identifies
+  its resume and cover-letter scope, and describes Job analysis, Cover letter,
+  and Application questions by the user-visible work each request performs.
   OpenAI API retains the three current GPT-5.6 models; Claude API and Claude Code
   add Opus 5, with Sonnet 5 / Opus 5 bounded API requests explicitly disabling
   their new default thinking behavior and Fable 5 using low effort because its
@@ -65,12 +87,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
   setting (default on) keeps the extra request per polish user-owned without
   making it a user-operated section. Role Fit stays separate and no fit score or
   post-tailor fit audit returned.
-  The shared input firewall now also declares the check-time and Initial Fit
-  fences (`<current_resume>`, `<current_cover_letter>`, `<candidate_evidence>`,
-  `<selected_resume>`, `<candidate_context>`, `<user_guidance>`) as data; those
-  carried untrusted text with no such instruction before. 75 offline evaluations
-  (1 new executable state eval), 438 client workflow guards, RoleFit production
-  and landing builds, and both TypeScript gates pass. **Browser QA is
+  The shared input firewall now derives both its data-only instruction and
+  escaping pattern from one current fence list. That list covers the check-time,
+  Initial Fit, Resume Polish, cover-letter, and application-answer inputs,
+  including `<editable_targets>`, `<resume_context>`, and the separate
+  `<selected_resume_label>` fence; those carried untrusted text without a
+  matching instruction or safe attribute boundary before. The final audit also
+  removed the retired cover-result adapter, keeps a superseded whole-letter
+  proposal visible to the shared workflow resolver, and uses Document check in
+  user-facing tracker and provider-error copy while preserving the `final-check`
+  storage/API id. All 77 offline evaluations (including the shared-state and two
+  layout contracts), 453 client workflow guards, RoleFit production and landing
+  builds, both TypeScript gates, and every desktop probe pass. **Browser QA is
   UNCONFIRMED** and is the outstanding check: the Resume rail lost a section and
   both rails changed status vocabulary. No live provider evaluation ran, so the
   automatic post-decision check has not been observed against a real provider.

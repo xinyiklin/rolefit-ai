@@ -59,7 +59,7 @@ export type { DraftAutosaveState };
 
 export function useAutosaveDraft({ editedResume, docStyle, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
   // Latest usage/raw-text read inside the debounced write without re-triggering
-  // the effect (and its debounce reset) on every job-analysis/tailor/review tick —
+  // the effect (and its debounce reset) on every Job analysis/Polish/check tick —
   // only dirty/editedResume/jobLabel changes should reschedule the write.
   const latestExtras = useRef({ pipelineAiUsage, jobRawText, getJobKeyHash });
   latestExtras.current = { pipelineAiUsage, jobRawText, getJobKeyHash };

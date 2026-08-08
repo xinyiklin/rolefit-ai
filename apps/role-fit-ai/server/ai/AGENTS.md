@@ -10,8 +10,8 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess
   invocation and provider-specific process constraints.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
-- `sanitize.ts` validates legacy suggestions and Review output; it does not invent or
-  recalculate a replacement judgment.
+- `sanitize.ts` owns shared deterministic markup and numeric-claim guards. Stage
+  modules own their response schemas and outcome derivation.
 - `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
   target IDs, deterministic mutation grounding, tolerant optional feedback,
   and truthful Proposal / No changes / Withheld outcomes.
@@ -19,9 +19,8 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   dispatch, an independent compact contract, deterministic issue grounding,
   partial valid issue survival, and server-derived status. It never returns a
   score, fit verdict, recommendation, or rewrite.
-- `polish.ts` routes `mode: "resume-proposal"` to that contract. Its older
-  Tailor/Review and optional cover legs are compatibility-only until their
-  staged cleanup; the browser's normal Resume Polish path must not use them.
+- `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
+  contract. Cover letters and current-document checks use their own routes.
 - `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
@@ -72,13 +71,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
   independently. Optional summary/gap failures never erase safe siblings, while
   an all-drop returns Withheld rather than a successful empty proposal.
-- Final Check audits the current edited draft only when requested. Validate its
+- Final Check audits the current edited draft only when enabled or explicitly
+  rerun. Validate its
   issue kinds and grounded details independently, drop malformed siblings, and
   derive READY / REVIEW / NEEDS_EVIDENCE from the surviving issues. Its failure
   is non-blocking and cannot alter Polish or Apply.
-- The older Review-only and Both modes remain compatibility-only until their
-  staged cleanup. Review-only audits the submitted current draft; the Review
-  leg of Both receives only sanitized suggestions from that same Tailor run.
 - Polish failures fail plainly without changing the document.
   Job analysis and Initial Fit failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither

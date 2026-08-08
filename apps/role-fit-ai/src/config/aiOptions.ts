@@ -3,8 +3,8 @@ import {
   DEFAULT_ANTIGRAVITY_MODEL
 } from "../../shared/antigravityModels.ts";
 
-// Shared AI option types (moved here from the former SourcesPane so the
-// provider tables and their types live together).
+// Shared AI option types and provider tables live together so the UI and
+// settings normalization use one catalog.
 export type AiProviderValue =
   | "openai"
   | "anthropic"
@@ -155,7 +155,7 @@ export function providerLabel(value: string): string {
   return providerOptions.find((option) => option.value === value)?.label ?? value;
 }
 
-// Provider attribution string for status lines and the reviewer caption, e.g.
+// Provider attribution string for status lines, e.g.
 // "Codex · CLI (gpt-5.6-sol)". The model is in parens (provider labels already
 // contain "·") and omitted when blank (e.g. an empty custom model id).
 export function describeProviderModel(provider: string, model: string): string {

@@ -621,7 +621,7 @@ export function ApplicationModal({
 
               {finalCheck ? (
                 <div className="application-review">
-                  <h4><AlertTriangle size={14} aria-hidden="true" /> Final Check · {finalCheck.status.replace("_", " ")}</h4>
+                  <h4><AlertTriangle size={14} aria-hidden="true" /> Document check · {finalCheck.status.replace("_", " ")}</h4>
                   <p className="application-review__verdict">{finalCheck.summary}</p>
                   {finalCheck.issues.length ? (
                     <ul className="application-review__list">
@@ -636,7 +636,7 @@ export function ApplicationModal({
                   ) : null}
                 </div>
               ) : (
-                <p className="application-muted">No Final Check snapshot. Run the optional check on the actual current resume before Apply if you want one saved here.</p>
+                <p className="application-muted">No document-check snapshot was saved for this application.</p>
               )}
             </section>
           ) : null}

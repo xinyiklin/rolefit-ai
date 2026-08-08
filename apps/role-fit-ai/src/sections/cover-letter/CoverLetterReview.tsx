@@ -152,7 +152,7 @@ export function CoverLetterReview({
     ready,
     polishing: isTailoring,
     checking: isChecking,
-    proposal: proposal && !proposal.stale ? { outstanding: 1, total: 1 } : null,
+    proposal: proposal ? { outstanding: 1, total: 1 } : null,
     proposalSuperseded: Boolean(proposal?.stale),
     check: check?.status ?? null,
     checkDocumentChanged,

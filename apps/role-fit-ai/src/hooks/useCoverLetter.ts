@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
-import { AI_UNAVAILABLE, ApiError, classifyFailure } from "../lib/failures";
+import { ApiError, classifyFailure } from "../lib/failures";
 import {
   workflowInputFingerprint,
   workflowRequestIsCurrent,
@@ -41,17 +41,7 @@ type UseCoverLetterArgs = {
   tailorApplied: boolean;
   jobTarget?: { role?: string; company?: string };
   onApplyTailored: (text: string) => void;
-  onApplyExternal: (text: string) => void;
   onUsage?: (usage: StageAiUsage) => void;
-};
-
-export type PolishCoverResult = {
-  status: "off" | "ok" | "failed";
-  coverLetterText?: string;
-  provider?: string;
-  model?: string;
-  reasoningEffort?: string;
-  attempts?: number;
 };
 
 export type CoverLetterProposal = {
@@ -98,7 +88,6 @@ export function useCoverLetter({
   tailorApplied,
   jobTarget,
   onApplyTailored,
-  onApplyExternal,
   onUsage,
 }: UseCoverLetterArgs) {
   const [coverStatus, setCoverStatus] = useState("");
@@ -234,19 +223,6 @@ export function useCoverLetter({
     [],
   );
 
-  const applyCoverLetter = useCallback(
-    (text: string) => {
-      invalidateCoverRequest();
-      onApplyExternal(text);
-      setPendingProposal(null);
-      setFailure(null);
-      setLastAppliedResult(null);
-      setCoverStatus("");
-      setCoverProgress({ status: "idle" });
-    },
-    [invalidateCoverRequest, onApplyExternal],
-  );
-
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
     setSlotAnswers({});
@@ -255,32 +231,6 @@ export function useCoverLetter({
     setCoverStatus("Inputs changed. Polish the letter again for this context.");
     setCoverProgress({ status: "idle" });
   }, [invalidateCoverRequest]);
-
-  // New browser requests never ask /api/polish for its compatibility cover leg.
-  // Refuse an unexpected legacy result instead of replacing the letter through a
-  // path that never ran RoleFit's evidence checks.
-  const applyPolishCoverResult = useCallback(
-    (result: PolishCoverResult) => {
-      if (result.status === "off") return;
-      invalidateCoverRequest();
-      setFailure({
-        kind: "error",
-        headline: AI_UNAVAILABLE,
-        detail: "The existing cover letter was not replaced.",
-      });
-      setCoverStatus(
-        result.status === "ok"
-          ? "A legacy cover-letter result was not applied. Use Polish on the Cover letter page."
-          : "The legacy cover-letter step failed. The existing letter was kept.",
-      );
-      setCoverProgress({
-        status: "failed",
-        errorHeadline: AI_UNAVAILABLE,
-        error: "The existing cover letter was not replaced.",
-      });
-    },
-    [invalidateCoverRequest],
-  );
 
   const dismissCoverProgress = useCallback(
     () => setCoverProgress({ status: "idle" }),
@@ -399,13 +349,13 @@ export function useCoverLetter({
           return;
         }
         throw new ApiError(
-          raw.error ?? raw.reasons?.[0] ?? "Could not tailor the cover letter.",
+          raw.error ?? raw.reasons?.[0] ?? "Could not polish the cover letter.",
           response.status,
         );
       }
       const result = tailorResponse(raw);
       if (!result) {
-        throw new ApiError("The tailored cover letter could not be read.", 502);
+        throw new ApiError("The polished cover letter could not be read.", 502);
       }
       setPendingProposal({
         result,
@@ -479,9 +429,7 @@ export function useCoverLetter({
 
   return {
     coverLetterText: currentCoverLetterText,
-    applyCoverLetter,
     resetCoverWorkflow,
-    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleTailorCoverLetter,

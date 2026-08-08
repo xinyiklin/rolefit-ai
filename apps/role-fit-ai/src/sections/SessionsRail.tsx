@@ -9,9 +9,9 @@ const PHASE_LABEL: Record<PresencePhase, string> = {
   editing: "editing",
   "analyzing-job": "analyzing job",
   distilling: "analyzing job",
-  tailoring: "tailoring",
-  reviewing: "reviewing",
-  "tailoring+reviewing": "tailoring + reviewing"
+  tailoring: "polishing resume",
+  reviewing: "checking document",
+  "tailoring+reviewing": "polishing + checking"
 };
 
 // Phases that represent live work — rendered with a spinner so the user can see
@@ -20,13 +20,8 @@ const ACTIVE_PHASES = new Set<PresencePhase>(["analyzing-job", "distilling", "ta
 
 type SessionRow = { key: string; label: string; phase: PresencePhase; isSelf: boolean };
 
-// Session-awareness utility in the studio rail. Each browser tab remains an
-// independent job/draft/review workspace; this is read-only ambient awareness
-// because browsers cannot reliably focus another tab.
-// Each browser tab is an INDEPENDENT tailoring session (own job, draft, review);
-// this lists THIS tab plus any concurrent tabs so the user can see, at a glance,
-// what every open session is working on. Read-only ambient awareness — browsers
-// can't reliably focus another tab, so it informs rather than controls.
+// Read-only awareness across independent job/document tabs; browsers cannot
+// reliably focus another tab, so this menu informs rather than controls.
 //
 // PRIVACY: only the short role · company label and a coarse phase are shown — the
 // same contract the presence registry enforces (never the JD body or resume text).
@@ -49,7 +44,7 @@ export function SessionsMenu({
 
   const total = rows.length;
   const activeCount = rows.filter((r) => ACTIVE_PHASES.has(r.phase)).length;
-  const ariaLabel = `Tailoring sessions: ${total} open, ${activeCount} working`;
+  const ariaLabel = `RoleFit sessions: ${total} open, ${activeCount} working`;
 
   return (
     <NavMenu
@@ -65,7 +60,7 @@ export function SessionsMenu({
       popoverPlacement="right"
     >
       {/* role="group" (not status/aria-live): presence is ambient, not an alert. */}
-      <section className="sessions-rail" role="group" aria-label="Open tailoring sessions">
+      <section className="sessions-rail" role="group" aria-label="Open RoleFit sessions">
         <div className="sessions-rail__head">
           <span className="sessions-rail__eyebrow">Open sessions</span>
           <span className="sessions-rail__count">

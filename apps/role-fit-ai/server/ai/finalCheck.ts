@@ -84,11 +84,11 @@ export function sanitizeFinalCheck(
   jobText: string
 ): FinalCheckResult {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new UserSafeAiError("AI returned an invalid Final Check. Retry, or switch providers.", 502);
+    throw new UserSafeAiError("AI returned an invalid document check. Retry, or switch providers.", 502);
   }
   const source = raw as Record<string, unknown>;
   if (!Array.isArray(source.issues)) {
-    throw new UserSafeAiError("AI returned an invalid Final Check. Retry, or switch providers.", 502);
+    throw new UserSafeAiError("AI returned an invalid document check. Retry, or switch providers.", 502);
   }
 
   const issues: FinalCheckIssue[] = [];
@@ -119,7 +119,7 @@ export function sanitizeFinalCheck(
   }
 
   if (source.issues.length > 0 && issues.length === 0) {
-    throw new UserSafeAiError("AI returned an invalid Final Check. Retry, or switch providers.", 502);
+    throw new UserSafeAiError("AI returned an invalid document check. Retry, or switch providers.", 502);
   }
   const status: FinalCheckResult["status"] = issues.some((issue) => issue.kind === "UNSUPPORTED")
     ? "NEEDS_EVIDENCE"
@@ -246,7 +246,7 @@ export async function handleFinalCheck(req: IncomingMessage, res: ServerResponse
       errorName: error instanceof Error ? error.name : typeof error
     });
     sendJson(res, 500, {
-      error: `${providerLabel(provider)} did not return a usable Final Check. Check the selected provider and model, then try again.`
+      error: `${providerLabel(provider)} did not return a usable document check. Check the selected provider and model, then try again.`
     });
   } finally {
     request.dispose();

@@ -930,9 +930,10 @@
     position: static;
   }
 
-  /* Keep the single rail panel filling its column so the pane reads as one
-     surface rather than a card floating in an empty scroll area. */
+  /* Opt out of grid-item stretch so wrapped content establishes the panel's
+     height. The minimum keeps a shorter panel filling the scrollport. */
   .prepare-layout.is-prepared > .prepare-rail > .prepare-application {
+    align-self: start;
     min-height: 100%;
   }
 }

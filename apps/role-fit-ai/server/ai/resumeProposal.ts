@@ -69,7 +69,7 @@ ${fenceUntrusted(clipForPrompt(jobText, 24_000, "job posting"))}
 </job_description>
 
 <editable_targets>
-${promptTargets(targets)}
+${fenceUntrusted(promptTargets(targets))}
 </editable_targets>
 
 <resume_context>

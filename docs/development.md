@@ -120,8 +120,7 @@ node apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs
 
 # Live-provider evals: drive a real AI provider; manual-only, never part of
 # `check`/`test`, run only when explicitly authorized.
-npm run eval:live:fabrication --workspace apps/role-fit-ai
-npm run eval:live:tailor --workspace apps/role-fit-ai -- <jd-file> [runs] [resume-file]
+npm run eval:live:cover-letter --workspace apps/role-fit-ai
 ```
 
 Typeset preview is `npm run preview --workspace apps/typeset`. RoleFit preview

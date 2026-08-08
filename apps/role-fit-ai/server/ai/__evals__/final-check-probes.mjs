@@ -90,7 +90,7 @@ assert.throws(
     evidenceText,
     jobText
   ),
-  /invalid Final Check/,
+  /invalid document check/,
   "an all-invalid response fails instead of becoming a false READY result"
 );
 

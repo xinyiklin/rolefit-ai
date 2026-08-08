@@ -163,8 +163,8 @@ const PERSISTED_SETTING_KEYS = [
 
 // Reconcile persisted values that may be stale (older app version, a renamed
 // provider, a removed model option, or hand-edited storage). An unknown provider
-// would otherwise be shown raw in the menu and silently coerced to OpenAI
-// server-side; a model left over from a different provider — or a now-removed
+// would otherwise be shown raw in the menu and rejected only at request time; a
+// model left over from a different provider — or a now-removed
 // option such as the CLI providers' old blank "CLI subscription default" (empty
 // string) or OpenAI's old blank "Server default" — would make the dropdown and
 // the submitted model disagree. The empty string is checked with `!== undefined`
@@ -204,15 +204,11 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     // Each stage now holds a concrete provider + model (the old "" = "same as
     // Resume Polish" sentinel is gone). Drop any stale empty string — for the model too,
     // since the hook seeds its default with `?? "..."`, which does NOT replace an
-    // empty string. A legacy "same as primary" reviewer persisted an empty
-    // auditSelectedModel; left in place it would send an empty model, resolve to the
-    // CLI default, and mis-trigger the "reviewed by" attribution.
+    // empty string. A legacy "same as primary" stage persisted an empty model;
+    // left in place it would send an empty value while the UI appeared configured.
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  // The AI stage sections are permanently visible. Drop the retired accordion
-  // preference from older browser storage on the next normal save.
-  delete (settings as unknown as Record<string, unknown>).sectionOpen;
   for (const key of ["runInitialFit", "runFinalCheck", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }

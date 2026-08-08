@@ -19,7 +19,7 @@ import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
   { key: "resume-polish", label: "Resume Polish" },
-  { key: "final-check", label: "Final Check" },
+  { key: "final-check", label: "Document check" },
   { key: "cover", label: "Cover letter" }
 ];
 
@@ -330,7 +330,7 @@ export function TrackerInspector({
 
       {selected.finalCheck ? (
         <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Final Check · {selected.finalCheck.status.replace("_", " ")}</p>
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Document check · {selected.finalCheck.status.replace("_", " ")}</p>
           <p className="side-section__value">{selected.finalCheck.summary}</p>
           {selected.finalCheck.issues.length ? (
             <div className="application-chip-list">

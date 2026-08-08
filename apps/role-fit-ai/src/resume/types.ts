@@ -21,7 +21,7 @@ export type PolishedResume = {
   source?: "ai";
   missingKeywords: string[];
   // 1-3 bullets from the AI describing what changed (or why nothing needed
-  // changing). Absent when no Tailor pass ran.
+  // changing). Absent when no Resume Polish pass ran.
   changeSummary?: string[];
   suggestedChanges?: TailorSuggestion[];
   polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
@@ -36,7 +36,7 @@ export type PolishedResume = {
 export type ResumeAnalysis = Omit<PolishedResume, "polishedText">;
 
 // One run of the inline before/after diff: text that is unchanged, newly added
-// in the tailored resume, or removed from the original. Adjacent runs of the
+// in the polished resume, or removed from the original. Adjacent runs of the
 // same type are merged so the renderer emits the fewest spans.
 export type DiffSegment = {
   type: "equal" | "added" | "removed";

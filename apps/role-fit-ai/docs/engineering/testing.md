@@ -89,10 +89,12 @@ Good server verification covers:
   preserves valid issues beside malformed siblings, derives its status from the
   surviving issues, and rejects an all-invalid response rather than returning a
   false Ready result
-- the browser starts Final Check only from an explicit action, marks its result
-  stale after semantic input changes, and classifies parsed invalid output as
-  validation. Failure never replaces the Polish result and in-flight or failed
-  Final Check never enters Apply readiness
+- when enabled, the browser starts Final Check once after all resume proposal
+  decisions settle; the inline action may rerun it. It marks the result stale
+  after semantic input changes and classifies parsed invalid output as
+  validation. A cover letter may instead adopt the validated receipt from its
+  accepted proposal. Failure never replaces the Polish result, and an in-flight
+  or failed Final Check never enters Apply readiness
 - positive Initial Fit starts enabled Resume and Cover proposals independently;
   neither automatic request awaits or suppresses the other, and each failure is
   confined to its own document workflow
@@ -140,7 +142,7 @@ Good server verification covers:
 - cover-letter tailoring and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
   must prove the **one-click contract**: a template-only starter, a blank
-  document, and every base-variant job family reach Tailor with zero extra
+  document, and every base-variant job family reach Polish with zero extra
   fields; only a missing name/role/company or an unanswered private slot
   blocks; a recipient named in the source survives and an impersonal greeting
   falls back to the company hiring team; markdown links, citations, array
@@ -266,7 +268,7 @@ Good frontend verification covers:
   Deterministic extraction gaps remain visible until addressed; View
   source and Prepare again retain the captured posting, Apply stores the full
   corrected brief, and reopening restores benefits without adding them to the
-  Tailor projection
+  Resume Polish projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
   on Prepare through the visible **Open preparation** action
@@ -278,7 +280,7 @@ Good frontend verification covers:
   fingerprinted whole-letter proposal, only explicit acceptance loads it into
   the editor with an exact one-click Restore, and that Restore plus its result
   summary disappear together the moment the user edits, opens another document,
-  or runs Tailor again. Duration grounding covers equivalent word and digit forms
+  or runs Polish again. Duration grounding covers equivalent word and digit forms
 - the owned typeset page stays the sole editor and live preview; the tracker may
   render or open a saved application document as PDF. Resume's proposal rail
   shows only What improved, Edits ready, Still missing, and a withheld line;

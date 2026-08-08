@@ -1,6 +1,6 @@
 // Provider identity + per-request configuration resolution: which provider/
 // model/key/reasoning-effort a request resolves to, plus the default
-// provider and the validation shared by /api/polish and /api/application-answers.
+// provider and the validation shared by every provider-backed route.
 
 import { UserSafeAiError } from "./errors.ts";
 import {
@@ -145,10 +145,9 @@ function assertCompanionProviderReady(provider: RoleFitManagedProviderId): void 
   }
 }
 
-// Resolve provider, key, model, and reasoning effort from a request
-// body, applying the same validation handlePolish used. Throws UserSafeAiError
-// (handled by each route's catch) on a missing key, bad model, or unsupported
-// CLI effort. Shared by /api/polish and /api/application-answers.
+// Resolve provider, key, model, and reasoning effort from a request body.
+// Throws UserSafeAiError (handled by each route's catch) on a missing key, bad
+// model, or unsupported CLI effort. Shared by every provider-backed route.
 export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProviderConfig {
   const requestedProvider = String(body.provider ?? "").trim();
   // An omitted provider keeps the headless/default path. An explicitly supplied

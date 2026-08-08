@@ -1,7 +1,7 @@
 /* Settings dialog — the single home for RoleFit preferences, opened from the
    bottom of the studio sidebar. It reuses the shared .field / .textarea /
-   .check-row / .segmented-control vocabulary; the shell, the section nav, and
-   the AI stage rows are the only new pieces.
+   .check-row vocabulary; the shell, the section nav, and the AI stage rows are
+   the only new pieces.
 
    No runtime diagnostics live here (server address, workspace path, provider
    counts). Those describe the machine the companion runs, not a browser
@@ -177,14 +177,8 @@
   line-height: 1.45;
 }
 
-.settings-hint {
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-
-/* Default Polish stages: a labelled row, not a framed card. */
-.settings-default-stages {
+/* Automation controls are one labelled group, not a stack of framed cards. */
+.settings-automation-group {
   display: grid;
   gap: 6px;
   padding-bottom: var(--s3);
@@ -218,23 +212,6 @@
   color: var(--ink-soft);
   font-size: 0.76rem;
   line-height: 1.4;
-}
-
-.settings-default-stages__label {
-  display: grid;
-  gap: 1px;
-}
-
-.settings-default-stages__label strong {
-  color: var(--ink-strong);
-  font-size: 0.78rem;
-  font-weight: 620;
-}
-
-.settings-default-stages__label small {
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  line-height: 1.35;
 }
 
 /* -------- AI stage rows -------- */

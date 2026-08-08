@@ -190,7 +190,7 @@ export function SettingsDialog({
                   Companion; your API keys never reach the browser.
                 </p>
 
-                <div className="settings-default-stages">
+                <div className="settings-automation-group">
                   <div className="settings-automation" aria-label="Prepare automation">
                     <label className="check-row">
                       <input

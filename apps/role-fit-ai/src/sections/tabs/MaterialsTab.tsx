@@ -135,7 +135,7 @@ export function MaterialsTab({
         {targetLine ? (
           <span className="materials-page__meta">{targetLine}</span>
         ) : (
-          <span className="materials-page__meta">Prepare a job to tailor drafts</span>
+          <span className="materials-page__meta">Prepare a job to polish drafts</span>
         )}
       </header>
 

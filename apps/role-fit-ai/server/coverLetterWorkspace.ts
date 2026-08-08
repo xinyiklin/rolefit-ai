@@ -14,7 +14,6 @@ import {
   ensureJobWorkspace,
   isMissingFile,
   nextTrashStamp,
-  readWorkspaceFiles,
   restoreConflictHandled,
   withWorkspaceLock,
   type WorkspaceLocations

@@ -195,7 +195,7 @@ editable documents.
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current Final Check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current document-check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
   **Open preparation** restores a stored application's validated posting and
   available strict documents into the session, keeps the dirty-document
   replacement confirmation, and lands on Prepare. Apply saves only the
@@ -303,13 +303,14 @@ providers and their models in **Settings > AI stages**, opened from the foot of
 the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
-- **Job analysis** — job-link, paste, and import analysis into a compact job brief.
+- **Job analysis** — structures the posting and, when enabled, checks Initial Fit.
 - **Resume Polish** — one evidence-grounded proposal request over selected fields.
-- **Final Check** — an optional, separate check of the actual current resume
-  after you decide which Polish edits to accept.
-- **Cover letter** — one grounded revision pass over your own letter, run from
-  the Cover Letter page's **Polish** action.
-- **Application questions** — drafts for an application's free-text questions.
+- **Check current document** — checks the actual current resume or cover letter
+  after proposal decisions or later edits.
+- **Cover letter** — creates one grounded whole-letter proposal for you to
+  accept or discard.
+- **Application questions** — drafts grounded responses to an application's
+  free-text questions.
 
 Each stage has its own provider/model/effort settings and an optional instruction
 override; use **Copy settings** to sync one stage from another. The browser never renders or submits an

@@ -191,15 +191,15 @@ function localOnlyUsage(): StageAiUsage {
 // import (both analyze client-side through `/api/job-analysis`; the extension's server
 // pass only prepares the raw text).
 //
-// "Usable AI content" mirrors the tailor pass's usable-response guard (needs
-// suggestions/gaps/summary) and any other route response: a reply the
+// "Usable AI content" mirrors the other model-backed stages' usable-response
+// guards: a reply the
 // server grounded down to nothing of substance is an AI no-op. A bare title or
 // other metadata scalar does NOT count — the deterministic engine extracts those
 // too, so reporting them as "ai" mislabels a failure as success while the same
-// misbehaving provider makes tailor/review show a fallback. We key off ONLY the
+// misbehaving provider makes Resume Polish show a fallback. We key off ONLY the
 // server-grounded content lists (responsibilities/qualifications/tech/seniority/
 // domain). roleDescription is deliberately NOT a signal here: a grounded summary
-// alone still provides no actionable requirements for tailoring. When all lists
+// alone still provides no actionable requirements for polishing. When all lists
 // are empty we defer to the local engine and label the result "local" honestly.
 function hasUsableAiContent(fields: Partial<AiJobAnalysisFields>): boolean {
   return (

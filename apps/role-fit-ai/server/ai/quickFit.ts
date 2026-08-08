@@ -103,7 +103,11 @@ This is a fast decision aid, not a forensic audit. Return:
 Do not return a score, confidence, requirement ledger, evidence quotations, IDs, recommendation action, or resume-surfacing permission.
 Do not invent candidate evidence. A missing requirement is a gap, never permission to add it to the resume.
 
-<selected_resume label="${fenceUntrusted(text(resumeLabel, 160))}">
+<selected_resume_label>
+${fenceUntrusted(text(resumeLabel, 160))}
+</selected_resume_label>
+
+<selected_resume>
 ${fenceUntrusted(clipForPrompt(resumeText, RESUME_CHAR_LIMIT, "selected resume")) || "No usable resume was provided."}
 </selected_resume>
 

@@ -1,5 +1,5 @@
 // Offline half of the cover-letter quality corpus: proves the fixtures cover the
-// job families the workflow has to serve, that every one of them reaches Tailor
+// job families the workflow has to serve, that every one of them reaches Polish
 // in a single click, and that the grader can both pass a good letter and catch a
 // bad one. The live counterpart drives a real provider over the same fixtures.
 import assert from "node:assert/strict";

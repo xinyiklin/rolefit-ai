@@ -1006,17 +1006,17 @@ button.table-sort svg {
 .pipeline-inspector {
   position: sticky;
   top: var(--s4);
+  /* An implicit auto track grows to long provider/model identifiers and pulls
+     every full-width child past the card. Keep the panel's one column bounded. */
+  grid-template-columns: minmax(0, 1fr);
+  /* Table view is denser than the shared card default without collapsing the
+     separation between inspector blocks. */
+  gap: var(--s2);
   padding: var(--s3);
   min-width: 0;
   max-width: 100%;
   /* Ensure the panel renders above board columns when sticky */
   z-index: 2;
-}
-
-/* Compact table-view inspector: tighter inter-block rhythm than the default s3,
-   but kept at s2 so blocks still breathe (no zero-gap stacking). */
-.pipeline-inspector {
-  gap: var(--s2);
 }
 
 /* The shared .field carries a menu-context margin-top that doubles the grid gap

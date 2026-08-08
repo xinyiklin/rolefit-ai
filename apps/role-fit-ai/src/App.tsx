@@ -245,7 +245,7 @@ function App() {
   // ----- Dialog system -----
   const { alert, confirm } = useDialog();
 
-  // Draggable progress dock (Tailor/Review/Job analysis/Cover/Answers task cards) —
+  // Draggable progress dock for active AI task cards —
   // lets the user drag the fixed-position stack out of the way of whatever
   // studio content it would otherwise sit over.
   const dock = useDraggableDock();
@@ -283,7 +283,7 @@ function App() {
   const [isManuallySelectingResumeVariant, setIsManuallySelectingResumeVariant] = useState(false);
   const resumeManualVariantSelectionInFlightRef = useRef(false);
   const coverManualVariantSelectionInFlightRef = useRef(false);
-  // Tab-local document identity: independent tailoring sessions can name their
+  // Tab-local document identity: independent RoleFit sessions can name their
   // drafts independently, and the same title becomes the default PDF/.resume
   // file name. Successful imports/analyses replace it with the new job target.
   const [documentTitle, setDocumentTitle] = useState(() => {
@@ -301,7 +301,7 @@ function App() {
   const [pipelineAiUsage, setPipelineAiUsage] = useState<Record<string, StageAiUsage>>({});
   // Immutable captured posting text. It remains separate even when it initially
   // matches jobDescription so prepared-brief edits and "Prepare again" never
-  // rewrite or accidentally reanalyze the compact tailoring scaffold.
+  // rewrite or accidentally reanalyze the compact model-facing brief.
   const [jobRawText, setJobRawText] = useState("");
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
@@ -340,11 +340,9 @@ function App() {
   const exportStatusIsError = /failed|could not|couldn't|unavailable|load a resume/i.test(exportStatus);
   const [applyStatus, setApplyStatus] = useState("");
   const applyStatusIsError = /failed|could not|couldn't/i.test(applyStatus);
-  // All auto-saved AI preferences (primary provider/model, the reviewer-override
-  // audit* fields, and the polish prefs that persist with them) plus the
-  // debounced localStorage write live in useAiSettings. Credentials are owned
-  // by the local companion and have no browser state. Destructured into the
-  // same names the handlers + JSX already use.
+  // Per-stage provider settings and automation preferences, plus the debounced
+  // localStorage write, live in useAiSettings. Credentials are owned by the
+  // local companion and have no browser state.
   const providerAvailability = useAvailableProviders();
   const ai = useAiSettings();
   const resumeHistoryClock = useMemo(createHistoryClock, []);
@@ -729,9 +727,9 @@ function App() {
     },
     [importedJob]
   );
-  // Per-section tailoring choice. Off is the implicit default (absent key); the
-  // map stores only "tailor"/"include" so the three states are mutually exclusive
-  // by construction.
+  // Per-section Polish choice. Off is the implicit default (absent key); the
+  // map retains the existing "tailor"/"include" wire values so saved editor
+  // state remains compatible.
   const [tailorModes, setTailorModes] = useState<Record<string, TailorMode>>({});
   // Stable identity keeps the typeset editor's section controls from
   // re-rendering solely because App rendered.
@@ -982,7 +980,7 @@ function App() {
     findForTarget
   });
 
-  // Cover tailoring stages a whole-document proposal. The dedicated editor
+  // Cover Polish stages a whole-document proposal. The dedicated editor
   // remains the single owner for accepted text, direct edits, file lifecycle,
   // the pre-acceptance Restore snapshot, and application save.
   const {
@@ -1024,7 +1022,6 @@ function App() {
       company: jobTracking.company
     },
     onApplyTailored: coverLetterEditor.applyTailoredText,
-    onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
   });
 
@@ -1101,7 +1098,7 @@ function App() {
 
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
-  // we tailor against, while `jobUrl` is optional metadata saved with the
+  // Resume Polish uses, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
   const resumeIsStarterSample = resumeOrigin === "starter" && applicationOfRecordId === null;
@@ -1118,10 +1115,8 @@ function App() {
     importedJob &&
     importedJob.tailoringText.length > 40
   );
-  // Everything except provider readiness. Every stage selection needs these —
-  // buildPolishContext requires an editable Tailor scope even for Review only —
-  // so this gates the Polish trigger while selectedPolishProvidersReady gates
-  // only the providers that the remembered workflow will call.
+  // Everything except provider readiness. Resume Polish needs at least one
+  // editable section; provider readiness is gated separately.
   const polishInputsReady = useMemo(() => {
     return Boolean(
       jobPrepared &&
@@ -1344,7 +1339,7 @@ function App() {
     setPolishProgressVisible(false);
   }
 
-  // Cross-tab presence: each browser tab is an independent tailoring session, so
+  // Cross-tab presence: each browser tab is an independent RoleFit session, so
   // we publish this tab's coarse phase (derived from existing flow state — never
   // instrumented into the stage runners) and read back the OTHER live tabs for
   // the shared in-progress card. Privacy: only the role · company label leaves
@@ -1690,7 +1685,7 @@ function App() {
       isManuallySelectingResumeVariant ||
       isResolvingPreparedResume
     ) return;
-    // This click is explicit: it tailors exactly the resume currently shown;
+    // This click is explicit: it polishes exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
     // dirty-document confirmation.
     void handleResumePolish({ revealResumeOnSuccess: false });

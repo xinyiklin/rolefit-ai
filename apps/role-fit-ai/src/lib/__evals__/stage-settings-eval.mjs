@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 
-import { AI_STAGE_IDS } from "../../config/aiStages.ts";
+import { AI_STAGES, AI_STAGE_IDS } from "../../config/aiStages.ts";
 import {
   seedStage,
   seedStages,
@@ -26,6 +26,37 @@ assert.equal(AI_STAGE_IDS.includes("job-analysis"), true, "Job analysis is the c
 assert.equal(AI_STAGE_IDS.includes("distill"), false, "the retired Distill stage id is not configured");
 assert.equal(AI_STAGE_IDS.includes("resume-polish"), true, "Resume Polish is the canonical configurable stage id");
 assert.equal(AI_STAGE_IDS.includes("tailor"), false, "the retired Tailor stage id is not configured");
+assert.deepEqual(
+  Object.fromEntries(AI_STAGES.map(({ id, label, title, blurb }) => [id, { label, title, blurb }])),
+  {
+    "job-analysis": {
+      label: "Job analysis",
+      title: "Job analysis",
+      blurb: "Structures the posting and, when enabled, checks Initial Fit."
+    },
+    "resume-polish": {
+      label: "Resume Polish",
+      title: "Resume Polish",
+      blurb: "Creates one grounded proposal for the resume sections marked Polish."
+    },
+    "final-check": {
+      label: "Document check",
+      title: "Check current document",
+      blurb: "Checks the current resume or cover letter after proposal decisions or later edits."
+    },
+    cover: {
+      label: "Cover letter",
+      title: "Cover letter",
+      blurb: "Creates a grounded whole-letter proposal for you to accept or discard."
+    },
+    answers: {
+      label: "Application questions",
+      title: "Application questions",
+      blurb: "Drafts grounded answers to an application's written questions."
+    }
+  },
+  "AI stage copy describes the user-visible request rather than implementation history"
+);
 assert.deepEqual(
   Object.keys(fresh).sort(),
   [...AI_STAGE_IDS].sort(),

@@ -115,7 +115,7 @@ and `docs/engineering/ui-principles.md`.
   `FormattingToolbar`, and direct editor with the cover-letter layout and
   structure editing disabled. It replaces only the toolbar's resume style-menu
   slot with a RoleFit-owned line-height control plus the shared page control;
-  its file lifecycle, workflow rail, and deterministic resume proposal review
+  its file lifecycle, workflow rail, and whole-document proposal review
   remain RoleFit-owned. The
   editor is always mounted: without an opened or restored source, it starts as
   one empty editable paragraph.

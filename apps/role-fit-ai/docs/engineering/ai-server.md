@@ -140,10 +140,8 @@ owns:
   fails instead of becoming a false Ready result. It returns no score, fit
   verdict, recommendation, or rewrite and never participates in Polish or
   Apply readiness.
-  `/api/polish` temporarily retains legacy `tailor`, `review`, and `both` modes
-  for headless compatibility. The normal browser never dispatches them. Their
-  strict Review and optional cover legs remain isolated from the one-pass
-  `resume-proposal` contract until the final cleanup slice.
+  `/api/polish` accepts only the one-pass `resume-proposal` contract. Cover
+  letters and current-document checks use their own routes.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -208,7 +206,7 @@ owns:
   Signals. Prepare adapts those fields plus the retained raw source into its
   complete editable review brief, including benefits and deterministic
   extraction gaps. Benefits remain review context and are not added to
-  the resume-tailoring prompt. Apply persists that complete review brief and the
+  the Resume Polish prompt. Apply persists that complete review brief and the
   immutable captured posting separately; reopening reconstructs the same
   editable/model-facing projections. The link itself is kept only for pipeline
   tracking and is never sent to the AI.
@@ -318,8 +316,8 @@ owns:
 
 Deterministic keyword and mechanical resume analysis live in focused client
 helpers under `src/resume/` and `src/resumeEngine.ts`. They may describe text or
-evidence, but never calculate a fit score or verdict. Keep that logic and the AI
-Review judgment out of `server.ts` orchestration.
+evidence, but never calculate a fit score or verdict. Keep that logic and
+model-backed judgment out of `server.ts` orchestration.
 
 When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
@@ -434,7 +432,7 @@ The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/polish` receives the Resume Polish config as `provider` / `model` /
-`reasoningEffort`, `/api/final-check` receives the Final Check config,
+`reasoningEffort`, `/api/final-check` receives the Document check config,
 `/api/cover-letter` receives the Cover config, and
 `/api/application-answers` receives the Answers config. Cover and Answers ran on
 the Resume Polish config before they became separately configurable; an install
@@ -454,9 +452,9 @@ provider/model/effort fields remain the durable Resume Polish storage keys.
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
 the shared instructions. Resume Polish is one proposal request; the optional
-closing Final Check remains a separate request with its own configuration and
-guidance. The server contract is unchanged — one `customInstructions` string per
-request.
+closing current-document check remains a separate request with its own
+configuration and guidance. Its persisted and API id remains `final-check`.
+The server contract is unchanged — one `customInstructions` string per request.
 
 Browser requests contain provider, model, and
 reasoning settings but no API credentials. If a request omits provider fields
@@ -517,7 +515,7 @@ Per-provider rules:
 
 The AI must:
 
-- tailor only the provided `tailorScope` sections to the job description
+- polish only the provided `tailorScope` sections for the job description
 - keep each role to no more than five bullets
 - emphasize entry-level SDE / full-stack fit
 - strengthen wording and structure

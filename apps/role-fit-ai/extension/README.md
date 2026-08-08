@@ -132,13 +132,13 @@ the keyboard command is an ES module.
    `{text, url}`. The receiving tab always runs provider-backed job analysis and
    loads the brief into that tab's Prepare page. If the analysis fails, a
    deterministic brief may remain available for inspection, but the stage is
-   failed and Tailor/Review do not start automatically.
+   failed and Polish does not start automatically.
 4. The `Ctrl+Shift+U` / `⌘⇧U` command runs steps 1 and 3 with no popup open,
    through the same shared bridge and the same status/approval handshake. It
    skips the tracker preview in step 2 — the app still runs its own duplicate
    gates on arrival. A failure leaves a badge on the toolbar icon and a single
    short explanation the popup shows and clears the next time you open it.
-5. The popup has no extension AI/deterministic or automatic-tailor toggles.
+5. The popup has no extension AI/deterministic or automatic-proposal toggles.
    Neither entry point has one. The handoff stops on Prepare after the
    duplicate gates and the Job analysis stage.
    The claim token keeps the new posting out of older visible tabs, and the

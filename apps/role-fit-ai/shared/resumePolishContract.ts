@@ -145,10 +145,6 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
   }));
 }
 
-export function resumePolishTargetMap(scope: ScopeLike): Map<string, FlatResumeTarget> {
-  return new Map(flattenResumeTargets(scope).map((target) => [target.targetId, target]));
-}
-
 export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;

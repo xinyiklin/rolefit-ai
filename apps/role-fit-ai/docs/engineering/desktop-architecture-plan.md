@@ -41,9 +41,10 @@ configured and ready, AI actions stop with an actionable “Add a provider in
 RoleFit Companion” state rather than silently selecting a default or a paid
 provider.
 
-Job analysis, Tailor, and Review retain independent provider/model/effort choices in
-browser preferences. One stored API credential is shared by the local server
-for all stages using that provider; keys are not duplicated per stage.
+Job analysis, Resume Polish, Check current document, Cover letter, and Application
+questions retain independent provider/model/effort choices in browser
+preferences. One stored API credential is shared by the local server for all
+stages using that provider; keys are not duplicated per stage.
 
 ## Interpretation of “browser app”
 

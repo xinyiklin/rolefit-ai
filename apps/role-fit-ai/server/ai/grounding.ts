@@ -135,8 +135,8 @@ function normalizePhrase(text: string): string {
 
 // Token set for a corpus string: boundary periods freed (see stripBoundaryDots
 // below) then split into [a-z0-9.#+] tokens. Both the JD and the grounding
-// corpus are INVARIANT across the ~19 findUngroundedJdTerm calls a single review
-// sanitize makes (identical multi-KB strings every time), and isTermGrounded
+// corpus repeat across one request's grounding checks (identical multi-KB
+// strings every time), and isTermGrounded
 // re-tokenizes the same grounding corpus once per hit. Memoize on the raw string
 // with a tiny FIFO-evicted cache: corpora are per-request strings, so 4 entries
 // covers the JD + a couple of grounding variants in flight without the cache
@@ -218,8 +218,8 @@ function isGrounded(groundingText: string, groundingTokens: Set<string>, term: s
 // and legitimate. It skips detector 1 (which flags every capitalized JD token,
 // company and role names included) and relies on the curated tech-skill lexicons
 // (detectors 2-4) instead, so "excited about Acme's roadmap" is NOT flagged while
-// "I have Kubernetes/Terraform/ML experience" still is. Resume-field surfaces
-// (tailor + strict-review rewrites) leave it off and run all detectors.
+// "I have Kubernetes/Terraform/ML experience" still is. Resume-field rewrites
+// leave it off and run all detectors.
 export function findUngroundedJdTerm(
   proposedText: unknown,
   jobLower: string,
@@ -233,7 +233,7 @@ export function findUngroundedJdTerm(
   // Boundary periods are freed before tokenizing (see stripBoundaryDots) so a
   // sentence-final "C#."/"ML." still produces the bare "c#"/"ml" token, for both
   // the lexicon sweeps below AND the grounding corpus that must ground them.
-  // grounding + jobLower are INVARIANT corpora across a review's ~19 calls, so
+  // grounding + jobLower are invariant corpora across repeated checks, so
   // they route through the memoized tokenize(); proposedTokens varies per call
   // and is tokenized fresh.
   const groundingTokens = tokenize(grounding);
@@ -518,9 +518,8 @@ export function findUngroundedProseProperClaimTerm(
 }
 
 // Prose-surface grounding predicate: true when `text` names a JD skill term
-// absent from the grounding corpus. The one shared shape behind five hand-rolled
-// copies (strict-review advisory prose, the change summary, cover letters, and
-// application answers/role descriptions) so the proseMode grounding contract
+// absent from the grounding corpus. Shared by proposal feedback, cover letters,
+// and application-answer/job-analysis prose so the proseMode grounding contract
 // lives in one place. Callers pass ALREADY-LOWERCASED jobLower/groundingLower
 // (the same pre-lowercased contract findUngroundedJdTerm documents) and do their
 // own one-time lowercasing, so the helper never re-lowercases a multi-KB corpus
@@ -530,9 +529,9 @@ export function proseHasUngroundedTerm(text: unknown, jobLower: string, groundin
   return Boolean(text) && Boolean(findUngroundedJdTerm(text, jobLower, groundingLower, { proseMode: true }));
 }
 
-// Alias/inflection-aware grounding check for a SINGLE term (a claimed hit
-// keyword), exposed so the tailor sanitizer's hit-keyword gate shares the exact
-// same discipline as findUngroundedJdTerm (which routes through isGrounded).
+// Alias/inflection-aware grounding check for a SINGLE claimed term. It shares
+// the exact discipline used by findUngroundedJdTerm (which routes through
+// isGrounded).
 // Without this the hit gate did a raw substring `grounding.includes(word)` that
 // is alias-blind: once grounding narrowed to a single entry's text, an honest
 // edit whose entry spells a tech in its short/alias form (k8s, postgres, ts)
@@ -547,7 +546,7 @@ export function isTermGrounded(term: unknown, grounding: unknown): boolean {
   const t = stripBoundaryDots(String(term ?? "").trim().toLowerCase()).trim();
   if (!t) return false;
   const groundingLower = String(grounding ?? "").toLowerCase();
-  // The grounding corpus repeats across a review's per-hit isTermGrounded calls,
+  // The grounding corpus repeats across per-claim isTermGrounded calls,
   // so route it through the same memoized tokenize() as findUngroundedJdTerm.
   const groundingTokens = tokenize(groundingLower);
   return isGrounded(groundingLower, groundingTokens, t);
@@ -621,4 +620,3 @@ export function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): st
     .map(tokenKey)
     .filter(Boolean))] as string[];
 }
-

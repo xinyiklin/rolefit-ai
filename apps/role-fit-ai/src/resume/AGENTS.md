@@ -10,7 +10,7 @@ file/layout contracts remain in `@typeset/engine`.
 - Keep transformations evidence-preserving and target stable document IDs.
 - Do not calculate, cap, recompute, or substitute a fit score, verdict,
   eligibility decision, or missing-qualification count. Initial Fit owns its
-  compact advisory verdict; Final Check owns its separate unscored issue list.
+  compact advisory verdict; Final Check owns its closing unscored issue list.
 - Do not promote job-description-only terms into resume evidence. Rewrites may
   clarify facts already present in the resume or honest user context, never
   invent experience, tools, metrics, employers, dates, or outcomes.

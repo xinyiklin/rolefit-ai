@@ -410,6 +410,20 @@ assert.equal(
   true,
   "slot instructions reach the model as drafting instructions",
 );
+for (const tag of [
+  "resolved_context",
+  "employer_context",
+  "source_context",
+  "evidence_items",
+  "validation_failures",
+  "rejected_output",
+]) {
+  assert.match(
+    prompts.systemPrompt,
+    new RegExp(`<${tag}>`),
+    `${tag} is declared as untrusted data in the system prompt`,
+  );
+}
 
 const fencePrompts = buildCoverLetterTailorPrompts({
   jobText: "Acme needs a Software Engineer.",

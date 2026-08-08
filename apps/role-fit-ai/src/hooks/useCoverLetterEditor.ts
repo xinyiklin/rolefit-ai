@@ -135,8 +135,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     serializeCoverLetterFile(initialData, documentStyleToCoverLetterStyle(style)),
     currentFingerprint
   );
-  // The exact serialized `.cover` immediately before Tailor is a true one-step
-  // replacement undo. Its hook retires the snapshot after any subsequent edit.
+  // The exact serialized `.cover` before a polished proposal is applied is a
+  // true one-step replacement undo. Its hook retires the snapshot after any
+  // subsequent edit.
   const {
     snapshot: preTailorSnapshot,
     capture: capturePreTailorSnapshot,
@@ -248,40 +249,13 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       setActiveCoverFileName("");
       saveLastCoverLetterName("");
       if (title?.trim()) setDocumentTitle(nextTitle);
-      setStatus("Cover letter loaded. Tailor it after preparing the job on Prepare.");
+      setStatus("Cover letter loaded. Prepare the job, then Polish this letter.");
     },
     [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument]
   );
 
-  const applyExternalText = useCallback(
-    (source: string) => {
-      if (!source.trim()) {
-        const data = parseCoverLetterText("");
-        openDocument(data);
-        editor.markClean();
-        commitPersistenceBaseline(
-          serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
-        );
-        setActiveCoverFileName("");
-        saveLastCoverLetterName("");
-        setStatus("");
-        return;
-      }
-      const data = parseCoverLetterText(source);
-      openDocument(data);
-      editor.markClean();
-      commitPersistenceBaseline(
-        serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
-      );
-      setActiveCoverFileName("");
-      saveLastCoverLetterName("");
-      setStatus("Cover letter restored.");
-    },
-    [commitPersistenceBaseline, editor.markClean, openDocument]
-  );
-
-  // Tailoring replaces the document in place. The exact prior `.cover` is kept
-  // first so a single Restore is a true undo of the replacement.
+  // Applying a polished proposal replaces the document in place. Keep the
+  // exact prior `.cover` first so one Restore is a true undo.
   const applyTailoredText = useCallback(
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
@@ -306,7 +280,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           : null
       );
       editor.seedData(data);
-      setStatus("Tailored letter loaded. Read it once before sending.");
+      setStatus("Polished letter loaded. Read it once before sending.");
     },
     [capturePreTailorSnapshot, editor.editedResume, editor.seedData]
   );
@@ -323,11 +297,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         spellCheck: current.spellCheck
       }));
       dropPreTailorSnapshot();
-      setStatus("Restored the letter from before tailoring.");
+      setStatus("Restored the letter from before polishing.");
       return true;
     } catch {
       dropPreTailorSnapshot();
-      setStatus("The letter from before tailoring could not be restored.");
+      setStatus("The letter from before polishing could not be restored.");
       return false;
     }
   }, [dropPreTailorSnapshot, editor.seedData, preTailorSnapshot]);
@@ -429,7 +403,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     setActiveCoverFileName("");
     saveLastCoverLetterName("");
     setDocumentTitle("Cover letter");
-    setStatus("Starter opened. Complete the tailoring details beside the document.");
+    setStatus("Starter opened. Complete the details beside the document before polishing.");
   }, [commitPersistenceBaseline, editor.markClean, openDocument]);
 
   const openFile = useCallback(
@@ -775,7 +749,6 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     openWorkspaceCoverLetter,
     restoreWorkspaceCoverLetter,
     loadSourceText,
-    applyExternalText,
     applyTailoredText,
     canRestorePreTailor: preTailorSnapshot !== null,
     restorePreTailor,

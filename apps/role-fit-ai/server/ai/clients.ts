@@ -274,9 +274,8 @@ async function dispatchProvider({ provider, model, reasoningEffort, apiKey, syst
 // failures into successes instead of surfacing a 502. Network, HTTP, timeout,
 // and config errors are NOT retried — those callers should see immediately.
 //
-// Optional `stats` collector (same additive pattern as
-// sanitizeTailorSuggestions' drop-stats object): when provided, its `attempts`
-// counter is incremented once per dispatch attempt so a route can report how
+// Optional bounded `stats` collector: when provided, its `attempts` counter is
+// incremented once per dispatch attempt so a route can report how
 // many provider calls a pass took (1 = no retry, 2 = the JSON-only retry
 // fired). Purely observational — it never changes retry or error behavior.
 export async function callConfiguredProvider(args: ProviderCallArgs, stats?: AttemptStats): Promise<unknown> {

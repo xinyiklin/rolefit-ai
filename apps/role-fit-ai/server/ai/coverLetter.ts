@@ -251,7 +251,7 @@ export async function handleCoverLetter(
 
     const evidenceItems = parseCoverLetterEvidenceItems(body.evidenceItems);
     if (!evidenceItems.some((item) => item.source === "resume")) {
-      sendJson(res, 400, { error: "Add your resume before tailoring a cover letter." });
+      sendJson(res, 400, { error: "Add your resume before polishing a cover letter." });
       return;
     }
 
@@ -323,7 +323,7 @@ export async function handleCoverLetter(
       return;
     }
     sendJson(res, 500, {
-      error: "Could not tailor the cover letter. Check AI settings and try again."
+      error: "Could not polish the cover letter. Check AI settings and try again."
     });
   } finally {
     request.dispose();

@@ -157,6 +157,7 @@ export function useAiSettings() {
     setCustomInstructions("");
     setStageCustomInstructions({});
     setRunInitialFit(true);
+    setRunFinalCheck(true);
     setAutoCreateResumeProposal(false);
     setAutoCreateCoverLetterProposal(false);
     setCitizenshipStatus("unspecified");

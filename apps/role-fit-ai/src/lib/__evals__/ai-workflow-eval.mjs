@@ -30,6 +30,8 @@ assert.equal(workflowStageCanAdvance({ status: "done" }), true, "only a complete
 assert.equal(workflowStageCanAdvance({ status: "failed" }), false, "a failed stage cannot advance");
 assert.equal(workflowStageCanAdvance({ status: "stopped" }), false, "a stopped stage cannot advance");
 assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress uses Job analysis vocabulary");
+assert.equal(AI_STAGE_COPY["final-check"].running, "Checking document", "document-check progress is not resume-only");
+assert.equal(AI_STAGE_COPY.cover.running, "Polishing cover letter", "cover progress matches the Polish action");
 
 const legacyUsage = {
   distill: { source: "ai", provider: "anthropic", model: "legacy-model" },
@@ -109,4 +111,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 23/23 checks passed");
+console.log("AI workflow eval: 25/25 checks passed");

@@ -524,6 +524,11 @@ assert.match(
   "the resume checks the resulting document only after every edit has a decision"
 );
 assert.match(
+  coverReview,
+  /proposal:\s*proposal \? \{ outstanding: 1, total: 1 \} : null,[\s\S]{0,100}?proposalSuperseded:\s*Boolean\(proposal\?\.stale\)/,
+  "a stale cover proposal reaches the shared resolver as an out-of-date proposal"
+);
+assert.match(
   proposalDecisions,
   /decisionsSettled: Boolean\(result\?\.polishOutcome\) && outstanding === 0/,
   "decision state is owned by the workflow so the check can observe it settle"
@@ -1146,11 +1151,15 @@ assert.doesNotMatch(
   /<button\b|<a\b|\bonClick\s*=|\bonChange\s*=|\bonSelect\s*=|\bnavigate\s*\(/,
   "SessionsMenu remains read-only ambient awareness"
 );
-assert.doesNotMatch(sessionsRail, /ariaLabel\s*=\s*["']Tailoring sessions["']/, "Sessions label is not a static count-free name");
 assert.match(
   sessionsRail,
-  /(?:const\s+\w*ariaLabel\w*\s*=\s*|ariaLabel\s*=\s*\{)[\s\S]{0,420}?(?:total[\s\S]{0,420}?activeCount|activeCount[\s\S]{0,420}?total)/,
-  "Sessions accessible label exposes both the total and working counts"
+  /const ariaLabel = `RoleFit sessions: \$\{total\} open, \$\{activeCount\} working`;/,
+  "Sessions accessible label uses current language and exposes both counts"
+);
+assert.match(
+  sessionsRail,
+  /tailoring: "polishing resume",[\s\S]{0,100}?reviewing: "checking document"/,
+  "persisted presence phases render with current workflow language"
 );
 
 // The masthead-only menu rules must disappear with the old ownership. The rail
@@ -1211,12 +1220,12 @@ assert.match(
 assert.match(
   app,
   /function handleTailorPreparedResume()[\s\S]{0,600}?void handleResumePolish\(\{ revealResumeOnSuccess: false \}\);/,
-  "the prepared-job Tailor action remains an explicit manual action"
+  "the prepared-job Resume Polish action remains explicit"
 );
 assert.doesNotMatch(
   app,
   /const applicationPreparationActive[\s\S]{0,1000}?handlePolish\(\{ revealResumeOnSuccess: false \}\)/,
-  "extension preparation cannot automatically start Tailor"
+  "extension preparation cannot automatically start Resume Polish"
 );
 
 assert.match(
@@ -1640,17 +1649,17 @@ assert.match(
 assert.match(
   app,
   /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isResolvingPreparedResume[\s\S]{0,40}?\) return;/,
-  "the prepared-resume Tailor handler fails closed while manual selection or ranking is active"
+  "the prepared-resume Polish handler fails closed while manual selection or ranking is active"
 );
 assert.match(
   app,
   /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isResolvingPreparedResume[\s\S]{0,20}?\}/,
-  "App disables Prepare resume Tailor during loading, manual selection, or variant ranking"
+  "App disables Prepare Resume Polish during loading, manual selection, or variant ranking"
 );
 assert.match(
   prepareTab,
   /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isResolvingPreparedResume[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
-  "Prepare explains that resume Tailor is waiting for variant selection before generic blockers"
+  "Prepare explains that Resume Polish is waiting for variant selection before generic blockers"
 );
 assert.match(
   app,
@@ -1665,12 +1674,12 @@ assert.match(
 assert.match(
   app,
   /canTailorCoverLetter=\{[\s\S]{0,280}?!isGeneratingCover[\s\S]{0,80}?!isSelectingCoverVariant[\s\S]{0,80}?!isRankingCoverLetterVariants\s*\}/,
-  "Prepare disables cover-letter Tailor during manual or automatic variant selection"
+  "Prepare disables Cover Letter Polish during manual or automatic variant selection"
 );
 assert.match(
   app,
   /isSelectingCoverVariant \|\| isRankingCoverLetterVariants[\s\S]{0,120}?"Wait for the cover-letter variant selection to finish\."/,
-  "Prepare explains that cover-letter Tailor is waiting for variant selection"
+  "Prepare explains that Cover Letter Polish is waiting for variant selection"
 );
 assert.match(
   preparationReadiness,
@@ -1795,10 +1804,20 @@ assert.doesNotMatch(
   /\bsectionOpen\b|\btoggleSection\b/,
   "AI settings no longer own or persist accordion state"
 );
-assert.match(
+assert.doesNotMatch(
   persistedSettings,
-  /delete \(settings as unknown as Record<string, unknown>\)\.sectionOpen;/,
-  "loading legacy settings removes the retired accordion preference"
+  /\bsectionOpen\b/,
+  "strict settings allowlisting needs no dead accordion cleanup"
+);
+assert.match(
+  aiSettings,
+  /function resetSettings\(\)[\s\S]{0,400}?setRunInitialFit\(true\);[\s\S]{0,120}?setRunFinalCheck\(true\);/,
+  "Reset restores both user-owned analysis toggles"
+);
+assert.match(
+  intake,
+  /const freshJobAnalysisUsage = \(usage: StageAiUsage\) => \(\) => \(\{\s*"job-analysis": usage\s*\}\);/,
+  "fresh intake replaces the entire job-specific AI usage map"
 );
 
 assert.match(resumeProposalReview, /What improved[\s\S]*Edits ready[\s\S]*Still missing/,
@@ -2129,6 +2148,11 @@ assert.match(
   "Restore appears with the tailored result and disappears with it"
 );
 assert.doesNotMatch(cover, /onCaptureSource/, "the workflow hook never owns the document snapshot the editor owns");
+assert.doesNotMatch(
+  `${app}\n${cover}\n${coverEditor}`,
+  /PolishCoverResult|applyPolishCoverResult|onApplyExternal|applyExternalText|legacy cover-letter result/,
+  "the retired Polish cover leg has no client compatibility adapter"
+);
 assert.match(
   coverDraft,
   /saveTabDraft\("cover"/,

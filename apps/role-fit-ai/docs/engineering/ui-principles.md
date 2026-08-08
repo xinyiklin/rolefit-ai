@@ -401,7 +401,7 @@ Never show:
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
 - Settings > AI stages carries one section per configurable stage (Job analysis,
-  Resume Polish, Final Check, Cover letter, Application questions). Each
+  Resume Polish, Check current document, Cover letter, Application questions). Each
   owns a concrete provider/model/effort config plus an optional instruction
   override; **Copy settings** is a one-shot sync between stages, not a live link.
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to
@@ -419,8 +419,9 @@ Never show:
   work-authorization lines and education level gates the field of study; neither
   block gates the other.
 - Retired Tailor/Review/Both settings are dropped. Resume and Prepare both use
-  the one-pass Polish contract; Final Check is its optional closing phase, with
-  an independent provider setting because it remains an extra request.
+  the one-pass Polish contract; the current-document check is its optional
+  closing phase, with an independent provider setting because it remains an
+  extra request. The persisted stage id stays `final-check` for compatibility.
 - Job analysis and Resume Polish each report their real operation. Resume Polish
   never fabricates a second stage: Proposal, No changes, and Withheld are
   distinct, and an all-withheld result is not a completed proposal.
