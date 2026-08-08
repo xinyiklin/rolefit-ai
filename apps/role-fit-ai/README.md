@@ -15,7 +15,7 @@ application-data service.
 
 Current desktop source version: **0.6.0** (preview).
 
-The main workflow is Prepare → Resume and Cover Letter → Apply → Applications.
+The default workflow is Prepare → Initial Fit → Polish → Apply.
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
 
@@ -89,18 +89,18 @@ editable documents.
   Source panel shows only the selected URL or pasted-text method. Afterward it
   collapses above the complete editable job brief—tracked job facts, company
   context, responsibilities, required and preferred qualifications, technical
-  keywords, seniority and domain signals, benefits, and any extraction or
-  candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
-  fit, readiness, and Apply together. Fit shows the current Recruiter audit, a
-  matching saved audit marked historical, or **Not audited** until that stage
-  runs; RoleFit does not estimate it locally. Each material has an **Include** toggle and its
+  keywords, seniority and domain signals, benefits, and any extraction gaps—while
+  the Application rail keeps Resume, Cover Letter, Initial Fit, readiness, and
+  Apply together. Initial Fit is a compact provider advisory for the selected
+  resume: Strong, Reasonable, Stretch, or Limited; one summary; up to three
+  matches and gaps; and an eligibility warning only when relevant. It has no
+  score, confidence, requirement ledger, evidence quotes, recommendation, or
+  analytics role. Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
   **Prepare again**; Apply stores the complete corrected brief, while resume
-  polishing continues to use the benefits-excluded projection. Candidate gaps
-  from a reopened application are explicitly historical until Recruiter audit runs
-  against the current resume and prepared job.
+  polishing continues to use the benefits-excluded projection.
 - **Evidence-based variant recommendation** — when multiple saved variants
   exist, Prepare compares the actual strict `.resume` and `.cover` contents with
   weighted role, requirement, responsibility, and technology signals from the
@@ -115,8 +115,11 @@ editable documents.
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
   boards. The configured Job analysis provider runs before the server's grounding
   and sanitization checks.
-  A deterministic parser can preserve a local brief for inspection if Job analysis
-  fails, but the failed stage stays failed and never starts resume Polish. The compact
+  A deterministic parser publishes a usable local brief immediately. Job analysis
+  can improve it, but provider failure leaves the local fields editable and does
+  not block manual Polish. When Initial Fit is enabled, the same normal provider
+  dispatch returns it as an independent optional subsection; an invalid fit cannot
+  invalidate valid job fields. The compact
   job brief keeps role context, responsibilities,
   requirements, preferred qualifications, and technical/domain signals while
   dropping ATS/navigation/marketing/legal furniture. Prepare separately keeps
@@ -127,10 +130,15 @@ editable documents.
   check whether a posting is already tracked and open it on Prepare in a fresh
   RoleFit tab. On first use it sends a bounded local access request; approve
   that exact browser origin once in the companion. The extension does not
-  estimate fit locally; score and verdict come from Recruiter audit in the app. See
+  estimate fit locally; Initial Fit runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **Provider-run fit audit** — the selected Recruiter audit model judges the complete requirement set and returns the coverage table, base/tailored scores, verdict, explanation, gaps, and recommendation. RoleFit validates the response contract but does not recalculate or replace that judgment locally.
+- **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
+  Letter proposal toggles are independent and default off. Only Strong or
+  Reasonable without an eligibility blocker may start an enabled proposal;
+  Stretch, Limited, unavailable, and blocked outcomes remain manual. Changing
+  the selected resume reruns only Initial Fit, never Job analysis.
 - **Strict recruiter audit** — audit the current edited draft as-is, or audit the sanitized proposal produced moments earlier in **Polish**, for a verdict (STRONG FIT / REASONABLE FIT / STRETCH / DON'T APPLY), AI fit scores, gap severity, targeted bullet rewrites, interview risk flags, ready / edits-pending / missing-evidence status, and a cover-letter angle.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
@@ -154,7 +162,10 @@ editable documents.
   typing and held Backspace/Delete bursts undo as groups; direction changes,
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
-- **Ordered AI workflow** — Job analysis, Tailor, and Recruiter audit share one progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
+- **Truthful AI workflow** — Prepare shows its local brief while Job analysis and
+  optional Initial Fit settle independently. Tailor and Recruiter audit retain
+  exact step counts, specific failure reasons, Retry/Stop behavior, and later
+  stages marked not run after a document-stage failure.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -367,9 +378,10 @@ resume/job text exclusively on stdin while the subprocess is running.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-URL, pasted-text, and extension intake require AI-backed job analysis. When Job analysis fails,
-RoleFit may load the deterministic brief for inspection while
-leaving Job analysis failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
+URL, pasted-text, and extension intake request AI-backed Job analysis. RoleFit
+publishes the deterministic brief first; if Job analysis or Initial Fit fails,
+that local brief remains editable and manual Polish stays available. Tailor,
+Recruiter audit, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or
 verdict silently stands in.
 
@@ -394,9 +406,9 @@ preparation and duplicate checking to the job board. On any posting, click the
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
   tab on Prepare, lets the server resolve the raw page text, and always runs
   AI-backed job analysis with that tab's selected provider. The extension
-  handoff stops on Prepare; it never starts resume Polish. If the analysis fails, the
-  deterministic brief may remain available for inspection, but Job analysis stays
-  failed. The popup has no AI/deterministic or automatic-tailor toggle.
+  handoff stops on Prepare; it never implicitly starts resume Polish. If the
+  analysis fails, the deterministic brief remains usable and Initial Fit shows
+  a separate retryable state. The popup has no workflow automation toggle.
 
 A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
 without opening the popup at all, through the same approval handshake and with

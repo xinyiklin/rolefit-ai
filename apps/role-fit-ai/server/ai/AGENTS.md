@@ -14,7 +14,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   recalculate a replacement judgment.
 - `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
   only for compatibility with older clients.
-- `jobAnalysis.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
+- `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
+  own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
+  Job analysis plus optional compact Initial Fit in one provider dispatch;
+  their response subsections sanitize independently. `mode: "initial-fit"`
+  reruns only the compact fit for a changed resume.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -62,9 +66,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Never import JD-only skills or fabricate claims.
 - Review-only audits the current edited draft. The Review leg of Both receives
   only sanitized suggestions from that same Tailor run.
-- A failed stage fails plainly and stops downstream work. Job analysis may return a
-  deterministic local brief to the client for inspection, but that does not
-  convert the failed AI stage into success.
+- Tailor and Review failures fail plainly and stop downstream document work.
+  Job analysis and Initial Fit failures are advisory to Prepare: the local brief
+  remains usable, invalid fit never invalidates valid job fields, and neither
+  failure authorizes silent fabrication or a substitute AI result.
 - Propagate request cancellation into native API fetches and CLI subprocesses.
   Browser disconnect or Stop must terminate matching provider work and never
   advance a later stage.

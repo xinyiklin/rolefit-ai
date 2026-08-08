@@ -234,8 +234,8 @@ owns:
   Company/Product Context, Core Responsibilities, Required Qualifications,
   Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and Domain
   Signals. Prepare adapts those fields plus the retained raw source into its
-  complete editable review brief, including benefits and extraction or
-  candidate-review gaps. Benefits remain review context and are not added to
+  complete editable review brief, including benefits and deterministic
+  extraction gaps. Benefits remain review context and are not added to
   the resume-tailoring prompt. Apply persists that complete review brief and the
   immutable captured posting separately; reopening reconstructs the same
   editable/model-facing projections. The link itself is kept only for pipeline
@@ -253,9 +253,13 @@ owns:
   review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
-  provider. When the request fails, a deterministic brief may
-  remain available for inspection, but the stage stays failed and cannot
-  start resume Polish. The
+  provider after publishing the deterministic local brief. When the request
+  fails, that local brief remains editable and manual Polish stays available.
+  If Initial Fit is enabled and a selected resume is usable, the same provider
+  dispatch requests an independent `initialFit` subsection. The server preserves
+  valid job fields when fit is absent or invalid; fit output never invalidates
+  Job analysis. `mode: "initial-fit"` reuses this route for a compact fit-only
+  rerun after the selected resume changes. The
   route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
   a menu-entered key reaches the route only in that transient request and is
   never returned. The
@@ -299,10 +303,10 @@ owns:
   provider settings. The background pass survives the popup closing on focus
   loss, and a burst of imports is serialized to one in-flight resolve. `inbox`
   (GET) reports `{status:"preparing"}` while preparation runs, then hands only
-  `{text, url}` to the claiming app tab once before clearing it. The tab always
-  runs provider-backed job analysis with its selected provider; if that request
-  fails, the deterministic brief may remain visible for inspection while the
-  stage stays failed. Extension imports include a short
+  `{text, url}` to the claiming app tab once before clearing it. The tab requests
+  provider-backed Job analysis with its selected provider after publishing its
+  local brief; if that request fails, the deterministic brief remains usable
+  and manual Polish stays available. Extension imports include a short
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
@@ -328,9 +332,9 @@ owns:
   connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
-  the base resume or calculates a local fit estimate. Fit score, coverage, and
-  verdict come only from AI Review in the app; its output still requires human
-  review.
+  the base resume or calculates a local fit estimate. Prepare's compact Initial
+  Fit runs only inside the app against its selected resume. Detailed score,
+  coverage, and recommendation remain Review outputs.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
   upload, save, reload; source development defaults to `workspace/`,
   while packaged runs use `app.getPath("userData")/workspace/`).
@@ -577,10 +581,10 @@ These are prompt-quality inputs, not permission to fabricate. The shared
 truthfulness, source-attribution, grounding, and sanitization rules remain
 authoritative.
 
-The only deterministic non-AI alternative is the job analyzer
-(`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
-disabled for Job analysis. If an AI-backed Job analysis request fails, the
-local brief may be retained for inspection but the selected stage remains failed. Tailor, Review,
+The deterministic job analyzer (`src/lib/jobExtract.ts`) is Prepare's immediate
+usable baseline. Job analysis may improve it, but an AI-backed failure leaves
+the baseline editable and does not block manual Polish. Initial Fit is advisory
+and independently unavailable when its provider output is unusable. Tailor, Review,
 cover-letter tailoring, and application-answer failures have no local
 substitutes. No
 locally generated draft, score, review, or verdict stands in.

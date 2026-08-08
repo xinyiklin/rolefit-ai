@@ -35,11 +35,10 @@ application materials. Prepare is the first/default page and the sole job-intake
 surface: the paired browser extension is primary, with URL fetch and pasted text
 as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
 one role context, responsibilities, required and preferred qualifications,
-technical keywords, seniority and domain signals, benefits, and extraction or
-candidate-review gaps. Resume proposals remain constrained by server-side
-grounding and anti-fabrication checks, with a recruiter audit for fit scoring
-and gap analysis. Candidate gaps restored from a saved Apply record are labeled
-historical until an audit runs against the current materials.
+technical keywords, seniority and domain signals, benefits, and extraction
+gaps. Resume proposals remain constrained by server-side
+grounding and anti-fabrication checks, with a recruiter audit for detailed
+post-draft scoring and gap analysis.
 
 The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
@@ -186,9 +185,10 @@ disappears into the task. Quiet competence, not salesmanship.
 5. Restraint over systems: no global toast/banner/loading frameworks; reuse
    the per-surface CSS classes in `src/styles/`, shared editor primitives from
    `@typeset/editor`, and each owner's tokens rather than forking controls.
-6. Make workflow state truthful: Job analysis, Tailor, and Recruiter audit show their exact
-   ordered step, stop after failure/user cancellation, identify the cause, and
-   never present a deterministic brief as a successful AI run.
+6. Make workflow state truthful: Prepare publishes its deterministic brief
+   immediately, then Job analysis and optional Initial Fit settle independently.
+   Tailor and Recruiter audit show their exact ordered step, stop after
+   failure/user cancellation, and identify the cause.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
    host chrome; shared document editing, formatting, layout, files, and PDF
    remain package-owned and consistent with standalone Typeset.
@@ -211,27 +211,33 @@ disappears into the task. Quiet competence, not salesmanship.
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
-    Prepare may summarize a current matching Recruiter audit or a matching
-    historical saved audit; before either exists it says "Not audited" and never
-    substitutes a local fit estimate.
-11. Preserve safe extension intake: a claimed extension posting always runs
-    AI-backed job analysis and stops on Prepare; it never starts resume Polish.
-    A failed analysis may leave the deterministic brief visible for inspection,
-    but it remains failed. The ordinary Prepare workflow may rank actual saved
+    Prepare shows compact Initial Fit for the selected resume: one four-level
+    verdict, one summary, up to three matches and gaps, and a relevant
+    eligibility warning. It never shows scores, confidence, evidence ledgers,
+    recommendations, or saved/historical audit state there.
+11. Preserve safe extension intake: a claimed extension posting requests
+    AI-backed Job analysis and stops on Prepare; it never implicitly starts
+    resume Polish. A failed analysis leaves the deterministic brief editable and
+    manual Polish available. The ordinary Prepare workflow may rank actual saved
     resume and cover-letter contents against the prepared job and auto-select a
     meaningful unique winner while the editor is clean and not application-
     owned; that selection is not tailoring. A tie or incomplete comparison keeps
     the current selection. Do not add persisted variant metadata or another
-    document schema for this decision.
+    document schema for this decision. When Initial Fit is enabled, it shares
+    Prepare's normal provider dispatch and sanitizes independently; changing the
+    selected resume reruns only Initial Fit.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,
     required and preferred qualifications, technical keywords, seniority and
-    domain signals, benefits, and extraction or candidate-review gaps. Preserve
+    domain signals, benefits, and extraction gaps. Preserve
     the captured posting separately, persist the complete corrected brief on
     Apply, and restore both without feeding benefits into resume tailoring.
-    Treat restored candidate gaps as historical until a matching Review
-    replaces them.
+13. Keep proposal automation fixed and reversible. Initial Fit defaults on;
+    Resume and Cover Letter proposal toggles are independent and default off.
+    Only Strong or Reasonable with no eligibility blocker may auto-start an
+    enabled proposal. Stretch, Limited, unavailable, and blocked states remain
+    manual, and manual Polish is always available.
 
 ## Accessibility & Inclusion
 

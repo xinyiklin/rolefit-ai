@@ -119,16 +119,20 @@ Good server verification covers:
 - the Job analysis rename contract must keep current code and docs free of the
   retired term except for the temporary route alias, settings/backup/provenance
   readers, extension cleanup keys, compatibility tests, and historical release notes
+- compact Initial Fit probes must prove that disabling it omits resume/context
+  data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
+  invalid fit preserves valid job fields, lists cap at three, only the four
+  verdicts sanitize, and fit-only retries omit the Job analysis schema
 - tailor-quality changes can grade live consistency on the real resume:
   `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
   (metrics-only output; full responses land in gitignored
   `workspace/tailor-eval/`); a matched JD should produce
   evidence-backed suggestions with a small honest lift, a bad-fit JD a
   stable DON'T APPLY
-- when an AI call for Job analysis, Tailor, or Review fails, the shared workflow identifies
-  the classified cause, keeps the failed step current, and leaves later steps
-  as not run; Job analysis may retain a deterministic local brief for inspection,
-  but that failed run cannot auto-launch Tailor or Review
+- when Job analysis or Initial Fit fails, Prepare keeps the immediate local
+  brief editable and manual Polish available; Initial Fit is separately
+  retryable and cannot invalidate valid job fields. Tailor or Review failures
+  remain current and leave later selected document stages not run
 - duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
@@ -218,13 +222,21 @@ Good frontend verification covers:
   above Settings in the bottom studio-rail utilities group, outside
   `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
-  state, every delivered posting and Retry require provider readiness and AI
-  Job analysis, a failed run may retain only the deterministic inspection brief, and
-  retry/stale guards cannot apply an earlier posting to the current session
+  state; every delivered posting and Retry asks the selected provider for Job
+  analysis after the local preview is published. Provider failure leaves that
+  preview usable, and retry/stale guards cannot apply an earlier posting to the
+  current session
 - extension intake never launches Tailor or Review; multiple saved resume
   variants may still be ranked from their actual strict document contents and
   a clear high-confidence winner selected while the editor is clean, but that
   is source selection, not tailoring, and no variant metadata is persisted
+- Initial Fit shows only verdict, selected resume, summary, up to three matches
+  and gaps, and a relevant eligibility warning. It exposes no score, confidence,
+  evidence ledger, quotations, recommendation, saved audit, or analytics metric
+- changing the selected resume dispatches only `mode: "initial-fit"`; disabling
+  Initial Fit sends no resume/context data. Only Strong or Reasonable without an
+  eligibility blocker can start each independently enabled proposal, while
+  manual Polish remains available for every fit state
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
@@ -237,11 +249,10 @@ Good frontend verification covers:
   failed extraction without invalidating the matching prepared source snapshot:
   tracked job facts through one role context, responsibilities, required/preferred
   qualifications, technical keywords, seniority/domain signals, and benefits.
-  Extraction and candidate-review gaps remain visible until addressed; View
+  Deterministic extraction gaps remain visible until addressed; View
   source and Prepare again retain the captured posting, Apply stores the full
   corrected brief, and reopening restores benefits without adding them to the
-  Tailor projection. Candidate gaps from a saved Apply snapshot are labeled
-  historical until a matching Review replaces them
+  Tailor projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
   on Prepare through the visible **Open preparation** action

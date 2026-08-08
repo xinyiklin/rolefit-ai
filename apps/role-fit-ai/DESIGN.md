@@ -399,10 +399,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   role context in one aligned form grid rather than a card per field. Continue
   the brief with responsibilities, required and preferred
   qualifications, technical keywords, seniority and domain signals, and
-  benefits. Show extraction and candidate-review gaps beside the fields they
-  qualify, as flat columns; missing extraction is an edit invitation, not hidden
-  uncertainty. Label candidate gaps restored from an Apply snapshot as
-  historical until Recruiter audit runs for the current resume and prepared job.
+  benefits. Show extraction gaps beside the fields they qualify, as flat
+  columns; missing extraction is an edit invitation, not hidden uncertainty.
   In the Application rail, Resume and Cover Letter are two divided groups
   sharing the same anatomy: title and state beside Include, followed by the
   named-variant selector and document-specific actions. The DOM and visual order
@@ -410,18 +408,24 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Fit row follows the materials: show the current Recruiter audit verdict first,
-  a matching saved verdict as historical, or "Not audited" with a route to
-  Recruiter audit. Do not style it as a nested card or derive a local verdict.
-- **Automation:** extension receipt and Job analysis progress remain visible on
-  Prepare. Resume Polish started from Prepare also completes there. Rank the actual
+  Initial Fit row follows the materials: show its verdict, selected resume,
+  short summary, at most three matches and gaps, and an eligibility warning only
+  when relevant. Running, disabled, and unavailable/retry states use the same
+  flat hierarchy. Never add scores, confidence, evidence ledgers, quotes, or a
+  recommendation to this row.
+- **Automation:** the deterministic local brief renders before extension receipt
+  and Job analysis progress settle. Initial Fit shares the normal Prepare
+  provider dispatch when enabled, while a resume change reruns only that compact
+  check. Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
   winner while its editor is clean and not application-owned. A tie or
   incomplete read keeps the current selection and shows no recommendation.
   The selector is the normal receipt; show one compact recommendation line only
   when unsaved work blocks replacement. Neither comparison needs persisted
-  variant metadata.
+  variant metadata. Resume and Cover Letter auto-proposal settings are
+  independent; only Strong or Reasonable without an eligibility blocker may
+  start them, and manual Polish remains available in every state.
 - **Apply:** the page and masthead invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.

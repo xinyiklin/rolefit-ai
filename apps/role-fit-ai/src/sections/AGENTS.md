@@ -26,7 +26,7 @@ and `docs/engineering/ui-principles.md`.
   belong in hooks; components receive values and callbacks.
 - `PrepareTab` is the first/default and sole job-intake page. It composes the
   URL/paste fallbacks, receipt/Job analysis progress, collapsed source, editable
-  full job brief and its extraction/candidate-review gaps, resume-variant
+  full job brief and its extraction gaps, resume-variant
   recommendation, material selection, readiness, and the shared Apply callback;
   it does not own their async state. Its brief includes tracked job facts and
   one role context, responsibilities, required/preferred qualifications,
@@ -39,10 +39,11 @@ and `docs/engineering/ui-principles.md`.
   source collapses into its panel head — captured size and origin — rather than
   repeating them in the body.
 - After preparation, the brief leads the main column and one Application rail
-  owns both material choices, a flat fit summary, readiness,
-  saved-application summary, and Apply. Fit prefers the matching current AI
-  Review, labels a matching saved review historical, and otherwise says "Not
-  reviewed"; never infer or recalculate a verdict on Prepare.
+  owns both material choices, compact Initial Fit, readiness,
+  saved-application summary, and Apply. Initial Fit shows only its verdict,
+  selected resume, short summary, up to three matches and gaps, and a relevant
+  eligibility warning. Running, disabled, and retryable-unavailable states stay
+  flat and never block manual Polish.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing
   card.

@@ -2040,3 +2040,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
   one-preview compatibility alias, extension cleanup still recognizes
   `distillAi`, and historical release notes remain unchanged. No initial-fit
   audit behavior is included in this PR.
+- [USER+CODE] 2026-08-07: The fast path is now Prepare → Initial Fit → Polish →
+  Apply. Prepare publishes its deterministic local brief before provider work;
+  Job analysis improves it when available, while provider failure leaves manual
+  Polish usable. Optional Initial Fit shares the normal Prepare dispatch,
+  sanitizes independently, and reruns alone when the selected resume changes.
+  Its contract is only a four-level verdict, one summary, up to three matches
+  and gaps, and a relevant eligibility warning — no score, confidence, ledger,
+  evidence quotes, recommendation, persistence, or analytics.
+- [USER+CODE] 2026-08-07: Initial Fit defaults on. Independent Resume and Cover
+  Letter proposal toggles default off; only Strong or Reasonable without an
+  eligibility blocker may start either proposal, and manual Polish remains
+  available for every fit outcome. PR #124 and PR #125 were reverted before
+  this slice so the new contract does not preserve their audit complexity.
+- [TOOL] 2026-08-07: The full RoleFit check passed: browser and server builds,
+  landing build, desktop contracts, and 71/71 offline evaluations. The compact
+  Initial Fit probes, 403 client workflow guards, settings normalization, and
+  analytics regression all passed. The UI detector reported only advisory
+  font-size matches already permitted by the documented body/label ramps.
+  Live-provider and real-browser visual QA were not run.

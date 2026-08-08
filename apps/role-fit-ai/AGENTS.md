@@ -50,12 +50,15 @@ own a second resume model, editor, layout engine, or PDF implementation.
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
-- AI Review is the sole owner of fit score, coverage, verdict, reason, gaps,
-  and recommendation. The server validates the response contract and
-  anti-fabrication-sensitive edits; it does not calculate a replacement review.
-- A failed Job analysis, Tailor, or Review stage stops the selected pipeline.
-  Job analysis may retain a deterministic local brief for inspection, but a
-  failed AI-backed analysis cannot auto-launch Tailor or Review.
+- AI Review is the sole owner of scored post-draft coverage, recommendations,
+  and the detailed audit. Initial Fit is a separate compact Prepare advisory:
+  four verdicts, one summary, up to three matches and gaps, and an optional
+  eligibility warning. It has no score, confidence, ledger, evidence quotes,
+  recommendation, persistence, or analytics contract.
+- Prepare publishes its deterministic local brief before provider work. A Job
+  analysis or Initial Fit failure leaves that brief editable and manual Polish
+  available; invalid Initial Fit output never invalidates valid Job analysis.
+  Tailor and Review failures still stop their selected document pipeline.
 - Duplicate checks gate the pipeline before and after Job analysis. Stop means no
   downstream request; Continue is acknowledged for that job target.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
@@ -113,7 +116,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   remain there, never in masthead chrome or a second menu. Keep its complete
   brief editable: tracked job facts through one role context, responsibilities,
   required and preferred qualifications, technical keywords, seniority and
-  domain signals, benefits, plus extraction and candidate-review gaps.
+  domain signals, benefits, plus deterministic extraction gaps.
 - Prepare is state-shaped: before preparation, one centered Source panel exposes
   one URL-or-paste method at a time and no empty downstream scaffolds; afterward,
   the editable brief leads beside one Application rail containing both material
@@ -138,8 +141,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Apply status names which PDF failed. Apply is synchronously single-flight from
   duplicate resolution through a direct commit and again through every selected
   post-commit export; the pre-commit naming prompt remains interactive.
-- Extension intake always requires AI-backed job analysis and stops on Prepare; it never
-  auto-launches Tailor or Review. The ordinary app may still rank actual saved
+- Extension intake requests AI-backed Job analysis and stops on Prepare. Its
+  local brief remains usable when that request fails, and it never implicitly
+  launches Polish. The ordinary app may still rank actual saved
   resume and cover-letter contents against weighted prepared-job sections and
   auto-select a meaningful unique winner while its editor is clean and not
   application-owned, but that selection is not automatic tailoring.
@@ -149,6 +153,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   A tie or incomplete comparison returns no recommendation and keeps the current
   selection. Do not add persisted variant metadata or another schema for either
   choice.
+- When enabled, Initial Fit shares Prepare's normal Job analysis provider
+  dispatch and independently sanitizes its subsection. Changing the selected
+  resume reruns only compact Initial Fit. The fixed auto-proposal rule admits
+  only Strong or Reasonable with no eligibility blocker; Resume and Cover Letter
+  toggles are independent, default off, and never disable manual Polish.
 - Reuse `AiWorkflowProgress` for ordered/retryable task stages and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.

@@ -5,13 +5,14 @@ browser-side effects; components render them and App composes them.
 
 ## Ownership
 
-- `useJobIntake` owns Prepare's link/paste/extension intake, Job analysis
-  progress/retry, and automatic-tailor intent. Its extension progress callback
+- `useJobIntake` owns Prepare's link/paste/extension intake, immediate local
+  preview, Job analysis progress/retry, and compact Initial Fit lifecycle. Its extension progress callback
   and first delivered-posting callback select Prepare before visible intake
   state changes; claim tokens and fresh-tab ownership remain transport
   concerns. The imported snapshot carries the complete editable Prepare brief,
   including benefits and extraction gaps, alongside the exact model-facing
-  tailoring text; candidate-review gaps remain owned by the Review result.
+  tailoring text. Job analysis and Initial Fit settle independently, and a fit
+  retry or resume change must not rerun Job analysis.
 - `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
@@ -102,8 +103,10 @@ browser-side effects; components render them and App composes them.
 
 - One state owner per workflow. Return state and intent-level actions; do not
   expose setters when a named action can preserve invariants.
-- Keep async sequencing fail-closed. Only a `done` stage may advance. Preserve
-  abort controllers, retry provenance, and stale-input guards inside the owner.
+- Keep document-pipeline sequencing fail-closed. Only a `done` Tailor/Review
+  stage may advance. Prepare's deterministic brief is independently usable when
+  Job analysis or compact Initial Fit is unavailable. Preserve abort
+  controllers, retry provenance, and stale-input guards inside the owner.
 - Store hot transient values in refs when they must survive async callbacks
   without driving presentation. Keep visible state serializable and explicit.
 - Effects depend on stable primitive/derived signals, not freshly created
@@ -121,17 +124,21 @@ browser-side effects; components render them and App composes them.
   mount-time empty applications array. Provider readiness is a preflight
   signal, not semantic request input, so background readiness polls must not
   invalidate an already-running AI request.
-- Automatic extension tailoring remains on Prepare. It may not replace a dirty
+- Automatic variant selection remains on Prepare. It may not replace a dirty
   editor without an explicit user action. When multiple saved resume or
   cover-letter variants exist, compare their actual strict document contents
   with weighted prepared-job sections and auto-select a meaningful unique
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
-  recommendation. A successful automatic run must not force the Resume tab;
+  recommendation. A successful automatic proposal run must not force the Resume tab;
   user-initiated Resume tailoring retains its normal reveal behavior.
-- Job analysis stale-input guards cover only the job source and that stage's AI
-  settings. Resume bootstrap and Tailor-mode reconciliation are downstream
-  auto-Tailor inputs; they must not cancel extension job analysis that is
-  already running.
+- Job analysis stale-input guards cover the job source, Initial Fit setting,
+  and that stage's AI settings. The selected resume is captured immediately
+  before dispatch; later resume changes use the fit-only request instead of
+  cancelling or repeating Job analysis.
+- Initial Fit automation is fixed, not threshold-configurable: only Strong or
+  Reasonable with no eligibility blocker may start the independently enabled
+  Resume and Cover Letter proposals. Both toggles default off and manual Polish
+  remains available for every verdict and fit failure.
 - Add a focused eval for durable sequencing, identity, or state-transition
   rules that can be tested without React/browser orchestration.

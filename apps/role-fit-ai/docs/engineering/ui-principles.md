@@ -62,9 +62,11 @@ receipt and Job analysis progress navigate to and remain visible on Prepare.
 Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the
 main column and one Application rail combines both material choices, readiness,
-  the saved-application summary, a flat fit summary, and Apply. The fit summary
-  prefers a current matching Recruiter audit, labels a matching saved audit historical,
-  and otherwise says "Not audited"; it never estimates fit locally. Nothing on
+the saved-application summary, a flat Initial Fit summary, and Apply. Initial
+Fit shows only its four-level verdict, selected resume, summary, up to three
+matches and gaps, and a relevant eligibility warning. It has distinct running,
+disabled, and retryable-unavailable states and never shows scores, confidence,
+evidence ledgers, quotations, recommendations, or historical audit state. Nothing on
 the page is a card inside a card, and no status earns its own tinted panel or
 icon tile. Preparation
 progress is already a readiness check, so it takes rail space only while work is
@@ -76,9 +78,8 @@ Every extracted tracker field remains editable on Prepare: role, company,
 location, job type, source, work authorization, compensation range/currency/
 period, and one role context. Responsibilities, required and preferred
 qualifications, technical keywords, seniority and domain signals, and benefits
-are editable in the same brief. Surface both extraction gaps and
-candidate-review gaps so partial analysis output can be corrected without
-another AI run. Benefits remain visible preparation context rather than being
+are editable in the same brief. Surface deterministic extraction gaps so
+partial analysis output can be corrected without another AI run. Benefits remain visible preparation context rather than being
 silently folded into resume-tailoring evidence.
 
 Resume and Cover Letter share the same Prepare material-card structure and
@@ -94,7 +95,8 @@ only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 
-Extension intake always runs AI-backed job analysis and stops on Prepare; it never starts
+Extension intake requests AI-backed Job analysis and stops on Prepare. Its local
+brief remains usable when provider work fails, and it never implicitly starts
 resume Polish. Independently, Prepare may rank the actual contents of saved
 `.resume` and `.cover` variants against weighted prepared-job sections. For
 either document, auto-select a meaningful unique winner only while its editor
@@ -103,6 +105,13 @@ selection. This is source selection, not automatic tailoring. The selector is
 the normal receipt; reserve the shared compact recommendation line for a blocked
 replacement. Do not persist parallel variant metadata or widen the strict
 document schema for this decision.
+
+When enabled, Initial Fit is an optional subsection of the same normal Prepare
+provider dispatch and sanitizes independently from Job analysis. A resume change
+reruns only Initial Fit. Settings exposes one Initial Fit toggle, default on,
+plus independent Resume and Cover Letter proposal toggles, default off. Only
+Strong or Reasonable without an eligibility blocker may auto-start an enabled
+proposal; manual Polish remains available for every outcome.
 
 A material's state line reports the real reason it is not ready. A saved base
 letter is a template: real prose plus unresolved `[slots]` that Polish fills.
@@ -395,6 +404,9 @@ Never show:
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
+- Settings places the compact Initial Fit toggle and the two independent
+  proposal toggles beside the stage configuration. It does not expose scores,
+  confidence thresholds, verdict cutoffs, or a master automation switch.
 - Keep every stage section expanded together. There is no section toggle,
   collapsed summary, or persisted open/collapse preference; the user can scan
   and edit all stage configurations without changing view state.
