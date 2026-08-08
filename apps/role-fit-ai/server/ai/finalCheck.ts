@@ -9,7 +9,12 @@ import {
 import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
-import { findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
+import {
+  LIST_STOPWORDS,
+  distinctiveTokenKeys,
+  findUngroundedCuratedClaimTerm,
+  findUngroundedOutcomeClaim
+} from "./grounding.ts";
 import { readAiJsonBody } from "./json.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
@@ -53,6 +58,20 @@ function hasUngroundedClaimSignal(value: string, grounding: string): boolean {
     || Boolean(findUngroundedOutcomeClaim(value, grounding, { candidateProse: true }));
 }
 
+const ISSUE_DETAIL_STOPWORDS = new Set([
+  ...LIST_STOPWORDS,
+  "resume", "letter", "cover", "document", "posting", "job", "current",
+  "claim", "claims", "claimed", "require", "requires", "requirement",
+  "wording", "phrase", "sentence", "bullet", "item", "show", "shown",
+  "missing", "unsupported", "unclear", "vague", "specific", "exact"
+]);
+
+function detailReferencesExcerpt(detail: string, sourceExcerpt: string): boolean {
+  const excerptTokens = new Set(distinctiveTokenKeys(sourceExcerpt, ISSUE_DETAIL_STOPWORDS));
+  const detailTokens = distinctiveTokenKeys(detail, ISSUE_DETAIL_STOPWORDS);
+  return excerptTokens.size > 0 && detailTokens.some((token) => excerptTokens.has(token));
+}
+
 function issueHasExactSourceAnchor(
   issue: FinalCheckIssue,
   sourceExcerpt: string,
@@ -62,15 +81,16 @@ function issueHasExactSourceAnchor(
 ): boolean {
   const source = issue.kind === "MISSING" ? jobText : currentDocument;
   if (!sourceExcerpt || !source.includes(sourceExcerpt)) return false;
+  if (!detailReferencesExcerpt(issue.detail, sourceExcerpt)) return false;
   if (issue.kind === "UNSUPPORTED") {
-    return !hasUngroundedClaimSignal(issue.detail, currentDocument)
-      && hasUngroundedClaimSignal(issue.detail, evidenceText);
+    return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt)
+      && hasUngroundedClaimSignal(sourceExcerpt, evidenceText);
   }
   if (issue.kind === "MISSING") {
-    return !hasUngroundedClaimSignal(issue.detail, `${currentDocument}\n${jobText}`)
-      && hasUngroundedClaimSignal(issue.detail, currentDocument);
+    return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt)
+      && hasUngroundedClaimSignal(sourceExcerpt, currentDocument);
   }
-  return !hasUngroundedClaimSignal(issue.detail, currentDocument);
+  return !hasUngroundedClaimSignal(issue.detail, sourceExcerpt);
 }
 
 function derivedSummary(status: FinalCheckResult["status"], issues: FinalCheckIssue[]): string {

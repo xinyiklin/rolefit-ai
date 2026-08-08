@@ -393,8 +393,8 @@ assert.doesNotMatch(
 );
 assert.doesNotMatch(
   intakeFingerprint,
-  /editedResume|tailorModes/,
-  "resume bootstrap and Tailor-mode reconciliation cannot invalidate an active Job analysis request"
+  /editedResume|polishScopeModes/,
+  "resume bootstrap and Polish-scope reconciliation cannot invalidate an active Job analysis request"
 );
 assert.match(intakeFingerprint, /jobUrl/, "Job analysis still guards the live job URL");
 assert.match(intakeFingerprint, /jobDescription/, "Job analysis still guards the live job description");
@@ -1855,7 +1855,7 @@ assert.match(resumePolishContract, /targetId: `target-\$\{index \+ 1\}`/,
   "flat target IDs are assigned locally without exposing composite document IDs to the model");
 assert.match(resumePolishContract, /resumePolishSectionIsLocked\(heading\)/,
   "the server-owned flat target map applies durable locked-section rules");
-assert.match(roleFitEditorOverlay, /resumePolishSectionIsLocked\(sectionHeading\)[\s\S]{0,100}?mode !== "tailor"/,
+assert.match(roleFitEditorOverlay, /resumePolishSectionIsLocked\(sectionHeading\)[\s\S]{0,100}?mode !== "polish"/,
   "the section scope UI does not offer Polish for Education");
 assert.doesNotMatch(
   appIndex,
@@ -2107,8 +2107,8 @@ assert.doesNotMatch(prepareTab, /reviewGapsProvenance|current recruiter audit/,
   "the compact Prepare surface contains no Recruiter Review fallback copy");
 assert.match(
   app,
-  /const polishInputsReady = useMemo\(\(\) => \{[\s\S]{0,160}?jobPrepared &&[\s\S]{0,420}?\}, \[editedResume, jobDescription, jobPrepared, resumeReady, tailorModes\]\)/,
-  "resume tailoring is unavailable until source intake has produced a matching prepared snapshot"
+  /const polishInputsReady = useMemo\(\(\) => \{[\s\S]{0,160}?jobPrepared &&[\s\S]{0,420}?\}, \[editedResume, jobDescription, jobPrepared, resumeReady, polishScopeModes\]\)/,
+  "Resume Polish is unavailable until source intake has produced a matching prepared snapshot"
 );
 assert.match(
   app,

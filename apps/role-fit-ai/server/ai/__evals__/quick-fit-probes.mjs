@@ -5,7 +5,11 @@ import {
   sanitizePrepareAnalysisResponse
 } from "../jobAnalysis.ts";
 import { buildQuickFitPrompts, calibrateQuickFit } from "../quickFit.ts";
-import { quickFitAllowsAutoProposal, sanitizeQuickFit } from "../../../shared/quickFitContract.ts";
+import {
+  quickFitAllowsAutoProposal,
+  quickFitRequirementCandidatesFromPreparedJob,
+  sanitizeQuickFit
+} from "../../../shared/quickFitContract.ts";
 
 const jobText = [
   "Intermediate Software Developer.",
@@ -89,8 +93,9 @@ assert.equal(
   "an unknown public verdict remains unusable"
 );
 
-function item(sourceRequirement, importance, coverage, evidenceExcerpt, evidenceSource = "RESUME") {
+function item(sourceRequirement, importance, coverage, evidenceExcerpt, evidenceSource = "RESUME", requirementId) {
   return {
+    ...(requirementId ? { requirementId } : {}),
     sourceRequirement,
     importance,
     coverage,
@@ -104,6 +109,27 @@ const coreRequirements = [
   "Maintain internal tools.",
   "Partner with product teams."
 ];
+const requiredRequirements = coreRequirements.map((sourceRequirement, index) => ({
+  requirementId: `required-${index + 1}`,
+  sourceRequirement,
+  importance: "CORE"
+}));
+
+assert.deepEqual(
+  quickFitRequirementCandidatesFromPreparedJob([
+    "Core Responsibilities:",
+    "- Partner with product teams.",
+    "Required Qualifications:",
+    "- Familiarity with internal tools.",
+    "- Must have five years of distributed systems experience."
+  ].join("\n")).map((candidate) => candidate.sourceRequirement),
+  [
+    "Must have five years of distributed systems experience.",
+    "Familiarity with internal tools.",
+    "Partner with product teams."
+  ],
+  "the client selects hard required qualifications before filling from core responsibilities"
+);
 const evidence = [
   "Built JavaScript services for internal teams.",
   "Designed SQL data models for reporting.",
@@ -131,6 +157,45 @@ assert.equal(strong?.matches.length, 3);
 assert.deepEqual(strong?.gaps, []);
 assert.match(strong?.summary ?? "", /Direct evidence covers three of four core requirements/i);
 assert.equal(quickFitAllowsAutoProposal(strong), true);
+
+const omittedRequired = calibrateQuickFit(
+  {
+    basis: coreRequirements.slice(0, 3).map((requirement, index) =>
+      item(requirement, "CORE", "DIRECT", evidence[index], "RESUME", `required-${index + 1}`)
+    )
+  },
+  { jobText, resumeText, candidateContext: "", requiredRequirements }
+);
+assert.equal(
+  omittedRequired?.verdict,
+  "REASONABLE",
+  "omitting a server-selected required requirement cannot preserve a Strong verdict"
+);
+assert.deepEqual(
+  omittedRequired?.gaps,
+  [coreRequirements[3]],
+  "a missing required assessment is conservatively represented as NOT_SHOWN"
+);
+
+const unrelatedJob = "Required: Experience building distributed systems.";
+const unrelatedResume = "Built internal React dashboards for operations teams.";
+const semanticallyUnrelated = calibrateQuickFit(
+  {
+    basis: [item(
+      "Experience building distributed systems.",
+      "CORE",
+      "DIRECT",
+      "Built internal React dashboards"
+    )]
+  },
+  { jobText: unrelatedJob, resumeText: unrelatedResume, candidateContext: "" }
+);
+assert.equal(
+  semanticallyUnrelated?.verdict,
+  "LIMITED",
+  "two exact source excerpts cannot establish DIRECT coverage when their material concepts are unrelated"
+);
+assert.deepEqual(semanticallyUnrelated?.gaps, ["Experience building distributed systems."]);
 
 const reasonable = calibrate(["DIRECT", "DIRECT", "ADJACENT", "NOT_SHOWN"]);
 assert.equal(reasonable?.verdict, "REASONABLE");
@@ -358,5 +423,25 @@ const fitOnly = buildQuickFitPrompts({
 }).userPrompt;
 assert.match(fitOnly, /Return the Initial Fit calibration basis itself/);
 assert.doesNotMatch(fitOnly, /"job"/);
+
+const lateRequirement = "Must have seven years of distributed systems experience.";
+const longPosting = `${"General company and role context. ".repeat(900)}\n${lateRequirement}`;
+const longPostingPrompt = buildQuickFitPrompts({
+  jobText: longPosting,
+  resumeText,
+  resumeLabel: "Backend resume",
+  candidateContext: "",
+  requiredRequirements: [{
+    requirementId: "required-1",
+    sourceRequirement: lateRequirement,
+    importance: "CORE"
+  }]
+}).userPrompt;
+assert.match(
+  longPostingPrompt,
+  /Must have seven years of distributed systems experience/,
+  "a server-selected hard requirement after the clipped posting prefix still reaches Initial Fit"
+);
+assert.match(longPostingPrompt, /"requirementId":"required-1"/);
 
 console.log("calibrated quick Initial Fit probes: passed");

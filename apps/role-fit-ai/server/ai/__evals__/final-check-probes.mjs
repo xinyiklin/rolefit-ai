@@ -89,7 +89,7 @@ const paraphrased = sanitizeFinalCheck(
     issues: [{
       kind: "CLARITY",
       sourceExcerpt: "Built JavaScript and SQL tools for internal teams",
-      detail: "The opening accomplishment does not make the candidate's ownership easy to scan.",
+      detail: "The JavaScript accomplishment does not make the candidate's ownership easy to scan.",
       action: "Clarify the supported scope and ownership."
     }]
   },
@@ -100,7 +100,43 @@ const paraphrased = sanitizeFinalCheck(
 assert.equal(
   paraphrased.issues.length,
   1,
-  "an exact source anchor survives even when the public detail paraphrases it"
+  "a clarity detail may paraphrase only when it remains materially bound to the cited wording"
+);
+
+assert.throws(
+  () => sanitizeFinalCheck(
+    {
+      issues: [{
+        kind: "UNSUPPORTED",
+        sourceExcerpt: "JavaScript and SQL tools for internal teams",
+        detail: "The resume claims a 30% uptime improvement.",
+        action: "Add evidence for the metric or remove it."
+      }]
+    },
+    currentResume,
+    evidenceText,
+    jobText
+  ),
+  /invalid document check/,
+  "an unrelated exact document excerpt cannot anchor a different unsupported claim"
+);
+
+assert.throws(
+  () => sanitizeFinalCheck(
+    {
+      issues: [{
+        kind: "MISSING",
+        sourceExcerpt: "JavaScript services",
+        detail: "The job requires AWS, but the current resume does not show it.",
+        action: "Add supported AWS evidence if available."
+      }]
+    },
+    currentResume,
+    evidenceText,
+    jobText
+  ),
+  /invalid document check/,
+  "an unrelated exact posting excerpt cannot anchor a different missing requirement"
 );
 
 assert.throws(

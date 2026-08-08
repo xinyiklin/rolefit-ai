@@ -696,6 +696,10 @@ export function useWorkspaceResume({
     },
     []
   );
+  const readBaseResumeCandidatesRevision = useCallback(
+    () => baseResumeCandidatesRevisionRef.current,
+    []
+  );
 
   async function handleFileUpload(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -775,6 +779,7 @@ export function useWorkspaceResume({
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
     readBaseResumeCandidates,
+    readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
     handleFileUpload
   };

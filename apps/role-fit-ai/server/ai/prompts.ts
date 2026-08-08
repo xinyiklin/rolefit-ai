@@ -230,6 +230,7 @@ const UNTRUSTED_FENCE_NAMES = [
   "selected_resume_label",
   "selected_resume",
   "candidate_context",
+  "required_requirement_candidates",
   "user_guidance",
   "resolved_context",
   "employer_context",

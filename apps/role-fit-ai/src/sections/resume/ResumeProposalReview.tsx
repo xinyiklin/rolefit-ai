@@ -6,7 +6,7 @@ import { currentTargetText } from "../../hooks/useResumeProposalDecisions";
 import { renderInlineMarks, stripInlineMarks } from "../../lib/inlineMarks";
 import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import type { TailorChangeTarget } from "../../resume/types";
+import type { ResumeProposalTarget } from "../../resume/types";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type ResumeProposalReviewProps = {
@@ -16,7 +16,7 @@ type ResumeProposalReviewProps = {
   // current-resume check runs when the last decision settles, and the review
   // list cannot be the thing that knows.
   decisions: ReturnType<typeof useResumeProposalDecisions>;
-  onHighlight: (target: TailorChangeTarget | null) => void;
+  onHighlight: (target: ResumeProposalTarget | null) => void;
 };
 
 const normalize = (value: string) => stripInlineMarks(value).replace(/\s+/g, " ").trim().toLowerCase();

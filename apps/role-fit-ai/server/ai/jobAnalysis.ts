@@ -35,7 +35,10 @@ import {
   calibrateQuickFit,
   quickFitPromptSection
 } from "./quickFit.ts";
-import type { QuickFitResult } from "../../shared/quickFitContract.ts";
+import type {
+  QuickFitRequirementCandidate,
+  QuickFitResult
+} from "../../shared/quickFitContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -48,6 +51,7 @@ type InitialFitInput = {
   resumeText: string;
   resumeLabel: string;
   candidateContext?: string;
+  requiredRequirements?: QuickFitRequirementCandidate[];
 };
 
 export function buildJobAnalysisPrompts({
@@ -106,7 +110,7 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 ${fenceUntrusted(clipForPrompt(jobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${initialFit ? quickFitPromptSection(initialFit) : ""}
+${initialFit ? quickFitPromptSection({ ...initialFit, jobText }) : ""}
 
 ${responseSchema}`;
 
@@ -123,7 +127,10 @@ function initialFitInput(body: Record<string, unknown>): InitialFitInput | null 
   return {
     resumeText,
     resumeLabel: typeof source.resumeLabel === "string" ? source.resumeLabel : "Selected resume",
-    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {})
+    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {}),
+    ...(Array.isArray(source.requiredRequirements)
+      ? { requiredRequirements: source.requiredRequirements as QuickFitRequirementCandidate[] }
+      : {})
   };
 }
 
@@ -254,18 +261,13 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
   return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
 }
 
-// workAuth is an ELIGIBILITY-BLOCKER fact — it can force a DON'T APPLY verdict and
-// persists into the application tracker — so it gets the same anti-fabrication
-// discipline as every other analyzed field (the old code passed it through
-// ungrounded). Keep it only when the SPECIFIC authorization class the model named
-// (clearance / citizenship / visa / sponsorship / work authorization / …) actually
-// appears in the posting: an invented "active security clearance required" for a
-// posting that never mentions clearance is dropped, while a genuine "authorized to
-// work without sponsorship" is kept. A workAuth naming no auth class at all is not
-// a real constraint and is dropped. AUTH_STEMS + the boundary-anchored matcher
-// live in the shared eligibility lexicon (./eligibilityLexicon.ts — the one
-// home for every work-auth/credential term list; its header documents how this
-// list deliberately differs from scoring's blocker/bucket lists).
+// workAuth is a tracked prepared-job fact that feeds a separate advisory
+// eligibility interpretation; it does not control Initial Fit. Give it the same
+// anti-fabrication discipline as every other analyzed field: keep it only when
+// the specific authorization class the model named (clearance / citizenship /
+// visa / sponsorship / work authorization / …) actually appears in the posting.
+// AUTH_STEMS and its boundary-aware matcher live in the shared eligibility
+// lexicon so every advisory path uses the same vocabulary.
 function groundedWorkAuth(value: unknown, sourceLower: string): string {
   const wa = str(value, 240);
   if (!wa) return "";
@@ -460,7 +462,8 @@ export function sanitizePrepareAnalysisResponse(
           initialFit: calibrateQuickFit(source.initialFit, {
             jobText,
             resumeText: fitInput.resumeText,
-            candidateContext: fitInput.candidateContext
+            candidateContext: fitInput.candidateContext,
+            requiredRequirements: fitInput.requiredRequirements
           })
         }
       : {})
@@ -531,6 +534,9 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
         resumeText,
         resumeLabel: String(body.resumeLabel ?? "Selected resume"),
         candidateContext: String(body.candidateContext ?? ""),
+        requiredRequirements: Array.isArray(body.requiredRequirements)
+          ? body.requiredRequirements as QuickFitRequirementCandidate[]
+          : undefined,
         body,
         signal: request.signal
       });

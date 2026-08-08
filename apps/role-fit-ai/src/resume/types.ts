@@ -1,15 +1,15 @@
-export type TailorChangeField = "bullet" | "skill" | "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
+export type ResumeProposalField = "bullet" | "skill" | "skillLabel";
 
-export type TailorChangeTarget = {
+export type ResumeProposalTarget = {
   sectionId: string;
   entryId?: string;
   bulletId?: string;
-  field: TailorChangeField;
+  field: ResumeProposalField;
 };
 
-export type TailorSuggestion = {
+export type ResumeProposalSuggestion = {
   id: string;
-  target: TailorChangeTarget;
+  target: ResumeProposalTarget;
   sectionHeading: string;
   currentText: string;
   proposedText: string;
@@ -23,7 +23,7 @@ export type PolishedResume = {
   // 1-3 bullets from the AI describing what changed (or why nothing needed
   // changing). Absent when no Resume Polish pass ran.
   changeSummary?: string[];
-  suggestedChanges?: TailorSuggestion[];
+  suggestedChanges?: ResumeProposalSuggestion[];
   polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
   remainingGaps?: string[];
   omittedTargetCount?: number;

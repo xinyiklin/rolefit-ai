@@ -27,13 +27,13 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       return;
     }
 
-    const tailorScope = normalizeResumeScope(body.tailorScope);
-    const scopeText = resumeScopeToText(tailorScope);
-    const editableText = resumeScopeToText(tailorScope, true);
+    const resumeScope = normalizeResumeScope(body.resumeScope);
+    const scopeText = resumeScopeToText(resumeScope);
+    const editableText = resumeScopeToText(resumeScope, true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
-    if (!tailorScope.sections.length || editableText.length < 40 || jobText.trim().length < 40) {
+    if (!resumeScope.sections.length || editableText.length < 40 || jobText.trim().length < 40) {
       sendJson(res, 400, {
         error: "Select at least one editable resume section and add a job description before polishing."
       });
@@ -42,7 +42,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
 
     const proposal = await generateResumeProposal({
       body,
-      tailorScope,
+      resumeScope,
       scopeText,
       jobText,
       honestContext,

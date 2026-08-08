@@ -31,12 +31,12 @@ export type ResumePolishEditorTarget = {
   sectionId: string;
   entryId: string;
   bulletId?: string;
-  field: "bullet" | "skill" | "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
+  field: "bullet" | "skill" | "skillLabel";
 };
 
 export type FlatResumeTarget = {
   targetId: string;
-  kind: "bullet" | "skill-label" | "skill-list" | "field";
+  kind: "bullet" | "skill-label" | "skill-list";
   section: string;
   currentText: string;
   target: ResumePolishEditorTarget;
@@ -75,10 +75,6 @@ function entryText(entry: ScopeEntry): string {
   ].map((value) => clean(value)).filter(Boolean).join("\n");
 }
 
-function looksLikeDate(value: string): boolean {
-  return /\b(?:(?:19|20)\d{2}|present|current|jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\b/i.test(value);
-}
-
 export function resumePolishSectionIsLocked(heading: string): boolean {
   const normalized = clean(heading, 120).toLowerCase();
   return /\b(?:education|academic)\b/.test(normalized)
@@ -99,30 +95,25 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
       const entryId = clean(entry?.id, 120);
       if (!entryId) continue;
       const grounding = entryText(entry);
-      const addField = (
-        field: ResumePolishEditorTarget["field"],
-        currentText: unknown,
-        kind: FlatResumeTarget["kind"] = "field"
-      ) => {
-        const text = clean(currentText);
-        if (!text || looksLikeDate(text)) return;
-        targets.push({
-          kind,
-          section: heading,
-          currentText: text,
-          target: { sectionId, entryId, field },
-          sectionType: type,
-          entryText: grounding
-        });
-      };
       if (type === "skills") {
-        addField("skill", entry.subtitleLeft, "skill-list");
-        addField("titleLeft", entry.titleLeft, "skill-label");
-      } else if (type === "standard") {
-        addField("titleLeft", entry.titleLeft);
-        addField("titleRight", entry.titleRight);
-        addField("subtitleLeft", entry.subtitleLeft);
-        addField("subtitleRight", entry.subtitleRight);
+        const addSkillField = (
+          field: "skill" | "skillLabel",
+          currentText: unknown,
+          kind: "skill-label" | "skill-list"
+        ) => {
+          const text = clean(currentText);
+          if (!text) return;
+          targets.push({
+            kind,
+            section: heading,
+            currentText: text,
+            target: { sectionId, entryId, field },
+            sectionType: type,
+            entryText: grounding
+          });
+        };
+        addSkillField("skill", entry.subtitleLeft, "skill-list");
+        addSkillField("skillLabel", entry.titleLeft, "skill-label");
       }
       const bullets = Array.isArray(entry.bullets) ? entry.bullets as ScopeBullet[] : [];
       for (const bullet of bullets) {

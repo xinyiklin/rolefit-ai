@@ -7,16 +7,23 @@ import {
   type QuickFitBasisItem,
   type QuickFitEligibilityStatus,
   type QuickFitEvidenceSource,
+  type QuickFitRequirementCandidate,
   type QuickFitResult,
   type QuickFitVerdict
 } from "../../shared/quickFitContract.ts";
 import { callConfiguredProvider } from "./clients.ts";
+import {
+  LIST_STOPWORDS,
+  distinctiveTokenKeys,
+  findUngroundedCuratedClaimTerm
+} from "./grounding.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
 
 const RESUME_CHAR_LIMIT = 28_000;
 const JOB_CHAR_LIMIT = 24_000;
 const MAX_BASIS_ITEMS = 6;
+const MAX_REQUIRED_REQUIREMENTS = 5;
 
 const basisImportance = new Set<string>(QUICK_FIT_BASIS_IMPORTANCE);
 const basisCoverage = new Set<string>(QUICK_FIT_BASIS_COVERAGE);
@@ -25,6 +32,7 @@ const evidenceSources = new Set<string>(QUICK_FIT_EVIDENCE_SOURCES);
 export const QUICK_FIT_BASIS_RESPONSE_SCHEMA = `{
   "basis": [
     {
+      "requirementId": "server-selected requirement id, or omitted only for one provider-added material requirement",
       "sourceRequirement": "exact requirement excerpt from the posting",
       "importance": "CORE | SUPPORTING",
       "coverage": "DIRECT | ADJACENT | NOT_SHOWN | CONTRADICTED",
@@ -53,6 +61,39 @@ function normalizedExcerpt(value: string): string {
 function sourceIncludesExcerpt(source: string, excerpt: string): boolean {
   const normalized = normalizedExcerpt(excerpt);
   return normalized.length >= 2 && normalizedExcerpt(source).includes(normalized);
+}
+
+function sanitizeRequiredRequirements(raw: unknown, jobText: string): QuickFitRequirementCandidate[] {
+  if (!Array.isArray(raw)) return [];
+  const result: QuickFitRequirementCandidate[] = [];
+  const seenIds = new Set<string>();
+  const seenRequirements = new Set<string>();
+  for (const item of raw) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
+    const source = item as Record<string, unknown>;
+    const requirementId = text(source.requirementId, 40);
+    const sourceRequirement = text(source.sourceRequirement, 500);
+    const requirementKey = normalizedExcerpt(sourceRequirement);
+    const importance = text(source.importance, 24).toUpperCase();
+    if (
+      !/^required-[1-9][0-9]?$/.test(requirementId)
+      || seenIds.has(requirementId)
+      || seenRequirements.has(requirementKey)
+      || !sourceIncludesExcerpt(jobText, sourceRequirement)
+      || eligibilityOnlyRequirement(sourceRequirement)
+      || !basisImportance.has(importance)
+    ) continue;
+    seenIds.add(requirementId);
+    seenRequirements.add(requirementKey);
+    result.push({
+      requirementId,
+      sourceRequirement,
+      importance: postingImportance(sourceRequirement, jobText)
+        ?? importance as QuickFitBasisImportance
+    });
+    if (result.length === MAX_REQUIRED_REQUIREMENTS) break;
+  }
+  return result;
 }
 
 function postingImportance(requirement: string, jobText: string): QuickFitBasisImportance | null {
@@ -130,6 +171,18 @@ function hasYearsMismatch(requirement: string, evidence: string): boolean {
 function isExplicitContradiction(requirement: string, evidence: string): boolean {
   if (hasYearsMismatch(requirement, evidence)) return true;
 
+  const degreeRank = (value: string): number => {
+    if (/\b(?:doctorate|doctoral|ph\.?d)\b/i.test(value)) return 5;
+    if (/\bmaster(?:'s|s)?\b|\bm\.?s\.?\b|\bmba\b/i.test(value)) return 4;
+    if (/\bbachelor(?:'s|s)?\b|\bb\.?s\.?\b|\bb\.?a\.?\b/i.test(value)) return 3;
+    if (/\bassociate(?:'s|s)?\b/i.test(value)) return 2;
+    if (/\bhigh school\b|\bged\b/i.test(value)) return 1;
+    return 0;
+  };
+  const requiredDegree = degreeRank(requirement);
+  const candidateDegree = degreeRank(evidence);
+  if (requiredDegree > 0 && candidateDegree > 0 && candidateDegree < requiredDegree) return true;
+
   const requirementLower = normalizedExcerpt(requirement);
   const evidenceLower = normalizedExcerpt(evidence);
   const sponsorshipDisallowed = /\b(?:no|without)\s+(?:visa\s+)?sponsorship\b|\b(?:visa\s+)?sponsorship\b[^.]{0,30}\b(?:not available|unavailable|not offered|not provided)\b|\b(?:cannot|can't|will not|won't|do not|does not)\s+sponsor\b|\b(?:cannot|can't|unable to|will not|won't|do not|does not)\s+(?:provide|offer|support)\b[^.]{0,40}\bsponsor/i.test(requirementLower);
@@ -155,6 +208,40 @@ function isExplicitContradiction(requirement: string, evidence: string): boolean
     && /\b(?:no|without|lack\w*|do not have|does not have|not active|expired)\b[^.]{0,45}\b(?:license|licence|certification)\b/i.test(evidenceLower);
 }
 
+const RELATION_STOPWORDS = new Set([
+  ...LIST_STOPWORDS,
+  "build", "built", "building", "develop", "developed", "developing",
+  "design", "designed", "maintain", "maintained", "manage", "managed",
+  "partner", "partnered", "support", "supported", "deliver", "delivered",
+  "responsible", "responsibility", "knowledge", "proficiency"
+]);
+
+function relationCoverageCap(requirement: string, evidence: string): QuickFitBasisCoverage {
+  if (isExplicitContradiction(requirement, evidence)) return "CONTRADICTED";
+  const requirementTokens = distinctiveTokenKeys(requirement, RELATION_STOPWORDS);
+  const evidenceTokens = new Set(distinctiveTokenKeys(evidence, RELATION_STOPWORDS));
+  const overlap = requirementTokens.filter((token) => evidenceTokens.has(token)).length;
+  const adjacent = overlap > 0 && (overlap >= 2 || overlap * 3 >= requirementTokens.length);
+  if (!adjacent) return "NOT_SHOWN";
+
+  const requiredYears = statedYears(requirement);
+  const evidenceYears = statedYears(evidence);
+  const yearsSatisfied = requiredYears.length === 0
+    || (evidenceYears.length > 0 && Math.max(...evidenceYears) >= Math.max(...requiredYears));
+  const requiresEducation = /\b(?:degree|bachelor|master|doctorate|doctoral|ph\.?d|associate)\b/i.test(requirement);
+  const showsEducation = /\b(?:degree|bachelor|master|doctorate|doctoral|ph\.?d|associate|b\.?s\.?|b\.?a\.?|m\.?s\.?|mba)\b/i.test(evidence);
+  const curatedSkillMissing = Boolean(findUngroundedCuratedClaimTerm(requirement, evidence));
+  const directOverlap = requirementTokens.length > 0
+    && overlap >= Math.min(2, requirementTokens.length)
+    && overlap * 5 >= requirementTokens.length * 3;
+  return directOverlap
+    && yearsSatisfied
+    && (!requiresEducation || showsEducation)
+    && !curatedSkillMissing
+      ? "DIRECT"
+      : "ADJACENT";
+}
+
 function eligibilityOnlyRequirement(requirement: string): boolean {
   return /\b(?:citizens?(?:hip)?|visa|sponsor(?:ship)?|work authoriz\w*|work authoris\w*|authoriz\w* to work|authoris\w* to work|green card|permanent resident|security clearance|ts\/sci|polygraph)\b/i.test(requirement)
     || (/\b(?:license|licence|certification)\b/i.test(requirement)
@@ -166,25 +253,33 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
   const rawBasis = (raw as Record<string, unknown>).basis;
   if (!Array.isArray(rawBasis)) return [];
 
-  const seenRequirements = new Set<string>();
-  const result: QuickFitBasisItem[] = [];
-  for (const rawItem of rawBasis.slice(0, MAX_BASIS_ITEMS)) {
+  const requiredRequirements = sanitizeRequiredRequirements(sources.requiredRequirements, sources.jobText);
+  const requiredById = new Map(requiredRequirements.map((item) => [item.requirementId, item]));
+  const requiredItems = new Map<string, QuickFitBasisItem>();
+  const seenRequirements = new Set(requiredRequirements.map((item) => normalizedExcerpt(item.sourceRequirement)));
+  const extras: QuickFitBasisItem[] = [];
+  for (const rawItem of rawBasis.slice(0, MAX_BASIS_ITEMS * 2)) {
     if (!rawItem || typeof rawItem !== "object" || Array.isArray(rawItem)) continue;
     const source = rawItem as Record<string, unknown>;
-    const sourceRequirement = text(source.sourceRequirement, 500);
+    const requirementId = text(source.requirementId, 40);
+    const requiredRequirement = requirementId ? requiredById.get(requirementId) : undefined;
+    if (requirementId && !requiredRequirement) continue;
+    if (requiredRequirement && requiredItems.has(requirementId)) continue;
+    const sourceRequirement = requiredRequirement?.sourceRequirement ?? text(source.sourceRequirement, 500);
     const requirementKey = normalizedExcerpt(sourceRequirement);
     const rawImportance = text(source.importance, 24).toUpperCase();
     const rawCoverage = text(source.coverage, 24).toUpperCase();
     if (
       !sourceRequirement
-      || seenRequirements.has(requirementKey)
+      || (!requiredRequirement && seenRequirements.has(requirementKey))
       || !sourceIncludesExcerpt(sources.jobText, sourceRequirement)
       || eligibilityOnlyRequirement(sourceRequirement)
       || !basisImportance.has(rawImportance)
       || !basisCoverage.has(rawCoverage)
     ) continue;
 
-    const importance = postingImportance(sourceRequirement, sources.jobText)
+    const importance = requiredRequirement?.importance
+      ?? postingImportance(sourceRequirement, sources.jobText)
       ?? rawImportance as QuickFitBasisImportance;
     let coverage = rawCoverage as QuickFitBasisCoverage;
     let evidenceSource: QuickFitEvidenceSource | undefined;
@@ -205,24 +300,38 @@ function sanitizeQuickFitBasis(raw: unknown, sources: QuickFitSources): QuickFit
       ) {
         evidenceSource = rawEvidenceSource as QuickFitEvidenceSource;
         evidenceExcerpt = rawEvidenceExcerpt;
-        if (isExplicitContradiction(sourceRequirement, rawEvidenceExcerpt)) coverage = "CONTRADICTED";
+        const cap = relationCoverageCap(sourceRequirement, rawEvidenceExcerpt);
+        if (cap === "CONTRADICTED") coverage = "CONTRADICTED";
         else if (coverage === "CONTRADICTED") coverage = "NOT_SHOWN";
+        else if (coverage === "DIRECT" && cap !== "DIRECT") coverage = cap;
+        else if (coverage === "ADJACENT" && cap === "NOT_SHOWN") coverage = "NOT_SHOWN";
       } else {
         coverage = "NOT_SHOWN";
       }
     }
 
-    seenRequirements.add(requirementKey);
-    result.push({
+    if (!requiredRequirement) seenRequirements.add(requirementKey);
+    const item: QuickFitBasisItem = {
+      ...(requiredRequirement ? { requirementId } : {}),
       sourceRequirement,
       importance,
       coverage,
       ...(coverage !== "NOT_SHOWN" && evidenceSource && evidenceExcerpt
         ? { evidenceSource, evidenceExcerpt }
         : {})
-    });
+    };
+    if (requiredRequirement) requiredItems.set(requirementId, item);
+    else if (extras.length < MAX_BASIS_ITEMS - requiredRequirements.length) extras.push(item);
   }
-  return result;
+  return [
+    ...requiredRequirements.map((requirement) => requiredItems.get(requirement.requirementId) ?? {
+      requirementId: requirement.requirementId,
+      sourceRequirement: requirement.sourceRequirement,
+      importance: requirement.importance,
+      coverage: "NOT_SHOWN" as const
+    }),
+    ...extras
+  ].slice(0, MAX_BASIS_ITEMS);
 }
 
 type EligibilityCondition = "citizenship" | "sponsorship" | "work-authorization" | "clearance" | "license";
@@ -369,6 +478,7 @@ export type QuickFitSources = {
   jobText: string;
   resumeText: string;
   candidateContext?: string;
+  requiredRequirements?: QuickFitRequirementCandidate[];
 };
 
 export function calibrateQuickFit(raw: unknown, sources: QuickFitSources): QuickFitResult | null {
@@ -398,15 +508,24 @@ export function calibrateQuickFit(raw: unknown, sources: QuickFitSources): Quick
 export function quickFitPromptSection({
   resumeText,
   resumeLabel,
-  candidateContext
+  candidateContext,
+  requiredRequirements,
+  jobText
 }: {
   resumeText: unknown;
   resumeLabel: unknown;
   candidateContext?: unknown;
+  requiredRequirements?: unknown;
+  jobText: unknown;
 }): string {
+  const required = sanitizeRequiredRequirements(requiredRequirements, String(jobText ?? ""));
+  const requiredSection = required.length
+    ? `\nThe server selected these mandatory assessment candidates from the prepared job. Return exactly one basis row for every requirementId, copying its sourceRequirement exactly. If evidence is absent or uncertain, return NOT_SHOWN. You may add at most ${MAX_BASIS_ITEMS - required.length} other material requirement${MAX_BASIS_ITEMS - required.length === 1 ? "" : "s"} without a requirementId.\n\n<required_requirement_candidates>\n${fenceUntrusted(JSON.stringify(required))}\n</required_requirement_candidates>\n`
+    : "";
   return `Also produce a compact Initial Fit calibration basis using ONLY the selected resume and candidate context below.
 
-Select at most ${MAX_BASIS_ITEMS} material job requirements, prioritizing mandatory core work before supporting preferences.
+${required.length ? "Assess every server-selected candidate before any optional extra." : `Select at most ${MAX_BASIS_ITEMS} material job requirements, prioritizing mandatory core work before supporting preferences.`}
+- requirementId must copy a server-selected id exactly. Omit it only for a provider-added requirement.
 - sourceRequirement must be an exact excerpt from the posting.
 - CORE means a material required qualification or core responsibility. Preferred, bonus, and nice-to-have qualifications are SUPPORTING unless the posting explicitly makes them mandatory.
 - DIRECT means the candidate source explicitly demonstrates the requirement. ADJACENT means exact candidate evidence demonstrates related transferable work. NOT_SHOWN means no candidate evidence was found.
@@ -414,6 +533,7 @@ Select at most ${MAX_BASIS_ITEMS} material job requirements, prioritizing mandat
 - DIRECT, ADJACENT, and CONTRADICTED require evidenceSource plus an exact evidenceExcerpt from that source. NOT_SHOWN returns neither.
 - Eligibility conditions such as citizenship, sponsorship, work authorization, clearance, or licensing do not determine fit and must not be included as basis items.
 - Do not return a verdict, summary, matches, gaps, eligibility result, score, confidence, ledger IDs, or recommendation. The server derives the public result.
+${requiredSection}
 
 <selected_resume_label>
 ${fenceUntrusted(text(resumeLabel, 160))}
@@ -432,12 +552,14 @@ export function buildQuickFitPrompts({
   jobText,
   resumeText,
   resumeLabel,
-  candidateContext
+  candidateContext,
+  requiredRequirements
 }: {
   jobText: unknown;
   resumeText: unknown;
   resumeLabel: unknown;
   candidateContext?: unknown;
+  requiredRequirements?: unknown;
 }) {
   const systemPrompt = `You are a careful resume-to-job screening assistant. Return exactly one JSON object and no markdown.
 
@@ -450,7 +572,7 @@ Use only explicit evidence from the posting, selected resume, and candidate cont
 ${fenceUntrusted(clipForPrompt(jobText, JOB_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${quickFitPromptSection({ resumeText, resumeLabel, candidateContext })}
+${quickFitPromptSection({ jobText, resumeText, resumeLabel, candidateContext, requiredRequirements })}
 
 Return the Initial Fit calibration basis itself, without an outer key, in this shape:
 ${QUICK_FIT_BASIS_RESPONSE_SCHEMA}`;
@@ -462,6 +584,7 @@ export async function analyzeQuickFit({
   resumeText,
   resumeLabel,
   candidateContext,
+  requiredRequirements,
   body = {},
   signal
 }: {
@@ -469,6 +592,7 @@ export async function analyzeQuickFit({
   resumeText: string;
   resumeLabel: string;
   candidateContext?: string;
+  requiredRequirements?: QuickFitRequirementCandidate[];
   body?: Record<string, unknown>;
   signal?: AbortSignal;
 }) {
@@ -477,7 +601,8 @@ export async function analyzeQuickFit({
     jobText,
     resumeText,
     resumeLabel,
-    candidateContext
+    candidateContext,
+    requiredRequirements
   });
   const parsed = await callConfiguredProvider({
     provider,
@@ -489,7 +614,7 @@ export async function analyzeQuickFit({
     signal
   });
   return {
-    initialFit: calibrateQuickFit(parsed, { jobText, resumeText, candidateContext }),
+    initialFit: calibrateQuickFit(parsed, { jobText, resumeText, candidateContext, requiredRequirements }),
     provider,
     model,
     reasoningEffort

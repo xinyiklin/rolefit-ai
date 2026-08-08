@@ -136,6 +136,9 @@ export type PreparedResumeState = {
   documentDirty: boolean;
   manualSelectionInFlight: boolean;
   savingBaseResume: boolean;
+  // Advances for every authoritative workspace snapshot, including an
+  // overwrite/restore whose filenames are unchanged.
+  candidateRevision: number;
 };
 
 export type PreparedResumeResolution = {
@@ -185,7 +188,8 @@ export function preparedResumeOptionSnapshotKey(state: PreparedResumeState): str
   return JSON.stringify({
     orderedFileNames: state.options.map((option) => option.fileName),
     optionCount: state.options.length,
-    loadedFileName: state.baseResumeName
+    loadedFileName: state.baseResumeName,
+    candidateRevision: state.candidateRevision
   });
 }
 

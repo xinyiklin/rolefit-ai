@@ -1,6 +1,6 @@
-// JD-term grounding for tailor suggestions: a term that appears in the job
+// JD-term grounding for Resume Polish suggestions: a term that appears in the job
 // description may be written into a proposedText ONLY if it already exists in
-// the grounding corpus (every current field text in the tailor scope plus the
+// the grounding corpus (every current field text in the resume scope plus the
 // user's honest context). The evidence field is model prose and can launder an
 // inferred fact ("clinics run Windows"); the source text cannot.
 //

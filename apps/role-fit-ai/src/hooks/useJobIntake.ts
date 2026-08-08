@@ -27,6 +27,7 @@ import {
   type InitialFitRequest,
   type JobAnalysisResult
 } from "../lib/aiJobAnalysis";
+import { quickFitRequirementCandidatesFromPreparedJob } from "../../shared/quickFitContract.ts";
 import { ApiError, classifyFailure } from "../lib/failures";
 import { useExtensionInbox, type ExtensionImport } from "./useExtensionInbox";
 import {
@@ -332,7 +333,8 @@ export function useJobIntake({
     const fitRequest: InitialFitRequest = {
       resumeText: selection.text,
       resumeLabel: selection.label,
-      candidateContext: candidateContext()
+      candidateContext: candidateContext(),
+      requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(localJobText)
     };
     latestInitialFitRef.current = { jobText: fitJobText, request: fitRequest };
     setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
@@ -372,20 +374,28 @@ export function useJobIntake({
     initialFitAbortRef.current?.abort();
     const controller = new AbortController();
     initialFitAbortRef.current = controller;
-    latestInitialFitRef.current = { jobText, request: fitRequest };
-    setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
+    const request = fitRequest.requiredRequirements
+      ? fitRequest
+      : {
+          ...fitRequest,
+          requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(
+            preparedJobForFitRef.current?.localJobText ?? ""
+          )
+        };
+    latestInitialFitRef.current = { jobText, request };
+    setQuickFitState({ status: "running", resumeLabel: request.resumeLabel });
     try {
       const readiness = await ensureProviderReady();
       if (controller.signal.aborted) return;
       if (!readiness.ready) {
         setQuickFitState({
           status: "unavailable",
-          resumeLabel: fitRequest.resumeLabel,
+          resumeLabel: request.resumeLabel,
           message: `Initial Fit is unavailable: ${readiness.message}`
         });
         return;
       }
-      const outcome = await analyzeInitialFit(jobText, fitRequest, {
+      const outcome = await analyzeInitialFit(jobText, request, {
         aiRequest: jobAnalysisRequestFields(),
         signal: controller.signal
       });
@@ -393,19 +403,19 @@ export function useJobIntake({
       setQuickFitState(outcome.initialFit
         ? {
             status: "ready",
-            snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel },
-            provenance: fitProvenance(jobText, fitRequest)
+            snapshot: { result: outcome.initialFit, resumeLabel: request.resumeLabel },
+            provenance: fitProvenance(jobText, request)
           }
         : {
             status: "unavailable",
-            resumeLabel: fitRequest.resumeLabel,
+            resumeLabel: request.resumeLabel,
             message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
           });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
       setQuickFitState({
         status: "unavailable",
-        resumeLabel: fitRequest.resumeLabel,
+        resumeLabel: request.resumeLabel,
         message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
       });
     } finally {
@@ -436,7 +446,8 @@ export function useJobIntake({
     await refreshInitialFit(prepared.fitJobText, {
       resumeText: selection.text,
       resumeLabel: selection.label,
-      candidateContext: candidateContext()
+      candidateContext: candidateContext(),
+      requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(prepared.localJobText)
     });
   }
 

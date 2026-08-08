@@ -1,74 +1,74 @@
 import type { ResumeData, ResumeEntry, ResumeSectionData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 
-export type TailorScopeBullet = {
+export type ResumePolishScopeBullet = {
   id: string;
   text: string;
 };
 
-export type TailorScopeEntry = {
+export type ResumePolishScopeEntry = {
   id: string;
   titleLeft: string;
   titleRight: string;
   subtitleLeft: string;
   subtitleRight: string;
-  bullets: TailorScopeBullet[];
+  bullets: ResumePolishScopeBullet[];
 };
 
-export type TailorScopeSection = {
+export type ResumePolishScopeSection = {
   id: string;
   heading: string;
   type: ResumeSectionType;
-  entries: TailorScopeEntry[];
+  entries: ResumePolishScopeEntry[];
 };
 
-// Per-section tailoring choice. TAILOR = editable (AI suggests edits). INCLUDE =
-// read-only context (sent to the AI as evidence, counts for fit, appears in the
-// cover letter — but NEVER an editable target). OFF = omitted (heading noted only).
-export type TailorMode = "tailor" | "include" | "off";
+// Per-section Resume Polish choice. POLISH = editable (AI suggests edits). INCLUDE =
+// read-only context (sent to the provider as evidence but NEVER an editable
+// target). OFF = omitted (heading noted only).
+export type ResumePolishScopeMode = "polish" | "include" | "off";
 
-export type TailorScope = {
+export type ResumePolishScope = {
   version: 1;
   locked: {
     omittedIdentity: true;
     omittedContact: true;
     omittedSections: string[];
   };
-  // TAILOR sections — the editable targets (this is the ONLY editable set, by
+  // POLISH sections — the editable targets (this is the ONLY editable set, by
   // construction: the sanitizer builds its target map from `sections` alone).
-  sections: TailorScopeSection[];
+  sections: ResumePolishScopeSection[];
   // INCLUDE sections — read-only evidence. Disjoint from `sections`; never a
   // suggestion target. Keeping these in a sibling array (not a per-section flag)
   // makes "not editable" the structural default — fail-safe.
-  contextSections: TailorScopeSection[];
+  contextSections: ResumePolishScopeSection[];
 };
 
 const DEFAULT_EXCLUDED_HEADINGS = /\b(?:education|certifications?|licenses?|awards?|publications?)\b/i;
 const DEFAULT_INCLUDED_HEADINGS = /\b(?:experience|projects?|skills?|technical\s+skills|work|employment|summary|objective|profile)\b/i;
 
 // Default state per section: skill/summary and experience/projects-like sections
-// tailor; education/certs/awards/publications default to INCLUDE (read-only
-// context — kept in the picture so they count toward fit and can ground claims,
-// without being rewritten); anything else stays off.
-export function defaultTailorMode(section: ResumeSectionData): TailorMode {
+// are polished; education/certs/awards/publications default to INCLUDE (read-only
+// context so they can ground claims without being rewritten); anything else
+// stays off.
+export function defaultResumePolishScopeMode(section: ResumeSectionData): ResumePolishScopeMode {
   const heading = section.heading.trim();
   if (!heading) return "off";
   if (DEFAULT_EXCLUDED_HEADINGS.test(heading)) return "include";
-  if (section.type === "skills" || section.type === "summary") return "tailor";
-  if (DEFAULT_INCLUDED_HEADINGS.test(heading)) return "tailor";
+  if (section.type === "skills" || section.type === "summary") return "polish";
+  if (DEFAULT_INCLUDED_HEADINGS.test(heading)) return "polish";
   return "off";
 }
 
-export function defaultTailorModes(data: ResumeData | null): Record<string, TailorMode> {
-  const modes: Record<string, TailorMode> = {};
+export function defaultResumePolishScopeModes(data: ResumeData | null): Record<string, ResumePolishScopeMode> {
+  const modes: Record<string, ResumePolishScopeMode> = {};
   for (const section of data?.sections ?? []) {
-    const mode = defaultTailorMode(section);
-    // Off is the implicit default (absent key) — store only tailor/include.
+    const mode = defaultResumePolishScopeMode(section);
+    // Off is the implicit default (absent key) — store only polish/include.
     if (mode !== "off") modes[section.id] = mode;
   }
   return modes;
 }
 
-function scopeEntry(entry: ResumeEntry): TailorScopeEntry {
+function scopeEntry(entry: ResumeEntry): ResumePolishScopeEntry {
   return {
     id: entry.id,
     titleLeft: entry.titleLeft,
@@ -79,7 +79,7 @@ function scopeEntry(entry: ResumeEntry): TailorScopeEntry {
   };
 }
 
-function scopeSection(section: ResumeSectionData): TailorScopeSection {
+function scopeSection(section: ResumeSectionData): ResumePolishScopeSection {
   return {
     id: section.id,
     heading: section.heading,
@@ -88,21 +88,21 @@ function scopeSection(section: ResumeSectionData): TailorScopeSection {
   };
 }
 
-// Partition the resume into three disjoint buckets: tailorIds -> editable
+// Partition the resume into three disjoint buckets: polishIds -> editable
 // `sections`, contextIds -> read-only `contextSections`, everything else ->
 // `omittedSections` (heading only). A section in neither id set is omitted.
-export function buildTailorScope(
+export function buildResumePolishScope(
   data: ResumeData,
-  tailorSectionIds: Iterable<string>,
+  polishSectionIds: Iterable<string>,
   contextSectionIds: Iterable<string> = []
-): TailorScope {
-  const tailor = new Set(tailorSectionIds);
+): ResumePolishScope {
+  const polish = new Set(polishSectionIds);
   const context = new Set(contextSectionIds);
-  const sections: TailorScopeSection[] = [];
-  const contextSections: TailorScopeSection[] = [];
+  const sections: ResumePolishScopeSection[] = [];
+  const contextSections: ResumePolishScopeSection[] = [];
   const omittedSections: string[] = [];
   for (const section of data.sections) {
-    if (tailor.has(section.id)) sections.push(scopeSection(section));
+    if (polish.has(section.id)) sections.push(scopeSection(section));
     else if (context.has(section.id)) contextSections.push(scopeSection(section));
     else {
       const heading = section.heading.trim();
@@ -118,7 +118,7 @@ export function buildTailorScope(
   };
 }
 
-function appendScopeSectionLines(lines: string[], section: TailorScopeSection): void {
+function appendScopeSectionLines(lines: string[], section: ResumePolishScopeSection): void {
   lines.push(section.heading.toUpperCase());
   for (const entry of section.entries) {
     if (section.type === "skills") {
@@ -144,11 +144,10 @@ function appendScopeSectionLines(lines: string[], section: TailorScopeSection): 
   lines.push("");
 }
 
-// Serializes BOTH editable and read-only context sections so the base fit score
-// reflects the whole resume the user is keeping (e.g. Education counts), matching
-// what the server scores. `editableOnly` (for the polish-gate length check)
-// limits it to the tailored sections.
-export function tailorScopeToText(scope: TailorScope, editableOnly = false): string {
+// Serializes both editable and read-only context sections for provider evidence.
+// `editableOnly` (for the polish-gate length check) limits it to the editable
+// Polish sections.
+export function resumePolishScopeToText(scope: ResumePolishScope, editableOnly = false): string {
   const lines: string[] = [];
   for (const section of scope.sections) appendScopeSectionLines(lines, section);
   if (!editableOnly) {

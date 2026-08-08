@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
-import { analyzeResumeText, type PolishedResume, type TailorSuggestion } from "../resumeEngine";
+import { analyzeResumeText, type PolishedResume, type ResumeProposalSuggestion } from "../resumeEngine";
 import { buildStageRequestFields, type StageConfig, type StageId } from "../lib/aiRequest";
 import type { StageAiUsage } from "../lib/aiUsage";
 import { ApiError, classifyFailure } from "../lib/failures";
-import { buildTailorScope, defaultTailorModes, tailorScopeToText, type TailorMode } from "../lib/tailorScope";
+import {
+  buildResumePolishScope,
+  defaultResumePolishScopeModes,
+  resumePolishScopeToText,
+  type ResumePolishScopeMode
+} from "../lib/resumePolishScope";
 import {
   workflowInputFingerprint,
   workflowRequestIsCurrent,
@@ -24,7 +29,7 @@ function idleProgress(): PolishProgressState {
 }
 
 type PolishContext = {
-  tailorScope: ReturnType<typeof buildTailorScope>;
+  resumeScope: ReturnType<typeof buildResumePolishScope>;
   scopedResumeText: string;
   inputFingerprint: string;
 };
@@ -35,7 +40,7 @@ export type PolishRunOptions = {
 
 type UsePolishPipelineArgs = {
   editedResume: ResumeData | null;
-  tailorModes: Record<string, TailorMode>;
+  polishScopeModes: Record<string, ResumePolishScopeMode>;
   currentResumeText: string;
   jobDescription: string;
   requestHonestContext: string;
@@ -61,9 +66,9 @@ async function readProposalResponse(response: Response): Promise<Record<string, 
 
 function proposalSuggestions(
   data: ResumePolishWireResult,
-  tailorScope: ReturnType<typeof buildTailorScope>
-): TailorSuggestion[] {
-  const targets = new Map(flattenResumeTargets(tailorScope).map((target) => [target.targetId, target]));
+  resumeScope: ReturnType<typeof buildResumePolishScope>
+): ResumeProposalSuggestion[] {
+  const targets = new Map(flattenResumeTargets(resumeScope).map((target) => [target.targetId, target]));
   return data.changes.flatMap((change) => {
     const target = targets.get(change.targetId);
     if (!target) return [];
@@ -80,7 +85,7 @@ function proposalSuggestions(
 
 export function usePolishPipeline({
   editedResume,
-  tailorModes,
+  polishScopeModes,
   currentResumeText,
   jobDescription,
   requestHonestContext,
@@ -103,7 +108,7 @@ export function usePolishPipeline({
   const runLockRef = useRef(false);
   const inputFingerprint = workflowInputFingerprint({
     editedResume,
-    tailorModes,
+    polishScopeModes,
     currentResumeText,
     jobDescription,
     requestHonestContext,
@@ -161,16 +166,18 @@ export function usePolishPipeline({
       setPolishStatus("Load a resume before polishing.");
       return null;
     }
-    const modes = Object.keys(tailorModes).length ? tailorModes : defaultTailorModes(editedResume);
-    const tailorIds = Object.keys(modes).filter((id) => modes[id] === "tailor");
+    const modes = Object.keys(polishScopeModes).length
+      ? polishScopeModes
+      : defaultResumePolishScopeModes(editedResume);
+    const polishIds = Object.keys(modes).filter((id) => modes[id] === "polish");
     const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
-    const tailorScope = buildTailorScope(editedResume, tailorIds, contextIds);
-    const scopedResumeText = tailorScopeToText(tailorScope);
-    if (!flattenResumeTargets(tailorScope).length || tailorScopeToText(tailorScope, true).trim().length < 40) {
+    const resumeScope = buildResumePolishScope(editedResume, polishIds, contextIds);
+    const scopedResumeText = resumePolishScopeToText(resumeScope);
+    if (!flattenResumeTargets(resumeScope).length || resumePolishScopeToText(resumeScope, true).trim().length < 40) {
       setPolishStatus("Set at least one editable resume section to Polish.");
       return null;
     }
-    return { tailorScope, scopedResumeText, inputFingerprint: inputFingerprintRef.current };
+    return { resumeScope, scopedResumeText, inputFingerprint: inputFingerprintRef.current };
   }
 
   async function runProposal(
@@ -188,7 +195,7 @@ export function usePolishPipeline({
         body: JSON.stringify({
           ...buildStageRequestFields(resumePolish),
           mode: "resume-proposal",
-          tailorScope: context.tailorScope,
+          resumeScope: context.resumeScope,
           jobText: jobDescription,
           honestContext: requestHonestContext,
           customInstructions: customInstructionsFor("resume-polish")
@@ -202,7 +209,7 @@ export function usePolishPipeline({
       if (!data) {
         throw new ApiError("Resume Polish returned an invalid outcome", 422);
       }
-      const suggestions = proposalSuggestions(data, context.tailorScope);
+      const suggestions = proposalSuggestions(data, context.resumeScope);
       if (data.status === "PROPOSAL" && !suggestions.length) {
         throw new ApiError("Resume Polish returned no usable proposal edits", 422);
       }

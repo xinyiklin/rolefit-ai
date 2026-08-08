@@ -52,16 +52,20 @@ own a second resume model, editor, layout engine, or PDF implementation.
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
 - Initial Fit is a compact Prepare advisory: four verdicts, one summary, up to
   three matches and gaps, and an optional eligibility warning. The provider
-  returns at most six exact-anchored hidden basis items; the server validates
-  them and derives the public category/copy. That basis has no UI or persistence
-  contract. The compact result has no score, confidence, visible ledger,
+  must assess up to five material server-selected requirements and may add at
+  most one more. The server validates exact posting/candidate anchors, rejects
+  semantically unrelated evidence, and derives the public category/copy from
+  that complete hidden basis. That basis has no UI or persistence contract. The
+  compact result has no score, confidence, visible ledger,
   evidence quotes, recommendation, or analytics role, and never derives tracker
   priority.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
-  education, dates, and omitted sections stay locked, and the live resume
+  education, standard-entry role/employer/subtitle/date fields, and omitted
+  sections stay locked; only bullets and Skills labels/lists are proposal
+  targets. The live resume
   changes only through explicit Apply all, Accept, or edited acceptance. Skills
   category labels and actual skill lists are distinct target kinds; swaps and
   job-only skill insertions fail independently. When all editable targets do
@@ -89,7 +93,8 @@ own a second resume model, editor, layout engine, or PDF implementation.
   Check again. The check stays advisory: it never rewrites the document, never
   blocks Apply or editing, and a failure says the document was unaffected.
   Provider issues require exact private source excerpts from the current
-  document or posting; invalid anchors are dropped and never reach the client.
+  document or posting, and each issue detail must refer to its own excerpt;
+  invalid or mismatched anchors are dropped and never reach the client.
   It is skippable through one setting because it is a real extra request per
   polish, but skippable is not the same as user-operated.
 - Prepare publishes its deterministic local brief before provider work. A Job

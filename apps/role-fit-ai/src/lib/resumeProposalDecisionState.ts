@@ -1,6 +1,6 @@
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 
-import type { PolishedResume, TailorSuggestion } from "../resume/types.ts";
+import type { PolishedResume, ResumeProposalSuggestion } from "../resume/types.ts";
 
 export type ResumeProposalDecision =
   | { kind: "accepted"; text: string }
@@ -51,7 +51,7 @@ export function recordProposalDecision(
 
 export function resumeProposalEditIsPending(
   currentText: string | null,
-  suggestion: TailorSuggestion,
+  suggestion: ResumeProposalSuggestion,
   decision?: ResumeProposalDecision
 ): boolean {
   if (decision?.kind === "discarded") return false;

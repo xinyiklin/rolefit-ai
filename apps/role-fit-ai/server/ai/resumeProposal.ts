@@ -51,9 +51,7 @@ function targetPriority(target: FlatResumeTarget, jobTerms: Set<string>): number
     ? 40
     : target.kind === "skill-list"
       ? 35
-      : target.kind === "field"
-        ? 15
-        : 5;
+      : 15;
   const summaryPriority = target.sectionType === "summary" ? 45 : 0;
   return kindPriority + summaryPriority + Math.min(12, matchingJobTermCount(target, jobTerms)) * 10;
 }
@@ -343,7 +341,7 @@ export function sanitizeResumeProposal(
 
 export async function generateResumeProposal({
   body,
-  tailorScope,
+  resumeScope,
   scopeText,
   jobText,
   honestContext,
@@ -351,14 +349,14 @@ export async function generateResumeProposal({
   signal
 }: {
   body: Record<string, unknown>;
-  tailorScope: unknown;
+  resumeScope: unknown;
   scopeText: string;
   jobText: string;
   honestContext: string;
   customInstructions: string;
   signal?: AbortSignal;
 }) {
-  const targets = flattenResumeTargets(tailorScope as Parameters<typeof flattenResumeTargets>[0]);
+  const targets = flattenResumeTargets(resumeScope as Parameters<typeof flattenResumeTargets>[0]);
   if (!targets.length) {
     throw new UserSafeAiError("Set at least one editable resume section to Polish.", 400);
   }

@@ -5,6 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **The branch-review accuracy findings are resolved locally;
+  no publish action was taken.** Initial Fit now requires every one of up to five
+  material RoleFit-selected requirements, including important items outside the
+  clipped posting prefix, permits only one provider-added row, and caps exact but
+  semantically unrelated evidence before deriving the public verdict. Prepared
+  resume selection includes the live candidate revision in its atomic snapshot,
+  so overwriting a saved resume under the same filename invalidates and retries
+  an in-flight read. Resume Polish exposes only bullets and Skills labels/lists
+  as mutable targets; standard role, employer, subtitle, and date fields remain
+  read-only evidence. Final Check now binds each issue detail to its own exact
+  private source excerpt before its grounding test. Active Resume Polish scope,
+  proposal-target, payload, and test names use current terminology, and the stale
+  work-authorization scoring comment is corrected. The complete RoleFit gate
+  passes: production and landing builds, desktop security/contracts, and all 79
+  offline evaluations. Live-provider and browser QA were not run; the changes do
+  not alter provider count or rendered layout. No files were staged, committed,
+  pushed, merged, or opened as a pull request.
 - [USER+CODE+TOOL] **The remaining accuracy and preview-cleanup slices are now in
   place.** Final Check requires a private exact source excerpt for every issue,
   validates it against the current document or posting, preserves valid

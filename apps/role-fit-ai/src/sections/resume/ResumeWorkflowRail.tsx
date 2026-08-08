@@ -4,7 +4,7 @@ import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDe
 import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
 import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { PolishedResume } from "../../resumeEngine";
-import type { TailorChangeTarget } from "../../resume/types";
+import type { ResumeProposalTarget } from "../../resume/types";
 import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
 import { resolveDocumentWorkflowStatus } from "../../../shared/documentWorkflowContract.ts";
 import {
@@ -26,7 +26,7 @@ type ResumeWorkflowRailProps = {
   checkProviderReady: boolean;
   checkProviderMessage: string;
   selectedSectionCount: number;
-  tailorSectionCount: number;
+  polishSectionCount: number;
   isPolishing: boolean;
   progress: PolishProgressState;
   status?: string;
@@ -36,11 +36,11 @@ type ResumeWorkflowRailProps = {
   checkInputsChanged: boolean;
   checkProgress: AiStageState;
   isChecking: boolean;
-  onRetryTailor: () => void;
+  onRetryPolish: () => void;
   onStop: () => void;
   onCheck: () => void;
   onStopCheck: () => void;
-  onHighlight: (target: TailorChangeTarget | null) => void;
+  onHighlight: (target: ResumeProposalTarget | null) => void;
 };
 
 function readiness(label: string, ready: boolean, detail: string): DocumentWorkflowCheck {
@@ -59,7 +59,7 @@ export function ResumeWorkflowRail({
   checkProviderReady,
   checkProviderMessage,
   selectedSectionCount,
-  tailorSectionCount,
+  polishSectionCount,
   isPolishing,
   progress,
   status,
@@ -69,7 +69,7 @@ export function ResumeWorkflowRail({
   checkInputsChanged,
   checkProgress,
   isChecking,
-  onRetryTailor,
+  onRetryPolish,
   onStop,
   onCheck,
   onStopCheck,
@@ -77,7 +77,7 @@ export function ResumeWorkflowRail({
 }: ResumeWorkflowRailProps) {
   const proposalResult = result?.polishOutcome ? result : null;
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
-  const ready = resumeReady && jobReady && resumePolishProviderReady && tailorSectionCount > 0;
+  const ready = resumeReady && jobReady && resumePolishProviderReady && polishSectionCount > 0;
   const failed = progress.polish.status === "failed" || progress.polish.status === "stopped";
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
 
@@ -123,9 +123,9 @@ export function ResumeWorkflowRail({
     readiness("Polish provider", resumePolishProviderReady, "Check AI settings"),
     readiness(
       "Sections selected",
-      tailorSectionCount > 0,
+      polishSectionCount > 0,
       selectedSectionCount > 0
-        ? `${selectedSectionCount} included · ${tailorSectionCount} tailored`
+        ? `${selectedSectionCount} included · ${polishSectionCount} selected for Polish`
         : "Mark at least one section Polish"
     )
   ];
@@ -147,7 +147,7 @@ export function ResumeWorkflowRail({
   const footer = isPolishing ? (
     <button type="button" className="secondary-button is-compact" onClick={onStop}>Stop</button>
   ) : failed ? (
-    <button type="button" className="primary-button is-compact" onClick={onRetryTailor}>Retry Polish</button>
+    <button type="button" className="primary-button is-compact" onClick={onRetryPolish}>Retry Polish</button>
   ) : null;
 
   return (

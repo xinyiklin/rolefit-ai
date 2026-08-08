@@ -75,8 +75,10 @@ browser-side effects; components render them and App composes them.
   hydration wait, the terminal states, and the adoption guards are executable in
   tests rather than only inspectable as source. Do not reintroduce a second
   selector or a post-preparation re-ranking effect for the resume. Candidate
-  bytes and ordered option metadata must share one snapshot; retry one changed
-  snapshot, then retain current. The guarded loader returns the exact committed
+  bytes, ordered option metadata, and the numeric candidate revision must share
+  one snapshot. Read the live revision at resolution time so a same-filename
+  overwrite invalidates an in-flight read; retry one changed snapshot, then
+  retain current. The guarded loader returns the exact committed
   document receipt, failed adoption clears the recommendation, and cancellation
   clears both the recommendation and visible resolving flag.
 - `useApplications` sends only mutation-named upsert records, keeps optimistic

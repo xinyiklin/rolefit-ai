@@ -70,14 +70,19 @@ const targets = flattenResumeTargets(scope);
 assert.deepEqual(targets.map((target) => target.targetId), [
   "target-1",
   "target-2",
-  "target-3",
-  "target-4",
-  "target-5"
+  "target-3"
 ]);
 assert.equal(targets.some((target) => target.target.sectionId === "education-section"), false);
 assert.equal(targets.some((target) => /2024-present/i.test(target.currentText)), false);
+assert.equal(
+  targets.some((target) =>
+    target.target.sectionId === "experience-section" && target.target.field !== "bullet"
+  ),
+  false,
+  "role, employer, and subtitle identity fields never become Resume Polish targets"
+);
 const skillListTarget = targets.find((target) => target.target.field === "skill");
-const skillLabelTarget = targets.find((target) => target.target.field === "titleLeft" && target.sectionType === "skills");
+const skillLabelTarget = targets.find((target) => target.target.field === "skillLabel" && target.sectionType === "skills");
 assert.equal(skillListTarget?.kind, "skill-list", "the actual skills carry list semantics");
 assert.equal(skillLabelTarget?.kind, "skill-label", "the category title carries label semantics");
 const prompts = buildResumeProposalPrompts({
@@ -177,13 +182,13 @@ const partial = sanitizeResumeProposal(
     status: "PROPOSAL",
     changes: [
       {
-        targetId: "target-3",
+        targetId: "target-1",
         replacement: "Built internal tools with JavaScript and SQL for cross-functional teams.",
         reason: "Makes the relevant stack easier to scan."
       },
       { targetId: "target-999", replacement: "Unknown target must be dropped." },
-      { targetId: "target-3", replacement: "Built Kubernetes systems." },
-      { targetId: "target-4", replacement: "JavaScript, SQL, Kubernetes" }
+      { targetId: "target-1", replacement: "Built Kubernetes systems." },
+      { targetId: skillListTarget.targetId, replacement: "JavaScript, SQL, Kubernetes" }
     ],
     summary: ["Clarified the JavaScript and SQL delivery work.", 42, "Invented Kubernetes expertise."],
     remainingGaps: ["No public-sector experience is stated.", "Second gap", "Third gap", "Fourth gap"]
@@ -195,7 +200,7 @@ const partial = sanitizeResumeProposal(
 );
 assert.equal(partial.status, "PROPOSAL");
 assert.equal(partial.changes.length, 1, "malformed or unsupported edits do not discard a valid edit");
-assert.equal(partial.changes[0].targetId, "target-3");
+assert.equal(partial.changes[0].targetId, "target-1");
 assert.equal(partial.withheld.count, 3);
 assert.deepEqual(partial.withheld.reasons, ["UNSUPPORTED", "INVALID_TARGET", "MALFORMED"]);
 assert.equal(partial.remainingGaps.length, 3);
@@ -261,7 +266,7 @@ assert.deepEqual(
 const withheld = sanitizeResumeProposal(
   {
     status: "PROPOSAL",
-    changes: [{ targetId: "target-4", replacement: "JavaScript, SQL, Kubernetes" }],
+    changes: [{ targetId: skillListTarget.targetId, replacement: "JavaScript, SQL, Kubernetes" }],
     summary: ["Added Kubernetes"]
   },
   targets,
@@ -274,11 +279,9 @@ assert.equal(withheld.changes.length, 0);
 assert.deepEqual(withheld.summary, []);
 
 for (const [label, targetId, replacement, honestContext = ""] of [
-  ["technology relocation", "target-3", "Built Kubernetes tools for internal teams.", "I have used Kubernetes."],
-  ["number", "target-3", "Built 50 JavaScript and SQL tools for internal teams."],
-  ["employer", "target-2", "Globex"],
-  ["title", "target-1", "Engineering Manager"],
-  ["outcome", "target-3", "Increased revenue by building JavaScript and SQL tools."]
+  ["technology relocation", "target-1", "Built Kubernetes tools for internal teams.", "I have used Kubernetes."],
+  ["number", "target-1", "Built 50 JavaScript and SQL tools for internal teams."],
+  ["outcome", "target-1", "Increased revenue by building JavaScript and SQL tools."]
 ]) {
   const rejected = sanitizeResumeProposal(
     { status: "PROPOSAL", changes: [{ targetId, replacement }] },
@@ -289,6 +292,21 @@ for (const [label, targetId, replacement, honestContext = ""] of [
   );
   assert.equal(rejected.status, "WITHHELD", `unsupported ${label} is withheld`);
   assert.equal(rejected.changes.length, 0, `unsupported ${label} cannot mutate the resume`);
+}
+
+for (const removedQualifier of [
+  { targetId: "target-999", replacement: "Software Engineer" },
+  { targetId: "target-998", replacement: "Acme" }
+]) {
+  const rejected = sanitizeResumeProposal(
+    { status: "PROPOSAL", changes: [removedQualifier] },
+    targets,
+    jobText,
+    scopeText,
+    ""
+  );
+  assert.equal(rejected.status, "WITHHELD", "identity-field rewrites cannot address a valid proposal target");
+  assert.deepEqual(rejected.withheld.reasons, ["INVALID_TARGET"]);
 }
 
 const noChanges = sanitizeResumeProposal(

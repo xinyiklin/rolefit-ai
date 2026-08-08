@@ -24,34 +24,33 @@ import {
   resumeProposalKey,
   type ResumeProposalDecisionState
 } from "../lib/resumeProposalDecisionState.ts";
-import type { PolishedResume, TailorSuggestion } from "../resumeEngine.ts";
+import type { PolishedResume, ResumeProposalSuggestion } from "../resumeEngine.ts";
 import type { ResumeEditorActions } from "./useResumeEditor.ts";
 
 export type { ResumeProposalDecision } from "../lib/resumeProposalDecisionState.ts";
 
-function findEntry(resume: ResumeData, suggestion: TailorSuggestion): ResumeEntry | null {
+function findEntry(resume: ResumeData, suggestion: ResumeProposalSuggestion): ResumeEntry | null {
   const section = resume.sections.find((item) => item.id === suggestion.target.sectionId);
   return section?.items.find((entry) => entry.id === suggestion.target.entryId) ?? null;
 }
 
-export function currentTargetText(resume: ResumeData, suggestion: TailorSuggestion): string | null {
+export function currentTargetText(resume: ResumeData, suggestion: ResumeProposalSuggestion): string | null {
   const entry = findEntry(resume, suggestion);
   if (!entry) return null;
   if (suggestion.target.field === "bullet") {
     return entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text ?? null;
   }
-  if (suggestion.target.field === "skill") return entry.subtitleLeft;
-  return entry[suggestion.target.field] ?? null;
+  return suggestion.target.field === "skillLabel" ? entry.titleLeft : entry.subtitleLeft;
 }
 
-function applyTarget(actions: ResumeEditorActions, suggestion: TailorSuggestion, value: string): void {
+function applyTarget(actions: ResumeEditorActions, suggestion: ResumeProposalSuggestion, value: string): void {
   const { sectionId, entryId, bulletId, field } = suggestion.target;
   if (!entryId) return;
   if (field === "bullet") {
     if (bulletId) actions.updateBullet(sectionId, entryId, bulletId, value, true);
     return;
   }
-  actions.updateEntry(sectionId, entryId, field === "skill" ? "subtitleLeft" : field, value, true);
+  actions.updateEntry(sectionId, entryId, field === "skillLabel" ? "titleLeft" : "subtitleLeft", value, true);
 }
 
 type UseResumeProposalDecisionsArgs = {
@@ -78,7 +77,7 @@ export function useResumeProposalDecisions({
   const decisions = decisionsForProposal(decisionState, proposalKey);
 
   const isPending = useCallback(
-    (suggestion: TailorSuggestion): boolean => {
+    (suggestion: ResumeProposalSuggestion): boolean => {
       const current = currentTargetText(resume, suggestion);
       return resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
     },
@@ -91,7 +90,7 @@ export function useResumeProposalDecisions({
   );
 
   const accept = useCallback(
-    (suggestion: TailorSuggestion, value = suggestion.proposedText) => {
+    (suggestion: ResumeProposalSuggestion, value = suggestion.proposedText) => {
       if (!value.trim()) return;
       applyTarget(actions, suggestion, value);
       setDecisionState((current) => recordProposalDecision(
@@ -104,7 +103,7 @@ export function useResumeProposalDecisions({
     [actions, proposalKey]
   );
 
-  const discard = useCallback((suggestion: TailorSuggestion) => {
+  const discard = useCallback((suggestion: ResumeProposalSuggestion) => {
     setDecisionState((current) => recordProposalDecision(
       current,
       proposalKey,

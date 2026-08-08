@@ -135,16 +135,18 @@ owns:
   and actual skill lists use distinct semantic target kinds; label/list swaps
   and job-only skill additions are rejected independently beside unknown,
   duplicate, unchanged, malformed, and unsupported mutations. Optional
-  feedback is tolerant while mutation validation stays strict. Identity,
-  contact, education, dates, and omitted sections never become targets.
+  feedback is tolerant while mutation validation stays strict. Only bullets and
+  Skills category labels/lists are mutable targets. Identity, contact,
+  education, and standard-entry role/employer/subtitle/date fields remain
+  read-only evidence; omitted sections are absent.
   `/api/final-check` is a separate optional operation over the actual current
   resume, candidate evidence, and prepared job. It performs one provider
   dispatch and returns READY, REVIEW, or NEEDS_EVIDENCE plus a short summary
   and at most five UNSUPPORTED, MISSING, or CLARITY issues. The server drops
   malformed issue siblings, requires an exact private source excerpt from the
   current document for Unsupported/Clarity or the posting for Missing, grounds
-  surviving details, strips the excerpt, and derives status rather than trusting
-  contradictory model status. An all-invalid response fails instead of becoming
+  surviving details against that same excerpt, strips the excerpt, and derives
+  status rather than trusting contradictory model status. An all-invalid response fails instead of becoming
   a false Ready result. It returns no score, fit
   verdict, recommendation, or rewrite and never participates in Polish or
   Apply readiness.
@@ -234,11 +236,14 @@ owns:
   provider after publishing the deterministic local brief. When the request
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
-  dispatch requests an independent `initialFit` subsection containing at most
-  six material requirement assessments. Each assessment carries an exact posting
-  excerpt and, for covered/contradicted rows, an exact resume or candidate-context
-  excerpt. `quickFit.ts` validates those anchors, downgrades invalid evidence to
-  `NOT_SHOWN`, normalizes preferred qualifications to supporting, and derives the
+  dispatch requests an independent `initialFit` subsection. The server first
+  selects up to five material requirements from the full prepared job; the
+  provider must assess every supplied id and may add at most one other material
+  requirement. Each assessment carries an exact posting excerpt and, for
+  covered/contradicted rows, an exact resume or candidate-context excerpt.
+  `quickFit.ts` validates those anchors and their semantic relationship,
+  injects any omitted required row as `NOT_SHOWN`, normalizes preferred
+  qualifications to supporting, and derives the
   public category, summary, matches, gaps, and eligibility. The hidden basis is
   never returned to the client or persisted. The two subsections are sanitized
   independently in BOTH directions: the server preserves valid job
@@ -515,7 +520,7 @@ Per-provider rules:
 
 The AI must:
 
-- polish only the provided `tailorScope` sections for the job description
+- polish only the provided `resumeScope` sections for the job description
 - keep each role to no more than five bullets
 - emphasize entry-level SDE / full-stack fit
 - strengthen wording and structure
@@ -527,7 +532,8 @@ The AI must:
   selected set and report the separate omitted-target count
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
-- never edit identity, contact, education, dates, or omitted sections
+- never edit identity, contact, education, standard-entry role/employer/subtitle/date
+  fields, or omitted sections; only bullets and Skills labels/lists are mutable
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section

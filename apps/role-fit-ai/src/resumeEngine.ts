@@ -3,9 +3,9 @@
 // API so existing importers keep working unchanged.
 
 export type {
-  TailorChangeField,
-  TailorChangeTarget,
-  TailorSuggestion,
+  ResumeProposalField,
+  ResumeProposalTarget,
+  ResumeProposalSuggestion,
   PolishedResume,
   ResumeAnalysis,
   DiffSegment,

@@ -22,17 +22,20 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   partial valid issue survival, and server-derived status. It never returns a
   score, fit verdict, recommendation, or rewrite. Every provider issue carries
   a private exact source excerpt from the current document (Unsupported /
-  Clarity) or posting (Missing); that anchor is validated and never returned.
+  Clarity) or posting (Missing); each detail must refer to its own anchor, which
+  is validated and never returned.
 - `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and current-document checks use their own routes.
 - `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
   their response subsections sanitize independently. `mode: "initial-fit"`
-  reruns only the compact fit for a changed resume. Initial Fit asks the provider
-  for at most six material requirement assessments with exact posting/candidate
-  anchors. `quickFit.ts` validates those anchors and derives the four-category
-  public result and eligibility; the hidden basis is never returned or persisted.
+  reruns only the compact fit for a changed resume. Initial Fit requires the
+  provider to assess up to five material requirements selected from the full
+  prepared job and permits at most one provider-added requirement. `quickFit.ts`
+  validates exact posting/candidate anchors, caps semantically unrelated evidence,
+  and derives the four-category public result and eligibility; the hidden basis
+  is never returned or persisted.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -76,14 +79,17 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 
 - Resume Polish emits targeted suggestions grounded in the submitted
   resume/honest context. Never import JD-only skills or fabricate claims.
+  Only bullets and Skills category labels/lists are mutable targets; standard
+  entry role, employer, subtitle, and date fields remain read-only evidence.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
   independently. Skill labels and lists retain separate semantics, so a label/list
   swap or unsupported new list item is dropped without erasing safe siblings.
   Optional summary/gap failures never erase safe siblings, while an all-drop
   returns Withheld rather than a successful empty proposal.
 - Final Check audits the current edited draft only when enabled or explicitly
-  rerun. Validate its issue kinds, exact private source anchors, and grounded
-  details independently, drop malformed siblings, and
+  rerun. Validate its issue kinds, exact private source anchors, each detail's
+  semantic connection to its own anchor, and grounding independently; drop
+  malformed siblings, and
   derive READY / REVIEW / NEEDS_EVIDENCE from the surviving issues. Its failure
   is non-blocking and cannot alter Polish or Apply.
 - Polish failures fail plainly without changing the document.

@@ -74,8 +74,56 @@ function baseState(overrides = {}) {
     documentDirty: false,
     manualSelectionInFlight: false,
     savingBaseResume: false,
+    candidateRevision: 0,
     ...overrides
   };
+}
+
+// Same-filename overwrites must invalidate candidate bytes just like option
+// additions/deletions. The ordered names and loaded filename remain identical;
+// only the authoritative candidate revision can reveal this change.
+{
+  const staleFrontend = {
+    fileName: "frontend.resume",
+    label: "Frontend",
+    text: resumeText("Frontend stale", "Go Postgres Kubernetes distributed systems")
+  };
+  const staleBackend = {
+    fileName: "backend.resume",
+    label: "Backend",
+    text: resumeText("Backend stale", "React TypeScript accessibility")
+  };
+  const freshFrontend = {
+    fileName: staleFrontend.fileName,
+    label: staleFrontend.label,
+    text: resumeText("Frontend fresh", "React TypeScript accessibility")
+  };
+  const freshBackend = {
+    fileName: staleBackend.fileName,
+    label: staleBackend.label,
+    text: resumeText("Backend fresh", "Go Postgres Kubernetes distributed systems")
+  };
+  let reads = 0;
+  const run = harness({
+    state: baseState({
+      options: [
+        { fileName: staleFrontend.fileName, label: staleFrontend.label },
+        { fileName: staleBackend.fileName, label: staleBackend.label }
+      ]
+    }),
+    candidates: [freshFrontend, freshBackend],
+    onReadCandidates: (_options, state) => {
+      reads += 1;
+      if (reads === 1) {
+        state.candidateRevision += 1;
+        return [staleFrontend, staleBackend];
+      }
+      return [freshFrontend, freshBackend];
+    }
+  }).setJobText("Job title:\nBackend Engineer\nTech stack / keywords:\n- Go\n- Postgres\n- Kubernetes");
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(reads, 2, "a same-filename overwrite retries the candidate read once");
+  check(resolution.selection?.fileName, freshBackend.fileName, "ranking uses the overwritten candidate bytes");
 }
 
 // A harness that records what the resolution actually did, so ordering claims

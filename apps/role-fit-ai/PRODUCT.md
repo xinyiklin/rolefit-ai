@@ -222,9 +222,12 @@ disappears into the task. Quiet competence, not salesmanship.
     slot.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
-    eligibility warning. The provider supplies a bounded hidden basis with exact
-    posting and candidate anchors; the server validates it and derives the
-    category and visible copy. That basis is never displayed or persisted.
+    eligibility warning. The provider must assess up to five material
+    requirements selected by the server from the full prepared job and may add
+    at most one more. The server validates exact posting and candidate anchors,
+    rejects semantically unrelated evidence, and derives the category and
+    visible copy from the complete hidden basis. That basis is never displayed
+    or persisted.
     Initial Fit never shows scores, confidence, evidence ledgers,
     recommendations, or saved/historical audit state there, and never silently
     sets tracker priority. The bundled starter
@@ -238,8 +241,10 @@ disappears into the task. Quiet competence, not salesmanship.
     workspace to finish loading, keeps a real current document, and otherwise
     adopts the sole saved variant or a meaningful unique winner while the editor
     is clean and not application-owned; that selection is not tailoring. A tie or
-    incomplete comparison keeps the current selection. Do not add persisted
-    variant metadata or another document schema for this decision. When Initial
+    incomplete comparison keeps the current selection. Candidate bytes, option
+    metadata, and the live candidate revision form one resolution snapshot, so
+    overwriting a saved variant under the same filename forces a fresh read. Do
+    not add persisted variant metadata or another document schema for this decision. When Initial
     Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
     independently in both directions; changing the selected resume reruns only
     Initial Fit, and a fit is tied to the resume and posting it actually

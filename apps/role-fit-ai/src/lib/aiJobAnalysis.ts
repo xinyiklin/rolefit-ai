@@ -17,7 +17,11 @@ import {
 import type { AiRequestFields } from "./aiRequest";
 import type { StageAiUsage } from "./aiUsage";
 import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
-import { sanitizeQuickFit, type QuickFitResult } from "../../shared/quickFitContract.ts";
+import {
+  sanitizeQuickFit,
+  type QuickFitRequirementCandidate,
+  type QuickFitResult
+} from "../../shared/quickFitContract.ts";
 
 // The structured fields /api/job-analysis returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
@@ -119,6 +123,7 @@ export type InitialFitRequest = {
   resumeText: string;
   resumeLabel: string;
   candidateContext?: string;
+  requiredRequirements?: QuickFitRequirementCandidate[];
 };
 
 export function localJobAnalysisResult(
@@ -345,6 +350,7 @@ export async function analyzeInitialFit(
         resumeText: request.resumeText,
         resumeLabel: request.resumeLabel,
         candidateContext: request.candidateContext,
+        requiredRequirements: request.requiredRequirements,
         ...(options.aiRequest ?? {})
       }),
       signal: options.signal

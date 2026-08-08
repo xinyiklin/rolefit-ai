@@ -69,7 +69,10 @@ import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
-import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
+import {
+  defaultResumePolishScopeModes,
+  type ResumePolishScopeMode
+} from "./lib/resumePolishScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
 import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
@@ -727,14 +730,12 @@ function App() {
     },
     [importedJob]
   );
-  // Per-section Polish choice. Off is the implicit default (absent key); the
-  // map retains the existing "tailor"/"include" wire values so saved editor
-  // state remains compatible.
-  const [tailorModes, setTailorModes] = useState<Record<string, TailorMode>>({});
+  // Per-section Polish choice. Off is the implicit default (absent key).
+  const [polishScopeModes, setPolishScopeModes] = useState<Record<string, ResumePolishScopeMode>>({});
   // Stable identity keeps the typeset editor's section controls from
   // re-rendering solely because App rendered.
-  const setTailorMode = useCallback((sectionId: string, mode: TailorMode) => {
-    setTailorModes((current) => {
+  const setPolishScopeMode = useCallback((sectionId: string, mode: ResumePolishScopeMode) => {
+    setPolishScopeModes((current) => {
       const next = { ...current };
       if (mode === "off") delete next[sectionId];
       else next[sectionId] = mode;
@@ -1052,16 +1053,16 @@ function App() {
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
     if (!editedResume) {
-      setTailorModes({});
+      setPolishScopeModes({});
       return;
     }
     const validIds = new Set(editedResume.sections.map((section) => section.id));
-    setTailorModes((current) => {
-      const preserved: Record<string, TailorMode> = {};
+    setPolishScopeModes((current) => {
+      const preserved: Record<string, ResumePolishScopeMode> = {};
       for (const [id, mode] of Object.entries(current)) {
         if (validIds.has(id)) preserved[id] = mode;
       }
-      return Object.keys(preserved).length ? preserved : defaultTailorModes(editedResume);
+      return Object.keys(preserved).length ? preserved : defaultResumePolishScopeModes(editedResume);
     });
     // Only reset when sections are added/removed/reparsed. Heading/text edits
     // should not wipe the user's explicit scope choices.
@@ -1122,10 +1123,10 @@ function App() {
       jobPrepared &&
       editedResume &&
       resumeReady &&
-      Object.values(tailorModes).some((mode) => mode === "tailor") &&
+      Object.values(polishScopeModes).some((mode) => mode === "polish") &&
       jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, jobPrepared, resumeReady, tailorModes]);
+  }, [editedResume, jobDescription, jobPrepared, resumeReady, polishScopeModes]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
 
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
@@ -1232,7 +1233,7 @@ function App() {
     stopPolish
   } = usePolishPipeline({
     editedResume,
-    tailorModes,
+    polishScopeModes,
     currentResumeText,
     jobDescription,
     requestHonestContext,
@@ -1392,6 +1393,7 @@ function App() {
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
     readBaseResumeCandidates,
+    readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
     handleFileUpload
   } = useWorkspaceResume({
@@ -1430,9 +1432,18 @@ function App() {
     documentTitle,
     documentDirty: resumeDocumentDirty,
     manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
-    savingBaseResume: isSavingBaseResume
+    savingBaseResume: isSavingBaseResume,
+    candidateRevision: readBaseResumeCandidatesRevision()
   };
-  const readPreparedResumeState = useCallback(() => preparedResumeStateRef.current, []);
+  const readPreparedResumeState = useCallback(
+    () => ({
+      ...preparedResumeStateRef.current,
+      // Read the ref at resolution time: an authoritative snapshot can arrive
+      // while candidate I/O is in flight, before React republishes App state.
+      candidateRevision: readBaseResumeCandidatesRevision()
+    }),
+    [readBaseResumeCandidatesRevision]
+  );
   const {
     resolvePreparedResume,
     clearPreparedResumeRecommendation,
@@ -2565,8 +2576,8 @@ function App() {
               }}
               onInlineFormatStateChange={setInlineFormat}
               onRequestLinkEditor={() => setLinkEditorOpen(true)}
-              tailorModes={tailorModes}
-              onSetTailorMode={setTailorMode}
+              polishScopeModes={polishScopeModes}
+              onSetPolishScopeMode={setPolishScopeMode}
               pendingAutosaveDraft={pendingAutosaveDraft}
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
@@ -2587,7 +2598,7 @@ function App() {
               checkProgress={finalCheckProgress}
               isChecking={isChecking}
               onPolish={() => void handleResumePolish()}
-              onRetryTailor={() => void retryStage()}
+              onRetryPolish={() => void retryStage()}
               onStopPolish={stopPolish}
               onCheck={() => void runResumeCheck()}
               onStopCheck={stopResumeCheck}

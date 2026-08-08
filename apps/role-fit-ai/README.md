@@ -94,9 +94,11 @@ editable documents.
   Apply together. Initial Fit is a compact server-calibrated provider advisory
   for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
   up to three matches and gaps; and an eligibility warning only when relevant.
-  The provider supplies at most six exact-anchored requirement assessments; the
-  server validates their posting/candidate excerpts and derives the public
-  result. That hidden basis is neither displayed nor stored. Initial Fit has no
+  The provider must assess up to five material requirements selected by the
+  server from the full prepared job and may add at most one more. The server
+  validates exact posting/candidate excerpts, rejects semantically unrelated
+  evidence, and derives the public result from the complete hidden basis. That
+  basis is neither displayed nor stored. Initial Fit has no
   score, confidence, visible requirement ledger, evidence quotes,
   recommendation, or analytics role, and it never silently sets tracker
   priority. Each material has an **Include** toggle and its
@@ -113,8 +115,9 @@ editable documents.
   incomplete comparison keeps the current choice and makes no recommendation;
   unsaved work is never replaced. Resume candidate bytes and option metadata
   are resolved from one snapshot, with one retry if the saved option set changes
-  mid-read; a failed load keeps the current resume without advertising an
-  unloaded winner. Neither document persists parallel variant metadata.
+  or any saved candidate is overwritten mid-read—even under the same filename;
+  a failed load keeps the current resume without advertising an unloaded winner.
+  Neither document persists parallel variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and fetch the
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
@@ -143,7 +146,9 @@ editable documents.
   through flat target IDs. The server distinguishes Skills category labels from
   actual skill lists and drops malformed, unknown, unchanged, swapped, or
   unsupported edits independently, so a bad optional note or one bad edit does
-  not discard safe siblings. Large resumes prioritize material, job-relevant
+  not discard safe siblings. Only bullets and Skills labels/lists are mutable;
+  role, employer, subtitle, date, identity, contact, and education fields remain
+  read-only evidence. Large resumes prioritize material, job-relevant
   fields inside the prompt budget, validate replies only against fields actually
   sent, and show how many editable fields were outside that pass. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
@@ -181,8 +186,9 @@ editable documents.
   Stop behavior, and never presents an all-discarded response as a ready proposal.
 - **Grounded document check** — each reported Unsupported or Clarity issue must
   quote an exact private anchor from the current document, while Missing must
-  anchor to the posting. The server validates and removes those anchors before
-  returning the compact advisory issue list.
+  anchor to the posting. The detail must refer to that same excerpt; the server
+  validates this relationship and removes the anchors before returning the
+  compact advisory issue list.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file

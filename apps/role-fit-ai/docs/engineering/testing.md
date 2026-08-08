@@ -74,9 +74,10 @@ Good server verification covers:
   native-runtime syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
 - normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
-  `tailorScope`, does not require full-resume `resumeText`, and owns exactly one
-  provider dispatch. It prompts with flat `target-N` IDs only; education, dates,
-  and omitted sections never become targets. Oversized fixtures prove complete
+  `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
+  provider dispatch. It prompts with flat `target-N` IDs only; only bullets and
+  Skills labels/lists are mutable, while standard role/employer/subtitle/date,
+  education, and omitted sections never become targets. Oversized fixtures prove complete
   JSON stays within budget, later job-relevant targets survive, response ids
   outside the selected set are withheld, and the omitted count round-trips
 - one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
@@ -89,7 +90,8 @@ Good server verification covers:
 - `/api/final-check` owns exactly one provider dispatch and a contract
   independent of Initial Fit and Polish. It receives the actual current resume,
   requires exact private document anchors for Unsupported/Clarity and exact
-  posting anchors for Missing, preserves valid issues beside malformed siblings,
+  posting anchors for Missing, requires each detail to refer to its own anchor,
+  preserves valid issues beside malformed siblings,
   strips anchors from the public result, derives status from surviving issues,
   and rejects an all-invalid response rather than returning a false Ready result
 - when enabled, the browser starts Final Check once after all resume proposal
@@ -122,8 +124,8 @@ Good server verification covers:
   offline probes green, including partial malformed siblings, ungrounded terms,
   invented numbers, invalid targets, and all-withheld/all-invalid outcomes
 - prompt-budget changes must add probes that build oversized structured
-  payloads, extract each emitted JSON fragment (`tailor_scope`,
-  `context_sections`, `proposed_changes`, or equivalent), and parse it again;
+  payloads, extract each emitted JSON fragment (`editable_targets`,
+  `resume_context`, `proposed_changes`, or equivalent), and parse it again;
   serialized JSON must never be truncated by raw character count. Resume target
   selection must also prove it avoids prefix-order bias and sanitizes against
   only the selected targets
@@ -135,11 +137,13 @@ Good server verification covers:
   release/continuity records
 - compact Initial Fit probes must prove that disabling it omits resume/context
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
-  invalid fit preserves valid job fields, the hidden basis caps at six exact
-  posting/candidate anchors, preferred qualifications cannot depress the
-  category, contradiction requires adverse evidence, the server derives all
-  four category boundaries and eligibility states, public lists cap at three,
-  and fit-only retries omit the Job analysis schema
+  invalid fit preserves valid job fields, the server selects up to five
+  requirements from the full prepared job, the provider must assess every id
+  and may add only one, semantically unrelated exact excerpts are downgraded,
+  preferred qualifications cannot depress the category, contradiction requires
+  adverse evidence, the server derives all four category boundaries and
+  eligibility states, public lists cap at three, and fit-only retries omit the
+  Job analysis schema
 - resume proposal probes must distinguish `skill-label` from `skill-list`, allow
   controlled label changes and grounded list reordering/additions, reject both
   swap directions and job-only skills, and preserve safe sibling edits
@@ -251,8 +255,9 @@ Good frontend verification covers:
   regexes (`src/hooks/__evals__/prepared-resume-resolution.mjs`): an import
   arriving before workspace hydration, exactly one saved variant, a
   starter-only workspace, a ranked winner, option addition/deletion during a
-  read, a changed candidate before adoption, a protected document, and a refused
-  adoption with no stale recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
+  read, a same-filename candidate overwrite during a read, a changed candidate
+  before adoption, a protected document, and a refused adoption with no stale
+  recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
   pins content-derived proposal identity, keyed resets, undo, and manual-match
   behavior. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
   request per candidate read at 1, 5, and 20 variants for both document kinds,

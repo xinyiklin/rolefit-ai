@@ -10,16 +10,89 @@ export type QuickFitBasisImportance = (typeof QUICK_FIT_BASIS_IMPORTANCE)[number
 export type QuickFitBasisCoverage = (typeof QUICK_FIT_BASIS_COVERAGE)[number];
 export type QuickFitEvidenceSource = (typeof QUICK_FIT_EVIDENCE_SOURCES)[number];
 
+// Server-selected material requirements supplied with an Initial Fit request.
+// They are live request data only: the server revalidates every excerpt against
+// the full posting, the provider assesses the closed ids, and missing rows fail
+// conservatively as NOT_SHOWN.
+export type QuickFitRequirementCandidate = {
+  requirementId: string;
+  sourceRequirement: string;
+  importance: QuickFitBasisImportance;
+};
+
 // Provider-only calibration input. The server validates these anchors and
 // derives the public result below; basis items never enter tracker persistence
 // or the visible Initial Fit contract.
 export type QuickFitBasisItem = {
+  requirementId?: string;
   sourceRequirement: string;
   importance: QuickFitBasisImportance;
   coverage: QuickFitBasisCoverage;
   evidenceSource?: QuickFitEvidenceSource;
   evidenceExcerpt?: string;
 };
+
+type PreparedRequirementSection = "required" | "responsibility";
+
+const REQUIREMENT_SECTION_HEADINGS = new Map<string, PreparedRequirementSection>([
+  ["required qualifications", "required"],
+  ["core responsibilities", "responsibility"]
+] as const);
+
+const REQUIREMENT_PLACEHOLDER = /^\[(?:manual input needed|not specified)[^\]]*\]$|^not specified$/i;
+
+function preparedRequirementSections(preparedJobText: string): { required: string[]; responsibility: string[] } {
+  const result = { required: [] as string[], responsibility: [] as string[] };
+  let active: keyof typeof result | null = null;
+  for (const rawLine of String(preparedJobText ?? "").replace(/\r\n?/g, "\n").split("\n")) {
+    const line = rawLine.trim();
+    const heading = line.replace(/:\s*$/, "").toLowerCase();
+    if (REQUIREMENT_SECTION_HEADINGS.has(heading)) {
+      active = REQUIREMENT_SECTION_HEADINGS.get(heading) ?? null;
+      continue;
+    }
+    if (/^[A-Za-z][A-Za-z /&-]{2,60}:$/.test(line)) {
+      active = null;
+      continue;
+    }
+    if (!active) continue;
+    const item = line
+      .replace(/^\s*(?:[-*â€¢Â·â€£â—¦â–ªâ—â—‹]|(?:\d+)[.)])\s*/, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!item || REQUIREMENT_PLACEHOLDER.test(item)) continue;
+    result[active].push(item.slice(0, 500));
+  }
+  return result;
+}
+
+function requiredMateriality(value: string): number {
+  let score = 0;
+  if (/\b(?:must|required|minimum|mandatory|at least)\b/i.test(value)) score += 4;
+  if (/\b(?:\d{1,2}|one|two|three|four|five|six|seven|eight|nine|ten)\s*(?:\+|plus)?\s+years?\b/i.test(value)) score += 3;
+  if (/\b(?:degree|bachelor|master|doctorate|ph\.?d|license|licence|certification)\b/i.test(value)) score += 2;
+  return score;
+}
+
+export function quickFitRequirementCandidatesFromPreparedJob(
+  preparedJobText: string
+): QuickFitRequirementCandidate[] {
+  const sections = preparedRequirementSections(preparedJobText);
+  const rankedRequired = sections.required
+    .map((sourceRequirement, index) => ({ sourceRequirement, index, score: requiredMateriality(sourceRequirement) }))
+    .sort((left, right) => right.score - left.score || left.index - right.index)
+    .slice(0, 5);
+  const selected = rankedRequired.map(({ sourceRequirement }) => sourceRequirement);
+  for (const responsibility of sections.responsibility) {
+    if (selected.length >= 5) break;
+    selected.push(responsibility);
+  }
+  return selected.map((sourceRequirement, index) => ({
+    requirementId: `required-${index + 1}`,
+    sourceRequirement,
+    importance: "CORE"
+  }));
+}
 
 export type QuickFitResult = {
   verdict: QuickFitVerdict;
