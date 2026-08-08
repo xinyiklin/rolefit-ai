@@ -3,7 +3,6 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { handlePolish } from "./ai/polish.ts";
-import { handleFitAudit } from "./ai/fitAudit.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
@@ -410,11 +409,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/polish") {
       void handlePolish(req, res);
-      return;
-    }
-
-    if (pathname === "/api/fit-audit") {
-      void handleFitAudit(req, res);
       return;
     }
 

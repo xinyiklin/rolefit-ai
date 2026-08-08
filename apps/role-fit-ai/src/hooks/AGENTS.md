@@ -6,18 +6,12 @@ browser-side effects; components render them and App composes them.
 ## Ownership
 
 - `useJobIntake` owns Prepare's link/paste/extension intake, Job analysis
-  progress/retry, and fresh `preparationId`. Its extension progress callback
+  progress/retry, and automatic-tailor intent. Its extension progress callback
   and first delivered-posting callback select Prepare before visible intake
   state changes; claim tokens and fresh-tab ownership remain transport
   concerns. The imported snapshot carries the complete editable Prepare brief,
   including benefits and extraction gaps, alongside the exact model-facing
   tailoring text; candidate-review gaps remain owned by the Review result.
-- `usePreparedResumeSelection` owns the settled resume token for a preparation;
-  `useInitialFitAudit` owns its one-score request/cache/abort/stale lifecycle;
-  and `usePrepareAutomation` consumes only a current completed audit to evaluate
-  Resume and Cover Letter thresholds independently. Automatic Resume always
-  includes Tailor. Automatic Cover uses the dedicated proposal workflow, does
-  not require Include, and still runs after a skipped/failed Resume action.
 - `usePolishPipeline` owns Tailor/Review orchestration, abort/retry, and progress.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
@@ -127,16 +121,13 @@ browser-side effects; components render them and App composes them.
   mount-time empty applications array. Provider readiness is a preflight
   signal, not semantic request input, so background readiness polls must not
   invalidate an already-running AI request.
-- Automatic Prepare continuation remains on Prepare. It may not replace a dirty
-  editor without an explicit user action. Initial Fit must wait for the exact
-  selected resume and document version to settle; free edits mark it stale
-  without per-keystroke reruns. When multiple saved resume or
+- Automatic extension tailoring remains on Prepare. It may not replace a dirty
+  editor without an explicit user action. When multiple saved resume or
   cover-letter variants exist, compare their actual strict document contents
   with weighted prepared-job sections and auto-select a meaningful unique
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
-  recommendation. The two thresholds never accept proposals or change Include.
-  A successful automatic run must not force the Resume tab;
+  recommendation. A successful automatic run must not force the Resume tab;
   user-initiated Resume tailoring retains its normal reveal behavior.
 - Job analysis stale-input guards cover only the job source and that stage's AI
   settings. Resume bootstrap and Tailor-mode reconciliation are downstream

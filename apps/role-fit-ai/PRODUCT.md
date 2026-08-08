@@ -41,15 +41,6 @@ grounding and anti-fabrication checks, with a recruiter audit for fit scoring
 and gap analysis. Candidate gaps restored from a saved Apply record are labeled
 historical until an audit runs against the current materials.
 
-Every successful fresh preparation continues through safe resume-variant
-selection and an automatic Initial Fit audit of that exact selected document.
-Initial Fit uses the Recruiter Audit provider and the whole visible resume as
-evidence, returns one score/verdict decision checkpoint, and never exposes a
-fabricated base/tailored comparison. Settings provides independent inclusive
-thresholds for Resume and Cover Letter automation; either can be Off, neither
-gates the other, and neither silently accepts a proposal or changes the Apply
-package. Manual Polish remains available after any result or failure.
-
 The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
 evidence corpus with the source letter, and lets the model choose which
@@ -195,7 +186,7 @@ disappears into the task. Quiet competence, not salesmanship.
 5. Restraint over systems: no global toast/banner/loading frameworks; reuse
    the per-surface CSS classes in `src/styles/`, shared editor primitives from
    `@typeset/editor`, and each owner's tokens rather than forking controls.
-6. Make workflow state truthful: Job analysis, Initial Fit, Tailor, and Recruiter audit show their exact
+6. Make workflow state truthful: Job analysis, Tailor, and Recruiter audit show their exact
    ordered step, stop after failure/user cancellation, identify the cause, and
    never present a deterministic brief as a successful AI run.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
@@ -220,21 +211,16 @@ disappears into the task. Quiet competence, not salesmanship.
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. A later
     re-Apply must preserve any previously saved artifact for an excluded slot.
-    Prepare always continues a successful fresh preparation through settled
-    resume selection and Initial Fit. It shows that baseline separately from a
-    later Proposal fit, persists the baseline independently on Apply, labels a
-    restored baseline historical, and never substitutes a local estimate.
+    Prepare may summarize a current matching Recruiter audit or a matching
+    historical saved audit; before either exists it says "Not audited" and never
+    substitutes a local fit estimate.
 11. Preserve safe extension intake: a claimed extension posting always runs
-    AI-backed job analysis and lands on Prepare. Only a successful analysis may
-    continue through the ordinary required Initial Fit flow; the extension does
-    not supply an automation command or bypass the user's two thresholds.
+    AI-backed job analysis and stops on Prepare; it never starts resume Polish.
     A failed analysis may leave the deterministic brief visible for inspection,
     but it remains failed. The ordinary Prepare workflow may rank actual saved
     resume and cover-letter contents against the prepared job and auto-select a
     meaningful unique winner while the editor is clean and not application-
-    owned; that selection is not itself tailoring. After it settles, Initial Fit
-    runs once for the preparation/resume version, then Resume and Cover Letter
-    thresholds are evaluated independently. A tie or incomplete comparison keeps
+    owned; that selection is not tailoring. A tie or incomplete comparison keeps
     the current selection. Do not add persisted variant metadata or another
     document schema for this decision.
 12. Keep the complete prepared job correctable without another AI run. Along

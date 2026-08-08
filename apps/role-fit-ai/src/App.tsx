@@ -70,17 +70,13 @@ import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
-import { defaultTailorModes, fullResumeEvidenceText, type TailorMode } from "./lib/tailorScope";
+import { defaultTailorModes, type TailorMode } from "./lib/tailorScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
-import { documentSourceFingerprint } from "./lib/documentSourceFingerprint";
 import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
-import { useInitialFitAudit } from "./hooks/useInitialFitAudit";
-import { usePreparedResumeSelection } from "./hooks/usePreparedResumeSelection";
-import { usePrepareAutomation } from "./hooks/usePrepareAutomation";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
@@ -112,7 +108,6 @@ import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
-import type { PrepareInitialFitView } from "./sections/tabs/prepare/PrepareDecisionCheckpoint";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
@@ -351,10 +346,6 @@ function App() {
     setHonestContext,
     polishStages,
     setPolishStages,
-    resumeAutoPolishThreshold,
-    setResumeAutoPolishThreshold,
-    coverAutoPolishThreshold,
-    setCoverAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -1322,6 +1313,18 @@ function App() {
     phase: _myPhase
   });
 
+  // Warn before close/reload when there are unsaved edits OR a job analysis/tailor/
+  // review is mid-flight (losing an in-progress run is as costly as losing edits).
+  // Apply marks each included document clean only after its source persists.
+  useBeforeUnloadGuard(
+    resumeDocumentDirty ||
+      coverLetterEditor.dirty ||
+      isGeneratingCover ||
+      isPolishing ||
+      jobAnalysisProgress.status === "running" ||
+      pendingApplicationWrites > 0
+  );
+
   // ----- Handlers -----
 
   // The workspace / base-resume cluster (state + handlers) lives in
@@ -1366,6 +1369,27 @@ function App() {
     docStyle
   });
 
+  const handleSelectBaseResumeVariant = useCallback(
+    async (fileName: string) => {
+      if (
+        !fileName ||
+        fileName === baseResumeName ||
+        resumeManualVariantSelectionInFlightRef.current
+      ) {
+        return;
+      }
+      resumeManualVariantSelectionInFlightRef.current = true;
+      setIsManuallySelectingResumeVariant(true);
+      try {
+        await loadBaseResumeVersion(fileName);
+      } finally {
+        resumeManualVariantSelectionInFlightRef.current = false;
+        setIsManuallySelectingResumeVariant(false);
+      }
+    },
+    [baseResumeName, loadBaseResumeVersion]
+  );
+
   const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
   workspaceRestoreAdoptionHandlerRef.current = () => {
     if (resumeDocumentDirty) {
@@ -1401,59 +1425,10 @@ function App() {
   const activeBaseResumeLabel =
     baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label || baseResumeName;
 
-  const activeResumeFileName = baseResumeName || fileName;
-  const initialFitPreparationId =
-    jobPrepared && jobAnalysisProgress.status === "done" && importedJob
-      ? importedJob.preparationId
-      : "";
-  const preparedResumeSelection = usePreparedResumeSelection({
-    preparationId: initialFitPreparationId,
-    currentFileName: activeResumeFileName,
-    currentDocumentVersion: resumeDocumentVersion,
-    resumeReady,
-    busy:
-      isRankingResumeVariants ||
-      isSavingBaseResume ||
-      isManuallySelectingResumeVariant ||
-      isWorkspaceBootstrapping
-  });
-
-  const handleSelectBaseResumeVariant = useCallback(
-    async (fileName: string) => {
-      if (
-        !fileName ||
-        fileName === baseResumeName ||
-        resumeManualVariantSelectionInFlightRef.current
-      ) {
-        return;
-      }
-      resumeManualVariantSelectionInFlightRef.current = true;
-      setIsManuallySelectingResumeVariant(true);
-      try {
-        const applied = await loadBaseResumeVersion(fileName);
-        if (applied && initialFitPreparationId) {
-          const sequence = preparedResumeSelection.begin("manual");
-          preparedResumeSelection.complete(sequence, fileName, "manual");
-        }
-      } finally {
-        resumeManualVariantSelectionInFlightRef.current = false;
-        setIsManuallySelectingResumeVariant(false);
-      }
-    },
-    [
-      baseResumeName,
-      initialFitPreparationId,
-      loadBaseResumeVersion,
-      preparedResumeSelection.begin,
-      preparedResumeSelection.complete
-    ]
-  );
-
   const rankingJobDescription = debouncedPreparedJobDescription.trim();
   const resumeVariantRecommendationInputKey =
     jobPrepared && rankingJobDescription === jobDescription.trim() && baseResumeOptions.length > 1
       ? JSON.stringify({
-          preparationId: initialFitPreparationId,
           job: rankingJobDescription,
           variants: baseResumeOptions.map((option) => option.fileName),
           candidatesRevision: baseResumeCandidatesRevision
@@ -1461,28 +1436,24 @@ function App() {
       : "";
   const resumeVariantSelectionStateRef = useRef({
     baseResumeName,
-    activeResumeFileName,
     resumeDocumentDirty,
     documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
     jobPrepared,
-    preparationId: initialFitPreparationId,
     preparedJobDescription: jobDescription.trim(),
     options: baseResumeOptions,
     loadBaseResumeVersion
   });
   resumeVariantSelectionStateRef.current = {
     baseResumeName,
-    activeResumeFileName,
     resumeDocumentDirty,
     documentVersion: resumeReplacementStateRef.current.version,
     isWorkspaceBootstrapping,
     isSavingBaseResume,
     applicationOfRecordId,
     jobPrepared,
-    preparationId: initialFitPreparationId,
     preparedJobDescription: jobDescription.trim(),
     options: baseResumeOptions,
     loadBaseResumeVersion
@@ -1507,9 +1478,6 @@ function App() {
     const startingBaseResumeName = startState.baseResumeName;
     const startingDocumentVersion = startState.documentVersion;
     const options = startState.options;
-    const selectionSequence = initialFitPreparationId
-      ? preparedResumeSelection.begin("automatic")
-      : 0;
     setIsRankingResumeVariants(true);
     setResumeVariantRecommendation(null);
 
@@ -1518,7 +1486,6 @@ function App() {
       if (
         generation !== resumeVariantRecommendationGenerationRef.current ||
         !resumeVariantSelectionStateRef.current.jobPrepared ||
-        resumeVariantSelectionStateRef.current.preparationId !== initialFitPreparationId ||
         resumeVariantSelectionStateRef.current.preparedJobDescription !== rankingJobDescription
       ) {
         return;
@@ -1527,7 +1494,6 @@ function App() {
       setResumeVariantRecommendation(recommendation);
 
       const current = resumeVariantSelectionStateRef.current;
-      let selectedFileName = current.activeResumeFileName;
       const canAdoptRecommendation =
         recommendation !== null &&
         current.preparedJobDescription === rankingJobDescription &&
@@ -1540,12 +1506,11 @@ function App() {
         !current.isWorkspaceBootstrapping &&
         !current.isSavingBaseResume;
       if (canAdoptRecommendation) {
-        const applied = await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
+        await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
           const latest = resumeVariantSelectionStateRef.current;
           return (
             generation !== resumeVariantRecommendationGenerationRef.current ||
             !latest.jobPrepared ||
-            latest.preparationId !== initialFitPreparationId ||
             latest.preparedJobDescription !== rankingJobDescription ||
             latest.applicationOfRecordId !== null ||
             latest.documentVersion !== startingDocumentVersion ||
@@ -1554,13 +1519,9 @@ function App() {
             resumeManualVariantSelectionInFlightRef.current
           );
         });
-        if (applied) selectedFileName = recommendation.fileName;
       }
       if (generation === resumeVariantRecommendationGenerationRef.current) {
         setIsRankingResumeVariants(false);
-        if (selectionSequence) {
-          preparedResumeSelection.complete(selectionSequence, selectedFileName, "automatic");
-        }
       }
     })();
 
@@ -1569,115 +1530,7 @@ function App() {
         resumeVariantRecommendationGenerationRef.current += 1;
       }
     };
-  }, [
-    initialFitPreparationId,
-    preparedResumeSelection.begin,
-    preparedResumeSelection.complete,
-    readBaseResumeCandidates,
-    rankingJobDescription,
-    resumeVariantRecommendationInputKey
-  ]);
-
-  const simplePreparedResumeSelectionKeyRef = useRef("");
-  useEffect(() => {
-    if (!initialFitPreparationId || baseResumeOptions.length > 1 || isWorkspaceBootstrapping) {
-      if (!initialFitPreparationId) simplePreparedResumeSelectionKeyRef.current = "";
-      return;
-    }
-    if (simplePreparedResumeSelectionKeyRef.current === initialFitPreparationId) return;
-    simplePreparedResumeSelectionKeyRef.current = initialFitPreparationId;
-    const sequence = preparedResumeSelection.begin("automatic");
-    preparedResumeSelection.complete(sequence, activeResumeFileName, "automatic");
-  }, [
-    activeResumeFileName,
-    baseResumeOptions.length,
-    initialFitPreparationId,
-    isWorkspaceBootstrapping,
-    preparedResumeSelection.begin,
-    preparedResumeSelection.complete
-  ]);
-
-  const currentInitialFitResumeVersion = documentSourceFingerprint(resumeDocumentVersion);
-  const selectedResumeIsCurrent =
-    preparedResumeSelection.state.status === "settled" &&
-    preparedResumeSelection.state.preparationId === initialFitPreparationId &&
-    preparedResumeSelection.state.resumeFileName === activeResumeFileName;
-  const initialFitAuditInput = useMemo(() => {
-    if (
-      !selectedResumeIsCurrent ||
-      preparedResumeSelection.state.status !== "settled" ||
-      !editedResume
-    ) {
-      return null;
-    }
-    return {
-      preparationId: preparedResumeSelection.state.preparationId,
-      jobText: jobDescription.trim(),
-      resumeFileName: preparedResumeSelection.state.resumeFileName,
-      resumeDocumentVersion: currentInitialFitResumeVersion,
-      resumeText: fullResumeEvidenceText(editedResume),
-      honestContext: requestHonestContext,
-      reviewInstructions: customInstructionsFor("review"),
-      review: stages.review
-    };
-  }, [
-    currentInitialFitResumeVersion,
-    customInstructionsFor,
-    editedResume,
-    jobDescription,
-    preparedResumeSelection.state,
-    requestHonestContext,
-    selectedResumeIsCurrent,
-    stages.review
-  ]);
-  const initialFitAudit = useInitialFitAudit({
-    input: initialFitAuditInput,
-    ensureReviewProviderReady: ensureReviewProvider
-  });
-  const readyInitialFitAudit =
-    initialFitAudit.state.status === "ready" &&
-    initialFitAudit.state.result.fingerprint === initialFitAudit.fingerprint
-      ? initialFitAudit.state.result
-      : null;
-  const initialFitPreparationRef = useRef(initialFitPreparationId);
-  useEffect(() => {
-    if (initialFitPreparationRef.current === initialFitPreparationId) return;
-    initialFitPreparationRef.current = initialFitPreparationId;
-    initialFitAudit.reset();
-  }, [initialFitAudit.reset, initialFitPreparationId]);
-  useEffect(() => {
-    if (readyInitialFitAudit) {
-      const usage = readyInitialFitAudit.usage;
-      setPipelineAiUsage((current) => ({ ...current, "initial-fit": usage }));
-      return;
-    }
-    if (
-      initialFitAudit.state.status === "running" ||
-      initialFitAudit.state.status === "stale" ||
-      initialFitAudit.state.status === "failed" ||
-      initialFitAudit.state.status === "stopped" ||
-      (initialFitAudit.state.status === "ready" && !readyInitialFitAudit)
-    ) {
-      setPipelineAiUsage((current) => {
-        if (!("initial-fit" in current)) return current;
-        const next = { ...current };
-        delete next["initial-fit"];
-        return next;
-      });
-    }
-  }, [initialFitAudit.state, readyInitialFitAudit]);
-  const initialFitAutoRunKey =
-    initialFitAuditInput &&
-    preparedResumeSelection.state.status === "settled" &&
-    preparedResumeSelection.state.resumeDocumentVersion === currentInitialFitResumeVersion
-      ? `${preparedResumeSelection.state.preparationId}:${preparedResumeSelection.state.sequence}:${currentInitialFitResumeVersion}`
-      : "";
-  const dispatchedInitialFitKeysRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (!initialFitAutoRunKey || dispatchedInitialFitKeysRef.current.has(initialFitAutoRunKey)) return;
-    dispatchedInitialFitKeysRef.current.add(initialFitAutoRunKey);
-    void initialFitAudit.run();
-  }, [initialFitAudit.run, initialFitAutoRunKey]);
+  }, [readBaseResumeCandidates, rankingJobDescription, resumeVariantRecommendationInputKey]);
 
   // Cover letters follow the same rule as resumes: select a meaningful unique
   // winner, but only while the current editor is clean and not application-owned.
@@ -1686,7 +1539,6 @@ function App() {
     rankingJobDescription === jobDescription.trim() &&
     coverLetterEditor.coverLetterOptions.length > 1
       ? JSON.stringify({
-          preparationId: initialFitPreparationId,
           job: rankingJobDescription,
           variants: coverLetterEditor.coverLetterOptions.map((option) => option.fileName),
           candidatesRevision: coverLetterEditor.coverLetterCandidatesRevision
@@ -1788,52 +1640,8 @@ function App() {
     readCoverLetterVariantCandidates
   ]);
 
-  const coverVariantSelectionSettled =
-    !isSelectingCoverVariant &&
-    !isRankingCoverLetterVariants &&
-    (coverLetterEditor.coverLetterOptions.length <= 1 ||
-      (Boolean(coverLetterVariantRecommendationInputKey) &&
-        coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey));
-  const prepareAutomation = usePrepareAutomation({
-    audit: readyInitialFitAudit,
-    resumeThreshold: resumeAutoPolishThreshold,
-    coverThreshold: coverAutoPolishThreshold,
-    polishStages,
-    coverSelectionSettled: coverVariantSelectionSettled,
-    runResume: (stagesOverride) => handlePolish({
-      revealResumeOnSuccess: false,
-      stagesOverride
-    }),
-    runCoverLetter: handleTailorCoverLetter
-  });
-  const currentInitialFitFingerprint =
-    readyInitialFitAudit?.fingerprint ?? "";
-  const prepareAutomationActive =
-    Boolean(currentInitialFitFingerprint) &&
-    (prepareAutomation.auditFingerprint !== currentInitialFitFingerprint ||
-      prepareAutomation.resume.status === "waiting" ||
-      prepareAutomation.resume.status === "running" ||
-      prepareAutomation.coverLetter.status === "waiting" ||
-      prepareAutomation.coverLetter.status === "running");
-
-  // Warn before close/reload when there are unsaved edits OR any Prepare AI
-  // lifecycle is active. Apply marks each included document clean only after
-  // its source persists.
-  useBeforeUnloadGuard(
-    resumeDocumentDirty ||
-      coverLetterEditor.dirty ||
-      isGeneratingCover ||
-      isPolishing ||
-      initialFitAudit.isRunning ||
-      prepareAutomationActive ||
-      jobAnalysisProgress.status === "running" ||
-      pendingApplicationWrites > 0
-  );
-
   const applicationPreparationActive =
     jobPreparationActive ||
-    initialFitAudit.isRunning ||
-    prepareAutomationActive ||
     (materialSelection.resume &&
       (isPolishing ||
         isRankingResumeVariants ||
@@ -1857,8 +1665,7 @@ function App() {
       isPolishing ||
       isSavingBaseResume ||
       isManuallySelectingResumeVariant ||
-      isRankingResumeVariants ||
-      prepareAutomationActive
+      isRankingResumeVariants
     ) return;
     // This click is explicit: it tailors exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
@@ -1976,124 +1783,6 @@ function App() {
             provenance: "saved" as const
           }
         : null;
-  const savedInitialFitMatchesApplication = Boolean(
-    preparedApplication?.initialFitAudit &&
-      (preparedApplication.jobDescription ?? "").trim() === preparedApplicationJobDescription.trim()
-  );
-  const currentInitialFitForApplication =
-    readyInitialFitAudit
-      ? {
-          score: readyInitialFitAudit.score,
-          verdict: readyInitialFitAudit.verdict,
-          verdictReason: readyInitialFitAudit.verdictReason,
-          resumeFileName: readyInitialFitAudit.resumeFileName,
-          completedAt: readyInitialFitAudit.completedAt
-        }
-      : savedInitialFitMatchesApplication
-        ? (preparedApplication?.initialFitAudit ?? null)
-        : null;
-  const liveInitialFitResult =
-    readyInitialFitAudit
-      ? readyInitialFitAudit
-      : initialFitAudit.state.status === "stale" &&
-          initialFitAudit.state.result.preparationId === initialFitPreparationId
-        ? initialFitAudit.state.result
-      : initialFitAudit.state.status === "running" || initialFitAudit.state.status === "stopped"
-        ? initialFitAudit.state.previous
-        : undefined;
-  const initialFitResultView = liveInitialFitResult
-    ? {
-        score: liveInitialFitResult.score,
-        verdict: liveInitialFitResult.verdict,
-        reason: liveInitialFitResult.verdictReason,
-        strengths: liveInitialFitResult.review.coverage
-          .filter((entry) => entry.status === "covered")
-          .slice(0, 3)
-          .map((entry) => entry.where ? `${entry.keyword} · ${entry.where}` : entry.keyword),
-        blockers: liveInitialFitResult.review.gaps
-          .filter((gap) => gap.severity === "BLOCKER")
-          .slice(0, 3)
-          .map((gap) => gap.gap),
-        gaps: liveInitialFitResult.review.gaps
-          .filter((gap) => gap.severity !== "BLOCKER")
-          .slice(0, 3)
-          .map((gap) => `${gap.gap} · ${gap.severity.toLowerCase()}`),
-        resumeFileName: liveInitialFitResult.resumeFileName,
-        provenance: [
-          providerLabel(liveInitialFitResult.usage.provider ?? ""),
-          liveInitialFitResult.usage.model,
-          formatHistoryDate(liveInitialFitResult.completedAt)
-        ].filter(Boolean).join(" · ")
-      }
-    : null;
-  let prepareInitialFit: PrepareInitialFitView;
-  if (initialFitAudit.state.status === "running") {
-    prepareInitialFit = {
-      status: "running",
-      message: "Auditing the selected resume against the prepared job."
-    };
-  } else if (readyInitialFitAudit && initialFitResultView) {
-    prepareInitialFit = { status: "ready", ...initialFitResultView };
-  } else if (
-    initialFitAudit.state.status === "stale" &&
-    initialFitAudit.state.result.preparationId === initialFitPreparationId &&
-    initialFitResultView
-  ) {
-    prepareInitialFit = {
-      status: "stale",
-      ...initialFitResultView,
-      message: initialFitAudit.state.reason
-    };
-  } else if (initialFitAudit.state.status === "failed") {
-    prepareInitialFit = {
-      status: "failed",
-      message: `${initialFitAudit.state.errorHeadline}: ${initialFitAudit.state.error}`
-    };
-  } else if (initialFitAudit.state.status === "stopped") {
-    prepareInitialFit = {
-      status: "stopped",
-      message: initialFitAudit.state.error
-    };
-  } else if (preparedResumeSelection.state.status === "selecting" || isRankingResumeVariants) {
-    prepareInitialFit = {
-      status: "selecting",
-      message: "Selecting the best resume before Initial Fit."
-    };
-  } else if (preparedResumeSelection.state.status === "needs-user") {
-    prepareInitialFit = {
-      status: "waiting",
-      message: preparedResumeSelection.state.reason
-    };
-  } else if (savedInitialFitMatchesApplication && preparedApplication?.initialFitAudit) {
-    const savedUsage = preparedApplication.aiUsage?.["initial-fit"];
-    prepareInitialFit = {
-      status: "saved",
-      score: preparedApplication.initialFitAudit.score,
-      verdict: preparedApplication.initialFitAudit.verdict,
-      reason: preparedApplication.initialFitAudit.verdictReason,
-      resumeFileName: preparedApplication.initialFitAudit.resumeFileName,
-      provenance: [
-        savedUsage?.provider ? providerLabel(savedUsage.provider) : "",
-        savedUsage?.model,
-        formatHistoryDate(preparedApplication.initialFitAudit.completedAt)
-      ].filter(Boolean).join(" · ")
-    };
-  } else {
-    prepareInitialFit = {
-      status: "waiting",
-      message: resumeReady
-        ? "Initial Fit starts after the prepared resume selection settles."
-        : "Choose a complete resume to continue to Initial Fit."
-    };
-  }
-  const applyPipelineAiUsage = initialFitPreparationId
-    ? (() => {
-        const usage = { ...pipelineAiUsage };
-        if (readyInitialFitAudit) usage["initial-fit"] = readyInitialFitAudit.usage;
-        else delete usage["initial-fit"];
-        return usage;
-      })()
-    : pipelineAiUsage;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2122,8 +1811,7 @@ function App() {
     currentResumeText,
     headlineScore,
     fitComparison,
-    pipelineAiUsage: applyPipelineAiUsage,
-    initialFitAudit: currentInitialFitForApplication,
+    pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,
     findForTarget,
@@ -2267,7 +1955,6 @@ function App() {
       setImportedJob(
         restoredTailoringText.length > 40
           ? {
-              preparationId: `restored-${documentSourceFingerprint(`${app.id}:${restoredSourceText}`)}`,
               url: (app.jobUrl || "").trim(),
               sourceText: restoredSourceText,
               tailoringText: restoredTailoringText,
@@ -2583,7 +2270,6 @@ function App() {
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}
-              prepareAutomationBusy={prepareAutomationActive}
               includeResume={materialSelection.resume}
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
               baseResumeName={baseResumeName}
@@ -2596,8 +2282,7 @@ function App() {
                 canPolish &&
                 !isSavingBaseResume &&
                 !isManuallySelectingResumeVariant &&
-                !isRankingResumeVariants &&
-                !prepareAutomationActive
+                !isRankingResumeVariants
               }
               isPolishing={isPolishing}
               polishProgress={polishProgress}
@@ -2625,8 +2310,7 @@ function App() {
                 coverProviderReady &&
                 !isGeneratingCover &&
                 !isSelectingCoverVariant &&
-                !isRankingCoverLetterVariants &&
-                !prepareAutomationActive
+                !isRankingCoverLetterVariants
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
@@ -2637,22 +2321,14 @@ function App() {
                       ? "Prepare the job first."
                       : isSelectingCoverVariant || isRankingCoverLetterVariants
                         ? "Wait for the cover-letter variant selection to finish."
-                        : prepareAutomationActive
-                          ? "Wait for Prepare automation to finish."
-                          : !coverProviderReady
-                            ? coverProviderMessage
-                            : (coverLetterPreflight.blockers[0] ?? "")
+                      : !coverProviderReady
+                        ? coverProviderMessage
+                        : (coverLetterPreflight.blockers[0] ?? "")
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
               onTailorCoverLetter={handleTailorCoverLetter}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
-              initialFit={prepareInitialFit}
-              prepareAutomation={prepareAutomation}
-              resumeAutoPolishThreshold={resumeAutoPolishThreshold}
-              coverAutoPolishThreshold={coverAutoPolishThreshold}
-              onRetryInitialFit={initialFitAudit.retry}
-              onStopInitialFit={initialFitAudit.stop}
               reviewGaps={prepareReviewGaps}
               reviewGapsProvenance={prepareReviewGapsProvenance}
               fitAssessment={prepareFitAssessment}
@@ -3140,10 +2816,6 @@ function App() {
           onRefreshProviders={providerAvailability.refresh}
           polishStages={polishStages}
           onPolishStagesChange={setPolishStages}
-          resumeAutoPolishThreshold={resumeAutoPolishThreshold}
-          onResumeAutoPolishThresholdChange={setResumeAutoPolishThreshold}
-          coverAutoPolishThreshold={coverAutoPolishThreshold}
-          onCoverAutoPolishThresholdChange={setCoverAutoPolishThreshold}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}

@@ -25,7 +25,11 @@ import {
   resolveReviewOnlyProviderRequest
 } from "./providers.ts";
 import {
-  buildPolishPrompts
+  STRICT_REVIEW_JOB_CHAR_LIMIT,
+  STRICT_REVIEW_RESUME_CHAR_LIMIT,
+  buildPolishPrompts,
+  buildStrictReviewPrompts,
+  clipForPrompt
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { findUngroundedClaimTerm, findUngroundedOutcomeClaim, proseHasUngroundedTerm } from "./grounding.ts";
@@ -35,21 +39,36 @@ import {
   makeRewriteGrounder,
   makeRewriteNumericGrounder,
   missingRequiredSkillsFromStrictReview,
+  sanitizeAiFitScore,
   sanitizeMissingRequiredSkills,
+  sanitizeStrictReview,
   sanitizeTailorSuggestions,
   summarizeDroppedSuggestions
 } from "./sanitize.ts";
-import {
-  resolveReviewOutcome,
-  reviewFailureFromReason,
-  runRecruiterAudit,
-  type RecruiterAuditOutcome
-} from "./recruiterAudit.ts";
-
-export { resolveReviewOutcome, reviewFailureFromReason } from "./recruiterAudit.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
+
+type ReviewFailure = { message: string; status: number };
+
+/** Preserve actionable provider failures without exposing raw provider bodies. */
+export function reviewFailureFromReason(reason: unknown, provider: string): ReviewFailure {
+  if (reason instanceof UserSafeAiError) {
+    return { message: reason.message, status: reason.status };
+  }
+  if (reason instanceof FetchTimeoutError || (reason instanceof Error && /timed out|timeout/i.test(reason.message))) {
+    return {
+      message: `${providerLabel(provider)} timed out before finishing the review. Try again or switch providers.`,
+      status: 504
+    };
+  }
+  const configMessage = safeConfigErrorMessage(reason instanceof Error ? reason.message : "");
+  if (configMessage) return { message: configMessage, status: 400 };
+  return {
+    message: `${providerLabel(provider)} did not return a usable review. Try again or switch providers.`,
+    status: 502
+  };
+}
 
 // The server-normalized tailor scope (built by normalizeTailorScope from the
 // untrusted request body) and the shapes its serializer consumes.
@@ -269,7 +288,8 @@ function scopeToText(scope: NormalizedScope, suggestions: PolishSuggestion[] = [
   return lines.join("\n").trim();
 }
 
-// Recruiter Audit owns the entire fit judgment; the shared runner validates:
+// Compose the two AI-review contracts into the route's review outcome. AI Review
+// owns the entire fit judgment; the server only validates shape and consistency:
 //
 //   1. sanitizeStrictReview validates the review's shape, enums, and grounding.
 //   2. A review with no requirement rows OR a blank verdict reason is an empty
@@ -280,9 +300,33 @@ function scopeToText(scope: NormalizedScope, suggestions: PolishSuggestion[] = [
 // A score that fails step 3 (missing, non-integer, out of range, or
 // band-inconsistent — e.g. STRONG FIT paired with a tailored 82) makes the
 // entire Review output unusable. Score, verdict, coverage, and recommendation
-// are one model-authored judgment contract. The server never repairs or
-// substitutes either half. See recruiterAudit.ts; this route consumes its
-// all-or-nothing outcome below.
+// are one model-authored judgment contract; surfacing only the favorable prose
+// while silently hiding its contradictory number would turn a schema failure
+// into apparent Review success. The server never repairs or substitutes either
+// half — the stage fails visibly and the user can retry or switch providers.
+export function resolveReviewOutcome(
+  reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null,
+  jobText: string,
+  groundingText: string,
+  options: Parameters<typeof sanitizeStrictReview>[3] = {}
+): {
+  strictReview: ReturnType<typeof sanitizeStrictReview>;
+  aiScore: ReturnType<typeof sanitizeAiFitScore>;
+} {
+  let strictReview = reviewParsed
+    ? sanitizeStrictReview(reviewParsed.strictReview, jobText, groundingText, options)
+    : null;
+  if (strictReview && (!strictReview.coverage.length || !strictReview.verdictReason.trim())) {
+    strictReview = null;
+  }
+  const aiScore = strictReview
+    ? sanitizeAiFitScore(reviewParsed?.aiScore, strictReview.verdict)
+    : null;
+  return strictReview && aiScore
+    ? { strictReview, aiScore }
+    : { strictReview: null, aiScore: null };
+}
+
 export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -440,25 +484,27 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const auditStats: AttemptStats = {};
     const reviewPromise = !runReview
       ? Promise.resolve(null)
-      : runRecruiterAudit({
-          mode: "comparison",
-          provider: audit,
-          jobText,
-          resumeText: scopeText,
-          // The audit judges original + the sanitized change list (the polished
-          // resume is derivable from them); sending the polished copy too nearly
-          // doubled the audit prompt for no information.
-          suggestedChanges,
-          honestContext,
-          customInstructions,
-          signal: request.signal,
-          groundingText,
-          sanitizeOptions: {
-            rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
-            rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
-            suggestedEditNumericGrounding: honestContext
-          }
-        }, auditStats);
+      : (async () => {
+          const reviewPrompts = buildStrictReviewPrompts({
+            jobText: clipForPrompt(jobText, STRICT_REVIEW_JOB_CHAR_LIMIT, "job description"),
+            resumeText: clipForPrompt(scopeText, STRICT_REVIEW_RESUME_CHAR_LIMIT, "original selected resume sections"),
+            // The audit judges original + the sanitized change list (the
+            // polished resume is derivable from them); sending the polished
+            // copy too nearly doubled the audit prompt for no information.
+            suggestedChanges,
+            honestContext,
+            customInstructions
+          });
+          return callConfiguredProvider({
+            provider: audit.provider,
+            model: audit.model,
+            reasoningEffort: audit.reasoningEffort,
+            apiKey: audit.apiKey,
+            systemPrompt: reviewPrompts.systemPrompt,
+            userPrompt: reviewPrompts.userPrompt,
+            signal: request.signal
+          }, auditStats);
+        })();
     // No cover letter in review-only mode: the cover pass tailors prose off the
     // polished resume, which is purely a tailor-pass artifact. Shares the
     // grounded reviser with the standalone /api/cover-letter path; grounding
@@ -491,9 +537,9 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     if (request.signal.aborted) throw new RequestAbortedError();
     // Model output from the review pass: read the review and its AI-authored
     // base/tailored score defensively. Neither is recomputed locally.
-    let reviewOutcome: RecruiterAuditOutcome = { strictReview: null, aiScore: null };
+    let reviewParsed: { strictReview?: unknown; aiScore?: unknown } | null = null;
     if (reviewSettled.status === "fulfilled") {
-      if (reviewSettled.value) reviewOutcome = reviewSettled.value;
+      reviewParsed = reviewSettled.value as { strictReview?: unknown; aiScore?: unknown } | null;
     } else {
       console.warn("[ai] strict review pass failed; returning primary rewrite without it", {
         provider: audit.provider,
@@ -517,7 +563,16 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // The entry-scoped rewrite grounders keep the
     // review pass from reintroducing a misattribution the tailor gate drops
     // (match rewrite.original -> entry).
-    const { strictReview: strictReviewResult, aiScore } = reviewOutcome;
+    const { strictReview: strictReviewResult, aiScore } = resolveReviewOutcome(
+      reviewParsed,
+      jobText,
+      groundingText,
+      {
+        rewriteGrounder: makeRewriteGrounder(tailorScope, honestContext, groundingText),
+        rewriteNumericGrounder: makeRewriteNumericGrounder(tailorScope, honestContext),
+        suggestedEditNumericGrounding: honestContext
+      }
+    );
 
     const strictMissingRequiredSkills = missingRequiredSkillsFromStrictReview(
       strictReviewResult,
@@ -530,7 +585,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     // "failed" = review requested but no usable strictReview survived — whether
     // the pass rejected, returned no parseable object, or its shape did not
     // sanitize (strictReviewResult is null in every one of those cases, since it
-    // is only present in a valid shared audit outcome); "ok" = a sanitized
+    // is only computed from a non-null reviewParsed); "ok" = a sanitized
     // strictReview plus its valid score is returned. resolveReviewOutcome returns
     // both fields or neither, so a missing/invalid score is a failed Review, not
     // a scoreless success. Absent field = legacy client.

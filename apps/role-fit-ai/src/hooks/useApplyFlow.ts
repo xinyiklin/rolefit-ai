@@ -14,12 +14,7 @@
  * usePolishPipeline's pattern.
  */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import {
-  makeApplicationDraft,
-  type Application,
-  type ApplicationInitialFitAudit,
-  type ApplicationStatus
-} from "./useApplications";
+import { makeApplicationDraft, type Application, type ApplicationStatus } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "../lib/aiUsage";
@@ -51,7 +46,6 @@ type UseApplyFlowArgs = {
   headlineScore: number | null;
   fitComparison: FitComparison | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
-  initialFitAudit: ApplicationInitialFitAudit | null;
   applications: Application[];
   linkedApplicationId: string | null;
   findForTarget: (url: string, desc: string) => Application | undefined;
@@ -102,7 +96,6 @@ export function useApplyFlow({
   headlineScore,
   fitComparison,
   pipelineAiUsage,
-  initialFitAudit,
   applications,
   linkedApplicationId,
   findForTarget,
@@ -284,8 +277,6 @@ export function useApplyFlow({
     const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
     const aiUsage: Record<string, StageAiUsage> = canonicalizeAiUsageStageKeys(existing?.aiUsage);
     aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
-    if (pipelineAiUsage["initial-fit"]) aiUsage["initial-fit"] = pipelineAiUsage["initial-fit"];
-    else if (!initialFitAudit || !existing?.initialFitAudit) delete aiUsage["initial-fit"];
     if (materialSelection.resume) {
       aiUsage.tailor = pipelineAiUsage.tailor ?? { source: "none" };
       aiUsage.review = pipelineAiUsage.review ?? { source: "none" };
@@ -336,10 +327,6 @@ export function useApplyFlow({
       status,
       appliedAt: existing?.appliedAt ?? now,
       aiUsage,
-      // App supplies the saved audit only when it still matches this prepared
-      // job. An explicit absence must clear an older baseline instead of
-      // retaining it without the matching initial-fit provenance above.
-      initialFitAudit: initialFitAudit ?? undefined,
       ...(materialSelection.resume
         ? {
             fitScore: headlineScore,

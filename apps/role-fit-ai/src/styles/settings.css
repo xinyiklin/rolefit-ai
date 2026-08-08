@@ -208,55 +208,6 @@
   line-height: 1.35;
 }
 
-/* Prepare automation is one compact ledger of policies. The audit is fixed;
-   only the two independent thresholds are controls. */
-.settings-automation {
-  display: grid;
-}
-
-.settings-automation__row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.72fr);
-  align-items: center;
-  gap: var(--s4);
-  min-width: 0;
-  padding: var(--s3) 0;
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.settings-automation__row:first-child {
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.settings-automation__label {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.settings-automation__label strong {
-  color: var(--ink-strong);
-  font-size: 0.8rem;
-  font-weight: 620;
-}
-
-.settings-automation__label small {
-  color: var(--ink-soft);
-  font-size: 0.71rem;
-  line-height: 1.4;
-}
-
-.settings-automation__value {
-  color: var(--ink-muted);
-  font-size: 0.76rem;
-  font-weight: 560;
-}
-
-.settings-automation__row select {
-  width: 100%;
-  min-width: 0;
-}
-
 /* -------- AI stage rows -------- */
 
 /* Hairline-separated rows, NOT cards. These were bordered cards nested inside
@@ -553,13 +504,6 @@
      either way, so the note is the one that goes. */
   .settings-dialog__autosave {
     display: none;
-  }
-}
-
-@media (max-width: 540px) {
-  .settings-automation__row {
-    grid-template-columns: minmax(0, 1fr);
-    gap: 6px;
   }
 }
 

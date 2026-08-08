@@ -156,12 +156,3 @@ export function tailorScopeToText(scope: TailorScope, editableOnly = false): str
   }
   return lines.join("\n").trim();
 }
-
-// Initial Fit asks which resume sections count as qualification evidence, not
-// which sections AI may rewrite. Include every visible section as read-only
-// context while preserving the structural identity/contact omission.
-export function fullResumeEvidenceText(data: ResumeData): string {
-  return tailorScopeToText(
-    buildTailorScope(data, [], data.sections.map((section) => section.id))
-  );
-}

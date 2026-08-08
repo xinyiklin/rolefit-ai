@@ -410,22 +410,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Initial Fit checkpoint follows the materials: first show resume selection,
-  then the automatic audit, then score/verdict/reason plus concise strengths,
-  gaps, selected resume, and provider provenance. Its Retry, Stop, and Re-audit
-  controls stay local. A reopened saved checkpoint is explicitly historical.
-  Under it, two flat Automation rows explain independently why Resume and Cover
-  Letter Polish started, waited, skipped, stopped, or failed; manual overrides
-  use the same document commands. A separate Proposal fit row renders only when
-  the later Recruiter audit exists. Do not style any of these as nested cards or
-  derive a local verdict.
+  Fit row follows the materials: show the current Recruiter audit verdict first,
+  a matching saved verdict as historical, or "Not audited" with a route to
+  Recruiter audit. Do not style it as a nested card or derive a local verdict.
 - **Automation:** extension receipt and Job analysis progress remain visible on
-  Prepare. A successful preparation always continues through settled resume
-  selection and Initial Fit. The same result evaluates the two categorical
-  thresholds independently; execution may be sequential, but a skipped or
-  failed Resume action never suppresses eligible Cover Letter Polish. Neither
-  proposal is accepted and Cover inclusion remains unchanged. Resume or Cover
-  Polish started from Prepare also completes there. Rank the actual
+  Prepare. Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
   winner while its editor is clean and not application-owned. A tie or

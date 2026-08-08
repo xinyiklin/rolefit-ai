@@ -64,22 +64,7 @@ export type PolishRunOptions = {
   // runs keep the user on Prepare so its progress and package readiness stay in
   // one place; the result remains available from the Resume tab.
   revealResumeOnSuccess?: boolean;
-  // Prepare automation always includes Tailor, even when the remembered manual
-  // workflow is Review-only. The override applies to this run only.
-  stagesOverride?: "tailor" | "review" | "both";
 };
-
-export type ResumePolishOutcome =
-  | {
-      status: "completed";
-      stages: "tailor" | "review" | "both";
-      tailor: "completed" | "not-run";
-      review: "completed" | "failed" | "not-run";
-    }
-  | { status: "failed"; stage: "preflight" | "tailor" | "review"; reason: string }
-  | { status: "stopped" }
-  | { status: "stale" }
-  | { status: "busy" };
 
 async function readAiResponse(response: Response, stage: "tailor" | "review"): Promise<Record<string, unknown>> {
   try {
@@ -452,8 +437,8 @@ export function usePolishPipeline({
     generation: number,
     signal?: AbortSignal,
     revealResumeOnSuccess = true
-  ): Promise<boolean> {
-    if (!runCanCommit(generation, ctx, signal)) return false;
+  ): Promise<void> {
+    if (!runCanCommit(generation, ctx, signal)) return;
     const { scopedResumeText, commonBody } = ctx;
     reviewSnapshotRef.current = snapshot;
     setPolishProgress((prev) => ({ ...prev, review: { status: "running" } }));
@@ -470,7 +455,7 @@ export function usePolishPipeline({
         signal
       });
       const data = await readAiResponse(response, "review");
-      if (!runCanCommit(generation, ctx, signal)) return false;
+      if (!runCanCommit(generation, ctx, signal)) return;
       if (!response.ok) throw new ApiError((data.error as string) ?? "AI review failed.", response.status);
       // The request itself succeeded (200 OK), but the server's strict-review
       // pass may still have produced nothing usable — reviewStatus distinguishes
@@ -501,7 +486,7 @@ export function usePolishPipeline({
             completedAt: new Date().toISOString()
           }
         }));
-        return false;
+        return;
       }
       const reviewedBy = computePolishReviewedBy(data);
       setResult((prev) => {
@@ -538,15 +523,14 @@ export function usePolishPipeline({
           completedAt: new Date().toISOString()
         }
       }));
-      return true;
     } catch (error) {
       // User clicked Stop — let the orchestrator handle the clean stop. The
       // existing result (e.g. a completed tailor in "both") is left intact.
       if (signal?.aborted) {
         if (runIdentityMatches(generation, ctx)) throw error;
-        return false;
+        return;
       }
-      if (!runIdentityMatches(generation, ctx)) return false;
+      if (!runIdentityMatches(generation, ctx)) return;
       // No local review stands in (D011): the stage fails plainly with a
       // classified reason and Retry. The existing result is kept — a successful
       // tailor result is never clobbered, and the fit readout keeps whatever
@@ -565,7 +549,6 @@ export function usePolishPipeline({
           completedAt: new Date().toISOString()
         }
       }));
-      return false;
     }
   }
 
@@ -593,27 +576,26 @@ export function usePolishPipeline({
     polishAbortRef.current?.abort();
   }
 
-  async function handlePolish(options: PolishRunOptions = {}): Promise<ResumePolishOutcome> {
+  async function handlePolish(options: PolishRunOptions = {}) {
     const revealResumeOnSuccess = options.revealResumeOnSuccess !== false;
-    const runStages = options.stagesOverride ?? polishStages;
-    if (polishRunLockRef.current) return { status: "busy" };
+    if (polishRunLockRef.current) return;
     polishRunLockRef.current = true;
     polishGenerationRef.current += 1;
     const generation = polishGenerationRef.current;
     const providerBlocker = await selectedProviderBlocker(
-      runStages !== "review",
-      runStages !== "tailor"
+      polishStages !== "review",
+      polishStages !== "tailor"
     );
-    if (generation !== polishGenerationRef.current) return { status: "stale" };
+    if (generation !== polishGenerationRef.current) return;
     if (providerBlocker) {
       setPolishStatus(providerBlocker);
       polishRunLockRef.current = false;
-      return { status: "failed", stage: "preflight", reason: providerBlocker };
+      return;
     }
     const ctx = buildPolishContext();
     if (!ctx) {
       polishRunLockRef.current = false;
-      return { status: "failed", stage: "preflight", reason: "Resume inputs are not ready for Tailor." };
+      return;
     }
 
     // Duplicate gate BEFORE any AI spend (dialog copy + acknowledgment live in
@@ -621,9 +603,9 @@ export function usePolishPipeline({
     // extension import of an already-applied job pauses instead of silently
     // burning a polish run on it.
     const duplicateAllowed = await confirmDuplicateBeforePolish();
-    if (!runIdentityMatches(generation, ctx)) return { status: "stale" };
+    if (!runIdentityMatches(generation, ctx)) return;
     if (!duplicateAllowed) {
-      const firstStage = runStages === "review" ? "review" : "tailor";
+      const firstStage = polishStages === "review" ? "review" : "tailor";
       setPolishProgress({
         ...idleProgress(),
         [firstStage]: {
@@ -635,7 +617,7 @@ export function usePolishPipeline({
       setPolishProgressVisible(true);
       setPolishStatus("Pipeline stopped because this application is already tracked.");
       polishRunLockRef.current = false;
-      return { status: "stopped" };
+      return;
     }
 
     // A fresh run owns a fresh retry history. The next Review attempt (if any)
@@ -659,70 +641,44 @@ export function usePolishPipeline({
       delete next.review;
       // Preserve provenance for an existing letter when this run is not asking
       // the Tailor stage to replace it. Review-only never generates a cover.
-      if (includeCoverLetter && runStages !== "review") delete next.cover;
+      if (includeCoverLetter && polishStages !== "review") delete next.cover;
       return next;
     });
 
     try {
-      if (runStages === "tailor") {
-        const suggestions = await runTailorStage(ctx, generation, signal, revealResumeOnSuccess);
-        if (suggestions === null) {
-          return runIdentityMatches(generation, ctx)
-            ? { status: "failed", stage: "tailor", reason: "Tailor did not produce a usable resume proposal." }
-            : { status: "stale" };
-        }
-        return { status: "completed", stages: runStages, tailor: "completed", review: "not-run" };
-      } else if (runStages === "review") {
+      if (polishStages === "tailor") {
+        await runTailorStage(ctx, generation, signal, revealResumeOnSuccess);
+      } else if (polishStages === "review") {
         // A fresh standalone Review audits the CURRENT edited draft as-is. Old
         // result suggestions may describe a prior draft and must not be silently
         // re-applied or re-judged.
-        const reviewed = await runReviewStage(ctx, {
+        await runReviewStage(ctx, {
           target: "current",
           suggestions: [],
           fingerprint: ctx.reviewFingerprint
         }, generation, signal, revealResumeOnSuccess);
-        return reviewed
-          ? { status: "completed", stages: runStages, tailor: "not-run", review: "completed" }
-          : runIdentityMatches(generation, ctx)
-            ? { status: "failed", stage: "review", reason: "Recruiter audit did not produce a usable result." }
-            : { status: "stale" };
       } else {
         // both: tailor first, then review only if tailor succeeded.
         const suggestions = await runTailorStage(ctx, generation, signal, revealResumeOnSuccess);
-        if (suggestions === null) {
-          return runIdentityMatches(generation, ctx)
-            ? { status: "failed", stage: "tailor", reason: "Tailor did not produce a usable resume proposal." }
-            : { status: "stale" };
+        if (suggestions !== null) {
+          await runReviewStage(ctx, {
+            target: "proposal",
+            suggestions,
+            fingerprint: ctx.reviewFingerprint
+          }, generation, signal, revealResumeOnSuccess);
         }
-        const reviewed = await runReviewStage(ctx, {
-          target: "proposal",
-          suggestions,
-          fingerprint: ctx.reviewFingerprint
-        }, generation, signal, revealResumeOnSuccess);
-        if (!runIdentityMatches(generation, ctx)) return { status: "stale" };
-        return {
-          status: "completed",
-          stages: runStages,
-          tailor: "completed",
-          review: reviewed ? "completed" : "failed"
-        };
       }
     } catch (error) {
       // The only throw that reaches here is a Stop abort (stage runners catch
       // their own request errors and surface them as a failed stage).
-      if (signal.aborted && runIdentityMatches(generation, ctx)) {
-        handlePolishStopped();
-        return { status: "stopped" };
-      }
+      if (signal.aborted && runIdentityMatches(generation, ctx)) handlePolishStopped();
       // Defensive: stage runners convert their own request errors into a failed
       // stage, so only a Stop abort should reach here. Surface anything else as a
       // status toast rather than re-throwing out of this onClick-driven handler.
       else if (runIdentityMatches(generation, ctx)) {
         const failure = classifyFailure(error);
         setPolishStatus(`${failure.headline}: ${failure.detail}.`);
-        return { status: "failed", stage: "preflight", reason: failure.detail };
       }
-      return { status: "stale" };
     } finally {
       if (runIdentityMatches(generation, ctx)) {
         setIsPolishing(false);

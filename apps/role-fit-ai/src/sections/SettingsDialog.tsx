@@ -12,18 +12,16 @@ import {
 } from "../lib/candidateFacts";
 import type { AiProviderValue } from "../config/aiOptions";
 import type { StageConfig } from "../lib/aiRequest";
-import type { AutoPolishThreshold } from "../lib/prepareAutomation";
 import type {
   AvailableProviderConnection,
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
 import { SettingsStage } from "./SettingsStage";
 
-export type SettingsSection = "stages" | "automation" | "about" | "guidance";
+export type SettingsSection = "stages" | "about" | "guidance";
 
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "stages", label: "AI stages" },
-  { id: "automation", label: "Automation" },
   { id: "about", label: "About you" },
   { id: "guidance", label: "Guidance" }
 ];
@@ -32,13 +30,6 @@ const POLISH_STAGE_DEFAULTS: { value: "tailor" | "review" | "both"; label: strin
   { value: "both", label: "Polish resume" },
   { value: "tailor", label: "Tailor only" },
   { value: "review", label: "Audit current" }
-];
-
-const AUTO_POLISH_THRESHOLD_OPTIONS: { value: AutoPolishThreshold; label: string }[] = [
-  { value: "off", label: "Off" },
-  { value: "STRETCH", label: "Stretch or better" },
-  { value: "REASONABLE FIT", label: "Reasonable fit or better" },
-  { value: "STRONG FIT", label: "Strong fit" }
 ];
 
 type SettingsDialogProps = {
@@ -57,12 +48,6 @@ type SettingsDialogProps = {
   onRefreshProviders: () => void | Promise<void>;
   polishStages: "tailor" | "review" | "both";
   onPolishStagesChange: (value: "tailor" | "review" | "both") => void;
-
-  // ----- Prepare automation -----
-  resumeAutoPolishThreshold: AutoPolishThreshold;
-  onResumeAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
-  coverAutoPolishThreshold: AutoPolishThreshold;
-  onCoverAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
 
   // ----- About you -----
   citizenshipStatus: CitizenshipStatus;
@@ -107,10 +92,6 @@ export function SettingsDialog({
   onRefreshProviders,
   polishStages,
   onPolishStagesChange,
-  resumeAutoPolishThreshold,
-  onResumeAutoPolishThresholdChange,
-  coverAutoPolishThreshold,
-  onCoverAutoPolishThresholdChange,
   citizenshipStatus,
   onCitizenshipChange,
   legallyAuthorizedToWork,
@@ -251,60 +232,6 @@ export function SettingsDialog({
                       onInstructionsChange={(value) => onStageCustomInstructionChange(stage.id, value)}
                     />
                   ))}
-                </div>
-              </>
-            ) : null}
-
-            {section === "automation" ? (
-              <>
-                <p className="settings-panel__intro">
-                  Initial Fit always audits the resume selected by Prepare. These thresholds decide what starts afterward.
-                </p>
-
-                <div className="settings-automation">
-                  <div className="settings-automation__row">
-                    <span className="settings-automation__label">
-                      <strong>Initial fit audit</strong>
-                      <small>Always runs after a job is prepared and the best resume is selected.</small>
-                    </span>
-                    <span className="settings-automation__value">Always on</span>
-                  </div>
-
-                  <label className="settings-automation__row">
-                    <span className="settings-automation__label">
-                      <strong>Resume auto-polish</strong>
-                      <small>Starts Resume Polish when Initial Fit meets this threshold.</small>
-                    </span>
-                    <select
-                      className="select--compact"
-                      value={resumeAutoPolishThreshold}
-                      onChange={(event) =>
-                        onResumeAutoPolishThresholdChange(event.target.value as AutoPolishThreshold)
-                      }
-                    >
-                      {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
-
-                  <label className="settings-automation__row">
-                    <span className="settings-automation__label">
-                      <strong>Cover letter auto-polish</strong>
-                      <small>Prepares a proposal independently; it does not include the letter automatically.</small>
-                    </span>
-                    <select
-                      className="select--compact"
-                      value={coverAutoPolishThreshold}
-                      onChange={(event) =>
-                        onCoverAutoPolishThresholdChange(event.target.value as AutoPolishThreshold)
-                      }
-                    >
-                      {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>{option.label}</option>
-                      ))}
-                    </select>
-                  </label>
                 </div>
               </>
             ) : null}

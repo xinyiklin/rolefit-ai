@@ -39,12 +39,10 @@ and `docs/engineering/ui-principles.md`.
   source collapses into its panel head — captured size and origin — rather than
   repeating them in the body.
 - After preparation, the brief leads the main column and one Application rail
-  owns both material choices, a flat Initial Fit checkpoint, independent
-  automation receipts, readiness, saved-application summary, and Apply. Initial
-  Fit shows selection/audit progress, one-score result, evidence summary,
-  provenance, Retry/Stop/Re-audit, and a historical label on restore. A later AI
-  Review appears separately as Proposal fit; never infer or recalculate either
-  verdict on Prepare.
+  owns both material choices, a flat fit summary, readiness,
+  saved-application summary, and Apply. Fit prefers the matching current AI
+  Review, labels a matching saved review historical, and otherwise says "Not
+  reviewed"; never infer or recalculate a verdict on Prepare.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing
   card.
@@ -91,11 +89,6 @@ and `docs/engineering/ui-principles.md`.
   fallback. A tie or incomplete comparison returns no recommendation and keeps
   the current selection. Do not add persisted variant metadata to support this
   UI.
-- Initial Fit and Automation remain flat divided sections, not nested cards.
-  Automation rows name whether each material waited, started, completed,
-  skipped, stopped, or failed and why. Manual override buttons call the same
-  document commands, remain unavailable while automatic work is active, and do
-  not accept a proposal or change Include.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.

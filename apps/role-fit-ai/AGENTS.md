@@ -138,18 +138,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Apply status names which PDF failed. Apply is synchronously single-flight from
   duplicate resolution through a direct commit and again through every selected
   post-commit export; the pre-commit naming prompt remains interactive.
-- Extension intake always requires AI-backed job analysis and lands on Prepare.
-  A successful fresh preparation then follows the ordinary required continuation:
-  safely settle the selected resume, run one-score Initial Fit against the whole
-  visible resume, and independently evaluate the Resume and Cover Letter
-  automation thresholds. Initial Fit reuses Recruiter Audit configuration but is
-  persisted separately from the post-polish review/comparison. The extension
-  never supplies its own automation command. The app may rank actual saved
+- Extension intake always requires AI-backed job analysis and stops on Prepare; it never
+  auto-launches Tailor or Review. The ordinary app may still rank actual saved
   resume and cover-letter contents against weighted prepared-job sections and
   auto-select a meaningful unique winner while its editor is clean and not
-  application-owned, but that selection is not itself tailoring. Automatic
-  Resume runs always include Tailor; automatic Cover runs use the dedicated
-  proposal workflow, do not require Include, and neither path accepts changes.
+  application-owned, but that selection is not automatic tailoring.
   An explicit manual variant choice synchronously preempts recommendation work;
   while an included variant is ranking or loading, preparation remains busy and
   Apply or another Tailor action cannot start.

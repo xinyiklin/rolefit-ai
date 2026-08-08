@@ -31,10 +31,6 @@ for provider, prompt, sanitizer, and review work.
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Every byte served back is a download (narrow
   content type, `nosniff`, no inline render).
-  Application records persist Initial Fit as a compact historical checkpoint
-  separate from the later review/base/tailored comparison. Its sanitizer must
-  reject non-integer or band-inconsistent scores, unsafe resume names, and
-  noncanonical timestamps without dropping the otherwise valid application.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin
