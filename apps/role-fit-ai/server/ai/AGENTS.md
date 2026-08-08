@@ -15,6 +15,10 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
   target IDs, deterministic mutation grounding, tolerant optional feedback,
   and truthful Proposal / No changes / Withheld outcomes.
+- `finalCheck.ts` owns the separate optional current-resume check: one provider
+  dispatch, an independent compact contract, deterministic issue grounding,
+  partial valid issue survival, and server-derived status. It never returns a
+  score, fit verdict, recommendation, or rewrite.
 - `polish.ts` routes `mode: "resume-proposal"` to that contract. Its older
   Tailor/Review and optional cover legs are compatibility-only until their
   staged cleanup; the browser's normal Resume Polish path must not use them.
@@ -61,19 +65,21 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
-## Trust and scoring contract
+## Trust contracts
 
-- The selected Review model owns coverage, scores, verdict, reason, gaps, and
-  recommendation. Validate exact shape, enums, bounds, and score/verdict band
-  consistency; reject invalid output instead of recomputing it.
 - Resume Polish emits targeted suggestions grounded in the submitted
   resume/honest context. Never import JD-only skills or fabricate claims.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
   independently. Optional summary/gap failures never erase safe siblings, while
   an all-drop returns Withheld rather than a successful empty proposal.
-- Review-only audits the current edited draft. The Review leg of Both receives
-  only sanitized suggestions from that same Tailor run.
-- Tailor and Review failures fail plainly and stop downstream document work.
+- Final Check audits the current edited draft only when requested. Validate its
+  issue kinds and grounded details independently, drop malformed siblings, and
+  derive READY / REVIEW / NEEDS_EVIDENCE from the surviving issues. Its failure
+  is non-blocking and cannot alter Polish or Apply.
+- The older Review-only and Both modes remain compatibility-only until their
+  staged cleanup. Review-only audits the submitted current draft; the Review
+  leg of Both receives only sanitized suggestions from that same Tailor run.
+- Polish failures fail plainly without changing the document.
   Job analysis and Initial Fit failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
   failure authorizes silent fabrication or a substitute AI result.

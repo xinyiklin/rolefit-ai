@@ -22,6 +22,7 @@ const applyFlow = readHook("useApplyFlow.ts");
 const answers = readHook("useApplicationAnswers.ts");
 const cover = readHook("useCoverLetter.ts");
 const polish = readHook("usePolishPipeline.ts");
+const finalCheckHook = readHook("useFinalCheck.ts");
 const inbox = readHook("useExtensionInbox.ts");
 const intake = readHook("useJobIntake.ts");
 const prepareTab = readFileSync(new URL("../../sections/tabs/PrepareTab.tsx", import.meta.url), "utf8");
@@ -62,8 +63,16 @@ const resumeProposalReview = readFileSync(
   new URL("../../sections/resume/ResumeProposalReview.tsx", import.meta.url),
   "utf8"
 );
+const finalCheckPanel = readFileSync(
+  new URL("../../sections/resume/FinalCheckPanel.tsx", import.meta.url),
+  "utf8"
+);
 const resumePolishContract = readFileSync(
   new URL("../../../shared/resumePolishContract.ts", import.meta.url),
+  "utf8"
+);
+const finalCheckContract = readFileSync(
+  new URL("../../../shared/finalCheckContract.ts", import.meta.url),
   "utf8"
 );
 const appIndex = readFileSync(new URL("../../../index.html", import.meta.url), "utf8");
@@ -435,6 +444,38 @@ assert.doesNotMatch(settingsDialog, /polishStages|Tailor only|Audit current|radi
 assert.match(settingsDialog, /Resume Polish uses one proposal request/,
   "Settings explains the one-pass proposal contract"
 );
+assert.equal(finalCheckHook.match(/fetch\("\/api\/final-check"/g)?.length, 1,
+  "Final Check has one independent request path");
+assert.match(finalCheckHook, /resumeText: currentResumeText/,
+  "Final Check submits the actual current resume after proposal decisions");
+assert.doesNotMatch(finalCheckHook, /\bsetResult\b|\/api\/polish/,
+  "Final Check cannot replace or invalidate the Resume Polish result");
+assert.match(app, /useBeforeUnloadGuard\([\s\S]{0,240}?isChecking/,
+  "closing the app during Final Check receives the standard in-flight warning");
+assert.match(
+  app,
+  /const applicationPreparationActive =([\s\S]*?)const preparationReadiness =/,
+  "Apply readiness has an explicit preparation boundary"
+);
+const applicationPreparationSlice = app.match(
+  /const applicationPreparationActive =([\s\S]*?)const preparationReadiness =/
+)?.[1] ?? "";
+assert.doesNotMatch(applicationPreparationSlice, /isChecking/,
+  "optional Final Check never blocks Apply readiness");
+assert.match(finalCheckHook, /invalid outcome", 422/,
+  "a parsed invalid Final Check is validation, not a parsing error");
+assert.match(finalCheckHook, /finalCheckStale:[\s\S]{0,100}?resultFingerprint !== contentFingerprint/,
+  "a completed Final Check becomes visibly stale when its actual inputs change");
+assert.match(finalCheckPanel, /Run Final Check/,
+  "Final Check runs only from an explicit user action");
+assert.match(finalCheckPanel, /actual current resume[\s\S]*Polish and Apply are unaffected/,
+  "Final Check describes its actual target and keeps failure non-blocking");
+assert.doesNotMatch(finalCheckContract, /QuickFit|ResumePolish|requirement|score|verdict|recommendation/i,
+  "Final Check keeps an independent compact contract");
+assert.match(finalCheckContract, /READY[\s\S]*REVIEW[\s\S]*NEEDS_EVIDENCE/,
+  "Final Check owns a small contract independent from Initial Fit");
+assert.doesNotMatch(finalCheckContract, /quickFit|requirement|score|verdict|confidence/i,
+  "Final Check does not share Initial Fit or legacy assessment fields");
 assert.ok(
   !existsSync(new URL("../../sections/PolishMenu.tsx", import.meta.url)) &&
     !existsSync(new URL("../../sections/AiMenu.tsx", import.meta.url)),
@@ -1832,13 +1873,13 @@ assert.match(
 );
 assert.match(
   app,
-  /const polishOutputCurrent = result\?\.source === "ai" && !reviewStale/,
+  /const polishOutputCurrent = result\?\.source === "ai" && !proposalStale/,
   "only a current AI proposal can drive completed Resume Polish status"
 );
 assert.match(
   app,
-  /if \(result\.source !== "ai"\) return;\s*setReviewStale\(jobDescription !== lastPolishedJobRef\.current\)/,
-  "zero-suggestion Tailor output still becomes stale when the prepared job changes"
+  /if \(result\.source !== "ai"\) return;\s*setProposalStale\(jobDescription !== lastPolishedJobRef\.current\)/,
+  "zero-suggestion Polish output still becomes stale when the prepared job changes"
 );
 assert.doesNotMatch(app, /prepareReviewGapsProvenance|savedApplicationReviewAvailable/,
   "Prepare does not reuse saved Recruiter Review state as Initial Fit");

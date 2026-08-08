@@ -31,8 +31,8 @@ and `docs/engineering/ui-principles.md`.
   it does not own their async state. Its brief includes tracked job facts and
   one role context, responsibilities, required/preferred qualifications,
   technical keywords, seniority/domain signals, and benefits. Candidate gaps
-  restored from a saved Apply snapshot are visibly historical until Review
-  produces a matching current result.
+  restored from a saved Apply snapshot remain clearly historical compatibility
+  data rather than masquerading as a current Final Check.
 - Before preparation, Source is the only visible panel. URL and pasted text are
   two APG-tabbed methods inside it, only the selected method renders, and the
   intake column is centered instead of reserving an empty rail. A prepared

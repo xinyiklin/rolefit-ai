@@ -85,6 +85,15 @@ Good server verification covers:
 - the browser makes one `/api/polish` request per normal Resume Polish run,
   exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
   result as validation rather than `Parsing error`
+- `/api/final-check` owns exactly one provider dispatch and a contract
+  independent of Initial Fit and Polish. It receives the actual current resume,
+  preserves valid issues beside malformed siblings, derives its status from the
+  surviving issues, and rejects an all-invalid response rather than returning a
+  false Ready result
+- the browser starts Final Check only from an explicit action, marks its result
+  stale after semantic input changes, and classifies parsed invalid output as
+  validation. Failure never replaces the Polish result and in-flight or failed
+  Final Check never enters Apply readiness
 - a fresh standalone Review skips tailoring and sends `suggestedChanges: []`
   so it audits the current edited draft as submitted; the internal Review leg
   of Both may send only the sanitized suggestions returned by that same Tailor

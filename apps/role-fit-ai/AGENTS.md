@@ -50,17 +50,20 @@ own a second resume model, editor, layout engine, or PDF implementation.
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
-- AI Review is the sole owner of scored post-draft coverage, recommendations,
-  and the detailed audit. Initial Fit is a separate compact Prepare advisory:
-  four verdicts, one summary, up to three matches and gaps, and an optional
-  eligibility warning. It has no score, confidence, ledger, evidence quotes,
-  recommendation, persistence, or analytics contract.
+- Initial Fit is a compact Prepare advisory: four verdicts, one summary, up to
+  three matches and gaps, and an optional eligibility warning. It has no score,
+  confidence, ledger, evidence quotes, recommendation, persistence, or analytics
+  contract.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
   education, dates, and omitted sections stay locked, and the live resume
   changes only through explicit Apply all, Accept, or edited acceptance.
+- Final Check is a separate, optional request over the actual current resume,
+  candidate evidence, and prepared job. Its small contract is independent of
+  Initial Fit and Polish, it never rewrites the document, and failure never
+  invalidates a proposal or blocks Apply.
 - Prepare publishes its deterministic local brief before provider work. A Job
   analysis or Initial Fit failure leaves that brief editable and manual Polish
   available; invalid Initial Fit output never invalidates valid Job analysis.
@@ -85,7 +88,8 @@ RoleFit owns:
 - `src/hooks/`: RoleFit workflow state and effects;
 - `src/sections/`: Apply-only masthead, read-only Sessions/Settings studio-rail
   utilities, first/default Prepare intake, studio navigation and tabs, tracker,
-  materials, review rail, reusable AI workflow progress, dialogs, and host
+  materials, proposal and Final Check rails, reusable AI workflow progress,
+  dialogs, and host
   composition;
 - `src/sections/editor/RoleFitEditorOverlay.tsx`: the section-scope and review
   overlay injected into the shared editor;

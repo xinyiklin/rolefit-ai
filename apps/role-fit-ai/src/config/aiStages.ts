@@ -7,9 +7,9 @@
 // hardcoded to Tailor's provider in another — which is exactly the state the
 // cover letter and Q&A stages were in before they were added here.
 //
-// `settingsPrefix` is the localStorage key prefix. Tailor's is empty and Review's
-// is `audit` for back-compat with the original single-stage settings shape; do
-// not "tidy" those without a migration.
+// `settingsPrefix` is the localStorage key prefix. Polish is empty and Final
+// Check retains `audit` for storage compatibility; do not rename those keys
+// without a migration.
 
 export type AiStageId = "job-analysis" | "tailor" | "review" | "cover" | "answers";
 
@@ -40,9 +40,9 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
   },
   {
     id: "review",
-    label: "Audit",
-    title: "Recruiter audit",
-    blurb: "Audits your draft like a recruiter and scores the fit.",
+    label: "Final Check",
+    title: "Final Check",
+    blurb: "Optionally checks the actual current resume after your edit decisions.",
     settingsPrefix: "audit"
   },
   {

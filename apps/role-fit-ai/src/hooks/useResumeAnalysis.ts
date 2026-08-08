@@ -44,9 +44,9 @@ export function useResumeAnalysis({
     [result, basePlainText, tailoredText]
   );
 
-  // Base (original resume) vs. tailored (polished) fit comes only from AI Review.
-  // Once free-form edits make that judgment stale, show no score until Review is
-  // run again. Never substitute a deterministic estimate under AI review UI.
+  // Historical base-vs-tailored AI comparisons are compatibility-only. Hide one
+  // after free-form edits; normal Polish and Final Check do not refresh it, and
+  // no deterministic estimate may stand in.
   const fitComparison = useMemo<FitComparison | null>(() => {
     if (!result || isEdited) return null;
     if (result.aiScore) {

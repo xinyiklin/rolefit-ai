@@ -2074,3 +2074,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
   guards. The UI detector reported only advisory matches already covered by the
   documented body/label ramps or pre-existing styles. Live-provider evaluation
   and real-browser visual QA were not run.
+- [USER+CODE] 2026-08-07: Final Check replaces Recruiter audit in the normal
+  Resume UI as a deliberate optional request after proposal decisions. It sends
+  the actual current resume, candidate evidence, and prepared job through its
+  own one-call route and independent compact contract; the server grounds up to
+  five unsupported, missing, or clarity issues and derives Ready / Review /
+  Needs evidence from valid survivors. A failed, stopped, or stale Final Check
+  never changes the Polish proposal, editor, or Apply readiness. The legacy
+  headless Review modes remain compatibility-only for the final cleanup slice.
+- [TOOL] 2026-08-07: The exact PR 3 RoleFit gate passed: application and landing
+  builds, desktop contracts, server types, and 73/73 offline evaluations,
+  including the independent Final Check route/grounding probes, 419 client
+  workflow guards, and document-workbench contract. The UI detector reported
+  only advisory font-size/radius/color matches already present in the shared
+  review stylesheet or consistent with its existing compact type ramp.
+  Live-provider evaluation and real-browser visual QA were not run.

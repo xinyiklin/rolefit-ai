@@ -42,8 +42,8 @@ export type ApplicationAnswersResult = {
   roleDescriptions: GeneratedRoleDescription[];
 } | null;
 
-// Before/after fit numbers for the original (base) vs. tailored resume against
-// one job. AI Review scores both in one call; there is no local fallback.
+// Compatibility shape for historical before/after AI comparisons. Normal
+// Resume Polish and Final Check no longer create these scores.
 export type FitComparison = {
   source: "ai";
   base: number;

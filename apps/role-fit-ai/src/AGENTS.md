@@ -16,7 +16,7 @@ owns the RoleFit React host and its integration with shared Typeset packages.
   dependency-free and side-effect-free, so the client-only caching layer sits
   beside it instead. Nothing under `server/` may import it.
 - `resume/` owns deterministic mechanical resume analysis and suggestion/diff
-  types. It never calculates fit score or verdict; AI Review owns those.
+  types. It never calculates an AI score or fit verdict.
 - `sections/` owns UI composition. Read its guide before component work.
 - Shared document behavior comes from `@typeset/engine` and `@typeset/editor`.
   Do not recreate resume types, file parsing, editing, formatting toolbar,

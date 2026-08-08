@@ -305,8 +305,8 @@ per-section collapse control:
 
 - **Job analysis** — job-link, paste, and import analysis into a compact job brief.
 - **Resume Polish** — one evidence-grounded proposal request over selected fields.
-- **Recruiter audit** — retained for the legacy/headless review route while the
-  separate optional Final Check replaces it; normal Resume Polish does not call it.
+- **Final Check** — an optional, separate check of the actual current resume
+  after you decide which Polish edits to accept.
 - **Cover letter** — one grounded revision pass over your own letter, run from
   the Cover Letter page's **Polish** action.
 - **Application questions** — drafts for an application's free-text questions.

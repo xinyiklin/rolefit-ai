@@ -2,7 +2,7 @@
 //
 // This module is pure, dependency-free logic used by the /api/extension/*
 // routes in server.ts. It owns job-meta extraction and the layered tracked-
-// application duplicate lookup. Fit scoring belongs exclusively to AI Review
+// application duplicate lookup. Fit judgment belongs to compact Initial Fit
 // in the main app; the extension does not estimate or review qualifications.
 //
 // URL normalization + the layered duplicate matcher live in the shared

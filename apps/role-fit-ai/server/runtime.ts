@@ -7,6 +7,7 @@ import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
 import { handleCoverLetter } from "./ai/coverLetter.ts";
+import { handleFinalCheck } from "./ai/finalCheck.ts";
 import { isApiPathname, sendJson } from "./http.ts";
 import {
   ensureJobWorkspace,
@@ -409,6 +410,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/polish") {
       void handlePolish(req, res);
+      return;
+    }
+
+    if (pathname === "/api/final-check") {
+      void handleFinalCheck(req, res);
       return;
     }
 

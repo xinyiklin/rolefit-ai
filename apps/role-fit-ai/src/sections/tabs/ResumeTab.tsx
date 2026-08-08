@@ -15,10 +15,11 @@ import {
   type TypesetEditorHandle,
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import type { PolishProgressState } from "../../lib/aiWorkflow";
+import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
+import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -64,18 +65,26 @@ type ResumeTabProps = {
   // Job target context: displayed in the header so the user knows which role
   // the resume is being tailored for.
   jobTarget?: { role?: string; company?: string } | null;
-  // True when the JD changed since the last polish — the review describes an
-  // old posting and should be flagged as stale.
-  reviewStale?: boolean;
+  // True when the JD changed since the last Polish proposal.
+  proposalStale?: boolean;
   resumeReady: boolean;
   jobReady: boolean;
   tailorProviderReady: boolean;
+  finalCheckProviderReady: boolean;
+  finalCheckProviderMessage: string;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
+  finalCheck: FinalCheckResult | null;
+  finalCheckStale: boolean;
+  finalCheckProgress: AiStageState;
+  finalCheckStatus: string;
+  isChecking: boolean;
   onPolish: () => void;
   onRetryTailor: () => void;
   onStopPolish: () => void;
+  onRunFinalCheck: () => void;
+  onStopFinalCheck: () => void;
 };
 
 // The resume surface is edit-and-check: the owned typeset page is the editor
@@ -111,16 +120,25 @@ export function ResumeTab({
   pendingAutosaveDraft,
   onRestoreAutosaveDraft,
   onDismissAutosaveDraft,
-  reviewStale,
+  proposalStale,
   resumeReady,
   jobReady,
   tailorProviderReady,
+  finalCheckProviderReady,
+  finalCheckProviderMessage,
   isPolishing,
   polishProgress,
   polishStatus,
+  finalCheck,
+  finalCheckStale,
+  finalCheckProgress,
+  finalCheckStatus,
+  isChecking,
   onPolish,
   onRetryTailor,
   onStopPolish,
+  onRunFinalCheck,
+  onStopFinalCheck,
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -247,18 +265,27 @@ export function ResumeTab({
               result={result}
               resume={editedResume}
               actions={actions}
-              reviewStale={reviewStale}
+              proposalStale={proposalStale}
               jobTarget={jobTarget}
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
+              finalCheckProviderReady={finalCheckProviderReady}
+              finalCheckProviderMessage={finalCheckProviderMessage}
               selectedSectionCount={selectedSectionCount}
               tailorSectionCount={tailorSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
+              finalCheck={finalCheck}
+              finalCheckStale={finalCheckStale}
+              finalCheckProgress={finalCheckProgress}
+              finalCheckStatus={finalCheckStatus}
+              isChecking={isChecking}
               onRetryTailor={onRetryTailor}
               onStop={onStopPolish}
+              onRunFinalCheck={onRunFinalCheck}
+              onStopFinalCheck={onStopFinalCheck}
               onHighlight={setHighlightTarget}
             />
           )

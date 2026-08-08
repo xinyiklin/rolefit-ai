@@ -239,6 +239,11 @@ disappears into the task. Quiet competence, not salesmanship.
     Only Strong or Reasonable with no eligibility blocker may auto-start an
     enabled proposal. Stretch, Limited, unavailable, and blocked states remain
     manual, and manual Polish is always available.
+14. Keep Final Check deliberate and non-blocking. It runs only when requested,
+    checks the actual current resume after proposal decisions, and reports at
+    most five unsupported, missing, or clarity issues. It has no score, fit
+    verdict, recommendation, or rewrite. A failed or stale Final Check never
+    changes Polish state and never prevents Apply.
 
 ## Accessibility & Inclusion
 

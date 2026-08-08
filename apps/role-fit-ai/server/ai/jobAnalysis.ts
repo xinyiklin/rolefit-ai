@@ -465,7 +465,7 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
     requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     techKeywords,
-    // senioritySignals/domainSignals feed AI Review and the visible job brief,
+    // senioritySignals/domainSignals feed the visible job brief and later checks,
     // so they get the same source-grounding as the content lists —
     // an invented "fintech" domain or "staff-level" seniority signal is dropped.
     senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),

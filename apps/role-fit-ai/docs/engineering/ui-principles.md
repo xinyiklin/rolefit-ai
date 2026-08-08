@@ -135,7 +135,7 @@ style, detaches saved-variant identity, and never mutates the saved variant it
 replaced. Document existence enables editing and strict `.resume` save; meaningful
 content separately gates PDF, Polish, and Apply.
 
-Resume and Cover Letter compose their separate `ReviewRail` and
+Resume and Cover Letter compose their separate `ResumeWorkflowRail` and
 `CoverLetterReview` content through `DocumentWorkbench`. The shared shell owns
 only the editor/rail grid, labelled disclosure, independent scrolling,
 container-query stacking, and the two origin-scoped preferences
@@ -211,6 +211,12 @@ ready is not a check. The two rails share their gate phrasing (`Add your
 resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
 (`Accept` / `Discard` a proposal) while their content stays document-specific; a
 row never repeats a reason that the field directly below it already carries.
+
+Resume places an optional Final Check after the proposal decisions. It is one
+explicit action over the actual current resume, displays READY, REVIEW, or NEEDS
+EVIDENCE with at most five actionable issues, and becomes visibly out of date
+when its semantic inputs change. It does not appear as a Polish stage, does not
+replace proposal feedback, and never blocks Apply.
 
 The stacked layout owns vertical scrolling inside the document tabs' clipped
 studio host; the editor and rail can then participate as full-width rows without
@@ -395,7 +401,7 @@ Never show:
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
 - Settings > AI stages carries one section per configurable stage (Job analysis,
-  Resume tailor, Resume review, Cover letter tailor, Application questions). Each
+  Resume Polish, Final Check, Cover letter, Application questions). Each
   owns a concrete provider/model/effort config plus an optional instruction
   override; **Copy settings** is a one-shot sync between stages, not a live link.
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to

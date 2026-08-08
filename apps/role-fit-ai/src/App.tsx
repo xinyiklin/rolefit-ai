@@ -76,6 +76,7 @@ import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
+import { useFinalCheck } from "./hooks/useFinalCheck";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
@@ -397,10 +398,12 @@ function App() {
   const jobAnalysisStage = stages["job-analysis"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const tailorProviderReady = providerReady(stages.tailor.provider);
+  const finalCheckProviderReady = providerReady(stages.review.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
+  const finalCheckProviderMessage = providerRecoveryMessage(stages.review.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureJobAnalysisProvider = useCallback(
@@ -410,6 +413,10 @@ function App() {
   const ensureTailorProvider = useCallback(
     () => providerAvailability.ensureProvider(stages.tailor.provider),
     [providerAvailability.ensureProvider, stages.tailor.provider]
+  );
+  const ensureFinalCheckProvider = useCallback(
+    () => providerAvailability.ensureProvider(stages.review.provider),
+    [providerAvailability.ensureProvider, stages.review.provider]
   );
   const selectedPolishProvidersReady = tailorProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
@@ -487,9 +494,10 @@ function App() {
   const [pendingAutosaveDraft, setPendingAutosaveDraft] = useState<AutosavedDraft | null>(null);
   // The cover letter's own recovery draft — the two editors recover the same way.
   const [pendingCoverDraft, setPendingCoverDraft] = useState<CoverLetterAutosavedDraft | null>(null);
-  // Track whether the resume proposal or job changed since the last audit.
-  // When true, show a quiet stale notice in the proposal review.
-  const [reviewStale, setReviewStale] = useState(false);
+  // A proposal is bound to the prepared job. Individual resume fields validate
+  // themselves against their original text, so only a changed job stales the
+  // whole proposal.
+  const [proposalStale, setProposalStale] = useState(false);
 
   // ----- Structured resume editor -----
   // editedResume is the canonical editable model; it seeds at discrete events
@@ -500,8 +508,8 @@ function App() {
     editedResume,
     dirty: resumeEdited,
     // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
-    // Gates fit provenance so applying reviewed suggestions keeps the AI score;
-    // arbitrary typing makes it stale until AI Review runs again.
+    // Legacy stored comparisons become stale after arbitrary typing; Final Check
+    // is deliberately unscored and does not refresh that compatibility data.
     manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
@@ -1065,36 +1073,23 @@ function App() {
     }
   }, [applications, expandedApplicationId]);
 
-  // Stale AI output: when the JD changes after Tailor or Review, that result
-  // describes the old posting. Track whether the text still matches what the
-  // result was based on, including valid Tailor runs with zero suggestions.
+  // A Polish proposal is bound to the job it was generated for. Track that
+  // input even when a valid run returns zero suggestions.
   const lastPolishedJobRef = useRef<string>("");
   useEffect(() => {
     if (!result) return;
     // result changed (new polish) — record the current JD as "last polished JD".
     lastPolishedJobRef.current = jobDescription;
-    setReviewStale(false);
+    setProposalStale(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
   useEffect(() => {
-    // Any AI result is bound to its job input, even when Tailor correctly found
-    // zero suggestions and there is no strict Review payload.
+    // Any AI result is bound to its job input, even when Polish correctly found
+    // zero suggestions.
     if (!result) return;
     if (result.source !== "ai") return;
-    setReviewStale(jobDescription !== lastPolishedJobRef.current);
+    setProposalStale(jobDescription !== lastPolishedJobRef.current);
   }, [jobDescription, result]);
-  useEffect(() => {
-    // Resume FREELY edited after a review completed — mark stale so the user
-    // understands why the AI fit numbers are hidden (useResumeAnalysis gates
-    // them behind !isEdited). Accepting a reviewed suggestion is not a free edit
-    // (the verdict still describes that proposal), so it does not mark stale.
-    // Only fires when there is an AI review to flag.
-    if (!result?.strictReview) return;
-    if (resumeManuallyEdited) setReviewStale(true);
-    // We deliberately do NOT reset on !resumeManuallyEdited — the stale flag
-    // should clear only when a new polish result lands (the result effect above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeManuallyEdited]);
 
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
@@ -1259,6 +1254,23 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
+  const {
+    finalCheck,
+    finalCheckStale,
+    finalCheckProgress,
+    finalCheckStatus,
+    isChecking,
+    runFinalCheck,
+    stopFinalCheck
+  } = useFinalCheck({
+    currentResumeText,
+    evidenceText: [resumeText, requestHonestContext].filter(Boolean).join("\n"),
+    jobDescription,
+    customInstructions: customInstructionsFor("review"),
+    finalCheckConfig: stages.review,
+    ensureFinalCheckProviderReady: ensureFinalCheckProvider,
+    setPipelineAiUsage
+  });
   const aiWorkflowStages: AiWorkflowStage[] = [];
   if (jobAnalysisProgressVisible) {
     aiWorkflowStages.push({
@@ -1291,6 +1303,8 @@ function App() {
       ? "analyzing-job"
       : isPolishing
         ? "tailoring"
+        : isChecking
+          ? "reviewing"
         : resumeDocumentDirty
           ? "editing"
           : "idle";
@@ -1299,14 +1313,15 @@ function App() {
     phase: _myPhase
   });
 
-  // Warn before close/reload when there are unsaved edits OR a job analysis/tailor/
-  // review is mid-flight (losing an in-progress run is as costly as losing edits).
+  // Warn before close/reload when there are unsaved edits or an AI operation is
+  // mid-flight (losing an in-progress run is as costly as losing edits).
   // Apply marks each included document clean only after its source persists.
   useBeforeUnloadGuard(
     resumeDocumentDirty ||
       coverLetterEditor.dirty ||
       isGeneratingCover ||
       isPolishing ||
+      isChecking ||
       jobAnalysisProgress.status === "running" ||
       pendingApplicationWrites > 0
   );
@@ -1869,7 +1884,7 @@ function App() {
   // A one-pass proposal stays usable after per-field decisions: each edit card
   // validates its own original target against the live document. Only a changed
   // job invalidates the proposal wholesale.
-  const polishOutputCurrent = result?.source === "ai" && !reviewStale;
+  const polishOutputCurrent = result?.source === "ai" && !proposalStale;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2086,7 +2101,8 @@ function App() {
           ...restoredAnalysis,
           polishedText: restoredResume,
           // Restore only a saved AI comparison. Legacy deterministic estimates
-          // are intentionally ignored and require a fresh AI Review.
+          // are intentionally ignored; normal Resume Polish and Final Check do
+          // not create or refresh this compatibility-only score.
           savedFit:
             app.fitScoreSource === "ai" &&
             typeof app.baseFitScore === "number" &&
@@ -2604,16 +2620,25 @@ function App() {
               pendingAutosaveDraft={pendingAutosaveDraft}
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
-              reviewStale={reviewStale}
+              proposalStale={proposalStale}
               resumeReady={resumeReady}
               jobReady={jobReady}
               tailorProviderReady={tailorProviderReady}
+              finalCheckProviderReady={finalCheckProviderReady}
+              finalCheckProviderMessage={finalCheckProviderMessage}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
+              finalCheck={finalCheck}
+              finalCheckStale={finalCheckStale}
+              finalCheckProgress={finalCheckProgress}
+              finalCheckStatus={finalCheckStatus}
+              isChecking={isChecking}
               onPolish={() => void handlePolish()}
               onRetryTailor={() => void retryStage("tailor")}
               onStopPolish={stopPolish}
+              onRunFinalCheck={() => void runFinalCheck()}
+              onStopFinalCheck={stopFinalCheck}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>

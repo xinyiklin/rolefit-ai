@@ -147,7 +147,7 @@ export type Application = {
   // tailored draft, so the pipeline can show the lift tailoring produced.
   baseFitScore?: number | null;
   tailoredFitScore?: number | null;
-  // A fit comparison is persisted only when AI Review produced it.
+  // Compatibility provenance for historical AI comparison snapshots.
   fitScoreSource?: "ai" | null;
   templateId?: string;
   review?: ApplicationReview;

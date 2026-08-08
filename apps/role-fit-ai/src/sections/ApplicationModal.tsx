@@ -316,8 +316,8 @@ export function ApplicationModal({
       contacts: cleanContacts.length ? cleanContacts : undefined,
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
       fitScore: fitNumber,
-      // A manually entered tracker number is not an AI Review result. Keep it as
-      // the standalone fitScore only; comparison/provenance require AI Review.
+      // A manually entered tracker number is not a legacy AI comparison. Keep it
+      // as the standalone fitScore only; do not invent comparison provenance.
       tailoredFitScore: base.tailoredFitScore ?? null,
       fitScoreSource: base.fitScoreSource ?? null,
       updatedAt: now
@@ -375,7 +375,7 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  // New scores arrive only from AI Review and are read-only here.
+  // Historical scores and user-entered tracker values are read-only here.
   const displayedFitNumber = fitNumber;
   const ringTone = fitTone(displayedFitNumber);
   const fitVerdictDerived = verdictFromScore(displayedFitNumber);

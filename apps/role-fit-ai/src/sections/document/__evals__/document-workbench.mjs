@@ -36,7 +36,7 @@ const styles = readFileSync(sourceUrl("../../../styles/document-workbench.css"),
 const studioStyles = readFileSync(sourceUrl("../../../styles/studio.css"), "utf8");
 const resumeTab = readFileSync(sourceUrl("../../tabs/ResumeTab.tsx"), "utf8");
 const coverTab = readFileSync(sourceUrl("../../tabs/CoverLetterTab.tsx"), "utf8");
-const reviewRail = readFileSync(sourceUrl("../../ReviewRail.tsx"), "utf8");
+const finalCheckPanel = readFileSync(sourceUrl("../../resume/FinalCheckPanel.tsx"), "utf8");
 const app = readFileSync(sourceUrl("../../../App.tsx"), "utf8");
 
 const values = new Map();
@@ -149,9 +149,9 @@ assert.match(
   "the shared workflow rail owns the complementary landmark"
 );
 assert.doesNotMatch(
-  reviewRail,
+  finalCheckPanel,
   /<aside/,
-  "Resume-specific review content does not create a nested complementary landmark"
+  "Final Check content does not create a nested complementary landmark"
 );
 assert.match(
   workbench,

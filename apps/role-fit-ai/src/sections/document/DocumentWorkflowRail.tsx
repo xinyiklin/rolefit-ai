@@ -4,7 +4,6 @@ export type DocumentWorkflowPhase =
   | "ready"
   | "working"
   | "proposal"
-  | "audit"
   | "blocked"
   | "applied"
   | "stale";
@@ -38,7 +37,6 @@ const PHASE_LABELS: Record<DocumentWorkflowPhase, string> = {
   ready: "Ready",
   working: "Working",
   proposal: "Proposal ready",
-  audit: "Audit ready",
   blocked: "Blocked",
   applied: "Applied",
   stale: "Stale"

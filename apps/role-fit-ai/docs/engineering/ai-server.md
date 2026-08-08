@@ -131,52 +131,19 @@ owns:
   malformed, and unsupported mutations are dropped independently. Optional
   feedback is tolerant while mutation validation stays strict. Identity,
   contact, education, dates, and omitted sections never become targets.
-  The route temporarily also supports independent legacy `tailor` and `review`
-  requests plus a backward-compatible/headless `both` request; normal UI does
-  not dispatch those modes. A headless `stages: "both"` request runs targeted suggestions first,
-  then runs its strict audit and optional cover pass in parallel. No single
-  model response is forced to suggest edits, score, audit, and revise a letter
-  at the same time. The optional cover leg remains only for older/headless
-  clients and runs only when they supply a candidate-authored source letter.
-  Review-only skips the suggestion pass and audits the
-  current edited draft exactly as submitted; it must not regenerate or replay
-  stale tailoring changes. The suggestion pass
-  returns only structured `suggestedChanges` (no full-text rewrite and no fit
-  score — scoring belongs exclusively to the audit pass). When the audit does
-  not return a usable review and score, the Review stage fails visibly and the
-  client does not calculate or substitute a local fit judgment;
-  the `polishedText` preview is derived server-side by applying only sanitized
-  suggestions to the scoped text. Every applied suggestion has passed the
-  current deterministic grounding and sanitization gates before the audit,
-  cover letter, or UI diff sees it. Those gates reduce fabrication risk; they
-  are not proof of truth, and human review remains required. The polish request
-  sends a structured `tailorScope` of user-selected editable sections instead
-  of the full resume; identity, contact, education, and any omitted sections remain
-  locked out of the rewrite prompt unless the user selects them. In a combined
-  run, the audit pass receives the clipped original sections plus the SANITIZED
-  proposed changes (`<proposed_changes>`, slim JSON) instead of a second full
-  resume copy — the polished resume is derivable from them, and dropping the
-  redundant copy cuts the audit prompt by up to ~28k chars. Review-only instead
-  receives the current edited draft as its audit target. The Tailor stage
-  supplies the primary provider for suggestion generation, cover-letter
-  revision, and application answers. The Review stage can use its own
-  provider/model (request `audit*`
-  fields, resolved by `resolveAuditProviderRequest`); when audit fields are
-  absent the server reuses the primary config. Only the non-rewriting audit
-  can differ inside `/api/polish`, so a reviewer model can never alter the
-  editor's resume output. A `/api/polish` response that ran Tailor echoes the
-  resolved `provider` / `model` / `reasoningEffort` plus `attempts`
-  (tailor-pass dispatch count); Review-only intentionally omits `attempts`
-  because it made no Tailor dispatch. Whenever the review pass ran (stages
-  `review` / `both`, i.e.
-  `strictReview`), the response ALWAYS carries `auditProvider` / `auditModel` /
-  `auditReasoningEffort` (the resolved audit values, even when identical to the
-  primary) plus `auditAttempts` — so "review ran with the same provider" is
-  distinguishable from "no review". The response also reports
-  `coverStatus: "off" | "ok" | "failed"`; clients must not infer cover state
-  from a missing letter, and a cover failure must not discard successful
-  tailor/review results. The client surfaces "reviewed by" when either the
-  audit provider or audit model differs from the Tailor configuration.
+  `/api/final-check` is a separate optional operation over the actual current
+  resume, candidate evidence, and prepared job. It performs one provider
+  dispatch and returns READY, REVIEW, or NEEDS_EVIDENCE plus a short summary
+  and at most five UNSUPPORTED, MISSING, or CLARITY issues. The server drops
+  malformed issue siblings, grounds surviving details, and derives status
+  rather than trusting contradictory model status. An all-invalid response
+  fails instead of becoming a false Ready result. It returns no score, fit
+  verdict, recommendation, or rewrite and never participates in Polish or
+  Apply readiness.
+  `/api/polish` temporarily retains legacy `tailor`, `review`, and `both` modes
+  for headless compatibility. The normal browser never dispatches them. Their
+  strict Review and optional cover legs remain isolated from the one-pass
+  `resume-proposal` contract until the final cleanup slice.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -355,7 +322,7 @@ When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
 one large route.
 
-The `/api/polish` flow follows that rule — it is split across focused
+The resume AI flows follow that rule — they are split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
 - `polish.ts` — the `handlePolish` route (request parsing, the
@@ -364,6 +331,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
   construction, the compact one-pass prompt/wire contract, deterministic
   per-edit grounding, and Proposal / No changes / Withheld derivation.
+- `finalCheck.ts` and `shared/finalCheckContract.ts` — the independent optional
+  current-resume check, grounded partial issue sanitization, and deterministic
+  READY / REVIEW / NEEDS_EVIDENCE derivation.
 - `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, provider-specific key lookup,
   `resolveProviderRequest`, `resolveAuditProviderRequest`).
@@ -395,18 +365,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- AI Review owns the complete fit judgment. Its response contains one
-  evidence table (`strictReview.coverage`), one verdict and reason, and one
-  numeric comparison (`aiScore.base` / `aiScore.tailored`). The server validates
-  JSON shape, exact enums, numeric bounds, and that the tailored score belongs
-  to the declared verdict band. It does not recalculate scores, reinterpret
-  coverage statuses, count missing rows into caps, or replace the verdict.
-  Invalid or incomplete review output fails the Review stage instead of being
-  repaired into a different judgment. Suggestion and rewrite evidence still
-  passes the existing anti-fabrication sanitizers before reaching the editor.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used only
   to ground facts extracted by the job analyzer. Eligibility judgment belongs
-  to AI Review; this module does not gate, score, or select a verdict.
+  to Initial Fit; this module does not gate, score, or select a verdict.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of
@@ -455,8 +416,8 @@ The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/polish` receives the Tailor config as `provider` / `model` /
-`reasoningEffort`, the strict-review pass receives the Review config as `audit*`
-fields, `/api/cover-letter` receives the Cover config, and
+`reasoningEffort`, `/api/final-check` receives the Final Check config,
+`/api/cover-letter` receives the Cover config, and
 `/api/application-answers` receives the Answers config. Cover and Answers ran on
 the Tailor config before they became separately configurable; an install that
 predates the split migrates them from Tailor on load, so its behavior does not
@@ -592,10 +553,10 @@ authoritative.
 The deterministic job analyzer (`src/lib/jobExtract.ts`) is Prepare's immediate
 usable baseline. Job analysis may improve it, but an AI-backed failure leaves
 the baseline editable and does not block manual Polish. Initial Fit is advisory
-and independently unavailable when its provider output is unusable. Tailor, Review,
-cover-letter tailoring, and application-answer failures have no local
-substitutes. No
-locally generated draft, score, review, or verdict stands in.
+and independently unavailable when its provider output is unusable. Resume
+Polish, Final Check, cover-letter tailoring, and application-answer failures
+have no local substitutes. Final Check failure is non-blocking; no locally
+generated draft, score, review, or verdict stands in.
 
 ## Job Posting Import
 

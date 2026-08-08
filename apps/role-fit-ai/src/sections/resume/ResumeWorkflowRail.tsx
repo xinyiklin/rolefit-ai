@@ -1,32 +1,43 @@
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
-import type { PolishProgressState } from "../../lib/aiWorkflow";
+import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { PolishedResume } from "../../resumeEngine";
 import type { TailorChangeTarget } from "../../resume/types";
+import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
 import {
   DocumentWorkflowRail,
   type DocumentWorkflowCheck,
   type DocumentWorkflowPhase
 } from "../document/DocumentWorkflowRail";
 import { ResumeProposalReview } from "./ResumeProposalReview";
+import { FinalCheckPanel } from "./FinalCheckPanel";
 
 type ResumeWorkflowRailProps = {
   result: PolishedResume | null;
   resume: ResumeData;
   actions: ResumeEditorActions;
-  reviewStale?: boolean;
+  proposalStale?: boolean;
   jobTarget?: { role?: string; company?: string } | null;
   resumeReady: boolean;
   jobReady: boolean;
   tailorProviderReady: boolean;
+  finalCheckProviderReady: boolean;
+  finalCheckProviderMessage: string;
   selectedSectionCount: number;
   tailorSectionCount: number;
   isPolishing: boolean;
   progress: PolishProgressState;
   status?: string;
+  finalCheck: FinalCheckResult | null;
+  finalCheckStale: boolean;
+  finalCheckProgress: AiStageState;
+  finalCheckStatus: string;
+  isChecking: boolean;
   onRetryTailor: () => void;
   onStop: () => void;
+  onRunFinalCheck: () => void;
+  onStopFinalCheck: () => void;
   onHighlight: (target: TailorChangeTarget | null) => void;
 };
 
@@ -38,18 +49,27 @@ export function ResumeWorkflowRail({
   result,
   resume,
   actions,
-  reviewStale,
+  proposalStale,
   jobTarget,
   resumeReady,
   jobReady,
   tailorProviderReady,
+  finalCheckProviderReady,
+  finalCheckProviderMessage,
   selectedSectionCount,
   tailorSectionCount,
   isPolishing,
   progress,
   status,
+  finalCheck,
+  finalCheckStale,
+  finalCheckProgress,
+  finalCheckStatus,
+  isChecking,
   onRetryTailor,
   onStop,
+  onRunFinalCheck,
+  onStopFinalCheck,
   onHighlight
 }: ResumeWorkflowRailProps) {
   const proposalResult = result?.polishOutcome ? result : null;
@@ -65,7 +85,7 @@ export function ResumeWorkflowRail({
   if (isPolishing) {
     phase = "working";
     description = "Creating grounded edits. Your current resume remains unchanged.";
-  } else if (proposalResult && reviewStale) {
+  } else if (proposalResult && proposalStale) {
     phase = "stale";
     description = "The resume or prepared job changed. Polish again for a current proposal.";
   } else if (withheld) {
@@ -94,6 +114,16 @@ export function ResumeWorkflowRail({
         : "Mark at least one section Polish"
     )
   ];
+  const canRunFinalCheck = resumeReady && jobReady && finalCheckProviderReady && !isPolishing;
+  const finalCheckBlocker = !resumeReady
+    ? "Add your resume first."
+    : !jobReady
+      ? "Prepare the job first."
+      : !finalCheckProviderReady
+        ? finalCheckProviderMessage || "Check Final Check settings."
+        : isPolishing
+          ? "Wait for Resume Polish to finish."
+          : "";
   const failure = failed && !withheld ? {
     title: progress.tailor.errorHeadline || "Polish failed",
     message: "No proposal was created. Your resume was not changed.",
@@ -130,6 +160,17 @@ export function ResumeWorkflowRail({
           onHighlight={onHighlight}
         />
       ) : null}
+      <FinalCheckPanel
+        result={finalCheck}
+        stale={finalCheckStale}
+        progress={finalCheckProgress}
+        status={finalCheckStatus}
+        canRun={canRunFinalCheck}
+        isChecking={isChecking}
+        blocker={finalCheckBlocker}
+        onRun={onRunFinalCheck}
+        onStop={onStopFinalCheck}
+      />
     </DocumentWorkflowRail>
   );
 }

@@ -17,6 +17,10 @@ browser-side effects; components render them and App composes them.
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
   edits and outcome metadata without seeding or replacing the editor.
+- `useFinalCheck` owns the optional current-resume check, abort/retry, provider
+  readiness, and semantic staleness. It submits the live serialized resume and
+  must never mutate the editor, replace the Polish result, or participate in
+  Apply readiness.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
@@ -134,7 +138,7 @@ browser-side effects; components render them and App composes them.
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
   recommendation. A successful automatic proposal run must not force the Resume tab;
-  user-initiated Resume tailoring retains its normal reveal behavior.
+  user-initiated Resume Polish retains its normal reveal behavior.
 - Job analysis stale-input guards cover the job source, Initial Fit setting,
   and that stage's AI settings. The selected resume is captured immediately
   before dispatch; later resume changes use the fit-only request instead of
