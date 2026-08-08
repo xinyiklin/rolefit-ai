@@ -23,6 +23,10 @@ type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
   quickFit: QuickFitState;
   onRetryInitialFit: () => void;
+  // Whether a retry can actually do anything. A resume label is not that
+  // signal: the state that most needs recovery — no resume resolved — has no
+  // label, which is exactly why it used to offer no way out.
+  canRetryInitialFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -34,6 +38,7 @@ export function PrepareApplicationRail({
   activity,
   quickFit,
   onRetryInitialFit,
+  canRetryInitialFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -103,7 +108,7 @@ export function PrepareApplicationRail({
             <>
               <strong className="prepare-fit__empty">Initial Fit unavailable</strong>
               <p>{quickFit.message}</p>
-              {quickFit.resumeLabel ? (
+              {canRetryInitialFit ? (
                 <button className="ghost-button is-compact" type="button" onClick={onRetryInitialFit}>
                   Retry fit check
                 </button>

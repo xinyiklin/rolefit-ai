@@ -20,10 +20,19 @@ export type QuickFitSnapshot = {
   resumeLabel: string;
 };
 
+// What the screening actually ran against. A friendly label cannot answer that:
+// two files can share one, editing a document never changes it, and re-preparing
+// a posting leaves the old label attached to a fit that no longer applies. This
+// is live workflow state only — the persisted snapshot above is unchanged.
+export type QuickFitProvenance = {
+  resumeFingerprint: string;
+  jobFingerprint: string;
+};
+
 export type QuickFitState =
   | { status: "disabled" }
   | { status: "running"; resumeLabel: string }
-  | { status: "ready"; snapshot: QuickFitSnapshot }
+  | { status: "ready"; snapshot: QuickFitSnapshot; provenance: QuickFitProvenance }
   | { status: "unavailable"; resumeLabel: string; message: string };
 
 const verdicts = new Set<string>(QUICK_FIT_VERDICTS);

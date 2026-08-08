@@ -42,7 +42,9 @@ import {
   reconcilePreparedJobManualReviewFields,
   type PreparedJobBrief
 } from "../lib/preparedJobBrief";
-import type { QuickFitState } from "../../shared/quickFitContract.ts";
+import type { QuickFitProvenance, QuickFitState } from "../../shared/quickFitContract.ts";
+import { contentFingerprint } from "../lib/contentFingerprint.ts";
+import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
 
 export type ImportedJobSnapshot = {
   url: string;
@@ -123,7 +125,12 @@ type UseJobIntakeArgs = {
   jobAnalysisRequestFields: () => Record<string, unknown>;
   ensureProviderReady: () => Promise<ProviderReadiness>;
   runInitialFit: boolean;
-  selectResumeForInitialFit: (jobText: string) => Promise<InitialFitRequest | null>;
+  // The one authoritative resume resolution, ranked against the local
+  // job-analysis brief and adopted into the editor BEFORE the provider request.
+  // It runs on every preparation, not only when Initial Fit is on: which resume
+  // this application speaks for is a workflow fact, not a fit-check detail.
+  resolvePreparedResume: (jobText: string) => Promise<PreparedResumeSelection | null>;
+  candidateContext: () => string;
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
   onExtensionJobReceived: () => void;
@@ -146,7 +153,8 @@ export function useJobIntake({
   jobAnalysisRequestFields,
   ensureProviderReady,
   runInitialFit,
-  selectResumeForInitialFit,
+  resolvePreparedResume,
+  candidateContext,
   extensionImportsReady,
   onExtensionPrepareStarted,
   onExtensionJobReceived
@@ -185,6 +193,11 @@ export function useJobIntake({
   const jobAnalysisAbortRef = useRef<AbortController | null>(null);
   const initialFitAbortRef = useRef<AbortController | null>(null);
   const latestInitialFitRef = useRef<{ jobText: string; request: InitialFitRequest } | null>(null);
+  // The job texts the last preparation resolved a resume against: the local
+  // brief for ranking, the posting the provider screens. Retry re-resolves
+  // from these rather than requiring the posting to be prepared again.
+  const preparedJobForFitRef = useRef<{ localJobText: string; fitJobText: string } | null>(null);
+  const [initialFitRetryable, setInitialFitRetryable] = useState(false);
   // The stale-input guard tracks the job source, Initial Fit setting, and
   // stage-local AI settings. The selected resume is captured immediately
   // before dispatch and is not allowed to mutate the in-flight request.
@@ -255,6 +268,7 @@ export function useJobIntake({
     initialFitAbortRef.current?.abort();
     initialFitAbortRef.current = null;
     latestInitialFitRef.current = null;
+    setInitialFitRetryable(false);
     setQuickFitState({ status: "disabled" });
   }, [runInitialFit]);
 
@@ -279,28 +293,57 @@ export function useJobIntake({
     return claimJobAnalysisRun();
   }
 
-  async function prepareInitialFitRequest(jobText: string): Promise<InitialFitRequest | null> {
+  // Provenance is derived from exactly what was sent, so a fit can never be
+  // credited to a resume or a posting it did not screen.
+  function fitProvenance(jobText: string, request: InitialFitRequest): QuickFitProvenance {
+    return {
+      resumeFingerprint: contentFingerprint(request.resumeText),
+      jobFingerprint: contentFingerprint(jobText)
+    };
+  }
+
+  // Resolve the prepared resume for THIS preparation, then turn it into an
+  // Initial Fit request when the check is enabled. Resolution is unconditional:
+  // turning Initial Fit off must not stop the workflow from loading the resume
+  // this application will be tailored from.
+  async function prepareResumeAndInitialFit(
+    localJobText: string,
+    fitJobText: string
+  ): Promise<InitialFitRequest | null> {
+    const selection = await resolvePreparedResume(localJobText);
+    preparedJobForFitRef.current = { localJobText, fitJobText };
     if (!runInitialFit) {
       latestInitialFitRef.current = null;
       setQuickFitState({ status: "disabled" });
       return null;
     }
-    const fitRequest = await selectResumeForInitialFit(jobText);
-    if (!fitRequest) {
+    // Retry stays offered even here: this preparation is real, and the user can
+    // open or save a resume and then ask for the check without re-preparing.
+    setInitialFitRetryable(true);
+    if (!selection) {
       latestInitialFitRef.current = null;
       setQuickFitState({
         status: "unavailable",
         resumeLabel: "",
-        message: "Initial Fit needs a loaded resume. You can still continue to Polish."
+        message: "Initial Fit needs your own resume. Open or save one, then retry the fit check."
       });
       return null;
     }
-    latestInitialFitRef.current = { jobText, request: fitRequest };
+    const fitRequest: InitialFitRequest = {
+      resumeText: selection.text,
+      resumeLabel: selection.label,
+      candidateContext: candidateContext()
+    };
+    latestInitialFitRef.current = { jobText: fitJobText, request: fitRequest };
     setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
     return fitRequest;
   }
 
-  function settleInitialFit(result: JobAnalysisResult, fitRequest: InitialFitRequest | null) {
+  function settleInitialFit(
+    result: JobAnalysisResult,
+    fitRequest: InitialFitRequest | null,
+    fitJobText: string
+  ) {
     if (!runInitialFit) {
       setQuickFitState({ status: "disabled" });
       return;
@@ -309,7 +352,8 @@ export function useJobIntake({
     if (result.initialFit) {
       setQuickFitState({
         status: "ready",
-        snapshot: { result: result.initialFit, resumeLabel: fitRequest.resumeLabel }
+        snapshot: { result: result.initialFit, resumeLabel: fitRequest.resumeLabel },
+        provenance: fitProvenance(fitJobText, fitRequest)
       });
       return;
     }
@@ -349,7 +393,8 @@ export function useJobIntake({
       setQuickFitState(outcome.initialFit
         ? {
             status: "ready",
-            snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel }
+            snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel },
+            provenance: fitProvenance(jobText, fitRequest)
           }
         : {
             status: "unavailable",
@@ -368,9 +413,31 @@ export function useJobIntake({
     }
   }
 
-  function retryInitialFit() {
+  async function retryInitialFit() {
     const latest = latestInitialFitRef.current;
-    if (latest) void refreshInitialFit(latest.jobText, latest.request);
+    if (latest) {
+      await refreshInitialFit(latest.jobText, latest.request);
+      return;
+    }
+    // No request was ever built because no resume resolved. Resolve again
+    // rather than doing nothing: the user's remedy is to open or save a resume,
+    // and that must not force them to prepare the posting a second time.
+    const prepared = preparedJobForFitRef.current;
+    if (!runInitialFit || !prepared) return;
+    const selection = await resolvePreparedResume(prepared.localJobText);
+    if (!selection) {
+      setQuickFitState({
+        status: "unavailable",
+        resumeLabel: "",
+        message: "Initial Fit needs your own resume. Open or save one, then retry the fit check."
+      });
+      return;
+    }
+    await refreshInitialFit(prepared.fitJobText, {
+      resumeText: selection.text,
+      resumeLabel: selection.label,
+      candidateContext: candidateContext()
+    });
   }
 
   function jobAnalysisTerminalState(result: JobAnalysisResult, duplicateNote?: string | null): StageState {
@@ -419,6 +486,8 @@ export function useJobIntake({
     setJobRawText("");
     setLocalPreparedPreview(null);
     latestInitialFitRef.current = null;
+    preparedJobForFitRef.current = null;
+    setInitialFitRetryable(false);
     setQuickFitState(runInitialFit
       ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Initial Fit." }
       : { status: "disabled" });
@@ -484,7 +553,10 @@ export function useJobIntake({
       }
       const aiRequest = jobAnalysisRequestFields();
       setLocalPreparedPreview(importedJobSnapshot(url, localExtracted.tailoringText, localExtracted, rawText));
-      const fitRequest = await prepareInitialFitRequest(rawText);
+      // Rank against the local brief, not the raw page: the ranker weights
+      // section headings the raw text does not have. The provider still
+      // receives the raw posting.
+      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, rawText);
       if (!request.isCurrent()) return;
       const result = readiness.ready
         ? await analyzeJobPosting(rawText, {
@@ -525,7 +597,7 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(rawText);
-      settleInitialFit(result, fitRequest);
+      settleInitialFit(result, fitRequest, rawText);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -615,7 +687,7 @@ export function useJobIntake({
       }
       const aiRequest = jobAnalysisRequestFields();
       setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, cleaned));
-      const fitRequest = await prepareInitialFitRequest(cleaned);
+      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, cleaned);
       if (!request.isCurrent()) return;
       const result = readiness.ready
         ? await analyzeJobPosting(cleaned, {
@@ -655,7 +727,7 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(cleaned);
-      settleInitialFit(result, fitRequest);
+      settleInitialFit(result, fitRequest, cleaned);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -702,6 +774,8 @@ export function useJobIntake({
       noteTone: "info"
     });
     latestInitialFitRef.current = null;
+    preparedJobForFitRef.current = null;
+    setInitialFitRetryable(false);
     setQuickFitState(runInitialFit
       ? { status: "unavailable", resumeLabel: "", message: "Initial Fit did not run because duplicate review stopped Prepare." }
       : { status: "disabled" });
@@ -745,7 +819,7 @@ export function useJobIntake({
       }
       const aiRequest = jobAnalysisRequestFields();
       setLocalPreparedPreview(importedJobSnapshot(payload.url, localExtracted.tailoringText, localExtracted, payload.text));
-      const fitRequest = await prepareInitialFitRequest(payload.text);
+      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, payload.text);
       if (!request.isCurrent()) return;
       const result = readiness.ready
         ? await analyzeJobPosting(payload.text, {
@@ -787,7 +861,7 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(payload.text);
-      settleInitialFit(result, fitRequest);
+      settleInitialFit(result, fitRequest, payload.text);
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -841,7 +915,7 @@ export function useJobIntake({
         setJobAnalysisProgressVisible(true);
         const aiRequest = jobAnalysisRequestFields();
         setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, text));
-        const fitRequest = await prepareInitialFitRequest(text);
+        const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, text);
         if (!request.isCurrent()) return;
         const result = readiness.ready
           ? await analyzeJobPosting(text, {
@@ -884,7 +958,7 @@ export function useJobIntake({
         resetCoverWorkflow();
         setPipelineAiUsage(freshJobAnalysisUsage(usage));
         setJobRawText(text);
-        settleInitialFit(result, fitRequest);
+        settleInitialFit(result, fitRequest, text);
         if (!duplicateAfter.proceed) {
           setJobAnalysisRetrySource("import");
           setJobAnalysisProgress(duplicateStoppedState("after"));
@@ -949,6 +1023,10 @@ export function useJobIntake({
     jobAnalysisRetry,
     quickFitState,
     retryInitialFit,
+    // Retry is offered whenever a preparation exists to retry, not when a
+    // resume label happens to be non-empty: the case that most needs recovery
+    // is exactly the one where no resume resolved and there is no label.
+    canRetryInitialFit: runInitialFit && initialFitRetryable,
     refreshInitialFit,
     localPreparedPreview,
     handleManualJobDescriptionChange,

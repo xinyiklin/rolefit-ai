@@ -104,7 +104,9 @@ export type PrepareTabProps = {
   baseResumeOptions: BaseResumeOption[];
   onSelectBaseResume: (fileName: string) => void | Promise<unknown>;
   resumeVariantRecommendation: VariantRecommendation | null;
-  isRankingResumeVariants: boolean;
+  isResolvingPreparedResume: boolean;
+  // The loaded document is the bundled sample, not the applicant's resume.
+  resumeIsStarterSample: boolean;
   canTailor: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
@@ -132,6 +134,7 @@ export type PrepareTabProps = {
   onOpenCoverLetter: () => void;
   quickFit: QuickFitState;
   onRetryInitialFit: () => void;
+  canRetryInitialFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -165,7 +168,8 @@ export function PrepareTab({
   baseResumeOptions,
   onSelectBaseResume,
   resumeVariantRecommendation,
-  isRankingResumeVariants,
+  isResolvingPreparedResume,
+  resumeIsStarterSample,
   canTailor,
   isPolishing,
   polishProgress,
@@ -193,6 +197,7 @@ export function PrepareTab({
   onOpenCoverLetter,
   quickFit,
   onRetryInitialFit,
+  canRetryInitialFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -239,7 +244,7 @@ export function PrepareTab({
     polishProgress.tailor.status === "done" || polishOutcome === "WITHHELD"
   );
   const resumeState =
-    isRankingResumeVariants || isSelectingResume
+    isResolvingPreparedResume || isSelectingResume
       ? "Selecting best match…"
       : isPolishing
         ? "Polishing…"
@@ -251,7 +256,9 @@ export function PrepareTab({
               : "Suggestions withheld"
           : resumeReady
             ? "Ready"
-            : "No document";
+            : resumeIsStarterSample
+              ? "Starter template"
+              : "No document";
   // A saved base letter is a template: it holds real prose and unresolved slots
   // like [Company]. Reporting that as "No draft" hid a document the user could
   // see in the selector, so the state names the actual reason it is not ready.
@@ -292,8 +299,10 @@ export function PrepareTab({
   const tailorHint = !jobPrepared
     ? "Prepare the job first."
     : !resumeReady
-      ? "Add your resume first."
-      : isSelectingResume || isRankingResumeVariants
+      ? resumeIsStarterSample
+        ? "The starter is a sample. Open or save your own resume."
+        : "Add your resume first."
+      : isSelectingResume || isResolvingPreparedResume
         ? "Wait for the resume variant selection to finish."
         : isPolishing
           ? "Wait for the current polish to finish."
@@ -322,7 +331,7 @@ export function PrepareTab({
       : "";
   const jobTypeIsKnown = JOB_TYPES.includes(tracking.jobType as (typeof JOB_TYPES)[number]);
   const recommendationLiveText = [
-    variantRecommendationLiveText("resume", isRankingResumeVariants, resumeVariantRecommendation, baseResumeName),
+    variantRecommendationLiveText("resume", isResolvingPreparedResume, resumeVariantRecommendation, baseResumeName),
     variantRecommendationLiveText(
       "cover letter",
       isRankingCoverLetterVariants,
@@ -724,6 +733,7 @@ export function PrepareTab({
             activity={activity}
             quickFit={quickFit}
             onRetryInitialFit={onRetryInitialFit}
+            canRetryInitialFit={canRetryInitialFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
             isApplying={isApplying}
@@ -740,7 +750,7 @@ export function PrepareTab({
               variantOptions={baseResumeOptions}
               emptyVariantLabel={resumeReady ? "Current draft" : "No saved variants"}
               variantDisabled={
-                isSelectingResume || isPolishing || isRankingResumeVariants || baseResumeOptions.length === 0
+                isSelectingResume || isPolishing || isResolvingPreparedResume || baseResumeOptions.length === 0
               }
               onVariantChange={(fileName) => void onSelectBaseResume(fileName)}
               actions={
@@ -768,7 +778,7 @@ export function PrepareTab({
                 </p>
               ) : (
                 <PreparedVariantRecommendation
-                  isRanking={isRankingResumeVariants}
+                  isRanking={isResolvingPreparedResume}
                   recommendation={resumeVariantRecommendation}
                   selectedFileName={baseResumeName}
                   onUse={(fileName) => void onSelectBaseResume(fileName)}

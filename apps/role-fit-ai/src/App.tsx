@@ -91,7 +91,10 @@ import {
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
-import type { InitialFitRequest } from "./lib/aiJobAnalysis";
+import type { PreparedResumeSelection } from "./lib/preparedResume";
+import { contentFingerprint } from "./lib/contentFingerprint";
+import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
+import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
 import { quickFitAllowsAutoProposal } from "../shared/quickFitContract.ts";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
@@ -303,6 +306,11 @@ function App() {
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
   const [fileName, setFileName] = useState("");
+  // What the loaded document actually is. The bundled starter is sample
+  // content: it is long enough to pass every length test while speaking for
+  // nobody, so readiness, Initial Fit, and automatic proposals must not treat
+  // it as the applicant's resume until it is saved as a real base.
+  const [resumeOrigin, setResumeOrigin] = useState<ResumeOrigin>("blank");
 
   const [result, setResult] = useState<PolishedResume | null>(null);
   const [fileError, setFileError] = useState("");
@@ -310,13 +318,13 @@ function App() {
   const [linkStatus, setLinkStatus] = useState("");
   // Surfaces polish-flow feedback in the workflow rail.
   const [polishStatus, setPolishStatus] = useState("");
-  const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
-  const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
-  const selectResumeForInitialFitRef = useRef<(jobText: string) => Promise<InitialFitRequest | null>>(
+  // usePreparedResume is declared below useWorkspaceResume (it consumes the
+  // workspace loader), while useJobIntake is composed above it. One ref bridges
+  // that order, exactly as the retired fit-only selector did.
+  const resolvePreparedResumeRef = useRef<(jobText: string) => Promise<PreparedResumeSelection | null>>(
     async () => null
   );
-  const resumeVariantRecommendationKeyRef = useRef("");
-  const resumeVariantRecommendationGenerationRef = useRef(0);
+  const clearPreparedResumeRecommendationRef = useRef<() => void>(() => undefined);
   const autoProposalFitRef = useRef({ key: "", resumeStarted: false, coverStarted: false });
   // Both document kinds use the same recommendation and safe auto-selection
   // contract; dirty editors and restored applications are never replaced.
@@ -641,7 +649,7 @@ function App() {
       if (!continuesPreparedSource) {
         setApplicationOfRecordId(null);
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
-        setResumeVariantRecommendation(null);
+        clearPreparedResumeRecommendationRef.current();
         setCoverLetterVariantRecommendation(null);
       }
       if (!snapshot) return;
@@ -1092,7 +1100,10 @@ function App() {
   // we tailor against, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
-  const resumeReady = Boolean((currentResumeText || resumeText).trim().length > 80);
+  const resumeIsStarterSample = resumeOrigin === "starter" && applicationOfRecordId === null;
+  const resumeReady = Boolean(
+    (currentResumeText || resumeText).trim().length > 80 && !resumeIsStarterSample
+  );
   const coverLetterReady =
     coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
   // A usable application starts with a completed intake snapshot. Nonempty
@@ -1174,6 +1185,7 @@ function App() {
     jobAnalysisRetry,
     quickFitState,
     retryInitialFit,
+    canRetryInitialFit,
     refreshInitialFit,
     localPreparedPreview,
     handleManualJobDescriptionChange,
@@ -1198,7 +1210,8 @@ function App() {
     jobAnalysisRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
     runInitialFit,
-    selectResumeForInitialFit: (jobText) => selectResumeForInitialFitRef.current(jobText),
+    resolvePreparedResume: (jobText: string) => resolvePreparedResumeRef.current(jobText),
+    candidateContext: () => requestHonestContext,
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
@@ -1316,10 +1329,10 @@ function App() {
     baseResumeName,
     baseResumeOptions,
     baseResumeHistory,
-    baseResumeCandidatesRevision,
     workspaceStatus,
     isSavingBaseResume,
     isWorkspaceBootstrapping,
+    whenWorkspaceBootstrapped,
     loadWorkspace,
     loadStarterTemplate,
     startBlankResume,
@@ -1345,43 +1358,42 @@ function App() {
     resetExportStatuses,
     setExportStatus,
     seedResumeData,
+    setResumeOrigin,
     currentResumeText,
     resumeText,
     editedResume,
     docStyle
   });
 
-  selectResumeForInitialFitRef.current = async (sourceJobText) => {
-    const currentText = currentResumeText || resumeText;
-    const currentLabel =
-      baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label ||
-      documentTitle ||
-      "Current resume";
-    const canRecommend =
-      baseResumeOptions.length > 1 &&
-      applicationOfRecordId === null &&
-      !resumeDocumentDirty &&
-      !resumeManualVariantSelectionInFlightRef.current &&
-      !isWorkspaceBootstrapping &&
-      !isSavingBaseResume;
-    if (canRecommend) {
-      const candidates = await readBaseResumeCandidates(baseResumeOptions);
-      const recommendation = recommendVariant(sourceJobText, candidates, baseResumeOptions.length);
-      const candidate = recommendation
-        ? candidates.find((entry) => entry.fileName === recommendation.fileName)
-        : null;
-      if (candidate) {
-        return {
-          resumeText: candidate.text,
-          resumeLabel: candidate.label,
-          candidateContext: requestHonestContext
-        };
-      }
-    }
-    return currentText.trim().length >= 80
-      ? { resumeText: currentText, resumeLabel: currentLabel, candidateContext: requestHonestContext }
-      : null;
+  // Every live value the resolver's decision depends on, read at dispatch time
+  // rather than captured: preparation begins from an event, and a stale closure
+  // is exactly how "workspace still hydrating" became "no resume".
+  const preparedResumeStateRef = useRef<PreparedResumeResolverState>(null!);
+  preparedResumeStateRef.current = {
+    baseResumeName,
+    options: baseResumeOptions,
+    resumeOrigin,
+    applicationOwned: applicationOfRecordId !== null,
+    currentText: currentResumeText || resumeText,
+    documentTitle,
+    documentDirty: resumeDocumentDirty,
+    manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
+    savingBaseResume: isSavingBaseResume
   };
+  const readPreparedResumeState = useCallback(() => preparedResumeStateRef.current, []);
+  const {
+    resolvePreparedResume,
+    clearPreparedResumeRecommendation,
+    resumeVariantRecommendation,
+    isResolvingPreparedResume
+  } = usePreparedResume({
+    readState: readPreparedResumeState,
+    whenWorkspaceBootstrapped,
+    readBaseResumeCandidates,
+    loadBaseResumeVersion
+  });
+  resolvePreparedResumeRef.current = resolvePreparedResume;
+  clearPreparedResumeRecommendationRef.current = clearPreparedResumeRecommendation;
 
   const handleSelectBaseResumeVariant = useCallback(
     async (fileName: string) => {
@@ -1466,111 +1478,6 @@ function App() {
     baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label || baseResumeName;
 
   const rankingJobDescription = debouncedPreparedJobDescription.trim();
-  const resumeVariantRecommendationInputKey =
-    jobPrepared && rankingJobDescription === jobDescription.trim() && baseResumeOptions.length > 1
-      ? JSON.stringify({
-          job: rankingJobDescription,
-          variants: baseResumeOptions.map((option) => option.fileName),
-          candidatesRevision: baseResumeCandidatesRevision
-        })
-      : "";
-  const resumeVariantSelectionStateRef = useRef({
-    baseResumeName,
-    resumeDocumentDirty,
-    documentVersion: resumeReplacementStateRef.current.version,
-    isWorkspaceBootstrapping,
-    isSavingBaseResume,
-    applicationOfRecordId,
-    jobPrepared,
-    preparedJobDescription: jobDescription.trim(),
-    options: baseResumeOptions,
-    loadBaseResumeVersion
-  });
-  resumeVariantSelectionStateRef.current = {
-    baseResumeName,
-    resumeDocumentDirty,
-    documentVersion: resumeReplacementStateRef.current.version,
-    isWorkspaceBootstrapping,
-    isSavingBaseResume,
-    applicationOfRecordId,
-    jobPrepared,
-    preparedJobDescription: jobDescription.trim(),
-    options: baseResumeOptions,
-    loadBaseResumeVersion
-  };
-
-  useEffect(() => {
-    if (!resumeVariantRecommendationInputKey) {
-      resumeVariantRecommendationKeyRef.current = "";
-      resumeVariantRecommendationGenerationRef.current += 1;
-      setResumeVariantRecommendation(null);
-      setIsRankingResumeVariants(false);
-      return;
-    }
-    if (resumeVariantRecommendationKeyRef.current === resumeVariantRecommendationInputKey) {
-      return;
-    }
-
-    resumeVariantRecommendationKeyRef.current = resumeVariantRecommendationInputKey;
-    const generation = resumeVariantRecommendationGenerationRef.current + 1;
-    resumeVariantRecommendationGenerationRef.current = generation;
-    const startState = resumeVariantSelectionStateRef.current;
-    const startingBaseResumeName = startState.baseResumeName;
-    const startingDocumentVersion = startState.documentVersion;
-    const options = startState.options;
-    setIsRankingResumeVariants(true);
-    setResumeVariantRecommendation(null);
-
-    void (async () => {
-      const candidates = await readBaseResumeCandidates(options);
-      if (
-        generation !== resumeVariantRecommendationGenerationRef.current ||
-        !resumeVariantSelectionStateRef.current.jobPrepared ||
-        resumeVariantSelectionStateRef.current.preparedJobDescription !== rankingJobDescription
-      ) {
-        return;
-      }
-      const recommendation = recommendVariant(rankingJobDescription, candidates, options.length);
-      setResumeVariantRecommendation(recommendation);
-
-      const current = resumeVariantSelectionStateRef.current;
-      const canAdoptRecommendation =
-        recommendation !== null &&
-        current.preparedJobDescription === rankingJobDescription &&
-        recommendation.fileName !== current.baseResumeName &&
-        current.baseResumeName === startingBaseResumeName &&
-        current.documentVersion === startingDocumentVersion &&
-        current.applicationOfRecordId === null &&
-        !current.resumeDocumentDirty &&
-        !resumeManualVariantSelectionInFlightRef.current &&
-        !current.isWorkspaceBootstrapping &&
-        !current.isSavingBaseResume;
-      if (canAdoptRecommendation) {
-        await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
-          const latest = resumeVariantSelectionStateRef.current;
-          return (
-            generation !== resumeVariantRecommendationGenerationRef.current ||
-            !latest.jobPrepared ||
-            latest.preparedJobDescription !== rankingJobDescription ||
-            latest.applicationOfRecordId !== null ||
-            latest.documentVersion !== startingDocumentVersion ||
-            latest.resumeDocumentDirty ||
-            latest.baseResumeName !== startingBaseResumeName ||
-            resumeManualVariantSelectionInFlightRef.current
-          );
-        });
-      }
-      if (generation === resumeVariantRecommendationGenerationRef.current) {
-        setIsRankingResumeVariants(false);
-      }
-    })();
-
-    return () => {
-      if (generation === resumeVariantRecommendationGenerationRef.current) {
-        resumeVariantRecommendationGenerationRef.current += 1;
-      }
-    };
-  }, [readBaseResumeCandidates, rankingJobDescription, resumeVariantRecommendationInputKey]);
 
   // Cover letters follow the same rule as resumes: select a meaningful unique
   // winner, but only while the current editor is clean and not application-owned.
@@ -1684,7 +1591,7 @@ function App() {
     jobPreparationActive ||
     (materialSelection.resume &&
       (isPolishing ||
-        isRankingResumeVariants ||
+        isResolvingPreparedResume ||
         isSavingBaseResume ||
         isManuallySelectingResumeVariant ||
         isWorkspaceBootstrapping)) ||
@@ -1705,7 +1612,7 @@ function App() {
       isPolishing ||
       isSavingBaseResume ||
       isManuallySelectingResumeVariant ||
-      isRankingResumeVariants
+      isResolvingPreparedResume
     ) return;
     // This click is explicit: it tailors exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
@@ -1715,11 +1622,12 @@ function App() {
 
   useEffect(() => {
     if (quickFitState.status !== "ready") return;
-    const { result: fit, resumeLabel } = quickFitState.snapshot;
+    const { result: fit } = quickFitState.snapshot;
+    const { provenance } = quickFitState;
     if (!quickFitAllowsAutoProposal(fit)) return;
     const key = JSON.stringify({
-      source: importedJob?.sourceText || jobRawText || jobDescription,
-      resumeLabel,
+      job: provenance.jobFingerprint,
+      resume: provenance.resumeFingerprint,
       verdict: fit.verdict,
       summary: fit.summary
     });
@@ -1727,22 +1635,25 @@ function App() {
       autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
     }
     const receipt = autoProposalFitRef.current;
-    const currentResumeLabel =
-      baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label ||
-      documentTitle ||
-      "Current resume";
-    const fitResumeIsCurrent = resumeLabel === currentResumeLabel;
+    // Content, not labels: two files can share a friendly label, editing a
+    // document never changes its label, and re-preparing a posting leaves the
+    // old label attached to a screening that no longer applies. A proposal may
+    // only start from the exact resume and posting the fit actually screened.
+    const fitInputsAreCurrent =
+      provenance.resumeFingerprint === contentFingerprint(currentResumeText || resumeText) &&
+      provenance.jobFingerprint ===
+        contentFingerprint(importedJob?.sourceText || jobRawText || jobDescription);
 
     const canStartResume =
       autoCreateResumeProposal &&
       materialSelection.resume &&
-      fitResumeIsCurrent &&
+      fitInputsAreCurrent &&
       jobPrepared &&
       canPolish &&
       !isPolishing &&
       !isSavingBaseResume &&
       !isManuallySelectingResumeVariant &&
-      !isRankingResumeVariants;
+      !isResolvingPreparedResume;
     if (!receipt.resumeStarted && canStartResume) {
       receipt.resumeStarted = true;
       void handlePolish({ revealResumeOnSuccess: false });
@@ -1751,7 +1662,7 @@ function App() {
     const canStartCover =
       autoCreateCoverLetterProposal &&
       materialSelection.coverLetter &&
-      fitResumeIsCurrent &&
+      fitInputsAreCurrent &&
       coverLetterPreflight.canTailor &&
       resumeReady &&
       jobPrepared &&
@@ -1766,12 +1677,10 @@ function App() {
   }, [
     autoCreateCoverLetterProposal,
     autoCreateResumeProposal,
-    baseResumeName,
-    baseResumeOptions,
     canPolish,
     coverLetterPreflight.canTailor,
     coverProviderReady,
-    documentTitle,
+    currentResumeText,
     handlePolish,
     handleTailorCoverLetter,
     importedJob?.sourceText,
@@ -1779,7 +1688,7 @@ function App() {
     isManuallySelectingResumeVariant,
     isPolishing,
     isRankingCoverLetterVariants,
-    isRankingResumeVariants,
+    isResolvingPreparedResume,
     isSavingBaseResume,
     isSelectingCoverVariant,
     jobDescription,
@@ -1788,7 +1697,8 @@ function App() {
     materialSelection.coverLetter,
     materialSelection.resume,
     quickFitState,
-    resumeReady
+    resumeReady,
+    resumeText
   ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
@@ -2072,6 +1982,9 @@ function App() {
       linkPreparedApplication(app.id);
       detachBaseResumeIdentity();
       setFileName("");
+      // The only origin transition useWorkspaceResume cannot see: a restored
+      // application seeds the editor directly, outside every workspace path.
+      setResumeOrigin(restoredResumeData || restoredResume ? "application" : "blank");
       if (restoredResumeData || restoredResume) {
         const restoredAnalysis = analyzeResumeText(restoredResume, restoredTailoringText);
         setResumeText(restoredResume);
@@ -2347,13 +2260,14 @@ function App() {
               baseResumeOptions={baseResumeOptions}
               onSelectBaseResume={handleSelectBaseResumeVariant}
               resumeVariantRecommendation={resumeVariantRecommendation}
-              isRankingResumeVariants={isRankingResumeVariants}
+              isResolvingPreparedResume={isResolvingPreparedResume}
+              resumeIsStarterSample={resumeIsStarterSample}
               isSelectingResume={isSavingBaseResume || isManuallySelectingResumeVariant}
               canTailor={
                 canPolish &&
                 !isSavingBaseResume &&
                 !isManuallySelectingResumeVariant &&
-                !isRankingResumeVariants
+                !isResolvingPreparedResume
               }
               isPolishing={isPolishing}
               polishProgress={polishProgress}
@@ -2402,7 +2316,8 @@ function App() {
               onTailorCoverLetter={handleTailorCoverLetter}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
               quickFit={quickFitState}
-              onRetryInitialFit={retryInitialFit}
+              onRetryInitialFit={() => void retryInitialFit()}
+              canRetryInitialFit={canRetryInitialFit}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}

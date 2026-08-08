@@ -344,7 +344,7 @@ assert.match(
 );
 assert.match(
   intake,
-  /setLocalPreparedPreview\(importedJobSnapshot\([\s\S]{0,180}?const fitRequest = await prepareInitialFitRequest/,
+  /setLocalPreparedPreview\(importedJobSnapshot\([\s\S]{0,240}?const fitRequest = await prepareResumeAndInitialFit/,
   "Prepare publishes deterministic extraction before waiting on resume selection or AI"
 );
 assert.doesNotMatch(
@@ -866,7 +866,7 @@ assert.match(
 );
 assert.match(
   prepareTab,
-  /variantDisabled=\{\s*isSelectingResume\s*\|\|\s*isPolishing\s*\|\|\s*isRankingResumeVariants/,
+  /variantDisabled=\{\s*isSelectingResume\s*\|\|\s*isPolishing\s*\|\|\s*isResolvingPreparedResume/,
   "the resume selector cannot launch overlapping variant loads"
 );
 assert.match(
@@ -894,7 +894,7 @@ assert.match(
   /<p className="prepare-page__eyebrow">Initial Fit<\/p>[\s\S]{0,2400}?Initial Fit unavailable[\s\S]{0,500}?Retry fit check/,
   "Prepare treats compact Initial Fit failure as retryable and non-blocking"
 );
-assert.match(app, /quickFit=\{quickFitState\}[\s\S]{0,100}?onRetryInitialFit=\{retryInitialFit\}/,
+assert.match(app, /quickFit=\{quickFitState\}[\s\S]{0,200}?onRetryInitialFit=\{\(\) => void retryInitialFit\(\)\}\s*canRetryInitialFit=\{canRetryInitialFit\}/,
   "Prepare receives the current compact Initial Fit state and retry action");
 assert.doesNotMatch(app, /prepareFitAssessment|savedApplicationFitVerdict/,
   "Prepare no longer derives Initial Fit from saved or post-polish audit scores");
@@ -1179,78 +1179,66 @@ assert.match(
   /onOpen: \(\) => void handleSelectBaseResumeVariant\(option\.fileName\)/,
   "the resume Open menu routes saved variants through the synchronous wrapper"
 );
-const variantRankingStart = app.indexOf("const rankingJobDescription");
-const variantRankingEnd = app.indexOf("const applicationPreparationActive", variantRankingStart);
-const variantRanking = app.slice(variantRankingStart, variantRankingEnd);
-assert.match(
-  variantRanking,
-  /readBaseResumeCandidates\(options\)/,
-  "variant recommendation compares the actual saved resume documents"
+// One resolver, not two selectors. The retired post-Prepare ranking effect
+// could adopt a different variant than the pre-fit pick, so Initial Fit
+// described resume A while the editor held resume B. These guards pin the
+// shape; prepared-resume-resolution.mjs exercises the decisions themselves.
+const preparedResumeHook = readHook("usePreparedResume.ts");
+const preparedResumeRules = readFileSync(new URL("../../lib/preparedResume.ts", import.meta.url), "utf8");
+assert.doesNotMatch(
+  app,
+  /resumeVariantRecommendationInputKey|resumeVariantSelectionStateRef|setResumeVariantRecommendation/,
+  "the duplicate post-Prepare resume ranking effect stays removed"
+);
+assert.equal(
+  app.match(/resolvePreparedResume\b(?!Ref)/g)?.length,
+  3,
+  "App holds exactly one resolver value: the hook result, the intake arg name, and the ref assignment"
 );
 assert.match(
-  variantRanking,
-  /recommendVariant\(\s*rankingJobDescription,\s*candidates,\s*options\.length\s*\)/,
-  "variant recommendation ranks every expected candidate against the captured prepared job"
+  app,
+  /resolvePreparedResumeRef\.current = resolvePreparedResume;/,
+  "the intake bridge always points at the live resolver"
 );
 assert.match(
-  variantRanking,
-  /const rankingJobDescription = debouncedPreparedJobDescription\.trim\(\);[\s\S]{0,220}?rankingJobDescription === jobDescription\.trim\(\)/,
-  "variant ranking cannot start until the debounced text is the current prepared job"
+  intake,
+  /const selection = await resolvePreparedResume\(localJobText\);/,
+  "preparation resolves its resume before building any provider request"
 );
 assert.match(
-  variantRanking,
-  /(?:resumeVariantSelectionStateRef\.current|latest)\.preparedJobDescription\s*!==\s*rankingJobDescription/,
-  "an in-flight candidate read is discarded immediately when the prepared job changes"
+  intake,
+  /const fitRequest = await prepareResumeAndInitialFit\(localExtracted\.tailoringText,/,
+  "variants rank against the local job-analysis brief, not the raw posting the provider receives"
 );
 assert.match(
-  variantRanking,
-  /recommendation !== null[\s\S]{0,350}?!current\.resumeDocumentDirty/,
-  "a unique resume recommendation is adopted only while the editor is clean"
+  intake,
+  /const selection = await resolvePreparedResume\(localJobText\);\s*preparedJobForFitRef\.current = [\s\S]{0,120}?if \(!runInitialFit\)/,
+  "resolution runs on every preparation, not only when Initial Fit is enabled"
 );
 assert.match(
-  variantRanking,
-  /const resumeVariantSelectionStateRef = useRef\(\{[\s\S]{0,260}?documentVersion: resumeReplacementStateRef\.current\.version/,
-  "resume variant selection mirrors the live editor document version"
+  preparedResumeRules,
+  /await deps\.whenWorkspaceBootstrapped\(\);/,
+  "resolution waits for workspace hydration instead of reading a mid-flight boolean"
 );
 assert.match(
-  variantRanking,
-  /const startingDocumentVersion = startState\.documentVersion/,
-  "resume ranking captures the starting document version before loading candidates"
+  preparedResumeHook,
+  /adopt: \(fileName\) =>\s*loadBaseResumeVersion\(fileName, true,/,
+  "an adopted variant is loaded through the guarded workspace loader, never seeded directly"
 );
 assert.match(
-  variantRanking,
-  /const canAdoptRecommendation =[\s\S]{0,650}?current\.documentVersion === startingDocumentVersion/,
-  "resume adoption requires the document version to remain current before loading"
+  preparedResumeHook,
+  /loadBaseResumeVersion\([\s\S]{0,420}?latest\.applicationOwned \|\|\s*latest\.documentDirty \|\|\s*latest\.manualSelectionInFlight/,
+  "an in-flight adoption cancels on a restored application, a fresh edit, or manual selection"
 );
 assert.match(
-  variantRanking,
-  /const canAdoptRecommendation =[\s\S]{0,800}?!resumeManualVariantSelectionInFlightRef\.current[\s\S]{0,260}?await current\.loadBaseResumeVersion/,
-  "resume recommendation yields to synchronous manual selection before automatic loading"
+  preparedResumeRules,
+  /function documentIsReplaceable[\s\S]{0,320}?!state\.applicationOwned &&\s*!state\.documentDirty &&\s*!state\.manualSelectionInFlight &&\s*!state\.savingBaseResume/,
+  "a dirty, application-owned, or busy document is never replaced by resolution"
 );
 assert.match(
-  variantRanking,
-  /await current\.loadBaseResumeVersion\(\s*recommendation\.fileName,[\s\S]{0,650}?latest\.documentVersion !== startingDocumentVersion/,
-  "a unique resume winner is adopted through the guarded workspace loader"
-);
-assert.match(
-  variantRanking,
-  /await current\.loadBaseResumeVersion\([\s\S]{0,800}?resumeManualVariantSelectionInFlightRef\.current/,
-  "an in-flight automatic resume load cancels when manual selection begins"
-);
-assert.match(
-  variantRanking,
-  /latest\.resumeDocumentDirty[\s\S]{0,180}?latest\.baseResumeName !== startingBaseResumeName/,
-  "resume loading cancels when the editor becomes dirty or the selected base changes"
-);
-assert.match(
-  variantRanking,
-  /candidatesRevision: baseResumeCandidatesRevision/,
-  "variant ranking invalidates when authoritative saved candidate contents may have changed"
-);
-assert.match(
-  variantRanking,
-  /latest\.preparedJobDescription !== rankingJobDescription[\s\S]{0,100}?latest\.applicationOfRecordId !== null/,
-  "an in-flight automatic variant load cannot replace a resume restored from an application of record"
+  preparedResumeRules,
+  /state\.applicationOwned \|\| \(state\.resumeOrigin !== "starter" && state\.resumeOrigin !== "blank"\)/,
+  "the bundled starter never counts as the applicant's own resume"
 );
 assert.match(
   variantRecommendation,
@@ -1262,15 +1250,24 @@ assert.match(
   /if \(best\.score <= 0 \|\| lead < minimumLead\) return null/,
   "a tie or negligible edge is not presented as a recommendation"
 );
+const baseResumeRepository = readFileSync(
+  new URL("../../lib/baseResumeWorkspaceRepository.ts", import.meta.url),
+  "utf8"
+);
 assert.match(
-  workspaceResume,
-  /const readBaseResumeCandidates = useCallback[\s\S]{0,900}?fetch\("\/api\/workspace\/base-resume\/candidates"/,
+  baseResumeRepository,
+  /fetch\("\/api\/workspace\/base-resume\/candidates"/,
   "candidate ranking reads every variant through one batch request, not one snapshot per file"
 );
 assert.doesNotMatch(
-  workspaceResume,
-  /const readBaseResumeCandidates = useCallback[\s\S]{0,1600}?base-resume\/select/,
+  baseResumeRepository,
+  /base-resume\/select/,
   "candidate ranking never falls back to the snapshot-per-file select route"
+);
+assert.match(
+  workspaceResume,
+  /const cached = baseResumeCandidateCacheRef\.current;\s*if \(cached\?\.key === cacheKey\) return cached\.candidates;/,
+  "resolving and then displaying the same ranking reuses one read"
 );
 assert.match(
   workspaceResume,
@@ -1367,7 +1364,7 @@ assert.equal(
 );
 assert.match(
   prepareTab,
-  /isRankingResumeVariants \|\| isSelectingResume[\s\S]{0,80}?"Selecting best match…"/,
+  /isResolvingPreparedResume \|\| isSelectingResume[\s\S]{0,80}?"Selecting best match…"/,
   "the resume names automatic variant selection concisely"
 );
 assert.match(
@@ -1471,17 +1468,17 @@ assert.match(
 );
 assert.match(
   app,
-  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isRankingResumeVariants[\s\S]{0,40}?\) return;/,
+  /function handleTailorPreparedResume\(\) \{\s*if \([\s\S]{0,240}?isSavingBaseResume \|\|[\s\S]{0,100}?isManuallySelectingResumeVariant \|\|[\s\S]{0,100}?isResolvingPreparedResume[\s\S]{0,40}?\) return;/,
   "the prepared-resume Tailor handler fails closed while manual selection or ranking is active"
 );
 assert.match(
   app,
-  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isRankingResumeVariants[\s\S]{0,20}?\}/,
+  /canTailor=\{[\s\S]{0,180}?canPolish &&[\s\S]{0,80}?!isSavingBaseResume &&[\s\S]{0,80}?!isManuallySelectingResumeVariant &&[\s\S]{0,80}?!isResolvingPreparedResume[\s\S]{0,20}?\}/,
   "App disables Prepare resume Tailor during loading, manual selection, or variant ranking"
 );
 assert.match(
   prepareTab,
-  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isRankingResumeVariants[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
+  /const tailorHint =[\s\S]{0,420}?isSelectingResume \|\| isResolvingPreparedResume[\s\S]{0,120}?"Wait for the resume variant selection to finish\."[\s\S]{0,120}?!canTailor/,
   "Prepare explains that resume Tailor is waiting for variant selection before generic blockers"
 );
 assert.match(
@@ -1817,7 +1814,7 @@ const importedSnapshotSetterEnd = app.indexOf("const handlePreparedJobTrackingCh
 const importedSnapshotSetter = app.slice(importedSnapshotSetterStart, importedSnapshotSetterEnd);
 assert.match(
   importedSnapshotSetter,
-  /snapshot\.sourceText === importedJob\.sourceText[\s\S]*setImportedJob\(snapshot\);[\s\S]*if \(!continuesPreparedSource\) \{[\s\S]*setApplicationOfRecordId\(null\);[\s\S]*setMaterialSelection\(DEFAULT_MATERIAL_SELECTION\);[\s\S]*setResumeVariantRecommendation\(null\);/,
+  /snapshot\.sourceText === importedJob\.sourceText[\s\S]*setImportedJob\(snapshot\);[\s\S]*if \(!continuesPreparedSource\) \{[\s\S]*setApplicationOfRecordId\(null\);[\s\S]*setMaterialSelection\(DEFAULT_MATERIAL_SELECTION\);[\s\S]*clearPreparedResumeRecommendationRef\.current\(\);/,
   "fresh intake resets application defaults while same-source Prepare again preserves explicit choices"
 );
 const manualSourceEdit = intake.indexOf("function handleManualJobDescriptionChange");
