@@ -241,7 +241,7 @@ export function PrepareTab({
           ? { tone: "info", message: preparationStatus }
           : null;
   const polishSettled = polishOutputCurrent && (
-    polishProgress.tailor.status === "done" || polishOutcome === "WITHHELD"
+    polishProgress.polish.status === "done" || polishOutcome === "WITHHELD"
   );
   const resumeState =
     isResolvingPreparedResume || isSelectingResume
@@ -311,8 +311,8 @@ export function PrepareTab({
             : "";
   const canStartTailor = canTailor && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
-    (polishProgress.tailor.status === "failed" && polishOutcome !== "WITHHELD") ||
-    polishProgress.tailor.status === "stopped";
+    (polishProgress.polish.status === "failed" && polishOutcome !== "WITHHELD") ||
+    polishProgress.polish.status === "stopped";
   // Success receipts duplicate the state line. Keep only blockers and failures.
   const resumeNote = !canStartTailor && tailorHint
     ? tailorHint

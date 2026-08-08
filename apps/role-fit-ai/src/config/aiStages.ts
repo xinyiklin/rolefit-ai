@@ -4,13 +4,13 @@
 // settings keys, the settings seeder, the Copy-settings control, and the
 // Settings dialog all derive from it, because eight hand-maintained copies of
 // "the stages" is how a new stage ends up configurable in one place and
-// hardcoded to Tailor's provider in another — which is exactly the state the
+// hardcoded to Resume Polish's provider in another — which is exactly the state the
 // cover letter and Q&A stages were in before they were added here.
 //
-// `settingsPrefix` is the localStorage key prefix. Polish keeps its original
+// `settingsPrefix` is the localStorage key prefix. Resume Polish keeps its original
 // unprefixed fields; the other stages use explicit names.
 
-export type AiStageId = "job-analysis" | "tailor" | "final-check" | "cover" | "answers";
+export type AiStageId = "job-analysis" | "resume-polish" | "final-check" | "cover" | "answers";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -31,8 +31,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     settingsPrefix: "jobAnalysis"
   },
   {
-    id: "tailor",
-    label: "Polish",
+    id: "resume-polish",
+    label: "Resume Polish",
     title: "Resume Polish",
     blurb: "Creates one grounded proposal for the sections you marked Polish.",
     settingsPrefix: ""
@@ -75,7 +75,7 @@ export function stageSettingsKeys(stage: AiStageDescriptor): {
   effort: string;
 } {
   const prefix = stage.settingsPrefix;
-  // Tailor's unprefixed keys are the original names, not a pattern the other
+  // Resume Polish's unprefixed keys are the original names, not a pattern the other
   // stages follow: `aiProvider`/`selectedModel`/`cliReasoningEffort`.
   if (prefix === "") {
     return { provider: "aiProvider", model: "selectedModel", effort: "cliReasoningEffort" };

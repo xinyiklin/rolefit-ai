@@ -378,7 +378,9 @@ no API key required.
 The CLI auth/session remains provider-owned and tied to the device.
 Antigravity 1.1.x requires its non-interactive prompt in the local process
 argument list; unlike the Claude and Codex wrappers, that path cannot keep
-resume/job text exclusively on stdin while the subprocess is running.
+resume/job text exclusively on stdin while the subprocess is running. RoleFit
+uses the stable model slugs printed by current `agy models`; older saved display
+names migrate without losing the selected model.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 

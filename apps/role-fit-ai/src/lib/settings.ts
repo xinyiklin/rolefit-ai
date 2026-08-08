@@ -1,6 +1,7 @@
 import type { AiProviderValue } from "../config/aiOptions.ts";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
+import { normalizeAntigravityModelId } from "../../shared/antigravityModels.ts";
 import {
   CITIZENSHIP_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,
@@ -28,9 +29,9 @@ export type PersistedSettings = {
   jobAnalysisProvider?: AiProviderValue;
   jobAnalysisSelectedModel?: string;
   jobAnalysisCliReasoningEffort?: string;
-  // Cover-letter tailor and application Q&A. Both ran on the Tailor stage's
-  // config before they were configurable; absent keys migrate from Tailor on
-  // load so an existing install keeps the provider it was already using.
+  // Cover-letter polish and application Q&A. Both ran on the Resume Polish
+  // config before they were configurable; absent keys inherit it on load so an
+  // existing install keeps the provider it was already using.
   coverProvider?: AiProviderValue;
   coverSelectedModel?: string;
   coverCliReasoningEffort?: string;
@@ -109,9 +110,23 @@ export function migrateSettings(value: unknown): Record<string, unknown> {
     if (!hasOwn(instructions, "final-check") && hasOwn(instructions, "review")) {
       instructions["final-check"] = instructions.review;
     }
+    if (!hasOwn(instructions, "resume-polish") && hasOwn(instructions, "tailor")) {
+      instructions["resume-polish"] = instructions.tailor;
+    }
     delete instructions.distill;
     delete instructions.review;
+    delete instructions.tailor;
     migrated.stageCustomInstructions = instructions;
+  }
+
+  // Antigravity 1.1.5 introduced stable slugs accepted by `--model`. Preserve
+  // every stage's prior model choice instead of letting strict normalization
+  // collapse a legacy display name to the new default.
+  for (const stage of AI_STAGES) {
+    const keys = stageSettingsKeys(stage);
+    if (migrated[keys.provider] !== "antigravity-cli") continue;
+    const model = migrated[keys.model];
+    if (typeof model === "string") migrated[keys.model] = normalizeAntigravityModelId(model);
   }
   return migrated;
 }
@@ -170,7 +185,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   // it does not seed missing stage configuration. `workspaceBackupContract.ts`
   // compares against the migrated input so old backups remain valid while
   // unsupported keys still fail closed. The cover/answers stages
-  // inherit Tailor's config in useAiSettings' seeder instead, and the one
+  // inherit Resume Polish's config in useAiSettings' seeder instead.
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     if (bag[providerKey] && !validProviders.has(bag[providerKey] as string)) {
       delete bag[providerKey];
@@ -187,7 +202,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
       }
     }
     // Each stage now holds a concrete provider + model (the old "" = "same as
-    // Tailor" sentinel is gone). Drop any stale empty string — for the model too,
+    // Resume Polish" sentinel is gone). Drop any stale empty string — for the model too,
     // since the hook seeds its default with `?? "..."`, which does NOT replace an
     // empty string. A legacy "same as primary" reviewer persisted an empty
     // auditSelectedModel; left in place it would send an empty model, resolve to the

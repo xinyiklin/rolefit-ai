@@ -54,6 +54,7 @@ try {
       ["claude-fable-5", "Fable 5"],
       ["claude-sonnet-5", "Sonnet 5"],
       ["claude-sonnet-4-6", "Sonnet 4.6"],
+      ["claude-opus-5", "Opus 5"],
       ["claude-opus-4-8", "Opus 4.8"],
       ["claude-opus-4-7", "Opus 4.7"],
       ["claude-opus-4-6", "Opus 4.6"],
@@ -62,12 +63,48 @@ try {
     "Claude CLI exposes every current or still-available concrete model with concise labels"
   );
   assert.deepEqual(
+    modelOptionsByProvider.openai.map(({ value }) => value),
+    ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"],
+    "OpenAI API exposes the three current GPT-5.6 general-purpose models"
+  );
+  assert.deepEqual(
+    modelOptionsByProvider.anthropic.map(({ value }) => value),
+    ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+    "Claude API exposes the current public model families plus the still-available prior Opus"
+  );
+  assert.deepEqual(
+    modelOptionsByProvider["codex-cli"].map(({ value }) => value),
+    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"],
+    "Codex CLI matches every list-visible model in the installed cache"
+  );
+  assert.deepEqual(
+    modelOptionsByProvider["antigravity-cli"].map(({ value, label }) => [value, label]),
+    [
+      ["gemini-3.6-flash-high", "Gemini 3.6 Flash (High)"],
+      ["gemini-3.6-flash-medium", "Gemini 3.6 Flash (Medium)"],
+      ["gemini-3.6-flash-low", "Gemini 3.6 Flash (Low)"],
+      ["gemini-3.5-flash-high", "Gemini 3.5 Flash (High)"],
+      ["gemini-3.5-flash-medium", "Gemini 3.5 Flash (Medium)"],
+      ["gemini-3.5-flash-low", "Gemini 3.5 Flash (Low)"],
+      ["gemini-3.1-pro-high", "Gemini 3.1 Pro (High)"],
+      ["gemini-3.1-pro-low", "Gemini 3.1 Pro (Low)"],
+      ["claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"],
+      ["claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"],
+      ["gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"]
+    ],
+    "Antigravity sends the stable slugs paired with the installed CLI's display names"
+  );
+  assert.deepEqual(
     cliReasoningEffortOptionsFor("codex-cli", "gpt-5.6-sol")?.map(({ value }) => value),
     ["low", "medium", "high", "xhigh", "max", "ultra"]
   );
   assert.deepEqual(
     cliReasoningEffortOptionsFor("codex-cli", "gpt-5.6-luna")?.map(({ value }) => value),
     ["low", "medium", "high", "xhigh", "max"]
+  );
+  assert.deepEqual(
+    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.3-codex-spark")?.map(({ value }) => value),
+    ["low", "medium", "high", "xhigh"]
   );
 
   const defaults = resolveProviderRequest({});
@@ -85,6 +122,17 @@ try {
     "an explicit provider uses its provider-specific default instead of a global headless override"
   );
   delete process.env.AI_MODEL;
+
+  assert.equal(
+    resolveProviderRequest({ provider: "antigravity-cli" }).model,
+    "gemini-3.6-flash-high",
+    "Antigravity defaults to the current stable 3.6 Flash slug"
+  );
+  assert.equal(
+    resolveProviderRequest({ provider: "antigravity-cli", model: "Gemini 3.5 Flash (High)" }).model,
+    "gemini-3.5-flash-high",
+    "already-open tabs using a legacy Antigravity display name migrate at the server boundary"
+  );
 
   assert.throws(
     () => resolveProviderRequest({ provider: "opneai", model: "gpt-test" }),
@@ -296,8 +344,30 @@ try {
   });
   assert.deepEqual(sonnetBody.thinking, { type: "disabled" }, "Sonnet 5 preserves bounded no-thinking behavior explicitly");
   assert.equal("temperature" in sonnetBody, false, "Claude requests omit unsupported sampling parameters");
+  const opus5Body = buildAnthropicMessagesBody({
+    model: "claude-opus-5",
+    systemPrompt: "system",
+    userPrompt: "user"
+  });
+  assert.deepEqual(
+    opus5Body.thinking,
+    { type: "disabled" },
+    "Opus 5 also defaults thinking on, so it is disabled explicitly like Sonnet 5"
+  );
+  assert.equal(
+    "output_config" in opus5Body,
+    false,
+    "Opus 5 stays at the default effort, the only tier that accepts a thinking disable"
+  );
   const fableBody = buildAnthropicMessagesBody({ model: "claude-fable-5", systemPrompt: "system", userPrompt: "user" });
   assert.equal("thinking" in fableBody, false, "models with always-on adaptive thinking are not sent an invalid disable flag");
+  assert.deepEqual(
+    fableBody.output_config,
+    { effort: "low" },
+    "Fable 5 keeps its required adaptive thinking within the bounded JSON output budget"
+  );
+  const opus48Body = buildAnthropicMessagesBody({ model: "claude-opus-4-8", systemPrompt: "system", userPrompt: "user" });
+  assert.equal("thinking" in opus48Body, false, "models that already default to no thinking are left untouched");
 
   const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low", systemPrompt: "system" });
   assert(claude.includes("--no-session-persistence"));
@@ -337,9 +407,10 @@ try {
   }
   assert.equal(codex[codex.indexOf("-C") + 1], "/tmp/rolefit-test");
 
-  const agy = buildAntigravityCliArgs({ model: "Gemini Test", userPrompt: "Return JSON" });
+  const agy = buildAntigravityCliArgs({ model: "gemini-test", userPrompt: "Return JSON" });
   assert(agy.includes("--sandbox"), "Antigravity runs with terminal restrictions");
   assert.equal(agy[agy.indexOf("-p") + 1], "Return JSON", "Antigravity receives the print prompt as -p's required value");
+  assert.equal(agy[agy.indexOf("--model") + 1], "gemini-test", "Antigravity receives a stable model slug");
   assert.equal(agy[agy.indexOf("--print-timeout") + 1], "230s", "Antigravity has an internal timeout below the server timeout");
 
   const normalizedQuestions = normalizeApplicationQuestions([

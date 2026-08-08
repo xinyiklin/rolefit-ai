@@ -419,7 +419,8 @@ Never show:
   work-authorization lines and education level gates the field of study; neither
   block gates the other.
 - Retired Tailor/Review/Both settings are dropped. Resume and Prepare both use
-  the one-pass Polish contract; Final Check is a separate optional action.
+  the one-pass Polish contract; Final Check is its optional closing phase, with
+  an independent provider setting because it remains an extra request.
 - Job analysis and Resume Polish each report their real operation. Resume Polish
   never fabricates a second stage: Proposal, No changes, and Withheld are
   distinct, and an all-withheld result is not a completed proposal.
@@ -430,8 +431,8 @@ Never show:
 - Each Model control changes with its section's selected provider and exposes
   only models verified against the installed CLI or current first-party API;
   do not add a custom-model escape hatch for unverified IDs.
-- Provider, model, and effort preferences may persist in localStorage so the
-  three stage configurations survive reloads. CLI providers show connection
+- Provider, model, and effort preferences may persist in localStorage so all
+  five stage configurations survive reloads. CLI providers show connection
   guidance and no API-key field. Native OpenAI/Claude API credentials are added
   only through the local provider companion; the browser never collects,
   stores, renders, or submits them. Settings shows only explicitly added

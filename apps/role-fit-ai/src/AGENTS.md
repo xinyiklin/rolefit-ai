@@ -28,7 +28,7 @@ owns the RoleFit React host and its integration with shared Typeset packages.
   exports contract.
 - RoleFit may adapt shared hooks/components through thin host adapters and
   documented slots. Keep provider/job/tracker state outside the packages.
-- The editor always paints the full `ResumeData`. Tailor/Include/Off controls AI
+- The editor always paints the full `ResumeData`. Polish/Include/Off controls AI
   payload scope; they do not project or filter the document.
 - Keep server/client request fields explicit and aligned. Unknown responses are
   untrusted until validated/coerced.

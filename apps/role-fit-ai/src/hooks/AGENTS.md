@@ -52,7 +52,7 @@ browser-side effects; components render them and App composes them.
   before duplicate or download dialogs, permits either or both to be excluded,
   and leaves a previously saved excluded artifact untouched on re-Apply. Apply
   stores the complete editable prepared brief (including benefits) while
-  Tailor receives the benefits-excluded model-facing projection. The captured
+  Resume Polish receives the benefits-excluded model-facing projection. The captured
   posting remains immutable and separately persisted even when it initially
   matches that prepared projection.
   `useWorkspaceResume` may read actual saved resume documents to support
@@ -112,7 +112,7 @@ browser-side effects; components render them and App composes them.
   document becomes durable, and a restore seeds CLEAN so a crash right after it
   still has something to recover. Accepting a cover-letter proposal also keeps
   one exact in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
-  history; its Restore expires on the next edit, open, or Tailor and does not
+  history; its Restore expires on the next edit, open, or Polish and does not
   replace crash recovery or workspace variants/history.
 - `useRestoredScroll` preserves each document tab's reading position across its
   unmount. It receives both the desktop editor scroller and the narrow stacked

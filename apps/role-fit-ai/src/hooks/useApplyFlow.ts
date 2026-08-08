@@ -279,7 +279,7 @@ export function useApplyFlow({
     const aiUsage: Record<string, StageAiUsage> = canonicalizeAiUsageStageKeys(existing?.aiUsage);
     aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
     if (materialSelection.resume) {
-      aiUsage.tailor = pipelineAiUsage.tailor ?? { source: "none" };
+      aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
       if (pipelineAiUsage["final-check"]) {
         aiUsage["final-check"] = pipelineAiUsage["final-check"];
       } else {

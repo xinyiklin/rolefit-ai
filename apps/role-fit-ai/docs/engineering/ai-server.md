@@ -178,7 +178,7 @@ owns:
   unchanged and offers recovery near the workflow heading. A valid response is
   also staged client-side as a fingerprinted proposal: only **Accept proposal**
   applies it, **Discard proposal** does not touch the editor, and changed semantic
-  inputs disable acceptance until Tailor runs again. The flow never escalates
+  inputs disable acceptance until Resume Polish runs again. The flow never escalates
   into asking the candidate to plan evidence. Length is advisory — outside
   180-420 words the letter still returns, with a warning attached. Pure employer
   facts are excluded from the candidate-claim surface, but employer-led sentences
@@ -433,13 +433,13 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
-`/api/polish` receives the Tailor config as `provider` / `model` /
+`/api/polish` receives the Resume Polish config as `provider` / `model` /
 `reasoningEffort`, `/api/final-check` receives the Final Check config,
 `/api/cover-letter` receives the Cover config, and
 `/api/application-answers` receives the Answers config. Cover and Answers ran on
-the Tailor config before they became separately configurable; an install that
-predates the split migrates them from Tailor on load, so its behavior does not
-change across the upgrade.
+the Resume Polish config before they became separately configurable; an install
+that predates the split inherits it on load, so its behavior does not change
+across the upgrade.
 
 Settings and workspace-backup loads migrate `distillProvider`,
 `distillSelectedModel`, `distillCliReasoningEffort`, and
@@ -447,12 +447,16 @@ Settings and workspace-backup loads migrate `distillProvider`,
 analysis value wins if both generations are present. Historical tracker
 `aiUsage.distill` is read and displayed as Job analysis, while every new or
 subsequent tracker write emits only `aiUsage["job-analysis"]`.
+The same boundary migrates `stageCustomInstructions.tailor` and historical
+`aiUsage.tailor` to the canonical `resume-polish` stage. The original unprefixed
+provider/model/effort fields remain the durable Resume Polish storage keys.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
-the shared instructions. Tailor and Review are separate requests, so one polish
-run may carry different guidance for each. The server contract is unchanged — one
-`customInstructions` string per request.
+the shared instructions. Resume Polish is one proposal request; the optional
+closing Final Check remains a separate request with its own configuration and
+guidance. The server contract is unchanged — one `customInstructions` string per
+request.
 
 Browser requests contain provider, model, and
 reasoning settings but no API credentials. If a request omits provider fields
@@ -481,13 +485,20 @@ Per-provider rules:
   Antigravity provider stays `authState: "unknown"` and is ready-to-verify on
   first use rather than falsely labeled signed in. It also requires the print
   prompt as `-p`'s argv value; stdin is not a supported prompt source, so its
-  local process argument list briefly contains the request.
+  local process argument list briefly contains the request. RoleFit submits the
+  stable slug from the first column of `agy models`; settings saved by older
+  builds migrate their display-name values before dispatch.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
   The supported GPT-5.6 choices are Sol, Terra, and Luna; the balanced default is
   `gpt-5.6-terra`.
 - **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
   trailing assistant prefill because current Claude models reject those patterns.
-  JSON is enforced by the strict-output prompt plus `parseAiJson`.
+  JSON is enforced by the strict-output prompt plus `parseAiJson`. The current
+  catalog exposes Fable 5, Opus 5, Sonnet 5, Haiku 4.5, and the still-available
+  Opus 4.8. Sonnet 5 and Opus 5 default to adaptive thinking, so this bounded
+  JSON workflow disables it explicitly; Fable 5 rejects that flag and is left
+  on its supported adaptive-thinking contract at low effort so reasoning does
+  not consume the bounded JSON output budget.
 - Managed browser requests accept provider/model/effort identifiers only. The
   server resolves an OpenAI/Claude key from the companion-owned in-memory
   credential snapshot immediately before dispatch; there is no browser

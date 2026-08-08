@@ -151,8 +151,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   choices, readiness, the saved-application summary, and Apply.
 - Resume and Cover Letter use one material-card contract on Prepare: Include
   toggle, variant selector, readiness, and document-specific actions. Resume
-  defaults included and Cover Letter defaults excluded; do not label either
-  card optional.
+  defaults included and Cover Letter defaults excluded; starting Polish for a
+  document, manually or through its enabled automatic proposal, turns on only
+  that document's Include toggle. Do not label either card optional.
 - Masthead and Prepare Apply controls share one handler and readiness model.
   Require the current prepared job and readiness only for included materials,
   while allowing either or both to be excluded. Re-Apply must not delete or
@@ -189,7 +190,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Adoption still goes through the guarded workspace loader only while the editor
   is clean and not application-owned; an explicit manual variant choice
   synchronously preempts it; while an included variant is resolving or loading,
-  preparation remains busy and Apply or another Tailor action cannot start. A
+  preparation remains busy and Apply or another Polish action cannot start. A
   tie or incomplete comparison returns no recommendation and keeps the current
   selection. Cover letters keep their own ranking effect and the same safety
   rules. Do not add persisted variant metadata or another schema for either

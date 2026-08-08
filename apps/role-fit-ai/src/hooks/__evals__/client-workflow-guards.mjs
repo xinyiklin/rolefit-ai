@@ -374,8 +374,17 @@ assert.match(app, /quickFitAllowsAutoProposal\(fit\)/,
   "automatic proposals use the shared fixed positive-verdict and eligibility rule");
 assert.match(
   app,
-  /if \(!receipt\.resumeStarted && canStartResume\)[\s\S]{0,180}?void handlePolish[\s\S]{0,500}?if \(!receipt\.coverStarted && canStartCover\)[\s\S]{0,180}?void handleTailorCoverLetter/,
-  "positive Initial Fit starts enabled resume and cover proposals independently without sequential awaits"
+  /if \(!receipt\.resumeStarted && canStartResume\)[\s\S]{0,180}?void handleResumePolish[\s\S]{0,500}?if \(!receipt\.coverStarted && canStartCover\)[\s\S]{0,180}?void handleCoverLetterPolish/,
+  "positive Initial Fit includes and starts enabled resume and cover proposals independently without sequential awaits"
+);
+const automaticProposalStart = app.slice(
+  app.indexOf("const canStartResume ="),
+  app.indexOf("  }, [", app.indexOf("const canStartResume ="))
+);
+assert.doesNotMatch(
+  automaticProposalStart,
+  /materialSelection\.(?:resume|coverLetter)/,
+  "an enabled automatic proposal includes its document instead of requiring Include beforehand"
 );
 assert.doesNotMatch(
   intakeFingerprint,
@@ -416,8 +425,13 @@ assert.doesNotMatch(
 );
 assert.match(
   app,
-  /onPolish=\{\(\) => void handlePolish\(\)\}/,
-  "the Resume document action dispatches the one-pass workflow"
+  /onPolish=\{\(\) => void handleResumePolish\(\)\}/,
+  "the Resume document action dispatches the intent-level Polish workflow"
+);
+assert.match(
+  app,
+  /onTailor=\{handleCoverLetterPolish\}/,
+  "the Cover Letter document action dispatches the intent-level Polish workflow"
 );
 assert.doesNotMatch(resumeTab, /polishStages|auditProviderReady|onRetryAudit/,
   "the Resume workbench has no normal audit-stage selector or gate");
@@ -559,7 +573,7 @@ assert.ok(
 // another stage's provider still works, so nothing surfaces the mistake. Both
 // cover and answers shipped in exactly that state.
 assert.match(aiStages, /export const AI_STAGES/, "the stage list is declared in config/aiStages.ts");
-for (const stage of ["job-analysis", "tailor", "final-check", "cover", "answers"]) {
+for (const stage of ["job-analysis", "resume-polish", "final-check", "cover", "answers"]) {
   assert.match(aiStages, new RegExp(`id: "${stage}"`), `aiStages declares the ${stage} stage`);
 }
 assert.match(app, /aiRequest: stages\.cover,/, "the cover-letter flow runs on its own stage config, not Tailor's");
@@ -573,7 +587,7 @@ assert.doesNotMatch(
   /const STAGE_FIELD_GROUPS: Array<\[keyof PersistedSettings, keyof PersistedSettings, keyof PersistedSettings\]> = \[\s*\[/,
   "persisted stage key groups are derived from the stage list, not hand-listed"
 );
-// The cover/answers stages inherit Tailor's config when they have none of their
+// The cover/answers stages inherit Resume Polish's config when they have none of their
 // own. That inheritance MUST live in the seeder: key migration may rename an
 // existing persisted value, but normalization must not seed a stage that was
 // absent from a portable backup.
@@ -586,7 +600,7 @@ assert.match(
 );
 assert.doesNotMatch(
   persistedSettings,
-  /bag\[keys\.provider\] = bag\[TAILOR_KEYS\.provider\]/,
+  /bag\[keys\.provider\] = bag\[RESUME_POLISH_KEYS\.provider\]/,
   "normalizeSettings never adds a stage key — it would break workspace-backup restore"
 );
 
@@ -612,8 +626,13 @@ assert.doesNotMatch(
 
 assert.match(
   polish,
-  /customInstructions: customInstructionsFor\("tailor"\)/,
-  "the one-pass Polish request carries the Resume tailor guidance"
+  /customInstructions: customInstructionsFor\("resume-polish"\)/,
+  "the one-pass Polish request carries the Resume Polish guidance"
+);
+assert.equal(
+  (polish.match(/"resume-polish": \{/g) ?? []).length,
+  2,
+  "Resume Polish success and failure provenance both use the canonical stage key"
 );
 assert.doesNotMatch(
   polish,
@@ -1191,7 +1210,7 @@ assert.match(
 
 assert.match(
   app,
-  /function handleTailorPreparedResume()[\s\S]{0,600}?void handlePolish\(\{ revealResumeOnSuccess: false \}\);/,
+  /function handleTailorPreparedResume()[\s\S]{0,600}?void handleResumePolish\(\{ revealResumeOnSuccess: false \}\);/,
   "the prepared-job Tailor action remains an explicit manual action"
 );
 assert.doesNotMatch(
@@ -1587,6 +1606,31 @@ assert.match(
   app,
   /const DEFAULT_MATERIAL_SELECTION = \{\s*resume:\s*true,\s*coverLetter:\s*false\s*\}/,
   "new prepared jobs include the resume by default and leave the cover letter excluded"
+);
+assert.match(
+  app,
+  /function includeMaterialForPolish\(material: "resume" \| "coverLetter"\) \{[\s\S]{0,220}?current\[material\] \? current : \{ \.\.\.current, \[material\]: true \}/,
+  "Polish includes only its own material and preserves the sibling selection"
+);
+assert.match(
+  app,
+  /function handleResumePolish[\s\S]{0,180}?includeMaterialForPolish\("resume"\);[\s\S]{0,80}?return handlePolish\(options\);/,
+  "every Resume Polish action includes the resume before dispatch"
+);
+assert.match(
+  app,
+  /function handleCoverLetterPolish[\s\S]{0,140}?includeMaterialForPolish\("coverLetter"\);[\s\S]{0,80}?return handleTailorCoverLetter\(\);/,
+  "every Cover Letter Polish action includes the cover letter before dispatch"
+);
+assert.match(
+  app,
+  /onTailorPreparedResume=\{handleTailorPreparedResume\}/,
+  "Prepare routes Resume Polish through its inclusion-aware action"
+);
+assert.match(
+  app,
+  /onTailorCoverLetter=\{handleCoverLetterPolish\}/,
+  "Prepare routes Cover Letter Polish through its inclusion-aware action"
 );
 assert.match(
   app,
@@ -1987,7 +2031,7 @@ assert.ok(
 );
 assert.match(
   applyFlow,
-  /if \(materialSelection\.resume\) \{[\s\S]{0,220}?aiUsage\.tailor[\s\S]{0,260}?aiUsage\["final-check"\]/,
+  /if \(materialSelection\.resume\) \{[\s\S]{0,260}?aiUsage\["resume-polish"\][\s\S]{0,260}?aiUsage\["final-check"\]/,
   "re-Apply updates resume AI provenance only when Resume is included"
 );
 assert.match(

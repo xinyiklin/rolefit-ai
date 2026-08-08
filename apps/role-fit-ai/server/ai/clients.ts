@@ -195,16 +195,35 @@ export async function callOpenAiResponsesWithFetch(
   return parseAiJson(extractOutputText(data));
 }
 
+// Sonnet 5 and Opus 5 changed omitted-thinking behavior from off to adaptive.
+// This bounded JSON workflow does not benefit from hidden reasoning consuming
+// the output budget, so preserve the prior low-latency contract explicitly.
+// Two models must stay out of this set: Fable 5 rejects an explicit disable
+// with a 400, and Opus 4.8 and earlier already default to no thinking.
+const EXPLICIT_NO_THINKING_MODELS: ReadonlySet<string> = new Set([
+  "claude-sonnet-5",
+  "claude-opus-5"
+]);
+const BOUNDED_ADAPTIVE_THINKING_MODELS: ReadonlySet<string> = new Set([
+  "claude-fable-5"
+]);
+
 export function buildAnthropicMessagesBody({ model, systemPrompt, userPrompt }: ProviderCallArgs) {
   return {
     model,
     max_tokens: OUTPUT_TOKEN_LIMIT,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
-    // Sonnet 5 changed omitted-thinking behavior from off to adaptive. This
-    // bounded JSON workflow does not benefit from hidden reasoning consuming
-    // the output budget, so preserve the prior low-latency contract explicitly.
-    ...(model === "claude-sonnet-5" ? { thinking: { type: "disabled" } } : {})
+    // Opus 5 accepts a disable only at effort `high` or below; this body sends no
+    // `output_config.effort`, so it runs at the default `high`. Adding an explicit
+    // `xhigh`/`max` effort here would turn these requests into 400s.
+    ...(EXPLICIT_NO_THINKING_MODELS.has(model) ? { thinking: { type: "disabled" } } : {}),
+    // Fable 5 does not allow thinking to be disabled. Its max_tokens cap covers
+    // both reasoning and visible JSON, so low effort keeps this bounded
+    // extraction/rewrite workflow from spending the output budget on reasoning.
+    ...(BOUNDED_ADAPTIVE_THINKING_MODELS.has(model)
+      ? { output_config: { effort: "low" } }
+      : {})
   };
 }
 

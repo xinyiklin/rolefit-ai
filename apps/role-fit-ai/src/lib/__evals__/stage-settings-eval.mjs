@@ -2,7 +2,7 @@
 // seeded from persisted settings.
 //
 // The load-bearing case is the cover/answers inheritance. Both flows ran on the
-// Tailor config before they were separately configurable, so an install that
+// Resume Polish config before they were separately configurable, so an install that
 // predates the split MUST keep the provider it was already using. Getting this
 // wrong silently switches a user's cover-letter or Q&A stage to the default
 // provider — possibly a paid one — with nothing on screen to indicate it.
@@ -12,13 +12,20 @@
 import assert from "node:assert/strict";
 
 import { AI_STAGE_IDS } from "../../config/aiStages.ts";
-import { seedStage, seedStages, stageFieldsToPersist, STAGES_INHERITING_TAILOR } from "../stageSettings.ts";
+import {
+  seedStage,
+  seedStages,
+  stageFieldsToPersist,
+  STAGES_INHERITING_RESUME_POLISH
+} from "../stageSettings.ts";
 import { migrateSettings, normalizeSettings } from "../settings.ts";
 
 // ── A fresh install: every stage gets the account-backed CLI default ─────────
 const fresh = seedStages({});
 assert.equal(AI_STAGE_IDS.includes("job-analysis"), true, "Job analysis is the canonical configurable stage id");
 assert.equal(AI_STAGE_IDS.includes("distill"), false, "the retired Distill stage id is not configured");
+assert.equal(AI_STAGE_IDS.includes("resume-polish"), true, "Resume Polish is the canonical configurable stage id");
+assert.equal(AI_STAGE_IDS.includes("tailor"), false, "the retired Tailor stage id is not configured");
 assert.deepEqual(
   Object.keys(fresh).sort(),
   [...AI_STAGE_IDS].sort(),
@@ -29,7 +36,7 @@ for (const stage of AI_STAGE_IDS) {
   assert.equal(fresh[stage].selectedModel, "claude-sonnet-5", `${stage} defaults to the CLI's default model`);
 }
 
-// ── A pre-split install: cover + answers inherit Tailor, others do not ──────
+// ── A pre-split install: cover + answers inherit Resume Polish ──────────────
 const preSplit = {
   aiProvider: "openai",
   selectedModel: "gpt-5.6-terra",
@@ -40,7 +47,7 @@ const preSplit = {
   finalCheckSelectedModel: "gpt-5.6-terra"
 };
 const seeded = seedStages(preSplit);
-assert.equal(seeded.tailor.provider, "openai", "Tailor keeps its own persisted provider");
+assert.equal(seeded["resume-polish"].provider, "openai", "Resume Polish keeps its persisted provider");
 assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps its own persisted provider");
 assert.equal(seeded["final-check"].provider, "codex-cli", "Final Check keeps its own persisted provider");
 for (const stage of ["cover", "answers"]) {
@@ -61,7 +68,7 @@ for (const stage of ["cover", "answers"]) {
   );
 }
 assert.deepEqual(
-  [...STAGES_INHERITING_TAILOR].sort(),
+  [...STAGES_INHERITING_RESUME_POLISH].sort(),
   ["answers", "cover"],
   "only the two stages that previously shared Tailor's config inherit it"
 );
@@ -86,7 +93,7 @@ assert.deepEqual(
     jobAnalysisCliReasoningEffort: "high",
     stageCustomInstructions: {
       "job-analysis": "Keep the posting language precise.",
-      tailor: "Keep edits concise."
+      "resume-polish": "Keep edits concise."
     }
   },
   "legacy Distill settings migrate before strict normalization"
@@ -116,6 +123,11 @@ assert.equal(
   normalizedLegacyDistill.stageCustomInstructions?.["job-analysis"],
   "Keep the posting language precise.",
   "legacy stage instructions survive normalization"
+);
+assert.equal(
+  normalizedLegacyDistill.stageCustomInstructions?.["resume-polish"],
+  "Keep edits concise.",
+  "legacy Tailor instructions migrate to Resume Polish"
 );
 
 assert.deepEqual(
@@ -153,7 +165,7 @@ assert.equal(diverged.answers.provider, "openai", "the other inheriting stage is
 // A stage that inherits must take the WHOLE triple from one source. A persisted
 // model without a provider is not a partial inheritance source.
 const providerOnly = seedStage("cover", { aiProvider: "openai" });
-assert.equal(providerOnly.provider, "openai", "inheritance works from Tailor's provider alone");
+assert.equal(providerOnly.provider, "openai", "inheritance works from Resume Polish's provider alone");
 assert.equal(
   providerOnly.selectedModel,
   "gpt-5.6-terra",
@@ -181,6 +193,23 @@ assert.deepEqual(
   seedStages(flattened),
   seeded,
   "seeding is idempotent through a persist/normalize/seed cycle"
+);
+
+const migratedAntigravity = normalizeSettings({
+  aiProvider: "antigravity-cli",
+  selectedModel: "Gemini 3.5 Flash (Medium)",
+  coverProvider: "antigravity-cli",
+  coverSelectedModel: "Claude Opus 4.6 (Thinking)"
+});
+assert.equal(
+  migratedAntigravity.selectedModel,
+  "gemini-3.5-flash-medium",
+  "legacy Antigravity display names migrate to stable model slugs"
+);
+assert.equal(
+  migratedAntigravity.coverSelectedModel,
+  "claude-opus-4-6-thinking",
+  "Antigravity slug migration preserves each stage's selected model"
 );
 
 const workflowSettings = normalizeSettings({

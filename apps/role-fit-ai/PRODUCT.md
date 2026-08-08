@@ -79,11 +79,14 @@ qualify for PDF export, Polish, or Apply until it contains meaningful evidence.
 The product also includes application-question drafts and a lightweight application pipeline
 tracker. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
-and Cover Letter starts excluded. Apply creates the tracked application once the
-job is prepared and stores only included, ready materials; it also supports a
-tracker-only application with both cards excluded. On a later re-Apply, an
-excluded slot is left untouched so a previously saved artifact is never deleted
-or replaced implicitly. The resume and cover letter keep independent
+and Cover Letter starts excluded. Starting Polish for a document turns on that
+document's Include toggle without changing the sibling material; an enabled
+automatic proposal does the same when it starts. Apply creates the tracked
+application once the job is prepared and stores only included, ready materials;
+it also supports a tracker-only application with both cards excluded. On a
+later re-Apply, an excluded slot is left untouched so a
+previously saved artifact is never deleted or replaced implicitly. The resume
+and cover letter keep independent
 saved/unsaved states and an explicit "Update application" action in their own
 Save menus that rewrites only that document. Regenerating or editing a document
 never rewrites a stored one. An application keeps one space-efficient
@@ -210,8 +213,11 @@ disappears into the task. Quiet competence, not salesmanship.
     the same Apply command and blocker model. The current job must be prepared
     and preparation for selected work must be idle. Resume and Cover Letter
     each have an Include toggle; only included material must be ready, and both
-    may be excluded. Resume defaults on and Cover Letter defaults off. A later
-    re-Apply must preserve any previously saved artifact for an excluded slot.
+    may be excluded. Resume defaults on and Cover Letter defaults off. Starting
+    Polish for one document, manually or through its enabled automatic proposal,
+    includes that document and leaves the other Include choice unchanged. A
+    later re-Apply must preserve any previously saved artifact for an excluded
+    slot.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
     eligibility warning. It never shows scores, confidence, evidence ledgers,

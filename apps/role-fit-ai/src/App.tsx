@@ -294,7 +294,7 @@ function App() {
       return DEFAULT_DOCUMENT_TITLE;
     }
   });
-  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured across
+  // Per-stage AI usage snapshot (job-analysis/resume-polish/final-check/cover/answers), captured across
   // the pipeline and snapshotted onto the Application at Apply time. Keys are
   // deleted (not set to "none") when a fresh polish run starts, so a stale
   // provider attribution can never linger from a prior run into the new one.
@@ -406,14 +406,15 @@ function App() {
     ]
   );
   const jobAnalysisStage = stages["job-analysis"];
+  const resumePolishStage = stages["resume-polish"];
   const finalCheckStage = stages["final-check"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
-  const tailorProviderReady = providerReady(stages.tailor.provider);
+  const tailorProviderReady = providerReady(resumePolishStage.provider);
   const finalCheckProviderReady = providerReady(finalCheckStage.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
-  const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
+  const tailorProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
   const finalCheckProviderMessage = providerRecoveryMessage(finalCheckStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
@@ -422,8 +423,8 @@ function App() {
     [jobAnalysisStage.provider, providerAvailability.ensureProvider]
   );
   const ensureTailorProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.tailor.provider),
-    [providerAvailability.ensureProvider, stages.tailor.provider]
+    () => providerAvailability.ensureProvider(resumePolishStage.provider),
+    [providerAvailability.ensureProvider, resumePolishStage.provider]
   );
   const ensureFinalCheckProvider = useCallback(
     () => providerAvailability.ensureProvider(finalCheckStage.provider),
@@ -1241,7 +1242,7 @@ function App() {
     jobDescription,
     requestHonestContext,
     customInstructionsFor,
-    tailor: stages.tailor,
+    resumePolish: resumePolishStage,
     ensureTailorProviderReady: ensureTailorProvider,
     setResult,
     setActiveOutputTab,
@@ -1331,8 +1332,8 @@ function App() {
   }
   if (polishProgressVisible) {
     aiWorkflowStages.push({
-      key: "tailor",
-      state: polishProgress.tailor,
+      key: "resume-polish",
+      state: polishProgress.polish,
       onRetry: () => void retryStage(),
       onStop: stopPolish
     });
@@ -1643,6 +1644,25 @@ function App() {
     readCoverLetterVariantCandidates
   ]);
 
+  // Starting Polish — directly or through the user's enabled automatic proposal
+  // setting — is a decision to work on that document for this application.
+  // Reflect that intent in the package without coupling the sibling material.
+  function includeMaterialForPolish(material: "resume" | "coverLetter") {
+    setMaterialSelection((current) =>
+      current[material] ? current : { ...current, [material]: true }
+    );
+  }
+
+  function handleResumePolish(options: { revealResumeOnSuccess?: boolean } = {}) {
+    includeMaterialForPolish("resume");
+    return handlePolish(options);
+  }
+
+  function handleCoverLetterPolish() {
+    includeMaterialForPolish("coverLetter");
+    return handleTailorCoverLetter();
+  }
+
   const applicationPreparationActive =
     jobPreparationActive ||
     (materialSelection.resume &&
@@ -1673,7 +1693,7 @@ function App() {
     // This click is explicit: it tailors exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
     // dirty-document confirmation.
-    void handlePolish({ revealResumeOnSuccess: false });
+    void handleResumePolish({ revealResumeOnSuccess: false });
   }
 
   useEffect(() => {
@@ -1702,7 +1722,6 @@ function App() {
 
     const canStartResume =
       autoCreateResumeProposal &&
-      materialSelection.resume &&
       fitInputsAreCurrent &&
       jobPrepared &&
       canPolish &&
@@ -1712,12 +1731,11 @@ function App() {
       !isResolvingPreparedResume;
     if (!receipt.resumeStarted && canStartResume) {
       receipt.resumeStarted = true;
-      void handlePolish({ revealResumeOnSuccess: false });
+      void handleResumePolish({ revealResumeOnSuccess: false });
     }
 
     const canStartCover =
       autoCreateCoverLetterProposal &&
-      materialSelection.coverLetter &&
       fitInputsAreCurrent &&
       coverLetterPreflight.canTailor &&
       resumeReady &&
@@ -1728,7 +1746,7 @@ function App() {
       !isRankingCoverLetterVariants;
     if (!receipt.coverStarted && canStartCover) {
       receipt.coverStarted = true;
-      void handleTailorCoverLetter();
+      void handleCoverLetterPolish();
     }
   }, [
     autoCreateCoverLetterProposal,
@@ -1750,8 +1768,6 @@ function App() {
     jobDescription,
     jobPrepared,
     jobRawText,
-    materialSelection.coverLetter,
-    materialSelection.resume,
     quickFitState,
     resumeReady,
     resumeText
@@ -2370,7 +2386,7 @@ function App() {
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
-              onTailorCoverLetter={handleTailorCoverLetter}
+              onTailorCoverLetter={handleCoverLetterPolish}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
               quickFit={quickFitState}
               onRetryInitialFit={() => void retryInitialFit()}
@@ -2575,7 +2591,7 @@ function App() {
               checkInputsChanged={finalCheckInputsChanged}
               checkProgress={finalCheckProgress}
               isChecking={isChecking}
-              onPolish={() => void handlePolish()}
+              onPolish={() => void handleResumePolish()}
               onRetryTailor={() => void retryStage()}
               onStopPolish={stopPolish}
               onCheck={() => void runResumeCheck()}
@@ -2751,7 +2767,7 @@ function App() {
               }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
-              onTailor={handleTailorCoverLetter}
+              onTailor={handleCoverLetterPolish}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}

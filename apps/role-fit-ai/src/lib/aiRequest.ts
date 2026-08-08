@@ -2,7 +2,7 @@ import type { AiProviderValue } from "../config/aiOptions";
 import type { AiStageId } from "../config/aiStages";
 
 // Every configurable AI stage has its own concrete provider config (no "same as
-// Tailor" live link — Settings' "Copy settings" control does a one-shot copy
+// Resume Polish" live link — Settings' "Copy settings" control does a one-shot copy
 // between stages instead). The stage list itself lives in config/aiStages.ts.
 export type StageId = AiStageId;
 
@@ -19,7 +19,7 @@ export type AiRequestFields = {
 };
 
 // Resolve the provider/model fields shared by every AI request
-// body (`/api/polish`'s tailor stage, `/api/job-analysis`, `/api/application-answers`,
+// body (`/api/polish`'s Resume Polish stage, `/api/job-analysis`, `/api/application-answers`,
 // `/api/cover-letter`): uses the exact field names the server expects, so the
 // call sites cannot drift apart.
 // Spread the result into the request body and add the route-specific fields

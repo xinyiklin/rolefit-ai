@@ -20,7 +20,7 @@ import {
 } from "../../shared/resumePolishContract.ts";
 
 function idleProgress(): PolishProgressState {
-  return { tailor: { status: "idle" } };
+  return { polish: { status: "idle" } };
 }
 
 type PolishContext = {
@@ -40,7 +40,7 @@ type UsePolishPipelineArgs = {
   jobDescription: string;
   requestHonestContext: string;
   customInstructionsFor: (stage: StageId) => string;
-  tailor: StageConfig;
+  resumePolish: StageConfig;
   ensureTailorProviderReady: () => Promise<ProviderReadiness>;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
   setActiveOutputTab: (tab: OutputTab) => void;
@@ -85,7 +85,7 @@ export function usePolishPipeline({
   jobDescription,
   requestHonestContext,
   customInstructionsFor,
-  tailor,
+  resumePolish,
   ensureTailorProviderReady,
   setResult,
   setActiveOutputTab,
@@ -107,8 +107,8 @@ export function usePolishPipeline({
     currentResumeText,
     jobDescription,
     requestHonestContext,
-    customInstructions: customInstructionsFor("tailor"),
-    tailor: buildStageRequestFields(tailor)
+    customInstructions: customInstructionsFor("resume-polish"),
+    resumePolish: buildStageRequestFields(resumePolish)
   });
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
@@ -141,9 +141,9 @@ export function usePolishPipeline({
     setIsPolishing(false);
     setPolishProgress((current) => ({
       ...current,
-      tailor: current.tailor.status === "running"
+      polish: current.polish.status === "running"
         ? { status: "stopped", errorHeadline: "Inputs changed", error: "Polish was cancelled before it could replace the current proposal." }
-        : current.tailor
+        : current.polish
     }));
     setPolishProgressVisible(true);
     setPolishStatus("Resume, job, or AI settings changed. Polish again for the current inputs.");
@@ -180,18 +180,18 @@ export function usePolishPipeline({
     revealResumeOnSuccess: boolean
   ): Promise<boolean> {
     if (!requestIsCurrent(generation, context, signal)) return false;
-    setPolishProgress({ tailor: { status: "running" } });
+    setPolishProgress({ polish: { status: "running" } });
     try {
       const response = await fetch("/api/polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          ...buildStageRequestFields(tailor),
+          ...buildStageRequestFields(resumePolish),
           mode: "resume-proposal",
           tailorScope: context.tailorScope,
           jobText: jobDescription,
           honestContext: requestHonestContext,
-          customInstructions: customInstructionsFor("tailor")
+          customInstructions: customInstructionsFor("resume-polish")
         }),
         signal
       });
@@ -225,19 +225,19 @@ export function usePolishPipeline({
           : "Suggestions withheld; resume unchanged";
       setPolishProgress(data.status === "WITHHELD"
         ? {
-            tailor: {
+            polish: {
               status: "failed",
               errorHeadline: "Suggestions withheld",
               error: "The generated edits could not be verified. Your resume is unchanged."
             }
           }
         : {
-            tailor: { status: "done", note, noteTone: "ok" }
+            polish: { status: "done", note, noteTone: "ok" }
           });
       setPolishStatus(note);
       setPipelineAiUsage((current) => ({
         ...current,
-        tailor: {
+        "resume-polish": {
           source: "ai",
           ...(typeof raw.provider === "string" && raw.provider ? { provider: raw.provider } : {}),
           ...(typeof raw.model === "string" && raw.model ? { model: raw.model } : {}),
@@ -252,15 +252,15 @@ export function usePolishPipeline({
       if (!requestIsCurrent(generation, context)) return false;
       const failure = classifyFailure(error);
       setPolishProgress({
-        tailor: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
+        polish: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
       });
       setPolishStatus(`${failure.headline}: ${failure.detail}`);
       setPipelineAiUsage((current) => ({
         ...current,
-        tailor: {
+        "resume-polish": {
           source: "none",
-          requestedProvider: tailor.provider,
-          requestedModel: tailor.selectedModel,
+          requestedProvider: resumePolish.provider,
+          requestedModel: resumePolish.selectedModel,
           completedAt: new Date().toISOString()
         }
       }));
@@ -281,7 +281,7 @@ export function usePolishPipeline({
       runLockRef.current = false;
       setPolishStatus(provider.message);
       setPolishProgress({
-        tailor: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message }
+        polish: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message }
       });
       setPolishProgressVisible(true);
       return;
@@ -324,9 +324,9 @@ export function usePolishPipeline({
     setIsPolishing(false);
     setPolishProgress((current) => ({
       ...current,
-      tailor: current.tailor.status === "running"
+      polish: current.polish.status === "running"
         ? { status: "stopped", errorHeadline: "Stopped", error: "Polish stopped. Your resume is unchanged." }
-        : current.tailor
+        : current.polish
     }));
     setPolishStatus("Polish stopped. Your resume is unchanged.");
   }

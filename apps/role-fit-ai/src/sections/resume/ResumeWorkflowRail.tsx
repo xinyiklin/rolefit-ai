@@ -78,7 +78,7 @@ export function ResumeWorkflowRail({
   const proposalResult = result?.polishOutcome ? result : null;
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
   const ready = resumeReady && jobReady && tailorProviderReady && tailorSectionCount > 0;
-  const failed = progress.tailor.status === "failed" || progress.tailor.status === "stopped";
+  const failed = progress.polish.status === "failed" || progress.polish.status === "stopped";
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
 
   // A proposal is only "outstanding" while edits still need a decision. Once
@@ -140,9 +140,9 @@ export function ResumeWorkflowRail({
           ? "Wait for Polish to finish."
           : "";
   const failure = failed && !withheld ? {
-    title: progress.tailor.errorHeadline || "Polish failed",
+    title: progress.polish.errorHeadline || "Polish failed",
     message: "No proposal was created. Your resume was not changed.",
-    items: progress.tailor.error ? [progress.tailor.error] : undefined
+    items: progress.polish.error ? [progress.polish.error] : undefined
   } : null;
   const footer = isPolishing ? (
     <button type="button" className="secondary-button is-compact" onClick={onStop}>Stop</button>

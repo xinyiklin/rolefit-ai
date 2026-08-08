@@ -1,9 +1,9 @@
-// Per-stage AI usage attribution, captured across Job analysis/tailor/Final Check/
+// Per-stage AI usage attribution, captured across Job analysis/Resume Polish/Final Check/
 // cover pipeline and snapshotted onto an Application at Apply time (see
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.
 //
-// Stage keys are plain strings ("job-analysis" | "tailor" | "final-check" | "cover" today)
+// Stage keys are plain strings ("job-analysis" | "resume-polish" | "final-check" | "cover" today)
 // so a future stage can be added without a schema migration; the server sanitizer
 // constrains keys to /^[a-z][a-z0-9-]{0,23}$/.
 
@@ -40,7 +40,11 @@ export function canonicalizeAiUsageStageKeys(
   if (!canonical["final-check"] && canonical.review) {
     canonical["final-check"] = canonical.review;
   }
+  if (!canonical["resume-polish"] && canonical.tailor) {
+    canonical["resume-polish"] = canonical.tailor;
+  }
   delete canonical.distill;
   delete canonical.review;
+  delete canonical.tailor;
   return canonical;
 }

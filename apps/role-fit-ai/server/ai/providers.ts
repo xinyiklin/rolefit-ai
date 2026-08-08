@@ -4,6 +4,10 @@
 
 import { UserSafeAiError } from "./errors.ts";
 import {
+  DEFAULT_ANTIGRAVITY_MODEL,
+  normalizeAntigravityModelId
+} from "../../shared/antigravityModels.ts";
+import {
   getManagedApiKey,
   getManagedProviderConnection,
   isCompanionManaged,
@@ -102,7 +106,7 @@ function providerDefaultModel(provider: string): string {
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5",
       "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-5.6-sol",
-      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? "Gemini 3.5 Flash (High)"
+      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? DEFAULT_ANTIGRAVITY_MODEL
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );
 }
@@ -169,7 +173,10 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   // explicit request provider keeps its provider-specific default so a stale
   // global override cannot silently select an incompatible model after the user
   // chooses another provider in the UI.
-  const model = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
+  const selectedModel = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
+  const model = provider === "antigravity-cli"
+    ? normalizeAntigravityModelId(selectedModel)
+    : selectedModel;
   if (model.length > 120) {
     throw new UserSafeAiError("Configured model name is too long. Check AI settings and try again.", 400);
   }
@@ -187,11 +194,10 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
     // even though spaces/parens are allowed below.
     throw new UserSafeAiError("Model name cannot start with a dash.", 400);
   }
-  // Spaces and parentheses are permitted because the Antigravity CLI's model ids
-  // are display names like "Gemini 3.5 Flash (High)" (from `agy models`). They are
-  // injection-safe: CLI providers spawn with an argv array (no shell), so the
-  // value is one argument, and the leading-dash guard above still blocks flag
-  // injection. Hosted providers only place the model in a JSON body / encoded URL.
+  // Spaces and parentheses remain permitted for bounded compatibility with
+  // earlier Antigravity display-name values. Current Antigravity requests use
+  // stable lowercase slugs. Every CLI still receives the model as one argv
+  // element (never through a shell), and the leading-dash guard blocks flags.
   if (model && !/^[a-z0-9 _.:/@+()-]+$/i.test(model)) {
     throw new UserSafeAiError(
       "Model name can only use letters, numbers, spaces, dots, dashes, underscores, slashes, at signs, pluses, parentheses, or colons.",

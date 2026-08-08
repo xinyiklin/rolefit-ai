@@ -5,6 +5,39 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **AI stage and provider catalogs now match their current
+  contracts.** RoleFit still supports exactly five independently configurable
+  stages and the existing five integrations; no speculative provider was added.
+  The stale configurable `tailor` id and historical tracker provenance migrate
+  to `resume-polish` while the original unprefixed provider fields remain stable.
+  OpenAI API retains the three current GPT-5.6 models; Claude API and Claude Code
+  add Opus 5, with Sonnet 5 / Opus 5 bounded API requests explicitly disabling
+  their new default thinking behavior and Fable 5 using low effort because its
+  required adaptive thinking shares the output cap. The installed Codex 0.145.0 list adds
+  `gpt-5.3-codex-spark`. Antigravity 1.1.11 adds Gemini 3.6 Flash and now uses
+  the stable slugs introduced in 1.1.5; every older display-name setting maps to
+  its matching slug before dispatch. Installed-list inspection, both TypeScript
+  projects, production and landing builds, every desktop probe, and all 75
+  offline evaluations pass. Live provider requests remain UNCONFIRMED.
+- [USER+CODE] **Polish now includes the document being polished.** The Resume
+  and Cover Letter Polish actions on both Prepare and their document workbenches
+  turn on only that document's Include toggle before dispatch. An enabled
+  automatic proposal also includes its own document when it starts; it no
+  longer requires Include to be on beforehand. The sibling material and the two
+  automation settings remain independent, and Apply continues to persist only
+  the selected package.
+- [USER+CODE+TOOL] **Workspace hydration now becomes observable to Prepare only
+  after React commits the loaded resume.** The startup promise previously
+  settled inside `loadWorkspace`'s `finally`, in the same async turn that queued
+  the resume state updates. An extension-triggered Prepare could resume first,
+  read the still-blank state ref, and report "Initial Fit needs your own resume"
+  while the saved resume appeared immediately afterward. The promise now
+  settles from an effect following the authoritative startup commit; focused
+  resolution checks (45/45), client workflow guards (441/441), the RoleFit
+  production/landing/desktop gates, and all 75 offline evaluations pass. A fresh
+  browser session loaded the saved resume from the live port, but the exact
+  extension-arrival race and a live-provider Initial Fit remain UNCONFIRMED in
+  browser QA.
 - [USER+CODE+TOOL] **Final Check is no longer a separate tool; it is the closing
   phase of Polish for both documents.** The Resume rail showed a standalone
   "Final Check — Optional review of the actual current resume. Run Final Check"

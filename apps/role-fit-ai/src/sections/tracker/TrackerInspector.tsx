@@ -18,7 +18,7 @@ import { canonicalizeAiUsageStageKeys } from "../../lib/aiUsage";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
-  { key: "tailor", label: "Resume Polish" },
+  { key: "resume-polish", label: "Resume Polish" },
   { key: "final-check", label: "Final Check" },
   { key: "cover", label: "Cover letter" }
 ];
