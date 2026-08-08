@@ -1326,6 +1326,27 @@ assert.match(
   /await deps\.whenWorkspaceBootstrapped\(\);/,
   "resolution waits for workspace hydration instead of reading a mid-flight boolean"
 );
+// Waiting is only worth anything if the promise resolves AFTER the commit that
+// publishes the hydrated document. Settling inside loadWorkspace's finally put
+// the waiter's microtask ahead of React's commit, so the resolver read the
+// pre-hydration state ref — origin "blank", an empty document — and reported
+// "Initial Fit needs your own resume" with a resume plainly loaded.
+assert.match(
+  workspaceResume,
+  /useEffect\(\(\) => \{\s*if \(bootstrapResolved\) workspaceBootstrapSettledRef\.current\.settle\(\);/,
+  "the bootstrap promise settles from an effect, after the commit that publishes the document"
+);
+assert.doesNotMatch(
+  workspaceResume,
+  /finally \{[\s\S]{0,600}?workspaceBootstrapSettledRef\.current\.settle\(\)/,
+  "loadWorkspace never settles the promise in its own finally — that races React's commit"
+);
+assert.match(
+  workspaceResume,
+  /if \(applyBaseResume && generation === workspaceLoadGenerationRef\.current\) \{\s*setBootstrapResolved\(true\);/,
+  "only the authoritative startup load releases waiters, so a superseded run cannot release them onto its empty result"
+);
+
 assert.match(
   preparedResumeHook,
   /adopt: \(fileName\) =>\s*loadBaseResumeVersion\(fileName, true,/,

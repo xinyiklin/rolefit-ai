@@ -15,7 +15,7 @@
  * editor, export status, autosave draft, dialogs) stays owned by App and
  * arrives via args, mirroring usePolishPipeline's pattern.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { DOC_STYLE_DEFAULTS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
@@ -202,6 +202,16 @@ export function useWorkspaceResume({
     () => workspaceBootstrapSettledRef.current.promise,
     []
   );
+  // Settled from an EFFECT, never from loadWorkspace's own finally. Resolving
+  // there put the callback's microtask ahead of React's commit, so a caller
+  // that awaited this promise read the state ref as it was BEFORE hydration —
+  // origin "blank", an empty document — and concluded there was no resume. The
+  // effect runs after the commit that publishes those values, so awaiting this
+  // means the hydrated document is actually readable.
+  const [bootstrapResolved, setBootstrapResolved] = useState(false);
+  useEffect(() => {
+    if (bootstrapResolved) workspaceBootstrapSettledRef.current.settle();
+  }, [bootstrapResolved]);
   const detachBaseResumeIdentity = useCallback(() => {
     setBaseResumeName("");
     saveLastBaseResumeName("");
@@ -379,11 +389,13 @@ export function useWorkspaceResume({
       setIsWorkspaceBootstrapping(false);
       // Only the startup load answers "which resume is loaded", and only while
       // it is still the current one — a superseded run (Strict Mode's double
-      // mount, a Reload that overtook it) has applied nothing. Settles on
-      // failure too: an unreachable workspace is a terminal answer, not a
-      // reason to wait forever.
+      // mount, a Reload that overtook it) has applied nothing and must not
+      // release a waiter onto its empty result. Batched with the document
+      // updates above, so one commit publishes both; the effect above turns
+      // that commit into the resolved promise. Set on failure too: an
+      // unreachable workspace is a terminal answer, not a reason to wait.
       if (applyBaseResume && generation === workspaceLoadGenerationRef.current) {
-        workspaceBootstrapSettledRef.current.settle();
+        setBootstrapResolved(true);
       }
     }
   }

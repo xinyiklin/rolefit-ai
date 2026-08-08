@@ -150,6 +150,33 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
   );
 }
 
+// ── The resolver cannot compensate for a promise that resolves too early ────
+{
+  // Named explicitly because this WAS the shipped bug: the workspace hook
+  // settled its bootstrap promise inside loadWorkspace's finally, in the same
+  // task as the state updates, while React republishes the state ref on a
+  // later commit. The waiter's microtask won, so the resolver read the
+  // pre-hydration state and reported "no resume" with one plainly loaded.
+  // Nothing here can detect that — an empty editor and a not-yet-published
+  // editor are the same two values — which is exactly why the hook must settle
+  // from an effect that runs after the commit.
+  const run = harness({
+    state: baseState(),
+    hydrate: async () => undefined
+  });
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(
+    resolution.selection,
+    null,
+    "a bootstrap that resolves before the document is published looks identical to no document"
+  );
+  check(
+    resolution.blocker,
+    "no-resume",
+    "so the ordering guarantee belongs to the hook, not to a heuristic here"
+  );
+}
+
 // ── Exactly one saved variant, not yet loaded, is adopted rather than ranked ──
 {
   const only = { fileName: "general-sde.resume", label: "General SDE", text: resumeText("Backend") };
