@@ -120,6 +120,8 @@ ${JSON.stringify(MODEL_SUBMISSION_ASSESSMENT_EXAMPLE, null, 2)}
 Rules:
 - This is document readiness, not candidate fit. Do not return a fit verdict, recommendation to apply, numerical score, percentage, before/after comparison, or fit lift.
 - readiness must be READY, REVISIONS_RECOMMENDED, EVIDENCE_NEEDED, or NOT_READY.
+- importance must be CORE or SUPPORTING. coverage must be COVERED, ADJACENT, MISSING, or UNCERTAIN.
+- CORE means the job presents the requirement as necessary to perform or hold the role. SUPPORTING means preferred, beneficial, or secondary.
 - Review the resume as supplied. Determine whether relevant existing evidence is visible, specific, consistent, and defensible.
 - Identify explicit job requirements once in requirementVisibility. Combine true alternatives such as "degree or equivalent experience" into one requirement.
 - sourceRequirement and every evidence excerpt must be exact source quotes apart from whitespace and punctuation normalization. Never add, remove, or invert a substantive word.

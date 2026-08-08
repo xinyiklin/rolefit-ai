@@ -55,6 +55,8 @@ const fitPrompt = buildFitAssessmentPrompts({}).userPrompt;
 const submissionPrompt = buildSubmissionAssessmentPrompts({}).userPrompt;
 assert.match(fitPrompt, new RegExp(JSON.stringify(MODEL_FIT_ASSESSMENT_EXAMPLE, null, 2).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
 assert.match(submissionPrompt, new RegExp(JSON.stringify(MODEL_SUBMISSION_ASSESSMENT_EXAMPLE, null, 2).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+assert.match(submissionPrompt, /importance must be CORE or SUPPORTING/);
+assert.match(submissionPrompt, /coverage must be COVERED, ADJACENT, MISSING, or UNCERTAIN/);
 
 const oldRedundantFields = structuredClone(fitExample);
 Object.assign(oldRedundantFields.fitAssessment, {
