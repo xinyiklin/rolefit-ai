@@ -162,7 +162,8 @@ function sanitizeEligibility(raw: unknown, sources: PromptSources): QuickFitResu
   }
   if (status === "BLOCKED" && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
   if (source.candidateExcerpt !== undefined && status !== "BLOCKED") {
-    if (!exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
+    if (typeof source.candidateExcerpt !== "string") return null;
+    if (source.candidateExcerpt.trim() && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
   }
 
   return {

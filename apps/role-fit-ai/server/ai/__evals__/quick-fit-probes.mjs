@@ -67,6 +67,25 @@ assert.deepEqual(valid.eligibility, {
   note: "The posting disallows the sponsorship the candidate says is required."
 });
 
+assert.deepEqual(
+  sanitizeQuickFitResponse(
+    {
+      verdict: "STRONG",
+      matches: validRaw.matches,
+      gaps: [],
+      eligibility: {
+        status: "CLEAR",
+        jobExcerpt: "",
+        candidateExcerpt: "",
+        note: ""
+      }
+    },
+    { jobText, resumeText, candidateContext }
+  )?.eligibility,
+  { status: "CLEAR" },
+  "empty schema placeholders remain optional for CLEAR eligibility"
+);
+
 assert.equal(
   sanitizeQuickFitResponse(
     {
