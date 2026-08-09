@@ -46,6 +46,26 @@ export const QUICK_FIT_RESPONSE_SCHEMA = `{
   }
 }`;
 
+export const QUICK_FIT_RULES = `Initial Fit rules:
+- Judge only the evidence currently supplied in the posting, selected resume, and candidate context. Assess the candidate's demonstrated fit for this role, not the potential of a future tailored resume.
+
+Apply this rubric directly:
+- STRONG: The candidate explicitly demonstrates most main responsibilities and core qualifications, with no major material gap.
+- REASONABLE: The candidate explicitly demonstrates most main responsibilities, with only one or two material core gaps and a credible path to perform the role.
+- STRETCH: There is meaningful relevant overlap, but several important gaps remain or the core experience is mostly transferable rather than direct.
+- LIMITED: The candidate shows little direct evidence for the role's main responsibilities and core qualifications.
+
+Evidence rules:
+- Missing evidence is a gap, not proof that the candidate is incapable.
+- Return at most three matches and three gaps. Preserve posting order; when evidence is tied, choose the earliest material item in the posting.
+- Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT.
+- Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
+- Do not infer years, degree equivalence, skill adjacency, alternatives, scores, percentages, or hidden requirement bookkeeping.
+- If the evidence genuinely falls between adjacent categories, choose the lower category unless direct candidate evidence supports the higher one.
+- Assess employment eligibility separately from fit. CLEAR means no stated condition needs attention. CHECK means the posting states a condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
+- Eligibility never changes the verdict. If the candidate context does not explicitly conflict, never return BLOCKED.
+- Return only the fields in the response shape.`;
+
 type PromptSources = {
   jobText: string;
   resumeText: string;
@@ -185,22 +205,7 @@ export function quickFitPromptSection({
   candidateContext?: unknown;
 }): string {
   const sources = promptSources({ jobText: "", resumeText, candidateContext });
-  return `Also produce a compact Initial Fit result using only explicit evidence from the posting and candidate inputs.
-
-Apply this rubric directly:
-- STRONG: The candidate explicitly demonstrates most main responsibilities and core qualifications, with no major material gap.
-- REASONABLE: The candidate explicitly demonstrates most main responsibilities, with only one or two material core gaps and a credible path to perform the role.
-- STRETCH: There is meaningful relevant overlap, but several important gaps remain or the core experience is mostly transferable rather than direct.
-- LIMITED: The candidate shows little direct evidence for the role's main responsibilities and core qualifications.
-
-Evidence rules:
-- Return at most three matches and three gaps. Preserve posting order; when evidence is tied, choose the earliest material item in the posting.
-- Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT.
-- Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
-- Do not infer years, degree equivalence, skill adjacency, alternatives, scores, percentages, or hidden requirement bookkeeping.
-- Assess employment eligibility separately from fit. CLEAR means no stated condition needs attention. CHECK means the posting states a condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
-- Eligibility never changes the verdict. If the candidate context does not explicitly conflict, never return BLOCKED.
-- Return only the fields in the response shape below.
+  return `Also produce a compact Initial Fit result using the candidate evidence below.
 
 <selected_resume>
 ${fenceUntrusted(sources.resumeText) || "No usable resume was provided."}
@@ -225,7 +230,9 @@ export function buildQuickFitPrompts({
 
 ${inputFirewallRule()}
 
-Use only explicit evidence from the posting, selected resume, and candidate context. Never invent skills, experience, eligibility, employers, dates, metrics, tools, outcomes, requirements, or evidence excerpts.`;
+Use only explicit evidence from the posting, selected resume, and candidate context. Never invent skills, experience, eligibility, employers, dates, metrics, tools, outcomes, requirements, or evidence excerpts.
+
+${QUICK_FIT_RULES}`;
   const userPrompt = `Screen the posting against the selected resume.
 
 <job_description>

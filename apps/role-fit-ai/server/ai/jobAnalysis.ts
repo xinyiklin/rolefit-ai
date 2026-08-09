@@ -30,6 +30,7 @@ import {
   findUngroundedCuratedClaimTerm
 } from "./grounding.ts";
 import {
+  QUICK_FIT_RULES,
   QUICK_FIT_RESPONSE_SCHEMA,
   analyzeQuickFit,
   quickFitPromptSection,
@@ -70,7 +71,9 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 4. techKeywords are ONLY concrete technologies/languages/frameworks/tools/platforms NAMED in the posting (e.g. "Python", "React", "AWS", "Kubernetes"). Never a generic skill ("communication") and never a tool the posting does not name.
 5. roleDescription is a neutral extract or light trim of the posting's own role/company description. Do not synthesize a new summary, combine unrelated claims, or add implied context.
 6. Each list item is one concise duty/qualification (no numbering, no bullets).
-7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.`;
+7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.${initialFit ? `
+
+${QUICK_FIT_RULES}` : ""}`;
 
   const schema = `Return this JSON shape (use "" / null / [] for anything not stated):
 {

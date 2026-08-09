@@ -138,7 +138,9 @@ Good server verification covers:
 - compact Initial Fit probes must prove that disabling it omits resume/context
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
   invalid fit preserves valid job fields, the prompt contains the direct rubric
-  and stable posting-order tie break, all match/gap/eligibility anchors are exact
+  as one identical system-level block in combined and fit-only paths, includes
+  the conservative lower-category and stable posting-order tie breaks, all
+  match/gap/eligibility anchors are exact
   current-source excerpts, public lists cap at three and reject duplicates,
   malformed enums or anchors fail unavailable, `BLOCKED` requires the explicit
   conflicting candidate fact, fixed public summaries replace provider prose,

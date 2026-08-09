@@ -10,9 +10,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
   Prepare, fit-only retry, provenance, and staleness; the displayed prepared
   brief remains editable without silently changing that source. Resume,
   candidate context, provider/model/reasoning, and prompt version still control
-  freshness, and identical ready inputs are reused. Focused lifecycle and Quick
-  Fit probes, 470 client workflow guards, both TypeScript projects, and
-  `git diff --check` pass; live-provider and browser outcome QA remain pending.
+  freshness, and identical ready inputs are reused. Standalone retry and
+  combined Prepare now render the same exported Initial Fit rules block in the
+  system prompt; its conservative adjacent-category tie break chooses the lower
+  verdict unless direct evidence supports the higher one. Focused lifecycle,
+  Quick Fit, Job analysis, and route probes, all 80 offline evaluations, 470
+  client workflow guards, both TypeScript projects, and `git diff --check` pass;
+  live-provider and browser outcome QA remain pending.
 
 ## 2026-08-08
 

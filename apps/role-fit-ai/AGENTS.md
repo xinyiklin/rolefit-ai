@@ -232,7 +232,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   the normalized captured posting, resume, candidate context,
   provider/model/reasoning configuration, and prompt version, never a friendly
   label or the editable displayed brief. Combined Prepare and retry must screen
-  that same retained posting. An unchanged ready result is reused; rerun only
+  that same retained posting and render the exact same exported system-level
+  rubric. When direct evidence genuinely falls between adjacent categories, the
+  lower category wins. An unchanged ready result is reused; rerun only
   after those inputs change or a prior fit fails. `BLOCKED` requires an explicit posting restriction
   plus an exact conflicting candidate-context fact; unknown or ambiguous status
   is `CHECK`. Resume and Cover Letter automation switches and minimum verdict

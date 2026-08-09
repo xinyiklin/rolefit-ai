@@ -95,7 +95,10 @@ editable documents.
   for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
   up to three matches and gaps; and an eligibility warning only when relevant.
   The provider applies the rubric directly and cites exact posting and candidate
-  excerpts for every match and exact posting excerpts for every gap. The server
+  excerpts for every match and exact posting excerpts for every gap. Combined
+  Prepare and fit-only Retry use the same system-level rubric; a genuinely
+  ambiguous adjacent-category result resolves to the lower category unless
+  direct candidate evidence supports the higher one. The server
   validates structure, enums, bounds, deduplication, and exact current-source
   provenance, then maps the verdict to fixed public summary copy. Malformed or
   ungrounded output is unavailable; there is no hidden requirement basis,

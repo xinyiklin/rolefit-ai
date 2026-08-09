@@ -237,7 +237,10 @@ owns:
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
   dispatch requests an independent `initialFit` subsection. The provider applies
-  the four-category rubric directly and returns up to three matches with exact
+  the same exported system-level four-category rubric used by fit-only Retry.
+  When evidence genuinely falls between adjacent categories, that rubric chooses
+  the lower one unless direct candidate evidence supports the higher. The
+  provider returns up to three matches with exact
   posting plus resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps
   with exact posting excerpts, and at most one eligibility result. `quickFit.ts`
   performs only structural, enum, length/count, deduplication, and exact current-

@@ -31,8 +31,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Job analysis plus optional compact Initial Fit in one provider dispatch;
   their response subsections sanitize independently. `mode: "initial-fit"`
   reruns only the compact fit after a relevant input changes. Initial Fit asks
-  the provider to apply the four-category rubric directly with exact posting and
-  candidate excerpts. `quickFit.ts` validates only shape, enums, bounds,
+  the provider to apply one exported system-level four-category rubric in both
+  request paths, with exact posting and candidate excerpts and a conservative
+  lower-category tie break. `quickFit.ts` validates only shape, enums, bounds,
   deduplication, and exact current-source provenance, then maps the accepted
   verdict to fixed public summary copy. It has no hidden requirement basis,
   semantic recalculation, broad eligibility regex, or guessed fallback.
