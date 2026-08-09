@@ -11,7 +11,7 @@ import type { PreparedResumeSelection } from "./preparedResume.ts";
 
 export type PreparedQuickFitJob = {
   localJobText: string;
-  fitJobText: string;
+  screeningJobText: string;
 };
 
 export function quickFitRetryIsAvailable(
@@ -55,33 +55,29 @@ export function quickFitRequestFingerprint(
 
 export function createQuickFitProvenance(
   screeningJobText: string,
-  displayedPreparedJobText: string,
   request: InitialFitRequest,
   aiRequest: Partial<AiRequestFields>
 ): QuickFitProvenance {
   const requestFingerprint = quickFitRequestFingerprint(screeningJobText, request, aiRequest);
   return {
+    screeningJobFingerprint: contentFingerprint(normalizeQuickFitInput(screeningJobText)),
     resumeFingerprint: contentFingerprint(normalizeQuickFitInput(request.resumeText)),
     candidateContextFingerprint: contentFingerprint(normalizeQuickFitInput(request.candidateContext)),
-    preparedJobFingerprint: contentFingerprint(normalizeQuickFitInput(displayedPreparedJobText)),
     requestIdentityFingerprint: quickFitRequestIdentityFingerprint(aiRequest),
-    inputFingerprint: workflowInputFingerprint({
-      requestFingerprint,
-      preparedJobText: normalizeQuickFitInput(displayedPreparedJobText)
-    })
+    inputFingerprint: requestFingerprint
   };
 }
 
 export function quickFitProvenanceIsStale(
   provenance: QuickFitProvenance,
-  displayedPreparedJobText: string,
+  screeningJobText: string,
   currentResume: Pick<PreparedResumeSelection, "text"> | null,
   candidateContext: string,
   aiRequest: Partial<AiRequestFields>
 ): boolean {
   if (!currentResume) return true;
   return (
-    provenance.preparedJobFingerprint !== contentFingerprint(normalizeQuickFitInput(displayedPreparedJobText))
+    provenance.screeningJobFingerprint !== contentFingerprint(normalizeQuickFitInput(screeningJobText))
     || provenance.resumeFingerprint !== contentFingerprint(normalizeQuickFitInput(currentResume.text))
     || provenance.candidateContextFingerprint !== contentFingerprint(normalizeQuickFitInput(candidateContext))
     || provenance.requestIdentityFingerprint !== quickFitRequestIdentityFingerprint(aiRequest)
@@ -90,7 +86,6 @@ export function quickFitProvenanceIsStale(
 
 export async function dispatchQuickFitRetry({
   preparedJob,
-  displayedPreparedJobText,
   currentResume,
   resolvePreparedResume,
   candidateContext,
@@ -98,31 +93,24 @@ export async function dispatchQuickFitRetry({
   refresh
 }: {
   preparedJob: PreparedQuickFitJob;
-  displayedPreparedJobText: string;
   currentResume: () => Pick<PreparedResumeSelection, "text" | "label"> | null;
   resolvePreparedResume: (jobText: string) => Promise<PreparedResumeSelection | null>;
   candidateContext: () => string;
   onUnavailable: () => void;
-  refresh: (
-    screeningJobText: string,
-    request: InitialFitRequest,
-    displayedPreparedJobText: string
-  ) => Promise<void>;
+  refresh: (screeningJobText: string, request: InitialFitRequest) => Promise<void>;
 }): Promise<boolean> {
-  const currentPreparedJob = displayedPreparedJobText.trim() || preparedJob.localJobText;
-  const selection = currentResume() ?? await resolvePreparedResume(currentPreparedJob);
+  const selection = currentResume() ?? await resolvePreparedResume(preparedJob.localJobText);
   if (!selection) {
     onUnavailable();
     return false;
   }
   await refresh(
-    currentPreparedJob,
+    preparedJob.screeningJobText,
     {
       resumeText: selection.text,
       resumeLabel: selection.label,
       candidateContext: candidateContext()
-    },
-    currentPreparedJob
+    }
   );
   return true;
 }

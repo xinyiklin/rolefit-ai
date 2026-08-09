@@ -63,9 +63,9 @@ export type QuickFitSnapshot = {
 };
 
 export type QuickFitProvenance = {
+  screeningJobFingerprint: string;
   resumeFingerprint: string;
   candidateContextFingerprint: string;
-  preparedJobFingerprint: string;
   requestIdentityFingerprint: string;
   inputFingerprint: string;
 };

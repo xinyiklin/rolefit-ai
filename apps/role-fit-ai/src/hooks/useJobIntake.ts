@@ -304,10 +304,10 @@ export function useJobIntake({
   // this application will be tailored from.
   async function prepareResumeAndInitialFit(
     localJobText: string,
-    fitJobText: string
+    screeningJobText: string
   ): Promise<InitialFitRequest | null> {
     const selection = await resolvePreparedResume(localJobText);
-    preparedJobForFitRef.current = { localJobText, fitJobText };
+    preparedJobForFitRef.current = { localJobText, screeningJobText };
     if (!runInitialFit) {
       setQuickFitState({ status: "disabled" });
       return null;
@@ -334,7 +334,7 @@ export function useJobIntake({
   function settleInitialFit(
     result: JobAnalysisResult,
     fitRequest: InitialFitRequest | null,
-    fitJobText: string,
+    screeningJobText: string,
     aiRequest: AiRequestFields
   ) {
     if (!runInitialFit) {
@@ -347,8 +347,7 @@ export function useJobIntake({
         status: "ready",
         snapshot: { result: result.initialFit, resumeLabel: fitRequest.resumeLabel },
         provenance: createQuickFitProvenance(
-          fitJobText,
-          result.extracted.tailoringText,
+          screeningJobText,
           fitRequest,
           aiRequest
         )
@@ -364,8 +363,7 @@ export function useJobIntake({
 
   async function refreshInitialFit(
     screeningJobText: string,
-    fitRequest: InitialFitRequest,
-    displayedPreparedJobText = screeningJobText
+    fitRequest: InitialFitRequest
   ) {
     if (!runInitialFit) {
       setQuickFitState({ status: "disabled" });
@@ -398,7 +396,6 @@ export function useJobIntake({
             snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel },
             provenance: createQuickFitProvenance(
               screeningJobText,
-              displayedPreparedJobText,
               fitRequest,
               aiRequest
             )
@@ -430,7 +427,7 @@ export function useJobIntake({
       && selectedResume
       && !quickFitProvenanceIsStale(
         quickFitState.provenance,
-        jobDescription.trim() || prepared.localJobText,
+        prepared.screeningJobText,
         selectedResume,
         candidateContext(),
         aiRequest
@@ -438,7 +435,6 @@ export function useJobIntake({
     ) return;
     await dispatchQuickFitRetry({
       preparedJob: prepared,
-      displayedPreparedJobText: jobDescription,
       currentResume,
       resolvePreparedResume,
       candidateContext,
@@ -457,7 +453,7 @@ export function useJobIntake({
     && currentPrepared
     && quickFitProvenanceIsStale(
       quickFitState.provenance,
-      jobDescription,
+      currentPrepared.screeningJobText,
       currentSelection,
       candidateContext(),
       jobAnalysisRequestFields()

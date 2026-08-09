@@ -229,10 +229,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   dispatch and independently sanitizes its subsection — in both directions: a
   local job-analysis fallback never discards a valid screening. Changing the
   selected resume reruns only compact Initial Fit. A fit's provenance covers
-  the normalized posting, prepared brief, resume, candidate context,
+  the normalized captured posting, resume, candidate context,
   provider/model/reasoning configuration, and prompt version, never a friendly
-  label. An unchanged ready result is reused; rerun only after those inputs
-  change or a prior fit fails. `BLOCKED` requires an explicit posting restriction
+  label or the editable displayed brief. Combined Prepare and retry must screen
+  that same retained posting. An unchanged ready result is reused; rerun only
+  after those inputs change or a prior fit fails. `BLOCKED` requires an explicit posting restriction
   plus an exact conflicting candidate-context fact; unknown or ambiguous status
   is `CHECK`. Resume and Cover Letter automation switches and minimum verdict
   thresholds are independent and default off; only `BLOCKED` stops an otherwise

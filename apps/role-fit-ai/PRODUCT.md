@@ -228,13 +228,13 @@ disappears into the task. Quiet competence, not salesmanship.
     and exact current-source provenance, then maps the verdict to fixed public
     summary copy. It does not select a hidden requirement set, recalculate
     semantic coverage, or synthesize a fallback verdict. Unusable output is
-    unavailable. The exact complete provider screening payload is recorded,
-    while the complete prepared brief displayed after a combined response is the
-    freshness baseline. A change anywhere in that brief, a changed or cleared
-    authoritative resume, changed candidate facts/honest context, changed Job
-    analysis provider/model/reasoning, or a prompt-version change replaces the
-    old verdict with an out-of-date state until checked again. An identical
-    successful screening is reused rather than billed twice.
+    unavailable. The exact complete provider screening payload is recorded. A
+    changed captured posting, changed or cleared authoritative resume, changed
+    candidate facts/honest context, changed Job analysis provider/model/reasoning,
+    or a prompt-version change replaces the old verdict with an out-of-date state
+    until checked again. Editing the displayed prepared brief does not replace
+    the captured posting being screened. An identical successful screening is
+    reused rather than billed twice.
     Initial Fit never shows scores, confidence, evidence ledgers,
     recommendations, or saved/historical audit state there, and never silently
     sets tracker priority. The bundled starter
@@ -255,8 +255,9 @@ disappears into the task. Quiet competence, not salesmanship.
     Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
     independently in both directions; changing the selected resume reruns only
     Initial Fit, and a fit records the exact complete posting/request it screened
-    while binding freshness to the complete prepared brief, authoritative resume,
-    candidate facts, and honest context rather than to names or a selected subset.
+    while binding freshness to that captured posting, authoritative resume,
+    candidate facts, and honest context rather than to names, the editable
+    displayed brief, or a selected subset.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

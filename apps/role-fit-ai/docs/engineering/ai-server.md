@@ -248,11 +248,11 @@ owns:
   Eligibility does not change the verdict.
 
   The client fingerprints normalized posting, resume, candidate context,
-  provider, model, reasoning effort, and prompt version. A separate settled
-  baseline fingerprints the complete displayed prepared brief, so the final AI
-  brief does not invalidate its own combined request while a later relevant
-  change derives an out-of-date state. An unchanged successful result is reused;
-  only changed inputs/settings/prompt or a previous failure dispatches again.
+  provider, model, reasoning effort, and prompt version. That normalized
+  captured posting is retained as `screeningJobText` for the combined request,
+  fit-only retry, provenance, and staleness; editing the displayed prepared brief
+  does not replace it. An unchanged successful result is reused; only changed
+  semantic inputs/settings/prompt or a previous failure dispatches again.
   The two subsections are sanitized
   independently in BOTH directions: the server preserves valid job
   fields when fit is absent or invalid, and the client preserves a valid fit when

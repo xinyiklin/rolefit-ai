@@ -3,6 +3,17 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-09
+
+- [USER+CODE+TOOL] **Initial Fit now has one canonical screening source.** The
+  normalized captured posting is retained as `screeningJobText` for combined
+  Prepare, fit-only retry, provenance, and staleness; the displayed prepared
+  brief remains editable without silently changing that source. Resume,
+  candidate context, provider/model/reasoning, and prompt version still control
+  freshness, and identical ready inputs are reused. Focused lifecycle and Quick
+  Fit probes, 470 client workflow guards, both TypeScript projects, and
+  `git diff --check` pass; live-provider and browser outcome QA remain pending.
+
 ## 2026-08-08
 
 - [USER+CODE+TOOL] **Initial Fit is simplified without changing the document

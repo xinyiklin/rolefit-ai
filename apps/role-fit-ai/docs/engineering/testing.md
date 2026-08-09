@@ -281,10 +281,11 @@ Good frontend verification covers:
   summary, deduplication, and eligibility adversarial probes in
   `server/ai/__evals__/quick-fit-probes.mjs`
 - `src/hooks/__evals__/quick-fit-lifecycle.mjs` executes combined-request and
-  fit-only provenance, full-brief edit invalidation, cleared-resume invalidation,
-  provider/model/reasoning identity invalidation, friendly-label exclusion,
-  Retry toggle restoration, and zero-provider-dispatch cases for starter-only,
-  blank-origin edited, and 40-79-character stub documents
+  fit-only provenance, canonical source replacement, displayed-brief independence,
+  cleared-resume invalidation, provider/model/reasoning identity invalidation,
+  friendly-label exclusion, Retry toggle restoration, identical-source reuse,
+  and zero-provider-dispatch cases for starter-only, blank-origin edited, and
+  40-79-character stub documents
 - Initial Fit shows only verdict, selected resume, summary, up to three matches
   and gaps, and a relevant eligibility warning. It exposes no score, confidence,
   evidence ledger, quotations, recommendation, saved audit, or analytics metric

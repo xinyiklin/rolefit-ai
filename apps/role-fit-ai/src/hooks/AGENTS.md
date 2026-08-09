@@ -173,6 +173,9 @@ browser-side effects; components render them and App composes them.
   and that stage's AI settings. The selected resume is captured immediately
   before dispatch; later resume changes use the fit-only request instead of
   cancelling or repeating Job analysis.
+- Initial Fit retains one normalized captured posting for combined Prepare,
+  fit-only retry, provenance, and staleness. The editable displayed brief may
+  keep changing, but it never silently replaces that screening source.
 - Initial Fit automation has independent Resume and Cover Letter switches plus
   categorical minimum verdict thresholds. Both switches default off; Resume
   defaults to Reasonable or better and Cover Letter to Strong only. `CHECK`

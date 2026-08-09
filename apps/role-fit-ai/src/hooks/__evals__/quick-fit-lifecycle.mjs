@@ -53,21 +53,11 @@ const finalPreparedBrief = [
   "- Build reliable JavaScript services.",
   "- Partner with finance."
 ].join("\n");
-const provenance = createQuickFitProvenance(rawPosting, finalPreparedBrief, request, aiRequest);
-assert.notEqual(
-  provenance.inputFingerprint,
-  createQuickFitProvenance(
-    rawPosting,
-    finalPreparedBrief.replace("Software Engineer", "Senior Software Engineer"),
-    request,
-    aiRequest
-  ).inputFingerprint,
-  "the settled prepared job participates in the complete result identity"
-);
+const provenance = createQuickFitProvenance(rawPosting, request, aiRequest);
 assert.equal(
   quickFitProvenanceIsStale(
     provenance,
-    finalPreparedBrief,
+    rawPosting,
     { text: resumeText },
     request.candidateContext,
     aiRequest
@@ -78,34 +68,23 @@ assert.equal(
 assert.equal(
   quickFitProvenanceIsStale(
     provenance,
-    finalPreparedBrief.replace("Software Engineer", "Senior Software Engineer"),
+    rawPostingWithDifferentUnselectedWork,
     { text: resumeText },
     request.candidateContext,
     aiRequest
   ),
   true,
-  "editing a prepared role outside the selected requirements invalidates the fit"
+  "replacing the canonical source posting invalidates the fit"
 );
 assert.equal(
-  quickFitProvenanceIsStale(
-    provenance,
-    `${finalPreparedBrief}\n- Own quarterly incident reviews.`,
-    { text: resumeText },
-    request.candidateContext,
-    aiRequest
-  ),
-  true,
-  "editing an unselected prepared responsibility invalidates the fit"
-);
-assert.equal(
-  quickFitProvenanceIsStale(provenance, finalPreparedBrief, null, request.candidateContext, aiRequest),
+  quickFitProvenanceIsStale(provenance, rawPosting, null, request.candidateContext, aiRequest),
   true,
   "clearing the authoritative current resume hides the old ready verdict"
 );
 assert.equal(
   quickFitProvenanceIsStale(
     provenance,
-    finalPreparedBrief,
+    rawPosting,
     { text: resumeText },
     request.candidateContext,
     { ...aiRequest, reasoningEffort: "xhigh" }
@@ -114,7 +93,7 @@ assert.equal(
   "provider, model, reasoning, and prompt identity control result reuse"
 );
 
-const preparedJob = { localJobText: finalPreparedBrief, fitJobText: rawPosting };
+const preparedJob = { localJobText: finalPreparedBrief, screeningJobText: rawPosting };
 assert.equal(quickFitRetryIsAvailable(false, preparedJob), false);
 assert.equal(
   quickFitRetryIsAvailable(true, preparedJob),
@@ -134,7 +113,6 @@ for (const [label, state] of unavailableCases) {
     : null;
   const dispatched = await dispatchQuickFitRetry({
     preparedJob,
-    displayedPreparedJobText: finalPreparedBrief,
     currentResume: () => currentResume,
     resolvePreparedResume: async () => null,
     candidateContext: () => "",
@@ -143,6 +121,33 @@ for (const [label, state] of unavailableCases) {
   });
   assert.equal(dispatched, false, `${label} has no retry request`);
   assert.equal(refreshCalls, 0, `${label} makes no provider call`);
+}
+
+{
+  const refreshCalls = [];
+  const resolveCalls = [];
+  const dispatched = await dispatchQuickFitRetry({
+    preparedJob,
+    currentResume: () => null,
+    resolvePreparedResume: async (jobText) => {
+      resolveCalls.push(jobText);
+      return { text: resumeText, label: "Current" };
+    },
+    candidateContext: () => request.candidateContext,
+    onUnavailable: () => assert.fail("a resolved resume must dispatch Initial Fit"),
+    refresh: async (...args) => { refreshCalls.push(args); }
+  });
+  assert.equal(dispatched, true, "a resolved retry dispatches Initial Fit");
+  assert.deepEqual(
+    resolveCalls,
+    [finalPreparedBrief],
+    "retry keeps the local prepared brief only for prepared-resume resolution"
+  );
+  assert.equal(
+    refreshCalls[0]?.[0],
+    rawPosting,
+    "retry screens the same canonical posting as the combined Prepare request"
+  );
 }
 
 console.log("Initial Fit lifecycle probes: passed");

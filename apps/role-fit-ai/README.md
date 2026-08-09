@@ -101,9 +101,10 @@ editable documents.
   ungrounded output is unavailable; there is no hidden requirement basis,
   semantic recalculation, numeric scoring, or guessed fallback. The receipt
   fingerprints the normalized screening text, resume, candidate context,
-  provider/model/reasoning configuration, and prompt version, and separately
-  anchors the complete prepared brief displayed after settlement. Changing any
-  of those inputs hides the old verdict as out of date until checked again;
+  provider/model/reasoning configuration, and prompt version. Changing any of
+  those semantic inputs hides the old verdict as out of date until checked again;
+  editing the displayed prepared brief does not silently replace the captured
+  posting that Initial Fit screens.
   checking an identical successful input reuses the current result. Initial Fit has no
   score, confidence, visible requirement ledger, evidence quotes,
   recommendation, or analytics role, and it never silently sets tracker
