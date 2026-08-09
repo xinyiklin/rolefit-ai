@@ -242,7 +242,10 @@ owns:
   the lower one unless direct candidate evidence supports the higher. The
   provider may use transferable evidence to choose a verdict, but only direct
   evidence can support a match, and one posting excerpt cannot be both a match
-  and a gap. It returns up to three matches with exact
+  and a gap. Overlapping excerpts cannot count one underlying missing need twice.
+  The verdict is selected before eligibility, which covers only work
+  authorization, sponsorship/visa, clearance, or legal ability to take the
+  role—not education, skills, or experience. It returns up to three matches with exact
   posting plus resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps
   with exact posting excerpts, and at most one eligibility result. `quickFit.ts`
   performs only structural, enum, length/count, deduplication, and exact current-

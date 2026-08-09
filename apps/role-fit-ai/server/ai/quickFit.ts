@@ -62,9 +62,11 @@ Evidence rules:
 - A match requires direct candidate evidence for the cited job item. Transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement.
 - Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
 - A job excerpt may appear only once and must never appear in both matches and gaps.
+- Return one gap per underlying missing need; do not count the same missing qualification twice through overlapping posting excerpts.
 - Do not infer years, degree equivalence, skill adjacency, alternatives, scores, percentages, or hidden requirement bookkeeping.
 - If the evidence genuinely falls between adjacent categories, choose the lower category unless direct candidate evidence supports the higher one.
-- Assess employment eligibility separately from fit. CLEAR means no stated condition needs attention. CHECK means the posting states a condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
+- Determine the verdict without considering eligibility, then assess employment eligibility separately. Work authorization never counts as a match or gap and never lowers the verdict.
+- Eligibility covers only work authorization, visa or sponsorship, security clearance, or legal ability to take the role; education, skills, and experience are fit evidence, not eligibility. CLEAR means no stated eligibility condition needs attention. CHECK means the posting states an eligibility condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
 - Eligibility never changes the verdict. If the candidate context does not explicitly conflict, never return BLOCKED.
 - Return only the fields in the response shape.`;
 

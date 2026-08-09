@@ -15,8 +15,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   system prompt; its conservative adjacent-category tie break chooses the lower
   verdict unless direct evidence supports the higher one. Synthetic Codex live
   calibration exposed repeated match/gap overlap for transferable evidence; the
-  v3 rules now reserve matches for direct evidence and forbid using one posting
-  excerpt as both a match and a gap. Focused lifecycle,
+  v3 rules reserve matches for direct evidence and forbid using one posting
+  excerpt as both a match and a gap. Claude calibration then exposed duplicated
+  gap themes and degree-as-eligibility drift; the v4 rules require one gap per
+  missing need, make eligibility employment-specific, and require the verdict
+  to be decided independently. Focused lifecycle,
   Quick Fit, Job analysis, and route probes, all 80 offline evaluations, 470
   client workflow guards, both TypeScript projects, and `git diff --check` pass;
   live-provider and browser outcome QA remain pending.

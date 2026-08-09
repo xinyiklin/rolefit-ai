@@ -1,7 +1,7 @@
 export const QUICK_FIT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
 export const QUICK_FIT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
 export const QUICK_FIT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
-export const QUICK_FIT_PROMPT_VERSION = "initial-fit-direct-rubric-v3";
+export const QUICK_FIT_PROMPT_VERSION = "initial-fit-direct-rubric-v4";
 
 export type QuickFitVerdict = (typeof QUICK_FIT_VERDICTS)[number];
 export type QuickFitEligibilityStatus = (typeof QUICK_FIT_ELIGIBILITY)[number];
