@@ -188,6 +188,18 @@ Good server verification covers:
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
+- Initial Fit has a manual synthetic consistency calibration:
+  `npm run eval:live:initial-fit --workspace apps/role-fit-ai -- [fixture-id[,fixture-id]|all] [runs]`.
+  It runs three to five repetitions through both combined Prepare and standalone
+  Retry prompts, measures verdict and eligibility distributions, non-adjacent
+  jumps, invalid responses, provider errors, repairs, and material-theme overlap,
+  and writes full synthetic receipts under gitignored
+  `workspace/initial-fit-eval/`. `EVAL_PROVIDER`, `EVAL_MODEL`, and
+  `EVAL_REASONING_EFFORT` select one supported configuration; `EVAL_MATRIX`
+  accepts a JSON array of supported configurations. `EVAL_REPORT_ONLY=1`
+  recomputes the aggregate from existing receipts without provider calls. The
+  runner stops one provider configuration after its first provider failure and
+  is explicitly excluded from `npm test`.
 - Resume Proposal has a separate synthetic-only live smoke harness:
   `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
   Every run checks an aligned fixture where `NO_CHANGES` is valid and an

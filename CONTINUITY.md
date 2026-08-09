@@ -19,10 +19,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
   excerpt as both a match and a gap. Claude calibration then exposed duplicated
   gap themes and degree-as-eligibility drift; the v4 rules require one gap per
   missing need, make eligibility employment-specific, and require the verdict
-  to be decided independently. Focused lifecycle,
-  Quick Fit, Job analysis, and route probes, all 80 offline evaluations, 470
-  client workflow guards, both TypeScript projects, and `git diff --check` pass;
-  live-provider and browser outcome QA remain pending.
+  to be decided independently. The opt-in 12-fixture synthetic calibration now
+  measures both request paths over three to five runs. A targeted final-v4
+  Codex/Claude matrix produced 60/60 valid grounded responses, exact eligibility,
+  no non-adjacent jumps, and 1.0 average material-theme overlap; three Claude
+  samples moved one adjacent category while each intended clear category still
+  held in five of six runs. Antigravity returned four clean Strong receipts but
+  its fifth call did not complete within the bounded review window, so its full
+  matrix remains unconfirmed. Focused lifecycle, Quick Fit, Job analysis, and
+  route probes, all 81 offline evaluations, 470 client workflow guards, both
+  TypeScript projects, and `git diff --check` pass; browser QA remains pending.
 
 ## 2026-08-08
 

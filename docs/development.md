@@ -121,6 +121,7 @@ node apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs
 # Live-provider evals: drive a real AI provider; manual-only, never part of
 # `check`/`test`, run only when explicitly authorized.
 npm run eval:live:cover-letter --workspace apps/role-fit-ai
+npm run eval:live:initial-fit --workspace apps/role-fit-ai -- [fixture-id[,fixture-id]|all] [runs]
 ```
 
 Typeset preview is `npm run preview --workspace apps/typeset`. RoleFit preview
