@@ -43,7 +43,7 @@ import {
   reconcilePreparedJobManualReviewFields,
   type PreparedJobBrief
 } from "../lib/preparedJobBrief";
-import type { QuickFitState } from "../../shared/quickFitContract.ts";
+import type { QuickFitResult, QuickFitState } from "../../shared/quickFitContract.ts";
 import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
 import {
   createQuickFitProvenance,
@@ -331,21 +331,28 @@ export function useJobIntake({
     return fitRequest;
   }
 
-  function settleInitialFit(
-    result: JobAnalysisResult,
-    fitRequest: InitialFitRequest | null,
-    screeningJobText: string,
-    aiRequest: AiRequestFields
-  ) {
+  function applyQuickFitOutcome({
+    outcome,
+    fitRequest,
+    screeningJobText,
+    aiRequest,
+    unavailableMessage = "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+  }: {
+    outcome: QuickFitResult | null;
+    fitRequest: InitialFitRequest | null;
+    screeningJobText: string;
+    aiRequest: AiRequestFields;
+    unavailableMessage?: string;
+  }) {
     if (!runInitialFit) {
       setQuickFitState({ status: "disabled" });
       return;
     }
     if (!fitRequest) return;
-    if (result.initialFit) {
+    if (outcome) {
       setQuickFitState({
         status: "ready",
-        snapshot: { result: result.initialFit, resumeLabel: fitRequest.resumeLabel },
+        snapshot: { result: outcome, resumeLabel: fitRequest.resumeLabel },
         provenance: createQuickFitProvenance(
           screeningJobText,
           fitRequest,
@@ -357,7 +364,7 @@ export function useJobIntake({
     setQuickFitState({
       status: "unavailable",
       resumeLabel: fitRequest.resumeLabel,
-      message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+      message: unavailableMessage
     });
   }
 
@@ -378,10 +385,12 @@ export function useJobIntake({
       const readiness = await ensureProviderReady();
       if (controller.signal.aborted) return;
       if (!readiness.ready) {
-        setQuickFitState({
-          status: "unavailable",
-          resumeLabel: fitRequest.resumeLabel,
-          message: `Initial Fit is unavailable: ${readiness.message}`
+        applyQuickFitOutcome({
+          outcome: null,
+          fitRequest,
+          screeningJobText,
+          aiRequest,
+          unavailableMessage: `Initial Fit is unavailable: ${readiness.message}`
         });
         return;
       }
@@ -390,27 +399,19 @@ export function useJobIntake({
         signal: controller.signal
       });
       if (controller.signal.aborted) return;
-      setQuickFitState(outcome.initialFit
-        ? {
-            status: "ready",
-            snapshot: { result: outcome.initialFit, resumeLabel: fitRequest.resumeLabel },
-            provenance: createQuickFitProvenance(
-              screeningJobText,
-              fitRequest,
-              aiRequest
-            )
-          }
-        : {
-            status: "unavailable",
-            resumeLabel: fitRequest.resumeLabel,
-            message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
-          });
+      applyQuickFitOutcome({
+        outcome: outcome.initialFit,
+        fitRequest,
+        screeningJobText,
+        aiRequest
+      });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      setQuickFitState({
-        status: "unavailable",
-        resumeLabel: fitRequest.resumeLabel,
-        message: "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+      applyQuickFitOutcome({
+        outcome: null,
+        fitRequest,
+        screeningJobText,
+        aiRequest
       });
     } finally {
       if (initialFitAbortRef.current === controller) initialFitAbortRef.current = null;
@@ -613,7 +614,12 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(rawText);
-      settleInitialFit(result, fitRequest, rawText, aiRequest);
+      applyQuickFitOutcome({
+        outcome: result.initialFit,
+        fitRequest,
+        screeningJobText: rawText,
+        aiRequest
+      });
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -743,7 +749,12 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(cleaned);
-      settleInitialFit(result, fitRequest, cleaned, aiRequest);
+      applyQuickFitOutcome({
+        outcome: result.initialFit,
+        fitRequest,
+        screeningJobText: cleaned,
+        aiRequest
+      });
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -875,7 +886,12 @@ export function useJobIntake({
       resetCoverWorkflow();
       setPipelineAiUsage(freshJobAnalysisUsage(usage));
       setJobRawText(payload.text);
-      settleInitialFit(result, fitRequest, payload.text, aiRequest);
+      applyQuickFitOutcome({
+        outcome: result.initialFit,
+        fitRequest,
+        screeningJobText: payload.text,
+        aiRequest
+      });
       if (!duplicateAfter.proceed) {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
@@ -972,7 +988,12 @@ export function useJobIntake({
         resetCoverWorkflow();
         setPipelineAiUsage(freshJobAnalysisUsage(usage));
         setJobRawText(text);
-        settleInitialFit(result, fitRequest, text, aiRequest);
+        applyQuickFitOutcome({
+          outcome: result.initialFit,
+          fitRequest,
+          screeningJobText: text,
+          aiRequest
+        });
         if (!duplicateAfter.proceed) {
           setJobAnalysisRetrySource("import");
           setJobAnalysisProgress(duplicateStoppedState("after"));

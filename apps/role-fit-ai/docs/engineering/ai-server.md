@@ -233,8 +233,11 @@ owns:
   review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
-  provider after publishing the deterministic local brief. When the request
-  fails, that local brief remains editable and manual Polish stays available.
+  provider after publishing the deterministic local brief. Combined analysis and
+  fit-only Retry pass through one private request boundary that owns JSON decoding,
+  HTTP and network error translation, abort propagation, and mode-specific response
+  validation. When the request fails, that local brief remains editable and manual
+  Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
   dispatch requests an independent `initialFit` subsection. The provider applies
   the same exported system-level four-category rubric used by fit-only Retry.
@@ -255,7 +258,10 @@ owns:
   `BLOCKED` additionally requires an exact conflicting candidate-context fact.
   Eligibility does not change the verdict.
 
-  The client fingerprints normalized posting, resume, candidate context,
+  `useJobIntake` applies every ready or unavailable fit through one private outcome
+  boundary so combined analysis, Retry, provider-unavailable handling, state, and
+  provenance cannot settle differently. The client fingerprints normalized
+  posting, resume, candidate context,
   provider, model, reasoning effort, and prompt version. That normalized
   captured posting is retained as `screeningJobText` for the combined request,
   fit-only retry, provenance, and staleness; editing the displayed prepared brief

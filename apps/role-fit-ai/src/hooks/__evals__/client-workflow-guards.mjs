@@ -339,6 +339,27 @@ assert.match(
   /mode: "initial-fit"/,
   "a resume-variant change can rerun compact Initial Fit without repeating Job Analysis"
 );
+assert.equal(
+  aiJobAnalysis.match(/fetch\("\/api\/job-analysis"/g)?.length,
+  1,
+  "combined analysis and fit-only retry share one private request boundary"
+);
+assert.match(
+  aiJobAnalysis,
+  /async function postJobAnalysisRequest/,
+  "the private Job analysis request helper owns endpoint and failure translation"
+);
+assert.match(
+  intake,
+  /function applyQuickFitOutcome/,
+  "combined and retry outcomes share one private Quick Fit settlement helper"
+);
+assert.equal(
+  intake.match(/createQuickFitProvenance\(/g)?.length,
+  1,
+  "ready-result provenance is constructed only inside shared outcome settlement"
+);
+assert.doesNotMatch(intake, /function settleInitialFit/, "the former combined-only settlement branch is removed");
 assert.match(
   app,
   /if \(loaded && runInitialFit && jobPrepared\) \{[\s\S]{0,80}?void refreshInitialFit\(/,

@@ -15,7 +15,9 @@ browser-side effects; components render them and App composes them.
   directions — a local job-analysis fallback keeps a valid screening — and a fit
   retry or resume change must not rerun Job analysis. Intake does not choose the
   resume: it calls `usePreparedResume` once per preparation and records the fit's
-  provenance as content fingerprints of exactly what it sent.
+  provenance as content fingerprints of exactly what it sent. Combined and
+  fit-only results must pass through one private Quick Fit outcome helper so
+  ready/unavailable state and provenance cannot drift by entry path.
 - `usePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID

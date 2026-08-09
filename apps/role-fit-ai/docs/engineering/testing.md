@@ -145,6 +145,11 @@ Good server verification covers:
   malformed enums or anchors fail unavailable, `BLOCKED` requires the explicit
   conflicting candidate fact, fixed public summaries replace provider prose,
   and fit-only retries omit the Job analysis schema
+- `src/lib/__evals__/ai-job-analysis-request-eval.mjs` must exercise the one
+  browser request boundary with combined and fit-only success, provider HTTP
+  failure, unreadable and invalid responses, network failure, and abort
+  propagation. Client workflow guards must keep one endpoint request helper and
+  one Quick Fit outcome helper so entry paths cannot grow separate settlements
 - auto-polish policy probes must cover every categorical threshold boundary,
   preserve the threshold values/order/labels, and keep automation policy out of
   the shared Initial Fit contract

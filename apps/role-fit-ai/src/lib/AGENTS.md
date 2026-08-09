@@ -38,6 +38,9 @@ Applies to `apps/role-fit-ai/src/lib/`.
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe
   over-invalidation is preferable to a false cache hit.
+- `aiJobAnalysis.ts` owns one private `/api/job-analysis` request boundary for
+  combined analysis and fit-only retry. Keep HTTP error translation, JSON
+  decoding, abort propagation, and mode-specific response validation there.
 - `autoPolishPolicy.ts` owns the client-only minimum-verdict type, labels,
   ordering, and comparison used independently by Resume and Cover Letter. The
   shared Quick Fit contract owns assessment data and must not import downstream

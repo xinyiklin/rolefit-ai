@@ -158,6 +158,77 @@ function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
 }
 
+type JobAnalysisFailure = { failure: ClassifiedFailure };
+type AnalysisApiOutcome = { mode: "analysis"; fields: Partial<AiJobAnalysisFields> };
+type InitialFitApiOutcome = { mode: "initial-fit"; initialFit: QuickFitResult };
+type JobAnalysisApiOutcome = AnalysisApiOutcome | InitialFitApiOutcome | JobAnalysisFailure;
+
+function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "analysis"; signal?: AbortSignal }
+): Promise<AnalysisApiOutcome | JobAnalysisFailure>;
+function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "initial-fit"; signal?: AbortSignal }
+): Promise<InitialFitApiOutcome | JobAnalysisFailure>;
+async function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "analysis" | "initial-fit"; signal?: AbortSignal }
+): Promise<JobAnalysisApiOutcome> {
+  const { mode, signal } = options;
+  try {
+    const response = await fetch("/api/job-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal
+    });
+    if (!response.ok) {
+      let message = mode === "analysis"
+        ? "AI job analysis request failed"
+        : "Initial Fit request failed";
+      try {
+        const body = await response.json() as { error?: unknown };
+        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
+      } catch {
+        // The status code still classifies a non-JSON failure safely.
+      }
+      return { failure: classifyFailure(new ApiError(message, response.status)) };
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      const message = mode === "analysis"
+        ? "The job analyzer returned an unparseable response"
+        : "Initial Fit returned unreadable JSON";
+      return { failure: classifyFailure(new ApiError(message, 502)) };
+    }
+
+    if (mode === "analysis") {
+      if (!body || typeof body !== "object" || Array.isArray(body) || (body as { source?: unknown }).source !== "ai") {
+        return {
+          failure: classifyFailure(new ApiError("The job analyzer returned an invalid response", 502))
+        };
+      }
+      return { mode, fields: body as Partial<AiJobAnalysisFields> };
+    }
+
+    const initialFit = body && typeof body === "object" && !Array.isArray(body)
+      ? sanitizeQuickFit((body as { initialFit?: unknown }).initialFit)
+      : null;
+    return initialFit
+      ? { mode, initialFit }
+      : {
+          failure: classifyFailure(new ApiError("Initial Fit returned no usable screening", 502))
+        };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    return { failure: classifyFailure(error) };
+  }
+}
+
 // Usage attribution for an AI-accepted analysis: the resolved provider/model
 // echo the server attaches to a successful /api/job-analysis response.
 function aiUsageFromFields(fields: Partial<AiJobAnalysisFields>): StageAiUsage {
@@ -294,51 +365,32 @@ export async function analyzeJobPosting(
   });
   if (text.trim().length < 40) return localOnly();
 
-  try {
-    const res = await fetch("/api/job-analysis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        url,
-        ...(aiRequest ?? {}),
-        ...(initialFitRequested
-          ? {
-              initialFit: {
-                enabled: true,
-                resumeText: initialFit?.resumeText,
-                candidateContext: initialFit?.candidateContext
-              }
+  const outcome = await postJobAnalysisRequest(
+    {
+      text,
+      url,
+      ...(aiRequest ?? {}),
+      ...(initialFitRequested
+        ? {
+            initialFit: {
+              enabled: true,
+              resumeText: initialFit?.resumeText,
+              candidateContext: initialFit?.candidateContext
             }
-          : {})
-      }),
-      signal
-    });
-    if (!res.ok) {
-      let message = "AI job analysis request failed";
-      try {
-        const body = (await res.json()) as { error?: unknown };
-        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
-      } catch {
-        // The status code still classifies a non-JSON failure safely.
-      }
-      return localAfterAttempt(classifyFailure(new ApiError(message, res.status)));
-    }
-    let fields: Partial<AiJobAnalysisFields> | null;
-    try {
-      fields = (await res.json()) as Partial<AiJobAnalysisFields> | null;
-    } catch {
-      return localAfterAttempt(classifyFailure(new ApiError("The job analyzer returned an unparseable response", 502)));
-    }
-    if (!fields || fields.source !== "ai") {
-      return localAfterAttempt(classifyFailure(new ApiError("The job analyzer returned an invalid response", 502)));
-    }
-    return extractedFromAiOrLocal(fields, text, url, aiRequest, localExtracted, initialFitRequested);
-  } catch (error) {
-    // A genuine cancel should propagate; everything else falls back locally.
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return localAfterAttempt(classifyFailure(error));
-  }
+          }
+        : {})
+    },
+    { mode: "analysis", signal }
+  );
+  if ("failure" in outcome) return localAfterAttempt(outcome.failure);
+  return extractedFromAiOrLocal(
+    outcome.fields,
+    text,
+    url,
+    aiRequest,
+    localExtracted,
+    initialFitRequested
+  );
 }
 
 export async function analyzeInitialFit(
@@ -346,47 +398,17 @@ export async function analyzeInitialFit(
   request: InitialFitRequest,
   options: { signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
 ): Promise<{ initialFit: QuickFitResult | null; failure?: ClassifiedFailure }> {
-  try {
-    const response = await fetch("/api/job-analysis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        text,
-        mode: "initial-fit",
-        resumeText: request.resumeText,
-        candidateContext: request.candidateContext,
-        ...(options.aiRequest ?? {})
-      }),
-      signal: options.signal
-    });
-    if (!response.ok) {
-      let message = "Initial Fit request failed";
-      try {
-        const body = await response.json() as { error?: unknown };
-        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
-      } catch {
-        // The status still supplies a safe classification.
-      }
-      return { initialFit: null, failure: classifyFailure(new ApiError(message, response.status)) };
-    }
-    let body: { initialFit?: unknown };
-    try {
-      body = await response.json() as { initialFit?: unknown };
-    } catch {
-      return {
-        initialFit: null,
-        failure: classifyFailure(new ApiError("Initial Fit returned unreadable JSON", 502))
-      };
-    }
-    const initialFit = sanitizeQuickFit(body.initialFit);
-    return initialFit
-      ? { initialFit }
-      : {
-          initialFit: null,
-          failure: classifyFailure(new ApiError("Initial Fit returned no usable screening", 502))
-        };
-  } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return { initialFit: null, failure: classifyFailure(error) };
-  }
+  const outcome = await postJobAnalysisRequest(
+    {
+      text,
+      mode: "initial-fit",
+      resumeText: request.resumeText,
+      candidateContext: request.candidateContext,
+      ...(options.aiRequest ?? {})
+    },
+    { mode: "initial-fit", signal: options.signal }
+  );
+  return "failure" in outcome
+    ? { initialFit: null, failure: outcome.failure }
+    : { initialFit: outcome.initialFit };
 }
