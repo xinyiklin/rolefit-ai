@@ -239,7 +239,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   plus an exact conflicting candidate-context fact; unknown or ambiguous status
   is `CHECK`. Resume and Cover Letter automation switches and minimum verdict
   thresholds are independent and default off; only `BLOCKED` stops an otherwise
-  eligible threshold match, and manual Polish remains available.
+  eligible threshold match, and manual Polish remains available. Their labels,
+  ordering, and comparison belong to client `autoPolishPolicy.ts`, never the
+  shared Initial Fit assessment contract.
   Retry is offered whenever a preparation exists to retry — including when no
   resume resolved, the state that most needs recovery and has no label.
 - Reuse `AiWorkflowProgress` for retryable AI operations and existing

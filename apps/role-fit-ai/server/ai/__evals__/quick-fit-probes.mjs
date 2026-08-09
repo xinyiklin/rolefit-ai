@@ -8,7 +8,6 @@ import {
 import { buildJobAnalysisPrompts } from "../jobAnalysis.ts";
 import {
   QUICK_FIT_SUMMARY,
-  quickFitMeetsThreshold,
   sanitizeQuickFit
 } from "../../../shared/quickFitContract.ts";
 
@@ -137,12 +136,6 @@ assert.equal(
   null,
   "duplicate findings are unusable instead of double-counted"
 );
-
-assert.equal(quickFitMeetsThreshold("STRONG", "STRONG"), true);
-assert.equal(quickFitMeetsThreshold("REASONABLE", "STRONG"), false);
-assert.equal(quickFitMeetsThreshold("STRETCH", "REASONABLE"), false);
-assert.equal(quickFitMeetsThreshold("STRETCH", "STRETCH"), true);
-assert.equal(quickFitMeetsThreshold("LIMITED", "LIMITED"), true);
 
 const clientResult = sanitizeQuickFit({
   verdict: "STRONG",

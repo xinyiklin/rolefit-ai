@@ -144,8 +144,10 @@ Good server verification covers:
   current-source excerpts, public lists cap at three and reject duplicates,
   malformed enums or anchors fail unavailable, `BLOCKED` requires the explicit
   conflicting candidate fact, fixed public summaries replace provider prose,
-  all four categorical threshold boundaries hold, and fit-only retries omit the
-  Job analysis schema
+  and fit-only retries omit the Job analysis schema
+- auto-polish policy probes must cover every categorical threshold boundary,
+  preserve the threshold values/order/labels, and keep automation policy out of
+  the shared Initial Fit contract
 - resume proposal probes must keep category labels out of the target set, allow
   grounded list reordering/additions, reject category substitutions, job-only
   skills, every upward ownership inflation (including level 1 to 2), and

@@ -27,8 +27,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   held in five of six runs. Antigravity returned four clean Strong receipts but
   its fifth call did not complete within the bounded review window, so its full
   matrix remains unconfirmed. Focused lifecycle, Quick Fit, Job analysis, and
-  route probes, all 81 offline evaluations, 470 client workflow guards, both
-  TypeScript projects, and `git diff --check` pass; browser QA remains pending.
+  route probes, all 82 offline evaluations, 470 client workflow guards, both
+  TypeScript projects, and `git diff --check` pass. Initial Fit's shared contract
+  now owns only assessment/result/lifecycle concerns; client-only threshold
+  labels, ranking, and comparison live in `autoPolishPolicy.ts` with unchanged
+  independent Resume and Cover Letter behavior. Browser QA remains pending.
 
 ## 2026-08-08
 

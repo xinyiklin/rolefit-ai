@@ -2,10 +2,8 @@ import type { AiProviderValue } from "../config/aiOptions.ts";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
 import { normalizeAntigravityModelId } from "../../shared/antigravityModels.ts";
-import {
-  QUICK_FIT_VERDICTS,
-  type AutoPolishThreshold
-} from "../../shared/quickFitContract.ts";
+import { QUICK_FIT_VERDICTS } from "../../shared/quickFitContract.ts";
+import type { AutoPolishThreshold } from "./autoPolishPolicy.ts";
 import {
   CITIZENSHIP_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,

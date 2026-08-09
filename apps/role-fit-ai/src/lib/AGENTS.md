@@ -38,6 +38,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe
   over-invalidation is preferable to a false cache hit.
+- `autoPolishPolicy.ts` owns the client-only minimum-verdict type, labels,
+  ordering, and comparison used independently by Resume and Cover Letter. The
+  shared Quick Fit contract owns assessment data and must not import downstream
+  automation policy.
 - Add a focused deterministic eval for durable parsing, identity, workflow,
   naming, or evidence behavior. Cover adversarial and empty inputs, not only the
   happy path.

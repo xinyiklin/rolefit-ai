@@ -6,7 +6,6 @@ export const QUICK_FIT_PROMPT_VERSION = "initial-fit-direct-rubric-v4";
 export type QuickFitVerdict = (typeof QUICK_FIT_VERDICTS)[number];
 export type QuickFitEligibilityStatus = (typeof QUICK_FIT_ELIGIBILITY)[number];
 export type QuickFitEvidenceSource = (typeof QUICK_FIT_EVIDENCE_SOURCES)[number];
-export type AutoPolishThreshold = QuickFitVerdict;
 
 export const QUICK_FIT_SUMMARY: Record<QuickFitVerdict, string> = {
   STRONG: "Your background aligns closely with the role’s main requirements.",
@@ -14,30 +13,6 @@ export const QUICK_FIT_SUMMARY: Record<QuickFitVerdict, string> = {
   STRETCH: "You have relevant experience, but several important gaps remain.",
   LIMITED: "The resume shows limited direct evidence for the role’s main requirements."
 };
-
-export const AUTO_POLISH_THRESHOLD_OPTIONS: ReadonlyArray<{
-  value: AutoPolishThreshold;
-  label: string;
-}> = [
-  { value: "STRONG", label: "Strong only" },
-  { value: "REASONABLE", label: "Reasonable or better" },
-  { value: "STRETCH", label: "Stretch or better" },
-  { value: "LIMITED", label: "Any fit result" }
-];
-
-const FIT_RANK: Record<QuickFitVerdict, number> = {
-  LIMITED: 0,
-  STRETCH: 1,
-  REASONABLE: 2,
-  STRONG: 3
-};
-
-export function quickFitMeetsThreshold(
-  verdict: QuickFitVerdict,
-  threshold: AutoPolishThreshold
-): boolean {
-  return FIT_RANK[verdict] >= FIT_RANK[threshold];
-}
 
 // Initial Fit uses the same canonical text on the client and server. Friendly
 // file labels stay outside this boundary because renaming a file does not

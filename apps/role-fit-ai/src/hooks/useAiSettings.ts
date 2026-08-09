@@ -10,7 +10,7 @@ import type { AiProviderValue } from "../config/aiOptions";
 import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type { CitizenshipStatus, EducationLevel } from "../lib/candidateFacts";
-import type { AutoPolishThreshold } from "../../shared/quickFitContract.ts";
+import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
 // config, the shared and per-stage guidance, and candidate facts. These share

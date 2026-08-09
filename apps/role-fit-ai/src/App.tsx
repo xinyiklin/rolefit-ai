@@ -98,9 +98,7 @@ import { recommendVariant, type VariantRecommendation } from "./lib/variantRecom
 import { currentResumeSelection } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
-import {
-  quickFitMeetsThreshold
-} from "../shared/quickFitContract.ts";
+import { quickFitMeetsThreshold } from "./lib/autoPolishPolicy";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";

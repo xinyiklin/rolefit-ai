@@ -20,7 +20,7 @@ import { SettingsStage } from "./SettingsStage";
 import {
   AUTO_POLISH_THRESHOLD_OPTIONS,
   type AutoPolishThreshold
-} from "../../shared/quickFitContract.ts";
+} from "../lib/autoPolishPolicy.ts";
 
 export type SettingsSection = "stages" | "about" | "guidance";
 
