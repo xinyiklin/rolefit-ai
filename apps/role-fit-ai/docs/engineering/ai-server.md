@@ -238,52 +238,17 @@ owns:
   HTTP and network error translation, abort propagation, and mode-specific response
   validation. When the request fails, that local brief remains editable and manual
   Polish stays available.
-  If Initial Fit is enabled and a selected resume is usable, the same provider
-  dispatch requests an independent `initialFit` subsection. The provider applies
-  the same exported system-level four-category rubric used by fit-only Retry.
-  When evidence genuinely falls between adjacent categories, that rubric chooses
-  the lower one unless direct candidate evidence supports the higher. The
-  provider may use transferable evidence to choose a verdict, but only direct
-  evidence can support a match, and one posting excerpt cannot be both a match
-  and a gap. Overlapping excerpts cannot count one underlying missing need twice.
-  The verdict is selected before eligibility, which covers only work
-  authorization, sponsorship/visa, clearance, or legal ability to take the
-  role—not education, skills, or experience. It returns up to three matches with exact
-  posting plus resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps
-  with exact posting excerpts, and at most one eligibility result. `quickFit.ts`
-  performs only structural, enum, length/count, deduplication, and exact current-
-  source validation. It accepts the provider verdict without a semantic
-  recalculation and maps it to fixed public summary copy; an unusable response is
-  unavailable rather than guessed. `CHECK` requires an exact posting condition;
-  `BLOCKED` additionally requires an exact conflicting candidate-context fact.
-  Eligibility does not change the verdict.
 
-  `useJobIntake` applies every ready or unavailable fit through one private outcome
-  boundary so combined analysis, Retry, provider-unavailable handling, state, and
-  provenance cannot settle differently. The client fingerprints normalized
-  posting, resume, candidate context,
-  provider, model, reasoning effort, and prompt version. That normalized
-  captured posting is retained as `screeningJobText` for the combined request,
-  fit-only retry, provenance, and staleness; editing the displayed prepared brief
-  does not replace it. An unchanged successful result is reused; only changed
-  semantic inputs/settings/prompt or a previous failure dispatches again.
-  The two subsections are sanitized
-  independently in BOTH directions: the server preserves valid job
-  fields when fit is absent or invalid, and the client preserves a valid fit when
-  the job half falls back to the deterministic local brief. Discarding one half
-  with the other would waste the combined request the fast path exists to make.
-  `mode: "initial-fit"` reuses this route for a compact fit-only
-  rerun after the selected resume changes. Retry reads the same authoritative
-  prepared-resume state as Prepare; sample/stub/blank-origin editor text is not
-  screened, and the prepared-job receipt—not a parallel boolean—owns Retry
-  availability across a toggle cycle. The
-  route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
-  a menu-entered key reaches the route only in that transient request and is
-  never returned. The
-  success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
-  (never `apiKey`) plus `attempts` (dispatch count, ≥1) so the
-  client can record which model produced the brief.
-  `/api/job-analysis` is the only route for this handler.
+### Initial Fit integration boundary
+
+The canonical prompt, structured-output, exact-grounding, provider, request-
+identity, and verification contract lives in
+[`server/ai/README.md`](../../server/ai/README.md#initial-fit-technical-contract).
+At the server boundary, combined Job analysis and fit-only Retry remain modes of
+the same guarded `/api/job-analysis` handler. Managed credentials remain server-
+side, and the response may echo resolved provider/model/reasoning provenance and
+dispatch attempts but never an API key.
+
 - browser-extension API (`/api/extension/*`, helpers in
   `server/extension/index.ts`): `status` (GET) is the content-free same-port
   service marker. For a syntactically valid extension Origin it returns the
@@ -411,12 +376,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   inferred fact (e.g. "clinics run Windows") into the resume.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used by the
   job analyzer's `workAuth` grounding. It does not select a fit verdict.
-- `quickFit.ts` — the direct four-category Initial Fit prompt and mechanical
-  validation boundary. It has no requirement selection, coverage classes,
-  semantic relation engine, years/degree parser, broad eligibility regex, or
-  server-derived verdict. Exact excerpts must exist in the same normalized and
-  clipped sources the provider received. The accepted verdict maps to fixed
-  summary copy; model summary text is not part of the contract.
+- `quickFit.ts` — executable prompt, response schema, and mechanical validation
+  for the [Initial Fit technical contract](../../server/ai/README.md#initial-fit-technical-contract).
+  Model summary text is never part of the accepted contract.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of

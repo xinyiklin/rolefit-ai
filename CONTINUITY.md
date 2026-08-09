@@ -5,41 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-09
 
-- [USER+CODE+TOOL] **Initial Fit now has one canonical screening source.** The
-  normalized captured posting is retained as `screeningJobText` for combined
-  Prepare, fit-only retry, provenance, and staleness; the displayed prepared
-  brief remains editable without silently changing that source. Resume,
-  candidate context, provider/model/reasoning, and prompt version still control
-  freshness, and identical ready inputs are reused. Standalone retry and
-  combined Prepare now render the same exported Initial Fit rules block in the
-  system prompt; its conservative adjacent-category tie break chooses the lower
-  verdict unless direct evidence supports the higher one. Synthetic Codex live
-  calibration exposed repeated match/gap overlap for transferable evidence; the
-  v3 rules reserve matches for direct evidence and forbid using one posting
-  excerpt as both a match and a gap. Claude calibration then exposed duplicated
-  gap themes and degree-as-eligibility drift; the v4 rules require one gap per
-  missing need, make eligibility employment-specific, and require the verdict
-  to be decided independently. The opt-in 12-fixture synthetic calibration now
-  measures both request paths over three to five runs. A targeted final-v4
-  Codex/Claude matrix produced 60/60 valid grounded responses, exact eligibility,
-  no non-adjacent jumps, and 1.0 average material-theme overlap; three Claude
-  samples moved one adjacent category while each intended clear category still
-  held in five of six runs. Antigravity returned four clean Strong receipts but
-  its fifth call did not complete within the bounded review window, so its full
-  matrix remains unconfirmed. Focused lifecycle, Quick Fit, Job analysis, and
-  route probes, all 84 offline evaluations, 477 client workflow guards, both
-  TypeScript projects, and `git diff --check` pass. Initial Fit's shared contract
-  now owns only assessment/result/lifecycle concerns; client-only threshold
-  labels, ranking, and comparison live in `autoPolishPolicy.ts` with unchanged
-  independent Resume and Cover Letter behavior. The browser now posts combined
-  and fit-only Job analysis payloads through one private request boundary and
-  applies every ready/unavailable Quick Fit result through one private state and
-  provenance boundary; endpoint, error copy, abort timing, and automation
-  behavior remain unchanged. URL, paste, extension, and imported-posting Retry
-  now share one private post-acquisition coordinator for duplicate checks, local
-  preview, prepared-resume resolution, analysis/fallback, snapshot commit, and
-  fit settlement while retaining their separate acquisition and recovery copy.
-  Browser QA remains pending.
+- [USER+CODE+TOOL] **Initial Fit late stabilization is complete locally.** One
+  normalized captured posting now owns combined Prepare, fit-only Retry,
+  provenance, and staleness, while the displayed brief stays independently
+  editable. Both request paths use the same exported v4 direct-rubric block;
+  assessment/result state stays separate from client-only Resume and Cover
+  Letter automation policy. One browser request helper, one fit-settlement
+  helper, and one URL/paste/extension/Retry post-acquisition coordinator now
+  prevent entry-path drift without changing route copy or manual recovery.
+  The opt-in 12-fixture live calibration produced 60/60 valid grounded final-v4
+  Codex/Claude responses, exact eligibility, no non-adjacent jumps, and 1.0
+  average material-theme overlap; three Claude samples moved one adjacent
+  category, while each intended clear category held in five of six runs.
+  Antigravity returned four clean Strong receipts before its fifth call stalled,
+  so its full matrix remains unconfirmed. All 84 offline evaluations, 477 client
+  workflow guards, both TypeScript projects, and `git diff --check` pass. Product
+  behavior now lives in `PRODUCT.md`; provider/request mechanics live in
+  `server/ai/README.md`. Browser QA remains pending.
 
 ## 2026-08-08
 

@@ -414,20 +414,26 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   states use the same flat hierarchy; an out-of-date fit never leaves the old
   verdict visible. Never add scores, confidence, evidence ledgers, quotes, or a
   recommendation to this row.
-- **Automation:** the deterministic local brief renders before extension receipt
-  and Job analysis progress settle. Initial Fit shares the normal Prepare
-  provider dispatch when enabled, while a resume change reruns only that compact
-  check. Resume Polish started from Prepare also completes there. Rank the actual
+- **Automation and assessment boundaries:** keep Initial Fit, Proposal
+  Validation, and Document Check visibly and architecturally distinct. Initial
+  Fit is the pre-Polish advisory about whether the candidate fits the role.
+  Proposal Validation is the fail-closed evidence gate over proposed changes
+  before they can be accepted. Document Check assesses the actual current
+  document after proposal decisions or later edits; it is advisory and never
+  rewrites. No layer substitutes for another or turns its result into a numeric
+  score. User behavior belongs to the
+  [Initial Fit contract](PRODUCT.md#initial-fit-user-contract), while provider
+  mechanics belong to the
+  [technical contract](server/ai/README.md#initial-fit-technical-contract).
+  Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
   winner while its editor is clean and not application-owned. A tie or
   incomplete read keeps the current selection and shows no recommendation.
   The selector is the normal receipt; show one compact recommendation line only
   when unsaved work blocks replacement. Neither comparison needs persisted
-  variant metadata. Resume and Cover Letter automatic Polish switches and
-  minimum-fit selects are independent. Each uses Strong, Reasonable, Stretch,
-  or Limited as a categorical cutoff; `CHECK` may proceed and only `BLOCKED`
-  stops an eligible run. Manual Polish remains available in every state.
+  variant metadata. Resume and Cover Letter automatic Polish controls remain
+  independent and manual Polish remains available in every state.
 - **Apply:** the page and masthead invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.

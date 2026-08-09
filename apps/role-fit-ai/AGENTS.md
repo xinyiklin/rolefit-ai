@@ -9,10 +9,14 @@ own a second resume model, editor, layout engine, or PDF implementation.
 ## Guidance map
 
 - `README.md` — product setup, providers, extension, workspace, and app layout.
-- `PRODUCT.md` — RoleFit behavior, workflow, and trust contract.
-- `DESIGN.md` — Drafting Desk visual system and host/shared styling boundary.
+- `PRODUCT.md` — RoleFit behavior, workflow, and trust contract; its
+  `#initial-fit-user-contract` section owns verdict and eligibility behavior.
+- `DESIGN.md` — Drafting Desk visual system, assessment-layer separation, and
+  host/shared styling boundary.
 - `docs/engineering/ui-principles.md` — host UI and responsive behavior.
-- `docs/engineering/ai-server.md` — AI/server request and trust boundaries.
+- `docs/engineering/ai-server.md` — broad AI/server request and trust boundaries.
+- `server/ai/README.md` — canonical Initial Fit prompt, grounding, request,
+  response, provider, and provenance behavior.
 - `docs/engineering/testing.md` — RoleFit-focused verification.
 - `docs/engineering/desktop-architecture-plan.md` — companion trust boundary,
   local settings, provider registry, and lifecycle phases.
@@ -50,16 +54,11 @@ own a second resume model, editor, layout engine, or PDF implementation.
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
-- Initial Fit is a compact Prepare advisory: four verdicts, one summary, up to
-  three matches and gaps, and an optional eligibility warning. The provider
-  applies the four-category rubric directly and returns exact posting and
-  resume/candidate-context excerpts for every finding. The server performs only
-  structural, bounded, exact-excerpt, provenance, and deduplication checks, then
-  maps the verdict to fixed public summary copy. There is no hidden requirement
-  basis or server recalculation. The compact result has no score, confidence,
-  visible ledger,
-  evidence quotes, recommendation, or analytics role, and never derives tracker
-  priority.
+- Initial Fit changes must preserve the user contract in `PRODUCT.md`, the
+  technical contract in `server/ai/README.md`, and the executable
+  `QUICK_FIT_RULES` in `server/ai/quickFit.ts`. Do not add numeric scoring,
+  hidden requirement bookkeeping, a server-derived fallback verdict, tracker
+  priority inference, or a second assessment path.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
@@ -225,25 +224,12 @@ or workspace state, keep it here and expose the smallest host seam instead.
   test, so it never satisfies resume readiness, Initial Fit, or an automatic
   proposal, and Prepare names it ("Starter template") instead of claiming there
   is no document. Saving it as a base resume is what makes it the applicant's.
-- When enabled, Initial Fit shares Prepare's normal Job analysis provider
-  dispatch and independently sanitizes its subsection — in both directions: a
-  local job-analysis fallback never discards a valid screening. Changing the
-  selected resume reruns only compact Initial Fit. A fit's provenance covers
-  the normalized captured posting, resume, candidate context,
-  provider/model/reasoning configuration, and prompt version, never a friendly
-  label or the editable displayed brief. Combined Prepare and retry must screen
-  that same retained posting and render the exact same exported system-level
-  rubric. When direct evidence genuinely falls between adjacent categories, the
-  lower category wins. An unchanged ready result is reused; rerun only
-  after those inputs change or a prior fit fails. `BLOCKED` requires an explicit posting restriction
-  plus an exact conflicting candidate-context fact; unknown or ambiguous status
-  is `CHECK`. Resume and Cover Letter automation switches and minimum verdict
-  thresholds are independent and default off; only `BLOCKED` stops an otherwise
-  eligible threshold match, and manual Polish remains available. Their labels,
-  ordering, and comparison belong to client `autoPolishPolicy.ts`, never the
-  shared Initial Fit assessment contract.
-  Retry is offered whenever a preparation exists to retry — including when no
-  resume resolved, the state that most needs recovery and has no label.
+- Combined Prepare and fit-only Retry must use the same retained posting and
+  exact exported rules block, while Job analysis and Initial Fit sanitize in
+  both directions. Assessment data remains in the shared Quick Fit contract;
+  Resume/Cover automation labels, ordering, and thresholds remain client-only
+  in `autoPolishPolicy.ts`. Retry remains preparation-owned and available even
+  when no resume resolved.
 - Reuse `AiWorkflowProgress` for retryable AI operations and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.
@@ -301,6 +287,12 @@ bound listener rather than starting a second server.
 - Client/type changes: RoleFit build, plus focused evals.
 - Server/AI changes: server TypeScript gate, affected route/eval, and full app
   check when the contract is shared.
+- Initial Fit prompt, grounding, sanitizer, request, or lifecycle changes:
+  `quick-fit-probes.mjs`, `initial-fit-consistency-contracts.mjs`,
+  `ai-job-analysis-request-eval.mjs`, `quick-fit-lifecycle.mjs`,
+  `job-intake-entry-points.mjs`, and the full offline suite. Run the live
+  synthetic consistency matrix only when provider behavior is in scope and the
+  user authorizes provider calls.
 - Shared engine/editor changes: follow root impact matrix and verify both apps.
 - Material UI changes: follow RoleFit's flag-first visual-QA policy and report
   whether browser QA ran.

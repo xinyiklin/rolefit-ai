@@ -30,17 +30,12 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
   their response subsections sanitize independently. `mode: "initial-fit"`
-  reruns only the compact fit after a relevant input changes. Initial Fit asks
-  the provider to apply one exported system-level four-category rubric in both
-  request paths, with exact posting and candidate excerpts and a conservative
-  lower-category tie break. Transferable evidence may inform the verdict but is
-  not a direct match for an unshown requirement; one posting excerpt cannot be
-  both a match and a gap, and overlapping excerpts cannot double-count one
-  missing need. Eligibility is limited to employment eligibility and is assessed
-  only after the fit verdict. `quickFit.ts` validates only shape, enums, bounds,
-  deduplication, and exact current-source provenance, then maps the accepted
-  verdict to fixed public summary copy. It has no hidden requirement basis,
-  semantic recalculation, broad eligibility regex, or guessed fallback.
+  reruns only the compact fit after a relevant input changes. Initial Fit must
+  follow the canonical
+  [`server/ai/README.md`](README.md#initial-fit-technical-contract)
+  contract: both paths render one exported rules block, every finding uses exact
+  current-source excerpts, and server acceptance stays mechanical rather than
+  becoming a second classifier or guessed fallback.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -48,8 +43,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   provider dispatch only for a genuinely unresolvable fact, and cannot return
   `ready` with template tokens or unresolved correspondence fields.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
-  checks. The only deterministic fit classifier is the compact category rubric
-  in `quickFit.ts`; do not add numeric scores or a visible/persisted ledger.
+  checks. The direct category rubric in `quickFit.ts` is provider-applied; do
+  not add a deterministic fit classifier, numeric scores, or a visible/persisted
+  ledger.
 - Evidence selection belongs to the model, not to the candidate and not to a
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,
@@ -132,5 +128,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - Run the nearest offline eval under `server/ai/__evals__/`.
 - Prompt, grounding, sanitizer, provider-contract, or scoring-contract changes
   require adversarial probes and a diff review before handoff.
+- Initial Fit changes require `quick-fit-probes.mjs` and
+  `initial-fit-consistency-contracts.mjs`; shared request or lifecycle changes
+  additionally require the client request, lifecycle, and intake entry-point
+  evals named in the app guide.
 - Live provider evals cost tokens and may expose private inputs; run them only
   with explicit authorization and synthetic or approved fixtures.

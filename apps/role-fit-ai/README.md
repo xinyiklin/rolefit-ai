@@ -91,27 +91,13 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Initial Fit, readiness, and
-  Apply together. Initial Fit is a compact provider advisory
-  for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
-  up to three matches and gaps; and an eligibility warning only when relevant.
-  The provider applies the rubric directly and cites exact posting and candidate
-  excerpts for every match and exact posting excerpts for every gap. Combined
-  Prepare and fit-only Retry use the same system-level rubric; a genuinely
-  ambiguous adjacent-category result resolves to the lower category unless
-  direct candidate evidence supports the higher one. The server
-  validates structure, enums, bounds, deduplication, and exact current-source
-  provenance, then maps the verdict to fixed public summary copy. Malformed or
-  ungrounded output is unavailable; there is no hidden requirement basis,
-  semantic recalculation, numeric scoring, or guessed fallback. The receipt
-  fingerprints the normalized screening text, resume, candidate context,
-  provider/model/reasoning configuration, and prompt version. Changing any of
-  those semantic inputs hides the old verdict as out of date until checked again;
-  editing the displayed prepared brief does not silently replace the captured
-  posting that Initial Fit screens.
-  checking an identical successful input reuses the current result. Initial Fit has no
-  score, confidence, visible requirement ledger, evidence quotes,
-  recommendation, or analytics role, and it never silently sets tracker
-  priority. Each material has an **Include** toggle and its
+  Apply together. Initial Fit is a compact advisory for the selected resume,
+  with four categorical verdicts, bounded matches and gaps, and a separate
+  eligibility state. Its behavior and verdict meanings live in the
+  [Initial Fit user contract](PRODUCT.md#initial-fit-user-contract); provider,
+  grounding, Retry, and provenance details live in the
+  [technical contract](server/ai/README.md#initial-fit-technical-contract).
+  Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
@@ -165,16 +151,11 @@ editable documents.
   tied to the target's own work; leadership in an unrelated sibling bullet or
   broad context cannot authorize it. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
-- **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
-  Letter automatic Polish switches and categorical minimum-fit selects are
-  independent; both switches default off, with Resume defaulting to Reasonable
-  or better and Cover Letter to Strong only. A Check warning may still polish
-  because Polish is not submission; only Blocked stops an otherwise eligible
-  threshold match. Unavailable outcomes remain manual. Changing the
-  selected resume reruns only Initial Fit, never Job analysis. Retry always
-  resolves the same authoritative prepared-resume selection used by Prepare,
-  rejects the bundled starter and short/blank-origin stubs, and remains available
-  when Initial Fit is turned off and back on after a preparation.
+- **Optional Initial Fit automation** — Initial Fit defaults on, while Resume
+  and Cover Letter automatic Polish remain separate, default-off decisions.
+  Manual Polish stays available for every outcome; see the
+  [user contract](PRODUCT.md#initial-fit-user-contract) for thresholds,
+  eligibility, staleness, and Retry behavior.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,

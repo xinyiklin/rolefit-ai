@@ -139,6 +139,54 @@ unidentified listener, never force-kills a compatible listener, and does not
 offer process termination on Windows where an equivalent graceful signal is
 unavailable.
 
+## Initial Fit User Contract
+
+Initial Fit is an advisory screening of the captured posting against the exact
+selected resume and candidate-authored context. It describes demonstrated fit
+before tailoring; it does not predict hiring, rewrite the resume, or substitute
+for the user's judgment. Its four verdicts mean:
+
+- **Strong:** explicit evidence covers most main responsibilities and core
+  qualifications with no major material gap.
+- **Reasonable:** explicit evidence covers most main responsibilities, with one
+  or two material core gaps and a credible path to perform the role.
+- **Stretch:** relevant overlap exists, but several important gaps remain or
+  the core experience is mainly transferable rather than direct.
+- **Limited:** the supplied resume shows little direct evidence for the role's
+  main responsibilities and core qualifications.
+
+Prepare shows the verdict, fixed summary, selected resume, and at most three
+direct matches and three not-shown gaps. Missing evidence is a gap, not proof
+that the candidate is incapable. The result has no numeric score, confidence,
+visible requirement ledger, recommendation, or analytics role, and it never
+silently derives tracker priority. Unusable provider output becomes unavailable
+rather than a guessed result; the deterministic local job brief remains editable
+and manual Polish remains available.
+
+Eligibility is separate from fit and never changes the verdict. **Clear** means
+no stated employment-eligibility condition needs attention. **Check** means the
+posting states a work-authorization, sponsorship/visa, clearance, or legal-work
+condition the candidate should confirm. **Blocked** requires both an explicit
+posting condition and an explicit conflicting candidate-context fact. Education,
+skills, and experience are fit evidence, not eligibility. Only Blocked stops an
+otherwise eligible automatic Polish run; Check may proceed because Polish is a
+reviewable proposal, not a submission.
+
+Initial Fit defaults on and normally shares Prepare's Job analysis dispatch.
+Changing the selected resume reruns only Initial Fit. Combined Prepare and Retry
+screen the same retained posting; editing the displayed prepared brief does not
+silently change the screened evidence. A changed posting, authoritative resume,
+candidate context, provider/model/reasoning setting, or prompt version makes the
+old result out of date, while an identical successful request is reused. The
+bundled starter and short or blank-origin stubs are not applicant resumes.
+
+Resume and Cover Letter automatic Polish remain independent from Initial Fit and
+from each other. Both switches default off; Resume defaults to Reasonable or
+better and Cover Letter to Strong only. Manual Polish is available for every
+verdict, eligibility state, and unavailable result. The provider, grounding,
+request, and provenance implementation is specified in the
+[Initial Fit technical contract](server/ai/README.md#initial-fit-technical-contract).
+
 ## Brand Personality
 
 Calm, dense, trustworthy. A compact desktop-first job-prep workspace that
@@ -220,26 +268,10 @@ disappears into the task. Quiet competence, not salesmanship.
     includes that document and leaves the other Include choice unchanged. A
     later re-Apply must preserve any previously saved artifact for an excluded
     slot.
-    Prepare shows compact Initial Fit for the selected resume: one four-level
-    verdict, one summary, up to three matches and gaps, and a relevant
-    eligibility warning. The provider applies the rubric directly and anchors
-    each match to exact posting and candidate excerpts and each gap to an exact
-    posting excerpt. The server validates shape, enums, bounds, deduplication,
-    and exact current-source provenance, then maps the verdict to fixed public
-    summary copy. It does not select a hidden requirement set, recalculate
-    semantic coverage, or synthesize a fallback verdict. Unusable output is
-    unavailable. The exact complete provider screening payload is recorded. A
-    changed captured posting, changed or cleared authoritative resume, changed
-    candidate facts/honest context, changed Job analysis provider/model/reasoning,
-    or a prompt-version change replaces the old verdict with an out-of-date state
-    until checked again. Editing the displayed prepared brief does not replace
-    the captured posting being screened. An identical successful screening is
-    reused rather than billed twice.
-    Initial Fit never shows scores, confidence, evidence ledgers,
-    recommendations, or saved/historical audit state there, and never silently
-    sets tracker priority. The bundled starter
-    is sample content: it never counts as a ready resume, and Prepare says so
-    rather than reporting no document.
+    Initial Fit follows the [user contract](#initial-fit-user-contract): one
+    compact advisory in the Application rail, no hidden score or replacement
+    for human review. The bundled starter is sample content and never counts as
+    a ready applicant resume.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis and stops on Prepare; it never implicitly starts
     resume Polish. A failed analysis leaves the deterministic brief editable and
@@ -251,13 +283,8 @@ disappears into the task. Quiet competence, not salesmanship.
     incomplete comparison keeps the current selection. Candidate bytes, option
     metadata, and the live candidate revision form one resolution snapshot, so
     overwriting a saved variant under the same filename forces a fresh read. Do
-    not add persisted variant metadata or another document schema for this decision. When Initial
-    Fit is enabled, it shares Prepare's normal provider dispatch and sanitizes
-    independently in both directions; changing the selected resume reruns only
-    Initial Fit, and a fit records the exact complete posting/request it screened
-    while binding freshness to that captured posting, authoritative resume,
-    candidate facts, and honest context rather than to names, the editable
-    displayed brief, or a selected subset.
+    not add persisted variant metadata or another document schema for this
+    decision.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,
@@ -265,13 +292,10 @@ disappears into the task. Quiet competence, not salesmanship.
     domain signals, benefits, and extraction gaps. Preserve
     the captured posting separately, persist the complete corrected brief on
     Apply, and restore both without feeding benefits into resume tailoring.
-13. Keep Polish automation independent and reversible. Initial Fit defaults on;
-    Resume and Cover Letter switches and categorical minimum-fit thresholds are
-    independent and both switches default off. Resume defaults to Reasonable or
-    better; Cover Letter defaults to Strong only. `BLOCKED` requires an exact
-    posting restriction plus an exact conflicting candidate-context fact and is
-    the only eligibility state that stops an otherwise eligible automatic run;
-    `CHECK` may still polish. Manual Polish is always available.
+13. Keep Polish automation independent and reversible. Follow the
+    [Initial Fit user contract](#initial-fit-user-contract); Resume and Cover
+    Letter automation remain independent from the advisory and from each other,
+    and manual Polish is always available.
 14. Present one Polish workflow for both documents, and keep its closing check
     non-blocking. Resume and Cover Letter progress through the same named
     sequence — Ready to Polish, Polishing and validating, Proposal ready,
