@@ -33,7 +33,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   reruns only the compact fit after a relevant input changes. Initial Fit asks
   the provider to apply one exported system-level four-category rubric in both
   request paths, with exact posting and candidate excerpts and a conservative
-  lower-category tie break. `quickFit.ts` validates only shape, enums, bounds,
+  lower-category tie break. Transferable evidence may inform the verdict but is
+  not a direct match for an unshown requirement; one posting excerpt cannot be
+  both a match and a gap. `quickFit.ts` validates only shape, enums, bounds,
   deduplication, and exact current-source provenance, then maps the accepted
   verdict to fixed public summary copy. It has no hidden requirement basis,
   semantic recalculation, broad eligibility regex, or guessed fallback.

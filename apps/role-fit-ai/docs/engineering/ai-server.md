@@ -240,7 +240,9 @@ owns:
   the same exported system-level four-category rubric used by fit-only Retry.
   When evidence genuinely falls between adjacent categories, that rubric chooses
   the lower one unless direct candidate evidence supports the higher. The
-  provider returns up to three matches with exact
+  provider may use transferable evidence to choose a verdict, but only direct
+  evidence can support a match, and one posting excerpt cannot be both a match
+  and a gap. It returns up to three matches with exact
   posting plus resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps
   with exact posting excerpts, and at most one eligibility result. `quickFit.ts`
   performs only structural, enum, length/count, deduplication, and exact current-

@@ -169,6 +169,8 @@ assert.match(QUICK_FIT_RULES, /STRONG: The candidate explicitly demonstrates mos
 assert.match(QUICK_FIT_RULES, /judge only the evidence currently supplied/i);
 assert.match(QUICK_FIT_RULES, /Missing evidence is a gap, not proof that the candidate is incapable/i);
 assert.match(QUICK_FIT_RULES, /Preserve posting order; when evidence is tied, choose the earliest material item/);
+assert.match(QUICK_FIT_RULES, /transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement/i);
+assert.match(QUICK_FIT_RULES, /never appear in both matches and gaps/i);
 assert.match(QUICK_FIT_RULES, /falls between adjacent categories, choose the lower category/i);
 assert.match(QUICK_FIT_RULES, /BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact/);
 assert.match(prompts.userPrompt, /"candidateSource": "RESUME \| CANDIDATE_CONTEXT"/);

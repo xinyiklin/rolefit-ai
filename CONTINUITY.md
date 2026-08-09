@@ -13,7 +13,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   freshness, and identical ready inputs are reused. Standalone retry and
   combined Prepare now render the same exported Initial Fit rules block in the
   system prompt; its conservative adjacent-category tie break chooses the lower
-  verdict unless direct evidence supports the higher one. Focused lifecycle,
+  verdict unless direct evidence supports the higher one. Synthetic Codex live
+  calibration exposed repeated match/gap overlap for transferable evidence; the
+  v3 rules now reserve matches for direct evidence and forbid using one posting
+  excerpt as both a match and a gap. Focused lifecycle,
   Quick Fit, Job analysis, and route probes, all 80 offline evaluations, 470
   client workflow guards, both TypeScript projects, and `git diff --check` pass;
   live-provider and browser outcome QA remain pending.

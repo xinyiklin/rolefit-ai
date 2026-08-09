@@ -59,7 +59,9 @@ Evidence rules:
 - Missing evidence is a gap, not proof that the candidate is incapable.
 - Return at most three matches and three gaps. Preserve posting order; when evidence is tied, choose the earliest material item in the posting.
 - Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT.
+- A match requires direct candidate evidence for the cited job item. Transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement.
 - Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
+- A job excerpt may appear only once and must never appear in both matches and gaps.
 - Do not infer years, degree equivalence, skill adjacency, alternatives, scores, percentages, or hidden requirement bookkeeping.
 - If the evidence genuinely falls between adjacent categories, choose the lower category unless direct candidate evidence supports the higher one.
 - Assess employment eligibility separately from fit. CLEAR means no stated condition needs attention. CHECK means the posting states a condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
