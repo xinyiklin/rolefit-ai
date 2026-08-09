@@ -321,8 +321,18 @@ assert.ok(
 );
 assert.match(
   intake,
-  /const result = readiness\.ready\s*\? await analyzeJobPosting\(text,[\s\S]{0,260}?: localJobAnalysisResult\(text,/,
-  "extension delivery uses AI when ready and keeps a local brief when the provider is unavailable"
+  /async function runPreparedJobAnalysis[\s\S]{0,2200}?const result = readiness\.ready\s*\? await analyzeJobPosting\(screeningJobText,[\s\S]{0,400}?: localJobAnalysisResult\(screeningJobText,/,
+  "the prepared-job coordinator uses AI when ready and keeps a local brief when the provider is unavailable"
+);
+assert.equal(
+  intake.match(/await runPreparedJobAnalysis\(\{/g)?.length,
+  4,
+  "URL, paste, extension delivery, and extension Retry share the prepared-job coordinator"
+);
+assert.equal(
+  intake.match(/await analyzeJobPosting\(screeningJobText,/g)?.length,
+  1,
+  "provider-backed prepared-job analysis is dispatched from one orchestration boundary"
 );
 assert.match(
   intake,
@@ -724,11 +734,11 @@ assert.equal(
 );
 assert.equal(
   intake.match(/signal: request\.signal/g)?.length,
-  5,
-  "every Job analysis fetch receives the active abort signal"
+  2,
+  "both shared loopback fetch boundaries receive the active abort signal"
 );
 assert.ok(
-  (intake.match(/if \(!request\.isCurrent\(\)\) return;/g)?.length ?? 0) >= 16,
+  (intake.match(/if \(!request\.isCurrent\(\)\) return(?: \{ status: "stale" \})?;/g)?.length ?? 0) >= 9,
   "Job analysis checks request currency after every asynchronous boundary"
 );
 
@@ -1424,7 +1434,7 @@ assert.match(
 );
 assert.match(
   intake,
-  /const fitRequest = await prepareResumeAndInitialFit\(localExtracted\.tailoringText,/,
+  /const localJobText = localExtracted\.tailoringText;[\s\S]{0,180}?const fitRequest = await prepareResumeAndInitialFit\(localJobText, screeningJobText\);/,
   "variants rank against the local job-analysis brief, not the raw posting the provider receives"
 );
 assert.match(

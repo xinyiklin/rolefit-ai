@@ -17,7 +17,11 @@ browser-side effects; components render them and App composes them.
   resume: it calls `usePreparedResume` once per preparation and records the fit's
   provenance as content fingerprints of exactly what it sent. Combined and
   fit-only results must pass through one private Quick Fit outcome helper so
-  ready/unavailable state and provenance cannot drift by entry path.
+  ready/unavailable state and provenance cannot drift by entry path. URL, paste,
+  extension delivery, and imported-posting Retry keep acquisition and recovery
+  copy local but share one private post-acquisition coordinator for duplicate
+  checks, preview, prepared-resume resolution, analysis/fallback, snapshot
+  commit, and fit settlement.
 - `usePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID

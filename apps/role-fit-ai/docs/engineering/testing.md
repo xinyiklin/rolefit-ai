@@ -150,6 +150,11 @@ Good server verification covers:
   failure, unreadable and invalid responses, network failure, and abort
   propagation. Client workflow guards must keep one endpoint request helper and
   one Quick Fit outcome helper so entry paths cannot grow separate settlements
+- `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
+  extension, and imported-posting Retry intake with both duplicate gates, local
+  and provider fallback, prepared-resume resolution, Initial Fit on/off, and
+  snapshot commit order. Structural guards keep all four entry points on the
+  single private post-acquisition coordinator
 - auto-polish policy probes must cover every categorical threshold boundary,
   preserve the threshold values/order/labels, and keep automation policy out of
   the shared Initial Fit contract

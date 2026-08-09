@@ -144,6 +144,24 @@ type UseJobIntakeArgs = {
   onExtensionJobReceived: () => void;
 };
 
+type PreparedJobAnalysisSource = "link" | "paste" | "extension" | "retry";
+
+type PreparedJobAnalysisRequest = {
+  signal: AbortSignal;
+  isCurrent: () => boolean;
+};
+
+type PreparedJobAnalysisOutcome =
+  | { status: "stale" }
+  | { status: "duplicate-before" }
+  | { status: "too-short" }
+  | {
+      status: "complete" | "duplicate-after";
+      result: JobAnalysisResult;
+      relevant: string;
+      duplicateNote: string | null;
+    };
+
 export function useJobIntake({
   jobUrl,
   setJobUrl,
@@ -524,6 +542,103 @@ export function useJobIntake({
     "job-analysis": usage
   });
 
+  async function runPreparedJobAnalysis({
+    source,
+    url,
+    localSourceText,
+    screeningJobText,
+    readiness,
+    request
+  }: {
+    source: PreparedJobAnalysisSource;
+    url: string;
+    localSourceText: string;
+    screeningJobText: string;
+    readiness: ProviderReadiness;
+    request: PreparedJobAnalysisRequest;
+  }): Promise<PreparedJobAnalysisOutcome> {
+    const localExtracted = extractJobPosting(localSourceText, { url: url || undefined });
+    const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(
+      url,
+      localSourceText,
+      localExtracted.tracking
+    );
+    if (!request.isCurrent()) return { status: "stale" };
+    if (!duplicateBefore.proceed) {
+      // Extension delivery can contain a short intermediate payload. The URL
+      // and paste paths have already enforced their own acquisition floors.
+      if (source === "link" || source === "paste" || localSourceText.trim().length >= 40) {
+        applyRawImportedJob(localSourceText.trim(), url);
+      }
+      return { status: "duplicate-before" };
+    }
+
+    if (source === "extension") {
+      setJobAnalysisProgress({ status: "running" });
+      setJobAnalysisProgressVisible(true);
+    }
+
+    const aiRequest = jobAnalysisRequestFields();
+    // Rank against the compact local brief, while the provider and fit
+    // provenance retain the complete captured posting.
+    const localJobText = localExtracted.tailoringText;
+    setLocalPreparedPreview(importedJobSnapshot(url, localJobText, localExtracted, screeningJobText));
+    const fitRequest = await prepareResumeAndInitialFit(localJobText, screeningJobText);
+    if (!request.isCurrent()) return { status: "stale" };
+
+    const result = readiness.ready
+      ? await analyzeJobPosting(screeningJobText, {
+          url: url || undefined,
+          aiRequest,
+          initialFit: fitRequest ?? undefined,
+          localExtracted,
+          signal: request.signal
+        })
+      : localJobAnalysisResult(screeningJobText, {
+          url: url || undefined,
+          aiRequest,
+          localExtracted,
+          initialFitRequested: Boolean(fitRequest),
+          failure: classifyFailure(new ApiError(readiness.message, 503))
+        });
+    if (!request.isCurrent()) return { status: "stale" };
+
+    const relevant = result.extracted.tailoringText;
+    if (relevant.trim().length < 40) return { status: "too-short" };
+
+    const duplicateAfter = result.failure
+      ? duplicateBefore
+      : await confirmDuplicateAfterJobAnalysis(
+          url,
+          screeningJobText,
+          result.extracted.tracking
+        );
+    if (!request.isCurrent()) return { status: "stale" };
+
+    // Extension payloads are not already bound to the live URL input.
+    if (source === "extension" || source === "retry") setJobUrl(url);
+    setJobDescription(relevant);
+    setImportedJob(importedJobSnapshot(url, relevant, result.extracted, screeningJobText));
+    setLocalPreparedPreview(null);
+    setResult(null);
+    resetCoverWorkflow();
+    setPipelineAiUsage(freshJobAnalysisUsage(result.usage));
+    setJobRawText(screeningJobText);
+    applyQuickFitOutcome({
+      outcome: result.initialFit,
+      fitRequest,
+      screeningJobText,
+      aiRequest
+    });
+
+    return {
+      status: duplicateAfter.proceed ? "complete" : "duplicate-after",
+      result,
+      relevant,
+      duplicateNote: duplicateAfter.note
+    };
+  }
+
   async function handleExtractFromLink() {
     const url = jobUrl.trim();
     if (!url) return;
@@ -559,41 +674,21 @@ export function useJobIntake({
       // engine on any failure so a link import always produces a brief.
       setLinkStatus("Preparing job details…");
       const rawText = String(data.text ?? "");
-      const localExtracted = extractJobPosting(rawText, { url });
-      const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(url, rawText, localExtracted.tracking);
-      if (!request.isCurrent()) return;
-      if (!duplicateBefore.proceed) {
-        applyRawImportedJob(rawText.trim(), url);
+      const outcome = await runPreparedJobAnalysis({
+        source: "link",
+        url,
+        localSourceText: rawText,
+        screeningJobText: rawText,
+        readiness,
+        request
+      });
+      if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const aiRequest = jobAnalysisRequestFields();
-      setLocalPreparedPreview(importedJobSnapshot(url, localExtracted.tailoringText, localExtracted, rawText));
-      // Rank against the local brief, not the raw page: the ranker weights
-      // section headings the raw text does not have. The provider still
-      // receives the raw posting.
-      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, rawText);
-      if (!request.isCurrent()) return;
-      const result = readiness.ready
-        ? await analyzeJobPosting(rawText, {
-            url,
-            aiRequest,
-            initialFit: fitRequest ?? undefined,
-            localExtracted,
-            signal: request.signal
-          })
-        : localJobAnalysisResult(rawText, {
-            url,
-            aiRequest,
-            localExtracted,
-            initialFitRequested: Boolean(fitRequest),
-            failure: classifyFailure(new ApiError(readiness.message, 503))
-          });
-      if (!request.isCurrent()) return;
-      const { extracted, usage } = result;
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
+      if (outcome.status === "too-short") {
         setLinkStatus("Fetched the page, but found too little job text. Paste the description instead.");
         setJobAnalysisProgress({
           status: "failed",
@@ -603,35 +698,18 @@ export function useJobIntake({
         setImportedJob(null);
         return;
       }
-      const duplicateAfter = result.failure
-        ? duplicateBefore
-        : await confirmDuplicateAfterJobAnalysis(url, rawText, extracted.tracking);
-      if (!request.isCurrent()) return;
-      setJobDescription(relevant);
-      setImportedJob(importedJobSnapshot(url, relevant, extracted, rawText));
-      setLocalPreparedPreview(null);
-      setResult(null);
-      resetCoverWorkflow();
-      setPipelineAiUsage(freshJobAnalysisUsage(usage));
-      setJobRawText(rawText);
-      applyQuickFitOutcome({
-        outcome: result.initialFit,
-        fitRequest,
-        screeningJobText: rawText,
-        aiRequest
-      });
-      if (!duplicateAfter.proceed) {
+      if (outcome.status === "duplicate-after") {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
-      const missing = compactManualReviewFields(extracted.manualReviewFields);
-      setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
-        : `Prepared ${relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
-            extracted.tracking
+      const missing = compactManualReviewFields(outcome.result.extracted.manualReviewFields);
+      setLinkStatus(outcome.result.failure
+        ? `${outcome.result.failure.headline}: ${outcome.result.failure.detail}. The local brief is ready, and you can continue to Polish.`
+        : `Prepared ${outcome.relevant.length.toLocaleString()} compact characters for tailoring and captured ${presentTrackingFields(
+            outcome.result.extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
-      setJobAnalysisProgress(jobAnalysisTerminalState(result, duplicateAfter.note));
+      setJobAnalysisProgress(jobAnalysisTerminalState(outcome.result, outcome.duplicateNote));
     } catch (error) {
       if (!request.isCurrent()) return;
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
@@ -698,38 +776,21 @@ export function useJobIntake({
     setLinkStatus("Preparing the pasted posting…");
     try {
       const trimmedUrl = jobUrl.trim();
-      const localExtracted = extractJobPosting(cleaned, { url: trimmedUrl || undefined });
-      const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(trimmedUrl, cleaned, localExtracted.tracking);
-      if (!request.isCurrent()) return;
-      if (!duplicateBefore.proceed) {
-        applyRawImportedJob(cleaned.trim(), trimmedUrl);
+      const outcome = await runPreparedJobAnalysis({
+        source: "paste",
+        url: trimmedUrl,
+        localSourceText: cleaned,
+        screeningJobText: cleaned,
+        readiness,
+        request
+      });
+      if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const aiRequest = jobAnalysisRequestFields();
-      setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, cleaned));
-      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, cleaned);
-      if (!request.isCurrent()) return;
-      const result = readiness.ready
-        ? await analyzeJobPosting(cleaned, {
-            url: jobUrl.trim() || undefined,
-            aiRequest,
-            initialFit: fitRequest ?? undefined,
-            localExtracted,
-            signal: request.signal
-          })
-        : localJobAnalysisResult(cleaned, {
-            url: jobUrl.trim() || undefined,
-            aiRequest,
-            localExtracted,
-            initialFitRequested: Boolean(fitRequest),
-            failure: classifyFailure(new ApiError(readiness.message, 503))
-          });
-      if (!request.isCurrent()) return;
-      const { extracted, usage } = result;
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
+      if (outcome.status === "too-short") {
         setLinkStatus("Couldn't find enough job-relevant text in the paste. Check that you copied the description, not just the page header.");
         setJobAnalysisProgress({
           status: "failed",
@@ -738,35 +799,18 @@ export function useJobIntake({
         });
         return;
       }
-      const duplicateAfter = result.failure
-        ? duplicateBefore
-        : await confirmDuplicateAfterJobAnalysis(trimmedUrl, cleaned, extracted.tracking);
-      if (!request.isCurrent()) return;
-      setJobDescription(relevant);
-      setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, cleaned));
-      setLocalPreparedPreview(null);
-      setResult(null);
-      resetCoverWorkflow();
-      setPipelineAiUsage(freshJobAnalysisUsage(usage));
-      setJobRawText(cleaned);
-      applyQuickFitOutcome({
-        outcome: result.initialFit,
-        fitRequest,
-        screeningJobText: cleaned,
-        aiRequest
-      });
-      if (!duplicateAfter.proceed) {
+      if (outcome.status === "duplicate-after") {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setLinkStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
-      const missing = compactManualReviewFields(extracted.manualReviewFields);
-      setLinkStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
-        : `Prepared ${relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
-            extracted.tracking
+      const missing = compactManualReviewFields(outcome.result.extracted.manualReviewFields);
+      setLinkStatus(outcome.result.failure
+        ? `${outcome.result.failure.headline}: ${outcome.result.failure.detail}. The local brief is ready, and you can continue to Polish.`
+        : `Prepared ${outcome.relevant.length.toLocaleString()} compact characters from the paste and captured ${presentTrackingFields(
+            outcome.result.extracted.tracking
           )}${missing ? `; add ${missing} manually if needed` : ""}.`);
-      setJobAnalysisProgress(jobAnalysisTerminalState(result, duplicateAfter.note));
+      setJobAnalysisProgress(jobAnalysisTerminalState(outcome.result, outcome.duplicateNote));
     } catch (error) {
       if (!request.isCurrent()) return;
       // analyzeJobPosting is built to fall back to local rather than throw, so
@@ -833,38 +877,21 @@ export function useJobIntake({
         });
         return;
       }
-      const localExtracted = extractJobPosting(payload.text, { url: payload.url || undefined });
-      const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(payload.url, payload.text, localExtracted.tracking);
-      if (!request.isCurrent()) return;
-      if (!duplicateBefore.proceed) {
-        applyRawImportedJob(rawTrimmed, payload.url);
+      const outcome = await runPreparedJobAnalysis({
+        source: "retry",
+        url: payload.url,
+        localSourceText: payload.text,
+        screeningJobText: payload.text,
+        readiness,
+        request
+      });
+      if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setPolishStatus("Preparation stopped because this application is already tracked.");
         return;
       }
-      const aiRequest = jobAnalysisRequestFields();
-      setLocalPreparedPreview(importedJobSnapshot(payload.url, localExtracted.tailoringText, localExtracted, payload.text));
-      const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, payload.text);
-      if (!request.isCurrent()) return;
-      const result = readiness.ready
-        ? await analyzeJobPosting(payload.text, {
-            url: payload.url || undefined,
-            aiRequest,
-            initialFit: fitRequest ?? undefined,
-            localExtracted,
-            signal: request.signal
-          })
-        : localJobAnalysisResult(payload.text, {
-            url: payload.url || undefined,
-            aiRequest,
-            localExtracted,
-            initialFitRequested: Boolean(fitRequest),
-            failure: classifyFailure(new ApiError(readiness.message, 503))
-          });
-      if (!request.isCurrent()) return;
-      const { extracted, usage } = result;
-      const relevant = extracted.tailoringText;
-      if (relevant.trim().length < 40) {
+      if (outcome.status === "too-short") {
         setJobAnalysisProgress({
           status: "failed",
           errorHeadline: "Missing input",
@@ -872,34 +899,14 @@ export function useJobIntake({
         });
         return;
       }
-      const duplicateAfter = result.failure
-        ? duplicateBefore
-        : await confirmDuplicateAfterJobAnalysis(payload.url, payload.text, extracted.tracking);
-      if (!request.isCurrent()) return;
-      // Keep jobUrl in sync (payload.url is already trimmed) so the jobTracking
-      // memo's importedJob.url === jobUrl.trim() guard holds after the retry.
-      setJobUrl(payload.url);
-      setJobDescription(relevant);
-      setImportedJob(importedJobSnapshot(payload.url, relevant, extracted, payload.text));
-      setLocalPreparedPreview(null);
-      setResult(null);
-      resetCoverWorkflow();
-      setPipelineAiUsage(freshJobAnalysisUsage(usage));
-      setJobRawText(payload.text);
-      applyQuickFitOutcome({
-        outcome: result.initialFit,
-        fitRequest,
-        screeningJobText: payload.text,
-        aiRequest
-      });
-      if (!duplicateAfter.proceed) {
+      if (outcome.status === "duplicate-after") {
         setJobAnalysisProgress(duplicateStoppedState("after"));
         setPolishStatus("Job details were prepared, then the workflow stopped because this application is already tracked.");
         return;
       }
-      setJobAnalysisProgress(jobAnalysisTerminalState(result, duplicateAfter.note));
-      setPolishStatus(result.failure
-        ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
+      setJobAnalysisProgress(jobAnalysisTerminalState(outcome.result, outcome.duplicateNote));
+      setPolishStatus(outcome.result.failure
+        ? `${outcome.result.failure.headline}: ${outcome.result.failure.detail}. The local brief is ready, and you can continue to Polish.`
         : "Application prepared from the browser extension.");
     } catch (error) {
       if (!request.isCurrent()) return;
@@ -922,7 +929,6 @@ export function useJobIntake({
       setExtensionImportPhase("preparing");
       const { text, url } = item;
       const trimmedUrl = url.trim();
-      const rawTrimmed = text.trim();
       jobAnalysisImportRef.current = { text, url: trimmedUrl };
       setJobAnalysisRetrySource("import");
       const readiness = await ensureProviderReady();
@@ -930,42 +936,22 @@ export function useJobIntake({
       const request = startJobAnalysisRequest();
       setIsExtractingLink(true);
       try {
-        const localExtracted = extractJobPosting(rawTrimmed, { url: trimmedUrl || undefined });
-        const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(trimmedUrl, rawTrimmed, localExtracted.tracking);
-        if (!request.isCurrent()) return;
-        if (!duplicateBefore.proceed) {
-          if (rawTrimmed.length >= 40) applyRawImportedJob(rawTrimmed, trimmedUrl);
+        const outcome = await runPreparedJobAnalysis({
+          source: "extension",
+          url: trimmedUrl,
+          localSourceText: text.trim(),
+          screeningJobText: text,
+          readiness,
+          request
+        });
+        if (outcome.status === "stale") return;
+        if (outcome.status === "duplicate-before") {
           setJobAnalysisProgress(duplicateStoppedState("before"));
           setJobAnalysisProgressVisible(true);
           setPolishStatus("Preparation stopped because this application is already tracked.");
           return;
         }
-
-        setJobAnalysisProgress({ status: "running" });
-        setJobAnalysisProgressVisible(true);
-        const aiRequest = jobAnalysisRequestFields();
-        setLocalPreparedPreview(importedJobSnapshot(trimmedUrl, localExtracted.tailoringText, localExtracted, text));
-        const fitRequest = await prepareResumeAndInitialFit(localExtracted.tailoringText, text);
-        if (!request.isCurrent()) return;
-        const result = readiness.ready
-          ? await analyzeJobPosting(text, {
-              url: trimmedUrl || undefined,
-              aiRequest,
-              initialFit: fitRequest ?? undefined,
-              localExtracted,
-              signal: request.signal
-            })
-          : localJobAnalysisResult(text, {
-              url: trimmedUrl || undefined,
-              aiRequest,
-              localExtracted,
-              initialFitRequested: Boolean(fitRequest),
-              failure: classifyFailure(new ApiError(readiness.message, 503))
-            });
-        if (!request.isCurrent()) return;
-        const { extracted, usage } = result;
-        const relevant = extracted.tailoringText;
-        if (relevant.trim().length < 40) {
+        if (outcome.status === "too-short") {
           setPolishStatus("The extension posting had too little job text. Paste it manually.");
           setJobAnalysisRetrySource("import");
           setJobAnalysisProgress({
@@ -976,25 +962,7 @@ export function useJobIntake({
           setJobAnalysisProgressVisible(true);
           return;
         }
-        const duplicateAfter = result.failure
-          ? duplicateBefore
-          : await confirmDuplicateAfterJobAnalysis(trimmedUrl, text, extracted.tracking);
-        if (!request.isCurrent()) return;
-        setJobUrl(trimmedUrl);
-        setJobDescription(relevant);
-        setImportedJob(importedJobSnapshot(trimmedUrl, relevant, extracted, text));
-        setLocalPreparedPreview(null);
-        setResult(null);
-        resetCoverWorkflow();
-        setPipelineAiUsage(freshJobAnalysisUsage(usage));
-        setJobRawText(text);
-        applyQuickFitOutcome({
-          outcome: result.initialFit,
-          fitRequest,
-          screeningJobText: text,
-          aiRequest
-        });
-        if (!duplicateAfter.proceed) {
+        if (outcome.status === "duplicate-after") {
           setJobAnalysisRetrySource("import");
           setJobAnalysisProgress(duplicateStoppedState("after"));
           setJobAnalysisProgressVisible(true);
@@ -1003,12 +971,12 @@ export function useJobIntake({
         }
         // A successful or locally-fallback job analysis stops here. Polish
         // remains an explicit action in Prepare.
-        const terminalState = jobAnalysisTerminalState(result, duplicateAfter.note);
+        const terminalState = jobAnalysisTerminalState(outcome.result, outcome.duplicateNote);
         setJobAnalysisRetrySource("import");
         setJobAnalysisProgress(terminalState);
         setJobAnalysisProgressVisible(true);
-        setPolishStatus(result.failure
-          ? `${result.failure.headline}: ${result.failure.detail}. The local brief is ready, and you can continue to Polish.`
+        setPolishStatus(outcome.result.failure
+          ? `${outcome.result.failure.headline}: ${outcome.result.failure.detail}. The local brief is ready, and you can continue to Polish.`
           : "Application prepared from the browser extension.");
       } catch (error) {
         if (!request.isCurrent()) return;
