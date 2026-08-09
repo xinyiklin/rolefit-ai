@@ -207,6 +207,27 @@
   line-height: 1.35;
 }
 
+.settings-automation__document {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) 0 var(--s1) 22px;
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-automation__document h3 {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.settings-automation__threshold {
+  margin: 0;
+  max-width: 390px;
+}
+
 .settings-automation__note {
   margin: var(--s1) 0 0;
   color: var(--ink-soft);

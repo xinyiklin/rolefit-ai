@@ -30,12 +30,12 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Initial Fit in one provider dispatch;
   their response subsections sanitize independently. `mode: "initial-fit"`
-  reruns only the compact fit for a changed resume. Initial Fit requires the
-  provider to assess up to five material requirements selected from the full
-  prepared job and permits at most one provider-added requirement. `quickFit.ts`
-  validates exact posting/candidate anchors, caps semantically unrelated evidence,
-  and derives the four-category public result and eligibility; the hidden basis
-  is never returned or persisted.
+  reruns only the compact fit after a relevant input changes. Initial Fit asks
+  the provider to apply the four-category rubric directly with exact posting and
+  candidate excerpts. `quickFit.ts` validates only shape, enums, bounds,
+  deduplication, and exact current-source provenance, then maps the accepted
+  verdict to fixed public summary copy. It has no hidden requirement basis,
+  semantic recalculation, broad eligibility regex, or guessed fallback.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares

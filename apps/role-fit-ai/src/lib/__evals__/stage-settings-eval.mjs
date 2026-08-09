@@ -121,19 +121,37 @@ assert.deepEqual(
   }),
   {
     runInitialFit: false,
-    autoCreateResumeProposal: true,
-    autoCreateCoverLetterProposal: false
+    autoPolishResume: true,
+    resumeAutoPolishThreshold: "REASONABLE",
+    autoPolishCoverLetter: false,
+    coverLetterAutoPolishThreshold: "REASONABLE"
   },
-  "current workflow preferences persist independently"
+  "legacy fixed-cutoff workflow preferences migrate independently"
 );
 assert.deepEqual(
   normalizeSettings({
     runInitialFit: "always",
-    autoCreateResumeProposal: 1,
-    autoCreateCoverLetterProposal: null
+    autoPolishResume: 1,
+    autoPolishCoverLetter: null,
+    resumeAutoPolishThreshold: "MOSTLY"
   }),
   {},
   "invalid workflow preferences are dropped"
+);
+assert.deepEqual(
+  normalizeSettings({
+    autoPolishResume: true,
+    resumeAutoPolishThreshold: "STRETCH",
+    autoPolishCoverLetter: true,
+    coverLetterAutoPolishThreshold: "STRONG"
+  }),
+  {
+    autoPolishResume: true,
+    resumeAutoPolishThreshold: "STRETCH",
+    autoPolishCoverLetter: true,
+    coverLetterAutoPolishThreshold: "STRONG"
+  },
+  "the two categorical thresholds persist independently"
 );
 
 console.log("stage-settings probes passed");

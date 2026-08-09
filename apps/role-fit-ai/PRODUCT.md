@@ -222,20 +222,19 @@ disappears into the task. Quiet competence, not salesmanship.
     slot.
     Prepare shows compact Initial Fit for the selected resume: one four-level
     verdict, one summary, up to three matches and gaps, and a relevant
-    eligibility warning. The server selects up to five authoritative material
-    requirements from a broad prepared-brief pool, preserving at least two core
-    responsibilities when available and no more than three qualifications; the
-    provider may add at most one more. The server validates exact posting and candidate anchors,
-    rejects semantically unrelated evidence, and derives the category and
-    visible copy from the complete hidden basis. That basis is never displayed
-    or persisted. Strong and Reasonable require at least three core requirements.
-    The provider must return a valid assessment quorum; zero valid required ids
-    or too few valid rows is unavailable, while explicit `NOT_SHOWN` assessments
-    remain legitimate. The exact complete provider screening payload is recorded,
+    eligibility warning. The provider applies the rubric directly and anchors
+    each match to exact posting and candidate excerpts and each gap to an exact
+    posting excerpt. The server validates shape, enums, bounds, deduplication,
+    and exact current-source provenance, then maps the verdict to fixed public
+    summary copy. It does not select a hidden requirement set, recalculate
+    semantic coverage, or synthesize a fallback verdict. Unusable output is
+    unavailable. The exact complete provider screening payload is recorded,
     while the complete prepared brief displayed after a combined response is the
     freshness baseline. A change anywhere in that brief, a changed or cleared
-    authoritative resume, or changed candidate facts/honest context replaces the
-    old verdict with an out-of-date state until the user checks again.
+    authoritative resume, changed candidate facts/honest context, changed Job
+    analysis provider/model/reasoning, or a prompt-version change replaces the
+    old verdict with an out-of-date state until checked again. An identical
+    successful screening is reused rather than billed twice.
     Initial Fit never shows scores, confidence, evidence ledgers,
     recommendations, or saved/historical audit state there, and never silently
     sets tracker priority. The bundled starter
@@ -265,13 +264,13 @@ disappears into the task. Quiet competence, not salesmanship.
     domain signals, benefits, and extraction gaps. Preserve
     the captured posting separately, persist the complete corrected brief on
     Apply, and restore both without feeding benefits into resume tailoring.
-13. Keep proposal automation fixed and reversible. Initial Fit defaults on;
-    Resume and Cover Letter proposal toggles are independent and default off.
-    Only Strong or Reasonable with no eligibility blocker may auto-start an
-    enabled proposal. `BLOCKED` requires an explicit posting restriction plus
-    explicit adverse candidate context; unknown or ambiguous status is `CHECK`
-    and may still polish. Stretch, Limited, unavailable, and blocked states
-    remain manual, and manual Polish is always available.
+13. Keep Polish automation independent and reversible. Initial Fit defaults on;
+    Resume and Cover Letter switches and categorical minimum-fit thresholds are
+    independent and both switches default off. Resume defaults to Reasonable or
+    better; Cover Letter defaults to Strong only. `BLOCKED` requires an exact
+    posting restriction plus an exact conflicting candidate-context fact and is
+    the only eligibility state that stops an otherwise eligible automatic run;
+    `CHECK` may still polish. Manual Polish is always available.
 14. Present one Polish workflow for both documents, and keep its closing check
     non-blocking. Resume and Cover Letter progress through the same named
     sequence — Ready to Polish, Polishing and validating, Proposal ready,

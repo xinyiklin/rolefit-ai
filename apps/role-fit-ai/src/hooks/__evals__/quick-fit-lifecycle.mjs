@@ -21,25 +21,29 @@ const {
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
 
-const requirement = {
-  requirementId: "required-1",
-  sourceRequirement: "Build reliable JavaScript services.",
-  importance: "CORE",
-  kind: "RESPONSIBILITY"
-};
 const resumeText = "Software engineer who built reliable JavaScript services for internal operations teams. ".repeat(2);
 const request = {
   resumeText,
   resumeLabel: "Backend",
-  candidateContext: "Authorized to work in the United States.",
-  requiredRequirements: [requirement]
+  candidateContext: "Authorized to work in the United States."
 };
+const aiRequest = { provider: "claude-cli", model: "claude-sonnet-4-6", reasoningEffort: "high" };
 const rawPosting = "Software Engineer\nBuild reliable JavaScript services.\nPartner with finance.";
 const rawPostingWithDifferentUnselectedWork = `${rawPosting}\nOwn quarterly incident reviews.`;
 assert.notEqual(
-  quickFitRequestFingerprint(rawPosting, request),
-  quickFitRequestFingerprint(rawPostingWithDifferentUnselectedWork, request),
-  "the complete provider screening text participates even when selected requirements are unchanged"
+  quickFitRequestFingerprint(rawPosting, request, aiRequest),
+  quickFitRequestFingerprint(rawPostingWithDifferentUnselectedWork, request, aiRequest),
+  "the complete provider screening text participates in request identity"
+);
+assert.equal(
+  quickFitRequestFingerprint(rawPosting, request, aiRequest),
+  quickFitRequestFingerprint(rawPosting, { ...request, resumeLabel: "Renamed file" }, aiRequest),
+  "friendly file labels do not invalidate identical screening inputs"
+);
+assert.notEqual(
+  quickFitRequestFingerprint(rawPosting, request, aiRequest),
+  quickFitRequestFingerprint(rawPosting, request, { ...aiRequest, model: "claude-opus-4-6" }),
+  "provider model changes participate in request identity"
 );
 
 const finalPreparedBrief = [
@@ -49,13 +53,24 @@ const finalPreparedBrief = [
   "- Build reliable JavaScript services.",
   "- Partner with finance."
 ].join("\n");
-const provenance = createQuickFitProvenance(rawPosting, finalPreparedBrief, request);
+const provenance = createQuickFitProvenance(rawPosting, finalPreparedBrief, request, aiRequest);
+assert.notEqual(
+  provenance.inputFingerprint,
+  createQuickFitProvenance(
+    rawPosting,
+    finalPreparedBrief.replace("Software Engineer", "Senior Software Engineer"),
+    request,
+    aiRequest
+  ).inputFingerprint,
+  "the settled prepared job participates in the complete result identity"
+);
 assert.equal(
   quickFitProvenanceIsStale(
     provenance,
     finalPreparedBrief,
     { text: resumeText },
-    request.candidateContext
+    request.candidateContext,
+    aiRequest
   ),
   false,
   "a combined request remains current after the provider returns a different prepared brief"
@@ -65,7 +80,8 @@ assert.equal(
     provenance,
     finalPreparedBrief.replace("Software Engineer", "Senior Software Engineer"),
     { text: resumeText },
-    request.candidateContext
+    request.candidateContext,
+    aiRequest
   ),
   true,
   "editing a prepared role outside the selected requirements invalidates the fit"
@@ -75,15 +91,27 @@ assert.equal(
     provenance,
     `${finalPreparedBrief}\n- Own quarterly incident reviews.`,
     { text: resumeText },
-    request.candidateContext
+    request.candidateContext,
+    aiRequest
   ),
   true,
   "editing an unselected prepared responsibility invalidates the fit"
 );
 assert.equal(
-  quickFitProvenanceIsStale(provenance, finalPreparedBrief, null, request.candidateContext),
+  quickFitProvenanceIsStale(provenance, finalPreparedBrief, null, request.candidateContext, aiRequest),
   true,
   "clearing the authoritative current resume hides the old ready verdict"
+);
+assert.equal(
+  quickFitProvenanceIsStale(
+    provenance,
+    finalPreparedBrief,
+    { text: resumeText },
+    request.candidateContext,
+    { ...aiRequest, reasoningEffort: "xhigh" }
+  ),
+  true,
+  "provider, model, reasoning, and prompt identity control result reuse"
 );
 
 const preparedJob = { localJobText: finalPreparedBrief, fitJobText: rawPosting };

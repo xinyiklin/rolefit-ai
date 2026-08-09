@@ -91,25 +91,20 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Initial Fit, readiness, and
-  Apply together. Initial Fit is a compact server-calibrated provider advisory
+  Apply together. Initial Fit is a compact provider advisory
   for the selected resume: Strong, Reasonable, Stretch, or Limited; one summary;
   up to three matches and gaps; and an eligibility warning only when relevant.
-  The client supplies a broad qualification/responsibility pool from the full
-  prepared brief; the server selects up to five authoritative requirements,
-  reserves at least two responsibility slots when available, caps qualifications
-  at three, and permits at most one provider-added row. The server
-  validates exact posting/candidate excerpts, rejects semantically unrelated
-  evidence, parses numeric thresholds before bounded alternatives, and requires
-  a valid provider assessment quorum before filling omitted rows conservatively.
-  An explicit `NOT_SHOWN` row is valid; an empty, malformed, unknown-id, or
-  undersized required basis is unavailable rather than a synthesized verdict.
-  The server derives the public result from the complete hidden basis. That
-  basis is neither displayed nor stored. Strong and Reasonable require at least
-  three core requirements. The receipt fingerprints the complete provider
-  screening text and separately anchors the complete prepared brief displayed
-  after settlement. Editing any field in that brief, changing or clearing the
-  authoritative current resume, or changing candidate facts/honest context
-  hides the old verdict as out of date until the user checks again. Initial Fit has no
+  The provider applies the rubric directly and cites exact posting and candidate
+  excerpts for every match and exact posting excerpts for every gap. The server
+  validates structure, enums, bounds, deduplication, and exact current-source
+  provenance, then maps the verdict to fixed public summary copy. Malformed or
+  ungrounded output is unavailable; there is no hidden requirement basis,
+  semantic recalculation, numeric scoring, or guessed fallback. The receipt
+  fingerprints the normalized screening text, resume, candidate context,
+  provider/model/reasoning configuration, and prompt version, and separately
+  anchors the complete prepared brief displayed after settlement. Changing any
+  of those inputs hides the old verdict as out of date until checked again;
+  checking an identical successful input reuses the current result. Initial Fit has no
   score, confidence, visible requirement ledger, evidence quotes,
   recommendation, or analytics role, and it never silently sets tracker
   priority. Each material has an **Include** toggle and its
@@ -167,10 +162,11 @@ editable documents.
   broad context cannot authorize it. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
 - **Optional Initial Fit automation** — Initial Fit defaults on. Resume and Cover
-  Letter proposal toggles are independent and default off. Only Strong or
-  Reasonable without an eligibility blocker may start an enabled proposal;
-  a Check warning may still polish because Polish is not submission. Stretch,
-  Limited, unavailable, and blocked outcomes remain manual. Changing the
+  Letter automatic Polish switches and categorical minimum-fit selects are
+  independent; both switches default off, with Resume defaulting to Reasonable
+  or better and Cover Letter to Strong only. A Check warning may still polish
+  because Polish is not submission; only Blocked stops an otherwise eligible
+  threshold match. Unavailable outcomes remain manual. Changing the
   selected resume reruns only Initial Fit, never Job analysis. Retry always
   resolves the same authoritative prepared-resume selection used by Prepare,
   rejects the bundled starter and short/blank-origin stubs, and remains available
@@ -232,7 +228,7 @@ editable documents.
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current document-check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores, the hidden calibration basis, or full provider review payloads. Initial Fit remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Initial Fit and current document-check snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Initial Fit remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
   **Open preparation** restores a stored application's validated posting and
   available strict documents into the session, keeps the dirty-document
   replacement confirmation, and lands on Prepare. Apply saves only the

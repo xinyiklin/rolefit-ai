@@ -5,6 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-08
 
+- [USER+CODE+TOOL] **Initial Fit is simplified without changing the document
+  workflows.** The provider now applies the four-category rubric directly and
+  returns bounded exact posting/resume/context excerpts; the server performs
+  mechanical validation and maps accepted verdicts to fixed public summaries.
+  The hidden requirement selection, coverage recalculation, years/degree logic,
+  broad eligibility regex, and synthesized verdict path are removed. Resume and
+  Cover Letter keep their existing Polish workflows and one-shot safeguards but
+  now have independent automatic-Polish switches and categorical minimum-fit
+  thresholds; legacy enabled switches migrate to Reasonable, while fresh Resume
+  and Cover Letter defaults are Reasonable and Strong respectively. Only an
+  exact-evidence `BLOCKED` eligibility result stops an otherwise eligible run.
+  Fit identity covers normalized job/resume/context, provider/model/reasoning,
+  and prompt version, so unchanged ready results are reused and changed inputs
+  become out of date. The complete RoleFit gate passes: production and landing
+  builds, desktop contracts/security, and all 80 offline evaluations. Live-
+  provider and browser visual QA were not run. The work remains uncommitted on
+  the current branch; no pull request was opened.
 - [USER+CODE+TOOL] **The second re-review findings are repaired on the prepared-resume branch.**
   Initial Fit Retry and visible-fit provenance now read the authoritative
   `currentResumeSelection` snapshot, reject starter/blank-origin/stub documents,

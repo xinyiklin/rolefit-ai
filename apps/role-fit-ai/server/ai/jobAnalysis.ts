@@ -30,14 +30,14 @@ import {
   findUngroundedCuratedClaimTerm
 } from "./grounding.ts";
 import {
-  QUICK_FIT_BASIS_RESPONSE_SCHEMA,
+  QUICK_FIT_RESPONSE_SCHEMA,
   analyzeQuickFit,
-  calibrateQuickFit,
-  quickFitPromptSection
+  quickFitPromptSection,
+  sanitizeQuickFitResponse
 } from "./quickFit.ts";
-import type {
-  QuickFitRequirementCandidate,
-  QuickFitResult
+import {
+  normalizeQuickFitInput,
+  type QuickFitResult
 } from "../../shared/quickFitContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
@@ -49,9 +49,7 @@ const JOB_TEXT_CHAR_LIMIT = 24_000;
 
 type InitialFitInput = {
   resumeText: string;
-  resumeLabel: string;
   candidateContext?: string;
-  requiredRequirements?: QuickFitRequirementCandidate[];
 };
 
 export function buildJobAnalysisPrompts({
@@ -97,9 +95,12 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
     ? `Return this JSON shape. The job and initialFit subsections are independent; always return the best job object even if Initial Fit is unavailable:
 {
   "job": ${schema.slice(schema.indexOf("{"))},
-  "initialFit": ${QUICK_FIT_BASIS_RESPONSE_SCHEMA}
+  "initialFit": ${QUICK_FIT_RESPONSE_SCHEMA}
 }`
     : schema;
+  // A combined request must show Initial Fit the same normalized posting that
+  // its exact-excerpt validator will use after the response returns.
+  const promptJobText = initialFit ? normalizeQuickFitInput(jobText) : jobText;
 
   // The source URL is intentionally NOT included: it can carry private ATS
   // tokens / tracking params, and the product contract (README, ai-server.md)
@@ -107,10 +108,10 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   const userPrompt = `Parse the posting inside the <job_description> tags below.
 
 <job_description>
-${fenceUntrusted(clipForPrompt(jobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
+${fenceUntrusted(clipForPrompt(promptJobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${initialFit ? quickFitPromptSection({ ...initialFit, jobText }) : ""}
+${initialFit ? quickFitPromptSection(initialFit) : ""}
 
 ${responseSchema}`;
 
@@ -126,11 +127,7 @@ function initialFitInput(body: Record<string, unknown>): InitialFitInput | null 
   if (resumeText.trim().length < 40) return null;
   return {
     resumeText,
-    resumeLabel: typeof source.resumeLabel === "string" ? source.resumeLabel : "Selected resume",
-    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {}),
-    ...(Array.isArray(source.requiredRequirements)
-      ? { requiredRequirements: source.requiredRequirements as QuickFitRequirementCandidate[] }
-      : {})
+    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {})
   };
 }
 
@@ -459,11 +456,10 @@ export function sanitizePrepareAnalysisResponse(
     fields: sanitizeJobAnalysis(rawJob, jobText),
     ...(fitInput
       ? {
-          initialFit: calibrateQuickFit(source.initialFit, {
+          initialFit: sanitizeQuickFitResponse(source.initialFit, {
             jobText,
             resumeText: fitInput.resumeText,
-            candidateContext: fitInput.candidateContext,
-            requiredRequirements: fitInput.requiredRequirements
+            candidateContext: fitInput.candidateContext
           })
         }
       : {})
@@ -532,11 +528,7 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       const fit = await analyzeQuickFit({
         jobText,
         resumeText,
-        resumeLabel: String(body.resumeLabel ?? "Selected resume"),
         candidateContext: String(body.candidateContext ?? ""),
-        requiredRequirements: Array.isArray(body.requiredRequirements)
-          ? body.requiredRequirements as QuickFitRequirementCandidate[]
-          : undefined,
         body,
         signal: request.signal
       });

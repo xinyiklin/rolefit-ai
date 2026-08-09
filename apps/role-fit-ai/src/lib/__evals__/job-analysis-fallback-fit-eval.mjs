@@ -37,7 +37,7 @@ const POSTING = [
 
 const VALID_FIT = {
   verdict: "REASONABLE",
-  summary: "Strong backend overlap with a gap on formal on-call ownership.",
+  summary: "Provider-owned summary is ignored.",
   matches: ["Go services in production"],
   gaps: ["Formal on-call rotation ownership"],
   eligibility: { status: "CLEAR" }
@@ -75,7 +75,7 @@ const UNUSABLE_JOB_FIELDS = { source: "ai", title: "Senior Backend Engineer", in
   check(Boolean(result.failure), true, "the job-analysis failure is still reported honestly");
   check(
     result.initialFit?.summary,
-    VALID_FIT.summary,
+    "Your background aligns well, with a few material gaps.",
     "a valid screening survives a local job-analysis fallback — the halves are independent"
   );
   check(result.initialFit?.matches, VALID_FIT.matches, "the surviving screening keeps its grounded matches");

@@ -17,6 +17,10 @@ import type {
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
 import { SettingsStage } from "./SettingsStage";
+import {
+  AUTO_POLISH_THRESHOLD_OPTIONS,
+  type AutoPolishThreshold
+} from "../../shared/quickFitContract.ts";
 
 export type SettingsSection = "stages" | "about" | "guidance";
 
@@ -44,10 +48,14 @@ type SettingsDialogProps = {
   runFinalCheck: boolean;
   onRunFinalCheckChange: (value: boolean) => void;
   onRunInitialFitChange: (value: boolean) => void;
-  autoCreateResumeProposal: boolean;
-  onAutoCreateResumeProposalChange: (value: boolean) => void;
-  autoCreateCoverLetterProposal: boolean;
-  onAutoCreateCoverLetterProposalChange: (value: boolean) => void;
+  autoPolishResume: boolean;
+  onAutoPolishResumeChange: (value: boolean) => void;
+  resumeAutoPolishThreshold: AutoPolishThreshold;
+  onResumeAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
+  autoPolishCoverLetter: boolean;
+  onAutoPolishCoverLetterChange: (value: boolean) => void;
+  coverLetterAutoPolishThreshold: AutoPolishThreshold;
+  onCoverLetterAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
 
   // ----- About you -----
   citizenshipStatus: CitizenshipStatus;
@@ -94,10 +102,14 @@ export function SettingsDialog({
   runFinalCheck,
   onRunFinalCheckChange,
   onRunInitialFitChange,
-  autoCreateResumeProposal,
-  onAutoCreateResumeProposalChange,
-  autoCreateCoverLetterProposal,
-  onAutoCreateCoverLetterProposalChange,
+  autoPolishResume,
+  onAutoPolishResumeChange,
+  resumeAutoPolishThreshold,
+  onResumeAutoPolishThresholdChange,
+  autoPolishCoverLetter,
+  onAutoPolishCoverLetterChange,
+  coverLetterAutoPolishThreshold,
+  onCoverLetterAutoPolishThresholdChange,
   citizenshipStatus,
   onCitizenshipChange,
   legallyAuthorizedToWork,
@@ -203,30 +215,58 @@ export function SettingsDialog({
                         <small>Checks the selected resume in the same AI request.</small>
                       </span>
                     </label>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={autoCreateResumeProposal}
-                        disabled={!runInitialFit}
-                        onChange={(event) => onAutoCreateResumeProposalChange(event.target.checked)}
-                      />
-                      <span>
-                        <strong>Automatically create a resume proposal</strong>
-                        <small>Runs after Strong or Reasonable Fit.</small>
-                      </span>
-                    </label>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={autoCreateCoverLetterProposal}
-                        disabled={!runInitialFit}
-                        onChange={(event) => onAutoCreateCoverLetterProposalChange(event.target.checked)}
-                      />
-                      <span>
-                        <strong>Automatically create a cover-letter proposal</strong>
-                        <small>Runs independently after Strong or Reasonable Fit.</small>
-                      </span>
-                    </label>
+                    <div className="settings-automation__document">
+                      <h3>Resume</h3>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={autoPolishResume}
+                          disabled={!runInitialFit}
+                          onChange={(event) => onAutoPolishResumeChange(event.target.checked)}
+                        />
+                        <span><strong>Automatically Polish resume</strong></span>
+                      </label>
+                      <label className="field field--inline settings-automation__threshold">
+                        <span>Minimum fit</span>
+                        <select
+                          value={resumeAutoPolishThreshold}
+                          disabled={!runInitialFit || !autoPolishResume}
+                          onChange={(event) => onResumeAutoPolishThresholdChange(
+                            event.target.value as AutoPolishThreshold
+                          )}
+                        >
+                          {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
+                    <div className="settings-automation__document">
+                      <h3>Cover letter</h3>
+                      <label className="check-row">
+                        <input
+                          type="checkbox"
+                          checked={autoPolishCoverLetter}
+                          disabled={!runInitialFit}
+                          onChange={(event) => onAutoPolishCoverLetterChange(event.target.checked)}
+                        />
+                        <span><strong>Automatically Polish cover letter</strong></span>
+                      </label>
+                      <label className="field field--inline settings-automation__threshold">
+                        <span>Minimum fit</span>
+                        <select
+                          value={coverLetterAutoPolishThreshold}
+                          disabled={!runInitialFit || !autoPolishCoverLetter}
+                          onChange={(event) => onCoverLetterAutoPolishThresholdChange(
+                            event.target.value as AutoPolishThreshold
+                          )}
+                        >
+                          {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
+                            <option key={option.value} value={option.value}>{option.label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </div>
                     <label className="check-row">
                       <input
                         type="checkbox"

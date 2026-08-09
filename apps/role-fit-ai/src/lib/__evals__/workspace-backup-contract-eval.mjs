@@ -51,7 +51,13 @@ const emptyPortable = { settings: {}, lastBaseResume: "" };
 assert.deepEqual(parsePortableBrowserPreferences(emptyPortable), emptyPortable, "empty settings + empty lastBaseResume is valid (a fresh browser with nothing saved yet)");
 
 const knownSettingPortable = {
-  settings: { aiProvider: "openai", selectedModel: "gpt-5.6-terra", autoCreateResumeProposal: true, citizenshipStatus: "us-citizen" },
+  settings: {
+    aiProvider: "openai",
+    selectedModel: "gpt-5.6-terra",
+    autoPolishResume: true,
+    resumeAutoPolishThreshold: "REASONABLE",
+    citizenshipStatus: "us-citizen"
+  },
   lastBaseResume: "fullstack.resume"
 };
 assert.deepEqual(

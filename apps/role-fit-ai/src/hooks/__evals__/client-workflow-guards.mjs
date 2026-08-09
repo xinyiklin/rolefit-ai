@@ -331,7 +331,7 @@ assert.match(
 );
 assert.match(
   aiJobAnalysis,
-  /\.\.\.\(initialFitRequested \? \{ initialFit: \{ enabled: true, \.\.\.initialFit \} \} : \{\}\)/,
+  /\.\.\.\(initialFitRequested[\s\S]{0,260}?initialFit: \{[\s\S]{0,160}?enabled: true,[\s\S]{0,160}?resumeText: initialFit\?\.resumeText[\s\S]{0,220}?: \{\}\)/,
   "the Prepare request omits Initial Fit entirely when the setting is off"
 );
 assert.match(
@@ -366,13 +366,17 @@ assert.doesNotMatch(
 );
 assert.match(
   settingsDialog,
-  /Run Initial Fit after Prepare[\s\S]{0,900}?Automatically create a resume proposal[\s\S]{0,900}?Automatically create a cover-letter proposal/,
-  "Settings exposes one Initial Fit toggle and two independent proposal toggles"
+  /Run Initial Fit after Prepare[\s\S]{0,1800}?Resume[\s\S]{0,1200}?Automatically Polish resume[\s\S]{0,1200}?Minimum fit[\s\S]{0,1800}?Cover letter[\s\S]{0,1200}?Automatically Polish cover letter[\s\S]{0,1200}?Minimum fit/,
+  "Settings exposes one Initial Fit toggle and independent document thresholds"
 );
-assert.doesNotMatch(settingsDialog, /Strong threshold|Reasonable threshold|Stretch threshold|confidence threshold/i,
-  "Prepare automation has no adjustable verdict or confidence thresholds");
-assert.match(app, /quickFitAllowsAutoProposal\(fit\)/,
-  "automatic proposals use the shared fixed positive-verdict and eligibility rule");
+assert.match(settingsDialog, /AUTO_POLISH_THRESHOLD_OPTIONS\.map/,
+  "both document controls use the shared categorical threshold options");
+assert.match(app, /fit\.eligibility\?\.status === "BLOCKED"/,
+  "only explicit BLOCKED eligibility stops automatic polish");
+assert.match(app, /quickFitMeetsThreshold\(fit\.verdict, resumeAutoPolishThreshold\)/,
+  "resume automation uses its selected categorical threshold");
+assert.match(app, /quickFitMeetsThreshold\(fit\.verdict, coverLetterAutoPolishThreshold\)/,
+  "cover-letter automation uses its selected categorical threshold");
 assert.match(
   app,
   /if \(!receipt\.resumeStarted && canStartResume\)[\s\S]{0,180}?void handleResumePolish[\s\S]{0,500}?if \(!receipt\.coverStarted && canStartCover\)[\s\S]{0,180}?void handleCoverLetterPolish/,
@@ -1053,13 +1057,13 @@ assert.doesNotMatch(app, /prepareFitAssessment|savedApplicationFitVerdict/,
   "Prepare no longer derives Initial Fit from saved or post-polish audit scores");
 assert.match(
   quickFitLifecycle,
-  /jobText: screeningJobText\.trim\(\),[\s\S]{0,100}?\.\.\.normalizedRequest\(request\)/,
-  "Initial Fit provenance includes the complete screening text and normalized request"
+  /jobText: normalizeQuickFitInput\(screeningJobText\),[\s\S]{0,120}?\.\.\.normalizedRequest\(request\)[\s\S]{0,160}?requestIdentity:/,
+  "Initial Fit provenance includes normalized content and provider, model, reasoning, and prompt identity"
 );
 assert.match(
   intake,
-  /quickFitState\.status === "ready"[\s\S]{0,260}?quickFitProvenanceIsStale\([\s\S]{0,180}?status: "stale"/,
-  "a ready fit delegates current-brief, resume, and candidate-context freshness to the executable lifecycle guard"
+  /quickFitState\.status === "ready"[\s\S]{0,900}?quickFitProvenanceIsStale\([\s\S]{0,700}?status: "stale"/,
+  "a ready fit delegates current-brief, resume, context, and request-settings freshness to the lifecycle guard"
 );
 assert.match(
   app,

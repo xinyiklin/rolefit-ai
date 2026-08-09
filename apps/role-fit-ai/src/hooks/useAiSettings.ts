@@ -10,6 +10,7 @@ import type { AiProviderValue } from "../config/aiOptions";
 import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type { CitizenshipStatus, EducationLevel } from "../lib/candidateFacts";
+import type { AutoPolishThreshold } from "../../shared/quickFitContract.ts";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
 // config, the shared and per-stage guidance, and candidate facts. These share
@@ -28,9 +29,13 @@ export function useAiSettings() {
   );
   const [runInitialFit, setRunInitialFit] = useState(saved.runInitialFit ?? true);
   const [runFinalCheck, setRunFinalCheck] = useState(saved.runFinalCheck ?? true);
-  const [autoCreateResumeProposal, setAutoCreateResumeProposal] = useState(saved.autoCreateResumeProposal ?? false);
-  const [autoCreateCoverLetterProposal, setAutoCreateCoverLetterProposal] = useState(
-    saved.autoCreateCoverLetterProposal ?? false
+  const [autoPolishResume, setAutoPolishResume] = useState(saved.autoPolishResume ?? false);
+  const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
+    saved.resumeAutoPolishThreshold ?? "REASONABLE"
+  );
+  const [autoPolishCoverLetter, setAutoPolishCoverLetter] = useState(saved.autoPolishCoverLetter ?? false);
+  const [coverLetterAutoPolishThreshold, setCoverLetterAutoPolishThreshold] = useState<AutoPolishThreshold>(
+    saved.coverLetterAutoPolishThreshold ?? "STRONG"
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
@@ -50,8 +55,10 @@ export function useAiSettings() {
         stageCustomInstructions,
         runInitialFit,
         runFinalCheck,
-        autoCreateResumeProposal,
-        autoCreateCoverLetterProposal,
+        autoPolishResume,
+        resumeAutoPolishThreshold,
+        autoPolishCoverLetter,
+        coverLetterAutoPolishThreshold,
         citizenshipStatus,
         legallyAuthorizedToWork,
         requiresSponsorship,
@@ -67,8 +74,10 @@ export function useAiSettings() {
     stageCustomInstructions,
     runInitialFit,
     runFinalCheck,
-    autoCreateResumeProposal,
-    autoCreateCoverLetterProposal,
+    autoPolishResume,
+    resumeAutoPolishThreshold,
+    autoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -158,8 +167,10 @@ export function useAiSettings() {
     setStageCustomInstructions({});
     setRunInitialFit(true);
     setRunFinalCheck(true);
-    setAutoCreateResumeProposal(false);
-    setAutoCreateCoverLetterProposal(false);
+    setAutoPolishResume(false);
+    setResumeAutoPolishThreshold("REASONABLE");
+    setAutoPolishCoverLetter(false);
+    setCoverLetterAutoPolishThreshold("STRONG");
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork(true);
     setRequiresSponsorship(false);
@@ -178,10 +189,14 @@ export function useAiSettings() {
     setRunInitialFit,
     runFinalCheck,
     setRunFinalCheck,
-    autoCreateResumeProposal,
-    setAutoCreateResumeProposal,
-    autoCreateCoverLetterProposal,
-    setAutoCreateCoverLetterProposal,
+    autoPolishResume,
+    setAutoPolishResume,
+    resumeAutoPolishThreshold,
+    setResumeAutoPolishThreshold,
+    autoPolishCoverLetter,
+    setAutoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
+    setCoverLetterAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

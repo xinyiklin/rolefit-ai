@@ -3,6 +3,10 @@ import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts"
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
 import { normalizeAntigravityModelId } from "../../shared/antigravityModels.ts";
 import {
+  QUICK_FIT_VERDICTS,
+  type AutoPolishThreshold
+} from "../../shared/quickFitContract.ts";
+import {
   CITIZENSHIP_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
@@ -42,8 +46,10 @@ export type PersistedSettings = {
   // which is a real cost on metered providers, so it stays user-owned even
   // though it is no longer a separately operated workflow section.
   runFinalCheck?: boolean;
-  autoCreateResumeProposal?: boolean;
-  autoCreateCoverLetterProposal?: boolean;
+  autoPolishResume?: boolean;
+  resumeAutoPolishThreshold?: AutoPolishThreshold;
+  autoPolishCoverLetter?: boolean;
+  coverLetterAutoPolishThreshold?: AutoPolishThreshold;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: boolean;
   requiresSponsorship?: boolean;
@@ -71,6 +77,22 @@ export function migrateSettings(value: unknown): Record<string, unknown> {
     const model = migrated[keys.model];
     if (typeof model === "string") migrated[keys.model] = normalizeAntigravityModelId(model);
   }
+
+  // The former switches always used REASONABLE as their fixed cutoff. Carry
+  // that behavior forward exactly for existing origins, while fresh settings
+  // can use the new per-document defaults chosen by useAiSettings.
+  const legacyResume = migrated.autoCreateResumeProposal;
+  if (typeof legacyResume === "boolean") {
+    if (migrated.autoPolishResume === undefined) migrated.autoPolishResume = legacyResume;
+    if (migrated.resumeAutoPolishThreshold === undefined) migrated.resumeAutoPolishThreshold = "REASONABLE";
+  }
+  const legacyCover = migrated.autoCreateCoverLetterProposal;
+  if (typeof legacyCover === "boolean") {
+    if (migrated.autoPolishCoverLetter === undefined) migrated.autoPolishCoverLetter = legacyCover;
+    if (migrated.coverLetterAutoPolishThreshold === undefined) migrated.coverLetterAutoPolishThreshold = "REASONABLE";
+  }
+  delete migrated.autoCreateResumeProposal;
+  delete migrated.autoCreateCoverLetterProposal;
   return migrated;
 }
 
@@ -93,8 +115,10 @@ const PERSISTED_SETTING_KEYS = [
   "stageCustomInstructions",
   "runInitialFit",
   "runFinalCheck",
-  "autoCreateResumeProposal",
-  "autoCreateCoverLetterProposal",
+  "autoPolishResume",
+  "resumeAutoPolishThreshold",
+  "autoPolishCoverLetter",
+  "coverLetterAutoPolishThreshold",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -148,8 +172,12 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["runInitialFit", "runFinalCheck", "autoCreateResumeProposal", "autoCreateCoverLetterProposal"] as const) {
+  for (const key of ["runInitialFit", "runFinalCheck", "autoPolishResume", "autoPolishCoverLetter"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
+  }
+  const validAutoPolishThresholds = new Set<string>(QUICK_FIT_VERDICTS);
+  for (const key of ["resumeAutoPolishThreshold", "coverLetterAutoPolishThreshold"] as const) {
+    if (settings[key] !== undefined && !validAutoPolishThresholds.has(settings[key] as string)) delete settings[key];
   }
   // "unspecified" is the neutral default (not a selectable option), so add it
   // explicitly — the option lists carry only the concrete values.

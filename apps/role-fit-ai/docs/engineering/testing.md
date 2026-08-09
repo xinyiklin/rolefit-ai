@@ -137,17 +137,12 @@ Good server verification covers:
   release/continuity records
 - compact Initial Fit probes must prove that disabling it omits resume/context
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
-  invalid fit preserves valid job fields, the server selects up to five
-  requirements from a broad full-brief pool with responsibility/qualification
-  quotas, the provider must assess every id and may add only one, fewer than
-  three core rows cannot produce Strong or Reasonable, semantically unrelated exact excerpts are downgraded,
-  empty/unknown/malformed/undersized required bases are unavailable while explicit
-  all-`NOT_SHOWN` assessments remain valid, numeric ranges use their lower bound,
-  numeric `or more` wording is not split as an alternative, empty distinctive-token
-  sets never become adjacent, bounded tool lists and degree equivalency remain
-  alternatives, preferred qualifications cannot depress the category, contradiction requires
-  adverse evidence, the server derives all four category boundaries and
-  eligibility states, public lists cap at three, and fit-only retries omit the
+  invalid fit preserves valid job fields, the prompt contains the direct rubric
+  and stable posting-order tie break, all match/gap/eligibility anchors are exact
+  current-source excerpts, public lists cap at three and reject duplicates,
+  malformed enums or anchors fail unavailable, `BLOCKED` requires the explicit
+  conflicting candidate fact, fixed public summaries replace provider prose,
+  all four categorical threshold boundaries hold, and fit-only retries omit the
   Job analysis schema
 - resume proposal probes must keep category labels out of the target set, allow
   grounded list reordering/additions, reject category substitutions, job-only
@@ -282,20 +277,22 @@ Good frontend verification covers:
   return candidates and nothing else
 - a valid Initial Fit survives a local job-analysis fallback
   (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the compact fit
-  calibration layer has category-boundary, source-anchor, preference, years,
-  partial-survival, and eligibility adversarial probes in
+  contract has threshold-boundary, exact-source-anchor, malformed-response, fixed-
+  summary, deduplication, and eligibility adversarial probes in
   `server/ai/__evals__/quick-fit-probes.mjs`
 - `src/hooks/__evals__/quick-fit-lifecycle.mjs` executes combined-request and
   fit-only provenance, full-brief edit invalidation, cleared-resume invalidation,
+  provider/model/reasoning identity invalidation, friendly-label exclusion,
   Retry toggle restoration, and zero-provider-dispatch cases for starter-only,
   blank-origin edited, and 40-79-character stub documents
 - Initial Fit shows only verdict, selected resume, summary, up to three matches
   and gaps, and a relevant eligibility warning. It exposes no score, confidence,
   evidence ledger, quotations, recommendation, saved audit, or analytics metric
 - changing the selected resume dispatches only `mode: "initial-fit"`; disabling
-  Initial Fit sends no resume/context data. Only Strong or Reasonable without an
-  eligibility blocker can start each independently enabled proposal, while
-  manual Polish remains available for every fit state
+  Initial Fit sends no resume/context data. Resume and Cover Letter each use an
+  independent automatic Polish switch and categorical minimum-fit threshold;
+  `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
+  Polish remains available for every fit state
 - Initial Fit never derives tracker priority: explicit user priority wins,
   Interviewing/Offer may derive High, and every other record defaults Medium;
   `initialFitRank` remains available for explicit sorting

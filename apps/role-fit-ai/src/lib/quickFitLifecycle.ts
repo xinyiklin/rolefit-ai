@@ -1,6 +1,10 @@
-import type { QuickFitProvenance } from "../../shared/quickFitContract.ts";
-import { quickFitRequirementCandidatesFromPreparedJob } from "../../shared/quickFitContract.ts";
+import {
+  QUICK_FIT_PROMPT_VERSION,
+  normalizeQuickFitInput,
+  type QuickFitProvenance
+} from "../../shared/quickFitContract.ts";
 import type { InitialFitRequest } from "./aiJobAnalysis";
+import type { AiRequestFields } from "./aiRequest.ts";
 import { workflowInputFingerprint } from "./aiWorkflow";
 import { contentFingerprint } from "./contentFingerprint.ts";
 import type { PreparedResumeSelection } from "./preparedResume.ts";
@@ -19,42 +23,52 @@ export function quickFitRetryIsAvailable(
 
 function normalizedRequest(request: InitialFitRequest) {
   return {
-    resumeText: request.resumeText.trim(),
-    resumeLabel: request.resumeLabel.trim(),
-    candidateContext: (request.candidateContext ?? "").trim(),
-    requiredRequirements: (request.requiredRequirements ?? []).map((requirement) => ({
-      requirementId: requirement.requirementId.trim(),
-      sourceRequirement: requirement.sourceRequirement.trim(),
-      importance: requirement.importance,
-      kind: requirement.kind
-    }))
+    resumeText: normalizeQuickFitInput(request.resumeText),
+    candidateContext: normalizeQuickFitInput(request.candidateContext)
   };
 }
 
-// This is the exact semantic Initial Fit payload: the complete screening text
-// plus every selected-resume field sent alongside it. The prepared-brief
-// fingerprint below has a different job: it anchors what the user currently
-// sees after a combined Prepare response settles.
-export function quickFitRequestFingerprint(
-  screeningJobText: string,
-  request: InitialFitRequest
+export function quickFitRequestIdentityFingerprint(
+  aiRequest: Partial<AiRequestFields>
 ): string {
   return workflowInputFingerprint({
-    jobText: screeningJobText.trim(),
-    ...normalizedRequest(request)
+    provider: String(aiRequest.provider ?? "").trim(),
+    model: String(aiRequest.model ?? "").trim(),
+    reasoningEffort: String(aiRequest.reasoningEffort ?? "").trim(),
+    promptVersion: QUICK_FIT_PROMPT_VERSION
+  });
+}
+
+// This is the exact semantic Initial Fit payload. Friendly labels are omitted:
+// two files can share one, and renaming a file does not change the evidence.
+export function quickFitRequestFingerprint(
+  screeningJobText: string,
+  request: InitialFitRequest,
+  aiRequest: Partial<AiRequestFields>
+): string {
+  return workflowInputFingerprint({
+    jobText: normalizeQuickFitInput(screeningJobText),
+    ...normalizedRequest(request),
+    requestIdentity: quickFitRequestIdentityFingerprint(aiRequest)
   });
 }
 
 export function createQuickFitProvenance(
   screeningJobText: string,
   displayedPreparedJobText: string,
-  request: InitialFitRequest
+  request: InitialFitRequest,
+  aiRequest: Partial<AiRequestFields>
 ): QuickFitProvenance {
+  const requestFingerprint = quickFitRequestFingerprint(screeningJobText, request, aiRequest);
   return {
-    resumeFingerprint: contentFingerprint(request.resumeText),
-    candidateContextFingerprint: contentFingerprint(request.candidateContext ?? ""),
-    preparedJobFingerprint: contentFingerprint(displayedPreparedJobText),
-    inputFingerprint: quickFitRequestFingerprint(screeningJobText, request)
+    resumeFingerprint: contentFingerprint(normalizeQuickFitInput(request.resumeText)),
+    candidateContextFingerprint: contentFingerprint(normalizeQuickFitInput(request.candidateContext)),
+    preparedJobFingerprint: contentFingerprint(normalizeQuickFitInput(displayedPreparedJobText)),
+    requestIdentityFingerprint: quickFitRequestIdentityFingerprint(aiRequest),
+    inputFingerprint: workflowInputFingerprint({
+      requestFingerprint,
+      preparedJobText: normalizeQuickFitInput(displayedPreparedJobText)
+    })
   };
 }
 
@@ -62,13 +76,15 @@ export function quickFitProvenanceIsStale(
   provenance: QuickFitProvenance,
   displayedPreparedJobText: string,
   currentResume: Pick<PreparedResumeSelection, "text"> | null,
-  candidateContext: string
+  candidateContext: string,
+  aiRequest: Partial<AiRequestFields>
 ): boolean {
   if (!currentResume) return true;
   return (
-    provenance.preparedJobFingerprint !== contentFingerprint(displayedPreparedJobText)
-    || provenance.resumeFingerprint !== contentFingerprint(currentResume.text)
-    || provenance.candidateContextFingerprint !== contentFingerprint(candidateContext)
+    provenance.preparedJobFingerprint !== contentFingerprint(normalizeQuickFitInput(displayedPreparedJobText))
+    || provenance.resumeFingerprint !== contentFingerprint(normalizeQuickFitInput(currentResume.text))
+    || provenance.candidateContextFingerprint !== contentFingerprint(normalizeQuickFitInput(candidateContext))
+    || provenance.requestIdentityFingerprint !== quickFitRequestIdentityFingerprint(aiRequest)
   );
 }
 
@@ -104,8 +120,7 @@ export async function dispatchQuickFitRetry({
     {
       resumeText: selection.text,
       resumeLabel: selection.label,
-      candidateContext: candidateContext(),
-      requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(currentPreparedJob)
+      candidateContext: candidateContext()
     },
     currentPreparedJob
   );

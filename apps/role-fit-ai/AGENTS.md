@@ -52,11 +52,12 @@ own a second resume model, editor, layout engine, or PDF implementation.
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
 - Initial Fit is a compact Prepare advisory: four verdicts, one summary, up to
   three matches and gaps, and an optional eligibility warning. The provider
-  must assess up to five material server-selected requirements and may add at
-  most one more. The server validates exact posting/candidate anchors, rejects
-  semantically unrelated evidence, and derives the public category/copy from
-  that complete hidden basis. That basis has no UI or persistence contract. The
-  compact result has no score, confidence, visible ledger,
+  applies the four-category rubric directly and returns exact posting and
+  resume/candidate-context excerpts for every finding. The server performs only
+  structural, bounded, exact-excerpt, provenance, and deduplication checks, then
+  maps the verdict to fixed public summary copy. There is no hidden requirement
+  basis or server recalculation. The compact result has no score, confidence,
+  visible ledger,
   evidence quotes, recommendation, or analytics role, and never derives tracker
   priority.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
@@ -227,15 +228,15 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - When enabled, Initial Fit shares Prepare's normal Job analysis provider
   dispatch and independently sanitizes its subsection — in both directions: a
   local job-analysis fallback never discards a valid screening. Changing the
-  selected resume reruns only compact Initial Fit. A fit's provenance is a
-  CONTENT fingerprint of the resume and posting actually screened, never a
-  friendly label: labels collide, editing never changes one, and a re-prepared
-  posting keeps the old one. `BLOCKED` requires an explicit posting restriction
-  plus explicit adverse candidate context; unknown or ambiguous status is
-  `CHECK`. The fixed auto-proposal rule admits only Strong or Reasonable with no
-  eligibility blocker AND unchanged fit
-  inputs; Resume and Cover Letter
-  toggles are independent, default off, and never disable manual Polish.
+  selected resume reruns only compact Initial Fit. A fit's provenance covers
+  the normalized posting, prepared brief, resume, candidate context,
+  provider/model/reasoning configuration, and prompt version, never a friendly
+  label. An unchanged ready result is reused; rerun only after those inputs
+  change or a prior fit fails. `BLOCKED` requires an explicit posting restriction
+  plus an exact conflicting candidate-context fact; unknown or ambiguous status
+  is `CHECK`. Resume and Cover Letter automation switches and minimum verdict
+  thresholds are independent and default off; only `BLOCKED` stops an otherwise
+  eligible threshold match, and manual Polish remains available.
   Retry is offered whenever a preparation exists to retry — including when no
   resume resolved, the state that most needs recovery and has no label.
 - Reuse `AiWorkflowProgress` for retryable AI operations and existing

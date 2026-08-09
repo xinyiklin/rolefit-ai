@@ -424,9 +424,10 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   incomplete read keeps the current selection and shows no recommendation.
   The selector is the normal receipt; show one compact recommendation line only
   when unsaved work blocks replacement. Neither comparison needs persisted
-  variant metadata. Resume and Cover Letter auto-proposal settings are
-  independent; only Strong or Reasonable without an eligibility blocker may
-  start them, and manual Polish remains available in every state.
+  variant metadata. Resume and Cover Letter automatic Polish switches and
+  minimum-fit selects are independent. Each uses Strong, Reasonable, Stretch,
+  or Limited as a categorical cutoff; `CHECK` may proceed and only `BLOCKED`
+  stops an eligible run. Manual Polish remains available in every state.
 - **Apply:** the page and masthead invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.

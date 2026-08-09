@@ -236,27 +236,24 @@ owns:
   provider after publishing the deterministic local brief. When the request
   fails, that local brief remains editable and manual Polish stays available.
   If Initial Fit is enabled and a selected resume is usable, the same provider
-  dispatch requests an independent `initialFit` subsection. The server first
-  receives a broad pool from the full prepared job, then selects up to five
-  authoritative requirements with at least two responsibilities when available
-  and no more than three qualifications. The provider must assess every supplied
-  id and may add at most one other material
-  requirement. Each assessment carries an exact posting excerpt and, for
-  covered/contradicted rows, an exact resume or candidate-context excerpt.
-  `quickFit.ts` validates those anchors and their semantic relationship,
-  parses years/ranges before bounded alternatives, and counts valid required ids
-  before filling omissions. Zero valid ids or fewer than half the required rows
-  makes the fit unavailable; explicit `NOT_SHOWN` rows count as valid assessments,
-  and omissions after quorum are injected conservatively. It normalizes preferred
-  qualifications to supporting, and derives the
-  public category, summary, matches, gaps, and eligibility. Strong and Reasonable
-  require at least three core rows. The client fingerprints the exact complete
-  screening payload. A separate settled baseline fingerprints the complete
-  displayed prepared brief, exact authoritative resume, and candidate context,
-  so the final AI brief does not invalidate its own combined request while any
-  later full-brief/resume/context change derives an out-of-date state and blocks
-  automation and Apply persistence until a fresh fit-only check settles. The hidden basis is
-  never returned to the client or persisted. The two subsections are sanitized
+  dispatch requests an independent `initialFit` subsection. The provider applies
+  the four-category rubric directly and returns up to three matches with exact
+  posting plus resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps
+  with exact posting excerpts, and at most one eligibility result. `quickFit.ts`
+  performs only structural, enum, length/count, deduplication, and exact current-
+  source validation. It accepts the provider verdict without a semantic
+  recalculation and maps it to fixed public summary copy; an unusable response is
+  unavailable rather than guessed. `CHECK` requires an exact posting condition;
+  `BLOCKED` additionally requires an exact conflicting candidate-context fact.
+  Eligibility does not change the verdict.
+
+  The client fingerprints normalized posting, resume, candidate context,
+  provider, model, reasoning effort, and prompt version. A separate settled
+  baseline fingerprints the complete displayed prepared brief, so the final AI
+  brief does not invalidate its own combined request while a later relevant
+  change derives an out-of-date state. An unchanged successful result is reused;
+  only changed inputs/settings/prompt or a previous failure dispatches again.
+  The two subsections are sanitized
   independently in BOTH directions: the server preserves valid job
   fields when fit is absent or invalid, and the client preserves a valid fit when
   the job half falls back to the deterministic local brief. Discarding one half
@@ -400,17 +397,12 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   inferred fact (e.g. "clinics run Windows") into the resume.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used by the
   job analyzer's `workAuth` grounding. It does not select a fit verdict.
-- `quickFit.ts` `calibrateQuickFit` — the compact hidden calibration layer, not
-  a restored visible evidence ledger or numeric scorer. It accepts at most six
-  requirement rows, validates tightly normalized posting/candidate excerpts,
-  treats absence as `NOT_SHOWN`, recognizes explicit adverse contradictions
-  such as a lower years total, and derives Strong / Reasonable / Stretch /
-  Limited from core coverage only. Supporting preferences may appear in public
-  matches/gaps but cannot depress the category. Eligibility is derived separately:
-  `BLOCKED` requires both an explicit posting restriction and explicit adverse
-  candidate context, unknown/ambiguous status becomes `CHECK`, and no relevant
-  condition produces no eligibility object. The model's verdict, summary, and
-  eligibility prose are never accepted because the model no longer returns them.
+- `quickFit.ts` — the direct four-category Initial Fit prompt and mechanical
+  validation boundary. It has no requirement selection, coverage classes,
+  semantic relation engine, years/degree parser, broad eligibility regex, or
+  server-derived verdict. Exact excerpts must exist in the same normalized and
+  clipped sources the provider received. The accepted verdict maps to fixed
+  summary copy; model summary text is not part of the contract.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, and field of

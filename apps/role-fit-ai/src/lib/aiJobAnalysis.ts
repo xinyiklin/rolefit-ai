@@ -19,7 +19,6 @@ import type { StageAiUsage } from "./aiUsage";
 import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
 import {
   sanitizeQuickFit,
-  type QuickFitRequirementCandidate,
   type QuickFitResult
 } from "../../shared/quickFitContract.ts";
 
@@ -123,7 +122,6 @@ export type InitialFitRequest = {
   resumeText: string;
   resumeLabel: string;
   candidateContext?: string;
-  requiredRequirements?: QuickFitRequirementCandidate[];
 };
 
 export function localJobAnalysisResult(
@@ -304,7 +302,15 @@ export async function analyzeJobPosting(
         text,
         url,
         ...(aiRequest ?? {}),
-        ...(initialFitRequested ? { initialFit: { enabled: true, ...initialFit } } : {})
+        ...(initialFitRequested
+          ? {
+              initialFit: {
+                enabled: true,
+                resumeText: initialFit?.resumeText,
+                candidateContext: initialFit?.candidateContext
+              }
+            }
+          : {})
       }),
       signal
     });
@@ -348,9 +354,7 @@ export async function analyzeInitialFit(
         text,
         mode: "initial-fit",
         resumeText: request.resumeText,
-        resumeLabel: request.resumeLabel,
         candidateContext: request.candidateContext,
-        requiredRequirements: request.requiredRequirements,
         ...(options.aiRequest ?? {})
       }),
       signal: options.signal

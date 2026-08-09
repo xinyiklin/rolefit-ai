@@ -173,9 +173,11 @@ browser-side effects; components render them and App composes them.
   and that stage's AI settings. The selected resume is captured immediately
   before dispatch; later resume changes use the fit-only request instead of
   cancelling or repeating Job analysis.
-- Initial Fit automation is fixed, not threshold-configurable: only Strong or
-  Reasonable with no eligibility blocker may start the independently enabled
-  Resume and Cover Letter proposals. Both toggles default off and manual Polish
-  remains available for every verdict and fit failure.
+- Initial Fit automation has independent Resume and Cover Letter switches plus
+  categorical minimum verdict thresholds. Both switches default off; Resume
+  defaults to Reasonable or better and Cover Letter to Strong only. `CHECK`
+  remains eligible, only `BLOCKED` stops automatic Polish, and manual Polish
+  remains available for every verdict and fit failure. Reuse an unchanged ready
+  fit instead of dispatching another provider request.
 - Add a focused eval for durable sequencing, identity, or state-transition
   rules that can be tested without React/browser orchestration.

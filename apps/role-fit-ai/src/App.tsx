@@ -99,8 +99,7 @@ import { currentResumeSelection } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
 import {
-  quickFitAllowsAutoProposal,
-  quickFitRequirementCandidatesFromPreparedJob
+  quickFitMeetsThreshold
 } from "../shared/quickFitContract.ts";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
@@ -358,10 +357,14 @@ function App() {
     setRunInitialFit,
     runFinalCheck,
     setRunFinalCheck,
-    autoCreateResumeProposal,
-    setAutoCreateResumeProposal,
-    autoCreateCoverLetterProposal,
-    setAutoCreateCoverLetterProposal,
+    autoPolishResume,
+    setAutoPolishResume,
+    resumeAutoPolishThreshold,
+    setResumeAutoPolishThreshold,
+    autoPolishCoverLetter,
+    setAutoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
+    setCoverLetterAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -1475,8 +1478,7 @@ function App() {
             {
               resumeText: loaded.text,
               resumeLabel: loaded.label,
-              candidateContext: requestHonestContext,
-              requiredRequirements: quickFitRequirementCandidatesFromPreparedJob(jobDescription)
+              candidateContext: requestHonestContext
             }
           );
         }
@@ -1697,18 +1699,19 @@ function App() {
     if (quickFitState.status !== "ready") return;
     const { result: fit } = quickFitState.snapshot;
     const { provenance } = quickFitState;
-    if (!quickFitAllowsAutoProposal(fit)) return;
+    if (fit.eligibility?.status === "BLOCKED") return;
     const key = JSON.stringify({
       input: provenance.inputFingerprint,
       verdict: fit.verdict,
-      summary: fit.summary
+      eligibility: fit.eligibility?.status ?? "CLEAR"
     });
     if (autoProposalFitRef.current.key !== key) {
       autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
     }
     const receipt = autoProposalFitRef.current;
     const canStartResume =
-      autoCreateResumeProposal &&
+      autoPolishResume &&
+      quickFitMeetsThreshold(fit.verdict, resumeAutoPolishThreshold) &&
       jobPrepared &&
       canPolish &&
       !isPolishing &&
@@ -1721,7 +1724,8 @@ function App() {
     }
 
     const canStartCover =
-      autoCreateCoverLetterProposal &&
+      autoPolishCoverLetter &&
+      quickFitMeetsThreshold(fit.verdict, coverLetterAutoPolishThreshold) &&
       coverLetterPreflight.canTailor &&
       resumeReady &&
       jobPrepared &&
@@ -1734,10 +1738,11 @@ function App() {
       void handleCoverLetterPolish();
     }
   }, [
-    autoCreateCoverLetterProposal,
-    autoCreateResumeProposal,
+    autoPolishCoverLetter,
+    autoPolishResume,
     canPolish,
     coverLetterPreflight.canTailor,
+    coverLetterAutoPolishThreshold,
     coverProviderReady,
     currentResumeText,
     handlePolish,
@@ -1754,6 +1759,7 @@ function App() {
     jobPrepared,
     jobRawText,
     quickFitState,
+    resumeAutoPolishThreshold,
     resumeReady,
     resumeText
   ]);
@@ -2896,10 +2902,14 @@ function App() {
           runFinalCheck={runFinalCheck}
           onRunFinalCheckChange={setRunFinalCheck}
           onRunInitialFitChange={setRunInitialFit}
-          autoCreateResumeProposal={autoCreateResumeProposal}
-          onAutoCreateResumeProposalChange={setAutoCreateResumeProposal}
-          autoCreateCoverLetterProposal={autoCreateCoverLetterProposal}
-          onAutoCreateCoverLetterProposalChange={setAutoCreateCoverLetterProposal}
+          autoPolishResume={autoPolishResume}
+          onAutoPolishResumeChange={setAutoPolishResume}
+          resumeAutoPolishThreshold={resumeAutoPolishThreshold}
+          onResumeAutoPolishThresholdChange={setResumeAutoPolishThreshold}
+          autoPolishCoverLetter={autoPolishCoverLetter}
+          onAutoPolishCoverLetterChange={setAutoPolishCoverLetter}
+          coverLetterAutoPolishThreshold={coverLetterAutoPolishThreshold}
+          onCoverLetterAutoPolishThresholdChange={setCoverLetterAutoPolishThreshold}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}

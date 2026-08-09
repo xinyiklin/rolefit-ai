@@ -109,9 +109,10 @@ document schema for this decision.
 When enabled, Initial Fit is an optional subsection of the same normal Prepare
 provider dispatch and sanitizes independently from Job analysis. A resume change
 reruns only Initial Fit. Settings exposes one Initial Fit toggle, default on,
-plus independent Resume and Cover Letter proposal toggles, default off. Only
-Strong or Reasonable without an eligibility blocker may auto-start an enabled
-proposal; manual Polish remains available for every outcome.
+plus independent Resume and Cover Letter automatic Polish switches and minimum-
+fit selects. Both switches default off; Resume defaults to Reasonable or better
+and Cover Letter to Strong only. `CHECK` may auto-start an eligible document,
+only `BLOCKED` stops it, and manual Polish remains available for every outcome.
 
 A material's state line reports the real reason it is not ready. A saved base
 letter is a template: real prose plus unresolved `[slots]` that Polish fills.
@@ -409,8 +410,9 @@ Never show:
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
 - Settings places the compact Initial Fit toggle and the two independent
-  proposal toggles beside the stage configuration. It does not expose scores,
-  confidence thresholds, verdict cutoffs, or a master automation switch.
+  automatic Polish switch/minimum-fit pairs beside the stage configuration. It
+  exposes categorical verdict cutoffs, not scores, confidence thresholds, or a
+  master automation switch.
 - Keep every stage section expanded together. There is no section toggle,
   collapsed summary, or persisted open/collapse preference; the user can scan
   and edit all stage configurations without changing view state.
