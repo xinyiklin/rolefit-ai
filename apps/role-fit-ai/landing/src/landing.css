@@ -573,10 +573,6 @@ section[id] {
   grid-column: auto;
 }
 
-.surface-card--tracker {
-  grid-column: auto;
-}
-
 .surface-card__copy {
   padding: 25px 26px 24px;
 }
@@ -600,10 +596,6 @@ section[id] {
   margin: 0 14px 14px;
   border-radius: 7px;
   box-shadow: none;
-}
-
-.surface-card--tracker .app-frame img {
-  width: 100%;
 }
 
 .job-loop {
@@ -1084,8 +1076,7 @@ p.download-row__format {
     max-width: 21ch;
   }
 
-  .surface-card--editor,
-  .surface-card--tracker {
+  .surface-card--editor {
     grid-column: 1 / -1;
   }
 
@@ -1095,10 +1086,6 @@ p.download-row__format {
 
   .cover-feature__copy h3 {
     max-width: 20ch;
-  }
-
-  .surface-card--tracker .app-frame img {
-    width: 100%;
   }
 
   .job-loop {

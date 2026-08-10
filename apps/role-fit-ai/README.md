@@ -13,10 +13,18 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.6.0** (preview).
+Current desktop source version: **0.7.0** (preview).
 
 The default workflow is Prepare → Assess fit → Polish → Apply. Reassess fit at
 any time after preparation without repeating Job analysis.
+
+**Prepare** keeps the editable job brief beside one application rail: both
+material cards, the fit assessment, readiness, and Apply.
+
+![RoleFit AI prepare workspace](docs/prepare.png)
+
+The **resume editor** is the export page itself, with the document workflow
+rail beside it:
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
 

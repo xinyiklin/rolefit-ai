@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "note": "Screenshots whose pixels contain the RoleFit version. The page also renders the live release version from GitHub, so a stale stamp contradicts the same page. Retake the image and update its version here in the same change as a version bump; the release contract fails otherwise.",
+  "versionStamped": {
+    "public/assets/desktop-app.png": "0.7.0"
+  }
+}

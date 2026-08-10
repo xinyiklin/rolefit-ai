@@ -14,6 +14,7 @@ import {
 } from "./desktop-release-assets.mjs";
 import {
   assertRolefitReleaseVersion,
+  assertScreenshotVersionStamps,
   parseRolefitPreviewTag,
   parseRolefitReleaseTag,
   validateRolefitPreviewRef,
@@ -28,9 +29,11 @@ import {
 } from "../desktop/runtime-versions.mjs";
 
 const VERSION = "0.1.0";
-const RELEASE_VERSION = "0.6.0";
-const EXTENSION_VERSION = "1.1.0";
-const RELEASED_DESKTOP_API_VERSION = 12;
+const RELEASE_VERSION = "0.7.0";
+const EXTENSION_VERSION = "1.2.0";
+// 0.6.0 shipped API 12 while the source had already moved to 13. This release
+// publishes that 13, so the released and current API are the same number again.
+const RELEASED_DESKTOP_API_VERSION = 13;
 const CURRENT_DESKTOP_API_VERSION = 13;
 const PREVIEW_LABEL = "beta.1";
 const PREVIEW_TAG = `rolefit-preview-v${RELEASE_VERSION}-${PREVIEW_LABEL}`;
@@ -50,7 +53,7 @@ function readDesktopApiVersion() {
   return Number(match[1]);
 }
 
-test("0.6.0 beta.1 release tuple stays frozen while the current desktop API advances", () => {
+test("0.7.0 beta.1 release tuple stays frozen and publishes the current desktop API", () => {
   const appPackage = readJson(new URL("../package.json", import.meta.url));
   const extensionManifest = readJson(new URL("../extension/manifest.json", import.meta.url));
   const releaseNotes = readFileSync(
@@ -72,6 +75,78 @@ test("0.6.0 beta.1 release tuple stays frozen while the current desktop API adva
     ),
     "release notes must state the extension and desktop API mapping",
   );
+});
+
+async function makeScreenshotFixture(manifest, { imageName = "public/assets/desktop-app.png" } = {}) {
+  const root = await mkdtemp(join(tmpdir(), "rolefit-screenshot-manifest-"));
+  const landing = join(root, "apps", "role-fit-ai", "landing");
+  await mkdir(join(landing, "public", "assets"), { recursive: true });
+  await writeFile(
+    join(root, "apps", "role-fit-ai", "package.json"),
+    JSON.stringify({ name: "role-fit-ai", version: RELEASE_VERSION }),
+    "utf8",
+  );
+  if (imageName) await writeFile(join(landing, imageName), "png\n", "utf8");
+  await writeFile(join(landing, "screenshot-manifest.json"), JSON.stringify(manifest), "utf8");
+  return root;
+}
+
+test("version-stamped screenshots must be recaptured when the package version moves", async () => {
+  const committed = assertScreenshotVersionStamps();
+  const appPackage = readJson(new URL("../package.json", import.meta.url));
+  assert.ok(committed.length > 0, "the manifest must claim at least one version-stamped image");
+  for (const { capturedVersion } of committed) {
+    assert.equal(capturedVersion, appPackage.version);
+  }
+  assert.ok(
+    committed.some((entry) => entry.imagePath === "public/assets/desktop-app.png"),
+    "the companion screenshot prints the version in its footer and must stay covered",
+  );
+
+  const valid = await makeScreenshotFixture({
+    schemaVersion: 1,
+    versionStamped: { "public/assets/desktop-app.png": RELEASE_VERSION },
+  });
+  const stale = await makeScreenshotFixture({
+    schemaVersion: 1,
+    versionStamped: { "public/assets/desktop-app.png": "0.5.0" },
+  });
+  const missing = await makeScreenshotFixture(
+    { schemaVersion: 1, versionStamped: { "public/assets/desktop-app.png": RELEASE_VERSION } },
+    { imageName: null },
+  );
+  const unknownKey = await makeScreenshotFixture({
+    schemaVersion: 1,
+    unexpected: true,
+    versionStamped: { "public/assets/desktop-app.png": RELEASE_VERSION },
+  });
+  const escaping = await makeScreenshotFixture({
+    schemaVersion: 1,
+    versionStamped: { "../../../secrets.png": RELEASE_VERSION },
+  });
+  const empty = await makeScreenshotFixture({ schemaVersion: 1, versionStamped: {} });
+  const futureSchema = await makeScreenshotFixture({
+    schemaVersion: 2,
+    versionStamped: { "public/assets/desktop-app.png": RELEASE_VERSION },
+  });
+
+  try {
+    assert.deepEqual(assertScreenshotVersionStamps(valid), [
+      { imagePath: "public/assets/desktop-app.png", capturedVersion: RELEASE_VERSION },
+    ]);
+    assert.throws(() => assertScreenshotVersionStamps(stale), /retake the screenshot/);
+    assert.throws(() => assertScreenshotVersionStamps(missing), /not a file under landing\//);
+    assert.throws(() => assertScreenshotVersionStamps(unknownKey), /only schemaVersion, note, and versionStamped/);
+    assert.throws(() => assertScreenshotVersionStamps(escaping), /relative to the landing directory/);
+    assert.throws(() => assertScreenshotVersionStamps(empty), /at least one version-stamped image/);
+    assert.throws(() => assertScreenshotVersionStamps(futureSchema), /schemaVersion must be 1/);
+  } finally {
+    await Promise.all(
+      [valid, stale, missing, unknownKey, escaping, empty, futureSchema].map((root) =>
+        rm(root, { recursive: true, force: true }),
+      ),
+    );
+  }
 });
 
 test("desktop runtime tuple matches the release manifest and rejects drift", () => {

@@ -16,11 +16,14 @@ const textExtensions = new Set([
 // file-level exemption. Adding even one stale mention requires a reviewed edit
 // here, while deleting a rejection probe or historical receipt removes its row.
 const expectedCounts = new Map([
-  ["CONTINUITY.md", 4],
+  ["CONTINUITY.md", 5],
   ["apps/role-fit-ai/__evals__/extension-popup-contract.mjs", 1],
   ["apps/role-fit-ai/docs/engineering/ai-server.md", 1],
   ["apps/role-fit-ai/docs/engineering/testing.md", 1],
   ["apps/role-fit-ai/docs/releases/0.5.0-beta.11.md", 1],
+  // 0.7.0 is the release that renamed the stage, so its notes name the old
+  // term once for readers upgrading from an earlier preview.
+  ["apps/role-fit-ai/docs/releases/0.7.0-beta.1.md", 1],
   ["apps/role-fit-ai/server/ai/__evals__/job-analysis-route-contract.mjs", 4],
   ["apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs", 1],
   ["apps/role-fit-ai/src/lib/__evals__/stage-settings-eval.mjs", 4],
