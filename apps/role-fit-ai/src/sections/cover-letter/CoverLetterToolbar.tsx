@@ -81,6 +81,10 @@ export function CoverLetterToolbar({
   const { confirm } = useDialog();
   // The PDF rename prompt is opened from the Save menu's PDF row.
   const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
+  const workspaceMutationPending =
+    editor.isWorkspaceSaving || editor.isWorkspaceReplacing;
+  const workspaceSaveDisabled =
+    workspaceMutationPending || editor.isWorkspaceBootstrapping;
 
   async function confirmReplace(): Promise<boolean> {
     if (!editor.recoveryDirty) return true;
@@ -161,7 +165,7 @@ export function CoverLetterToolbar({
             <DocumentOpenMenu
               tooltip="Open a cover letter"
               icon={<FolderOpen size={16} />}
-              disabled={editor.isWorkspaceReplacing}
+              disabled={workspaceMutationPending}
               title="Open cover letter"
               description={
                 editor.activeCoverLabel
@@ -235,7 +239,10 @@ export function CoverLetterToolbar({
                 description: editor.activeCoverFileName
                   ? "The version it replaces goes to history."
                   : "Opens automatically next time.",
-                onSelect: () => editor.saveToWorkspace()
+                disabled: workspaceSaveDisabled,
+                onSelect: async () => {
+                  await editor.saveToWorkspace();
+                }
               }}
               variant={{
                 fieldId: "cover-letter-variant-name",
@@ -243,9 +250,15 @@ export function CoverLetterToolbar({
                 placeholder: "e.g. Backend SDE",
                 fileNameFor: coverLetterVariantFileName,
                 existingNames: editor.coverLetterOptions.map((option) => option.fileName),
-                onSave: (fileName) => editor.saveToWorkspace({ fileName })
+                disabled: workspaceSaveDisabled,
+                onSave: async (fileName) => {
+                  await editor.saveToWorkspace({ fileName });
+                }
               }}
-              applicationSync={applicationSync}
+              applicationSync={{
+                ...applicationSync,
+                disabled: applicationSync.disabled || workspaceMutationPending
+              }}
               actions={[
                 {
                   key: "cover",

@@ -8,6 +8,7 @@ import {
 } from "react";
 
 import { coverLetterDocumentVersion } from "../lib/coverLetterWorkspaceOwnership.ts";
+import { createCoverLetterPersistenceBaselineOwnership } from "../lib/coverLetterPersistenceBaseline.ts";
 import { coverLetterRecoveryDirty } from "../lib/coverLetterRecovery.ts";
 
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
@@ -29,6 +30,13 @@ export function useCoverLetterDocumentIdentity(
     useState(documentTitle);
   const [persistedFingerprint, setPersistedFingerprint] =
     useState<string | null>(initialFingerprint);
+  const persistenceBaselineOwnershipRef = useRef<
+    ReturnType<typeof createCoverLetterPersistenceBaselineOwnership> | null
+  >(null);
+  if (persistenceBaselineOwnershipRef.current === null) {
+    persistenceBaselineOwnershipRef.current =
+      createCoverLetterPersistenceBaselineOwnership();
+  }
   const currentFingerprintRef = useRef(currentFingerprint);
   currentFingerprintRef.current = currentFingerprint;
   const documentTitleRef = useRef(documentTitle);
@@ -59,8 +67,34 @@ export function useCoverLetterDocumentIdentity(
 
   const commitPersistenceBaseline = useCallback(
     (fingerprint: string, title = documentTitleRef.current) => {
+      persistenceBaselineOwnershipRef.current?.commit();
       setPersistedFingerprint(fingerprint);
       setPersistedDocumentTitle(title.trim() || "Cover letter");
+    },
+    []
+  );
+
+  const capturePersistenceBaselineRevision = useCallback(
+    () => persistenceBaselineOwnershipRef.current?.capture() ?? 0,
+    []
+  );
+
+  const commitPersistenceBaselineIfUnchanged = useCallback(
+    (
+      expectedRevision: number,
+      fingerprint: string,
+      title = documentTitleRef.current
+    ): boolean => {
+      if (
+        !persistenceBaselineOwnershipRef.current?.commitIfUnchanged(
+          expectedRevision
+        )
+      ) {
+        return false;
+      }
+      setPersistedFingerprint(fingerprint);
+      setPersistedDocumentTitle(title.trim() || "Cover letter");
+      return true;
     },
     []
   );
@@ -81,6 +115,8 @@ export function useCoverLetterDocumentIdentity(
     dirty: documentDirty,
     recoveryDirty,
     commitPersistenceBaseline,
+    capturePersistenceBaselineRevision,
+    commitPersistenceBaselineIfUnchanged,
     documentTitleRef,
     documentVersion,
     documentVersionRef

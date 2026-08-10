@@ -131,6 +131,7 @@ console.log("cover-letter workspace replacement ownership: PASS");
     payload: payloadV1,
     documentTitle: title,
     documentVersion: current.documentVersion,
+    persistenceBaselineRevision: 0,
     sourceRevision: current.sourceRevision,
     activeFileName: current.activeFileName,
     intendedFileName: current.activeFileName
@@ -176,6 +177,7 @@ console.log("cover-letter workspace replacement ownership: PASS");
     payload: "variant A",
     documentTitle: "A",
     documentVersion: current.documentVersion,
+    persistenceBaselineRevision: 0,
     sourceRevision: current.sourceRevision,
     activeFileName: current.activeFileName,
     intendedFileName: current.activeFileName
@@ -208,6 +210,7 @@ console.log("cover-letter workspace replacement ownership: PASS");
     payload: "same payload",
     documentTitle: "Same title",
     documentVersion: current.documentVersion,
+    persistenceBaselineRevision: 0,
     sourceRevision: current.sourceRevision,
     activeFileName: current.activeFileName,
     intendedFileName: current.activeFileName
@@ -216,6 +219,7 @@ console.log("cover-letter workspace replacement ownership: PASS");
     payload: "same payload",
     documentTitle: "Same title",
     documentVersion: current.documentVersion,
+    persistenceBaselineRevision: 0,
     sourceRevision: current.sourceRevision,
     activeFileName: current.activeFileName,
     intendedFileName: "newer.cover"

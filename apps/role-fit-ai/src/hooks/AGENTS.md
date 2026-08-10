@@ -119,9 +119,14 @@ browser-side effects; components render them and App composes them.
   lifecycle to `useCoverLetterPreTailorSnapshot`. Saved opens and history
   restores claim one shared replacement generation after confirmation and may
   adopt only while the exact serialized document + title is unchanged. A
-  workspace save captures its payload, title, source revision, active variant,
-  intended target, and operation id; only that exact live identity may become
-  clean, clear recovery, or rebind the active variant. History, editing, layout,
+  workspace save captures its payload, title, baseline revision, source revision,
+  active variant, intended target, and operation id. Workspace saves are
+  invocation-order queued; all workspace mutations expose one pending boundary
+  to conflicting save/open actions and evaluate ownership before publishing
+  options/history/candidate revision. Only the exact live identity may become
+  clean, clear recovery, or rebind the active variant; an older same-document
+  completion may advance the baseline only if no newer persistence route has
+  already advanced it. History, editing, layout,
   and PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
   preflight inputs, the single tailoring request, stale-response invalidation,
   one typed blocked-failure state, and one fingerprinted whole-document proposal

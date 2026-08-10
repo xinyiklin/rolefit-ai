@@ -42,10 +42,20 @@ bounded; app-only operational detail belongs in the affected app documentation.
   draft, mark newer edits clean, or rebind another opened letter. One exported
   title-inclusive recovery-dirty value now owns unload protection, recovery
   restore/dismissal, replacement guards, and save-status rendering. Deferred
-  reversed-response and edit-during-request probes pass. Under pinned Node 24,
-  the production and landing builds, desktop/security contracts, and all 90
-  offline evaluations pass. No layout changed; browser interaction QA remains
-  UNCONFIRMED under the flag-first policy.
+  reversed-response and edit-during-request probes pass. Final merge review
+  found two remaining cross-route races: a superseded save could publish its
+  workspace snapshot before ownership evaluation, and a delayed workspace P1
+  acknowledgment could roll the persistence baseline back after an application
+  save committed P2. Workspace saves now run through an invocation-order queue,
+  all workspace mutations share a visible pending boundary, ownership is
+  evaluated before snapshot publication, and a shared monotonic baseline
+  revision rejects older acknowledgments. Deferred reverse-response and P1/P2
+  application-save probes cover options, history, candidate revision, active
+  identity, status, baseline,
+  and recovery state. Under pinned Node 24, dependency/package-script contracts,
+  every workspace check, the production and landing builds, desktop/security
+  contracts, and all 91 offline evaluations pass. No layout changed; browser
+  interaction QA remains UNCONFIRMED under the flag-first policy.
 
 ## 2026-08-09
 

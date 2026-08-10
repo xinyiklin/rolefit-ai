@@ -44,6 +44,7 @@ import {
   renderCoverLetterPdfBytes
 } from "../lib/coverLetterExport.ts";
 import {
+  applyCoverLetterSaveCompletion,
   coverLetterDocumentVersion,
   createCoverLetterReplacementOwnership,
   createCoverLetterSaveOwnership
@@ -138,11 +139,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   if (workspaceSaveOwnershipRef.current === null) {
     workspaceSaveOwnershipRef.current = createCoverLetterSaveOwnership();
   }
+  const workspaceSaveQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const workspaceSavePendingCountRef = useRef(0);
   const workspaceReplacementCountRef = useRef(0);
   // One-shot readiness for the initial options read and optional saved-letter
   // adoption. An explicit user open resolves startup ownership immediately.
   const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
   const [isWorkspaceReplacing, setIsWorkspaceReplacing] = useState(false);
+  const [isWorkspaceSaving, setIsWorkspaceSaving] = useState(false);
   const styleRef = useRef(style);
   styleRef.current = style;
   const text = useMemo(
@@ -163,6 +167,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     dirty,
     recoveryDirty,
     commitPersistenceBaseline,
+    capturePersistenceBaselineRevision,
+    commitPersistenceBaselineIfUnchanged,
     documentTitleRef,
     documentVersion,
     documentVersionRef
@@ -548,10 +554,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // Write the current letter into the workspace, either over the active file or
   // as a new named variant. The server archives whatever it replaces.
   const saveToWorkspace = useCallback(
-    async (target?: { fileName?: string; variant?: string }) => {
+    async (target?: { fileName?: string; variant?: string }): Promise<boolean> => {
       if (!editor.editedResume) {
         setStatus("Open or start a cover letter before saving.");
-        return;
+        return false;
+      }
+      if (workspaceReplacementCountRef.current > 0 || isWorkspaceBootstrapping) {
+        setStatus("Wait for the workspace cover letter to finish loading.");
+        return false;
       }
       const payload = serializeCoverLetterFile(
         editor.editedResume,
@@ -559,67 +569,126 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       );
       const titleAtSaveStart = documentTitleRef.current;
       const activeFileNameAtSaveStart = activeCoverFileNameRef.current;
+      const sourceRevisionAtSaveStart = sourceRevisionRef.current;
       const intendedFileName =
         target?.fileName ?? (target?.variant ? "" : activeFileNameAtSaveStart);
-      const saveOwnership = workspaceSaveOwnershipRef.current;
-      if (!saveOwnership) return;
-      const saveClaim = saveOwnership.claim({
-        payload,
-        documentTitle: titleAtSaveStart,
-        documentVersion: coverLetterDocumentVersion(payload, titleAtSaveStart),
-        sourceRevision: sourceRevisionRef.current,
-        activeFileName: activeFileNameAtSaveStart,
-        intendedFileName
-      });
-      try {
-        // `variant` is a LABEL the server slugs; `fileName` is already validated
-        // workspace identity. Keeping that distinction here prevents an update
-        // from being re-slugged as a new doubly-prefixed variant.
-        const data = await saveCoverLetterWorkspace(payload, {
-          fileName: intendedFileName || undefined,
-          variant: target?.variant
+      workspaceSavePendingCountRef.current += 1;
+      setIsWorkspaceSaving(true);
+      let refreshAfterQueueSettles = false;
+
+      const runSave = async (): Promise<boolean> => {
+        const saveOwnership = workspaceSaveOwnershipRef.current;
+        if (!saveOwnership) return false;
+        // Claims are created when the queued mutation is dispatched, so the
+        // server receives saves in invocation order and each response owns its
+        // publication window until the next queued mutation begins.
+        const persistenceBaselineRevision = capturePersistenceBaselineRevision();
+        const saveClaim = saveOwnership.claim({
+          payload,
+          documentTitle: titleAtSaveStart,
+          documentVersion: coverLetterDocumentVersion(payload, titleAtSaveStart),
+          persistenceBaselineRevision,
+          sourceRevision: sourceRevisionAtSaveStart,
+          activeFileName: activeFileNameAtSaveStart,
+          intendedFileName
         });
-        adoptCoverWorkspaceSnapshot(data);
-        const completion = saveOwnership.evaluate(saveClaim, {
+        const currentSaveIdentity = () => ({
           documentVersion: documentVersionRef.current,
           sourceRevision: sourceRevisionRef.current,
           activeFileName: activeCoverFileNameRef.current
         });
-        if (completion === "current") {
-          if (data.fileName) {
-            setActiveCoverFileName(data.fileName);
-            saveLastCoverLetterName(data.fileName);
+
+        try {
+          // `variant` is a LABEL the server slugs; `fileName` is already validated
+          // workspace identity. Keeping that distinction here prevents an update
+          // from being re-slugged as a new doubly-prefixed variant.
+          const data = await saveCoverLetterWorkspace(payload, {
+            fileName: intendedFileName || undefined,
+            variant: target?.variant
+          });
+          const completion = saveOwnership.evaluate(
+            saveClaim,
+            currentSaveIdentity()
+          );
+          if (completion === "superseded") {
+            refreshAfterQueueSettles = true;
+            return false;
           }
-          editor.markClean();
-          commitPersistenceBaseline(payload, titleAtSaveStart);
-          clearCoverLetterAutosaveDraft();
-          setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
-        } else if (completion === "document-changed") {
-          // The response made the dispatched bytes durable, but not the newer
-          // live edit. Baseline only this same document and retain its recovery.
-          commitPersistenceBaseline(payload, titleAtSaveStart);
-          setStatus("Earlier version saved; current changes remain unsaved.");
-        } else if (completion === "document-replaced") {
-          setStatus("Earlier version saved; the current cover letter was kept.");
+          applyCoverLetterSaveCompletion({
+            completion,
+            claim: saveClaim,
+            snapshot: data,
+            effects: {
+              publishSnapshot: adoptCoverWorkspaceSnapshot,
+              bindActiveFile: (fileName) => {
+                setActiveCoverFileName(fileName);
+                saveLastCoverLetterName(fileName);
+              },
+              markClean: editor.markClean,
+              commitBaseline: commitPersistenceBaseline,
+              commitBaselineIfUnchanged: commitPersistenceBaselineIfUnchanged,
+              clearRecovery: clearCoverLetterAutosaveDraft,
+              setStatus
+            }
+          });
+          return true;
+        } catch (error) {
+          const completion = saveOwnership.evaluate(
+            saveClaim,
+            currentSaveIdentity()
+          );
+          if (completion === "superseded") {
+            refreshAfterQueueSettles = true;
+          } else {
+            setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
+          }
+          return false;
         }
-      } catch (error) {
-        const completion = saveOwnership.evaluate(saveClaim, {
-          documentVersion: documentVersionRef.current,
-          sourceRevision: sourceRevisionRef.current,
-          activeFileName: activeCoverFileNameRef.current
-        });
-        if (completion !== "superseded") {
-          setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
+      };
+
+      const queuedSave = workspaceSaveQueueRef.current.then(runSave, runSave);
+      workspaceSaveQueueRef.current = queuedSave.then(
+        () => undefined,
+        () => undefined
+      );
+      try {
+        const saved = await queuedSave;
+        if (refreshAfterQueueSettles) {
+          // This is defensive: the invocation-order queue should make a
+          // superseded save impossible. If ownership is ever invalidated by a
+          // future path, append one authoritative read after all queued writes.
+          const refresh = workspaceSaveQueueRef.current.then(async () => {
+            await refreshCoverWorkspace();
+          });
+          workspaceSaveQueueRef.current = refresh.then(
+            () => undefined,
+            () => undefined
+          );
+          try {
+            await refresh;
+          } catch {
+            setStatus(
+              "The cover letter was saved, but the workspace list could not be refreshed."
+            );
+          }
         }
+        return saved;
+      } finally {
+        workspaceSavePendingCountRef.current -= 1;
+        if (workspaceSavePendingCountRef.current === 0) setIsWorkspaceSaving(false);
       }
     },
     [
       adoptCoverWorkspaceSnapshot,
+      capturePersistenceBaselineRevision,
       commitPersistenceBaseline,
+      commitPersistenceBaselineIfUnchanged,
       documentTitleRef,
       documentVersionRef,
       editor.editedResume,
       editor.markClean,
+      isWorkspaceBootstrapping,
+      refreshCoverWorkspace,
       setActiveCoverFileName
     ]
   );
@@ -630,8 +699,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       options: WorkspaceCoverLetterOpenOptions,
       successMessage: (data: CoverLetterWorkspaceDocument) => string,
       fallbackError: string
-    ): Promise<boolean> =>
-      withWorkspaceReplacement(async () => {
+    ): Promise<boolean> => {
+      if (workspaceSavePendingCountRef.current > 0) {
+        if (!options.background && !options.startup) {
+          setStatus("Wait for the workspace save to finish before opening another letter.");
+        }
+        return false;
+      }
+      return withWorkspaceReplacement(async () => {
         if (options.confirmReplace && !(await options.confirmReplace())) return false;
 
         // A user-owned saved/history action supersedes startup as soon as its
@@ -677,7 +752,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           }
           return false;
         }
-      }),
+      });
+    },
     [adoptCoverPayload, adoptCoverWorkspaceSnapshot, documentVersionRef, withWorkspaceReplacement]
   );
 
@@ -870,6 +946,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     isRenderingPdf,
     isWorkspaceBootstrapping,
     isWorkspaceReplacing,
+    isWorkspaceSaving,
     openFile,
     startBlank,
     startStarter,

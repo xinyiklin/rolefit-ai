@@ -43,6 +43,7 @@ export type CoverLetterSaveClaim = {
   payload: string;
   documentTitle: string;
   documentVersion: string;
+  persistenceBaselineRevision: number;
   sourceRevision: number;
   activeFileName: string;
   intendedFileName: string;
@@ -86,4 +87,60 @@ export function createCoverLetterSaveOwnership() {
         : "document-changed";
     }
   };
+}
+
+type CoverLetterSaveSnapshot = {
+  fileName?: string;
+  label?: string;
+};
+
+type CoverLetterSaveCompletionEffects<TSnapshot extends CoverLetterSaveSnapshot> = {
+  publishSnapshot: (snapshot: TSnapshot) => void;
+  bindActiveFile: (fileName: string) => void;
+  markClean: () => void;
+  commitBaseline: (payload: string, documentTitle: string) => void;
+  commitBaselineIfUnchanged: (
+    expectedRevision: number,
+    payload: string,
+    documentTitle: string
+  ) => boolean;
+  clearRecovery: () => void;
+  setStatus: (status: string) => void;
+};
+
+export function applyCoverLetterSaveCompletion<
+  TSnapshot extends CoverLetterSaveSnapshot
+>(args: {
+  completion: CoverLetterSaveResult;
+  claim: CoverLetterSaveClaim;
+  snapshot: TSnapshot;
+  effects: CoverLetterSaveCompletionEffects<TSnapshot>;
+}): { published: boolean; baselineAcknowledged: boolean } {
+  const { completion, claim, snapshot, effects } = args;
+  if (completion === "superseded") {
+    return { published: false, baselineAcknowledged: false };
+  }
+
+  effects.publishSnapshot(snapshot);
+  if (completion === "current") {
+    if (snapshot.fileName) effects.bindActiveFile(snapshot.fileName);
+    effects.markClean();
+    effects.commitBaseline(claim.payload, claim.documentTitle);
+    effects.clearRecovery();
+    effects.setStatus(`Saved ${snapshot.label ?? "cover letter"} to your workspace.`);
+    return { published: true, baselineAcknowledged: true };
+  }
+
+  if (completion === "document-changed") {
+    const baselineAcknowledged = effects.commitBaselineIfUnchanged(
+      claim.persistenceBaselineRevision,
+      claim.payload,
+      claim.documentTitle
+    );
+    effects.setStatus("Earlier version saved; current changes remain unsaved.");
+    return { published: true, baselineAcknowledged };
+  }
+
+  effects.setStatus("Earlier version saved; the current cover letter was kept.");
+  return { published: true, baselineAcknowledged: false };
 }

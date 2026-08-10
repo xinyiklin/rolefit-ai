@@ -79,6 +79,10 @@ const identityHook = readFileSync(
   new URL("../../hooks/useCoverLetterDocumentIdentity.ts", import.meta.url),
   "utf8"
 );
+const coverLetterToolbar = readFileSync(
+  new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url),
+  "utf8"
+);
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverLetter = readFileSync(
   new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
@@ -106,13 +110,48 @@ assert.match(
 );
 assert.match(
   hook,
-  /const saveClaim = saveOwnership\.claim\(\{[\s\S]{0,350}?payload,[\s\S]{0,200}?documentTitle: titleAtSaveStart,[\s\S]{0,300}?sourceRevision: sourceRevisionRef\.current,[\s\S]{0,200}?activeFileName: activeFileNameAtSaveStart,[\s\S]{0,200}?intendedFileName/,
-  "workspace saves capture payload, title, document instance, active variant, target, and operation identity"
+  /const sourceRevisionAtSaveStart = sourceRevisionRef\.current[\s\S]{0,900}?const persistenceBaselineRevision = capturePersistenceBaselineRevision\(\)[\s\S]{0,120}?const saveClaim = saveOwnership\.claim\(\{[\s\S]{0,350}?persistenceBaselineRevision,[\s\S]{0,200}?sourceRevision: sourceRevisionAtSaveStart,[\s\S]{0,200}?activeFileName: activeFileNameAtSaveStart,[\s\S]{0,200}?intendedFileName/,
+  "workspace saves capture document, baseline, active variant, target, and source identity before dispatch"
 );
 assert.match(
   hook,
-  /if \(completion === "current"\) \{[\s\S]{0,450}?clearCoverLetterAutosaveDraft\(\);[\s\S]{0,250}?\} else if \(completion === "document-changed"\) \{[\s\S]{0,350}?commitPersistenceBaseline\(payload, titleAtSaveStart\);[\s\S]{0,200}?Earlier version saved; current changes remain unsaved/,
-  "only the exact live save clears recovery while a newer edit keeps its persisted baseline and recovery"
+  /const queuedSave = workspaceSaveQueueRef\.current\.then\(runSave, runSave\)[\s\S]{0,180}?workspaceSaveQueueRef\.current = queuedSave\.then/,
+  "workspace saves enter one invocation-order queue before reaching the server"
+);
+assert.match(
+  hook,
+  /const completion = saveOwnership\.evaluate\([\s\S]{0,220}?if \(completion === "superseded"\) \{[\s\S]{0,180}?return false;[\s\S]{0,120}?applyCoverLetterSaveCompletion/,
+  "save ownership is evaluated before any workspace snapshot is published"
+);
+assert.match(
+  identityHook,
+  /capturePersistenceBaselineRevision[\s\S]{0,500}?commitPersistenceBaselineIfUnchanged[\s\S]{0,450}?commitIfUnchanged/,
+  "delayed persistence acknowledgments use the shared monotonic baseline revision"
+);
+assert.match(
+  coverLetterToolbar,
+  /workspaceMutationPending =\s*editor\.isWorkspaceSaving \|\| editor\.isWorkspaceReplacing/,
+  "the toolbar derives one visible pending boundary for workspace mutations"
+);
+assert.match(
+  coverLetterToolbar,
+  /<DocumentOpenMenu[\s\S]{0,180}?disabled=\{workspaceMutationPending\}/,
+  "pending workspace mutations disable saved opens and restores"
+);
+assert.match(
+  coverLetterToolbar,
+  /primary=\{\{[\s\S]{0,650}?disabled: workspaceSaveDisabled/,
+  "pending workspace mutations disable update-in-place saves"
+);
+assert.match(
+  coverLetterToolbar,
+  /variant=\{\{[\s\S]{0,500}?disabled: workspaceSaveDisabled/,
+  "pending workspace mutations disable named-variant saves"
+);
+assert.match(
+  coverLetterToolbar,
+  /applicationSync=\{\{[\s\S]{0,180}?applicationSync\.disabled \|\| workspaceMutationPending/,
+  "pending workspace mutations disable the conflicting application save"
 );
 assert.match(
   hook,
