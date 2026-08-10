@@ -72,11 +72,11 @@ declare global {
       markClean(): void;
       setConfirmAllowed(value: boolean): void;
       resetStats(): void;
-      startLoadWorkspace(applyBaseResume: boolean): {
+      startLoadWorkspace(applyBaseResume: boolean): Promise<{
         taskId: number;
         requestId: number;
-      };
-      startLoadStarter(): { taskId: number; requestId: number };
+      }>;
+      startLoadStarter(): Promise<{ taskId: number; requestId: number }>;
       startTextUpload(): { taskId: number };
       resolveRequest(requestId: number, payload: unknown, ok?: boolean): void;
       waitTask(taskId: number): Promise<void>;
@@ -301,12 +301,20 @@ function WorkspaceResumeContractApp() {
   }, []);
 
   useEffect(() => {
-    const startTask = (task: Promise<unknown>) => {
+    const startTask = async (start: () => Promise<unknown>) => {
+      const requestIndex = pendingFetchesRef.current.length;
+      const task = start();
       const taskId = nextTaskIdRef.current;
       nextTaskIdRef.current += 1;
       tasksRef.current.set(taskId, task.then(() => undefined));
-      const request = pendingFetchesRef.current.at(-1);
-      if (!request) throw new Error("Expected the hook to start a fetch.");
+      const deadline = Date.now() + 2_000;
+      while (pendingFetchesRef.current.length <= requestIndex) {
+        if (Date.now() >= deadline) {
+          throw new Error("Expected the hook to start a fetch.");
+        }
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+      const request = pendingFetchesRef.current[requestIndex];
       return { taskId, requestId: request.id };
     };
 
@@ -332,8 +340,8 @@ function WorkspaceResumeContractApp() {
         uploadInputValueRef.current = "";
       },
       startLoadWorkspace: (applyBaseResume) =>
-        startTask(workspace.loadWorkspace(applyBaseResume)),
-      startLoadStarter: () => startTask(workspace.loadStarterTemplate()),
+        startTask(() => workspace.loadWorkspace(applyBaseResume)),
+      startLoadStarter: () => startTask(() => workspace.loadStarterTemplate()),
       startTextUpload: () => {
         const taskId = nextTaskIdRef.current;
         nextTaskIdRef.current += 1;

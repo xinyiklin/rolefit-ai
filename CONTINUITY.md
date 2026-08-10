@@ -58,6 +58,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   now wait behind the one-shot startup commit before claiming a load generation,
   so Prepare cannot be stranded on an unresolved bootstrap promise. Deferred
   two-document persistence and startup-versus-metadata probes cover both paths.
+  The Chromium workspace fixture now awaits the asynchronously claimed fetch,
+  preventing a harness-only deadlock while retaining reordered-response coverage.
   Under pinned Node 24, dependency/package-script contracts,
   every workspace check, the production and landing builds, desktop/security
   contracts, and all 91 offline evaluations pass. No layout changed; browser
