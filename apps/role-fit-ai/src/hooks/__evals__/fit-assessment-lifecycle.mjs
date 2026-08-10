@@ -22,6 +22,7 @@ const {
   failFitAssessmentRun,
   fitAssessmentMayTriggerAutoPolish,
   fitAssessmentLatestSnapshot,
+  fitAssessmentPersistenceDecision,
   fitAssessmentProvenanceChanges,
   fitAssessmentProvenanceIsStale,
   fitAssessmentRequestFingerprint,
@@ -243,6 +244,21 @@ assert.equal(
   null,
   "a completed assessment from another preparation is never persisted onto the new application"
 );
+assert.deepEqual(
+  fitAssessmentPersistenceDecision(emptyFitAssessmentState(true)),
+  { action: "preserve" },
+  "Apply preserves a saved assessment when this session has made no assessment decision"
+);
+assert.deepEqual(
+  fitAssessmentPersistenceDecision(samePreparationStale),
+  { action: "set", snapshot: savedSnapshot },
+  "Apply persists a same-preparation completion even after later input changes"
+);
+assert.deepEqual(
+  fitAssessmentPersistenceDecision(previousPreparation),
+  { action: "clear" },
+  "Apply removes a saved assessment after the lifecycle rejects it as another preparation"
+);
 const laterReady = completeFitAssessmentRun(
   beginFitAssessmentRun(prepareReady, {
     id: "fit-reassess-2",
@@ -336,6 +352,7 @@ assert.equal(
 
 const intakeSource = readFileSync(new URL("../useJobIntake.ts", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+const polishSource = readFileSync(new URL("../usePolishPipeline.ts", import.meta.url), "utf8");
 const preparedBriefChangeSource = appSource.slice(
   appSource.indexOf("const handlePreparedJobBriefChange"),
   appSource.indexOf("// Per-section Polish choice")
@@ -386,8 +403,8 @@ assert.match(
 );
 assert.match(
   appSource,
-  /fitAssessmentSnapshot:\s*fitAssessmentLatestSnapshot\(fitAssessmentState\)/,
-  "Apply includes the latest completed assessment that belongs to the current preparation"
+  /fitAssessmentPersistence:\s*fitAssessmentPersistenceDecision\(fitAssessmentState\)/,
+  "Apply receives the explicit set, preserve, or clear assessment decision"
 );
 assert.match(
   appSource,
@@ -406,13 +423,38 @@ assert.match(
 );
 assert.match(
   appSource,
-  /function handleResumePolish\([\s\S]{0,300}?PolishStartReceipt[\s\S]{0,500}?return \{ started: true \};[\s\S]{0,180}?function handleCoverLetterPolish\(\): PolishStartReceipt/,
-  "both automatic document actions return an explicit start-boundary receipt"
+  /function handleResumePolish\([\s\S]{0,250}?boolean[\s\S]{0,450}?const claimed = handlePolish\(options\);[\s\S]{0,180}?if \(!claimed\) return false;[\s\S]{0,180}?return true/,
+  "Resume Polish includes the material only after the pipeline synchronously claims the start"
+);
+assert.match(
+  polishSource,
+  /const \[isPolishStarting, setIsPolishStarting\] = useState\(false\)/,
+  "Resume Polish publishes its pre-dispatch provider and duplicate-check phase"
+);
+assert.match(
+  polishSource,
+  /function startRun\([\s\S]{0,300}?runLockRef\.current = true;[\s\S]{0,300}?setIsPolishStarting\(true\);[\s\S]{0,300}?void continueRun\(options\);[\s\S]{0,100}?return true/,
+  "the pipeline returns an authoritative synchronous claim before continuing pre-dispatch"
+);
+assert.match(
+  polishSource,
+  /setIsPolishing\(true\);\s*setIsPolishStarting\(false\);\s*settleStart\("started"\)/,
+  "Resume Polish settles the claim as started only at the active-request handoff"
 );
 assert.match(
   appSource,
-  /useBeforeUnloadGuard\([\s\S]{0,350}?fitAssessmentRequestActive \|\|[\s\S]{0,100}?preparationAutomationPending/,
-  "the unload guard covers the pending one-use Prepare automation decision"
+  /const resumeClaimed = handleResumePolish\([\s\S]{0,650}?onStartSettled:[\s\S]{0,500}?current\.resumeSettled = true/,
+  "automatic Resume Polish retains its token until the claimed pre-dispatch transaction settles"
+);
+assert.match(
+  appSource,
+  /const resumeSettled = receipt\.resumeSettled\s*\|\| \(!receipt\.resumeClaimed && resumeDecision === "decline"\)/,
+  "a claimed Resume pre-dispatch is not misclassified as declined while it awaits"
+);
+assert.match(
+  appSource,
+  /useBeforeUnloadGuard\([\s\S]{0,350}?isPolishStarting \|\|[\s\S]{0,250}?fitAssessmentRequestActive \|\|[\s\S]{0,100}?preparationAutomationPending/,
+  "the unload guard covers Resume pre-dispatch and the pending one-use Prepare automation decision"
 );
 assert.match(
   intakeSource,

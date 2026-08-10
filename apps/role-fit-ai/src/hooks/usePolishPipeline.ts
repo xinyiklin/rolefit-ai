@@ -36,6 +36,7 @@ type PolishContext = {
 
 export type PolishRunOptions = {
   revealResumeOnSuccess?: boolean;
+  onStartSettled?: (outcome: "started" | "declined") => void;
 };
 
 type UsePolishPipelineArgs = {
@@ -101,11 +102,13 @@ export function usePolishPipeline({
   confirmDuplicateBeforePolish
 }: UsePolishPipelineArgs) {
   const [isPolishing, setIsPolishing] = useState(false);
+  const [isPolishStarting, setIsPolishStarting] = useState(false);
   const [polishProgress, setPolishProgress] = useState<PolishProgressState>(idleProgress);
   const [polishProgressVisible, setPolishProgressVisible] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const generationRef = useRef(0);
   const runLockRef = useRef(false);
+  const startSettlementRef = useRef<PolishRunOptions["onStartSettled"]>(undefined);
   const inputFingerprint = workflowInputFingerprint({
     editedResume,
     polishScopeModes,
@@ -118,6 +121,12 @@ export function usePolishPipeline({
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
   const previousJobDescriptionRef = useRef(jobDescription);
+
+  function settleStart(outcome: "started" | "declined"): void {
+    const callback = startSettlementRef.current;
+    startSettlementRef.current = undefined;
+    callback?.(outcome);
+  }
 
   function requestIsCurrent(generation: number, context: PolishContext, signal?: AbortSignal): boolean {
     return workflowRequestIsCurrent(
@@ -143,6 +152,8 @@ export function usePolishPipeline({
     abortRef.current?.abort();
     abortRef.current = null;
     runLockRef.current = false;
+    setIsPolishStarting(false);
+    settleStart("declined");
     setIsPolishing(false);
     setPolishProgress((current) => ({
       ...current,
@@ -159,6 +170,7 @@ export function usePolishPipeline({
     abortRef.current?.abort();
     abortRef.current = null;
     runLockRef.current = false;
+    startSettlementRef.current = undefined;
   }, []);
 
   function buildContext(): PolishContext | null {
@@ -275,36 +287,53 @@ export function usePolishPipeline({
     }
   }
 
-  async function startRun(options: PolishRunOptions = {}): Promise<void> {
-    if (runLockRef.current || isPolishing) return;
-    runLockRef.current = true;
-    if (!buildContext()) {
+  async function continueRun(options: PolishRunOptions): Promise<void> {
+    let context: PolishContext | null = null;
+    try {
+      const provider = await ensureResumePolishProviderReady();
+      if (!runLockRef.current) return;
+      if (!provider.ready) {
+        runLockRef.current = false;
+        setIsPolishStarting(false);
+        settleStart("declined");
+        setPolishStatus(provider.message);
+        setPolishProgress({
+          polish: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message }
+        });
+        setPolishProgressVisible(true);
+        return;
+      }
+      if (!(await confirmDuplicateBeforePolish())) {
+        runLockRef.current = false;
+        setIsPolishStarting(false);
+        settleStart("declined");
+        return;
+      }
+      if (!runLockRef.current) return;
+      context = buildContext();
+      if (!context) {
+        runLockRef.current = false;
+        setIsPolishStarting(false);
+        settleStart("declined");
+        return;
+      }
+    } catch (error) {
+      if (!runLockRef.current) return;
       runLockRef.current = false;
-      return;
-    }
-    const provider = await ensureResumePolishProviderReady();
-    if (!runLockRef.current) return;
-    if (!provider.ready) {
-      runLockRef.current = false;
-      setPolishStatus(provider.message);
+      setIsPolishStarting(false);
+      settleStart("declined");
+      const failure = classifyFailure(error);
       setPolishProgress({
-        polish: { status: "failed", errorHeadline: "Provider unavailable", error: provider.message }
+        polish: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
       });
       setPolishProgressVisible(true);
-      return;
-    }
-    if (!(await confirmDuplicateBeforePolish())) {
-      runLockRef.current = false;
-      return;
-    }
-    if (!runLockRef.current) return;
-    const context = buildContext();
-    if (!context) {
-      runLockRef.current = false;
+      setPolishStatus(`${failure.headline}: ${failure.detail}`);
       return;
     }
 
     setIsPolishing(true);
+    setIsPolishStarting(false);
+    settleStart("started");
     setPolishProgressVisible(true);
     resetExportStatuses();
     setExportStatus("");
@@ -320,6 +349,19 @@ export function usePolishPipeline({
         setIsPolishing(false);
       }
     }
+  }
+
+  function startRun(options: PolishRunOptions = {}): boolean {
+    if (runLockRef.current || isPolishing) return false;
+    runLockRef.current = true;
+    if (!buildContext()) {
+      runLockRef.current = false;
+      return false;
+    }
+    startSettlementRef.current = options.onStartSettled;
+    setIsPolishStarting(true);
+    void continueRun(options);
+    return true;
   }
 
   function stopPolish(): void {
@@ -339,6 +381,7 @@ export function usePolishPipeline({
   }
 
   return {
+    isPolishStarting,
     isPolishing,
     polishProgress,
     polishProgressVisible,

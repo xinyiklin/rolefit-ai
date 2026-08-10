@@ -19,6 +19,11 @@ export type PreparedFitAssessmentJob = {
   screeningJobText: string;
 };
 
+export type FitAssessmentPersistenceDecision =
+  | { action: "set"; snapshot: FitAssessmentSnapshot }
+  | { action: "preserve" }
+  | { action: "clear" };
+
 export function fitAssessmentCanRun(
   runFitAssessment: boolean,
   preparedJob: PreparedFitAssessmentJob | null
@@ -48,6 +53,16 @@ export function fitAssessmentLatestSnapshot(
 ): FitAssessmentSnapshot | null {
   const completed = state.latestCompleted;
   return completed && !completed.previousPreparation ? completed.snapshot : null;
+}
+
+export function fitAssessmentPersistenceDecision(
+  state: FitAssessmentState
+): FitAssessmentPersistenceDecision {
+  const completed = state.latestCompleted;
+  if (!completed) return { action: "preserve" };
+  return completed.previousPreparation
+    ? { action: "clear" }
+    : { action: "set", snapshot: completed.snapshot };
 }
 
 export function emptyFitAssessmentState(

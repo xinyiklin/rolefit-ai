@@ -19,6 +19,8 @@ export function useCoverLetterDocumentIdentity(
     useState(documentTitle);
   const [persistedFingerprint, setPersistedFingerprint] =
     useState<string | null>(initialFingerprint);
+  const documentTitleRef = useRef(documentTitle);
+  documentTitleRef.current = documentTitle;
 
   useEffect(() => {
     try {
@@ -32,11 +34,11 @@ export function useCoverLetterDocumentIdentity(
   }, [documentTitle]);
 
   const commitPersistenceBaseline = useCallback(
-    (fingerprint: string, title = documentTitle) => {
+    (fingerprint: string, title = documentTitleRef.current) => {
       setPersistedFingerprint(fingerprint);
       setPersistedDocumentTitle(title.trim() || "Cover letter");
     },
-    [documentTitle]
+    []
   );
 
   const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
@@ -51,6 +53,7 @@ export function useCoverLetterDocumentIdentity(
       currentFingerprint !== null &&
       currentFingerprint !== persistedFingerprint,
     commitPersistenceBaseline,
+    documentTitleRef,
     startupFingerprintRef
   };
 }

@@ -23,9 +23,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
   found that the cover-variant wait did not include the initial workspace read;
   the cover-letter editor now exposes that one-shot pending state, including the
   empty-to-loaded and single-saved-variant paths, before automatic Polish may
-  consume its token. The pinned Node 24 RoleFit gate passes all 89 offline
-  evaluations. No rendered UI changed; browser interaction QA remains
-  UNCONFIRMED under the flag-first policy.
+  consume its token. A second Sol Pro review found four remaining cross-path
+  gaps. Cover startup now keeps title-sensitive data behind stable refs so its
+  effect cannot replay after ordinary naming, and saved/history opens share one
+  pending replacement boundary that starts before confirmation. Apply carries
+  an explicit set/preserve/clear Fit decision so it cannot reattach another
+  preparation's saved snapshot. Resume Polish now returns a synchronous claim,
+  publishes provider/duplicate preflight, guards unload, and settles the one-use
+  token only when that claim starts or permanently declines. The pinned Node 24
+  RoleFit gate passes all 89 offline evaluations. No rendered UI changed;
+  browser interaction QA remains UNCONFIRMED under the flag-first policy.
 
 ## 2026-08-09
 

@@ -75,6 +75,10 @@ assert.deepEqual(
 );
 
 const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+const identityHook = readFileSync(
+  new URL("../../hooks/useCoverLetterDocumentIdentity.ts", import.meta.url),
+  "utf8"
+);
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverLetter = readFileSync(
   new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
@@ -92,8 +96,13 @@ assert.match(
 );
 assert.match(
   hook,
-  /openWorkspaceCoverLetter\([\s\S]*startup\.fileName,[\s\S]*true,[\s\S]*coverLetterStartupIsCurrent/,
+  /openWorkspaceCoverLetter\([\s\S]*startup\.fileName,[\s\S]*startup: true,[\s\S]*coverLetterStartupIsCurrent/,
   "the selected response rechecks cancellation and edits before adopting its payload"
+);
+assert.match(
+  identityHook,
+  /const documentTitleRef = useRef\(documentTitle\)[\s\S]*commitPersistenceBaseline = useCallback\([\s\S]{0,180}?documentTitleRef\.current[\s\S]{0,180}?\[\]\s*\)/,
+  "document-title changes do not recreate the startup adoption callbacks"
 );
 assert.match(
   hook,
@@ -112,8 +121,23 @@ assert.match(
 );
 assert.match(
   app,
-  /const coverVariantResolutionPending = Boolean\(\s*coverLetterEditor\.isWorkspaceBootstrapping\s*\|\|\s*isSelectingCoverVariant/,
-  "automatic Cover Letter Polish waits through the empty-to-loaded startup transition, including one saved variant"
+  /const coverVariantResolutionPending = Boolean\(\s*coverLetterEditor\.isWorkspaceBootstrapping\s*\|\|\s*coverLetterEditor\.isWorkspaceReplacing\s*\|\|\s*isSelectingCoverVariant/,
+  "automatic Cover Letter Polish waits through startup and every editor-owned replacement transaction"
+);
+assert.match(
+  app,
+  /materialSelection\.coverLetter[\s\S]{0,120}?isGeneratingCover \|\| coverVariantResolutionPending/,
+  "Apply readiness remains pending while the included cover letter is being replaced"
+);
+assert.match(
+  hook,
+  /withWorkspaceReplacement\([\s\S]{0,450}?confirmReplace[\s\S]{0,500}?selectCoverLetterWorkspaceDocument/,
+  "opening a saved cover letter publishes pending state before replacement confirmation"
+);
+assert.match(
+  hook,
+  /restoreWorkspaceCoverLetter = useCallback\([\s\S]{0,250}?withWorkspaceReplacement/,
+  "history restoration uses the same pending replacement boundary"
 );
 assert.match(
   hook,

@@ -86,13 +86,13 @@ assert.match(app, /const saved = await saveApplication\(application\)/, "App awa
 assert.match(app, /pendingApplicationWrites > 0/, "before-unload protection includes pending tracker writes");
 assert.match(
   app,
-  /fitAssessmentSnapshot:\s*fitAssessmentLatestSnapshot\(fitAssessmentState\)/,
-  "Apply receives the latest completed Fit Assessment even when it is out of date"
+  /fitAssessmentPersistence:\s*fitAssessmentPersistenceDecision\(fitAssessmentState\)/,
+  "Apply receives an explicit Fit Assessment persistence decision"
 );
 assert.match(
   applyFlow,
-  /fitAssessment: fitAssessmentSnapshot \?\? existing\?\.fitAssessment,[\s\S]{0,180}?\.\.\.\(materialSelection\.resume/,
-  "Apply persists Fit Assessment independently from resume inclusion and preserves an existing snapshot"
+  /fitAssessmentPersistence\.action === "set"[\s\S]{0,180}?fitAssessment: fitAssessmentPersistence\.snapshot[\s\S]{0,220}?fitAssessmentPersistence\.action === "clear"[\s\S]{0,120}?fitAssessment: undefined/,
+  "Apply distinguishes replacing, preserving, and clearing a Fit Assessment"
 );
 
 console.log("application persistence guards passed");

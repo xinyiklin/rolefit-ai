@@ -116,11 +116,11 @@ export function CoverLetterToolbar({
   // upload does, so it asks first. Without this the Open menu's saved list threw
   // away unsaved edits silently — the resume's equivalents both confirm.
   async function openSaved(fileName: string) {
-    if (await confirmReplace()) await editor.openWorkspaceCoverLetter(fileName);
+    await editor.openWorkspaceCoverLetter(fileName, { confirmReplace });
   }
 
   async function restoreSaved(key: string) {
-    if (await confirmReplace()) await editor.restoreWorkspaceCoverLetter(key);
+    await editor.restoreWorkspaceCoverLetter(key, confirmReplace);
   }
 
   return (

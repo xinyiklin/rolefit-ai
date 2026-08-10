@@ -77,7 +77,7 @@ import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeD
 import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
-import { usePolishPipeline } from "./hooks/usePolishPipeline";
+import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipeline";
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
@@ -102,7 +102,7 @@ import {
   fitAssessmentMeetsThreshold
 } from "./lib/autoPolishPolicy";
 import {
-  fitAssessmentLatestSnapshot,
+  fitAssessmentPersistenceDecision,
   fitAssessmentMayTriggerAutoPolish
 } from "./lib/fitAssessmentLifecycle";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
@@ -130,8 +130,6 @@ import { formatHistoryDate } from "./lib/historyDate";
 import { type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
-
-type PolishStartReceipt = { started: boolean };
 
 const DEFAULT_MATERIAL_SELECTION = {
   resume: true,
@@ -333,7 +331,13 @@ function App() {
   const clearPreparedResumeRecommendationRef = useRef<() => void>(() => undefined);
   // Tracks the two independent actions for the one assessment that Prepare is
   // allowed to use for automation. Later assessments are advisory-only upstream.
-  const autoProposalFitRef = useRef({ key: "", resumeStarted: false, coverStarted: false });
+  const autoProposalFitRef = useRef({
+    key: "",
+    resumeClaimed: false,
+    resumeSettled: false,
+    coverStarted: false
+  });
+  const [autoProposalSettlementRevision, setAutoProposalSettlementRevision] = useState(0);
   // Both document kinds use the same recommendation and safe auto-selection
   // contract; dirty editors and restored applications are never replaced.
   const [coverLetterVariantRecommendation, setCoverLetterVariantRecommendation] =
@@ -628,8 +632,7 @@ function App() {
         const approvedVersion = coverReplacementStateRef.current.version;
         const opened = await coverLetterEditor.openWorkspaceCoverLetter(
           fileName,
-          false,
-          () => coverReplacementStateRef.current.version !== approvedVersion
+          { shouldCancel: () => coverReplacementStateRef.current.version !== approvedVersion }
         );
         if (!opened && coverReplacementStateRef.current.version !== approvedVersion) {
           coverLetterEditor.setStatus(
@@ -1346,10 +1349,11 @@ function App() {
   // ----- Resume Polish -----
   // Proposal generation, retry, cancellation, and stale-response protection are
   // extracted to
-  // src/hooks/usePolishPipeline.ts. isPolishing/polishProgress/
-  // polishProgressVisible are owned by the hook; App only reads them below for
-  // render + the presence phase + the before-unload guard.
+  // src/hooks/usePolishPipeline.ts. The hook owns the pre-dispatch and active
+  // phases plus progress state; App only reads them for orchestration, render,
+  // presence, and unload protection.
   const {
+    isPolishStarting,
     isPolishing,
     polishProgress,
     polishProgressVisible,
@@ -1405,6 +1409,7 @@ function App() {
     resumeDocumentDirty ||
       coverLetterEditor.dirty ||
       isGeneratingCover ||
+      isPolishStarting ||
       isPolishing ||
       jobAnalysisProgress.status === "running" ||
       fitAssessmentRequestActive ||
@@ -1497,6 +1502,7 @@ function App() {
   coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
   const coverVariantResolutionPending = Boolean(
     coverLetterEditor.isWorkspaceBootstrapping
+    || coverLetterEditor.isWorkspaceReplacing
     || isSelectingCoverVariant
     || (
       jobPrepared
@@ -1574,18 +1580,21 @@ function App() {
         !coverManualVariantSelectionInFlightRef.current &&
         !current.isSelecting;
       if (canAdoptRecommendation) {
-        await current.openWorkspaceCoverLetter(recommendation.fileName, "recommendation", () => {
-          const latest = coverLetterVariantSelectionStateRef.current;
-          return (
-            generation !== coverLetterVariantRecommendationGenerationRef.current ||
-            !latest.jobPrepared ||
-            latest.preparedJobDescription !== rankingJobDescription ||
-            latest.applicationOfRecordId !== null ||
-            latest.dirty ||
-            latest.activeFileName !== startingFileName ||
-            latest.documentVersion !== startingDocumentVersion ||
-            coverManualVariantSelectionInFlightRef.current
-          );
+        await current.openWorkspaceCoverLetter(recommendation.fileName, {
+          background: true,
+          shouldCancel: () => {
+            const latest = coverLetterVariantSelectionStateRef.current;
+            return (
+              generation !== coverLetterVariantRecommendationGenerationRef.current ||
+              !latest.jobPrepared ||
+              latest.preparedJobDescription !== rankingJobDescription ||
+              latest.applicationOfRecordId !== null ||
+              latest.dirty ||
+              latest.activeFileName !== startingFileName ||
+              latest.documentVersion !== startingDocumentVersion ||
+              coverManualVariantSelectionInFlightRef.current
+            );
+          }
         });
       }
       if (generation === coverLetterVariantRecommendationGenerationRef.current) {
@@ -1614,40 +1623,43 @@ function App() {
   }
 
   function handleResumePolish(
-    options: { revealResumeOnSuccess?: boolean } = {}
-  ): PolishStartReceipt {
+    options: PolishRunOptions = {}
+  ): boolean {
     if (
-      isPolishing
+      isPolishStarting
+      || isPolishing
       || isSavingBaseResume
       || isManuallySelectingResumeVariant
       || isResolvingPreparedResume
-    ) return { started: false };
+    ) return false;
+    const claimed = handlePolish(options);
+    if (!claimed) return false;
     includeMaterialForPolish("resume");
-    void handlePolish(options);
-    return { started: true };
+    return true;
   }
 
-  function handleCoverLetterPolish(): PolishStartReceipt {
+  function handleCoverLetterPolish(): boolean {
     if (
       isGeneratingCover
       || isSelectingCoverVariant
       || coverVariantResolutionPending
-    ) return { started: false };
+    ) return false;
     includeMaterialForPolish("coverLetter");
     void handleTailorCoverLetter();
-    return { started: true };
+    return true;
   }
 
   const applicationPreparationActive =
     jobPreparationActive ||
     (materialSelection.resume &&
-      (isPolishing ||
+      (isPolishStarting ||
+        isPolishing ||
         isResolvingPreparedResume ||
         isSavingBaseResume ||
         isManuallySelectingResumeVariant ||
         isWorkspaceBootstrapping)) ||
     (materialSelection.coverLetter &&
-      (isGeneratingCover || isRankingCoverLetterVariants || isSelectingCoverVariant));
+      (isGeneratingCover || coverVariantResolutionPending));
   const preparationReadiness = getPreparationReadiness({
     jobPrepared,
     includeResume: materialSelection.resume,
@@ -1660,6 +1672,7 @@ function App() {
     if (
       !jobPrepared ||
       !canPolish ||
+      isPolishStarting ||
       isPolishing ||
       isSavingBaseResume ||
       isManuallySelectingResumeVariant ||
@@ -1685,13 +1698,19 @@ function App() {
     const { result: fit } = candidate.snapshot;
     const key = candidate.automationToken;
     if (autoProposalFitRef.current.key !== key) {
-      autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
+      autoProposalFitRef.current = {
+        key,
+        resumeClaimed: false,
+        resumeSettled: false,
+        coverStarted: false
+      };
     }
     const receipt = autoProposalFitRef.current;
     const automationBlocked = fit.eligibility?.status === "BLOCKED";
     const resumePolishCanStart =
       jobPrepared &&
       canPolish &&
+      !isPolishStarting &&
       !isPolishing &&
       !isSavingBaseResume &&
       !isManuallySelectingResumeVariant &&
@@ -1706,10 +1725,18 @@ function App() {
       prerequisitePending: false,
       canStart: resumePolishCanStart
     });
-    if (!receipt.resumeStarted && resumeDecision === "start") {
-      receipt.resumeStarted = handleResumePolish({
-        revealResumeOnSuccess: false
-      }).started;
+    if (!receipt.resumeClaimed && !receipt.resumeSettled && resumeDecision === "start") {
+      const resumeClaimed = handleResumePolish({
+        revealResumeOnSuccess: false,
+        onStartSettled: () => {
+          const current = autoProposalFitRef.current;
+          if (current.key !== key || current.resumeSettled) return;
+          current.resumeSettled = true;
+          setAutoProposalSettlementRevision((revision) => revision + 1);
+        }
+      });
+      receipt.resumeClaimed = resumeClaimed;
+      if (!resumeClaimed) receipt.resumeSettled = true;
     }
 
     const coverPolishCanStart =
@@ -1731,12 +1758,13 @@ function App() {
       canStart: coverPolishCanStart
     });
     if (!receipt.coverStarted && coverDecision === "start") {
-      receipt.coverStarted = handleCoverLetterPolish().started;
+      receipt.coverStarted = handleCoverLetterPolish();
     }
     // The token represents this Prepare run's one automation decision. Once
     // both configured actions have either started or declined, later Settings
     // changes cannot revive automation from an old Fit result.
-    const resumeSettled = receipt.resumeStarted || resumeDecision === "decline";
+    const resumeSettled = receipt.resumeSettled
+      || (!receipt.resumeClaimed && resumeDecision === "decline");
     const coverSettled = receipt.coverStarted || coverDecision === "decline";
     if (resumeSettled && coverSettled) {
       acknowledgeFitAutomation(candidate.automationToken);
@@ -1744,6 +1772,7 @@ function App() {
   }, [
     autoPolishCoverLetter,
     autoPolishResume,
+    autoProposalSettlementRevision,
     canPolish,
     coverLetterPreflight.canTailor,
     coverLetterAutoPolishThreshold,
@@ -1755,6 +1784,7 @@ function App() {
     importedJob?.sourceText,
     isGeneratingCover,
     isManuallySelectingResumeVariant,
+    isPolishStarting,
     isPolishing,
     isRankingCoverLetterVariants,
     isResolvingPreparedResume,
@@ -1871,7 +1901,7 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    fitAssessmentSnapshot: fitAssessmentLatestSnapshot(fitAssessmentState),
+    fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
     pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,

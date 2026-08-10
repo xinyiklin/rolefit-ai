@@ -24,7 +24,7 @@ import { resumeUsedForApplication } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
-import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
+import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -44,7 +44,7 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
-  fitAssessmentSnapshot: FitAssessmentSnapshot | null;
+  fitAssessmentPersistence: FitAssessmentPersistenceDecision;
   pipelineAiUsage: Record<string, StageAiUsage>;
   applications: Application[];
   linkedApplicationId: string | null;
@@ -93,7 +93,7 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
-  fitAssessmentSnapshot,
+  fitAssessmentPersistence,
   pipelineAiUsage,
   applications,
   linkedApplicationId,
@@ -320,10 +320,14 @@ export function useApplyFlow({
       status,
       appliedAt: existing?.appliedAt ?? now,
       aiUsage,
-      // Fit Assessment belongs to the application receipt, not the included
-      // document package. Keep the latest completed snapshot even when current
-      // inputs changed or this Apply excludes the resume artifact.
-      fitAssessment: fitAssessmentSnapshot ?? existing?.fitAssessment,
+      // Fit Assessment belongs to the preparation receipt, not the document
+      // package. Preserve only when this session has no assessment decision;
+      // a known previous-preparation completion clears the linked old receipt.
+      ...(fitAssessmentPersistence.action === "set"
+        ? { fitAssessment: fitAssessmentPersistence.snapshot }
+        : fitAssessmentPersistence.action === "clear"
+          ? { fitAssessment: undefined }
+          : {}),
       ...(materialSelection.resume
         ? {
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
