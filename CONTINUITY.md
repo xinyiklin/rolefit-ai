@@ -33,11 +33,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   token only when that claim starts or permanently declines. Exact-head review
   then found that an older asynchronous Polish preflight could mistake a newer
   claim's boolean lock for its own; the existing input generation now scopes
-  preflight ownership. Workspace cover-letter saves also acknowledge the title
-  captured at dispatch and retain recovery when the title changes in flight,
-  rather than falsely marking that later edit persisted. The pinned Node 24
-  RoleFit gate passes all 89 offline evaluations. No rendered UI changed;
-  browser interaction QA remains UNCONFIRMED under the flag-first policy.
+  preflight ownership. A later exact-head review found three remaining cover-
+  letter persistence gaps. Saved opens and history restores now share one
+  replacement generation and may adopt only while the exact post-confirmation
+  document + title remains live. Workspace saves capture payload, title, source
+  revision, active variant, intended target, and operation id; delayed
+  completions can refresh workspace metadata but cannot clear a newer recovery
+  draft, mark newer edits clean, or rebind another opened letter. One exported
+  title-inclusive recovery-dirty value now owns unload protection, recovery
+  restore/dismissal, replacement guards, and save-status rendering. Deferred
+  reversed-response and edit-during-request probes pass. Under pinned Node 24,
+  the production and landing builds, desktop/security contracts, and all 90
+  offline evaluations pass. No layout changed; browser interaction QA remains
+  UNCONFIRMED under the flag-first policy.
 
 ## 2026-08-09
 

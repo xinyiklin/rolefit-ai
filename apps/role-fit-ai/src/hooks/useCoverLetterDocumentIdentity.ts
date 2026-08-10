@@ -1,4 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type Dispatch,
+  type SetStateAction
+} from "react";
+
+import { coverLetterDocumentVersion } from "../lib/coverLetterWorkspaceOwnership.ts";
+import { coverLetterRecoveryDirty } from "../lib/coverLetterRecovery.ts";
 
 const TITLE_STORAGE_KEY = "rolefit:coverLetterTitle.v1";
 
@@ -14,13 +24,27 @@ export function useCoverLetterDocumentIdentity(
   initialFingerprint: string,
   currentFingerprint: string | null
 ) {
-  const [documentTitle, setDocumentTitle] = useState(loadTitle);
+  const [documentTitle, setDocumentTitleState] = useState(loadTitle);
   const [persistedDocumentTitle, setPersistedDocumentTitle] =
     useState(documentTitle);
   const [persistedFingerprint, setPersistedFingerprint] =
     useState<string | null>(initialFingerprint);
+  const currentFingerprintRef = useRef(currentFingerprint);
+  currentFingerprintRef.current = currentFingerprint;
   const documentTitleRef = useRef(documentTitle);
-  documentTitleRef.current = documentTitle;
+  const documentVersion = coverLetterDocumentVersion(currentFingerprint, documentTitle);
+  const documentVersionRef = useRef(documentVersion);
+  documentVersionRef.current = documentVersion;
+  const setDocumentTitle = useCallback<Dispatch<SetStateAction<string>>>((next) => {
+    const resolved =
+      typeof next === "function" ? next(documentTitleRef.current) : next;
+    documentTitleRef.current = resolved;
+    documentVersionRef.current = coverLetterDocumentVersion(
+      currentFingerprintRef.current,
+      resolved
+    );
+    setDocumentTitleState(resolved);
+  }, []);
 
   useEffect(() => {
     try {
@@ -41,19 +65,24 @@ export function useCoverLetterDocumentIdentity(
     []
   );
 
-  const startupFingerprint = `${documentTitle}\u0000${currentFingerprint ?? ""}`;
-  const startupFingerprintRef = useRef(startupFingerprint);
-  startupFingerprintRef.current = startupFingerprint;
+  const documentDirty =
+    currentFingerprint !== null &&
+    currentFingerprint !== persistedFingerprint;
+  const recoveryDirty = coverLetterRecoveryDirty({
+    documentDirty,
+    documentTitle,
+    persistedDocumentTitle
+  });
 
   return {
     documentTitle,
     persistedDocumentTitle,
     setDocumentTitle,
-    dirty:
-      currentFingerprint !== null &&
-      currentFingerprint !== persistedFingerprint,
+    dirty: documentDirty,
+    recoveryDirty,
     commitPersistenceBaseline,
     documentTitleRef,
-    startupFingerprintRef
+    documentVersion,
+    documentVersionRef
   };
 }

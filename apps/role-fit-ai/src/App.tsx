@@ -105,7 +105,6 @@ import {
   fitAssessmentPersistenceDecision,
   fitAssessmentMayTriggerAutoPolish
 } from "./lib/fitAssessmentLifecycle";
-import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 
@@ -606,12 +605,8 @@ function App() {
     version: ""
   });
   coverReplacementStateRef.current = {
-    dirty: coverLetterRecoveryDirty({
-      documentDirty: coverLetterEditor.dirty,
-      documentTitle: coverLetterEditor.documentTitle,
-      persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle
-    }),
-    version: `${coverLetterEditor.draftPayload ?? ""}\u0000${coverLetterEditor.documentTitle}`
+    dirty: coverLetterEditor.recoveryDirty,
+    version: coverLetterEditor.documentVersion
   };
 
   const handleSelectPreparedCoverLetter = useCallback(
@@ -626,19 +621,10 @@ function App() {
       coverManualVariantSelectionInFlightRef.current = true;
       setIsSelectingCoverVariant(true);
       try {
-        if (coverReplacementStateRef.current.dirty && !(await confirmReplaceCoverLetter())) {
-          return;
-        }
-        const approvedVersion = coverReplacementStateRef.current.version;
-        const opened = await coverLetterEditor.openWorkspaceCoverLetter(
-          fileName,
-          { shouldCancel: () => coverReplacementStateRef.current.version !== approvedVersion }
-        );
-        if (!opened && coverReplacementStateRef.current.version !== approvedVersion) {
-          coverLetterEditor.setStatus(
-            "The cover letter changed while that variant was loading. The current draft was kept."
-          );
-        }
+        await coverLetterEditor.openWorkspaceCoverLetter(fileName, {
+          confirmReplace: async () =>
+            !coverReplacementStateRef.current.dirty || confirmReplaceCoverLetter()
+        });
       } finally {
         coverManualVariantSelectionInFlightRef.current = false;
         setIsSelectingCoverVariant(false);
@@ -647,8 +633,7 @@ function App() {
     [
       confirmReplaceCoverLetter,
       coverLetterEditor.activeCoverFileName,
-      coverLetterEditor.openWorkspaceCoverLetter,
-      coverLetterEditor.setStatus
+      coverLetterEditor.openWorkspaceCoverLetter
     ]
   );
 
@@ -921,8 +906,7 @@ function App() {
   const coverDraftAutosaveState = useCoverLetterAutosaveDraft({
     payload: coverLetterEditor.draftPayload,
     documentTitle: coverLetterEditor.documentTitle,
-    persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle,
-    dirty: coverLetterEditor.dirty,
+    recoveryDirty: coverLetterEditor.recoveryDirty,
     jobLabel: _autosaveJobLabel
   });
 
@@ -1071,8 +1055,8 @@ function App() {
   }, [resumeDocumentDirty]);
 
   useEffect(() => {
-    if (coverLetterEditor.dirty) setPendingCoverDraft(null);
-  }, [coverLetterEditor.dirty]);
+    if (coverLetterEditor.recoveryDirty) setPendingCoverDraft(null);
+  }, [coverLetterEditor.recoveryDirty]);
 
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
@@ -1407,7 +1391,7 @@ function App() {
   // Apply marks each included document clean only after its source persists.
   useBeforeUnloadGuard(
     resumeDocumentDirty ||
-      coverLetterEditor.dirty ||
+      coverLetterEditor.recoveryDirty ||
       isGeneratingCover ||
       isPolishStarting ||
       isPolishing ||
@@ -1462,10 +1446,8 @@ function App() {
       void loadWorkspace(false);
       setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
     }
-    const coverDocumentDirty =
-      coverLetterEditor.dirty || coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
     coverLetterEditor.setStatus(
-      coverDocumentDirty
+      coverLetterEditor.recoveryDirty
         ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
         : "Workspace restored in another window. Reopen a saved cover letter to use the restored copy."
     );
@@ -2186,7 +2168,7 @@ function App() {
   // until the letter is safe elsewhere: openRecoveryDraft seeds CLEAN, so a
   // crash immediately after restoring still has something to recover.
   async function handleRestoreCoverDraft(draft: CoverLetterAutosavedDraft) {
-    if (coverLetterEditor.dirty && !(await confirmReplaceCoverLetter())) return;
+    if (coverLetterEditor.recoveryDirty && !(await confirmReplaceCoverLetter())) return;
     if (coverLetterEditor.openRecoveryDraft(draft.coverPayload, draft.documentTitle)) {
       setPendingCoverDraft(null);
     }

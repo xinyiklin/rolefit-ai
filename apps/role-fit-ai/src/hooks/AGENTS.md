@@ -116,8 +116,13 @@ browser-side effects; components render them and App composes them.
   delegating file transport to `coverLetterWorkspaceRepository`, export and
   application-artifact construction to `coverLetterExport`, title/baseline
   state to `useCoverLetterDocumentIdentity`, and the exact one-snapshot
-  lifecycle to `useCoverLetterPreTailorSnapshot`. History, editing, layout, and
-  PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
+  lifecycle to `useCoverLetterPreTailorSnapshot`. Saved opens and history
+  restores claim one shared replacement generation after confirmation and may
+  adopt only while the exact serialized document + title is unchanged. A
+  workspace save captures its payload, title, source revision, active variant,
+  intended target, and operation id; only that exact live identity may become
+  clean, clear recovery, or rebind the active variant. History, editing, layout,
+  and PDF primitives remain in the shared packages. `useCoverLetter` owns deterministic
   preflight inputs, the single tailoring request, stale-response invalidation,
   one typed blocked-failure state, and one fingerprinted whole-document proposal
   — it never holds the live document. Validate blocked payloads at the loopback

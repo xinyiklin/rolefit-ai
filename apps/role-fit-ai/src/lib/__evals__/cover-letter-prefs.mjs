@@ -91,8 +91,8 @@ assert.match(
 );
 assert.match(
   hook,
-  /const initialFingerprint = startupFingerprintRef\.current[\s\S]*coverLetterStartupIsCurrent/,
-  "startup snapshots the current editor fingerprint before loading the workspace"
+  /const initialDocumentVersion = documentVersionRef\.current[\s\S]*coverLetterStartupIsCurrent/,
+  "startup snapshots the exact current document and title before loading the workspace"
 );
 assert.match(
   hook,
@@ -101,18 +101,18 @@ assert.match(
 );
 assert.match(
   identityHook,
-  /const documentTitleRef = useRef\(documentTitle\)[\s\S]*commitPersistenceBaseline = useCallback\([\s\S]{0,180}?documentTitleRef\.current[\s\S]{0,180}?\[\]\s*\)/,
-  "document-title changes do not recreate the startup adoption callbacks"
+  /const documentVersion = coverLetterDocumentVersion\(currentFingerprint, documentTitle\)[\s\S]*documentVersionRef\.current = documentVersion/,
+  "the replacement version contains the serialized document and its live title"
 );
 assert.match(
   hook,
-  /const titleAtSaveStart = documentTitleRef\.current;[\s\S]{0,700}?await saveCoverLetterWorkspace\([\s\S]{0,500}?commitPersistenceBaseline\(payload, titleAtSaveStart\)/,
-  "workspace saves acknowledge the title captured when the dispatched payload was created"
+  /const saveClaim = saveOwnership\.claim\(\{[\s\S]{0,350}?payload,[\s\S]{0,200}?documentTitle: titleAtSaveStart,[\s\S]{0,300}?sourceRevision: sourceRevisionRef\.current,[\s\S]{0,200}?activeFileName: activeFileNameAtSaveStart,[\s\S]{0,200}?intendedFileName/,
+  "workspace saves capture payload, title, document instance, active variant, target, and operation identity"
 );
 assert.match(
   hook,
-  /if \(documentTitleRef\.current === titleAtSaveStart\) \{\s*clearCoverLetterAutosaveDraft\(\);\s*\}/,
-  "a title edited during a workspace save keeps its recovery draft"
+  /if \(completion === "current"\) \{[\s\S]{0,450}?clearCoverLetterAutosaveDraft\(\);[\s\S]{0,250}?\} else if \(completion === "document-changed"\) \{[\s\S]{0,350}?commitPersistenceBaseline\(payload, titleAtSaveStart\);[\s\S]{0,200}?Earlier version saved; current changes remain unsaved/,
+  "only the exact live save clears recovery while a newer edit keeps its persisted baseline and recovery"
 );
 assert.match(
   hook,
@@ -141,13 +141,13 @@ assert.match(
 );
 assert.match(
   hook,
-  /withWorkspaceReplacement\([\s\S]{0,450}?confirmReplace[\s\S]{0,500}?selectCoverLetterWorkspaceDocument/,
-  "opening a saved cover letter publishes pending state before replacement confirmation"
+  /replaceWorkspaceCoverLetter = useCallback\([\s\S]{0,1000}?confirmReplace[\s\S]{0,900}?ownership\.claim\(documentVersionRef\.current\)[\s\S]{0,700}?ownership\.evaluate\(claim, documentVersionRef\.current\)/,
+  "saved and historical replacements claim one exact post-confirmation document version"
 );
 assert.match(
   hook,
-  /restoreWorkspaceCoverLetter = useCallback\([\s\S]{0,250}?withWorkspaceReplacement/,
-  "history restoration uses the same pending replacement boundary"
+  /openWorkspaceCoverLetter = useCallback\([\s\S]{0,450}?replaceWorkspaceCoverLetter[\s\S]*restoreWorkspaceCoverLetter = useCallback\([\s\S]{0,350}?replaceWorkspaceCoverLetter/,
+  "saved opens and history restores use the same replacement owner"
 );
 assert.match(
   hook,

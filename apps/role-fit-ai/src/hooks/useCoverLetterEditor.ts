@@ -33,6 +33,7 @@ import {
   restoreCoverLetterWorkspaceDocument,
   saveCoverLetterWorkspace,
   selectCoverLetterWorkspaceDocument,
+  type CoverLetterWorkspaceDocument,
   type CoverLetterHistoryGroup,
   type CoverLetterOption,
   type CoverLetterWorkspaceSnapshot
@@ -42,10 +43,17 @@ import {
   createCoverLetterDocumentUpload,
   renderCoverLetterPdfBytes
 } from "../lib/coverLetterExport.ts";
+import {
+  coverLetterDocumentVersion,
+  createCoverLetterReplacementOwnership,
+  createCoverLetterSaveOwnership
+} from "../lib/coverLetterWorkspaceOwnership.ts";
 import { useCoverLetterDocumentIdentity } from "./useCoverLetterDocumentIdentity.ts";
 import { useCoverLetterPreTailorSnapshot } from "./useCoverLetterPreTailorSnapshot.ts";
 
 const STYLE_STORAGE_KEY = "rolefit:coverLetterStyle.v1";
+const WORKSPACE_REPLACEMENT_PRESERVED_STATUS =
+  "The cover letter changed while that workspace version was loading. The current draft was preserved.";
 // Spell-check is a view preference: it never enters a .cover file, but it is
 // the writer's choice and must survive a reload rather than snapping back on.
 const SPELL_CHECK_STORAGE_KEY = "rolefit:coverLetterSpellCheck.v1";
@@ -113,11 +121,23 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [style, setStyle] = useState<DocStyle>(loadStyle);
   const [initialData] = useState(() => parseCoverLetterText(""));
   const [sourceRevision, setSourceRevision] = useState(0);
+  const sourceRevisionRef = useRef(0);
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
-  const workspaceOpenGenerationRef = useRef(0);
+  const workspaceReplacementOwnershipRef = useRef<
+    ReturnType<typeof createCoverLetterReplacementOwnership> | null
+  >(null);
+  if (workspaceReplacementOwnershipRef.current === null) {
+    workspaceReplacementOwnershipRef.current = createCoverLetterReplacementOwnership();
+  }
+  const workspaceSaveOwnershipRef = useRef<
+    ReturnType<typeof createCoverLetterSaveOwnership> | null
+  >(null);
+  if (workspaceSaveOwnershipRef.current === null) {
+    workspaceSaveOwnershipRef.current = createCoverLetterSaveOwnership();
+  }
   const workspaceReplacementCountRef = useRef(0);
   // One-shot readiness for the initial options read and optional saved-letter
   // adoption. An explicit user open resolves startup ownership immediately.
@@ -141,9 +161,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     persistedDocumentTitle,
     setDocumentTitle,
     dirty,
+    recoveryDirty,
     commitPersistenceBaseline,
     documentTitleRef,
-    startupFingerprintRef
+    documentVersion,
+    documentVersionRef
   } = useCoverLetterDocumentIdentity(
     serializeCoverLetterFile(initialData, documentStyleToCoverLetterStyle(style)),
     currentFingerprint
@@ -162,12 +184,13 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     (data: ResumeData, automatic = false) => {
       if (!automatic) {
         cancelStartupOpenRef.current = true;
-        workspaceOpenGenerationRef.current += 1;
+        workspaceReplacementOwnershipRef.current?.invalidate();
         setIsWorkspaceBootstrapping(false);
       }
       editor.seedData(data);
       dropPreTailorSnapshot();
-      setSourceRevision((current) => current + 1);
+      sourceRevisionRef.current += 1;
+      setSourceRevision(sourceRevisionRef.current);
       onOpenDocumentRef.current?.();
     },
     [dropPreTailorSnapshot, editor.seedData]
@@ -180,7 +203,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const [coverLetterOptions, setCoverLetterOptions] = useState<CoverLetterOption[]>([]);
   const [coverLetterHistory, setCoverLetterHistory] = useState<CoverLetterHistoryGroup[]>([]);
   const [coverLetterCandidatesRevision, setCoverLetterCandidatesRevision] = useState(0);
-  const [activeCoverFileName, setActiveCoverFileName] = useState("");
+  const [activeCoverFileName, setActiveCoverFileNameState] = useState("");
+  const activeCoverFileNameRef = useRef(activeCoverFileName);
+  const setActiveCoverFileName = useCallback((fileName: string) => {
+    activeCoverFileNameRef.current = fileName;
+    setActiveCoverFileNameState(fileName);
+  }, []);
 
   // Saved and historical documents share one pending boundary, including the
   // replacement confirmation. The count keeps overlapping reads from clearing
@@ -530,56 +558,107 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         documentStyleToCoverLetterStyle(styleRef.current)
       );
       const titleAtSaveStart = documentTitleRef.current;
+      const activeFileNameAtSaveStart = activeCoverFileNameRef.current;
+      const intendedFileName =
+        target?.fileName ?? (target?.variant ? "" : activeFileNameAtSaveStart);
+      const saveOwnership = workspaceSaveOwnershipRef.current;
+      if (!saveOwnership) return;
+      const saveClaim = saveOwnership.claim({
+        payload,
+        documentTitle: titleAtSaveStart,
+        documentVersion: coverLetterDocumentVersion(payload, titleAtSaveStart),
+        sourceRevision: sourceRevisionRef.current,
+        activeFileName: activeFileNameAtSaveStart,
+        intendedFileName
+      });
       try {
         // `variant` is a LABEL the server slugs; `fileName` is already validated
         // workspace identity. Keeping that distinction here prevents an update
         // from being re-slugged as a new doubly-prefixed variant.
         const data = await saveCoverLetterWorkspace(payload, {
-          fileName:
-            target?.fileName ?? (target?.variant ? undefined : activeCoverFileName || undefined),
+          fileName: intendedFileName || undefined,
           variant: target?.variant
         });
         adoptCoverWorkspaceSnapshot(data);
-        if (data.fileName) {
-          setActiveCoverFileName(data.fileName);
-          saveLastCoverLetterName(data.fileName);
-        }
-        editor.markClean();
-        commitPersistenceBaseline(payload, titleAtSaveStart);
-        // A title changed after dispatch was not part of this save. Keep its
-        // recovery copy until a later save acknowledges that exact title.
-        if (documentTitleRef.current === titleAtSaveStart) {
+        const completion = saveOwnership.evaluate(saveClaim, {
+          documentVersion: documentVersionRef.current,
+          sourceRevision: sourceRevisionRef.current,
+          activeFileName: activeCoverFileNameRef.current
+        });
+        if (completion === "current") {
+          if (data.fileName) {
+            setActiveCoverFileName(data.fileName);
+            saveLastCoverLetterName(data.fileName);
+          }
+          editor.markClean();
+          commitPersistenceBaseline(payload, titleAtSaveStart);
           clearCoverLetterAutosaveDraft();
+          setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
+        } else if (completion === "document-changed") {
+          // The response made the dispatched bytes durable, but not the newer
+          // live edit. Baseline only this same document and retain its recovery.
+          commitPersistenceBaseline(payload, titleAtSaveStart);
+          setStatus("Earlier version saved; current changes remain unsaved.");
+        } else if (completion === "document-replaced") {
+          setStatus("Earlier version saved; the current cover letter was kept.");
         }
-        setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
       } catch (error) {
-        setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
+        const completion = saveOwnership.evaluate(saveClaim, {
+          documentVersion: documentVersionRef.current,
+          sourceRevision: sourceRevisionRef.current,
+          activeFileName: activeCoverFileNameRef.current
+        });
+        if (completion !== "superseded") {
+          setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
+        }
       }
     },
-    [activeCoverFileName, adoptCoverWorkspaceSnapshot, commitPersistenceBaseline, documentTitleRef, editor.editedResume, editor.markClean]
+    [
+      adoptCoverWorkspaceSnapshot,
+      commitPersistenceBaseline,
+      documentTitleRef,
+      documentVersionRef,
+      editor.editedResume,
+      editor.markClean,
+      setActiveCoverFileName
+    ]
   );
 
-  const openWorkspaceCoverLetter = useCallback(
+  const replaceWorkspaceCoverLetter = useCallback(
     async (
-      fileName: string,
-      options: WorkspaceCoverLetterOpenOptions = {}
-    ): Promise<boolean> => {
-      return withWorkspaceReplacement(async () => {
+      load: () => Promise<CoverLetterWorkspaceDocument>,
+      options: WorkspaceCoverLetterOpenOptions,
+      successMessage: (data: CoverLetterWorkspaceDocument) => string,
+      fallbackError: string
+    ): Promise<boolean> =>
+      withWorkspaceReplacement(async () => {
         if (options.confirmReplace && !(await options.confirmReplace())) return false;
-        const generation = workspaceOpenGenerationRef.current + 1;
-        workspaceOpenGenerationRef.current = generation;
+
+        // A user-owned saved/history action supersedes startup as soon as its
+        // confirmation succeeds, not only after its network response arrives.
+        if (!options.background && !options.startup) {
+          cancelStartupOpenRef.current = true;
+          setIsWorkspaceBootstrapping(false);
+        }
+
+        const ownership = workspaceReplacementOwnershipRef.current;
+        if (!ownership) return false;
+        const claim = ownership.claim(documentVersionRef.current);
         try {
-          const data = await selectCoverLetterWorkspaceDocument(fileName);
+          const data = await load();
+          const result = ownership.evaluate(claim, documentVersionRef.current);
+          if (result === "document-changed") {
+            setStatus(WORKSPACE_REPLACEMENT_PRESERVED_STATUS);
+            return false;
+          }
           if (
-            generation !== workspaceOpenGenerationRef.current ||
+            result !== "current" ||
             options.shouldCancel?.() ||
-            // Only the one-shot startup open is invalidated by earlier user
-            // interaction. A later recommendation has its own live dirty/version
-            // guard and may safely replace a clean document.
             (options.startup && cancelStartupOpenRef.current)
           ) {
             return false;
           }
+
           adoptCoverPayload(
             data.text,
             data.fileName,
@@ -587,27 +666,46 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
             options.background === true
           );
           adoptCoverWorkspaceSnapshot(data);
-          setStatus(options.background ? "" : `Opened ${data.label}.`);
+          setStatus(options.background ? "" : successMessage(data));
           return true;
         } catch (error) {
-          setStatus(error instanceof Error ? error.message : "Cover letter load failed.");
+          const result = ownership.evaluate(claim, documentVersionRef.current);
+          if (result === "current") {
+            setStatus(error instanceof Error ? error.message : fallbackError);
+          } else if (result === "document-changed") {
+            setStatus(WORKSPACE_REPLACEMENT_PRESERVED_STATUS);
+          }
           return false;
         }
-      });
+      }),
+    [adoptCoverPayload, adoptCoverWorkspaceSnapshot, documentVersionRef, withWorkspaceReplacement]
+  );
+
+  const openWorkspaceCoverLetter = useCallback(
+    async (
+      fileName: string,
+      options: WorkspaceCoverLetterOpenOptions = {}
+    ): Promise<boolean> => {
+      return replaceWorkspaceCoverLetter(
+        () => selectCoverLetterWorkspaceDocument(fileName),
+        options,
+        (data) => `Opened ${data.label}.`,
+        "Cover letter load failed."
+      );
     },
-    [adoptCoverPayload, adoptCoverWorkspaceSnapshot, withWorkspaceReplacement]
+    [replaceWorkspaceCoverLetter]
   );
 
   useEffect(() => {
     let cancelled = false;
-    const initialFingerprint = startupFingerprintRef.current;
+    const initialDocumentVersion = documentVersionRef.current;
     void (async () => {
       try {
         const snapshot = await refreshCoverWorkspace();
         if (
           !coverLetterStartupIsCurrent(
-            initialFingerprint,
-            startupFingerprintRef.current,
+            initialDocumentVersion,
+            documentVersionRef.current,
             cancelled || cancelStartupOpenRef.current
           ) ||
           !snapshot
@@ -631,8 +729,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
               startup: true,
               shouldCancel: () =>
                 !coverLetterStartupIsCurrent(
-                  initialFingerprint,
-                  startupFingerprintRef.current,
+                  initialDocumentVersion,
+                  documentVersionRef.current,
                   cancelled
                 )
             }
@@ -648,24 +746,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   }, [openWorkspaceCoverLetter, refreshCoverWorkspace]);
 
   const restoreWorkspaceCoverLetter = useCallback(
-    async (key: string, confirmReplace?: () => Promise<boolean>) => {
-      await withWorkspaceReplacement(async () => {
-        if (confirmReplace && !(await confirmReplace())) return;
-        try {
-          const data = await restoreCoverLetterWorkspaceDocument(key);
-          adoptCoverPayload(
-            data.text,
-            data.fileName,
-            data.label
-          );
-          adoptCoverWorkspaceSnapshot(data);
-          setStatus(`Restored ${data.label} from history.`);
-        } catch (error) {
-          setStatus(error instanceof Error ? error.message : "Cover letter restore failed.");
-        }
-      });
-    },
-    [adoptCoverPayload, adoptCoverWorkspaceSnapshot, withWorkspaceReplacement]
+    (key: string, confirmReplace?: () => Promise<boolean>): Promise<boolean> =>
+      replaceWorkspaceCoverLetter(
+        () => restoreCoverLetterWorkspaceDocument(key),
+        { confirmReplace },
+        (data) => `Restored ${data.label} from history.`,
+        "Cover letter restore failed."
+      ),
+    [replaceWorkspaceCoverLetter]
   );
 
   const saveCoverFile = useCallback(() => {
@@ -769,10 +857,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     undoSequence: editor.undoSequence,
     redoSequence: editor.redoSequence,
     dirty,
+    recoveryDirty,
     text,
     sourceRevision,
     documentTitle,
     persistedDocumentTitle,
+    documentVersion,
     setDocumentTitle,
     docStyle,
     status,
