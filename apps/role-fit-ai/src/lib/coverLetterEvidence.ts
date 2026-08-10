@@ -1,3 +1,4 @@
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
 import { templateHasUnresolvedSlots } from "./coverLetterTemplate.ts";
@@ -68,11 +69,26 @@ function stableEvidenceId(
   return `${source}:${fingerprint}:${occurrence}`;
 }
 
+// Attribution context for one resume entry. It stays long on purpose: for an
+// entry with bullets, the dates, link, employer, and stack live ONLY here, so
+// the model would lose them if this were trimmed to a name. Inline marks are
+// display syntax, not content, and belong in neither the prompt nor the rail.
+// The entry's own name always leads, which is the part provenance shows.
+const ENTRY_LABEL_SEPARATOR = " · ";
+
 function entryLabel(entry: ResumeEntry): string {
   return [entry.titleLeft, entry.titleRight, entry.subtitleLeft, entry.subtitleRight]
-    .map(compact)
+    .map((value) => compact(stripInlineMarks(value)))
     .filter(Boolean)
-    .join(" · ");
+    .join(ENTRY_LABEL_SEPARATOR);
+}
+
+// The identifying head of an entry label. Provenance answers "which entry did
+// this come from", so it wants the name, not the entry's whole serialization.
+// Exported beside the label it reads so the separator has one owner.
+export function evidenceEntryName(label: string | undefined): string {
+  const [name] = stripInlineMarks(label ?? "").split(ENTRY_LABEL_SEPARATOR);
+  return name?.trim() ?? "";
 }
 
 function pushEvidence(
@@ -115,7 +131,7 @@ export function buildCoverLetterEvidence({
   const occurrences = new Map<string, number>();
 
   for (const section of resumeData?.sections ?? []) {
-    const sectionLabel = compact(section.heading) || "Untitled section";
+    const sectionLabel = compact(stripInlineMarks(section.heading)) || "Untitled section";
     for (const entry of section.items) {
       const label = entryLabel(entry);
       if (entry.bullets.length > 0) {
@@ -132,13 +148,12 @@ export function buildCoverLetterEvidence({
       if (section.type === "skills") {
         const skillsText =
           entry.subtitleLeft.trim() || entry.subtitleRight.trim() || entry.titleLeft.trim();
+        const category = compact(stripInlineMarks(entry.titleLeft));
         pushEvidence(items, occurrences, {
           source: "resume",
           text: skillsText,
           section: sectionLabel,
-          ...(entry.titleLeft.trim() && skillsText !== entry.titleLeft.trim()
-            ? { entry: entry.titleLeft.trim() }
-            : {})
+          ...(category && skillsText !== entry.titleLeft.trim() ? { entry: category } : {})
         });
         continue;
       }
@@ -153,7 +168,7 @@ export function buildCoverLetterEvidence({
           source: "resume",
           text,
           section: sectionLabel,
-          entry: label ? `${fieldLabel} · ${label}` : fieldLabel
+          entry: label ? `${label}${ENTRY_LABEL_SEPARATOR}${fieldLabel}` : fieldLabel
         });
       }
     }

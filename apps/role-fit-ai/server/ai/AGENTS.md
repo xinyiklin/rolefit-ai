@@ -17,22 +17,17 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
   are ranked by materiality and job relevance into complete JSON; the response
   is validated only against that selected set and reports the omitted count.
-- `finalCheck.ts` owns the separate optional current-resume check: one provider
-  dispatch, an independent compact contract, deterministic issue grounding,
-  partial valid issue survival, and server-derived status. It never returns a
-  score, fit verdict, recommendation, or rewrite. Every provider issue carries
-  a private exact source excerpt from the current document (Unsupported /
-  Clarity) or posting (Missing); each detail must refer to its own anchor, which
-  is validated and never returned.
 - `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
-  contract. Cover letters and current-document checks use their own routes.
-- `jobAnalysis.ts`, `quickFit.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
+  contract. Cover letters and application answers use their own routes.
+- `jobAnalysis.ts`, `fitAssessment.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
-  Job analysis plus optional compact Initial Fit in one provider dispatch;
-  their response subsections sanitize independently. `mode: "initial-fit"`
-  reruns only the compact fit after a relevant input changes. Initial Fit must
+  Job analysis plus optional compact Fit Assessment in one provider dispatch only
+  when their provider/model/reasoning settings match; otherwise the client commits
+  Job analysis before using `mode: "fit-assessment"` with Fit's own configuration.
+  Their response subsections sanitize independently. `mode: "fit-assessment"`
+  reruns only the compact fit after a relevant input changes. Fit Assessment must
   follow the canonical
-  [`server/ai/README.md`](README.md#initial-fit-technical-contract)
+  [`server/ai/README.md`](README.md#fit-assessment-technical-contract)
   contract: both paths render one exported rules block, every finding uses exact
   current-source excerpts, and server acceptance stays mechanical rather than
   becoming a second classifier or guessed fallback.
@@ -43,7 +38,7 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   provider dispatch only for a genuinely unresolvable fact, and cannot return
   `ready` with template tokens or unresolved correspondence fields.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
-  checks. The direct category rubric in `quickFit.ts` is provider-applied; do
+  checks. The direct category rubric in `fitAssessment.ts` is provider-applied; do
   not add a deterministic fit classifier, numeric scores, or a visible/persisted
   ledger.
 - Evidence selection belongs to the model, not to the candidate and not to a
@@ -87,14 +82,8 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   without erasing safe siblings.
   Optional summary/gap failures never erase safe siblings, while an all-drop
   returns Withheld rather than a successful empty proposal.
-- Final Check audits the current edited draft only when enabled or explicitly
-  rerun. Validate its issue kinds, exact private source anchors, each detail's
-  semantic connection to its own anchor, and grounding independently; drop
-  malformed siblings, and
-  derive READY / REVIEW / NEEDS_EVIDENCE from the surviving issues. Its failure
-  is non-blocking and cannot alter Polish or Apply.
 - Polish failures fail plainly without changing the document.
-  Job analysis and Initial Fit failures are advisory to Prepare: the local brief
+  Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
   failure authorizes silent fabrication or a substitute AI result.
 - Propagate request cancellation into native API fetches and CLI subprocesses.
@@ -128,8 +117,8 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - Run the nearest offline eval under `server/ai/__evals__/`.
 - Prompt, grounding, sanitizer, provider-contract, or scoring-contract changes
   require adversarial probes and a diff review before handoff.
-- Initial Fit changes require `quick-fit-probes.mjs` and
-  `initial-fit-consistency-contracts.mjs`; shared request or lifecycle changes
+- Fit Assessment changes require `fit-assessment-probes.mjs` and
+  `fit-assessment-consistency-contracts.mjs`; shared request or lifecycle changes
   additionally require the client request, lifecycle, and intake entry-point
   evals named in the app guide.
 - Live provider evals cost tokens and may expose private inputs; run them only

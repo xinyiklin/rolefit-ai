@@ -62,8 +62,8 @@ receipt and Job analysis progress navigate to and remain visible on Prepare.
 Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the
 main column and one Application rail combines both material choices, readiness,
-the saved-application summary, a flat Initial Fit summary, and Apply. Initial
-Fit shows only its four-level verdict, selected resume, summary, up to three
+the saved-application summary, a flat Fit Assessment summary, and Apply. Fit
+Assessment shows only its four-level verdict, selected resume, summary, up to three
 matches and gaps, and a relevant eligibility warning. It has distinct running,
 disabled, and retryable-unavailable states and never shows scores, confidence,
 evidence ledgers, quotations, recommendations, or historical audit state. Nothing on
@@ -106,9 +106,9 @@ the normal receipt; reserve the shared compact recommendation line for a blocked
 replacement. Do not persist parallel variant metadata or widen the strict
 document schema for this decision.
 
-When enabled, Initial Fit is an optional subsection of the same normal Prepare
+When enabled, Fit Assessment is an optional subsection of the same normal Prepare
 provider dispatch and sanitizes independently from Job analysis. A resume change
-reruns only Initial Fit. Settings exposes one Initial Fit toggle, default on,
+reruns only Fit Assessment. Settings exposes one Fit Assessment toggle, default on,
 plus independent Resume and Cover Letter automatic Polish switches and minimum-
 fit selects. Both switches default off; Resume defaults to Reasonable or better
 and Cover Letter to Strong only. `CHECK` may auto-start an eligible document,
@@ -213,12 +213,11 @@ resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
 (`Accept` / `Discard` a proposal) while their content stays document-specific; a
 row never repeats a reason that the field directly below it already carries.
 
-When enabled, Resume's current-document check is the closing Polish phase and
-runs once after proposal decisions settle. It checks the actual resulting
-resume, displays READY, REVIEW, or NEEDS EVIDENCE with at most five actionable
-issues, and becomes visibly out of date when its semantic inputs change. The
-inline Check again action may rerun it after later edits. It is not a standalone
-Final Check section, does not replace proposal feedback, and never blocks Apply.
+Polish is the only document-generation phase after the readiness rows. Its
+provider prompt performs a silent evidence and output audit before returning a
+proposal; the configured reasoning effort controls both provider reasoning and
+the breadth of that audit. The audit has no separate UI, route, or persisted
+result, and proposal acceptance remains the human decision boundary.
 
 The stacked layout owns vertical scrolling inside the document tabs' clipped
 studio host; the editor and rail can then participate as full-width rows without
@@ -285,10 +284,28 @@ stream as content. Zoom, spell-check, and preset labels do not.
 Polish should feel like a review queue, not a hidden overwrite. The user selects
 editable resume sections in the document; identity, contact, education, dates,
 and omitted sections stay locked. After AI returns, show What improved (up to
-three), Edits ready collapsed by default with Apply all plus individual
-Accept/Edit/Discard, Still missing (up to three), and one quiet withheld line.
-Do not render evidence, risk, or keyword chips in this normal surface. The
-editor remains the final source of truth for export and pipeline tracking.
+three), the proposed edits open by default in one disclosure, Still missing (up
+to three), and one quiet withheld line. Do not render evidence, risk, or keyword
+chips in this normal surface. The editor remains the final source of truth for
+export and pipeline tracking.
+
+Both documents accept a proposal the same way, because a user should not have to
+relearn the commit control when moving between them. `ProposalDecisionBar` is
+the only place either one commits: it sits in the shared rail's sticky footer,
+states what is left to decide in that document's own unit, and carries a primary
+accept beside a secondary discard, in that order. The resume's bar decides all
+remaining edits at once and reports progress through a real `progressbar`; the
+letter's bar decides one replacement and shows no meter. The rail description
+must not restate the counts the bar already owns.
+
+Changed words are marked, never left for the reader to spot. `ProposalDiff` is
+the one renderer: the resume marks removals in its Now line and additions in its
+Proposed line, and the letter offers a Changes / Full letter switch over the same
+marking, defaulting to Changes. Text carrying inline marks falls back to its
+plain rendered side, because a word-level diff can split a tag pair at a segment
+seam. Every recorded decision is reversible in place — an accepted resume edit
+restores its original text on Undo, a discarded one simply returns to the queue —
+so no accept is a one-way door the user has to Polish again to escape.
 
 When changing one menu or tab, preserve the others' layout and labels
 unless the task explicitly touches them.
@@ -403,28 +420,30 @@ Never show:
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
 - Settings > AI stages carries one section per configurable stage (Job analysis,
-  Resume Polish, Check current document, Cover letter, Application questions). Each
+  Fit Assessment, Resume Polish, Cover letter, Application questions). Each
   owns a concrete provider/model/effort config plus an optional instruction
   override; **Copy settings** is a one-shot sync between stages, not a live link.
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
-- Settings places the compact Initial Fit toggle and the two independent
+- Settings places the compact Fit Assessment toggle and the two independent
   automatic Polish switch/minimum-fit pairs beside the stage configuration. It
   exposes categorical verdict cutoffs, not scores, confidence thresholds, or a
   master automation switch.
 - Keep every stage section expanded together. There is no section toggle,
   collapsed summary, or persisted open/collapse preference; the user can scan
   and edit all stage configurations without changing view state.
-- Candidate facts (citizenship, work authorization, sponsorship, education level,
-  field of study) are strictly opt-in. An unset field emits no prompt line, so
-  the model is never told a fact the user did not declare. Citizenship gates the
-  work-authorization lines and education level gates the field of study; neither
-  block gates the other.
-- Retired Tailor/Review/Both settings are dropped. Resume and Prepare both use
-  the one-pass Polish contract; the current-document check is its optional
-  closing phase, with an independent provider setting because it remains an
-  extra request. The persisted stage id stays `final-check` for compatibility.
+- Candidate facts (citizenship, work authorization, sponsorship, education
+  level, field of study, optional GPA, earliest-start availability, and
+  source-aware experience) are strictly opt-in. An unset field emits no prompt
+  line, so the model is never told a fact the user did not declare. Citizenship
+  gates the work-authorization lines; education level gates the field of study
+  and 4.0-scale GPA; an exact availability date must be a valid calendar date.
+  These blocks remain independent.
+- Retired Tailor/Review/Both and obsolete extra-pass settings are dropped.
+  Resume and Prepare both use the one-pass Polish contract; its prompt carries
+  the internal audit and the selected reasoning effort remains the only effort
+  control.
 - Job analysis and Resume Polish each report their real operation. Resume Polish
   never fabricates a second stage: Proposal, No changes, and Withheld are
   distinct, and an all-withheld result is not a completed proposal.
@@ -435,9 +454,11 @@ Never show:
 - Each Model control changes with its section's selected provider and exposes
   only models verified against the installed CLI or current first-party API;
   do not add a custom-model escape hatch for unverified IDs.
-- Provider, model, and effort preferences may persist in localStorage so all
-  five stage configurations survive reloads. CLI providers show connection
-  guidance and no API-key field. Native OpenAI/Claude API credentials are added
+- Provider, model, and effort preferences persist in the owner-only workspace
+  preference record so all five stage configurations survive reloads and follow
+  the workspace across browser origins. localStorage is only a fail-open cache.
+  CLI providers show connection guidance and no API-key field. Native
+  OpenAI/Claude API credentials are added
   only through the local provider companion; the browser never collects,
   stores, renders, or submits them. Settings shows only explicitly added
   providers and makes an added-but-unready provider visibly unavailable.

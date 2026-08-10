@@ -1,11 +1,11 @@
-// Manual, live-provider calibration for Initial Fit. The tracked fixtures are
+// Manual, live-provider calibration for Fit Assessment. The tracked fixtures are
 // synthetic, console output is aggregate-only, and full synthetic receipts are
-// written beneath the gitignored workspace/initial-fit-eval/ directory.
+// written beneath the gitignored workspace/fit-assessment-eval/ directory.
 //
 // Usage:
-//   npm run eval:live:initial-fit --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.6-sol EVAL_REASONING_EFFORT=medium npm run eval:live:initial-fit --workspace apps/role-fit-ai
-//   EVAL_MATRIX='[{"provider":"codex-cli","model":"gpt-5.6-sol","reasoningEffort":"medium"}]' npm run eval:live:initial-fit --workspace apps/role-fit-ai
+//   npm run eval:live:fit-assessment --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
+//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.6-sol EVAL_REASONING_EFFORT=medium npm run eval:live:fit-assessment --workspace apps/role-fit-ai
+//   EVAL_MATRIX='[{"provider":"codex-cli","model":"gpt-5.6-sol","reasoningEffort":"medium"}]' npm run eval:live:fit-assessment --workspace apps/role-fit-ai
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -22,13 +22,13 @@ import {
   sanitizePrepareAnalysisResponse
 } from "../jobAnalysis.ts";
 import {
-  buildQuickFitPrompts,
-  sanitizeQuickFitResponse
-} from "../quickFit.ts";
+  buildFitAssessmentPrompts,
+  sanitizeFitAssessmentResponse
+} from "../fitAssessment.ts";
 import { resolveProviderRequest } from "../providers.ts";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const OUT_DIR = join(APP_ROOT, "workspace/initial-fit-eval");
+const OUT_DIR = join(APP_ROOT, "workspace/fit-assessment-eval");
 const fixtureFilter = process.argv[2] || "all";
 const RUNS = Number(process.argv[3] || 3);
 const REPORT_ONLY = process.env.EVAL_REPORT_ONLY === "1";
@@ -39,7 +39,7 @@ if (!Number.isInteger(RUNS) || RUNS < 3 || RUNS > 5) {
 }
 
 const allFixtures = JSON.parse(
-  readFileSync(new URL("./fixtures/initial-fit-consistency.json", import.meta.url), "utf8")
+  readFileSync(new URL("./fixtures/fit-assessment-consistency.json", import.meta.url), "utf8")
 );
 const requestedFixtureIds = new Set(fixtureFilter.split(",").map((id) => id.trim()).filter(Boolean));
 const fixtures = fixtureFilter === "all"
@@ -147,17 +147,17 @@ async function dispatchPath({ config, fixture, path, run }) {
   let parsed;
   let result;
   if (path === "standalone") {
-    prompts = buildQuickFitPrompts(fixture);
+    prompts = buildFitAssessmentPrompts(fixture);
     parsed = await callConfiguredProvider({ ...resolved, ...prompts }, stats);
-    result = sanitizeQuickFitResponse(parsed, fixture);
+    result = sanitizeFitAssessmentResponse(parsed, fixture);
   } else {
     const fitInput = {
       resumeText: fixture.resumeText,
       candidateContext: fixture.candidateContext
     };
-    prompts = buildJobAnalysisPrompts({ jobText: fixture.jobText, initialFit: fitInput });
+    prompts = buildJobAnalysisPrompts({ jobText: fixture.jobText, fitAssessment: fitInput });
     parsed = await callConfiguredProvider({ ...resolved, ...prompts }, stats);
-    result = sanitizePrepareAnalysisResponse(parsed, fixture.jobText, fitInput).initialFit ?? null;
+    result = sanitizePrepareAnalysisResponse(parsed, fixture.jobText, fitInput).fitAssessment ?? null;
   }
   const themes = representedThemes(fixture, result);
   writeFileSync(
@@ -201,7 +201,7 @@ function loadReceipt({ config, fixture, path, run }) {
 
 mkdirSync(OUT_DIR, { recursive: true });
 console.log(
-  `Initial Fit consistency eval — mode=${REPORT_ONLY ? "report" : "live"} configs=${matrix.length} fixtures=${fixtures.length} runs=${RUNS} paths=combined,standalone`
+  `Fit Assessment consistency eval — mode=${REPORT_ONLY ? "report" : "live"} configs=${matrix.length} fixtures=${fixtures.length} runs=${RUNS} paths=combined,standalone`
 );
 
 const records = [];

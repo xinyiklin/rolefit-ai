@@ -2,8 +2,13 @@ import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
 import type { Application } from "../../../hooks/useApplications";
+import { fitAssessmentRunLabel } from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
-import type { QuickFitState, QuickFitVerdict } from "../../../../shared/quickFitContract.ts";
+import type {
+  FitAssessmentInputChange,
+  FitAssessmentState,
+  FitAssessmentVerdict
+} from "../../../../shared/fitAssessmentContract.ts";
 
 // Preparation is one of the readiness checks, so its progress earns rail space
 // only while something is actually happening or a message is outstanding.
@@ -12,21 +17,28 @@ export type PrepareActivity = {
   message: string;
 };
 
-const QUICK_FIT_LABEL: Record<QuickFitVerdict, string> = {
+const FIT_ASSESSMENT_LABEL: Record<FitAssessmentVerdict, string> = {
   STRONG: "Strong fit",
   REASONABLE: "Reasonable fit",
   STRETCH: "Stretch",
   LIMITED: "Limited fit"
 };
 
+const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: string; detail: string }> = {
+  job: { label: "Job posting", detail: "Replaced" },
+  resume: { label: "Resume content", detail: "Edited" },
+  "candidate-context": { label: "About you", detail: "Updated" },
+  settings: { label: "Assessment setup", detail: "Changed" }
+};
+
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
-  quickFit: QuickFitState;
-  onRetryInitialFit: () => void;
-  // Whether a retry can actually do anything. A resume label is not that
+  fitAssessment: FitAssessmentState;
+  onAssessFit: () => void;
+  // Whether an assessment can actually run. A resume label is not that
   // signal: the state that most needs recovery — no resume resolved — has no
   // label, which is exactly why it used to offer no way out.
-  canRetryInitialFit: boolean;
+  canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -36,9 +48,9 @@ type PrepareApplicationRailProps = {
 
 export function PrepareApplicationRail({
   activity,
-  quickFit,
-  onRetryInitialFit,
-  canRetryInitialFit,
+  fitAssessment,
+  onAssessFit,
+  canAssessFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -51,6 +63,18 @@ export function PrepareApplicationRail({
   const hasSavedCoverLetter = Boolean(
     linkedApplication?.coverLetterArtifacts?.hasSource || linkedApplication?.coverLetterArtifacts?.hasPdf
   );
+  const assessmentSnapshot = fitAssessment.status === "ready"
+    || fitAssessment.status === "saved"
+    || fitAssessment.status === "stale"
+    ? fitAssessment.snapshot
+    : null;
+  const assessmentRunLabel = assessmentSnapshot ? fitAssessmentRunLabel(assessmentSnapshot) : "";
+  const assessmentMeta = [
+    fitAssessment.status === "saved" ? "Saved with application" : "",
+    fitAssessment.status === "stale" ? "Previous assessment" : "",
+    assessmentRunLabel
+  ].filter(Boolean).join(" · ");
+  const fitAssessmentMessage = "message" in fitAssessment ? fitAssessment.message : "";
 
   return (
     <aside className="prepare-rail" aria-label="Application setup">
@@ -65,62 +89,71 @@ export function PrepareApplicationRail({
         </div>
 
         <div className="prepare-fit">
-          <p className="prepare-page__eyebrow">Initial Fit</p>
-          {quickFit.status === "ready" ? (
+          <p className="prepare-page__eyebrow">Fit Assessment</p>
+          {assessmentSnapshot ? (
             <>
               <div className="prepare-fit__summary">
-                <strong className={`quick-fit-verdict is-${quickFit.snapshot.result.verdict.toLowerCase()}`}>
-                  {QUICK_FIT_LABEL[quickFit.snapshot.result.verdict]}
+                <strong className={`fit-assessment-verdict is-${assessmentSnapshot.result.verdict.toLowerCase()}`}>
+                  {FIT_ASSESSMENT_LABEL[assessmentSnapshot.result.verdict]}
                 </strong>
-                <span>{quickFit.snapshot.resumeLabel}</span>
+                <span>{assessmentSnapshot.resumeLabel}</span>
               </div>
-              <p>{quickFit.snapshot.result.summary}</p>
-              {quickFit.snapshot.result.matches.length ? (
-                <div className="quick-fit-list">
+              <p>{assessmentSnapshot.result.summary}</p>
+              {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
+              {assessmentSnapshot.result.matches.length ? (
+                <div className="fit-assessment-list">
                   <strong>Matches</strong>
                   <ul>
-                    {quickFit.snapshot.result.matches.map((match) => <li key={match}>{match}</li>)}
+                    {assessmentSnapshot.result.matches.map((match) => <li key={match}>{match}</li>)}
                   </ul>
                 </div>
               ) : null}
-              {quickFit.snapshot.result.gaps.length ? (
-                <div className="quick-fit-list">
+              {assessmentSnapshot.result.gaps.length ? (
+                <div className="fit-assessment-list">
                   <strong>Important gaps</strong>
                   <ul>
-                    {quickFit.snapshot.result.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+                    {assessmentSnapshot.result.gaps.map((gap) => <li key={gap}>{gap}</li>)}
                   </ul>
                 </div>
               ) : null}
-              {quickFit.snapshot.result.eligibility && quickFit.snapshot.result.eligibility.status !== "CLEAR" ? (
-                <p className="quick-fit-eligibility">
-                  {quickFit.snapshot.result.eligibility.note || "Check the role's eligibility requirement before applying."}
+              {assessmentSnapshot.result.eligibility && assessmentSnapshot.result.eligibility.status !== "CLEAR" ? (
+                <p className="fit-assessment-eligibility">
+                  {assessmentSnapshot.result.eligibility.note || "Check the role's eligibility requirement before applying."}
                 </p>
               ) : null}
-            </>
-          ) : quickFit.status === "running" ? (
-            <p className="prepare-note is-working" role="status">
-              <LoaderCircle className="spin" size={13} aria-hidden="true" />
-              Checking {quickFit.resumeLabel}…
-            </p>
-          ) : quickFit.status === "disabled" ? (
-            <p>Off in Settings. You can continue directly to Polish.</p>
-          ) : quickFit.status === "stale" ? (
-            <>
-              <strong className="prepare-fit__empty">Fit out of date</strong>
-              <p>{quickFit.message}</p>
-              {canRetryInitialFit ? (
-                <button className="ghost-button is-compact" type="button" onClick={onRetryInitialFit}>
-                  Check again
+              {fitAssessment.status === "stale" ? (
+                <div className="fit-assessment-changes" role="status">
+                  <strong>Changed since assessment</strong>
+                  <ul>
+                    {fitAssessment.changes.map((change) => (
+                      <li key={change}>
+                        <span>{FIT_ASSESSMENT_CHANGE_COPY[change].label}</span>
+                        <small>{FIT_ASSESSMENT_CHANGE_COPY[change].detail}</small>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
+              {canAssessFit ? (
+                <button className="ghost-button is-compact" type="button" onClick={onAssessFit}>
+                  Reassess fit
                 </button>
               ) : null}
             </>
+          ) : fitAssessment.status === "running" ? (
+            <p className="prepare-note is-working" role="status">
+              <LoaderCircle className="spin" size={13} aria-hidden="true" />
+              Assessing {fitAssessment.resumeLabel}…
+            </p>
+          ) : fitAssessment.status === "disabled" ? (
+            <p>Off in Settings. You can continue directly to Polish.</p>
           ) : (
             <>
-              <strong className="prepare-fit__empty">Initial Fit unavailable</strong>
-              <p>{quickFit.message}</p>
-              {canRetryInitialFit ? (
-                <button className="ghost-button is-compact" type="button" onClick={onRetryInitialFit}>
-                  Retry fit check
+              <strong className="prepare-fit__empty">Assessment unavailable</strong>
+              <p>{fitAssessmentMessage}</p>
+              {canAssessFit ? (
+                <button className="ghost-button is-compact" type="button" onClick={onAssessFit}>
+                  Retry assessment
                 </button>
               ) : null}
             </>

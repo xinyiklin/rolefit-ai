@@ -1,17 +1,15 @@
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
 import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
-import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
-import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
+import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeProposalTarget } from "../../resume/types";
-import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
 import { resolveDocumentWorkflowStatus } from "../../../shared/documentWorkflowContract.ts";
 import {
   DocumentWorkflowRail,
   type DocumentWorkflowCheck
 } from "../document/DocumentWorkflowRail";
-import { DocumentCheckSummary } from "../document/DocumentCheckSummary";
+import { ProposalDecisionBar } from "../document/ProposalDecisionBar";
 import { ResumeProposalReview } from "./ResumeProposalReview";
 
 type ResumeWorkflowRailProps = {
@@ -23,23 +21,13 @@ type ResumeWorkflowRailProps = {
   resumeReady: boolean;
   jobReady: boolean;
   resumePolishProviderReady: boolean;
-  checkProviderReady: boolean;
-  checkProviderMessage: string;
   selectedSectionCount: number;
   polishSectionCount: number;
   isPolishing: boolean;
   progress: PolishProgressState;
   status?: string;
-  check: FinalCheckResult | null;
-  checkSource: DocumentCheckSource;
-  checkDocumentChanged: boolean;
-  checkInputsChanged: boolean;
-  checkProgress: AiStageState;
-  isChecking: boolean;
   onRetryPolish: () => void;
   onStop: () => void;
-  onCheck: () => void;
-  onStopCheck: () => void;
   onHighlight: (target: ResumeProposalTarget | null) => void;
 };
 
@@ -56,23 +44,13 @@ export function ResumeWorkflowRail({
   resumeReady,
   jobReady,
   resumePolishProviderReady,
-  checkProviderReady,
-  checkProviderMessage,
   selectedSectionCount,
   polishSectionCount,
   isPolishing,
   progress,
   status,
-  check,
-  checkSource,
-  checkDocumentChanged,
-  checkInputsChanged,
-  checkProgress,
-  isChecking,
   onRetryPolish,
   onStop,
-  onCheck,
-  onStopCheck,
   onHighlight
 }: ResumeWorkflowRailProps) {
   const proposalResult = result?.polishOutcome ? result : null;
@@ -81,38 +59,30 @@ export function ResumeWorkflowRail({
   const failed = progress.polish.status === "failed" || progress.polish.status === "stopped";
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
 
-  // A proposal is only "outstanding" while edits still need a decision. Once
-  // they settle, the workflow moves on to the current-resume check rather than
-  // parking on a proposal the user has finished with.
+  // A proposal is only "outstanding" while edits still need a decision.
   const workflow = resolveDocumentWorkflowStatus({
     ready,
     polishing: isPolishing,
-    checking: isChecking,
     proposal: proposalResult && decisions.outstanding > 0
       ? { outstanding: decisions.outstanding, total: decisions.total }
       : null,
     proposalSuperseded: Boolean(proposalResult && proposalStale),
-    check: check?.status ?? null,
-    checkDocumentChanged,
-    checkInputsChanged
   });
 
+  // The footer's decision bar carries the count, so the description says what
+  // accepting means rather than repeating the same numbers one line above it.
   const description = isPolishing
     ? "Creating evidence-grounded resume edits. Your current resume remains unchanged."
-    : workflow.state === "checking"
-      ? "Reviewing the resulting document for evidence, coverage, and clarity."
-      : workflow.state === "proposal"
-        ? `${decisions.total} edit${decisions.total === 1 ? "" : "s"} waiting for your decision.`
-        : workflow.state === "reviewing"
-          ? `${decisions.outstanding} of ${decisions.total} edits still need a decision.`
-          : withheld
+    : workflow.state === "proposal" || workflow.state === "reviewing"
+        ? "Your resume changes only for the edits you accept."
+        : withheld
             ? "The generated edits could not be verified. Your resume is unchanged."
             : failed
               ? "No proposal replaced your resume. Retry when ready."
               : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
                 ? "The resume or prepared job changed. Polish again for a current proposal."
                 : workflow.state === "ready-to-polish"
-                  ? "Polish creates one evidence-grounded proposal, then checks the resulting resume."
+                  ? "Polish creates one evidence-grounded proposal for you to review."
                   : workflow.state === "blocked"
                     ? "Complete the blocked rows before polishing."
                     : "";
@@ -129,25 +99,41 @@ export function ResumeWorkflowRail({
         : "Mark at least one section Polish"
     )
   ];
-  const canCheck = resumeReady && jobReady && checkProviderReady && !isPolishing;
-  const checkBlocker = !resumeReady
-    ? "Add your resume first."
-    : !jobReady
-      ? "Prepare the job first."
-      : !checkProviderReady
-        ? checkProviderMessage || "Check the AI settings for this stage."
-        : isPolishing
-          ? "Wait for Polish to finish."
-          : "";
   const failure = failed && !withheld ? {
     title: progress.polish.errorHeadline || "Polish failed",
     message: "No proposal was created. Your resume was not changed.",
     items: progress.polish.error ? [progress.polish.error] : undefined
   } : null;
+  // Both documents commit from the same place with the same verbs; only the
+  // unit differs — the resume decides N edits, the letter decides one letter.
   const footer = isPolishing ? (
     <button type="button" className="secondary-button is-compact" onClick={onStop}>Stop</button>
   ) : failed ? (
     <button type="button" className="primary-button is-compact" onClick={onRetryPolish}>Retry Polish</button>
+  ) : proposalResult && decisions.total > 0 ? (
+    <ProposalDecisionBar
+      summary={decisions.outstanding
+        ? `${decisions.outstanding} of ${decisions.total} edit${decisions.total === 1 ? "" : "s"} left to decide`
+        : `All ${decisions.total} edit${decisions.total === 1 ? "" : "s"} decided`}
+      progress={{ decided: decisions.decided, total: decisions.total }}
+    >
+      <button
+        type="button"
+        className="primary-button is-compact"
+        disabled={Boolean(proposalStale) || !decisions.outstanding}
+        onClick={decisions.applyAll}
+      >
+        Accept all{decisions.outstanding ? ` (${decisions.outstanding})` : ""}
+      </button>
+      <button
+        type="button"
+        className="secondary-button is-compact"
+        disabled={!decisions.outstanding}
+        onClick={decisions.discardAll}
+      >
+        Discard all
+      </button>
+    </ProposalDecisionBar>
   ) : null;
 
   return (
@@ -163,24 +149,14 @@ export function ResumeWorkflowRail({
     >
       {proposalResult ? (
         <ResumeProposalReview
+          key={decisions.proposalKey}
           result={proposalResult}
           resume={resume}
           decisions={decisions}
+          proposalStale={Boolean(proposalStale)}
           onHighlight={onHighlight}
         />
       ) : null}
-      <DocumentCheckSummary
-        documentNoun="resume"
-        check={check}
-        source={checkSource}
-        staleReason={workflow.state === "stale" ? workflow.staleReason : undefined}
-        progress={checkProgress}
-        isChecking={isChecking}
-        canCheck={canCheck}
-        blocker={checkBlocker}
-        onCheck={onCheck}
-        onStop={onStopCheck}
-      />
     </DocumentWorkflowRail>
   );
 }

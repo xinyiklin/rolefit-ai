@@ -62,6 +62,20 @@ export function useApplicationAnswers({
 
   const dismissAnswersProgress = () => setAnswersProgress({ status: "idle" });
 
+  function stopAnswers() {
+    if (!requestAbortRef.current) return;
+    requestGenerationRef.current += 1;
+    requestAbortRef.current.abort();
+    requestAbortRef.current = null;
+    setIsGeneratingAnswers(false);
+    setAnswersStatus("Application answer drafting stopped. Existing drafts were kept.");
+    setAnswersProgress({
+      status: "stopped",
+      errorHeadline: "Stopped",
+      error: "Answer drafting was cancelled. Generate drafts again when you are ready."
+    });
+  }
+
   // Last submitted request, so the failed dock card's Retry can replay it —
   // handleGenerateAnswers needs the questions list, which only MaterialsTab
   // holds at click time. A ref (not state): nothing renders from it.
@@ -254,6 +268,7 @@ export function useApplicationAnswers({
     handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
+    stopAnswers,
     retryAnswers
   };
 }

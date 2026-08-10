@@ -30,16 +30,16 @@ import {
   findUngroundedCuratedClaimTerm
 } from "./grounding.ts";
 import {
-  QUICK_FIT_RULES,
-  QUICK_FIT_RESPONSE_SCHEMA,
-  analyzeQuickFit,
-  quickFitPromptSection,
-  sanitizeQuickFitResponse
-} from "./quickFit.ts";
+  FIT_ASSESSMENT_RULES,
+  FIT_ASSESSMENT_RESPONSE_SCHEMA,
+  analyzeFitAssessment,
+  fitAssessmentPromptSection,
+  sanitizeFitAssessmentResponse
+} from "./fitAssessment.ts";
 import {
-  normalizeQuickFitInput,
-  type QuickFitResult
-} from "../../shared/quickFitContract.ts";
+  normalizeFitAssessmentInput,
+  type FitAssessmentResult
+} from "../../shared/fitAssessmentContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -48,17 +48,17 @@ type StrListOptions = { maxItems: number; maxLen?: number; minLen?: number };
 
 const JOB_TEXT_CHAR_LIMIT = 24_000;
 
-type InitialFitInput = {
+type FitAssessmentInput = {
   resumeText: string;
   candidateContext?: string;
 };
 
 export function buildJobAnalysisPrompts({
   jobText,
-  initialFit
+  fitAssessment
 }: {
   jobText: unknown;
-  initialFit?: InitialFitInput | null;
+  fitAssessment?: FitAssessmentInput | null;
 }): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
 
@@ -71,9 +71,9 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 4. techKeywords are ONLY concrete technologies/languages/frameworks/tools/platforms NAMED in the posting (e.g. "Python", "React", "AWS", "Kubernetes"). Never a generic skill ("communication") and never a tool the posting does not name.
 5. roleDescription is a neutral extract or light trim of the posting's own role/company description. Do not synthesize a new summary, combine unrelated claims, or add implied context.
 6. Each list item is one concise duty/qualification (no numbering, no bullets).
-7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.${initialFit ? `
+7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.${fitAssessment ? `
 
-${QUICK_FIT_RULES}` : ""}`;
+${FIT_ASSESSMENT_RULES}` : ""}`;
 
   const schema = `Return this JSON shape (use "" / null / [] for anything not stated):
 {
@@ -94,16 +94,16 @@ ${QUICK_FIT_RULES}` : ""}`;
   "senioritySignals": ["e.g. \\"senior\\", \\"entry-level / junior\\", \\"3-5 years\\", \\"leadership\\""],
   "domainSignals": ["e.g. \\"fintech\\", \\"healthcare\\", \\"AI\\", \\"infrastructure\\""]
 }`;
-  const responseSchema = initialFit
-    ? `Return this JSON shape. The job and initialFit subsections are independent; always return the best job object even if Initial Fit is unavailable:
+  const responseSchema = fitAssessment
+    ? `Return this JSON shape. The job and fitAssessment subsections are independent; always return the best job object even if Fit Assessment is unavailable:
 {
   "job": ${schema.slice(schema.indexOf("{"))},
-  "initialFit": ${QUICK_FIT_RESPONSE_SCHEMA}
+  "fitAssessment": ${FIT_ASSESSMENT_RESPONSE_SCHEMA}
 }`
     : schema;
-  // A combined request must show Initial Fit the same normalized posting that
+  // A combined request must show Fit Assessment the same normalized posting that
   // its exact-excerpt validator will use after the response returns.
-  const promptJobText = initialFit ? normalizeQuickFitInput(jobText) : jobText;
+  const promptJobText = fitAssessment ? normalizeFitAssessmentInput(jobText) : jobText;
 
   // The source URL is intentionally NOT included: it can carry private ATS
   // tokens / tracking params, and the product contract (README, ai-server.md)
@@ -114,15 +114,15 @@ ${QUICK_FIT_RULES}` : ""}`;
 ${fenceUntrusted(clipForPrompt(promptJobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${initialFit ? quickFitPromptSection(initialFit) : ""}
+${fitAssessment ? fitAssessmentPromptSection(fitAssessment) : ""}
 
 ${responseSchema}`;
 
   return { systemPrompt, userPrompt };
 }
 
-function initialFitInput(body: Record<string, unknown>): InitialFitInput | null {
-  const raw = body.initialFit;
+function fitAssessmentInput(body: Record<string, unknown>): FitAssessmentInput | null {
+  const raw = body.fitAssessment;
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
   if (source.enabled !== true) return null;
@@ -262,7 +262,7 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
 }
 
 // workAuth is a tracked prepared-job fact that feeds a separate advisory
-// eligibility interpretation; it does not control Initial Fit. Give it the same
+// eligibility interpretation; it does not control Fit Assessment. Give it the same
 // anti-fabrication discipline as every other analyzed field: keep it only when
 // the specific authorization class the model named (clearance / citizenship /
 // visa / sponsorship / work authorization / …) actually appears in the posting.
@@ -444,11 +444,11 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
 export function sanitizePrepareAnalysisResponse(
   parsed: unknown,
   jobText: string,
-  // The Initial Fit inputs, or null when no screening was requested. The two
+  // The Fit Assessment inputs, or null when no screening was requested. The two
   // subsections are sanitized independently on purpose: a weak job half must
   // not discard a valid screening, and vice versa.
-  fitInput: InitialFitInput | null
-): { fields: ReturnType<typeof sanitizeJobAnalysis>; initialFit?: QuickFitResult | null } {
+  fitInput: FitAssessmentInput | null
+): { fields: ReturnType<typeof sanitizeJobAnalysis>; fitAssessment?: FitAssessmentResult | null } {
   const source = parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : {};
@@ -459,7 +459,7 @@ export function sanitizePrepareAnalysisResponse(
     fields: sanitizeJobAnalysis(rawJob, jobText),
     ...(fitInput
       ? {
-          initialFit: sanitizeQuickFitResponse(source.initialFit, {
+          fitAssessment: sanitizeFitAssessmentResponse(source.fitAssessment, {
             jobText,
             resumeText: fitInput.resumeText,
             candidateContext: fitInput.candidateContext
@@ -487,8 +487,8 @@ export async function analyzeJobToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const fitInput = initialFitInput(body);
-  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, initialFit: fitInput });
+  const fitInput = fitAssessmentInput(body);
+  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, fitAssessment: fitInput });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
     { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
@@ -497,7 +497,7 @@ export async function analyzeJobToFields({
   const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, fitInput);
   return {
     ...prepared,
-    initialFitRequested: Boolean(fitInput),
+    fitAssessmentRequested: Boolean(fitInput),
     provider,
     model,
     reasoningEffort,
@@ -522,13 +522,13 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
     }
     // Resolve once for the error label / key validation, then analyze.
     provider = resolveProviderRequest(body).provider;
-    if (body.mode === "initial-fit") {
+    if (body.mode === "fit-assessment") {
       const resumeText = String(body.resumeText ?? "");
       if (resumeText.trim().length < 40) {
-        sendJson(res, 400, { error: "Load a resume before retrying Initial Fit." });
+        sendJson(res, 400, { error: "Load a resume before retrying Fit Assessment." });
         return;
       }
-      const fit = await analyzeQuickFit({
+      const fit = await analyzeFitAssessment({
         jobText,
         resumeText,
         candidateContext: String(body.candidateContext ?? ""),
@@ -537,8 +537,8 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       });
       sendJson(res, 200, {
         source: "ai",
-        initialFit: fit.initialFit,
-        initialFitStatus: fit.initialFit ? "ready" : "unavailable",
+        fitAssessment: fit.fitAssessment,
+        fitAssessmentStatus: fit.fitAssessment ? "ready" : "unavailable",
         provider: fit.provider,
         model: fit.model,
         reasoningEffort: fit.reasoningEffort
@@ -556,10 +556,10 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       model: result.model,
       reasoningEffort: result.reasoningEffort,
       attempts: result.attempts,
-      ...(result.initialFitRequested
+      ...(result.fitAssessmentRequested
         ? {
-            initialFit: result.initialFit,
-            initialFitStatus: result.initialFit ? "ready" : "unavailable"
+            fitAssessment: result.fitAssessment,
+            fitAssessmentStatus: result.fitAssessment ? "ready" : "unavailable"
           }
         : {})
     });

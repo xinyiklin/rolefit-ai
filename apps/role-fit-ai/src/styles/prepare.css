@@ -717,7 +717,12 @@
   line-height: 1.4;
 }
 
-.quick-fit-verdict {
+.prepare-fit > .prepare-fit__meta {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.fit-assessment-verdict {
   display: inline-flex;
   align-items: center;
   min-height: 24px;
@@ -728,42 +733,42 @@
   font-weight: 650;
 }
 
-.quick-fit-verdict.is-strong {
+.fit-assessment-verdict.is-strong {
   color: var(--on-accent);
   background: var(--accent);
   border-color: var(--accent-deep);
 }
 
-.quick-fit-verdict.is-reasonable {
+.fit-assessment-verdict.is-reasonable {
   color: var(--accent-deep);
   background: var(--accent-soft);
   border-color: var(--accent-veil);
 }
 
-.quick-fit-verdict.is-stretch {
+.fit-assessment-verdict.is-stretch {
   color: var(--warm);
   background: var(--warm-veil);
   border-color: var(--warm-soft);
 }
 
-.quick-fit-verdict.is-limited {
+.fit-assessment-verdict.is-limited {
   color: var(--danger);
   background: var(--danger-soft);
   border-color: var(--danger-line);
 }
 
-.quick-fit-list {
+.fit-assessment-list {
   display: grid;
   gap: 4px;
 }
 
-.quick-fit-list > strong {
+.fit-assessment-list > strong {
   color: var(--ink-strong);
   font-size: 0.7rem;
   font-weight: 650;
 }
 
-.quick-fit-list ul {
+.fit-assessment-list ul {
   display: grid;
   gap: 4px;
   margin: 0;
@@ -773,11 +778,47 @@
   line-height: 1.4;
 }
 
-.quick-fit-eligibility {
+.fit-assessment-eligibility {
   padding: var(--s2);
   color: var(--warm) !important;
   background: var(--warm-veil);
   border-radius: var(--r-md);
+}
+
+.fit-assessment-changes {
+  display: grid;
+  gap: 4px;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.fit-assessment-changes > strong {
+  color: var(--ink-strong);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.fit-assessment-changes ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fit-assessment-changes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.fit-assessment-changes small {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
 }
 
 .prepare-fit__empty {
@@ -880,8 +921,9 @@
 
 /* -------- Prepared two-pane height -------- */
 
-/* A prepared application is two columns of unrelated length: the editable brief
-   grows with the posting, the rail grows with Initial Fit, materials, and
+/* Prepare keeps one stable workspace height in both lifecycle states. Once
+   prepared, its two columns are unrelated lengths: the editable brief grows
+   with the posting, while the rail grows with Fit Assessment, materials, and
    readiness. With the studio body as the only scroller, the taller column set
    the page height and the shorter one left a long dead band beside it — and the
    sticky rail could still be cut off by a much longer brief.
@@ -891,7 +933,7 @@
    height, so no measurement, ResizeObserver, or JS is involved. Desktop only:
    below 1080px the layout is a single column and the page scroll is correct. */
 @media (min-width: 1081px) {
-  .studio-body[data-tab="prepare"]:has(.prepare-layout.is-prepared) {
+  .studio-body[data-tab="prepare"] {
     grid-template-rows: minmax(0, 1fr);
     overflow: hidden;
     padding-bottom: var(--s4);
@@ -900,15 +942,30 @@
   /* The spacer exists to keep bottom padding inside a SCROLLING grid container
      (Firefox drops it otherwise). This container no longer scrolls, so the
      padding above is enough and the spacer would only steal height. */
-  .studio-body[data-tab="prepare"]:has(.prepare-layout.is-prepared)::after {
+  .studio-body[data-tab="prepare"]::after {
     display: none;
   }
 
-  .prepare-page:has(.prepare-layout.is-prepared) {
+  .prepare-page {
     height: 100%;
     min-height: 0;
     grid-template-rows: auto minmax(0, 1fr);
     align-content: stretch;
+  }
+
+  .prepare-layout {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .prepare-layout.is-intake > .prepare-main {
+    height: 100%;
+    min-height: 0;
+    align-content: start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
   }
 
   .prepare-layout.is-prepared {
@@ -918,6 +975,7 @@
 
   .prepare-layout.is-prepared > .prepare-main,
   .prepare-layout.is-prepared > .prepare-rail {
+    height: 100%;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;

@@ -17,7 +17,7 @@ import {
   PrepareApplicationRail,
   type PrepareActivity
 } from "./prepare/PrepareApplicationRail";
-import type { QuickFitState } from "../../../shared/quickFitContract.ts";
+import type { FitAssessmentState } from "../../../shared/fitAssessmentContract.ts";
 import type { PolishedResume } from "../../resumeEngine";
 
 type SourceMethod = "url" | "paste";
@@ -132,9 +132,9 @@ export type PrepareTabProps = {
   coverLetterStatus: string;
   onTailorCoverLetter: () => void | Promise<void>;
   onOpenCoverLetter: () => void;
-  quickFit: QuickFitState;
-  onRetryInitialFit: () => void;
-  canRetryInitialFit: boolean;
+  fitAssessment: FitAssessmentState;
+  onAssessFit: () => void;
+  canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -195,9 +195,9 @@ export function PrepareTab({
   coverLetterStatus,
   onTailorCoverLetter,
   onOpenCoverLetter,
-  quickFit,
-  onRetryInitialFit,
-  canRetryInitialFit,
+  fitAssessment,
+  onAssessFit,
+  canAssessFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -731,9 +731,9 @@ export function PrepareTab({
         {jobPrepared ? (
           <PrepareApplicationRail
             activity={activity}
-            quickFit={quickFit}
-            onRetryInitialFit={onRetryInitialFit}
-            canRetryInitialFit={canRetryInitialFit}
+            fitAssessment={fitAssessment}
+            onAssessFit={onAssessFit}
+            canAssessFit={canAssessFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
             isApplying={isApplying}

@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 
 import {
+  clearProposalDecision,
   decisionsForProposal,
   recordProposalDecision,
+  resumeProposalEditState,
   resumeProposalEditIsPending,
   resumeProposalKey
 } from "../resumeProposalDecisionState.ts";
@@ -84,8 +86,13 @@ assert.notEqual(
 
 assert.equal(
   resumeProposalEditIsPending(suggestion.currentText, suggestion, { kind: "accepted", text: suggestion.proposedText }),
-  true,
-  "undoing an accepted edit back to the original makes it pending again"
+  false,
+  "a document edit that supersedes an accepted decision does not revive destructive proposal controls"
+);
+assert.equal(
+  resumeProposalEditState(suggestion.currentText, suggestion, { kind: "accepted", text: suggestion.proposedText }),
+  "changed",
+  "restoring the original outside proposal Undo is a later document edit"
 );
 assert.equal(
   resumeProposalEditIsPending(`  ${suggestion.proposedText.toUpperCase()}  `, suggestion),
@@ -96,6 +103,55 @@ assert.equal(
   resumeProposalEditIsPending(suggestion.currentText, suggestion, { kind: "discarded" }),
   false,
   "discard remains an explicit resolution while the document keeps its original text"
+);
+assert.equal(
+  resumeProposalEditState(suggestion.proposedText, suggestion, {
+    kind: "accepted",
+    text: suggestion.proposedText
+  }),
+  "accepted",
+  "an accepted decision is current only while the document still holds its accepted text"
+);
+assert.equal(
+  resumeProposalEditState("Manually revised after acceptance.", suggestion, {
+    kind: "accepted",
+    text: suggestion.proposedText
+  }),
+  "changed",
+  "a later manual edit supersedes an accepted decision instead of exposing destructive Undo"
+);
+assert.equal(
+  resumeProposalEditState("Manually revised after discard.", suggestion, { kind: "discarded" }),
+  "changed",
+  "a later manual edit supersedes a discarded decision"
+);
+
+// Undo returns one row to the queue without disturbing its siblings or the
+// proposal identity the rest of the decisions hang from.
+const sibling = { ...suggestion, id: "target-2" };
+let undoState = { proposalKey: key, byTargetId: {} };
+undoState = recordProposalDecision(undoState, key, suggestion.id, { kind: "accepted", text: suggestion.proposedText });
+undoState = recordProposalDecision(undoState, key, sibling.id, { kind: "discarded" });
+undoState = clearProposalDecision(undoState, key, suggestion.id);
+assert.deepEqual(
+  undoState,
+  { proposalKey: key, byTargetId: { [sibling.id]: { kind: "discarded" } } },
+  "undo removes only its own decision"
+);
+assert.equal(
+  resumeProposalEditIsPending(suggestion.currentText, suggestion, undoState.byTargetId[suggestion.id]),
+  true,
+  "and the reverted row is waiting for a decision again once its original text is back"
+);
+assert.equal(
+  clearProposalDecision(undoState, key, "target-absent"),
+  undoState,
+  "undoing a row that never had a decision changes nothing"
+);
+assert.equal(
+  clearProposalDecision(undoState, replacementKey, sibling.id),
+  undoState,
+  "and an undo aimed at another proposal identity cannot reach these decisions"
 );
 
 console.log("Resume proposal decision identity eval: passed");

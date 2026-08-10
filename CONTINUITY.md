@@ -5,6 +5,255 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-09
 
+- [CODE+TOOL] **The full uncommitted Fit/workspace/document-workflow diff was
+  reviewed and its blocking edge cases were repaired.** Resume selection now
+  reassesses Fit against the hook-owned captured posting instead of the editable
+  brief. A post-analysis duplicate stop can retain an already-completed combined
+  assessment, but it cannot authorize automatic Polish or launch a separately
+  configured Fit request. Tracker compatibility normalizes only a present,
+  nonblank legacy summary string; missing, blank, and non-string summaries still
+  fail closed. Empty or corrupt citizenship/education enums are removed, and an
+  unknown citizenship gate emits no authorization or sponsorship claims. Stale
+  resume proposals disable accept/edit actions while preserving discard, new
+  resume and cover-letter proposals reset local review state, and a manual edit
+  after a recorded decision can no longer expose an Undo that overwrites that
+  newer text. Interrupted debounced settings writes now leave a durable browser
+  marker and replay the cached snapshot before canonical workspace adoption on
+  reload. The live-eval command in root development docs uses the current Fit
+  Assessment name. Focused red/green regressions, production and landing builds,
+  desktop security/contracts, all 88 offline evaluations, and `git diff --check`
+  pass under pinned Node 24. The final layout-scoped Impeccable detector reports
+  no findings. Browser interaction QA remains UNCONFIRMED under the repository's
+  flag-first policy.
+- [USER+CODE+TOOL] **The tracker's Fit column aligns, and its header pins.**
+  `.application-fit` still carried `min-width: 42px; justify-content: center`
+  from the numeric score badge it replaced. With word labels that floor is wider
+  than exactly one verdict — "Stretch" measured 42px against the floor while
+  "Strong fit" measured 45.6px and "Reasonable fit" 70.3px — so centering
+  offset that one label a few pixels off the column's left edge and nothing
+  else. Both declarations are gone; measured after, all three verdicts paint
+  from x=852. The table head is now `position: sticky; top: 0; z-index: 2`: at
+  the desktop breakpoint `.applications-table` is itself the vertical scrollport
+  (measured 1107px of rows in a 464px port), so the head is a direct child of
+  the scroller and pins while rows pass under it — verified holding at y=187
+  across scrollTop 0/200/400/end. Below that breakpoint the table is not a
+  vertical scrollport and the rule is inert. The final full-diff review resolved
+  the inspector-width defect: the register is now an inline-size container, and
+  at its calculated 852px full-column minimum it hides Next action — still
+  available in application details — before the fixed Fit verdict can clip. The
+  focused layout contract locks that component-aware behavior. All 88 offline
+  evaluations, the RoleFit TypeScript/server gates, production and landing
+  builds, desktop contracts/security, the layout-scoped Impeccable detector, and
+  `git diff --check` pass; exact browser rendering of this last container-query
+  change remains UNCONFIRMED under the flag-first policy.
+- [USER+CODE+TOOL] **Settings is dense again, and seven of its inputs were
+  invisible.** Every text field in AI stages, About you, and Experience evidence
+  carried `className="input"` — a class no stylesheet defines, so they fell
+  through to the bare `input` reset (`border: 0; background: transparent`) and
+  rendered as naked text under a label while the selects beside them had proper
+  boxes. They now use the canonical `.text-input`. Density: each automation
+  document is one row (switch, then its Minimum fit threshold) instead of a
+  RESUME / COVER LETTER subhead over a switch over a full-width select — the
+  subhead repeated the word the switch already said, and `.check-row`'s own
+  bottom hairline had to be suppressed once the label became a flex item. About
+  you rows are label-beside-control over one 152px label column, with
+  content-width controls. Measured in the running app at 1280x720: the
+  automation group went 450px → 193px, two AI stages now sit above the fold,
+  and the whole About panel fits without scrolling. Verified live on the
+  already-running 5181 dev server (reused, not started): no console errors, and
+  a probe confirmed the restyled Experience evidence inputs stay inside their
+  three-column grid (214px each in a 658px track, `border-box`). All 87 offline
+  evaluations, the RoleFit TypeScript gate, the production build, and
+  `git diff --check` pass.
+- [USER+CODE+TOOL] **Job analysis no longer exposes a nonfunctional custom-instruction
+  control.** Only the three drafting stages — Resume Polish, Cover letter, and
+  Application questions — offer instruction overrides. Job analysis retains its
+  fixed complete-extraction contract, Fit Assessment retains its fixed rubric,
+  and settings normalization removes dormant overrides for either analysis stage.
+  The focused stage-settings regression, production and landing builds, desktop
+  contracts/security, all 87 offline evaluations, `git diff --check`, and the
+  Impeccable detector pass. Browser interaction QA remains unrun under the
+  flag-first policy because this only removes one conditional disclosure.
+- [USER+CODE+TOOL] **Apply now retains the latest completed Fit Assessment even after
+  later input changes.** Ready, stale, and restored snapshots share one explicit
+  application-persistence selector. The assessment is saved independently of
+  resume artifact inclusion, while re-Apply preserves an existing snapshot when
+  the current session has no newer completed run. Tracker storage remains one
+  timestamped latest snapshot rather than a versioned Fit history. The focused
+  lifecycle and application-persistence regressions, production and landing
+  builds, desktop contracts/security, and all 87 offline evaluations pass.
+- [USER+CODE+TOOL] **Accepting a proposal is now one interaction across both
+  documents.** The unit stays genuinely different — the resume decides
+  individual edits, the letter decides one replacement — but nothing else about
+  the act does. Previously the resume committed from an `Apply all` button
+  inside a section header, over a `<details>` that was collapsed by default; it
+  had no bulk decline, no way to take a decision back, and restated its counts
+  in two places. The letter committed from the rail's sticky footer and showed
+  only the finished text, leaving the reader to compare two panes by eye.
+  Both now commit through one shared `ProposalDecisionBar` in that footer: what
+  is left to decide, then a primary accept beside a secondary discard, in that
+  order (`Accept all` / `Discard all`, `Accept proposal` / `Discard proposal`).
+  Only a multi-decision proposal renders its `progressbar`, and the rail
+  description no longer repeats those counts. One `ProposalDiff` renderer marks
+  changed words for both over the existing `buildResumeDiff`: `removed` and
+  `added` for the resume's Now/Proposed pair, `merged` behind the letter's new
+  Changes / Full letter switch, which opens on Changes. Text carrying inline
+  marks falls back to its plain rendered side, because a word-level diff can
+  split a tag pair at a segment seam. The resume's edits are now open on
+  arrival, each row names the section and entry it edits, a settled row shows
+  one shared chip (Accepted / Discarded / Changed in editor) and de-emphasizes
+  so the queue reads as what is left, and **every recorded decision is
+  reversible in place** — `revert` restores an accepted edit's exact original
+  text before returning the row to the queue, and `discardAll` records
+  decisions without mutating the document. The letter's per-paragraph
+  provenance was also wrong in two ways the new view exposed: it printed the
+  engine's inline-mark syntax verbatim (`<b>CareFlow</b> · …`) and used the
+  entry's entire serialization as its label, so one paragraph's source ran to
+  forty words. `buildCoverLetterEvidence` now strips inline marks from section
+  and entry context — display syntax that belonged in neither the rail nor the
+  prompt — and leads every entry label with the entry's own name, including the
+  bulletless field branch that previously led with "Title detail". The exported
+  `evidenceEntryName` reads only that head for the rail, so the model keeps the
+  full attribution context (dates, link, employer, stack) that lives nowhere
+  else in the corpus. No provider, request, grounding, or persistence contract
+  changed; evidence ids are per-request and unpersisted. All 87 offline
+  evaluations, the RoleFit
+  TypeScript gate, the production build, and `git diff --check` pass, with
+  red/green proof on the new shared-decision probes; one unrelated
+  `fit-assessment-lifecycle` run flaked under the parallel runner and passed
+  standalone and on both reruns. **Browser QA is UNCONFIRMED** and is the
+  outstanding check: the new footer bar, the diff marking inside the letter's
+  `pre-line` block, and the open-by-default edit list all change rail height and
+  scroll behavior.
+- [USER+CODE+TOOL] **Only the first Fit Assessment launched by Prepare may
+  trigger automatic Polish.** Ready assessment state now carries an in-memory
+  automation-eligibility receipt. The combined and separately configured first
+  Prepare assessment opt in; Reassess fit, retries, resume-change assessments,
+  restored history, and stale results remain advisory-only and cannot start a
+  later Resume or Cover Letter automatic Polish. The focused lifecycle
+  regression, production and landing builds, desktop contracts/security, and all
+  87 offline evaluations pass with pinned Node 24. Real-browser QA was not needed
+  because this changes orchestration policy without changing rendered UI.
+- [USER+CODE+TOOL] **Fit Assessment now explains staleness without erasing the
+  prior assessment.** Exact provenance differences derive a stable changed-input
+  list for job posting, resume content, About you, and assessment setup. An
+  out-of-date run remains visible only as a timestamped **Previous assessment**
+  with its verdict, matches, gaps, attribution, and a compact **Changed since
+  assessment** receipt before **Reassess fit**; its stale state still excludes it
+  from automation. Tracker persistence remains the latest compact snapshot, not
+  a versioned assessment ledger. The production and landing builds, desktop
+  contracts/security, all 87 offline evaluations, focused lifecycle/layout
+  probes, both TypeScript projects, and `git diff --check` pass. The Impeccable
+  detector reports only the stylesheet's existing off-ramp font-size advisories;
+  browser interaction QA remains UNCONFIRMED under the flag-first policy.
+- [USER+CODE+TOOL] **A resume edit no longer dead-ends a pending Cover Letter
+  proposal.** The cover workflow now fingerprints its own target, personal
+  evidence, and instructions separately from resume evidence. Changing the
+  source letter, job, Guidance, or polishing instructions still blocks acceptance
+  and requires Polish again. A resume-only change instead keeps Accept proposal
+  enabled, warns that the draft was checked against the earlier resume, and
+  leaves the exact evidence receipt visible for review. The production and
+  landing builds, desktop contracts/security, all 87 offline evaluations, the
+  focused red/green freshness probe, `git diff --check`, and the Impeccable
+  detector pass. Browser interaction QA remains UNCONFIRMED under the flag-first
+  policy.
+- [USER+CODE+TOOL] **Fit Assessment completed a private multi-model corpus
+  calibration and now uses rubric v3.** The full editable-source corpus contains
+  71 applications; the remaining tracker rows have no `.resume` source and were
+  excluded by user direction. Seven exposed Codex models (GPT-5.6 Sol, Terra,
+  Luna, GPT-5.5, GPT-5.4, GPT-5.4 Mini, and GPT-5.3 Codex Spark) each ran three
+  low-effort and three medium-effort passes: 2,982 calls, 2,676 strictly grounded
+  results, 306 fail-closed shape/anchor rejections, and zero provider errors.
+  GPT-5.5 medium was the strongest balanced calibration configuration (209/213
+  grounded, 71.0% three-run majority agreement with the independent labels); a
+  separate Sol xhigh review reached 70.0% exact agreement, with every miss only
+  one adjacent category away. A broader prescriptive rubric was rejected after
+  it reduced corpus accuracy. The retained v3 delta classifies role-critical
+  versus administrative text, selects decision-relevant findings, self-checks
+  exact excerpts, and narrowly distinguishes supporting-core Stretch from truly
+  sparse Limited evidence. The specialized-support and content-poor synthetic
+  controls held their intended Stretch/Limited categories in 6/6 runs each, and
+  the two real Limited-boundary cases stayed Limited in 42/42 model/effort/run
+  votes each. All 71 tracker Fit snapshots were atomically refreshed from
+  grounded xhigh receipts with complete private pre-write backups: 69 retain
+  truthful rubric-v2 provenance and the two v3-affected boundary cases carry v3;
+  the distribution is 8 Strong, 45 Reasonable, 16 Stretch, and 2 Limited. The
+  canonical write also archived and removed two retired `finalCheck` fields that
+  had blocked safe tracker reads; 241 other application rows were unchanged.
+  Post-write canonical result/provenance checks cover all 71 snapshots. The exact
+  RoleFit gate passes production/landing builds, desktop contracts/security, and
+  all 83 offline evaluations. Browser visual QA was not needed because this slice
+  changes prompt/data behavior without layout or interaction risk.
+- [USER+CODE+TOOL] **Fit Assessment now owns its own AI stage configuration.**
+  Settings exposes Fit Assessment as the fifth independently persisted
+  provider/model/reasoning stage, including normal one-shot Copy from behavior;
+  its fixed screening rubric deliberately has no custom-instruction override.
+  Prepare keeps the single-dispatch optimization only when Job analysis and Fit
+  Assessment resolve to the exact same provider/model/reasoning triple. When any
+  field differs, Job analysis sends no resume or candidate context, commits the
+  prepared brief, and Fit Assessment settles through a separate assessment-only
+  request with its own provider readiness and provenance. Reassessment and stale
+  identity now read the Fit stage rather than Job analysis. The full RoleFit gate
+  passes with production/landing builds, desktop contracts/security, and all 83
+  offline evaluations; the Impeccable detector reports no finding in the changed
+  Settings components. Browser visual QA remains UNCONFIRMED under the flag-first
+  policy.
+- [USER+CODE+TOOL] **About you now records optional GPA and earliest-start
+  availability.** GPA is one bounded 0–4.0 value, appears only with declared
+  education, and emits no candidate fact when empty or invalid. Availability is
+  independently optional and supports immediately, one to four weeks' notice,
+  or a specific ISO date; impossible calendar dates fail closed. Both facts use
+  the existing canonical workspace-preferences, backup/restore, reset, and
+  candidate-context path rather than a parallel store. The complete RoleFit
+  gate passes: production and landing builds, desktop contracts/security
+  probes, grounding/sanitizer coverage, and all 85 offline evaluations. The
+  Impeccable detector found only pre-existing typography advisories elsewhere in
+  the Settings stylesheet. Browser visual QA remains UNCONFIRMED under the
+  flag-first policy.
+- [USER+CODE+TOOL] **The reusable screening is now Fit Assessment, not Initial
+  Fit.** Its first run normally shares Prepare's Job analysis request, while a
+  completed or out-of-date result exposes **Reassess fit** and always dispatches
+  a fresh assessment without repeating Job analysis. Reassessment uses the
+  retained captured posting, current selected resume and candidate context, and
+  the Fit Assessment stage's selected provider/model/reasoning plus rubric v1.
+  Results show last-assessed attribution and the latest successful run
+  supersedes the displayed result. Active runtime types, prompt/schema fields,
+  CSS, docs, and offline/live eval names use Fit Assessment. The two existing
+  persisted v1 JSON keys, preference `runInitialFit` and tracker `initialFit`,
+  remain storage-boundary names so existing local data stays readable; they are
+  not user-facing concepts or runtime compatibility aliases. The full RoleFit
+  gate passes: production/landing/desktop builds and contracts plus all 85
+  offline evaluations.
+- [USER+CODE+TOOL] **About you now supplies source-aware experience evidence
+  from canonical workspace preferences.** Optional professional, internship,
+  freelance, research, academic, personal, open-source, volunteer, and
+  military/public-service categories each accept bounded duration,
+  role/project count, recency, and factual scope. Candidate context preserves
+  those sources and warns Fit Assessment not to sum overlaps; the shared rubric
+  also prevents strict professional/industry requirements from being satisfied
+  by other sources unless the posting accepts them. Preferences now belong to
+  owner-only `workspace-preferences.json` across browsers, ports, and incognito
+  sessions for the same OS-user workspace; localStorage is a fail-open cache,
+  startup/focus adopts the workspace record, and failed writes are visible in
+  Settings. The workspace backup, preference, and restore-marker contracts now
+  each expose only schema version 1; retired preference filenames/routes/fields,
+  old settings keys/model display names, and non-v1 backup formats are rejected
+  or defaulted without translation. The full RoleFit gate
+  passes: production/landing/desktop builds and contracts plus all 85 offline
+  evaluations. Browser visual QA, live-provider calibration, and a human-labeled
+  accuracy benchmark were not run.
+- [USER+CODE+TOOL] **Extension posting checks no longer fail on stale derived
+  Initial Fit summary copy.** The live popup's `RoleFit could not check this
+  posting (500)` was reproduced as a healthy extension handshake followed by a
+  fail-closed tracker read. All 312 application records were structurally valid;
+  13 differed only because their stored provider-era Initial Fit summary did not
+  equal the current fixed summary derived from the verdict. The tracker reader
+  now normalizes only that redundant summary leaf for its canonical comparison;
+  unknown fields, retired shapes, duplicate ids, lossy sanitizer changes, and
+  malformed data still fail closed. A red/green storage probe, server TypeScript,
+  the document-workflow suite, all 84 offline evaluations, the real tracker GET,
+  and a synthetic analyze request using the paired extension origin pass. The
+  restarted companion serves both tracker and extension-analyze routes with 200.
 - [USER+CODE+TOOL] **Initial Fit late stabilization is complete locally.** One
   normalized captured posting now owns combined Prepare, fit-only Retry,
   provenance, and staleness, while the displayed brief stays independently
@@ -2398,3 +2647,34 @@ bounded; app-only operational detail belongs in the affected app documentation.
   only advisory font-size/radius/color matches already present in the shared
   review stylesheet or consistent with its existing compact type ramp.
   Live-provider evaluation and real-browser visual QA were not run.
+- [USER+CODE+TOOL] 2026-08-09: Prepare and Applications now use the same stable
+  desktop studio height in populated and empty states above 1080px; stacked
+  layouts retain normal page scrolling. Prepared brief/rail columns scroll
+  independently. Applications reserves a fixed pagination row below an internal
+  table scrollport, while the selected-application rail owns its own scroll;
+  long Fit Assessment gaps wrap inside that rail. The focused Applications 8/8,
+  Prepare 4/4, and 481/481 client workflow layout contracts, `git diff --check`,
+  the layout detector, production and landing builds, desktop contracts, and
+  85/85 offline evaluations passed with pinned Node 24 and loopback access.
+  The expanded browser-app navigation rail was then reduced by 25px
+  without changing its 52px compact breakpoint; the updated 483/483 workflow
+  guards, production build, layout detector, and `git diff --check` passed.
+  Real-browser visual QA was not run.
+- [USER+CODE+TOOL] 2026-08-09: Opening a tracked application now hydrates Fit
+  Assessment's hook-owned prepared-job receipt instead of leaving the rail in
+  its pre-Prepare state. A saved compact assessment is shown as historical and
+  can be reassessed, but cannot trigger automatic Polish; a saved preparation
+  without an assessment offers a new run against the restored resume. The
+  focused lifecycle and restore-wiring probes pass. Full build and browser QA
+  remain blocked by unrelated in-progress Final Check removals in the worktree.
+- [USER+CODE] 2026-08-09: Job analysis and Resume Polish no longer share a
+  numbered multi-step progress sheet. Job analysis, Resume Polish, Cover letter,
+  and Application answers each own an independently named progress card with no
+  redundant step count, and every active provider request in that dock exposes
+  Stop through its workflow owner's abort boundary.
+- [TOOL] 2026-08-09: The focused workflow-copy and progress-wiring probes passed
+  34/34, and the full RoleFit check passed with loopback access: production and
+  landing builds, desktop contracts, and all 88 offline evaluations.
+  `git diff --check` passed. The Impeccable detector reported only pre-existing
+  advisory token matches in `shell.css`; browser QA was not run under the
+  repository's flag-first policy.

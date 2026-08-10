@@ -31,6 +31,7 @@ type SettingsStageProps = {
   onCopyFrom: (from: StageKey) => void;
   instructions: string;
   onInstructionsChange: (value: string) => void;
+  supportsInstructions: boolean;
 };
 
 // One stage's row in Settings > AI stages: what it does, which provider runs it,
@@ -53,7 +54,8 @@ export function SettingsStage({
   onProviderChange,
   onCopyFrom,
   instructions,
-  onInstructionsChange
+  onInstructionsChange,
+  supportsInstructions
 }: SettingsStageProps) {
   const headingId = useId();
   const { provider, selectedModel, cliReasoningEffort } = config;
@@ -158,34 +160,36 @@ export function SettingsStage({
         </div>
       ) : null}
 
-      <div className="settings-stage__extra">
-        <button
-          type="button"
-          className={`settings-stage__disclose${instructionsOpen ? " is-open" : ""}`}
-          aria-expanded={instructionsOpen}
-          onClick={() => setInstructionsOpen((open) => !open)}
-        >
-          <ChevronDown size={12} aria-hidden="true" />
-          {hasInstructions ? "Edit instructions" : "Add instructions"}
-        </button>
-        {/* A set override stays legible when collapsed — otherwise guidance that
-            is actually being sent would be invisible. */}
-        {!instructionsOpen && hasInstructions ? (
-          <p className="settings-stage__preview">{instructions.trim()}</p>
-        ) : null}
-        {instructionsOpen ? (
-          <label className="field">
-            <span className="sr-only">Instructions for {title}</span>
-            <textarea
-              className="textarea"
-              rows={3}
-              value={instructions}
-              placeholder="Replaces the shared custom instructions. Leave empty to use them."
-              onChange={(event) => onInstructionsChange(event.target.value)}
-            />
-          </label>
-        ) : null}
-      </div>
+      {supportsInstructions ? (
+        <div className="settings-stage__extra">
+          <button
+            type="button"
+            className={`settings-stage__disclose${instructionsOpen ? " is-open" : ""}`}
+            aria-expanded={instructionsOpen}
+            onClick={() => setInstructionsOpen((open) => !open)}
+          >
+            <ChevronDown size={12} aria-hidden="true" />
+            {hasInstructions ? "Edit instructions" : "Add instructions"}
+          </button>
+          {/* A set override stays legible when collapsed — otherwise guidance that
+              is actually being sent would be invisible. */}
+          {!instructionsOpen && hasInstructions ? (
+            <p className="settings-stage__preview">{instructions.trim()}</p>
+          ) : null}
+          {instructionsOpen ? (
+            <label className="field">
+              <span className="sr-only">Instructions for {title}</span>
+              <textarea
+                className="textarea"
+                rows={3}
+                value={instructions}
+                placeholder="Replaces the shared custom instructions. Leave empty to use them."
+                onChange={(event) => onInstructionsChange(event.target.value)}
+              />
+            </label>
+          ) : null}
+        </div>
+      ) : null}
     </section>
   );
 }

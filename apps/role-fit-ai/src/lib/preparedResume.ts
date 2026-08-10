@@ -2,7 +2,7 @@
 // Fit, the editor's loaded document, Prepare's recommendation note, and whether
 // an automatic proposal may begin. Splitting that decision in two (a pre-fit
 // pick that never adopted, plus a post-Prepare ranking that could adopt a
-// different variant) let Initial Fit describe resume A while the editor held
+// different variant) let Fit Assessment describe resume A while the editor held
 // resume B, which then suppressed the proposals the fit had just approved.
 //
 // Pure by design: this module decides, the resolver hook performs the load.

@@ -23,7 +23,6 @@ const expectedCounts = new Map([
   ["apps/role-fit-ai/docs/releases/0.5.0-beta.11.md", 1],
   ["apps/role-fit-ai/server/ai/__evals__/job-analysis-route-contract.mjs", 4],
   ["apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs", 1],
-  ["apps/role-fit-ai/src/hooks/__evals__/client-workflow-guards.mjs", 5],
   ["apps/role-fit-ai/src/lib/__evals__/stage-settings-eval.mjs", 4],
   ["apps/role-fit-ai/src/lib/__evals__/workspace-backup-contract-eval.mjs", 2]
 ]);

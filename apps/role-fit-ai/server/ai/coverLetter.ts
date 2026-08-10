@@ -82,6 +82,7 @@ export async function tailorCoverLetter(
   stats?: AttemptStats
 ): Promise<CoverLetterTailorResult> {
   const promptInput = {
+    reasoningEffort,
     jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
     sourceContext: {
       structuredTemplate: sourceContext.structuredTemplate,

@@ -1,26 +1,24 @@
-// Workspace-resident mirror of the browser's allowlisted preferences. The
-// Electron companion cannot read browser localStorage, so the browser pushes an
-// allowlisted preferences snapshot here (POST) and companion-driven backups read
-// it server-side instead of the client merging preferences into the envelope. A
-// restore stages the same file so the browser can adopt restored preferences on
-// its next load.
+// Canonical, workspace-resident RoleFit preferences. Browser storage is only a
+// fail-open cache: every client connected to this workspace reads and writes
+// this owner-only file, so changing browser, origin, or incognito mode does not
+// create a separate candidate profile.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
-  BROWSER_PREFERENCES_FILE_NAME,
-  BROWSER_PREFERENCES_FORMAT,
-  BROWSER_PREFERENCES_SCHEMA_VERSION,
-  MAX_BROWSER_PREFERENCES_JSON_BYTES,
+  MAX_WORKSPACE_PREFERENCES_JSON_BYTES,
+  WORKSPACE_PREFERENCES_FILE_NAME,
+  WORKSPACE_PREFERENCES_FORMAT,
+  WORKSPACE_PREFERENCES_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FILE_NAME,
   WORKSPACE_RESTORE_MARKER_FORMAT,
   WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION,
-  parsePortableBrowserPreferences,
-  parseStoredBrowserPreferences,
+  parsePortableWorkspacePreferences,
+  parseStoredWorkspacePreferences,
   parseStoredWorkspaceRestoreMarker,
-  type PortableBrowserPreferences,
-  type StoredBrowserPreferences,
+  type PortableWorkspacePreferences,
+  type StoredWorkspacePreferences,
   type StoredWorkspaceRestoreMarker
 } from "../src/lib/workspaceBackupContract.ts";
 import { readBody, sendJson } from "./http.ts";
@@ -31,27 +29,29 @@ function isMissingFile(error: unknown): boolean {
   return Boolean(error && typeof error === "object" && "code" in error && error.code === "ENOENT");
 }
 
-// A missing mirror and a corrupt/unreadable mirror are distinct: a backup omits
-// preferences on both, but the GET route reports `invalid` so the browser can
-// tell "never mirrored" from "mirror is damaged".
-export type StoredBrowserPreferencesRead =
+export type StoredWorkspacePreferencesRead =
   | { status: "missing" }
   | { status: "invalid" }
-  | { status: "ok"; value: StoredBrowserPreferences };
+  | { status: "ok"; value: StoredWorkspacePreferences };
 
-export async function readStoredBrowserPreferences(workspaceDir: string): Promise<StoredBrowserPreferencesRead> {
-  let raw: string;
+async function readPreferencesFile(path: string): Promise<{ status: "missing" } | { status: "ok"; raw: string } | { status: "invalid" }> {
   try {
-    raw = await readFile(join(workspaceDir, BROWSER_PREFERENCES_FILE_NAME), "utf8");
+    return { status: "ok", raw: await readFile(path, "utf8") };
   } catch (error) {
-    if (isMissingFile(error)) return { status: "missing" };
-    return { status: "invalid" };
+    return isMissingFile(error) ? { status: "missing" } : { status: "invalid" };
   }
-  try {
-    return { status: "ok", value: parseStoredBrowserPreferences(JSON.parse(raw) as unknown) };
-  } catch {
-    return { status: "invalid" };
+}
+
+export async function readStoredWorkspacePreferences(workspaceDir: string): Promise<StoredWorkspacePreferencesRead> {
+  const current = await readPreferencesFile(join(workspaceDir, WORKSPACE_PREFERENCES_FILE_NAME));
+  if (current.status === "ok") {
+    try {
+      return { status: "ok", value: parseStoredWorkspacePreferences(JSON.parse(current.raw) as unknown) };
+    } catch {
+      return { status: "invalid" };
+    }
   }
+  return current;
 }
 
 export type StoredWorkspaceRestoreMarkerRead =
@@ -74,14 +74,14 @@ export async function readStoredWorkspaceRestoreMarker(workspaceDir: string): Pr
   }
 }
 
-function serializeStoredBrowserPreferences(
-  preferences: PortableBrowserPreferences,
-  source: StoredBrowserPreferences["source"],
+function serializeStoredWorkspacePreferences(
+  preferences: PortableWorkspacePreferences,
+  source: StoredWorkspacePreferences["source"],
   now: Date
 ): string {
-  const stored: StoredBrowserPreferences = {
-    format: BROWSER_PREFERENCES_FORMAT,
-    schemaVersion: BROWSER_PREFERENCES_SCHEMA_VERSION,
+  const stored: StoredWorkspacePreferences = {
+    format: WORKSPACE_PREFERENCES_FORMAT,
+    schemaVersion: WORKSPACE_PREFERENCES_SCHEMA_VERSION,
     updatedAt: now.toISOString(),
     source,
     settings: preferences.settings,
@@ -90,17 +90,15 @@ function serializeStoredBrowserPreferences(
   return JSON.stringify(stored, null, 2);
 }
 
-// Direct owner-only write into a caller-controlled directory. Used by restore to
-// stage the mirror inside the incoming workspace before the atomic dir swap.
-export async function writeStoredBrowserPreferences(
+export async function writeStoredWorkspacePreferences(
   targetDir: string,
-  preferences: PortableBrowserPreferences,
-  source: StoredBrowserPreferences["source"],
+  preferences: PortableWorkspacePreferences,
+  source: StoredWorkspacePreferences["source"],
   now: Date
 ): Promise<void> {
   await writeFile(
-    join(targetDir, BROWSER_PREFERENCES_FILE_NAME),
-    serializeStoredBrowserPreferences(preferences, source, now),
+    join(targetDir, WORKSPACE_PREFERENCES_FILE_NAME),
+    serializeStoredWorkspacePreferences(preferences, source, now),
     { mode: 0o600 }
   );
 }
@@ -118,26 +116,54 @@ export async function writeWorkspaceRestoreMarker(targetDir: string, now: Date):
   );
 }
 
-async function writeMirrorAtomic(workspaceDir: string, preferences: PortableBrowserPreferences, now: Date): Promise<void> {
-  const filePath = join(workspaceDir, BROWSER_PREFERENCES_FILE_NAME);
+async function writePreferencesAtomic(
+  workspaceDir: string,
+  preferences: PortableWorkspacePreferences,
+  now: Date
+): Promise<void> {
+  const filePath = join(workspaceDir, WORKSPACE_PREFERENCES_FILE_NAME);
   const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   try {
-    await writeFile(temporaryPath, serializeStoredBrowserPreferences(preferences, "mirror", now), { mode: 0o600 });
+    await writeFile(
+      temporaryPath,
+      serializeStoredWorkspacePreferences(preferences, "workspace", now),
+      { mode: 0o600 }
+    );
     await rename(temporaryPath, filePath);
   } finally {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
 }
 
+export class InvalidWorkspacePreferencesError extends Error {
+  constructor() {
+    super("The canonical workspace preferences file is invalid.");
+    this.name = "InvalidWorkspacePreferencesError";
+  }
+}
+
+// Refuse to turn an ordinary browser-cache save into an implicit repair. The
+// validity check and replacement share the workspace lock so a concurrent
+// restore cannot change the file between them.
+export async function persistWorkspacePreferences(
+  workspaceDir: string,
+  preferences: PortableWorkspacePreferences,
+  now = new Date()
+): Promise<void> {
+  await withWorkspaceLock(async () => {
+    const current = await readStoredWorkspacePreferences(workspaceDir);
+    if (current.status === "invalid") throw new InvalidWorkspacePreferencesError();
+    await ensureJobWorkspace(workspaceDir);
+    await writePreferencesAtomic(workspaceDir, preferences, now);
+  });
+}
+
 async function handleGet(res: ServerResponse, workspaceDir: string): Promise<void> {
-  // The lock's restore gate throws while a companion restore is staging; this
-  // GET runs on every tab boot, and the route is dispatched fire-and-forget, so
-  // an uncaught gate rejection here would kill the whole server mid-restore.
-  let read: StoredBrowserPreferencesRead;
+  let read: StoredWorkspacePreferencesRead;
   let marker: StoredWorkspaceRestoreMarkerRead;
   try {
     [read, marker] = await withWorkspaceLock(() => Promise.all([
-      readStoredBrowserPreferences(workspaceDir),
+      readStoredWorkspacePreferences(workspaceDir),
       readStoredWorkspaceRestoreMarker(workspaceDir)
     ]));
   } catch (error) {
@@ -145,7 +171,7 @@ async function handleGet(res: ServerResponse, workspaceDir: string): Promise<voi
       sendJson(res, 409, { error: error.message });
       return;
     }
-    sendJson(res, 500, { error: "The browser preferences could not be read." });
+    sendJson(res, 500, { error: "The workspace preferences could not be read." });
     return;
   }
   const restoreStamp = marker.status === "ok"
@@ -172,34 +198,43 @@ async function handleGet(res: ServerResponse, workspaceDir: string): Promise<voi
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDir: string): Promise<void> {
-  let preferences: PortableBrowserPreferences;
+  let preferences: PortableWorkspacePreferences;
   try {
-    const raw = await readBody(req, MAX_BROWSER_PREFERENCES_JSON_BYTES);
-    preferences = parsePortableBrowserPreferences(JSON.parse(raw) as unknown);
+    const raw = await readBody(req, MAX_WORKSPACE_PREFERENCES_JSON_BYTES);
+    preferences = parsePortableWorkspacePreferences(JSON.parse(raw) as unknown);
   } catch (error) {
     const tooLarge = error instanceof Error && error.message === "Request is too large.";
     sendJson(res, tooLarge ? 413 : 400, {
-      error: tooLarge ? "The browser preferences are larger than the supported limit." : "The browser preferences are invalid."
+      error: tooLarge
+        ? "The workspace preferences are larger than the supported limit."
+        : "The workspace preferences are invalid."
     });
     return;
   }
   try {
-    await withWorkspaceLock(async () => {
-      await ensureJobWorkspace(workspaceDir);
-      await writeMirrorAtomic(workspaceDir, preferences, new Date());
-    });
+    await persistWorkspacePreferences(workspaceDir, preferences);
   } catch (error) {
     if (error instanceof WorkspaceRestoreConflictError) {
       sendJson(res, 409, { error: error.message });
       return;
     }
-    sendJson(res, 500, { error: "The browser preferences could not be saved." });
+    if (error instanceof InvalidWorkspacePreferencesError) {
+      sendJson(res, 409, {
+        error: "The canonical workspace preferences file is invalid. Repair or restore it before saving settings."
+      });
+      return;
+    }
+    sendJson(res, 500, { error: "The workspace preferences could not be saved." });
     return;
   }
   sendJson(res, 200, { saved: true });
 }
 
-export async function handleBrowserPreferences(req: IncomingMessage, res: ServerResponse, workspaceDir: string): Promise<void> {
+export async function handleWorkspacePreferences(
+  req: IncomingMessage,
+  res: ServerResponse,
+  workspaceDir: string
+): Promise<void> {
   if (req.method === "GET") {
     await handleGet(res, workspaceDir);
     return;

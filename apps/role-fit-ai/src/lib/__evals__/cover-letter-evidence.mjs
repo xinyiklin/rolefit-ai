@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCoverLetterEvidence,
+  evidenceEntryName,
   splitHonestContextEvidence
 } from "../coverLetterEvidence.ts";
 
@@ -130,5 +131,62 @@ assert.equal(
   evidence.length,
   "a blank answer contributes no evidence"
 );
+
+// Attribution context vs. the name provenance shows. A resume field carries the
+// engine's inline-mark grammar; printing it raw is what put `<b>CareFlow</b>`
+// in the rail, and it is noise in the prompt too.
+const markedResume = {
+  header: { visible: true, name: "Candidate", contact: [] },
+  sections: [{
+    id: "s", heading: "<b>Projects</b>", type: "standard",
+    items: [{
+      id: "e",
+      titleLeft: "<b>CareFlow</b>",
+      titleRight: "careflow.example.com",
+      subtitleLeft: "<i>React 19, TypeScript</i>",
+      subtitleRight: "",
+      bullets: [{ id: "b", text: "Shipped a scheduling flow." }]
+    }]
+  }]
+};
+const [marked] = buildCoverLetterEvidence({ resumeData: markedResume, honestContext: "" });
+assert.ok(marked, "a marked-up entry still produces evidence");
+assert.doesNotMatch(marked.entry, /<\/?[bi]>/, "no inline-mark syntax reaches the prompt's entry context");
+assert.doesNotMatch(marked.section, /<\/?[bi]>/, "or its section context");
+assert.equal(
+  marked.entry,
+  "CareFlow · careflow.example.com · React 19, TypeScript",
+  "the entry keeps the link and stack that live nowhere else in the corpus"
+);
+assert.equal(
+  evidenceEntryName(marked.entry),
+  "CareFlow",
+  "while provenance shows only the entry's name"
+);
+
+// The field-level branch (an entry with no bullets) must lead with the same
+// name, or provenance would report "Title detail" as the source.
+const fieldOnly = buildCoverLetterEvidence({
+  resumeData: {
+    header: { visible: true, name: "Candidate", contact: [] },
+    sections: [{
+      id: "s", heading: "Experience", type: "standard",
+      items: [{
+        id: "e", titleLeft: "<b>Clinic IT Assistant</b>", titleRight: "Mar 2023 - Present",
+        subtitleLeft: "<i>Colden Heart Center</i>", subtitleRight: "", bullets: []
+      }]
+    }]
+  },
+  honestContext: ""
+});
+assert.ok(fieldOnly.length > 1, "a bulletless entry contributes its fields");
+for (const item of fieldOnly) {
+  assert.equal(
+    evidenceEntryName(item.entry),
+    "Clinic IT Assistant",
+    "every field of one entry reports that entry as its source"
+  );
+}
+assert.equal(evidenceEntryName(undefined), "", "a missing entry label names nothing");
 
 console.log("cover-letter evidence probes: PASS");

@@ -10,7 +10,7 @@ import {
   restoreWorkspaceBackup,
   WorkspaceBackupError
 } from "../workspaceBackup.ts";
-import { writeStoredBrowserPreferences } from "../browserPreferences.ts";
+import { writeStoredWorkspacePreferences } from "../workspacePreferences.ts";
 import { writeApplications } from "../applications/storage.ts";
 import { countActiveTabs, isValidPresenceTabId } from "../presence.ts";
 import { withWorkspaceLock } from "../workspace.ts";
@@ -22,7 +22,7 @@ import {
   WorkspaceRestoreConflictError
 } from "../workspaceRestoreGate.ts";
 import {
-  BROWSER_PREFERENCES_FILE_NAME,
+  WORKSPACE_PREFERENCES_FILE_NAME,
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
   WORKSPACE_RESTORE_MARKER_FILE_NAME,
@@ -139,7 +139,7 @@ try {
 
   const backup = await createWorkspaceBackup(sourceDir, fixedDate);
   assert.equal(backup.format, "rolefit-workspace-backup");
-  assert.equal(backup.schemaVersion, 2);
+  assert.equal(backup.schemaVersion, 1);
   assert.deepEqual(
     backup.files.map((file) => file.path),
     [
@@ -156,18 +156,18 @@ try {
   assert.equal(backup.files.find((file) => file.path.endsWith("cover.cover"))?.encoding, "utf8");
   assert.equal(backup.files.find((file) => file.path === "applications.json")?.encoding, "utf8");
 
-  const withBrowser = parseWorkspaceBackupEnvelope({
+  const withPreferences = parseWorkspaceBackupEnvelope({
     ...backup,
-    browser: {
+    preferences: {
       settings: { autoPolishResume: true, honestContext: "Grounded experience only" },
       lastBaseResume: "default.resume"
     }
   });
-  assert.equal(withBrowser.browser?.settings.autoPolishResume, true, "portable browser preferences survive contract parsing");
+  assert.equal(withPreferences.preferences?.settings.autoPolishResume, true, "portable workspace preferences survive contract parsing");
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      browser: { settings: { autoPolishResume: true, credential: "must-not-travel" }, lastBaseResume: "default.resume" }
+      preferences: { settings: { autoPolishResume: true, credential: "must-not-travel" }, lastBaseResume: "default.resume" }
     }),
     /unsupported or invalid values/,
     "portable preferences reject settings outside the owned allowlist"
@@ -175,7 +175,7 @@ try {
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      browser: { settings: { autoPolishResume: true }, lastBaseResume: "../private.resume" }
+      preferences: { settings: { autoPolishResume: true }, lastBaseResume: "../private.resume" }
     }),
     /selected base resume is invalid/,
     "portable preferences reject non-managed base-resume names"
@@ -186,7 +186,7 @@ try {
   await writeFile(join(targetDir, "resumes", "default.resume"), starterText, "utf8");
   await writeFile(join(targetDir, "keep-me.txt"), "previous unknown workspace file", "utf8");
 
-  const result = await restoreWorkspaceBackup(targetDir, withBrowser, fixedDate);
+  const result = await restoreWorkspaceBackup(targetDir, withPreferences, fixedDate);
   assert.equal(result.restoredFiles, 6);
   assert.equal(result.previousWorkspaceKept, true);
   assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.header.name, "Portable Candidate");
@@ -212,29 +212,29 @@ try {
     "backup -> restore -> backup preserves every managed byte"
   );
 
-  // The restore staged envelope.browser into the new workspace as a
-  // source:"restore" mirror. It sits beside the resumes and is not a listed file.
-  const restoredMirror = JSON.parse(await readFile(join(targetDir, BROWSER_PREFERENCES_FILE_NAME), "utf8"));
-  assert.equal(restoredMirror.source, "restore", "restore writes the browser-preferences mirror with source:restore");
-  assert.equal(restoredMirror.format, "rolefit-browser-preferences");
-  assert.equal(restoredMirror.schemaVersion, 1);
-  assert.equal(restoredMirror.settings.autoPolishResume, true, "the restored mirror carries the envelope's browser settings");
-  assert.equal(restoredMirror.lastBaseResume, "default.resume");
+  // The restore stages canonical workspace preferences beside the resumes;
+  // the file is portable through the envelope but never listed as a managed file.
+  const restoredPreferences = JSON.parse(await readFile(join(targetDir, WORKSPACE_PREFERENCES_FILE_NAME), "utf8"));
+  assert.equal(restoredPreferences.source, "restore", "restore writes workspace preferences with source:restore");
+  assert.equal(restoredPreferences.format, "rolefit-workspace-preferences");
+  assert.equal(restoredPreferences.schemaVersion, 1);
+  assert.equal(restoredPreferences.settings.autoPolishResume, true, "restored preferences carry the envelope settings");
+  assert.equal(restoredPreferences.lastBaseResume, "default.resume");
   const restoredMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(targetDir, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
   );
   assert.equal(restoredMarker.restoredAt, fixedDate.toISOString(), "every restore records its generation independently");
 
-  // A backup without optional browser preferences still records the restore so
+  // A backup without optional workspace preferences still records the restore so
   // the next browser load can clear recovery drafts from the previous workspace.
   const noBrowserTarget = join(isolatedRoot, "no-browser-target");
   await mkdir(join(noBrowserTarget, "resumes"), { recursive: true });
   await writeFile(join(noBrowserTarget, "resumes", "default.resume"), starterText, "utf8");
   await restoreWorkspaceBackup(noBrowserTarget, backup, fixedDate);
   await assert.rejects(
-    () => readFile(join(noBrowserTarget, BROWSER_PREFERENCES_FILE_NAME), "utf8"),
+    () => readFile(join(noBrowserTarget, WORKSPACE_PREFERENCES_FILE_NAME), "utf8"),
     (error) => error && error.code === "ENOENT",
-    "a preference-less restore does not invent browser preferences"
+    "a preference-less restore does not invent workspace preferences"
   );
   const noBrowserMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(noBrowserTarget, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
@@ -245,7 +245,7 @@ try {
 
   // A live Drafting Desk tab blocks restore with a 409 before any staging.
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, 1),
+    () => restoreWorkspaceBackup(targetDir, withPreferences, fixedDate, 1),
     (error) => error instanceof WorkspaceBackupError
       && error.status === 409
       && /Close RoleFit browser tabs/.test(error.message),
@@ -257,7 +257,7 @@ try {
   // that appears during a queued/slow restore must leave the active workspace intact.
   let presenceChecks = 0;
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, () => ++presenceChecks === 1 ? 0 : 1),
+    () => restoreWorkspaceBackup(targetDir, withPreferences, fixedDate, () => ++presenceChecks === 1 ? 0 : 1),
     (error) => error instanceof WorkspaceBackupError && error.status === 409,
     "a tab appearing during staging blocks the replacement boundary"
   );
@@ -266,7 +266,7 @@ try {
 
   let postRenamePresenceChecks = 0;
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, () => ++postRenamePresenceChecks < 3 ? 0 : 1),
+    () => restoreWorkspaceBackup(targetDir, withPreferences, fixedDate, () => ++postRenamePresenceChecks < 3 ? 0 : 1),
     (error) => error instanceof WorkspaceBackupError && error.status === 409,
     "a tab arriving after the previous workspace rename triggers rollback"
   );
@@ -274,13 +274,13 @@ try {
 
   let postInstallPresenceChecks = 0;
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, withBrowser, fixedDate, () => ++postInstallPresenceChecks < 4 ? 0 : 1),
+    () => restoreWorkspaceBackup(targetDir, withPreferences, fixedDate, () => ++postInstallPresenceChecks < 4 ? 0 : 1),
     (error) => error instanceof WorkspaceBackupError && error.status === 409,
     "a tab arriving while the staged workspace is installed still triggers rollback"
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "post-install presence restores the previous active workspace");
 
-  const badChecksum = structuredClone(withBrowser);
+  const badChecksum = structuredClone(withPreferences);
   badChecksum.files[0].sha256 = "0".repeat(64);
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, badChecksum, fixedDate),
@@ -290,35 +290,35 @@ try {
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "checksum failure leaves active workspace unchanged");
 
   const missingManagedFile = {
-    ...withBrowser,
-    files: withBrowser.files.filter(
+    ...withPreferences,
+    files: withPreferences.files.filter(
       (file) => file.path !== "applications/application-1/attachments/writing sample.pdf"
     )
   };
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, missingManagedFile, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /tracker and saved document files do not match/.test(error.message),
-    "schema v2 rejects tracker metadata whose saved file is absent"
+    "schema v1 rejects tracker metadata whose saved file is absent"
   );
-  const attachmentFile = withBrowser.files.find(
+  const attachmentFile = withPreferences.files.find(
     (file) => file.path === "applications/application-1/attachments/writing sample.pdf"
   );
   assert.ok(attachmentFile);
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, {
-      ...withBrowser,
+      ...withPreferences,
       files: [
-        ...withBrowser.files,
+        ...withPreferences.files,
         { ...attachmentFile, path: "applications/orphan/attachments/writing sample.pdf" }
       ]
     }, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /tracker and saved document files do not match/.test(error.message),
-    "schema v2 rejects saved files for an untracked application"
+    "schema v1 rejects saved files for an untracked application"
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "application-file mismatch leaves active workspace unchanged");
 
   const invalidTracker = replaceEntry(
-    withBrowser,
+    withPreferences,
     "applications.json",
     JSON.stringify({ applications: [{ invalid: true }] })
   );
@@ -329,7 +329,7 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "tracker validation failure leaves active workspace unchanged");
 
-  const invalidResume = replaceEntry(withBrowser, "resumes/default.resume", "{" + "x".repeat(100));
+  const invalidResume = replaceEntry(withPreferences, "resumes/default.resume", "{" + "x".repeat(100));
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidResume, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /base-resume file/.test(error.message),
@@ -338,7 +338,7 @@ try {
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "resume validation failure leaves active workspace unchanged");
 
   const invalidPdf = replaceEntry(
-    withBrowser,
+    withPreferences,
     "applications/application-1/attachments/writing sample.pdf",
     "not a pdf"
   );
@@ -350,7 +350,7 @@ try {
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "PDF validation failure leaves active workspace unchanged");
 
   const invalidApplicationResume = replaceEntry(
-    withBrowser,
+    withPreferences,
     "applications/application-1/resume.resume",
     "{\"format\":\"wrong\"}"
   );
@@ -365,7 +365,7 @@ try {
     "application resume validation failure leaves active workspace unchanged"
   );
 
-  const invalidCover = replaceEntry(withBrowser, "applications/application-1/cover.cover", "{\"format\":\"wrong\"}");
+  const invalidCover = replaceEntry(withPreferences, "applications/application-1/cover.cover", "{\"format\":\"wrong\"}");
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidCover, fixedDate),
     (error) => error instanceof WorkspaceBackupError && /invalid saved application .cover file/.test(error.message),
@@ -374,52 +374,52 @@ try {
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "cover-letter validation failure leaves active workspace unchanged");
 
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, { ...withBrowser, files: [...withBrowser.files, withBrowser.files[0]] }, fixedDate),
+    () => restoreWorkspaceBackup(targetDir, { ...withPreferences, files: [...withPreferences.files, withPreferences.files[0]] }, fixedDate),
     /duplicate file path/,
     "duplicate paths are rejected"
   );
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, {
-      ...withBrowser,
-      files: [{ ...withBrowser.files[0], path: "../outside.resume" }]
+      ...withPreferences,
+      files: [{ ...withPreferences.files[0], path: "../outside.resume" }]
     }, fixedDate),
     /unsupported file path/,
     "path traversal is rejected"
   );
 
-  // --- Browser-preferences mirror <-> backup envelope ---
+  // --- Workspace preferences <-> backup envelope ---
   const prefsDir = join(isolatedRoot, "prefs-workspace");
   await mkdir(join(prefsDir, "resumes"), { recursive: true });
   await writeFile(join(prefsDir, "resumes", "default.resume"), portableResumeText, "utf8");
 
-  // No mirror yet: backup omits browser and never lists the mirror file.
-  const withoutMirror = await createWorkspaceBackup(prefsDir, fixedDate);
-  assert.equal(withoutMirror.browser, undefined, "backup omits browser when no mirror file exists");
+  // No preferences yet: backup omits them and never lists the preferences file.
+  const withoutPreferences = await createWorkspaceBackup(prefsDir, fixedDate);
+  assert.equal(withoutPreferences.preferences, undefined, "backup omits preferences when no preference file exists");
   assert.ok(
-    !withoutMirror.files.some((file) => file.path === BROWSER_PREFERENCES_FILE_NAME),
-    "the browser-preferences mirror is never listed as a backed-up file"
+    !withoutPreferences.files.some((file) => file.path === WORKSPACE_PREFERENCES_FILE_NAME),
+    "workspace preferences are never listed as a backed-up file"
   );
 
-  // A valid mirror is folded into envelope.browser but still excluded from files.
-  await writeStoredBrowserPreferences(
+  // Valid preferences are folded into the envelope but still excluded from files.
+  await writeStoredWorkspacePreferences(
     prefsDir,
     { settings: { autoPolishCoverLetter: true, honestContext: "" }, lastBaseResume: "default.resume" },
-    "mirror",
+    "workspace",
     fixedDate
   );
-  const withMirror = await createWorkspaceBackup(prefsDir, fixedDate);
-  assert.equal(withMirror.browser?.settings.autoPolishCoverLetter, true, "a valid mirror is folded into envelope.browser");
-  assert.equal(withMirror.browser?.lastBaseResume, "default.resume");
+  const withStoredPreferences = await createWorkspaceBackup(prefsDir, fixedDate);
+  assert.equal(withStoredPreferences.preferences?.settings.autoPolishCoverLetter, true, "valid preferences are folded into the envelope");
+  assert.equal(withStoredPreferences.preferences?.lastBaseResume, "default.resume");
   assert.ok(
-    !withMirror.files.some((file) => file.path === BROWSER_PREFERENCES_FILE_NAME),
-    "a present mirror is still excluded from the backed-up file list"
+    !withStoredPreferences.files.some((file) => file.path === WORKSPACE_PREFERENCES_FILE_NAME),
+    "present preferences are still excluded from the backed-up file list"
   );
 
-  // A corrupt mirror must not block backing up resumes: browser is omitted.
-  await writeFile(join(prefsDir, BROWSER_PREFERENCES_FILE_NAME), "{ not valid json", "utf8");
-  const corruptMirror = await createWorkspaceBackup(prefsDir, fixedDate);
-  assert.equal(corruptMirror.browser, undefined, "a corrupt mirror is skipped and does not block the backup");
-  assert.equal(corruptMirror.files.length, withMirror.files.length, "resume files still back up with a corrupt mirror present");
+  // Corrupt preferences must not block backing up resumes: they are omitted.
+  await writeFile(join(prefsDir, WORKSPACE_PREFERENCES_FILE_NAME), "{ not valid json", "utf8");
+  const corruptPreferences = await createWorkspaceBackup(prefsDir, fixedDate);
+  assert.equal(corruptPreferences.preferences, undefined, "corrupt preferences are skipped and do not block the backup");
+  assert.equal(corruptPreferences.files.length, withStoredPreferences.files.length, "resume files still back up with corrupt preferences present");
 
   // Capacity checks are explicit pre-allocation boundaries, not a final parser
   // pass after all file bodies have already accumulated in memory.

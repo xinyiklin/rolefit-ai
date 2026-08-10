@@ -36,7 +36,6 @@ const styles = readFileSync(sourceUrl("../../../styles/document-workbench.css"),
 const studioStyles = readFileSync(sourceUrl("../../../styles/studio.css"), "utf8");
 const resumeTab = readFileSync(sourceUrl("../../tabs/ResumeTab.tsx"), "utf8");
 const coverTab = readFileSync(sourceUrl("../../tabs/CoverLetterTab.tsx"), "utf8");
-const documentCheckSummary = readFileSync(sourceUrl("../DocumentCheckSummary.tsx"), "utf8");
 const app = readFileSync(sourceUrl("../../../App.tsx"), "utf8");
 
 const values = new Map();
@@ -147,16 +146,6 @@ assert.match(
   workflowRail,
   /<aside\s*\n?\s*className=\{`workflow-rail/,
   "the shared workflow rail owns the complementary landmark"
-);
-assert.doesNotMatch(
-  documentCheckSummary,
-  /<aside|<section|<h[1-6]/,
-  "the closing check is a phase of the rail, not a nested landmark or section of its own"
-);
-assert.doesNotMatch(
-  documentCheckSummary,
-  /primary-button/,
-  "the closing check offers no primary action — it is not a tool the user operates"
 );
 assert.match(
   workbench,
@@ -360,6 +349,7 @@ assert.doesNotMatch(
 // same runs — say Polish; Tailor and Audit survive only as the resume pipeline's
 // own stage names inside its progress list.
 const resumeRail = readFileSync(sourceUrl("../../resume/ResumeWorkflowRail.tsx"), "utf8");
+const resumeReview = readFileSync(sourceUrl("../../resume/ResumeProposalReview.tsx"), "utf8");
 const coverRail = readFileSync(sourceUrl("../../cover-letter/CoverLetterReview.tsx"), "utf8");
 const prepareTab = readFileSync(sourceUrl("../../tabs/PrepareTab.tsx"), "utf8");
 const coverWorkflow = readFileSync(sourceUrl("../../../hooks/useCoverLetter.ts"), "utf8");
@@ -415,6 +405,31 @@ assert.doesNotMatch(
   coverWorkflow,
   /Tailoring panel|Tailoring blocked|Tailor the letter again|Tailoring this letter/,
   "cover-letter status never names a panel or verb the interface does not show"
+);
+assert.match(
+  resumeRail,
+  /disabled=\{Boolean\(proposalStale\) \|\| !decisions\.outstanding\}/,
+  "a stale resume proposal cannot accept all edits"
+);
+assert.match(
+  resumeReview,
+  /disabled=\{proposalStale \|\| !draft\.trim\(\)\}/,
+  "a stale resume proposal cannot accept an edited replacement"
+);
+assert.match(
+  resumeReview,
+  /disabled=\{proposalStale\}[\s\S]{0,180}?Accept[\s\S]{0,300}?disabled=\{proposalStale\}[\s\S]{0,180}?Edit/,
+  "a stale resume proposal disables its per-edit accept and edit controls"
+);
+assert.match(
+  resumeRail,
+  /key=\{decisions\.proposalKey\}/,
+  "a replacement resume proposal remounts local edit state even when target ids are reused"
+);
+assert.match(
+  coverRail,
+  /useEffect\(\(\) => \{\s*setProposalView\("changes"\);\s*\}, \[proposal\?\.result\]\)/,
+  "each cover-letter proposal opens on Changes"
 );
 assert.match(
   resumeRail,
@@ -474,6 +489,70 @@ assert.match(
   resumeTab,
   /fitViewportRef\.current = node/,
   "Resume publishes the mounted editor pane to the shared Fit observer"
+);
+
+// One decision surface. A resume decides N edits and a letter decides one
+// letter, but a user should not have to relearn where the commit control is, or
+// what the verbs are, when they move between the two documents.
+const decisionBar = readFileSync(sourceUrl("../ProposalDecisionBar.tsx"), "utf8");
+const proposalDiff = readFileSync(sourceUrl("../ProposalDiff.tsx"), "utf8");
+const reviewStyles = readFileSync(sourceUrl("../../../styles/review.css"), "utf8");
+
+for (const [name, source] of [["Resume", resumeRail], ["Cover Letter", coverRail]]) {
+  assert.match(
+    source,
+    /footer = [\s\S]{0,900}?<ProposalDecisionBar/,
+    `${name} commits its proposal through the shared decision bar, in the rail footer`
+  );
+  assert.match(
+    source,
+    /<ProposalDecisionBar[\s\S]{0,600}?className="primary-button is-compact"[\s\S]{0,400}?className="secondary-button is-compact"/,
+    `${name} weights accept and discard the same way, in the same order`
+  );
+}
+assert.match(
+  decisionBar,
+  /role="progressbar"[\s\S]{0,240}?aria-valuemax=\{meter\.total\}/,
+  "a multi-decision proposal reports its progress to assistive technology, not only in prose"
+);
+const resumeDescription = resumeRail.match(/const description = [\s\S]*?;\n\n/)?.[0] ?? "";
+assert.ok(resumeDescription, "the resume rail still derives exactly one description");
+assert.doesNotMatch(
+  resumeDescription,
+  /\$\{decisions\./,
+  "and it stops restating the counts the decision bar one line below already owns"
+);
+assert.match(
+  resumeRail,
+  /Accept all[\s\S]{0,400}?Discard all/,
+  "the resume can decline a whole proposal in one move, as the letter can"
+);
+assert.match(
+  resumeReview,
+  /<details className="resume-proposal__edits" open>/,
+  "the resume's edits are visible on arrival, like the letter's proposed replacement"
+);
+assert.match(
+  resumeReview,
+  /revert\(suggestion\)/,
+  "a decided resume edit can be taken back"
+);
+for (const [name, source] of [["Resume", resumeReview], ["Cover Letter", coverRail]]) {
+  assert.match(
+    source,
+    /<ProposalDiff/,
+    `${name} marks what would change rather than asking the reader to compare two blocks by eye`
+  );
+}
+assert.match(
+  proposalDiff,
+  /hasInlineMarkTags\(original\) \|\| hasInlineMarkTags\(proposed\)[\s\S]{0,200}?renderInlineMarks/,
+  "marked-up text falls back to its rendered side, because a word diff can split a tag pair"
+);
+assert.match(
+  reviewStyles,
+  /\.proposal-diff__added[\s\S]{0,200}?\}[\s\S]{0,80}?\.proposal-diff__removed/,
+  "added and removed runs are marked from one shared rule set, in both documents"
 );
 
 console.log("Document workbench contract probes passed");

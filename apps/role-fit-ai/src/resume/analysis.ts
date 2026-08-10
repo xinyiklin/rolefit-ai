@@ -4,7 +4,7 @@ import type { ResumeAnalysis } from "./types";
 
 // Deterministic document analysis intentionally excludes fit scoring. It keeps
 // only mechanical information used by the editor/Polish workflow; it does not
-// produce Initial Fit or Final Check judgments.
+// produce Fit Assessment judgments.
 export function analyzeResumeText(resumeText: string, jobText: string): ResumeAnalysis {
   const jobKeywords = extractKeywords(jobText);
   const bulletGroupsOverLimit = resumeText

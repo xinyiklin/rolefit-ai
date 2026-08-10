@@ -31,3 +31,11 @@ export function buildStageRequestFields(config: StageConfig): AiRequestFields {
     reasoningEffort: config.cliReasoningEffort
   };
 }
+
+export function aiRequestFieldsMatch(left: AiRequestFields, right: AiRequestFields): boolean {
+  return (
+    left.provider === right.provider
+    && left.model === right.model
+    && left.reasoningEffort === right.reasoningEffort
+  );
+}

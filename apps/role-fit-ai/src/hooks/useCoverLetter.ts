@@ -22,6 +22,10 @@ import {
   parseCoverLetterBlockedFailure,
   type CoverLetterBlockedFailure,
 } from "../lib/coverLetterFailure";
+import {
+  resolveCoverLetterProposalFreshness,
+  type CoverLetterProposalIdentity,
+} from "../lib/coverLetterProposalFreshness";
 
 type UseCoverLetterArgs = {
   currentCoverLetterText: string;
@@ -46,8 +50,12 @@ type UseCoverLetterArgs = {
 
 export type CoverLetterProposal = {
   result: CoverLetterTailorResult;
-  sourceFingerprint: string;
   stale: boolean;
+  resumeChanged: boolean;
+};
+
+type PendingCoverLetterProposal = CoverLetterProposalIdentity & {
+  result: CoverLetterTailorResult;
 };
 
 export type CoverLetterFailure =
@@ -101,7 +109,7 @@ export function useCoverLetter({
   const [lastAppliedResult, setLastAppliedResult] = useState<CoverLetterTailorResult | null>(
     null,
   );
-  const [pendingProposal, setPendingProposal] = useState<Omit<CoverLetterProposal, "stale"> | null>(null);
+  const [pendingProposal, setPendingProposal] = useState<PendingCoverLetterProposal | null>(null);
   const [failure, setFailure] = useState<CoverLetterFailure | null>(null);
   const failureRef = useRef<CoverLetterFailure | null>(failure);
   failureRef.current = failure;
@@ -147,30 +155,39 @@ export function useCoverLetter({
       }),
     [honestContext, resumeData, slotAnswers, slotLabels],
   );
-  const proposalInputFingerprint = workflowInputFingerprint({
+  const proposalContentFingerprint = workflowInputFingerprint({
     currentCoverLetterText,
-    currentResumeText,
-    resumeText,
     jobText,
     customInstructions,
     resolved: preflight.resolved,
-    evidenceItems,
+    evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
+  });
+  const proposalResumeFingerprint = workflowInputFingerprint({
+    currentResumeText,
+    resumeText,
+    evidenceItems: evidenceItems.filter((item) => item.source === "resume"),
   });
   const requestInputFingerprint = workflowInputFingerprint({
-    proposalInputFingerprint,
+    proposalContentFingerprint,
+    proposalResumeFingerprint,
     aiRequest: buildStageRequestFields(aiRequest),
   });
   const requestInputFingerprintRef = useRef(requestInputFingerprint);
   requestInputFingerprintRef.current = requestInputFingerprint;
   const previousRequestInputFingerprintRef = useRef(requestInputFingerprint);
   const proposal = useMemo<CoverLetterProposal | null>(
-    () => pendingProposal
-      ? {
-          ...pendingProposal,
-          stale: pendingProposal.sourceFingerprint !== proposalInputFingerprint,
-        }
-      : null,
-    [pendingProposal, proposalInputFingerprint],
+    () => {
+      if (!pendingProposal) return null;
+      const freshness = resolveCoverLetterProposalFreshness(pendingProposal, {
+        contentFingerprint: proposalContentFingerprint,
+        resumeFingerprint: proposalResumeFingerprint,
+      });
+      return {
+        result: pendingProposal.result,
+        ...freshness,
+      };
+    },
+    [pendingProposal, proposalContentFingerprint, proposalResumeFingerprint],
   );
 
   const invalidateCoverRequest = useCallback(() => {
@@ -236,6 +253,18 @@ export function useCoverLetter({
     () => setCoverProgress({ status: "idle" }),
     [],
   );
+
+  const stopCoverPolish = useCallback(() => {
+    if (!requestAbortRef.current) return;
+    invalidateCoverRequest();
+    setFailure(null);
+    setCoverStatus("Cover Letter Polish stopped. Your current letter is unchanged.");
+    setCoverProgress({
+      status: "stopped",
+      errorHeadline: "Stopped",
+      error: "Cover Letter Polish was cancelled. Your current letter is unchanged.",
+    });
+  }, [invalidateCoverRequest]);
 
   const updateDetail = useCallback(
     (key: CoverLetterDetailKey, value: string) => {
@@ -359,7 +388,8 @@ export function useCoverLetter({
       }
       setPendingProposal({
         result,
-        sourceFingerprint: proposalInputFingerprint,
+        contentFingerprint: proposalContentFingerprint,
+        resumeFingerprint: proposalResumeFingerprint,
       });
       setCoverStatus(
         `Proposal ready for ${preflight.resolved.role} at ${preflight.resolved.company}.`,
@@ -407,7 +437,7 @@ export function useCoverLetter({
     if (!proposal) return;
     if (proposal.stale) {
       setCoverStatus(
-        "The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.",
+        "The letter, job, Guidance, or polishing instructions changed. Polish again for the current inputs.",
       );
       return;
     }
@@ -435,6 +465,7 @@ export function useCoverLetter({
     handleTailorCoverLetter,
     coverProgress,
     dismissCoverProgress,
+    stopCoverPolish,
     preflight,
     detailValues,
     updateDetail,

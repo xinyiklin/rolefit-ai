@@ -25,10 +25,10 @@ import {
   workspaceRestoreHadPresenceAttempt
 } from "./workspaceRestoreGate.ts";
 import {
-  readStoredBrowserPreferences,
-  writeStoredBrowserPreferences,
+  readStoredWorkspacePreferences,
+  writeStoredWorkspacePreferences,
   writeWorkspaceRestoreMarker
-} from "./browserPreferences.ts";
+} from "./workspacePreferences.ts";
 import { countActiveTabs } from "./presence.ts";
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
@@ -237,14 +237,14 @@ export async function createWorkspaceBackup(workspaceDir: string, now = new Date
       createdAt: now.toISOString(),
       files
     };
-    // Include the workspace-resident browser-preferences mirror when present and
-    // valid. The mirror file itself is deliberately outside the managed-path
-    // allowlist, so it never appears in `files`. A missing OR corrupt mirror must
-    // never block backing up resumes: omit `browser` and continue rather than
+    // Include canonical workspace preferences when present and valid. The file
+    // itself is deliberately outside the managed-path allowlist, so it never
+    // appears in `files`. Missing or corrupt preferences never block backing up
+    // resumes: omit `preferences` and continue rather than
     // failing the backup.
-    const stored = await readStoredBrowserPreferences(workspaceDir);
+    const stored = await readStoredWorkspacePreferences(workspaceDir);
     if (stored.status === "ok") {
-      envelope.browser = { settings: stored.value.settings, lastBaseResume: stored.value.lastBaseResume };
+      envelope.preferences = { settings: stored.value.settings, lastBaseResume: stored.value.lastBaseResume };
     }
     // Run the same aggregate file-count/size contract used at restore time.
     return parseWorkspaceBackupEnvelope(envelope);
@@ -369,12 +369,12 @@ export async function restoreWorkspaceBackup(
     try {
       await writeStagedBackup(stageDir, envelope);
       // Every restore gets a generation marker, even when the backup has no
-      // optional browser preferences. The browser uses it to clear recovery
+      // optional workspace preferences. The browser uses it to clear recovery
       // drafts from the pre-restore workspace without inventing preferences.
       await writeWorkspaceRestoreMarker(stageDir, now);
-      // Stage optional browser preferences alongside the restored files.
-      if (envelope.browser) {
-        await writeStoredBrowserPreferences(stageDir, envelope.browser, "restore", now);
+      // Stage optional workspace preferences alongside the restored files.
+      if (envelope.preferences) {
+        await writeStoredWorkspacePreferences(stageDir, envelope.preferences, "restore", now);
       }
       // Staging can take long enough for a browser tab to open after the first
       // gate. Recheck at the replacement boundary while the active workspace is

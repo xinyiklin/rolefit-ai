@@ -21,13 +21,13 @@ import { useEffect, useRef, useState } from "react";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { extractJobPosting } from "../lib/jobExtract";
 import {
-  analyzeInitialFit,
+  analyzeFitAssessment,
   analyzeJobPosting,
   localJobAnalysisResult,
-  type InitialFitRequest,
+  type FitAssessmentRequest,
   type JobAnalysisResult
 } from "../lib/aiJobAnalysis";
-import type { AiRequestFields } from "../lib/aiRequest.ts";
+import { aiRequestFieldsMatch, type AiRequestFields } from "../lib/aiRequest.ts";
 import { ApiError, classifyFailure } from "../lib/failures";
 import { useExtensionInbox, type ExtensionImport } from "./useExtensionInbox";
 import {
@@ -43,15 +43,21 @@ import {
   reconcilePreparedJobManualReviewFields,
   type PreparedJobBrief
 } from "../lib/preparedJobBrief";
-import type { QuickFitResult, QuickFitState } from "../../shared/quickFitContract.ts";
+import {
+  FIT_ASSESSMENT_PROMPT_VERSION,
+  type FitAssessmentResult,
+  type FitAssessmentSnapshot,
+  type FitAssessmentState
+} from "../../shared/fitAssessmentContract.ts";
 import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
 import {
-  createQuickFitProvenance,
-  dispatchQuickFitRetry,
-  quickFitProvenanceIsStale,
-  quickFitRetryIsAvailable,
-  type PreparedQuickFitJob
-} from "../lib/quickFitLifecycle.ts";
+  createFitAssessmentProvenance,
+  dispatchFitAssessment,
+  fitAssessmentCanRun,
+  fitAssessmentProvenanceChanges,
+  restoredFitAssessmentState,
+  type PreparedFitAssessmentJob
+} from "../lib/fitAssessmentLifecycle.ts";
 
 export type ImportedJobSnapshot = {
   url: string;
@@ -130,11 +136,13 @@ type UseJobIntakeArgs = {
     facts: ExtractedJobTracking
   ) => Promise<{ proceed: boolean; note: string | null }>;
   jobAnalysisRequestFields: () => AiRequestFields;
+  fitAssessmentRequestFields: () => AiRequestFields;
   ensureProviderReady: () => Promise<ProviderReadiness>;
-  runInitialFit: boolean;
+  ensureFitAssessmentProviderReady: () => Promise<ProviderReadiness>;
+  runFitAssessment: boolean;
   // The one authoritative resume resolution, ranked against the local
   // job-analysis brief and adopted into the editor BEFORE the provider request.
-  // It runs on every preparation, not only when Initial Fit is on: which resume
+  // It runs on every preparation, not only when Fit Assessment is on: which resume
   // this application speaks for is a workflow fact, not a fit-check detail.
   resolvePreparedResume: (jobText: string) => Promise<PreparedResumeSelection | null>;
   candidateContext: () => string;
@@ -177,8 +185,10 @@ export function useJobIntake({
   confirmDuplicateBeforeJobAnalysis,
   confirmDuplicateAfterJobAnalysis,
   jobAnalysisRequestFields,
+  fitAssessmentRequestFields,
   ensureProviderReady,
-  runInitialFit,
+  ensureFitAssessmentProviderReady,
+  runFitAssessment,
   resolvePreparedResume,
   candidateContext,
   currentResume,
@@ -194,8 +204,8 @@ export function useJobIntake({
   // reports whether the brief came from the AI or the local fallback.
   const [jobAnalysisProgress, setJobAnalysisProgress] = useState<StageState>({ status: "idle" });
   const [jobAnalysisProgressVisible, setJobAnalysisProgressVisible] = useState(false);
-  const [quickFitState, setQuickFitState] = useState<QuickFitState>(
-    runInitialFit ? { status: "unavailable", resumeLabel: "", message: "Prepare a job to run Initial Fit." } : { status: "disabled" }
+  const [fitAssessmentState, setFitAssessmentState] = useState<FitAssessmentState>(
+    runFitAssessment ? { status: "unavailable", resumeLabel: "", message: "Prepare a job to run Fit Assessment." } : { status: "disabled" }
   );
   // Which job analysis action the card's Retry should re-run (link, paste, or a
   // reanalyze of an extension import). Stored as a tag, not a captured closure,
@@ -218,19 +228,20 @@ export function useJobIntake({
   const jobAnalysisSettledRef = useRef<Promise<void>>(Promise.resolve());
   const jobAnalysisGenerationRef = useRef(0);
   const jobAnalysisAbortRef = useRef<AbortController | null>(null);
-  const initialFitAbortRef = useRef<AbortController | null>(null);
+  const fitAssessmentAbortRef = useRef<AbortController | null>(null);
   // The job texts the last preparation resolved a resume against: the local
   // brief for ranking, the posting the provider screens. Retry re-resolves
   // from these rather than requiring the posting to be prepared again.
-  const preparedJobForFitRef = useRef<PreparedQuickFitJob | null>(null);
-  // The stale-input guard tracks the job source, Initial Fit setting, and
+  const preparedJobForFitRef = useRef<PreparedFitAssessmentJob | null>(null);
+  // The stale-input guard tracks the job source, Fit Assessment setting, and
   // stage-local AI settings. The selected resume is captured immediately
   // before dispatch and is not allowed to mutate the in-flight request.
   const jobAnalysisInputFingerprint = workflowInputFingerprint({
     jobUrl,
     jobDescription,
-    runInitialFit,
-    aiRequest: jobAnalysisRequestFields()
+    runFitAssessment,
+    jobAnalysisRequest: jobAnalysisRequestFields(),
+    fitAssessmentRequest: runFitAssessment ? fitAssessmentRequestFields() : null
   });
   const jobAnalysisInputFingerprintRef = useRef(jobAnalysisInputFingerprint);
   jobAnalysisInputFingerprintRef.current = jobAnalysisInputFingerprint;
@@ -238,8 +249,8 @@ export function useJobIntake({
   function startJobAnalysisRequest() {
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
-    initialFitAbortRef.current?.abort();
-    initialFitAbortRef.current = null;
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
     const controller = new AbortController();
     jobAnalysisAbortRef.current = controller;
     const generation = jobAnalysisGenerationRef.current;
@@ -261,6 +272,26 @@ export function useJobIntake({
     if (jobAnalysisAbortRef.current === controller) jobAnalysisAbortRef.current = null;
   }
 
+  function restorePreparedFitAssessment(
+    preparedJob: PreparedFitAssessmentJob,
+    snapshot?: FitAssessmentSnapshot
+  ) {
+    // A tracker restore supersedes every request from the previous desk state.
+    // Without this generation bump, a late Job analysis could replace the
+    // restored posting and its historical assessment after Open completes.
+    jobAnalysisGenerationRef.current += 1;
+    jobAnalysisAbortRef.current?.abort();
+    jobAnalysisAbortRef.current = null;
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
+    preparedJobForFitRef.current = preparedJob;
+    setLocalPreparedPreview(null);
+    setJobAnalysisProgress({ status: "idle" });
+    setJobAnalysisProgressVisible(false);
+    setJobAnalysisRetrySource(null);
+    setFitAssessmentState(restoredFitAssessmentState(runFitAssessment, snapshot));
+  }
+
   useEffect(() => {
     if (!jobAnalysisAbortRef.current) return;
     jobAnalysisGenerationRef.current += 1;
@@ -279,21 +310,23 @@ export function useJobIntake({
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
     jobAnalysisAbortRef.current = null;
-    initialFitAbortRef.current?.abort();
-    initialFitAbortRef.current = null;
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
   }, []);
 
   useEffect(() => {
-    if (runInitialFit) {
-      setQuickFitState((current) => current.status === "disabled"
-        ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Initial Fit." }
+    if (runFitAssessment) {
+      setFitAssessmentState((current) => current.status === "disabled"
+        ? preparedJobForFitRef.current
+          ? restoredFitAssessmentState(true)
+          : { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Fit Assessment." }
         : current);
       return;
     }
-    initialFitAbortRef.current?.abort();
-    initialFitAbortRef.current = null;
-    setQuickFitState({ status: "disabled" });
-  }, [runInitialFit]);
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
+    setFitAssessmentState({ status: "disabled" });
+  }, [runFitAssessment]);
 
   function claimJobAnalysisRun(): () => void {
     jobAnalysisBusyRef.current = true;
@@ -317,172 +350,188 @@ export function useJobIntake({
   }
 
   // Resolve the prepared resume for THIS preparation, then turn it into an
-  // Initial Fit request when the check is enabled. Resolution is unconditional:
-  // turning Initial Fit off must not stop the workflow from loading the resume
+  // Fit Assessment request when the check is enabled. Resolution is unconditional:
+  // turning Fit Assessment off must not stop the workflow from loading the resume
   // this application will be tailored from.
-  async function prepareResumeAndInitialFit(
+  async function prepareResumeAndFitAssessment(
     localJobText: string,
     screeningJobText: string
-  ): Promise<InitialFitRequest | null> {
+  ): Promise<FitAssessmentRequest | null> {
     const selection = await resolvePreparedResume(localJobText);
     preparedJobForFitRef.current = { localJobText, screeningJobText };
-    if (!runInitialFit) {
-      setQuickFitState({ status: "disabled" });
+    if (!runFitAssessment) {
+      setFitAssessmentState({ status: "disabled" });
       return null;
     }
-    // Retry stays offered even here: this preparation is real, and the user can
-    // open or save a resume and then ask for the check without re-preparing.
+    // Assessment stays available even here: this preparation is real, and the
+    // user can open or save a resume without preparing the posting again.
     if (!selection) {
-      setQuickFitState({
+      setFitAssessmentState({
         status: "unavailable",
         resumeLabel: "",
-        message: "Initial Fit needs your own resume. Open or save one, then retry the fit check."
+        message: "Fit Assessment needs your own resume. Open or save one, then retry the assessment."
       });
       return null;
     }
-    const fitRequest: InitialFitRequest = {
+    const fitRequest: FitAssessmentRequest = {
       resumeText: selection.text,
       resumeLabel: selection.label,
       candidateContext: candidateContext()
     };
-    setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
+    setFitAssessmentState({ status: "running", resumeLabel: fitRequest.resumeLabel });
     return fitRequest;
   }
 
-  function applyQuickFitOutcome({
+  function applyFitAssessmentOutcome({
     outcome,
     fitRequest,
     screeningJobText,
     aiRequest,
-    unavailableMessage = "Initial Fit is unavailable. You can continue to Polish or retry the fit check."
+    autoPolishEligible = false,
+    unavailableMessage = "Fit Assessment is unavailable. You can continue to Polish or retry the assessment."
   }: {
-    outcome: QuickFitResult | null;
-    fitRequest: InitialFitRequest | null;
+    outcome: FitAssessmentResult | null;
+    fitRequest: FitAssessmentRequest | null;
     screeningJobText: string;
     aiRequest: AiRequestFields;
+    autoPolishEligible?: boolean;
     unavailableMessage?: string;
   }) {
-    if (!runInitialFit) {
-      setQuickFitState({ status: "disabled" });
+    if (!runFitAssessment) {
+      setFitAssessmentState({ status: "disabled" });
       return;
     }
     if (!fitRequest) return;
     if (outcome) {
-      setQuickFitState({
+      setFitAssessmentState({
         status: "ready",
-        snapshot: { result: outcome, resumeLabel: fitRequest.resumeLabel },
-        provenance: createQuickFitProvenance(
+        snapshot: {
+          result: outcome,
+          resumeLabel: fitRequest.resumeLabel,
+          assessedAt: new Date().toISOString(),
+          provider: aiRequest.provider,
+          model: aiRequest.model,
+          reasoningEffort: aiRequest.reasoningEffort,
+          promptVersion: FIT_ASSESSMENT_PROMPT_VERSION
+        },
+        provenance: createFitAssessmentProvenance(
           screeningJobText,
           fitRequest,
           aiRequest
-        )
+        ),
+        autoPolishEligible
       });
       return;
     }
-    setQuickFitState({
+    setFitAssessmentState({
       status: "unavailable",
       resumeLabel: fitRequest.resumeLabel,
       message: unavailableMessage
     });
   }
 
-  async function refreshInitialFit(
+  async function evaluateFitAssessment(
     screeningJobText: string,
-    fitRequest: InitialFitRequest
+    fitRequest: FitAssessmentRequest,
+    { autoPolishEligible = false }: { autoPolishEligible?: boolean } = {}
   ) {
-    if (!runInitialFit) {
-      setQuickFitState({ status: "disabled" });
+    if (!runFitAssessment) {
+      setFitAssessmentState({ status: "disabled" });
       return;
     }
-    initialFitAbortRef.current?.abort();
+    fitAssessmentAbortRef.current?.abort();
     const controller = new AbortController();
-    initialFitAbortRef.current = controller;
-    const aiRequest = jobAnalysisRequestFields();
-    setQuickFitState({ status: "running", resumeLabel: fitRequest.resumeLabel });
+    fitAssessmentAbortRef.current = controller;
+    const aiRequest = fitAssessmentRequestFields();
+    setFitAssessmentState({ status: "running", resumeLabel: fitRequest.resumeLabel });
     try {
-      const readiness = await ensureProviderReady();
+      const readiness = await ensureFitAssessmentProviderReady();
       if (controller.signal.aborted) return;
       if (!readiness.ready) {
-        applyQuickFitOutcome({
+        applyFitAssessmentOutcome({
           outcome: null,
           fitRequest,
           screeningJobText,
           aiRequest,
-          unavailableMessage: `Initial Fit is unavailable: ${readiness.message}`
+          autoPolishEligible,
+          unavailableMessage: `Fit Assessment is unavailable: ${readiness.message}`
         });
         return;
       }
-      const outcome = await analyzeInitialFit(screeningJobText, fitRequest, {
+      const outcome = await analyzeFitAssessment(screeningJobText, fitRequest, {
         aiRequest,
         signal: controller.signal
       });
       if (controller.signal.aborted) return;
-      applyQuickFitOutcome({
-        outcome: outcome.initialFit,
+      applyFitAssessmentOutcome({
+        outcome: outcome.fitAssessment,
         fitRequest,
         screeningJobText,
-        aiRequest
+        aiRequest,
+        autoPolishEligible
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
-      applyQuickFitOutcome({
+      applyFitAssessmentOutcome({
         outcome: null,
         fitRequest,
         screeningJobText,
-        aiRequest
+        aiRequest,
+        autoPolishEligible
       });
     } finally {
-      if (initialFitAbortRef.current === controller) initialFitAbortRef.current = null;
+      if (fitAssessmentAbortRef.current === controller) fitAssessmentAbortRef.current = null;
     }
   }
 
-  async function retryInitialFit() {
+  function assessFitForResume(
+    selection: Pick<PreparedResumeSelection, "text" | "label">
+  ): void {
     const prepared = preparedJobForFitRef.current;
-    if (!runInitialFit || !prepared) return;
-    const selectedResume = currentResume();
-    const aiRequest = jobAnalysisRequestFields();
-    if (
-      quickFitState.status === "ready"
-      && selectedResume
-      && !quickFitProvenanceIsStale(
-        quickFitState.provenance,
-        prepared.screeningJobText,
-        selectedResume,
-        candidateContext(),
-        aiRequest
-      )
-    ) return;
-    await dispatchQuickFitRetry({
+    if (!runFitAssessment || !prepared) return;
+    void evaluateFitAssessment(prepared.screeningJobText, {
+      resumeText: selection.text,
+      resumeLabel: selection.label,
+      candidateContext: candidateContext()
+    });
+  }
+
+  async function reassessFit() {
+    const prepared = preparedJobForFitRef.current;
+    if (!runFitAssessment || !prepared) return;
+    await dispatchFitAssessment({
       preparedJob: prepared,
       currentResume,
       resolvePreparedResume,
       candidateContext,
-      onUnavailable: () => setQuickFitState({
+      onUnavailable: () => setFitAssessmentState({
         status: "unavailable",
         resumeLabel: "",
-        message: "Initial Fit needs your own resume. Open or save one, then retry the fit check."
+        message: "Fit Assessment needs your own resume. Open or save one, then retry the assessment."
       }),
-      refresh: refreshInitialFit
+      refresh: evaluateFitAssessment
     });
   }
 
   const currentPrepared = preparedJobForFitRef.current;
   const currentSelection = currentResume();
-  const visibleQuickFitState: QuickFitState = quickFitState.status === "ready"
-    && currentPrepared
-    && quickFitProvenanceIsStale(
-      quickFitState.provenance,
-      currentPrepared.screeningJobText,
-      currentSelection,
-      candidateContext(),
-      jobAnalysisRequestFields()
-    )
+  const fitAssessmentChanges = fitAssessmentState.status === "ready" && currentPrepared
+    ? fitAssessmentProvenanceChanges(
+        fitAssessmentState.provenance,
+        currentPrepared.screeningJobText,
+        currentSelection,
+        candidateContext(),
+        fitAssessmentRequestFields()
+      )
+    : [];
+  const visibleFitAssessmentState: FitAssessmentState = fitAssessmentState.status === "ready"
+    && fitAssessmentChanges.length > 0
     ? {
         status: "stale",
-        resumeLabel: quickFitState.snapshot.resumeLabel,
-        message: "Fit out of date — check again."
+        snapshot: fitAssessmentState.snapshot,
+        changes: fitAssessmentChanges
       }
-    : quickFitState;
+    : fitAssessmentState;
 
   function jobAnalysisTerminalState(result: JobAnalysisResult, duplicateNote?: string | null): StageState {
     if (result.failure) {
@@ -513,6 +562,30 @@ export function useJobIntake({
     setJobAnalysisProgressVisible(false);
   }
 
+  function stopJobAnalysis() {
+    const controller = jobAnalysisAbortRef.current;
+    if (!controller) return;
+    jobAnalysisGenerationRef.current += 1;
+    controller.abort();
+    jobAnalysisAbortRef.current = null;
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
+    setIsExtractingLink(false);
+    setJobAnalysisProgress({
+      status: "stopped",
+      errorHeadline: "Stopped",
+      error: "Job analysis was cancelled. The unfinished result did not replace your prepared job."
+    });
+    setLinkStatus("Job analysis stopped. Prepare again when you are ready.");
+    setFitAssessmentState((current) => current.status === "running"
+      ? {
+          status: "unavailable",
+          resumeLabel: current.resumeLabel,
+          message: "Fit Assessment stopped with Job analysis. Prepare again or retry the assessment."
+        }
+      : current);
+  }
+
   // Prepare's direct-typing path (manual edits to the description textarea) —
   // NOT used by the job analysis entry points above, which call the raw
   // setJobDescription and set pipelineAiUsage["job-analysis"] to their own real usage.
@@ -530,8 +603,8 @@ export function useJobIntake({
     setJobRawText("");
     setLocalPreparedPreview(null);
     preparedJobForFitRef.current = null;
-    setQuickFitState(runInitialFit
-      ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Initial Fit." }
+    setFitAssessmentState(runFitAssessment
+      ? { status: "unavailable", resumeLabel: "", message: "Prepare the current posting to run Fit Assessment." }
       : { status: "disabled" });
   }
 
@@ -578,27 +651,33 @@ export function useJobIntake({
       setJobAnalysisProgressVisible(true);
     }
 
-    const aiRequest = jobAnalysisRequestFields();
-    // Rank against the compact local brief, while the provider and fit
+    const jobAnalysisAiRequest = jobAnalysisRequestFields();
+    const fitAssessmentAiRequest = fitAssessmentRequestFields();
+    // Rank against the compact local brief, while the provider and Fit
     // provenance retain the complete captured posting.
     const localJobText = localExtracted.tailoringText;
     setLocalPreparedPreview(importedJobSnapshot(url, localJobText, localExtracted, screeningJobText));
-    const fitRequest = await prepareResumeAndInitialFit(localJobText, screeningJobText);
+    const fitRequest = await prepareResumeAndFitAssessment(localJobText, screeningJobText);
     if (!request.isCurrent()) return { status: "stale" };
+    // Preserve Prepare's one-call fast path only when the two independently
+    // configured stages resolve to the exact same provider request. A distinct
+    // Fit Assessment config must never be silently replaced by Job analysis's.
+    const combineFitAssessment = Boolean(fitRequest)
+      && aiRequestFieldsMatch(jobAnalysisAiRequest, fitAssessmentAiRequest);
 
     const result = readiness.ready
       ? await analyzeJobPosting(screeningJobText, {
           url: url || undefined,
-          aiRequest,
-          initialFit: fitRequest ?? undefined,
+          aiRequest: jobAnalysisAiRequest,
+          fitAssessment: combineFitAssessment ? fitRequest ?? undefined : undefined,
           localExtracted,
           signal: request.signal
         })
       : localJobAnalysisResult(screeningJobText, {
           url: url || undefined,
-          aiRequest,
+          aiRequest: jobAnalysisAiRequest,
           localExtracted,
-          initialFitRequested: Boolean(fitRequest),
+          fitAssessmentRequested: combineFitAssessment,
           failure: classifyFailure(new ApiError(readiness.message, 503))
         });
     if (!request.isCurrent()) return { status: "stale" };
@@ -624,12 +703,29 @@ export function useJobIntake({
     resetCoverWorkflow();
     setPipelineAiUsage(freshJobAnalysisUsage(result.usage));
     setJobRawText(screeningJobText);
-    applyQuickFitOutcome({
-      outcome: result.initialFit,
-      fitRequest,
-      screeningJobText,
-      aiRequest
-    });
+    if (combineFitAssessment) {
+      applyFitAssessmentOutcome({
+        outcome: result.fitAssessment,
+        fitRequest,
+        screeningJobText,
+        aiRequest: fitAssessmentAiRequest,
+        autoPolishEligible: duplicateAfter.proceed
+      });
+    } else if (fitRequest) {
+      if (duplicateAfter.proceed) {
+        // Job analysis is already committed. Let the separately configured Fit
+        // stage settle independently without holding Prepare's brief/progress open.
+        void evaluateFitAssessment(screeningJobText, fitRequest, { autoPolishEligible: true });
+      } else {
+        applyFitAssessmentOutcome({
+          outcome: null,
+          fitRequest,
+          screeningJobText,
+          aiRequest: fitAssessmentAiRequest,
+          unavailableMessage: "Fit Assessment did not run because duplicate review stopped Prepare."
+        });
+      }
+    }
 
     return {
       status: duplicateAfter.proceed ? "complete" : "duplicate-after",
@@ -845,8 +941,8 @@ export function useJobIntake({
       noteTone: "info"
     });
     preparedJobForFitRef.current = null;
-    setQuickFitState(runInitialFit
-      ? { status: "unavailable", resumeLabel: "", message: "Initial Fit did not run because duplicate review stopped Prepare." }
+    setFitAssessmentState(runFitAssessment
+      ? { status: "unavailable", resumeLabel: "", message: "Fit Assessment did not run because duplicate review stopped Prepare." }
       : { status: "disabled" });
   }
 
@@ -1023,14 +1119,15 @@ export function useJobIntake({
     jobAnalysisProgress,
     jobAnalysisProgressVisible,
     dismissJobAnalysisProgress,
+    stopJobAnalysis,
     jobAnalysisRetry,
-    quickFitState: visibleQuickFitState,
-    retryInitialFit,
-    // Retry is offered whenever a preparation exists to retry, not when a
-    // resume label happens to be non-empty: the case that most needs recovery
-    // is exactly the one where no resume resolved and there is no label.
-    canRetryInitialFit: quickFitRetryIsAvailable(runInitialFit, preparedJobForFitRef.current),
-    refreshInitialFit,
+    fitAssessmentState: visibleFitAssessmentState,
+    restorePreparedFitAssessment,
+    reassessFit,
+    // Assessment is offered whenever a prepared posting exists, even when no
+    // resume resolved and the unavailable state therefore has no label.
+    canAssessFit: fitAssessmentCanRun(runFitAssessment, preparedJobForFitRef.current),
+    assessFitForResume,
     localPreparedPreview,
     handleManualJobDescriptionChange,
     handleExtractFromLink,

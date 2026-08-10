@@ -3,7 +3,7 @@
 A Manifest V3 popup (Chrome / Edge / Firefox) that prepares job postings in
 RoleFit AI. Click the toolbar icon to see whether you've already tracked or
 applied to that posting and open it in a fresh Prepare tab. Fit score, coverage,
-and evidence ledgers are not extension concerns; compact Initial Fit runs in the
+and evidence ledgers are not extension concerns; compact Fit Assessment runs in the
 main app when enabled.
 
 Two ways to import the posting you are reading:
@@ -155,9 +155,9 @@ after Job analysis asks the user to continue the current pipeline or stop; stopp
 prevents all later selected AI stages.
 
 The extension does not read the workspace base resume or calculate a local fit
-estimate. The app's compact Initial Fit returns an advisory verdict without a
-score or full coverage ledger. Resume Polish and optional Final Check keep their
-separate grounding contracts, and all AI output still requires human review.
+estimate. The app's compact Fit Assessment returns an advisory verdict without a
+score or full coverage ledger. Resume Polish keeps its grounding and
+pre-response audit contract, and all AI output still requires human review.
 
 No build or bundler — `popup.js` is a plain ES module loaded directly by
 `popup.html`. There is nothing to compile.

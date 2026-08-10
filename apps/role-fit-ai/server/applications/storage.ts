@@ -50,6 +50,66 @@ function isMissingFile(error: unknown): boolean {
   );
 }
 
+// Fit Assessment summary copy is derived entirely from its verdict. Older tracker
+// rows may carry the provider-generated sentence that preceded the fixed-copy
+// contract, so ignore only that redundant leaf during the strict canonical
+// comparison. Unknown fields and every other sanitizer change remain visible
+// to isDeepStrictEqual and still fail closed.
+function normalizeDerivedFitAssessmentSummariesForComparison(
+  applications: unknown[],
+  canonical: unknown[]
+): unknown[] {
+  return applications.map((application, index) => {
+    if (!application || typeof application !== "object" || Array.isArray(application)) {
+      return application;
+    }
+    const raw = application as Record<string, unknown>;
+    const fitAssessment = raw.initialFit;
+    const canonicalApplication = canonical[index];
+    if (
+      !fitAssessment ||
+      typeof fitAssessment !== "object" ||
+      Array.isArray(fitAssessment) ||
+      !canonicalApplication ||
+      typeof canonicalApplication !== "object" ||
+      Array.isArray(canonicalApplication)
+    ) {
+      return application;
+    }
+    const result = (fitAssessment as Record<string, unknown>).result;
+    const canonicalFitAssessment = (canonicalApplication as Record<string, unknown>).initialFit;
+    if (
+      !result ||
+      typeof result !== "object" ||
+      Array.isArray(result) ||
+      !canonicalFitAssessment ||
+      typeof canonicalFitAssessment !== "object" ||
+      Array.isArray(canonicalFitAssessment)
+    ) {
+      return application;
+    }
+    const canonicalResult = (canonicalFitAssessment as Record<string, unknown>).result;
+    if (!canonicalResult || typeof canonicalResult !== "object" || Array.isArray(canonicalResult)) {
+      return application;
+    }
+    const summary = (canonicalResult as Record<string, unknown>).summary;
+    const rawSummary = (result as Record<string, unknown>).summary;
+    if (typeof summary !== "string" || typeof rawSummary !== "string" || !rawSummary.trim()) {
+      return application;
+    }
+    return {
+      ...raw,
+      initialFit: {
+        ...(fitAssessment as Record<string, unknown>),
+        result: {
+          ...(result as Record<string, unknown>),
+          summary
+        }
+      }
+    };
+  });
+}
+
 export async function readApplications(workspaceDir: string) {
   const path = applicationsFilePath(workspaceDir);
   let text: string;
@@ -72,12 +132,13 @@ export async function readApplications(workspaceDir: string) {
     const apps = (data as { applications: unknown[] }).applications;
     const sane = sanitizeApplications(apps);
     const canonical = JSON.parse(JSON.stringify(sane)) as unknown[];
+    const comparable = normalizeDerivedFitAssessmentSummariesForComparison(apps, canonical);
     // Never silently erase an invalid on-disk record during the next write.
     if (
       apps.length > MAX_APPLICATIONS ||
       sane.length !== apps.length ||
       duplicateApplicationId(sane) ||
-      !isDeepStrictEqual(apps, canonical)
+      !isDeepStrictEqual(comparable, canonical)
     ) {
       throw new Error("Invalid application record.");
     }

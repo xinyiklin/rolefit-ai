@@ -39,11 +39,14 @@ Applies to `apps/role-fit-ai/src/lib/`.
   selectors and conservatively invalidate every observable verdict input; safe
   over-invalidation is preferable to a false cache hit.
 - `aiJobAnalysis.ts` owns one private `/api/job-analysis` request boundary for
-  combined analysis and fit-only retry. Keep HTTP error translation, JSON
+  combined analysis and reassessment. Keep HTTP error translation, JSON
   decoding, abort propagation, and mode-specific response validation there.
+- `fitAssessmentLifecycle.ts` owns exact request provenance and the structured
+  list of changed assessment input groups. Keep that list domain-only; the
+  Prepare rail owns its compact user-facing labels and details.
 - `autoPolishPolicy.ts` owns the client-only minimum-verdict type, labels,
   ordering, and comparison used independently by Resume and Cover Letter. The
-  shared Quick Fit contract owns assessment data and must not import downstream
+  shared Fit Assessment contract owns assessment data and must not import downstream
   automation policy.
 - Add a focused deterministic eval for durable parsing, identity, workflow,
   naming, or evidence behavior. Cover adversarial and empty inputs, not only the

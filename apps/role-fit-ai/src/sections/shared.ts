@@ -1,6 +1,6 @@
 // Types + helpers shared across the section components.
 
-// "review" is gone as a tab: the Resume proposal and current-document check
+// "review" is gone as a tab: the Resume proposal
 // live in the Resume tab's rail.
 // "pipeline" and "calendar" are gone as top-level tabs: they merged into
 // "applications" as a Table / Calendar view switcher (TrackerTab).

@@ -18,9 +18,9 @@ import type { AiRequestFields } from "./aiRequest";
 import type { StageAiUsage } from "./aiUsage";
 import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
 import {
-  sanitizeQuickFit,
-  type QuickFitResult
-} from "../../shared/quickFitContract.ts";
+  sanitizeFitAssessment,
+  type FitAssessmentResult
+} from "../../shared/fitAssessmentContract.ts";
 
 // The structured fields /api/job-analysis returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
@@ -48,8 +48,8 @@ export type AiJobAnalysisFields = {
   model?: string;
   reasoningEffort?: string;
   attempts?: number;
-  initialFit?: unknown;
-  initialFitStatus?: unknown;
+  fitAssessment?: unknown;
+  fitAssessmentStatus?: unknown;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -114,11 +114,11 @@ export type JobAnalysisResult = {
   source: "ai" | "local";
   usage: StageAiUsage;
   failure?: ClassifiedFailure;
-  initialFitRequested: boolean;
-  initialFit: QuickFitResult | null;
+  fitAssessmentRequested: boolean;
+  fitAssessment: FitAssessmentResult | null;
 };
 
-export type InitialFitRequest = {
+export type FitAssessmentRequest = {
   resumeText: string;
   resumeLabel: string;
   candidateContext?: string;
@@ -131,7 +131,7 @@ export function localJobAnalysisResult(
     aiRequest?: Partial<AiRequestFields>;
     localExtracted?: ExtractedJobPosting;
     failure?: ClassifiedFailure;
-    initialFitRequested?: boolean;
+    fitAssessmentRequested?: boolean;
   } = {}
 ): JobAnalysisResult {
   const extracted = options.localExtracted ?? extractJobPosting(text, { url: options.url });
@@ -140,8 +140,8 @@ export function localJobAnalysisResult(
       extracted,
       source: "local",
       usage: localOnlyUsage(),
-      initialFitRequested: options.initialFitRequested ?? false,
-      initialFit: null
+      fitAssessmentRequested: options.fitAssessmentRequested ?? false,
+      fitAssessment: null
     };
   }
   return {
@@ -149,8 +149,8 @@ export function localJobAnalysisResult(
     source: "local",
     usage: localFallbackUsage(options.aiRequest),
     failure: options.failure,
-    initialFitRequested: options.initialFitRequested ?? false,
-    initialFit: null
+    fitAssessmentRequested: options.fitAssessmentRequested ?? false,
+    fitAssessment: null
   };
 }
 
@@ -160,8 +160,8 @@ function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 type JobAnalysisFailure = { failure: ClassifiedFailure };
 type AnalysisApiOutcome = { mode: "analysis"; fields: Partial<AiJobAnalysisFields> };
-type InitialFitApiOutcome = { mode: "initial-fit"; initialFit: QuickFitResult };
-type JobAnalysisApiOutcome = AnalysisApiOutcome | InitialFitApiOutcome | JobAnalysisFailure;
+type FitAssessmentApiOutcome = { mode: "fit-assessment"; fitAssessment: FitAssessmentResult };
+type JobAnalysisApiOutcome = AnalysisApiOutcome | FitAssessmentApiOutcome | JobAnalysisFailure;
 
 function postJobAnalysisRequest(
   payload: Record<string, unknown>,
@@ -169,11 +169,11 @@ function postJobAnalysisRequest(
 ): Promise<AnalysisApiOutcome | JobAnalysisFailure>;
 function postJobAnalysisRequest(
   payload: Record<string, unknown>,
-  options: { mode: "initial-fit"; signal?: AbortSignal }
-): Promise<InitialFitApiOutcome | JobAnalysisFailure>;
+  options: { mode: "fit-assessment"; signal?: AbortSignal }
+): Promise<FitAssessmentApiOutcome | JobAnalysisFailure>;
 async function postJobAnalysisRequest(
   payload: Record<string, unknown>,
-  options: { mode: "analysis" | "initial-fit"; signal?: AbortSignal }
+  options: { mode: "analysis" | "fit-assessment"; signal?: AbortSignal }
 ): Promise<JobAnalysisApiOutcome> {
   const { mode, signal } = options;
   try {
@@ -186,7 +186,7 @@ async function postJobAnalysisRequest(
     if (!response.ok) {
       let message = mode === "analysis"
         ? "AI job analysis request failed"
-        : "Initial Fit request failed";
+        : "Fit Assessment request failed";
       try {
         const body = await response.json() as { error?: unknown };
         if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
@@ -202,7 +202,7 @@ async function postJobAnalysisRequest(
     } catch {
       const message = mode === "analysis"
         ? "The job analyzer returned an unparseable response"
-        : "Initial Fit returned unreadable JSON";
+        : "Fit Assessment returned unreadable JSON";
       return { failure: classifyFailure(new ApiError(message, 502)) };
     }
 
@@ -215,13 +215,13 @@ async function postJobAnalysisRequest(
       return { mode, fields: body as Partial<AiJobAnalysisFields> };
     }
 
-    const initialFit = body && typeof body === "object" && !Array.isArray(body)
-      ? sanitizeQuickFit((body as { initialFit?: unknown }).initialFit)
+    const fitAssessment = body && typeof body === "object" && !Array.isArray(body)
+      ? sanitizeFitAssessment((body as { fitAssessment?: unknown }).fitAssessment)
       : null;
-    return initialFit
-      ? { mode, initialFit }
+    return fitAssessment
+      ? { mode, fitAssessment }
       : {
-          failure: classifyFailure(new ApiError("Initial Fit returned no usable screening", 502))
+          failure: classifyFailure(new ApiError("Fit Assessment returned no usable screening", 502))
         };
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
@@ -299,21 +299,21 @@ export function extractedFromAiOrLocal(
   url?: string,
   aiRequest?: Partial<AiRequestFields>,
   localExtracted?: ExtractedJobPosting,
-  initialFitRequested = false
+  fitAssessmentRequested = false
 ): JobAnalysisResult {
-  // The server sanitizes the job subsection and the Initial Fit subsection
+  // The server sanitizes the job subsection and the Fit Assessment subsection
   // independently, so a valid screening can arrive beside job fields too weak
   // to use. Discarding the fit with them threw away a good half of the one
-  // combined request and invited a second fit-only call; the two sources stay
+  // combined request and invited a second assessment-only call; the two sources stay
   // independent here for the same reason.
-  const initialFit = initialFitRequested ? sanitizeQuickFit(fields?.initialFit) : null;
+  const fitAssessment = fitAssessmentRequested ? sanitizeFitAssessment(fields?.fitAssessment) : null;
   if (fields && hasUsableAiContent(fields)) {
     return {
       extracted: buildExtractedFromAi(fields, text, url),
       source: "ai",
       usage: aiUsageFromFields(fields),
-      initialFitRequested,
-      initialFit
+      fitAssessmentRequested,
+      fitAssessment
     };
   }
   return {
@@ -321,8 +321,8 @@ export function extractedFromAiOrLocal(
     source: "local",
     usage: localFallbackUsage(aiRequest),
     failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502)),
-    initialFitRequested,
-    initialFit
+    fitAssessmentRequested,
+    fitAssessment
   };
 }
 
@@ -335,7 +335,7 @@ export async function analyzeJobPosting(
     url?: string;
     signal?: AbortSignal;
     aiRequest?: Partial<AiRequestFields>;
-    initialFit?: InitialFitRequest;
+    fitAssessment?: FitAssessmentRequest;
     // Precomputed extractJobPosting(text, { url }) result from a caller's own
     // gate parse (same text/url). Every local-fallback branch below reuses it
     // instead of re-running the parser; falls back to computing it here, once,
@@ -344,8 +344,8 @@ export async function analyzeJobPosting(
     localExtracted?: ExtractedJobPosting;
   } = {}
 ): Promise<JobAnalysisResult> {
-  const { url, signal, aiRequest, initialFit, localExtracted } = options;
-  const initialFitRequested = Boolean(initialFit?.resumeText.trim());
+  const { url, signal, aiRequest, fitAssessment, localExtracted } = options;
+  const fitAssessmentRequested = Boolean(fitAssessment?.resumeText.trim());
   let memoizedLocalExtracted: ExtractedJobPosting | undefined;
   const resolveLocalExtracted = (): ExtractedJobPosting =>
     localExtracted ?? (memoizedLocalExtracted ??= extractJobPosting(text, { url }));
@@ -353,7 +353,7 @@ export async function analyzeJobPosting(
   const localOnly = (): JobAnalysisResult => localJobAnalysisResult(text, {
     url,
     localExtracted: resolveLocalExtracted(),
-    initialFitRequested
+    fitAssessmentRequested
   });
   // An AI call was made but didn't produce a usable result.
   const localAfterAttempt = (failure: ClassifiedFailure): JobAnalysisResult => localJobAnalysisResult(text, {
@@ -361,7 +361,7 @@ export async function analyzeJobPosting(
     aiRequest,
     localExtracted: resolveLocalExtracted(),
     failure,
-    initialFitRequested
+    fitAssessmentRequested
   });
   if (text.trim().length < 40) return localOnly();
 
@@ -370,12 +370,12 @@ export async function analyzeJobPosting(
       text,
       url,
       ...(aiRequest ?? {}),
-      ...(initialFitRequested
+      ...(fitAssessmentRequested
         ? {
-            initialFit: {
+            fitAssessment: {
               enabled: true,
-              resumeText: initialFit?.resumeText,
-              candidateContext: initialFit?.candidateContext
+              resumeText: fitAssessment?.resumeText,
+              candidateContext: fitAssessment?.candidateContext
             }
           }
         : {})
@@ -389,26 +389,26 @@ export async function analyzeJobPosting(
     url,
     aiRequest,
     localExtracted,
-    initialFitRequested
+    fitAssessmentRequested
   );
 }
 
-export async function analyzeInitialFit(
+export async function analyzeFitAssessment(
   text: string,
-  request: InitialFitRequest,
+  request: FitAssessmentRequest,
   options: { signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
-): Promise<{ initialFit: QuickFitResult | null; failure?: ClassifiedFailure }> {
+): Promise<{ fitAssessment: FitAssessmentResult | null; failure?: ClassifiedFailure }> {
   const outcome = await postJobAnalysisRequest(
     {
       text,
-      mode: "initial-fit",
+      mode: "fit-assessment",
       resumeText: request.resumeText,
       candidateContext: request.candidateContext,
       ...(options.aiRequest ?? {})
     },
-    { mode: "initial-fit", signal: options.signal }
+    { mode: "fit-assessment", signal: options.signal }
   );
   return "failure" in outcome
-    ? { initialFit: null, failure: outcome.failure }
-    : { initialFit: outcome.initialFit };
+    ? { fitAssessment: null, failure: outcome.failure }
+    : { fitAssessment: outcome.fitAssessment };
 }

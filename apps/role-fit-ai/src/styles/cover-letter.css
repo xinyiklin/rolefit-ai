@@ -185,24 +185,39 @@
   gap: var(--s2);
 }
 
-.cover-letter-proposal__evidence > section {
+.cover-letter-proposal__evidence dl {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+}
+
+.cover-letter-proposal__evidence dl > div {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   gap: var(--s2);
 }
 
 .cover-letter-proposal__evidence h3,
+.cover-letter-proposal__evidence dd,
 .cover-letter-proposal__provider {
   margin: 0;
 }
 
+/* Same weight as the rail's other feedback headings (What improved, Check
+   before using) — this is one more piece of proposal feedback, not a subsystem. */
 .cover-letter-proposal__evidence h3 {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.cover-letter-proposal__evidence dt {
   color: var(--ink-soft);
   font-size: 0.68rem;
   font-weight: 600;
 }
 
-.cover-letter-proposal__evidence small,
+.cover-letter-proposal__evidence dd,
 .cover-letter-proposal__provider {
   color: var(--ink-faint);
   font-size: 0.68rem;

@@ -1,43 +1,50 @@
-export const QUICK_FIT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
-export const QUICK_FIT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
-export const QUICK_FIT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
-export const QUICK_FIT_PROMPT_VERSION = "initial-fit-direct-rubric-v4";
+export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
+export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
+export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
+export const FIT_ASSESSMENT_INPUT_CHANGES = ["job", "resume", "candidate-context", "settings"] as const;
+export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v3";
 
-export type QuickFitVerdict = (typeof QUICK_FIT_VERDICTS)[number];
-export type QuickFitEligibilityStatus = (typeof QUICK_FIT_ELIGIBILITY)[number];
-export type QuickFitEvidenceSource = (typeof QUICK_FIT_EVIDENCE_SOURCES)[number];
+export type FitAssessmentVerdict = (typeof FIT_ASSESSMENT_VERDICTS)[number];
+export type FitAssessmentEligibilityStatus = (typeof FIT_ASSESSMENT_ELIGIBILITY)[number];
+export type FitAssessmentEvidenceSource = (typeof FIT_ASSESSMENT_EVIDENCE_SOURCES)[number];
+export type FitAssessmentInputChange = (typeof FIT_ASSESSMENT_INPUT_CHANGES)[number];
 
-export const QUICK_FIT_SUMMARY: Record<QuickFitVerdict, string> = {
+export const FIT_ASSESSMENT_SUMMARY: Record<FitAssessmentVerdict, string> = {
   STRONG: "Your background aligns closely with the role’s main requirements.",
   REASONABLE: "Your background aligns well, with a few material gaps.",
   STRETCH: "You have relevant experience, but several important gaps remain.",
   LIMITED: "The resume shows limited direct evidence for the role’s main requirements."
 };
 
-// Initial Fit uses the same canonical text on the client and server. Friendly
+// Fit Assessment uses the same canonical text on the client and server. Friendly
 // file labels stay outside this boundary because renaming a file does not
 // change what was screened.
-export function normalizeQuickFitInput(value: unknown): string {
+export function normalizeFitAssessmentInput(value: unknown): string {
   return String(value ?? "").normalize("NFKC").replace(/\r\n?/g, "\n").trim();
 }
 
-export type QuickFitResult = {
-  verdict: QuickFitVerdict;
+export type FitAssessmentResult = {
+  verdict: FitAssessmentVerdict;
   summary: string;
   matches: string[];
   gaps: string[];
   eligibility?: {
-    status: QuickFitEligibilityStatus;
+    status: FitAssessmentEligibilityStatus;
     note?: string;
   };
 };
 
-export type QuickFitSnapshot = {
-  result: QuickFitResult;
+export type FitAssessmentSnapshot = {
+  result: FitAssessmentResult;
   resumeLabel: string;
+  assessedAt?: string;
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  promptVersion?: string;
 };
 
-export type QuickFitProvenance = {
+export type FitAssessmentProvenance = {
   screeningJobFingerprint: string;
   resumeFingerprint: string;
   candidateContextFingerprint: string;
@@ -45,15 +52,26 @@ export type QuickFitProvenance = {
   inputFingerprint: string;
 };
 
-export type QuickFitState =
+export type FitAssessmentState =
   | { status: "disabled" }
   | { status: "running"; resumeLabel: string }
-  | { status: "ready"; snapshot: QuickFitSnapshot; provenance: QuickFitProvenance }
-  | { status: "stale"; resumeLabel: string; message: string }
+  | {
+      status: "ready";
+      snapshot: FitAssessmentSnapshot;
+      provenance: FitAssessmentProvenance;
+      // Only the first assessment launched by Prepare may authorize the
+      // optional automatic Polish actions. Later assessments stay advisory.
+      autoPolishEligible: boolean;
+    }
+  // A tracker restore can show the compact result saved with that application,
+  // but cannot reconstruct the exact candidate-context/request provenance. Keep
+  // it historical so it never participates in current-input automation.
+  | { status: "saved"; snapshot: FitAssessmentSnapshot }
+  | { status: "stale"; snapshot: FitAssessmentSnapshot; changes: FitAssessmentInputChange[] }
   | { status: "unavailable"; resumeLabel: string; message: string };
 
-const verdicts = new Set<string>(QUICK_FIT_VERDICTS);
-const eligibilityStatuses = new Set<string>(QUICK_FIT_ELIGIBILITY);
+const verdicts = new Set<string>(FIT_ASSESSMENT_VERDICTS);
+const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);
 
 function text(value: unknown, maxLength: number): string {
   if (typeof value !== "string") return "";
@@ -74,7 +92,7 @@ function list(value: unknown): string[] | null {
   return result;
 }
 
-export function sanitizeQuickFit(raw: unknown): QuickFitResult | null {
+export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
   const verdict = text(source.verdict, 24).toUpperCase();
@@ -84,7 +102,7 @@ export function sanitizeQuickFit(raw: unknown): QuickFitResult | null {
   if (!matches || !gaps) return null;
 
   const rawEligibility = source.eligibility;
-  let eligibility: QuickFitResult["eligibility"];
+  let eligibility: FitAssessmentResult["eligibility"];
   if (rawEligibility !== undefined && rawEligibility !== null) {
     if (typeof rawEligibility !== "object" || Array.isArray(rawEligibility)) return null;
     const eligibilitySource = rawEligibility as Record<string, unknown>;
@@ -92,15 +110,15 @@ export function sanitizeQuickFit(raw: unknown): QuickFitResult | null {
     if (!eligibilityStatuses.has(status)) return null;
     const note = text(eligibilitySource.note, 240);
     eligibility = {
-      status: status as QuickFitEligibilityStatus,
+      status: status as FitAssessmentEligibilityStatus,
       ...(note ? { note } : {})
     };
   }
 
-  const typedVerdict = verdict as QuickFitVerdict;
+  const typedVerdict = verdict as FitAssessmentVerdict;
   return {
     verdict: typedVerdict,
-    summary: QUICK_FIT_SUMMARY[typedVerdict],
+    summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
     matches,
     gaps,
     ...(eligibility ? { eligibility } : {})

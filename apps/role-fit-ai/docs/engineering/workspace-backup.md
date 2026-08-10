@@ -37,44 +37,51 @@ them, leaving room for base64 and JSON overhead.
 The bundle is intentionally plain, inspectable JSON and is **not encrypted**.
 Treat it like the resumes and application records it contains.
 
-## Browser-preferences mirror
+## Canonical workspace preferences
 
-Browser preferences (the normalized `rolefit:settings` allowlist and the last
-selected base resume name) live in origin-scoped browser storage, which the
-companion cannot read. The Drafting Desk therefore mirrors them to the server:
+The normalized `rolefit:settings` allowlist and last selected base resume name
+are canonical in the active OS-user workspace. Origin-scoped browser storage is
+only a fail-open cache. Every Drafting Desk client attached to the workspace
+uses the same server contract:
 
-- `POST /api/workspace/browser-preferences` — debounced push after any
-  preference save. The server validates the allowlisted shape and atomically
-  writes `browser-preferences.json` (owner-only permissions) in the workspace
-  root with `source: "mirror"` and a fresh `updatedAt`.
-- `GET /api/workspace/browser-preferences` — returns the stored file
-  (`exists`, `source`, `updatedAt`, `settings`, `lastBaseResume`) or
-  `exists: false`.
+- `POST /api/workspace/preferences` — debounced push after any preference save.
+  The server validates the allowlisted shape and atomically writes
+  `workspace-preferences.json` (owner-only permissions) in the workspace root
+  with `source: "workspace"` and a fresh `updatedAt`.
+- `GET /api/workspace/preferences` — returns the stored file (`exists`,
+  `source`, `updatedAt`, `settings`, `lastBaseResume`) or `exists: false`.
+  Clients adopt it before first render and refresh it on window focus, so
+  browser, port, and incognito boundaries do not fork the profile.
 
-Backup reads that file server-side and, when present and valid, embeds it as
-the envelope's `browser` field. A corrupt mirror file never blocks backing up
-resumes; the envelope simply omits `browser`. The mirror file itself is not a
-managed backup path and never appears in `files`.
+Backup embeds valid preferences as the envelope's `preferences` field. A
+corrupt preferences file never blocks backing up resumes; the envelope simply
+omits `preferences`. The file itself is not a managed backup path and never
+appears in `files`. A client also never overwrites a corrupt canonical record
+from one browser cache; Settings reports the persistence error until the record
+is repaired or replaced by a validated restore.
+
+The workspace backup, workspace preferences, and restore-marker documents each
+have one live schema: version 1. Other schema versions and retired field names
+are rejected rather than migrated.
 
 Every completed restore also installs an internal `workspace-restore.json`
 generation marker. It is not portable backup content. The marker lets every
 browser origin detect that its own pre-restore autosave draft is obsolete even
-when the imported backup has no optional `browser` payload. The adopting tab
+when the imported backup has no optional `preferences` payload. The adopting tab
 also clears invalid, expired, and confirmed-dead-tab orphans, but preserves
 drafts owned by live sibling tabs and publishes a workspace-adoption event so
 those tabs can surface the change without losing their in-flight work. Each
 event has a unique id because storage and `BroadcastChannel` may both deliver
 it. Siblings de-duplicate that id and refresh workspace choices without
 automatically replacing an open document; reordered refreshes commit only
-the latest response. Existing origin-local preferences remain when the backup
-has no browser payload.
+the latest response. The workspace preference record remains canonical even
+when the imported backup omitted preferences.
 
-On load, the browser adopts server-stored preferences in exactly two cases:
-after a restore (`source: "restore"` with an unseen `updatedAt` stamp — this
-also performs the tab-safe draft cleanup above), or when the origin has no
-saved RoleFit preferences at all (continuity across a companion port change or
-cleared site data). Everything else is a no-op, and adoption fails open so the
-app always starts.
+On load and window focus, the browser adopts server-stored preferences. A new
+restore generation also performs the tab-safe draft cleanup above. If the
+server has no preference file yet, a pre-existing browser cache seeds it once;
+afterward the workspace owns the record. Adoption fails open so a temporarily
+unavailable companion does not prevent the app from starting.
 
 ## Included data
 
@@ -85,7 +92,7 @@ Only files owned and validated by RoleFit enter the bundle:
 - validated `applications.json` tracker data;
 - current-schema application document sources or PDFs and PDF attachments under
   tracked `applications/<id>/` directories;
-- the mirrored allowlisted RoleFit preferences described above.
+- the canonical allowlisted workspace preferences described above.
 
 Generated cover letters, application answers, job targets, and tailored resume
 snapshots already stored on tracker records travel inside `applications.json`.
@@ -130,8 +137,8 @@ Restore is replace-not-merge:
 2. Parse the strict envelope and verify aggregate limits.
 3. Decode each file, verify its byte count and SHA-256 digest, and write it to a
    private sibling staging workspace with owner-only permissions. When the
-   envelope carries `browser` preferences, stage them as a
-   `source: "restore"` `browser-preferences.json` alongside the files. Always
+   envelope carries `preferences`, stage them as a
+   `source: "restore"` `workspace-preferences.json` alongside the files. Always
    stage the independent restore-generation marker.
 4. Re-run the strict `.resume`, tracker, and PDF domain validators against the
    complete staged tree.

@@ -24,8 +24,7 @@ import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
-import type { QuickFitSnapshot } from "../../shared/quickFitContract.ts";
-import type { FinalCheckResult } from "../../shared/finalCheckContract.ts";
+import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -45,8 +44,7 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
-  initialFitSnapshot: QuickFitSnapshot | null;
-  finalCheckSnapshot: FinalCheckResult | null;
+  fitAssessmentSnapshot: FitAssessmentSnapshot | null;
   pipelineAiUsage: Record<string, StageAiUsage>;
   applications: Application[];
   linkedApplicationId: string | null;
@@ -95,8 +93,7 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
-  initialFitSnapshot,
-  finalCheckSnapshot,
+  fitAssessmentSnapshot,
   pipelineAiUsage,
   applications,
   linkedApplicationId,
@@ -280,11 +277,6 @@ export function useApplyFlow({
     aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
     if (materialSelection.resume) {
       aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
-      if (pipelineAiUsage["final-check"]) {
-        aiUsage["final-check"] = pipelineAiUsage["final-check"];
-      } else {
-        delete aiUsage["final-check"];
-      }
     }
     if (materialSelection.coverLetter) {
       if (pipelineAiUsage.cover) aiUsage.cover = pipelineAiUsage.cover;
@@ -332,10 +324,12 @@ export function useApplyFlow({
       status,
       appliedAt: existing?.appliedAt ?? now,
       aiUsage,
+      // Fit Assessment belongs to the application receipt, not the included
+      // document package. Keep the latest completed snapshot even when current
+      // inputs changed or this Apply excludes the resume artifact.
+      initialFit: fitAssessmentSnapshot ?? existing?.initialFit,
       ...(materialSelection.resume
         ? {
-            initialFit: initialFitSnapshot ?? undefined,
-            finalCheck: finalCheckSnapshot ?? undefined,
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
           }
         : {})

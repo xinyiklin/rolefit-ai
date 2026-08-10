@@ -17,4 +17,20 @@ assert.match(
   "the prepared rail panel grows with wrapped content instead of stretching to a shorter scrollport track"
 );
 
-console.log("Prepare application rail layout eval: 1/1 checks passed");
+assert.match(
+  preparedHeightBlock,
+  /\.studio-body\[data-tab="prepare"\]\s*\{[\s\S]{0,220}?overflow:\s*hidden/,
+  "Prepare uses one fixed studio-height shell in both intake and prepared states"
+);
+assert.match(
+  preparedHeightBlock,
+  /\.prepare-page\s*\{[\s\S]{0,180}?height:\s*100%;[\s\S]{0,180}?min-height:\s*0/,
+  "the Prepare page keeps the same container height when no job is prepared"
+);
+assert.match(
+  preparedHeightBlock,
+  /\.prepare-layout\s*\{[\s\S]{0,160}?height:\s*100%;[\s\S]{0,160}?min-height:\s*0/,
+  "both Prepare topologies fill the page's remaining height"
+);
+
+console.log("Prepare application rail layout eval: 4/4 checks passed");

@@ -1,3 +1,4 @@
+import { useCallback, useRef } from "react";
 import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import type { SortKey, SortState } from "../tabs/TrackerTab";
@@ -167,49 +168,91 @@ export function TrackerTableView({
   duplicateIds
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
+  const headRef = useRef<HTMLDivElement>(null);
+  const bodyRef = useRef<HTMLDivElement>(null);
+
+  // The header is outside the vertical scroller so the scrollbar starts below it
+  // rather than running up alongside the column labels. That costs the free
+  // horizontal scrolling the two shared while they were one box, so their
+  // offsets are mirrored — written straight to the elements, no state, no
+  // re-render per frame.
+  //
+  // Both directions, not just body -> head: tabbing to an off-screen sort button
+  // makes the browser scroll the header's own `overflow: hidden` box to reveal
+  // it, and without the return path that silently slides the labels out of
+  // register with the rows. The inequality guard is what stops the pair from
+  // echoing each other.
+  const mirrorScroll = useCallback((from: "head" | "body") => () => {
+    const head = headRef.current;
+    const body = bodyRef.current;
+    if (!head || !body) return;
+    const [source, target] = from === "body" ? [body, head] : [head, body];
+    if (target.scrollLeft !== source.scrollLeft) target.scrollLeft = source.scrollLeft;
+  }, []);
 
   return (
     <div className="applications-table" role="region" aria-label="Applications">
-      <div className="applications-table__row applications-table__row--head">
-        {COLUMNS.map((col) => {
-          const isActive = sort.key === col.key;
-          return (
-            <button
-              type="button"
-              key={col.key}
-              aria-label={`Sort by ${col.label}${isActive ? `, currently ${sort.dir === "asc" ? "ascending" : "descending"}` : ""}`}
-              className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
-                col.key === "priority"
-                  ? " applications-table__cell--priority"
-                  : col.key === "nextAction"
-                    ? " applications-table__cell--next-action"
-                    : ""
-              }`}
-              onClick={() => onSort(col.key)}
-            >
-              {col.label}
-              {isActive ? (
-                sort.dir === "asc" ? (
-                  <ChevronUp size={12} aria-hidden="true" />
-                ) : (
-                  <ChevronDown size={12} aria-hidden="true" />
-                )
-              ) : null}
-            </button>
-          );
-        })}
-        <span aria-hidden="true" />
+      <div className="applications-table__head" ref={headRef} onScroll={mirrorScroll("head")}>
+        <div className="applications-table__row applications-table__row--head">
+          {COLUMNS.map((col) => {
+            const isActive = sort.key === col.key;
+            return (
+              <button
+                type="button"
+                key={col.key}
+                aria-label={`Sort by ${col.label}${isActive ? `, currently ${sort.dir === "asc" ? "ascending" : "descending"}` : ""}`}
+                className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
+                  col.key === "priority"
+                    ? " applications-table__cell--priority"
+                    : col.key === "nextAction"
+                      ? " applications-table__cell--next-action"
+                      : ""
+                }`}
+                onClick={() => onSort(col.key)}
+              >
+                {col.label}
+                {isActive ? (
+                  sort.dir === "asc" ? (
+                    <ChevronUp size={12} aria-hidden="true" />
+                  ) : (
+                    <ChevronDown size={12} aria-hidden="true" />
+                  )
+                ) : null}
+              </button>
+            );
+          })}
+          <span aria-hidden="true" />
+        </div>
       </div>
 
-      {visible.length ? (
-        grouped ? (
-          groups.map(({ month, rows }) => (
-            <div key={month} role="group" aria-label={month}>
-              <div className="applications-table__month-divider" aria-hidden="true">
-                <span className="table-eyebrow">{month}</span>
-                <span className="applications-table__month-count">{rows.length}</span>
+      <div
+        className={`applications-table__body${grouped && visible.length ? " has-month-groups" : ""}`}
+        ref={bodyRef}
+        onScroll={mirrorScroll("body")}
+      >
+        {visible.length ? (
+          grouped ? (
+            groups.map(({ month, rows }) => (
+              <div className="applications-table__month-group" key={month} role="group" aria-label={month}>
+                <div className="applications-table__month-divider" aria-hidden="true">
+                  <span className="table-eyebrow">{month}</span>
+                </div>
+                {rows.map((app) => (
+                  <ApplicationRow
+                    key={app.id}
+                    app={app}
+                    isSelected={selectedId === app.id}
+                    isDuplicate={duplicateIds.has(app.id)}
+                    onSelect={onSelect}
+                    onDoubleClick={onDoubleClick}
+                    onRowContextMenu={onRowContextMenu}
+                  />
+                ))}
               </div>
-              {rows.map((app) => (
+            ))
+          ) : (
+            <div>
+              {visible.map((app) => (
                 <ApplicationRow
                   key={app.id}
                   app={app}
@@ -221,33 +264,19 @@ export function TrackerTableView({
                 />
               ))}
             </div>
-          ))
+          )
         ) : (
-          <div>
-            {visible.map((app) => (
-              <ApplicationRow
-                key={app.id}
-                app={app}
-                isSelected={selectedId === app.id}
-                isDuplicate={duplicateIds.has(app.id)}
-                onSelect={onSelect}
-                onDoubleClick={onDoubleClick}
-                onRowContextMenu={onRowContextMenu}
-              />
-            ))}
+          <div className="applications-empty" role="status">
+            <BriefcaseBusiness size={24} aria-hidden="true" />
+            <strong>{allCount ? "No matching applications" : "No applications yet"}</strong>
+            <span>
+              {allCount
+                ? "Clear search or filters to widen the list."
+                : "Add a role or apply after polishing a resume."}
+            </span>
           </div>
-        )
-      ) : (
-        <div className="applications-empty" role="status">
-          <BriefcaseBusiness size={24} aria-hidden="true" />
-          <strong>{allCount ? "No matching applications" : "No applications yet"}</strong>
-          <span>
-            {allCount
-              ? "Clear search or filters to widen the list."
-              : "Add a role or apply after polishing a resume."}
-          </span>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }

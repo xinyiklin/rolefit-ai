@@ -39,7 +39,7 @@
     "test:server-lifecycle": "node server/__evals__/server-lifecycle-probes.test.mjs",
     "test:document-workflows": "node server/applications/__evals__/sanitize-applications.mjs && node server/applications/__evals__/application-documents-probes.mjs && node server/__evals__/workspace-backup-probes.mjs && node server/__evals__/cover-letter-workspace-probes.mjs && node --experimental-strip-types src/hooks/__evals__/workspace-backup-lifecycle.mjs && node --experimental-strip-types src/hooks/__evals__/workspace-resume-lifecycle.mjs && node --experimental-strip-types src/lib/__evals__/cover-letter-recovery-eval.mjs",
     "eval:live:cover-letter": "node server/ai/__evals__/cover-letter-quality-eval.mjs",
-    "eval:live:initial-fit": "node server/ai/__evals__/initial-fit-consistency-eval.mjs",
+    "eval:live:fit-assessment": "node server/ai/__evals__/fit-assessment-consistency-eval.mjs",
     "eval:live:resume-proposal": "node server/ai/__evals__/resume-proposal-quality-eval.mjs",
     "test": "node --test offline-evals.test.mjs",
     "check": "npm run build && npm run build:landing && npm run check:desktop && npm test"

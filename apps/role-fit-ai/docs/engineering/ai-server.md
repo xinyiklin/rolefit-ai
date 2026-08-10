@@ -139,19 +139,11 @@ owns:
   actual Skills lists are mutable targets. Identity, contact,
   education, and standard-entry role/employer/subtitle/date fields remain
   read-only evidence; omitted sections are absent.
-  `/api/final-check` is a separate optional operation over the actual current
-  resume, candidate evidence, and prepared job. It performs one provider
-  dispatch and returns READY, REVIEW, or NEEDS_EVIDENCE plus a short summary
-  and at most five UNSUPPORTED, MISSING, or CLARITY issues. The server drops
-  malformed issue siblings, requires an exact private source excerpt from the
-  current document for Unsupported/Clarity or the posting for Missing, grounds
-  surviving details against that same excerpt, strips the excerpt, and derives
-  status rather than trusting contradictory model status. An all-invalid response fails instead of becoming
-  a false Ready result. It returns no score, fit
-  verdict, recommendation, or rewrite and never participates in Polish or
-  Apply readiness.
-  `/api/polish` accepts only the one-pass `resume-proposal` contract. Cover
-  letters and current-document checks use their own routes.
+  `/api/polish` accepts only the one-pass `resume-proposal` contract. Its prompt
+  includes a silent self-audit before the provider returns JSON; the selected
+  reasoning effort controls provider reasoning and the audit's breadth, while
+  the audit remains internal and never becomes a second route or response.
+  Cover letters and application answers use their own routes.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -234,17 +226,17 @@ owns:
   (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
   provider after publishing the deterministic local brief. Combined analysis and
-  fit-only Retry pass through one private request boundary that owns JSON decoding,
+  reassessment pass through one private request boundary that owns JSON decoding,
   HTTP and network error translation, abort propagation, and mode-specific response
   validation. When the request fails, that local brief remains editable and manual
   Polish stays available.
 
-### Initial Fit integration boundary
+### Fit Assessment integration boundary
 
 The canonical prompt, structured-output, exact-grounding, provider, request-
 identity, and verification contract lives in
-[`server/ai/README.md`](../../server/ai/README.md#initial-fit-technical-contract).
-At the server boundary, combined Job analysis and fit-only Retry remain modes of
+[`server/ai/README.md`](../../server/ai/README.md#fit-assessment-technical-contract).
+At the server boundary, combined Job analysis and reassessment remain modes of
 the same guarded `/api/job-analysis` handler. Managed credentials remain server-
 side, and the response may echo resolved provider/model/reasoning provenance and
 dispatch attempts but never an API key.
@@ -335,7 +327,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 
 - `polish.ts` — the `handlePolish` route for the sole
   `mode: "resume-proposal"` request. It normalizes the editable scope and
-  dispatches `resumeProposal.ts`; cover letters and Final Check have dedicated
+  dispatches `resumeProposal.ts`; cover letters and answers have dedicated
   routes and cannot enter this handler.
 - `resumeScope.ts` — defensive normalization and plain-text serialization for
   the structured editable resume scope.
@@ -343,9 +335,6 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   construction (with category labels locked and `skill-list` semantics), the
   compact one-pass prompt/wire contract, deterministic per-edit grounding, and
   Proposal / No changes / Withheld derivation.
-- `finalCheck.ts` and `shared/finalCheckContract.ts` — the independent optional
-  current-resume check, grounded partial issue sanitization, and deterministic
-  READY / REVIEW / NEEDS_EVIDENCE derivation.
 - `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, provider-specific key lookup,
   and `resolveProviderRequest`).
@@ -363,7 +352,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   fields/arrays before `JSON.stringify` (or parse, shrink, and re-serialize),
   never character-slice serialized JSON into an invalid payload.
 - `sanitize.ts` — shared markup and numeric-claim guards used by the current
-  Resume Polish, Final Check, Cover Letter, and Application Answers flows.
+  Resume Polish, Cover Letter, and Application Answers flows.
   The markup gate allows exactly the editor's inline-mark vocabulary
   (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
   tokens in `currentText` and a faithful suggestion echoes them; all other
@@ -376,19 +365,21 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   inferred fact (e.g. "clinics run Windows") into the resume.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used by the
   job analyzer's `workAuth` grounding. It does not select a fit verdict.
-- `quickFit.ts` — executable prompt, response schema, and mechanical validation
-  for the [Initial Fit technical contract](../../server/ai/README.md#initial-fit-technical-contract).
+- `fitAssessment.ts` — executable prompt, response schema, and mechanical validation
+  for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
   Model summary text is never part of the accepted contract.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
-  citizenship, work authorization, sponsorship, education level, and field of
-  study to the user's honest context, and that combined string is what the
-  grounding allowlist is built from. Every field is therefore opt-in by
-  construction: an unset value contributes no line, so an undeclared
-  citizenship, clearance eligibility, or DEGREE can never become groundable
-  wording. Citizenship gates the work-authorization lines; education level gates
-  the field of study. Any new fact added there widens the allowlist and needs the
-  grounding/sanitizer probes re-run.
+  citizenship, work authorization, sponsorship, education level, field of
+  study, optional 4.0-scale GPA, earliest-start availability, and source-aware
+  experience evidence to the user's honest context, and that combined string is
+  what the grounding allowlist is built from. Every field is therefore opt-in
+  by construction: an unset value contributes no line, so an undeclared
+  citizenship, clearance eligibility, degree, GPA, or start date can never
+  become groundable wording. Citizenship gates the work-authorization lines;
+  education level gates the field of study and GPA; a specific availability
+  date must be a real ISO calendar date. Any new fact added there widens the
+  allowlist and needs the grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
   sanitizers. The proposed-text gate compares normalized JD terms against the
   submitted resume scope and honest context; unsupported JD-only terms produce
@@ -427,21 +418,21 @@ The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/polish` receives the Resume Polish config as `provider` / `model` /
-`reasoningEffort`, `/api/final-check` receives the Document check config,
+`reasoningEffort`,
 `/api/cover-letter` receives the Cover config, and
 `/api/application-answers` receives the Answers config. Missing stage fields use
 that stage's own product default; no stage inherits another stage's persisted
-provider/model/effort triple. Browser settings drop retired preview keys during
+provider/model/effort triple. Workspace settings drop retired preview keys during
 strict normalization, and portable workspace preferences carrying them fail
 closed. The original unprefixed provider/model/effort fields remain the durable
 Resume Polish storage keys.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
-the shared instructions. Resume Polish is one proposal request; the optional
-closing current-document check remains a separate request with its own
-configuration and guidance. Its persisted and API id remains `final-check`.
-The server contract is unchanged — one `customInstructions` string per request.
+ the shared instructions. Resume Polish is one proposal request. Its prompt
+ performs the internal evidence, claim, identifier, and schema audit before
+ returning, with breadth adapted to the selected reasoning effort. The server
+ contract remains one `customInstructions` string per request.
 
 Browser requests contain provider, model, and
 reasoning settings but no API credentials. If a request omits provider fields
@@ -530,11 +521,9 @@ The AI must:
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length
   so the one-page layout survives
-- keep Final Check non-rewriting and issue-only: it checks the actual current
-  resume and returns at most five grounded Unsupported, Missing, or Clarity
-  issues with a server-derived READY / REVIEW / NEEDS_EVIDENCE status. Each
-  issue must include a private exact source excerpt from the document or posting,
-  and that excerpt never enters the public result
+- keep the Polish self-audit internal and non-rewriting: it validates evidence,
+  claims, identifiers, and output shape before the proposal is returned. The
+  deterministic proposal sanitizer remains the final acceptance boundary
 
 ### Career-writing guidance
 
@@ -561,11 +550,10 @@ authoritative.
 
 The deterministic job analyzer (`src/lib/jobExtract.ts`) is Prepare's immediate
 usable baseline. Job analysis may improve it, but an AI-backed failure leaves
-the baseline editable and does not block manual Polish. Initial Fit is advisory
+the baseline editable and does not block manual Polish. Fit Assessment is advisory
 and independently unavailable when its provider output is unusable. Resume
-Polish, Final Check, cover-letter tailoring, and application-answer failures
-have no local substitutes. Final Check failure is non-blocking; no locally
-generated draft, score, review, or verdict stands in.
+Polish, cover-letter tailoring, and application-answer failures have no local
+substitutes; no locally generated draft, score, review, or verdict stands in.
 
 ## Job Posting Import
 

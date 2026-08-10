@@ -1,13 +1,13 @@
-import { migrateSettings, normalizeSettings } from "./settings.ts";
+import { normalizeSettings } from "./settings.ts";
 
 export const WORKSPACE_BACKUP_FORMAT = "rolefit-workspace-backup" as const;
-export const WORKSPACE_BACKUP_SCHEMA_VERSION = 2 as const;
+export const WORKSPACE_BACKUP_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_BACKUP_EXTENSION = ".rolefit-backup";
 
-export const BROWSER_PREFERENCES_FORMAT = "rolefit-browser-preferences" as const;
-export const BROWSER_PREFERENCES_SCHEMA_VERSION = 1 as const;
-export const BROWSER_PREFERENCES_FILE_NAME = "browser-preferences.json";
-export const MAX_BROWSER_PREFERENCES_JSON_BYTES = 120_000;
+export const WORKSPACE_PREFERENCES_FORMAT = "rolefit-workspace-preferences" as const;
+export const WORKSPACE_PREFERENCES_SCHEMA_VERSION = 1 as const;
+export const WORKSPACE_PREFERENCES_FILE_NAME = "workspace-preferences.json";
+export const MAX_WORKSPACE_PREFERENCES_JSON_BYTES = 120_000;
 
 export const WORKSPACE_RESTORE_MARKER_FORMAT = "rolefit-workspace-restore" as const;
 export const WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION = 1 as const;
@@ -26,7 +26,7 @@ export type WorkspaceBackupFile = {
   data: string;
 };
 
-export type PortableBrowserPreferences = {
+export type PortableWorkspacePreferences = {
   settings: Record<string, unknown>;
   lastBaseResume: string;
 };
@@ -36,7 +36,7 @@ export type WorkspaceBackupEnvelope = {
   schemaVersion: typeof WORKSPACE_BACKUP_SCHEMA_VERSION;
   createdAt: string;
   files: WorkspaceBackupFile[];
-  browser?: PortableBrowserPreferences;
+  preferences?: PortableWorkspacePreferences;
 };
 
 const RESUME_RE = /^resumes\/[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
@@ -71,14 +71,14 @@ export function workspaceBackupEncodingForPath(path: string): "utf8" | "base64" 
   return path.endsWith(".pdf") ? "base64" : "utf8";
 }
 
-// The workspace-resident mirror of allowlisted browser preferences. The browser
-// pushes it so companion-driven backups can include preferences, and restore
-// stages it so the browser can adopt restored preferences on its next load.
-export type StoredBrowserPreferences = {
-  format: typeof BROWSER_PREFERENCES_FORMAT;
-  schemaVersion: typeof BROWSER_PREFERENCES_SCHEMA_VERSION;
+// Canonical allowlisted preferences for one local workspace. Browser storage is
+// a fail-open cache; companion-driven backups carry this record and restore
+// stages it for every client attached to the workspace.
+export type StoredWorkspacePreferences = {
+  format: typeof WORKSPACE_PREFERENCES_FORMAT;
+  schemaVersion: typeof WORKSPACE_PREFERENCES_SCHEMA_VERSION;
   updatedAt: string;
-  source: "mirror" | "restore";
+  source: "workspace" | "restore";
   settings: Record<string, unknown>;
   lastBaseResume: string;
 };
@@ -107,26 +107,26 @@ export function parseStoredWorkspaceRestoreMarker(value: unknown): StoredWorkspa
   };
 }
 
-export function parseStoredBrowserPreferences(value: unknown): StoredBrowserPreferences {
+export function parseStoredWorkspacePreferences(value: unknown): StoredWorkspacePreferences {
   if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "updatedAt", "source", "settings", "lastBaseResume"])) {
-    throw new Error("The stored browser preferences are invalid.");
+    throw new Error("The stored workspace preferences are invalid.");
   }
-  if (value.format !== BROWSER_PREFERENCES_FORMAT || value.schemaVersion !== BROWSER_PREFERENCES_SCHEMA_VERSION) {
-    throw new Error("The stored browser preferences use an unsupported format version.");
+  if (value.format !== WORKSPACE_PREFERENCES_FORMAT || value.schemaVersion !== WORKSPACE_PREFERENCES_SCHEMA_VERSION) {
+    throw new Error("The stored workspace preferences use an unsupported format version.");
   }
   if (typeof value.updatedAt !== "string" || !Number.isFinite(Date.parse(value.updatedAt))) {
-    throw new Error("The stored browser preferences timestamp is invalid.");
+    throw new Error("The stored workspace preferences timestamp is invalid.");
   }
-  if (value.source !== "mirror" && value.source !== "restore") {
-    throw new Error("The stored browser preferences source is invalid.");
+  if (value.source !== "workspace" && value.source !== "restore") {
+    throw new Error("The stored workspace preferences source is invalid.");
   }
-  const portable = parsePortableBrowserPreferences({
+  const portable = parsePortableWorkspacePreferences({
     settings: value.settings,
     lastBaseResume: value.lastBaseResume
   });
   return {
-    format: BROWSER_PREFERENCES_FORMAT,
-    schemaVersion: BROWSER_PREFERENCES_SCHEMA_VERSION,
+    format: WORKSPACE_PREFERENCES_FORMAT,
+    schemaVersion: WORKSPACE_PREFERENCES_SCHEMA_VERSION,
     updatedAt: value.updatedAt,
     source: value.source,
     settings: portable.settings,
@@ -134,9 +134,9 @@ export function parseStoredBrowserPreferences(value: unknown): StoredBrowserPref
   };
 }
 
-export function parsePortableBrowserPreferences(value: unknown): PortableBrowserPreferences {
+export function parsePortableWorkspacePreferences(value: unknown): PortableWorkspacePreferences {
   if (!isRecord(value) || !hasExactKeys(value, ["settings", "lastBaseResume"])) {
-    throw new Error("The backup's browser preferences are invalid.");
+    throw new Error("The backup's workspace preferences are invalid.");
   }
   if (!isRecord(value.settings)) {
     throw new Error("The backup's settings are invalid.");
@@ -146,13 +146,12 @@ export function parsePortableBrowserPreferences(value: unknown): PortableBrowser
   if (new TextEncoder().encode(settingsJson).byteLength > 100_000) {
     throw new Error("The backup's settings are too large.");
   }
-  const migratedInputSettings = migrateSettings(inputSettings);
-  const settings = normalizeSettings(migratedInputSettings);
-  const inputKeys = Object.keys(migratedInputSettings);
+  const settings = normalizeSettings(inputSettings);
+  const inputKeys = Object.keys(inputSettings);
   const normalizedKeys = Object.keys(settings);
   if (inputKeys.length !== normalizedKeys.length || inputKeys.some((key) =>
     !Object.prototype.hasOwnProperty.call(settings, key) ||
-    JSON.stringify(migratedInputSettings[key]) !== JSON.stringify((settings as Record<string, unknown>)[key])
+    JSON.stringify(inputSettings[key]) !== JSON.stringify((settings as Record<string, unknown>)[key])
   )) {
     throw new Error("The backup's settings contain unsupported or invalid values.");
   }
@@ -167,13 +166,10 @@ export function parsePortableBrowserPreferences(value: unknown): PortableBrowser
 }
 
 export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnvelope {
-  if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "createdAt", "files"], ["browser"])) {
+  if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "createdAt", "files"], ["preferences"])) {
     throw new Error("This is not a valid RoleFit workspace backup.");
   }
-  if (
-    value.format !== WORKSPACE_BACKUP_FORMAT ||
-    value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION
-  ) {
+  if (value.format !== WORKSPACE_BACKUP_FORMAT || value.schemaVersion !== WORKSPACE_BACKUP_SCHEMA_VERSION) {
     throw new Error("This RoleFit workspace backup uses an unsupported format version.");
   }
   if (typeof value.createdAt !== "string" || !Number.isFinite(Date.parse(value.createdAt))) {
@@ -233,6 +229,8 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
     schemaVersion: WORKSPACE_BACKUP_SCHEMA_VERSION,
     createdAt: value.createdAt,
     files,
-    ...(value.browser === undefined ? {} : { browser: parsePortableBrowserPreferences(value.browser) })
+    ...(value.preferences === undefined
+      ? {}
+      : { preferences: parsePortableWorkspacePreferences(value.preferences) })
   };
 }

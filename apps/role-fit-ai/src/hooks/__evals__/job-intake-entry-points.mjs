@@ -64,7 +64,7 @@ const STATE_LABELS = [
   "preview",
   "progress",
   "progressVisible",
-  "quickFit",
+  "fitAssessment",
   "retrySource"
 ];
 
@@ -81,11 +81,15 @@ function assertOrder(log, expected, message) {
 function createHarness({
   routeUrl = JOB_URL,
   jobDescription = POSTING,
-  runInitialFit = true,
+  runFitAssessment = true,
   readiness = { ready: true },
   beforeProceed = true,
   afterProceed = true,
   providerStatus = 200,
+  fitProvider = "codex-cli",
+  fitModel = "synthetic-model",
+  fitReasoningEffort = "medium",
+  fitReadiness = { ready: true },
   selection = { text: RESUME, label: "Synthetic resume" }
 } = {}) {
   const log = [];
@@ -151,11 +155,20 @@ function createHarness({
       model: "synthetic-model",
       reasoningEffort: "medium"
     }),
+    fitAssessmentRequestFields: () => ({
+      provider: fitProvider,
+      model: fitModel,
+      reasoningEffort: fitReasoningEffort
+    }),
     ensureProviderReady: async () => {
       log.push({ event: "provider:ready" });
       return readiness;
     },
-    runInitialFit,
+    ensureFitAssessmentProviderReady: async () => {
+      log.push({ event: "provider:fit-ready" });
+      return fitReadiness;
+    },
+    runFitAssessment,
     resolvePreparedResume: async (jobText) => {
       log.push({ event: "resolvePreparedResume", value: jobText });
       return selection;
@@ -182,6 +195,19 @@ function createHarness({
         json: async () => ({ error: "Synthetic provider unavailable." })
       };
     }
+    if (payload.mode === "fit-assessment") {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          source: "ai",
+          fitAssessment: VALID_FIT,
+          provider: payload.provider,
+          model: payload.model,
+          reasoningEffort: payload.reasoningEffort
+        })
+      };
+    }
     return {
       ok: true,
       status: 200,
@@ -195,7 +221,7 @@ function createHarness({
         model: "synthetic-model",
         reasoningEffort: "medium",
         attempts: 1,
-        ...(payload.initialFit ? { initialFit: VALID_FIT } : {})
+        ...(payload.fitAssessment ? { fitAssessment: VALID_FIT } : {})
       })
     };
   };
@@ -211,6 +237,10 @@ function createHarness({
       return useJobIntake(args);
     }
   };
+}
+
+async function settleDetachedAssessment() {
+  await new Promise((resolve) => setImmediate(resolve));
 }
 
 async function runUrl(harness) {
@@ -239,7 +269,7 @@ const sharedCommitOrder = [
   "resetCoverWorkflow",
   "setPipelineAiUsage",
   "setJobRawText",
-  "state:quickFit"
+  "state:fitAssessment"
 ];
 
 {
@@ -248,6 +278,25 @@ const sharedCommitOrder = [
   assertOrder(harness.log, ["fetch:/api/import-job", ...sharedCommitOrder], "URL intake order");
   assert.equal(harness.requests.filter(({ url }) => url === "/api/job-analysis").length, 1);
   assert.equal(harness.state[5].status, "ready", "URL intake settles fit after the snapshot commit");
+}
+
+{
+  const harness = createHarness({
+    fitProvider: "anthropic",
+    fitModel: "claude-opus-4-8",
+    fitReasoningEffort: "high"
+  });
+  await runPaste(harness);
+  await settleDetachedAssessment();
+  const providerRequests = harness.requests.filter(({ url }) => url === "/api/job-analysis");
+  assert.equal(providerRequests.length, 2, "distinct Job analysis and Fit settings dispatch two provider requests");
+  assert.equal(providerRequests[0].payload.provider, "codex-cli");
+  assert.equal(providerRequests[0].payload.fitAssessment, undefined, "Job analysis does not absorb a differently configured Fit stage");
+  assert.equal(providerRequests[1].payload.mode, "fit-assessment");
+  assert.equal(providerRequests[1].payload.provider, "anthropic", "Fit Assessment uses its own provider");
+  assert.equal(providerRequests[1].payload.model, "claude-opus-4-8", "Fit Assessment uses its own model");
+  assert.equal(harness.state[5].status, "ready", "the separately configured Fit stage settles independently");
+  assert.equal(harness.state[5].snapshot.provider, "anthropic", "Fit provenance records the Fit provider, not Job analysis");
 }
 
 {
@@ -285,7 +334,35 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assertOrder(harness.log, [...sharedCommitOrder, "state:progress", "setLinkStatus"], "post-analysis duplicate order");
   assert.equal(harness.state[3].status, "stopped");
-  assert.equal(harness.state[5].status, "ready", "post-analysis duplicate review retains completed Initial Fit");
+  assert.equal(harness.state[5].status, "ready", "post-analysis duplicate review retains completed Fit Assessment");
+  assert.equal(
+    harness.state[5].autoPolishEligible,
+    false,
+    "a completed combined assessment cannot authorize downstream Polish after duplicate review stops"
+  );
+}
+
+{
+  const harness = createHarness({
+    afterProceed: false,
+    fitProvider: "anthropic",
+    fitModel: "claude-opus-4-8",
+    fitReasoningEffort: "high"
+  });
+  await runPaste(harness);
+  await settleDetachedAssessment();
+  assert.equal(
+    harness.requests.filter(({ url }) => url === "/api/job-analysis").length,
+    1,
+    "a post-analysis duplicate stop makes no separate Fit Assessment request"
+  );
+  assert.equal(
+    harness.log.some(({ event }) => event === "provider:fit-ready"),
+    false,
+    "duplicate review stops before Fit provider readiness"
+  );
+  assert.equal(harness.state[5].status, "unavailable");
+  assert.match(harness.state[5].message, /duplicate review stopped/i);
 }
 
 {
@@ -314,11 +391,11 @@ const sharedCommitOrder = [
 }
 
 {
-  const harness = createHarness({ runInitialFit: false });
+  const harness = createHarness({ runFitAssessment: false });
   await runPaste(harness);
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
   const request = harness.requests.find(({ url }) => url === "/api/job-analysis");
-  assert.equal(request.payload.initialFit, undefined, "disabled Initial Fit sends no resume payload");
+  assert.equal(request.payload.fitAssessment, undefined, "disabled Fit Assessment sends no resume payload");
   assert.equal(harness.state[5].status, "disabled");
 }
 
@@ -326,8 +403,8 @@ const sharedCommitOrder = [
   const harness = createHarness();
   await runPaste(harness);
   const request = harness.requests.find(({ url }) => url === "/api/job-analysis");
-  assert.equal(request.payload.initialFit.enabled, true);
-  assert.equal(request.payload.initialFit.resumeText, RESUME);
+  assert.equal(request.payload.fitAssessment.enabled, true);
+  assert.equal(request.payload.fitAssessment.resumeText, RESUME);
   assertOrder(
     harness.log,
     ["state:preview", "resolvePreparedResume", "fetch:/api/job-analysis"],

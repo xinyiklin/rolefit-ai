@@ -17,6 +17,13 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
+- About you stores optional evidence and scheduling facts, never self-scored
+  fit. GPA is a single bounded 4.0-scale value attached to declared education;
+  availability is a bounded notice period or valid exact date. Experience
+  remains divided by source with bounded duration, role/project count, recency,
+  and a factual scope note; job-specific relevance belongs to Fit Assessment.
+  Keep its category rows flat and do not collapse distinct evidence sources
+  into one additive years-of-experience total.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.
@@ -32,17 +39,19 @@ and `docs/engineering/ui-principles.md`.
   one role context, responsibilities, required/preferred qualifications,
   technical keywords, seniority/domain signals, and benefits. Candidate gaps
   restored from a saved Apply snapshot remain clearly historical compatibility
-  data rather than masquerading as a current Final Check.
+  data rather than masquerading as current evidence.
 - Before preparation, Source is the only visible panel. URL and pasted text are
   two APG-tabbed methods inside it, only the selected method renders, and the
   intake column is centered instead of reserving an empty rail. A prepared
   source collapses into its panel head — captured size and origin — rather than
   repeating them in the body.
 - After preparation, the brief leads the main column and one Application rail
-  owns both material choices, compact Initial Fit, readiness,
-  saved-application summary, and Apply. Initial Fit shows only its verdict,
+  owns both material choices, compact Fit Assessment, readiness,
+  saved-application summary, and Apply. Fit Assessment shows only its verdict,
   selected resume, short summary, up to three matches and gaps, and a relevant
-  eligibility warning. Running, disabled, and retryable-unavailable states stay
+  eligibility warning. When out of date, retain those facts only as a clearly
+  labeled previous assessment and add one flat Changed since assessment list
+  before Reassess fit. Running, disabled, and retryable-unavailable states stay
   flat and never block manual Polish.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing
@@ -124,13 +133,28 @@ and `docs/engineering/ui-principles.md`.
   tabs. The shell places each document's one primary **Polish** action beside the
   rail disclosure control in whichever open or collapsed state is visible.
   Resume dispatches one proposal request from both its document action and
-  Prepare; no stage selector exists. Its compact feedback is What improved,
-  collapsed Edits ready with Apply all and Accept/Edit/Discard, Still missing,
-  and a quiet withheld line. Evidence, risk, and keyword chips do not belong in
-  the normal surface, and Withheld never receives success treatment.
+  Prepare; no stage selector exists. Its compact feedback is What improved, the
+  proposed edits open in one disclosure with per-row Accept/Edit/Discard, Still
+  missing, and a quiet withheld line. Evidence, risk, and keyword chips do not
+  belong in the normal surface, and Withheld never receives success treatment.
   Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after acceptance.
+- `ProposalDecisionBar` and `ProposalDiff` are the shared accept surface, and
+  both documents must go through them. The bar is the ONLY place either document
+  commits: it renders in the rail's sticky footer, states what remains in that
+  document's own unit, and puts a primary accept before a secondary discard —
+  Accept all / Discard all for the resume's edits, Accept proposal / Discard
+  proposal for the letter's single replacement. Only a multi-decision proposal
+  gets its `progressbar`, and the rail description must not repeat the counts the
+  bar owns. `ProposalDiff` marks every changed word: `removed` and `added` for
+  the resume's Now/Proposed pair, `merged` for the letter's Changes view behind
+  its Changes / Full letter switch. It falls back to the plain rendered side when
+  either text carries inline marks, because a word diff can split a tag pair.
+  Resume decisions are individually reversible — `revert` restores an accepted
+  edit's original text before returning the row to the queue — and `discardAll`
+  is a decision record, never a mutation. Do not add a second commit location, a
+  third verb pair, or a document-private way of showing what changed.
   Typed post-draft issues render as one flat failure list with recovery beside
   each claim. When that rail is collapsed, its edge tab may show only the
   bounded issue count; readiness blockers and generic provider failures do not

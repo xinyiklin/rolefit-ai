@@ -628,7 +628,7 @@ export function isClaimTermGroundedInSource(term: unknown, source: unknown): boo
 
 // ---------------------------------------------------------------------------
 // Distinctive-token anchoring. Owned here rather than by the job analyzer
-// because Initial Fit anchors its gaps against the posting with exactly the
+// because Fit Assessment anchors its gaps against the posting with exactly the
 // same rule; two copies of a stopword list would drift into two definitions of
 // "grounded".
 

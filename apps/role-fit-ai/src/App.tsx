@@ -78,7 +78,6 @@ import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
 import { usePolishPipeline } from "./hooks/usePolishPipeline";
-import { useDocumentCheck } from "./hooks/useDocumentCheck";
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
@@ -98,14 +97,17 @@ import { recommendVariant, type VariantRecommendation } from "./lib/variantRecom
 import { currentResumeSelection } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
-import { quickFitMeetsThreshold } from "./lib/autoPolishPolicy";
+import { fitAssessmentMeetsThreshold } from "./lib/autoPolishPolicy";
+import {
+  fitAssessmentLatestSnapshot,
+  fitAssessmentMayTriggerAutoPolish
+} from "./lib/fitAssessmentLifecycle";
 import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 
 import { Masthead } from "./sections/Masthead";
-import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress";
-import type { AiWorkflowStage } from "./lib/aiWorkflow";
+import { TaskProgress } from "./sections/AiWorkflowProgress";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
 import { DocumentSaveMenu } from "./sections/document/DocumentSaveMenu";
@@ -296,7 +298,7 @@ function App() {
       return DEFAULT_DOCUMENT_TITLE;
     }
   });
-  // Per-stage AI usage snapshot (job-analysis/resume-polish/final-check/cover/answers), captured across
+  // Per-stage AI usage snapshot (job-analysis/resume-polish/cover/answers), captured across
   // the pipeline and snapshotted onto the Application at Apply time. Keys are
   // deleted (not set to "none") when a fresh polish run starts, so a stale
   // provider attribution can never linger from a prior run into the new one.
@@ -311,7 +313,7 @@ function App() {
   const [fileName, setFileName] = useState("");
   // What the loaded document actually is. The bundled starter is sample
   // content: it is long enough to pass every length test while speaking for
-  // nobody, so readiness, Initial Fit, and automatic proposals must not treat
+  // nobody, so readiness, Fit Assessment, and automatic proposals must not treat
   // it as the applicant's resume until it is saved as a real base.
   const [resumeOrigin, setResumeOrigin] = useState<ResumeOrigin>("blank");
 
@@ -324,6 +326,8 @@ function App() {
   // Resume seeding is composed before the workspace resolver but may clear a
   // recommendation later, so this callback alone crosses that declaration order.
   const clearPreparedResumeRecommendationRef = useRef<() => void>(() => undefined);
+  // Tracks the two independent actions for the one assessment that Prepare is
+  // allowed to use for automation. Later assessments are advisory-only upstream.
   const autoProposalFitRef = useRef({ key: "", resumeStarted: false, coverStarted: false });
   // Both document kinds use the same recommendation and safe auto-selection
   // contract; dirty editors and restored applications are never replaced.
@@ -351,10 +355,8 @@ function App() {
     copyStage,
     honestContext,
     setHonestContext,
-    runInitialFit,
-    setRunInitialFit,
-    runFinalCheck,
-    setRunFinalCheck,
+    runFitAssessment,
+    setRunFitAssessment,
     autoPolishResume,
     setAutoPolishResume,
     resumeAutoPolishThreshold,
@@ -373,6 +375,15 @@ function App() {
     setEducationLevel,
     major,
     setMajor,
+    gpa,
+    setGpa,
+    availabilityNotice,
+    setAvailabilityNotice,
+    availabilityDate,
+    setAvailabilityDate,
+    experienceProfile,
+    setExperienceProfile,
+    workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,
     stageCustomInstructions,
@@ -406,29 +417,27 @@ function App() {
     ]
   );
   const jobAnalysisStage = stages["job-analysis"];
+  const fitAssessmentStage = stages["fit-assessment"];
   const resumePolishStage = stages["resume-polish"];
-  const finalCheckStage = stages["final-check"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const resumePolishProviderReady = providerReady(resumePolishStage.provider);
-  const finalCheckProviderReady = providerReady(finalCheckStage.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const resumePolishProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
-  const finalCheckProviderMessage = providerRecoveryMessage(finalCheckStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureJobAnalysisProvider = useCallback(
     () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
     [jobAnalysisStage.provider, providerAvailability.ensureProvider]
   );
+  const ensureFitAssessmentProvider = useCallback(
+    () => providerAvailability.ensureProvider(fitAssessmentStage.provider),
+    [fitAssessmentStage.provider, providerAvailability.ensureProvider]
+  );
   const ensureResumePolishProvider = useCallback(
     () => providerAvailability.ensureProvider(resumePolishStage.provider),
     [providerAvailability.ensureProvider, resumePolishStage.provider]
-  );
-  const ensureFinalCheckProvider = useCallback(
-    () => providerAvailability.ensureProvider(finalCheckStage.provider),
-    [finalCheckStage.provider, providerAvailability.ensureProvider]
   );
   const selectedPolishProvidersReady = resumePolishProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
@@ -436,13 +445,18 @@ function App() {
     legallyAuthorizedToWork,
     requiresSponsorship,
     educationLevel,
-    major
+    major,
+    gpa,
+    availabilityNotice,
+    availabilityDate,
+    experienceProfile
   });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
   // Job analysis runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every job analysis entry point
   // (link, paste, extension import, and their retries).
   const jobAnalysisRequestFields = () => buildStageRequestFields(jobAnalysisStage);
+  const fitAssessmentRequestFields = () => buildStageRequestFields(fitAssessmentStage);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("prepare");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
@@ -958,6 +972,7 @@ function App() {
     handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
+    stopAnswers,
     retryAnswers
   } = useApplicationAnswers({
     resumeText: currentResumeText || resumeText,
@@ -991,6 +1006,7 @@ function App() {
     handleTailorCoverLetter,
     coverProgress,
     dismissCoverProgress,
+    stopCoverPolish,
     preflight: coverLetterPreflight,
     updateDetail: updateCoverLetterDetail,
     slotAnswers: coverLetterSlotAnswers,
@@ -1263,11 +1279,13 @@ function App() {
     jobAnalysisProgress,
     jobAnalysisProgressVisible,
     dismissJobAnalysisProgress,
+    stopJobAnalysis,
     jobAnalysisRetry,
-    quickFitState,
-    retryInitialFit,
-    canRetryInitialFit,
-    refreshInitialFit,
+    fitAssessmentState,
+    restorePreparedFitAssessment,
+    reassessFit,
+    canAssessFit,
+    assessFitForResume,
     localPreparedPreview,
     handleManualJobDescriptionChange,
     handleExtractFromLink,
@@ -1289,8 +1307,10 @@ function App() {
     confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
     confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
     jobAnalysisRequestFields,
+    fitAssessmentRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
-    runInitialFit,
+    ensureFitAssessmentProviderReady: ensureFitAssessmentProvider,
+    runFitAssessment,
     resolvePreparedResume,
     candidateContext: () => requestHonestContext,
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
@@ -1330,98 +1350,12 @@ function App() {
     setExportStatus,
     confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
   });
-  // Accept / edit / discard state for the proposal's individual edits. It lives
-  // here, not in the review list, because the resulting resume only exists once
-  // every edit has a decision — and that is exactly when the check may run.
+  // Accept / edit / discard state for the proposal's individual edits.
   const resumeProposalDecisions = useResumeProposalDecisions({
     result,
     resume: editedResume,
     actions: resumeEditorActions
   });
-  const checkEvidenceText = [resumeText, requestHonestContext].filter(Boolean).join("\n");
-  const checkInstructions = customInstructionsFor("final-check");
-  const {
-    check: finalCheck,
-    checkSource: finalCheckSource,
-    checkDocumentChanged: finalCheckDocumentChanged,
-    checkInputsChanged: finalCheckInputsChanged,
-    progress: finalCheckProgress,
-    isChecking,
-    runCheck: runResumeCheck,
-    requestAutoCheck: requestResumeAutoCheck,
-    stopCheck: stopResumeCheck
-  } = useDocumentCheck({
-    documentKind: "resume",
-    documentText: currentResumeText,
-    evidenceText: checkEvidenceText,
-    jobDescription,
-    customInstructions: checkInstructions,
-    enabled: runFinalCheck,
-    stageConfig: finalCheckStage,
-    ensureProviderReady: ensureFinalCheckProvider,
-    setPipelineAiUsage,
-    usageKey: "final-check"
-  });
-  const {
-    check: coverCheck,
-    checkSource: coverCheckSource,
-    checkDocumentChanged: coverCheckDocumentChanged,
-    checkInputsChanged: coverCheckInputsChanged,
-    progress: coverCheckProgress,
-    isChecking: isCheckingCoverLetter,
-    runCheck: runCoverCheck,
-    adoptValidatedReceipt: adoptCoverValidatedReceipt,
-    stopCheck: stopCoverCheck
-  } = useDocumentCheck({
-    documentKind: "cover-letter",
-    documentText: coverLetterEditor.text,
-    evidenceText: checkEvidenceText,
-    jobDescription,
-    customInstructions: checkInstructions,
-    enabled: runFinalCheck,
-    stageConfig: finalCheckStage,
-    ensureProviderReady: ensureFinalCheckProvider,
-    setPipelineAiUsage,
-    usageKey: "cover-check"
-  });
-
-  // The resume's closing phase: run the check ONCE, when the last edit decision
-  // settles. Not per accepted edit — that would spend a request per click and
-  // leave every earlier result stale the moment the next decision landed.
-  useEffect(() => {
-    if (!resumeProposalDecisions.decisionsSettled || proposalStale) return;
-    requestResumeAutoCheck(
-      `${jobDescription}|${resumeProposalDecisions.proposalKey}`
-    );
-  }, [
-    jobDescription,
-    proposalStale,
-    requestResumeAutoCheck,
-    resumeProposalDecisions.decisionsSettled,
-    resumeProposalDecisions.proposalKey
-  ]);
-  const aiWorkflowStages: AiWorkflowStage[] = [];
-  if (jobAnalysisProgressVisible) {
-    aiWorkflowStages.push({
-      key: "job-analysis",
-      state: jobAnalysisProgress,
-      onRetry: jobAnalysisRetry
-    });
-  }
-  if (polishProgressVisible) {
-    aiWorkflowStages.push({
-      key: "resume-polish",
-      state: polishProgress.polish,
-      onRetry: () => void retryStage(),
-      onStop: stopPolish
-    });
-  }
-
-  function dismissAiWorkflow() {
-    dismissJobAnalysisProgress();
-    setPolishProgressVisible(false);
-  }
-
   // Cross-tab presence: each browser tab is an independent RoleFit session, so
   // we publish this tab's coarse phase (derived from existing flow state — never
   // instrumented into the stage runners) and read back the OTHER live tabs for
@@ -1432,8 +1366,6 @@ function App() {
       ? "analyzing-job"
       : isPolishing
         ? "tailoring"
-        : isChecking
-          ? "reviewing"
         : resumeDocumentDirty
           ? "editing"
           : "idle";
@@ -1450,7 +1382,6 @@ function App() {
       coverLetterEditor.dirty ||
       isGeneratingCover ||
       isPolishing ||
-      isChecking ||
       jobAnalysisProgress.status === "running" ||
       pendingApplicationWrites > 0
   );
@@ -1470,15 +1401,8 @@ function App() {
       setIsManuallySelectingResumeVariant(true);
       try {
         const loaded = await loadBaseResumeVersion(fileName);
-        if (loaded && runInitialFit && jobPrepared) {
-          void refreshInitialFit(
-            jobDescription,
-            {
-              resumeText: loaded.text,
-              resumeLabel: loaded.label,
-              candidateContext: requestHonestContext
-            }
-          );
+        if (loaded && runFitAssessment && jobPrepared) {
+          assessFitForResume(loaded);
         }
       } finally {
         resumeManualVariantSelectionInFlightRef.current = false;
@@ -1487,12 +1411,10 @@ function App() {
     },
     [
       baseResumeName,
-      jobDescription,
       jobPrepared,
       loadBaseResumeVersion,
-      refreshInitialFit,
-      requestHonestContext,
-      runInitialFit
+      assessFitForResume,
+      runFitAssessment
     ]
   );
 
@@ -1694,9 +1616,9 @@ function App() {
   }
 
   useEffect(() => {
-    if (quickFitState.status !== "ready") return;
-    const { result: fit } = quickFitState.snapshot;
-    const { provenance } = quickFitState;
+    if (!fitAssessmentMayTriggerAutoPolish(fitAssessmentState)) return;
+    const { result: fit } = fitAssessmentState.snapshot;
+    const { provenance } = fitAssessmentState;
     if (fit.eligibility?.status === "BLOCKED") return;
     const key = JSON.stringify({
       input: provenance.inputFingerprint,
@@ -1709,7 +1631,7 @@ function App() {
     const receipt = autoProposalFitRef.current;
     const canStartResume =
       autoPolishResume &&
-      quickFitMeetsThreshold(fit.verdict, resumeAutoPolishThreshold) &&
+      fitAssessmentMeetsThreshold(fit.verdict, resumeAutoPolishThreshold) &&
       jobPrepared &&
       canPolish &&
       !isPolishing &&
@@ -1723,7 +1645,7 @@ function App() {
 
     const canStartCover =
       autoPolishCoverLetter &&
-      quickFitMeetsThreshold(fit.verdict, coverLetterAutoPolishThreshold) &&
+      fitAssessmentMeetsThreshold(fit.verdict, coverLetterAutoPolishThreshold) &&
       coverLetterPreflight.canTailor &&
       resumeReady &&
       jobPrepared &&
@@ -1756,7 +1678,7 @@ function App() {
     jobDescription,
     jobPrepared,
     jobRawText,
-    quickFitState,
+    fitAssessmentState,
     resumeAutoPolishThreshold,
     resumeReady,
     resumeText
@@ -1863,9 +1785,7 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    initialFitSnapshot: quickFitState.status === "ready" ? quickFitState.snapshot : null,
-    finalCheckSnapshot:
-      finalCheck && !finalCheckDocumentChanged && !finalCheckInputsChanged ? finalCheck : null,
+    fitAssessmentSnapshot: fitAssessmentLatestSnapshot(fitAssessmentState),
     pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,
@@ -2031,6 +1951,13 @@ function App() {
         copyAiUsage(app.aiUsage ?? { "job-analysis": { source: "none" } })
       );
       setJobRawText(restoredSourceText);
+      restorePreparedFitAssessment(
+        {
+          localJobText: restoredTailoringText,
+          screeningJobText: restoredSourceText
+        },
+        app.initialFit
+      );
       // Include controls describe the NEXT Apply package, not which historical
       // artifacts happen to exist. Reopen with the documented defaults; retained
       // excluded artifacts remain visible in the saved-application summary.
@@ -2235,21 +2162,36 @@ function App() {
           onPointerDown={dock.onPointerDown}
           aria-label="Task progress"
         >
-          <AiWorkflowProgress
-            stages={aiWorkflowStages}
-            onDismiss={dismissAiWorkflow}
-            busy={isExtractingLink || isPolishing}
-          />
+          {jobAnalysisProgressVisible ? (
+            <TaskProgress
+              stageKey="job-analysis"
+              state={jobAnalysisProgress}
+              onRetry={jobAnalysisRetry}
+              onStop={isExtractingLink ? stopJobAnalysis : undefined}
+              onDismiss={dismissJobAnalysisProgress}
+            />
+          ) : null}
+          {polishProgressVisible ? (
+            <TaskProgress
+              stageKey="resume-polish"
+              state={polishProgress.polish}
+              onRetry={() => void retryStage()}
+              onStop={stopPolish}
+              onDismiss={() => setPolishProgressVisible(false)}
+            />
+          ) : null}
           <TaskProgress
             stageKey="cover"
             state={coverProgress}
             onRetry={handleTailorCoverLetter}
+            onStop={stopCoverPolish}
             onDismiss={dismissCoverProgress}
           />
           <TaskProgress
             stageKey="answers"
             state={answersProgress}
             onRetry={retryAnswers}
+            onStop={stopAnswers}
             onDismiss={dismissAnswersProgress}
           />
         </div>
@@ -2377,9 +2319,9 @@ function App() {
               coverLetterStatus={coverStatus}
               onTailorCoverLetter={handleCoverLetterPolish}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
-              quickFit={quickFitState}
-              onRetryInitialFit={() => void retryInitialFit()}
-              canRetryInitialFit={canRetryInitialFit}
+              fitAssessment={fitAssessmentState}
+              onAssessFit={() => void reassessFit()}
+              canAssessFit={canAssessFit}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}
@@ -2568,23 +2510,13 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               resumePolishProviderReady={resumePolishProviderReady}
-              checkProviderReady={finalCheckProviderReady}
-              checkProviderMessage={finalCheckProviderMessage}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
               proposalDecisions={resumeProposalDecisions}
-              check={finalCheck}
-              checkSource={finalCheckSource}
-              checkDocumentChanged={finalCheckDocumentChanged}
-              checkInputsChanged={finalCheckInputsChanged}
-              checkProgress={finalCheckProgress}
-              isChecking={isChecking}
               onPolish={() => void handleResumePolish()}
               onRetryPolish={() => void retryStage()}
               onStopPolish={stopPolish}
-              onCheck={() => void runResumeCheck()}
-              onStopCheck={stopResumeCheck}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>
@@ -2775,38 +2707,8 @@ function App() {
               slotAnswers={coverLetterSlotAnswers}
               onDetailChange={updateCoverLetterDetail}
               onSlotAnswerChange={updateCoverLetterSlotAnswer}
-              onAcceptProposal={() => {
-                const accepted = coverLetterProposal?.result.coverLetterText ?? "";
-                acceptCoverLetterProposal();
-                // The accepted letter IS the validated document — the server
-                // checked and, where needed, repaired these exact words. Record
-                // that receipt instead of paying for a second opinion on it.
-                if (accepted) {
-                  adoptCoverValidatedReceipt(
-                    accepted,
-                    "This letter passed evidence checks during Polish."
-                  );
-                }
-              }}
+              onAcceptProposal={acceptCoverLetterProposal}
               onDiscardProposal={discardCoverLetterProposal}
-              check={coverCheck}
-              checkSource={coverCheckSource}
-              checkDocumentChanged={coverCheckDocumentChanged}
-              checkInputsChanged={coverCheckInputsChanged}
-              checkProgress={coverCheckProgress}
-              isChecking={isCheckingCoverLetter}
-              canCheck={resumeReady && jobPrepared && finalCheckProviderReady && !isGeneratingCover}
-              checkBlocker={
-                !jobPrepared
-                  ? "Prepare the job first."
-                  : !finalCheckProviderReady
-                    ? finalCheckProviderMessage || "Check the AI settings for this stage."
-                    : isGeneratingCover
-                      ? "Wait for Polish to finish."
-                      : ""
-              }
-              onCheck={() => void runCoverCheck()}
-              onStopCheck={stopCoverCheck}
               onAddHonestContext={handleAddHonestContext}
               onRestorePreTailor={() => {
                 coverLetterEditor.restorePreTailor();
@@ -2896,10 +2798,8 @@ function App() {
           availabilityStatus={providerAvailability.status}
           availabilityMessage={providerAvailability.message}
           onRefreshProviders={providerAvailability.refresh}
-          runInitialFit={runInitialFit}
-          runFinalCheck={runFinalCheck}
-          onRunFinalCheckChange={setRunFinalCheck}
-          onRunInitialFitChange={setRunInitialFit}
+          runFitAssessment={runFitAssessment}
+          onRunFitAssessmentChange={setRunFitAssessment}
           autoPolishResume={autoPolishResume}
           onAutoPolishResumeChange={setAutoPolishResume}
           resumeAutoPolishThreshold={resumeAutoPolishThreshold}
@@ -2918,6 +2818,15 @@ function App() {
           onEducationLevelChange={setEducationLevel}
           major={major}
           onMajorChange={setMajor}
+          gpa={gpa}
+          onGpaChange={setGpa}
+          availabilityNotice={availabilityNotice}
+          onAvailabilityNoticeChange={setAvailabilityNotice}
+          availabilityDate={availabilityDate}
+          onAvailabilityDateChange={setAvailabilityDate}
+          experienceProfile={experienceProfile}
+          onExperienceProfileChange={setExperienceProfile}
+          workspacePreferencesStatus={workspacePreferencesStatus}
           honestContext={honestContext}
           onHonestContextChange={setHonestContext}
           honestContextRef={honestContextTextareaRef}

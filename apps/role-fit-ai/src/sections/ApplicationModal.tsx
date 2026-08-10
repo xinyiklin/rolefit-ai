@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   BriefcaseBusiness,
   CheckCircle2,
   ClipboardCheck,
@@ -28,7 +27,7 @@ import {
 import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
-import { STATUS_LABEL, appFitVerdict, formatSalary } from "../lib/applicationDisplay";
+import { STATUS_LABEL, appFitVerdict, fitAssessmentRunLabel, formatSalary } from "../lib/applicationDisplay";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
@@ -355,9 +354,9 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  const initialFit = application.initialFit;
+  const fitAssessment = application.initialFit;
+  const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
   const fitVerdict = appFitVerdict(application);
-  const finalCheck = application.finalCheck;
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
   const compPreview = formatSalary({
@@ -553,27 +552,28 @@ export function ApplicationModal({
                 <span className="application-match-card__eyebrow">
                   <Sparkles size={14} aria-hidden="true" /> AI match & insights
                 </span>
-                <div className="figures-strip figures-strip--compact" aria-label="Initial Fit">
+                <div className="figures-strip figures-strip--compact" aria-label="Fit Assessment">
                   <span className="figures-strip__item">
-                    <em>Initial Fit</em>
+                    <em>Fit Assessment</em>
                     <strong className={`application-fit application-fit--${fitVerdict?.tone ?? "neutral"}`}>{fitVerdict?.label ?? "Not checked"}</strong>
                   </span>
-                  {initialFit ? (
+                  {fitAssessment ? (
                     <>
                       <span className="figures-strip__divider" aria-hidden="true" />
                       <span className="figures-strip__item">
                         <em>Resume</em>
-                        <strong className="is-prose">{initialFit.resumeLabel}</strong>
+                        <strong className="is-prose">{fitAssessment.resumeLabel}</strong>
                       </span>
                     </>
                   ) : null}
                 </div>
-                <p>{initialFit?.result.summary ?? "Prepare this job with a resume to create an Initial Fit snapshot."}</p>
-                {initialFit?.result.gaps.length ? (
+                <p>{fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}</p>
+                {fitAssessmentMeta ? <p className="application-match-card__meta">{fitAssessmentMeta}</p> : null}
+                {fitAssessment?.result.gaps.length ? (
                   <div className="application-match-card__gaps">
                     <strong>Top gaps</strong>
                     <div className="application-chip-list">
-                      {initialFit.result.gaps.map((gap) => (
+                      {fitAssessment.result.gaps.map((gap) => (
                         <span key={gap}>{gap}</span>
                       ))}
                     </div>
@@ -619,25 +619,6 @@ export function ApplicationModal({
                 )}
               </div>
 
-              {finalCheck ? (
-                <div className="application-review">
-                  <h4><AlertTriangle size={14} aria-hidden="true" /> Document check · {finalCheck.status.replace("_", " ")}</h4>
-                  <p className="application-review__verdict">{finalCheck.summary}</p>
-                  {finalCheck.issues.length ? (
-                    <ul className="application-review__list">
-                      {finalCheck.issues.map((issue, index) => (
-                        <li key={`${issue.kind}:${index}`}>
-                          <strong>{issue.kind.toLowerCase()}</strong>
-                          <span>{issue.detail}</span>
-                          <span>{issue.action}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="application-muted">No document-check snapshot was saved for this application.</p>
-              )}
             </section>
           ) : null}
 

@@ -8,14 +8,12 @@ const PHASE_LABEL: Record<PresencePhase, string> = {
   idle: "idle",
   editing: "editing",
   "analyzing-job": "analyzing job",
-  tailoring: "polishing resume",
-  reviewing: "checking document",
-  "tailoring+reviewing": "polishing + checking"
+  tailoring: "polishing resume"
 };
 
 // Phases that represent live work — rendered with a spinner so the user can see
 // at a glance which tabs are actually busy versus just open.
-const ACTIVE_PHASES = new Set<PresencePhase>(["analyzing-job", "tailoring", "reviewing", "tailoring+reviewing"]);
+const ACTIVE_PHASES = new Set<PresencePhase>(["analyzing-job", "tailoring"]);
 
 type SessionRow = { key: string; label: string; phase: PresencePhase; isSelf: boolean };
 

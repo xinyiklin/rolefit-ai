@@ -11,8 +11,7 @@ import {
   type ApplicationMutation
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
-import type { QuickFitSnapshot } from "../../shared/quickFitContract.ts";
-import type { FinalCheckResult } from "../../shared/finalCheckContract.ts";
+import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -123,10 +122,10 @@ export type Application = {
   // Free-text interview prep the user keeps for this role.
   interviewTips?: string;
   contacts?: ApplicationContact[];
-  // Compact, bounded snapshots of the two user-facing checks. Full provider
-  // responses and historical numeric scores never enter tracker storage.
-  initialFit?: QuickFitSnapshot;
-  finalCheck?: FinalCheckResult;
+  // Compact, bounded Fit Assessment snapshot. Full provider responses and
+  // historical numeric scores never enter tracker storage.
+  // Stable on-disk field name. The product concept is Fit Assessment.
+  initialFit?: FitAssessmentSnapshot;
   templateId?: string;
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.

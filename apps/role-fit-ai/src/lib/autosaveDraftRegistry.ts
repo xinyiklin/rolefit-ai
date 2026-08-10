@@ -1,6 +1,6 @@
 // The tab-scoped storage-key knowledge for autosave recovery drafts, shared by
 // useAutosaveDraft.ts (per-tab draft lifecycle: save/recover/clear-this-tab)
-// and browserPrefsSync.ts (adopt a workspace restore without deleting a live
+// and workspacePreferencesSync.ts (adopt a workspace restore without deleting a live
 // sibling's work).
 // Each editor keeps its own recovery draft under its own prefix, so a resume
 // draft and a cover-letter draft from the same tab never overwrite each other.

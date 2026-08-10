@@ -101,6 +101,14 @@ select,
   font-size: 0.78rem;
 }
 
+/* A field holding a short value — a GPA, a date — should not run the panel's
+   full width just because the base input does. */
+.text-input--narrow {
+  flex: 0 0 auto;
+  width: auto;
+  max-inline-size: 148px;
+}
+
 /* -------- Upload box -------- */
 
 .upload-box {

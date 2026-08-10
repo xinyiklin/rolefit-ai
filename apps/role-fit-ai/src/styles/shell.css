@@ -462,8 +462,8 @@
   pointer-events: none;
 }
 
-/* One workflow sheet owns the active AI tasks. Rows share a single outline so
-   the sequence reads as a process, not a stack of unrelated toasts. */
+/* Each AI workflow owns one named sheet. The shared dock keeps concurrent work
+   aligned without implying that independent requests are one sequence. */
 .ai-workflow {
   width: 100%;
   max-height: 360px;
@@ -505,20 +505,12 @@
   background: var(--card-soft);
 }
 
-.ai-workflow__head > div {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  min-width: 0;
-}
-
 .ai-workflow__head strong {
   color: var(--ink-strong);
   font-size: 0.78rem;
   font-weight: 650;
 }
 
-.ai-workflow__head span,
 .ai-workflow__stage-meta {
   color: var(--ink-faint);
   font-size: 0.7rem;
@@ -558,8 +550,6 @@
 .ai-workflow__stage:first-child { border-top: 0; }
 .ai-workflow__stage--running { background: color-mix(in srgb, var(--accent) 4%, var(--card)); }
 .ai-workflow__stage--idle { color: var(--ink-soft); }
-.ai-workflow__stage.is-blocked { opacity: 0.48; }
-
 .ai-workflow__stage-icon {
   display: inline-flex;
   align-items: center;

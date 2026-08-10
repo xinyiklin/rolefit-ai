@@ -374,8 +374,10 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   per-section collapse affordance. Each stage retains its own concrete
   provider/model/effort controls and **Copy from** action. Provider rows come
   from the local companion's explicitly added registry; added-but-unready rows
-  show reconnect guidance. API credentials are never rendered or entered in
-  the browser.
+  show reconnect guidance. Only Resume Polish, Cover letter, and Application
+  questions expose a custom-instruction disclosure. Job analysis keeps its fixed,
+  complete extraction contract and Fit Assessment keeps its fixed rubric. API
+  credentials are never rendered or entered in the browser.
 
 ### Prepare
 
@@ -408,23 +410,27 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Initial Fit row follows the materials: show its verdict, selected resume,
-  short summary, at most three matches and gaps, and an eligibility warning only
-  when relevant. Running, disabled, unavailable/retry, and out-of-date/check-again
-  states use the same flat hierarchy; an out-of-date fit never leaves the old
-  verdict visible. Never add scores, confidence, evidence ledgers, quotes, or a
-  recommendation to this row.
-- **Automation and assessment boundaries:** keep Initial Fit, Proposal
-  Validation, and Document Check visibly and architecturally distinct. Initial
-  Fit is the pre-Polish advisory about whether the candidate fits the role.
-  Proposal Validation is the fail-closed evidence gate over proposed changes
-  before they can be accepted. Document Check assesses the actual current
-  document after proposal decisions or later edits; it is advisory and never
-  rewrites. No layer substitutes for another or turns its result into a numeric
+  Fit Assessment row follows the materials: show its verdict, selected resume,
+  short summary, compact run attribution, at most three matches and gaps, and an
+  eligibility warning only when relevant. A completed result offers **Reassess fit**; running, disabled,
+  unavailable/retry, and out-of-date/reassess states use the same flat hierarchy,
+  and an out-of-date result stays visible only as a **Previous assessment** with
+  its timestamp plus one compact, hairline-separated **Changed since assessment**
+  list. That list names only the changed input groups — job posting, resume
+  content, About you, or assessment setup — before **Reassess fit**. Never add
+  scores, confidence, evidence ledgers, quotes, or a recommendation to this row.
+- **Automation and assessment boundaries:** keep Fit Assessment and Proposal
+  Validation visibly and architecturally distinct. Fit Assessment is the
+  reusable advisory about how the selected resume and candidate context align
+  with the prepared role at the time it runs. Proposal Validation is the
+  fail-closed evidence gate over proposed changes before they can be accepted.
+  Polish also instructs the selected model to silently audit its own evidence
+  and output before returning; that internal pass is not a third user-facing
+  workflow. No layer substitutes for another or turns its result into a numeric
   score. User behavior belongs to the
-  [Initial Fit contract](PRODUCT.md#initial-fit-user-contract), while provider
+  [Fit Assessment contract](PRODUCT.md#fit-assessment-user-contract), while provider
   mechanics belong to the
-  [technical contract](server/ai/README.md#initial-fit-technical-contract).
+  [technical contract](server/ai/README.md#fit-assessment-technical-contract).
   Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
@@ -433,14 +439,20 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   The selector is the normal receipt; show one compact recommendation line only
   when unsaved work blocks replacement. Neither comparison needs persisted
   variant metadata. Resume and Cover Letter automatic Polish controls remain
-  independent and manual Polish remains available in every state.
+  independent. Only the first Fit Assessment launched by the current Prepare may
+  start either automatic action; reassessment, retry, resume-change assessment,
+  and restored history stay advisory. Manual Polish remains available in every
+  state.
 - **Apply:** the page and masthead invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.
   Either or both materials may be excluded, so a prepared tracker-only
   application is valid. Re-Apply leaves any previously saved artifact intact
-  when its card is excluded. Apply persists the complete corrected brief,
-  including benefits, while Resume Polish receives the benefits-excluded projection.
+  when its card is excluded. Apply persists the latest completed Fit Assessment
+  snapshot as historical evidence even when its inputs changed or Resume is
+  excluded, and preserves an existing snapshot when no newer run completed.
+  Apply also persists the complete corrected brief, including benefits, while
+  Resume Polish receives the benefits-excluded projection.
 
 ### Navigation
 
@@ -509,14 +521,31 @@ and Apply without replacing the editor with an empty-state panel. Cover letter =
 plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
 visible from idle through blocked, working, proposal, stale, and applied states.
 Resume's primary Polish action runs one grounded proposal request from either
-Resume or Prepare. Its rail shows What improved, collapsed Edits ready with
-Apply all plus individual Accept/Edit/Discard controls, Still missing, and one
-quiet withheld line; when the prompt budget excludes editable fields, one
-equally quiet neutral line reports that count. Proposal, No changes, and
-Withheld remain visibly distinct.
+Resume or Prepare. Its rail shows What improved, the proposed edits open in one
+disclosure, Still missing, and one quiet withheld line; when the prompt budget
+excludes editable fields, one equally quiet neutral line reports that count.
+Proposal, No changes, and Withheld remain visibly distinct.
 Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.
+A resume-only change keeps that validated proposal in the proposal state with
+an inline earlier-resume warning and an enabled Accept proposal action; changes
+to the letter, job, personal evidence, or polishing instructions use the blocked
+stale state and require Polish again.
+
+**Accepting is one interaction across both documents.** The unit differs — the
+resume decides individual edits, the letter decides one replacement — and that
+difference stays; nothing else about the act does. One decision bar in the rail
+footer states what is left, then offers a primary accept beside a secondary
+discard, in that order, for both: Accept all / Discard all on the resume,
+Accept proposal / Discard proposal on the letter. One diff treatment marks
+changed words in both: the resume's Now and Proposed lines, and the letter's
+Changes view behind a Changes / Full letter switch that opens on Changes. One
+chip vocabulary reports a settled resume row (Accepted, Discarded, Changed in
+editor), each row carries Undo, and each names the section and entry it edits so
+the list reads on its own. A decided row de-emphasizes so the queue shows what is
+still waiting. Do not give either document a second commit location, a third
+verb, or a private way of showing what changed.
 If that draft fails the evidence checks after repair, the rail shows one flat
 issue list with the exact bounded claim and its recovery action. A collapsed
 Cover letter rail adds the bounded issue count to the icon tab and accessible
@@ -546,8 +575,11 @@ rather than four buttons. Nothing in the row scrolls or crops; see
 ### Register Grouping
 
 Long chronological tables group rows under month dividers: a
-`.table-eyebrow` month label left, mono count right, one hairline rule.
-The table reads as a logbook register, not a CRM grid.
+`.table-eyebrow` month label pinned to the visible left edge while the data
+columns scroll horizontally and to the top of the row viewport while the
+current month's rows scroll vertically. Its surface continues through the
+reserved scrollbar gutter, plus one hairline rule. The table reads as a logbook
+register, not a CRM grid.
 
 ## 6. Do's and Don'ts
 

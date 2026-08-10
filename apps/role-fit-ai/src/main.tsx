@@ -2,7 +2,10 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { DialogProvider } from "./hooks/useDialog";
-import { adoptWorkspacePreferences } from "./lib/browserPrefsSync";
+import {
+  adoptWorkspacePreferences,
+  startWorkspacePreferencesRefresh
+} from "./lib/workspacePreferencesSync";
 import "./styles/index.css";
 
 // Minimal error boundary: catches render-time throws so the whole app doesn't
@@ -49,11 +52,12 @@ class AppErrorBoundary extends React.Component<
   }
 }
 
-// Adopt any workspace-mirrored/restored browser preferences before the app's
-// own state (which reads settings/lastBaseResume on mount) ever renders. Bound
-// to ~1.5s and fail-open internally (see browserPrefsSync.ts), so a slow or
+// Adopt canonical workspace preferences before the app's own state (which
+// reads the browser cache on mount) ever renders. Bound
+// to ~1.5s and fail-open internally (see workspacePreferencesSync.ts), so a slow or
 // unreachable server delays first paint only briefly and never blocks it.
 await adoptWorkspacePreferences();
+startWorkspacePreferencesRefresh();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>

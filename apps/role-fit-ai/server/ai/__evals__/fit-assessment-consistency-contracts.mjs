@@ -1,21 +1,21 @@
-// Offline contract for the synthetic live Initial Fit calibration corpus. The
+// Offline contract for the synthetic live Fit Assessment calibration corpus. The
 // live runner itself is excluded from npm test and must be invoked deliberately.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const fixtures = JSON.parse(
-  readFileSync(new URL("./fixtures/initial-fit-consistency.json", import.meta.url), "utf8")
+  readFileSync(new URL("./fixtures/fit-assessment-consistency.json", import.meta.url), "utf8")
 );
 const offlineGate = readFileSync(new URL("../../../offline-evals.test.mjs", import.meta.url), "utf8");
 const packageJson = JSON.parse(readFileSync(new URL("../../../package.json", import.meta.url), "utf8"));
-const liveRunner = readFileSync(new URL("./initial-fit-consistency-eval.mjs", import.meta.url), "utf8");
+const liveRunner = readFileSync(new URL("./fit-assessment-consistency-eval.mjs", import.meta.url), "utf8");
 
-assert.equal(fixtures.length, 12, "the calibration corpus contains twelve synthetic scenarios");
+assert.equal(fixtures.length, 17, "the calibration corpus contains seventeen synthetic scenarios");
 assert.equal(new Set(fixtures.map((fixture) => fixture.id)).size, fixtures.length, "fixture ids are unique");
-assert.match(offlineGate, /"initial-fit-consistency-eval\.mjs"/, "the live runner stays out of ordinary CI");
+assert.match(offlineGate, /"fit-assessment-consistency-eval\.mjs"/, "the live runner stays out of ordinary CI");
 assert.equal(
-  packageJson.scripts["eval:live:initial-fit"],
-  "node server/ai/__evals__/initial-fit-consistency-eval.mjs",
+  packageJson.scripts["eval:live:fit-assessment"],
+  "node server/ai/__evals__/fit-assessment-consistency-eval.mjs",
   "the live runner has an explicit opt-in command"
 );
 assert.match(liveRunner, /RUNS < 3 \|\| RUNS > 5/, "the runner requires three to five repetitions");
@@ -40,6 +40,11 @@ assert(fixtures.some((fixture) => /adjacent technologies/i.test(fixture.scenario
 assert(fixtures.some((fixture) => /required years/i.test(fixture.scenario)));
 assert(fixtures.some((fixture) => /required degree/i.test(fixture.scenario)));
 assert(fixtures.some((fixture) => /Prompt-injection/i.test(fixture.scenario)));
+assert(fixtures.some((fixture) => /entry-level posting explicitly accepts shipped project evidence/i.test(fixture.scenario)));
+assert(fixtures.some((fixture) => /production AI platform capabilities/i.test(fixture.scenario)));
+assert(fixtures.some((fixture) => /compound requirement receives credit/i.test(fixture.scenario)));
+assert(fixtures.some((fixture) => /One unshown numeric duration/i.test(fixture.scenario)));
+assert(fixtures.some((fixture) => /content-poor posting/i.test(fixture.scenario)));
 
 for (const fixture of fixtures) {
   assert.match(fixture.id, /^[a-z0-9-]+$/);
@@ -55,4 +60,4 @@ for (const fixture of fixtures) {
   assert(Array.isArray(fixture.allowedEligibility) && fixture.allowedEligibility.length >= 1);
 }
 
-console.log("initial-fit consistency contracts passed");
+console.log("fit-assessment consistency contracts passed");

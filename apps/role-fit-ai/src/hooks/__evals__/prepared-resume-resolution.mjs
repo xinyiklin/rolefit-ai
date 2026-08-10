@@ -353,7 +353,7 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
   check(
     currentResumeSelection(baseState({ resumeOrigin: "saved", currentText: "x".repeat(60) })),
     null,
-    "a 40-79 character saved stub is unavailable for Initial Fit"
+    "a 40-79 character saved stub is unavailable for Fit Assessment"
   );
   for (const origin of ["saved", "uploaded", "application"]) {
     check(
@@ -368,7 +368,7 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
 {
   // The raw posting and the prepared brief weight different words. The old code
   // ranked the fit against one and the editor adoption against the other, so
-  // Initial Fit could describe a resume the editor never loaded.
+  // Fit Assessment could describe a resume the editor never loaded.
   const frontend = {
     fileName: "frontend.resume",
     label: "Frontend",

@@ -10,12 +10,12 @@ own a second resume model, editor, layout engine, or PDF implementation.
 
 - `README.md` — product setup, providers, extension, workspace, and app layout.
 - `PRODUCT.md` — RoleFit behavior, workflow, and trust contract; its
-  `#initial-fit-user-contract` section owns verdict and eligibility behavior.
+  `#fit-assessment-user-contract` section owns verdict and eligibility behavior.
 - `DESIGN.md` — Drafting Desk visual system, assessment-layer separation, and
   host/shared styling boundary.
 - `docs/engineering/ui-principles.md` — host UI and responsive behavior.
 - `docs/engineering/ai-server.md` — broad AI/server request and trust boundaries.
-- `server/ai/README.md` — canonical Initial Fit prompt, grounding, request,
+- `server/ai/README.md` — canonical Fit Assessment prompt, grounding, request,
   response, provider, and provenance behavior.
 - `docs/engineering/testing.md` — RoleFit-focused verification.
 - `docs/engineering/desktop-architecture-plan.md` — companion trust boundary,
@@ -54,9 +54,9 @@ own a second resume model, editor, layout engine, or PDF implementation.
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
   outcomes. Missing facts become gaps or bracketed prompts for human evidence.
-- Initial Fit changes must preserve the user contract in `PRODUCT.md`, the
+- Fit Assessment changes must preserve the user contract in `PRODUCT.md`, the
   technical contract in `server/ai/README.md`, and the executable
-  `QUICK_FIT_RULES` in `server/ai/quickFit.ts`. Do not add numeric scoring,
+  `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
   hidden requirement bookkeeping, a server-derived fallback verdict, tracker
   priority inference, or a second assessment path.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
@@ -66,40 +66,26 @@ own a second resume model, editor, layout engine, or PDF implementation.
   education, standard-entry role/employer/subtitle/date fields, and omitted
   sections and Skills category labels stay locked; only bullets and actual
   Skills lists are proposal targets. The live resume
-  changes only through explicit Apply all, Accept, or edited acceptance. Skill
+  changes only through explicit Accept all, Accept, or edited acceptance, and
+  Undo on a settled row restores exactly the text that row replaced. Skill
   list category substitutions and job-only skill insertions fail independently.
   When all editable targets do
   not fit the prompt budget, material and job-relevant targets win without
   prefix-order bias; only sent targets may be changed, and the rail states the
   omitted count quietly.
-- **The current-document check is the closing phase of Polish, not a separate
-  tool.** Both documents show one sequence — Ready to Polish, Polishing and
-  validating, Proposal ready, Reviewing proposal, Checking current document,
-  then Ready / Review / Needs evidence — owned by
-  `shared/documentWorkflowContract.ts`. Do not reintroduce a separately named,
-  manually operated Final Check section.
-  The visible sequence is shared; the internals are not, and must not be forced
-  to match. A resume proposal is individual edits, so the resulting resume does
-  not exist until each one is accepted, edited, or discarded: the check runs
-  ONCE when the last decision settles, never per accepted edit, and never inside
-  the Polish request (that would check a hypothetical accept-everything resume).
-  A cover-letter proposal is one complete replacement the server already
-  validated and repaired, so accepting it records that receipt as Ready with no
-  second provider request; the request path exists for letters with no such
-  receipt — manually authored, imported, or edited after acceptance.
-  Staleness has two meanings that must stay distinct: editing the document is
-  "Changed since check" and invites a re-check, while a changed job, evidence,
-  or guidance is "Out of date" and invites a re-polish. Both expose one inline
-  Check again. The check stays advisory: it never rewrites the document, never
-  blocks Apply or editing, and a failure says the document was unaffected.
-  Provider issues require exact private source excerpts from the current
-  document or posting, and each issue detail must refer to its own excerpt;
-  invalid or mismatched anchors are dropped and never reach the client.
-  It is skippable through one setting because it is a real extra request per
-  polish, but skippable is not the same as user-operated.
+- **Polish is one provider request per document proposal.** Both documents use
+  the shared Ready to Polish, Polishing and validating, Proposal ready, and
+  Reviewing proposal vocabulary. Before returning its JSON proposal, the model
+  silently audits evidence, claims, identifiers, and output shape. The selected
+  reasoning effort controls provider reasoning and the breadth of that internal
+  audit; no audit notes are exposed as a separate workflow.
 - Prepare publishes its deterministic local brief before provider work. A Job
-  analysis or Initial Fit failure leaves that brief editable and manual Polish
-  available; invalid Initial Fit output never invalidates valid Job analysis.
+  analysis or Fit Assessment failure leaves that brief editable and manual Polish
+  available; invalid Fit Assessment output never invalidates valid Job analysis.
+  Fit Assessment owns an independent provider/model/reasoning configuration;
+  Prepare may combine it with Job analysis only when both resolved request
+  configurations match exactly, otherwise it dispatches assessment-only after
+  committing the brief.
   Resume Polish failure or Withheld leaves the document unchanged.
 - Duplicate checks gate the pipeline before and after Job analysis. Stop means no
   downstream request; Continue is acknowledged for that job target.
@@ -121,7 +107,7 @@ RoleFit owns:
 - `src/hooks/`: RoleFit workflow state and effects;
 - `src/sections/`: Apply-only masthead, read-only Sessions/Settings studio-rail
   utilities, first/default Prepare intake, studio navigation and tabs, tracker,
-  materials, proposal and Final Check rails, reusable AI workflow progress,
+  materials, proposal rails, reusable AI workflow progress,
   dialogs, and host
   composition;
 - `src/sections/editor/RoleFitEditorOverlay.tsx`: the section-scope and review
@@ -191,10 +177,10 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - **Which resume a preparation speaks for has exactly ONE owner**
   (`usePreparedResume` over the pure rules in `lib/preparedResume.ts`). It runs
   once per preparation, after the deterministic local job analysis and before
-  the combined provider request, and it is the sole source for Initial Fit, the
+  the combined provider request, and it is the sole source for Fit Assessment, the
   editor's loaded document, Prepare's recommendation note, and automatic
   proposals. Do not add a second selector: a pre-fit picker plus a post-Prepare
-  ranking effect is what made Initial Fit describe one resume while the editor
+  ranking effect is what made Fit Assessment describe one resume while the editor
   held another. Its terminal states are: a real current document is
   authoritative; exactly one saved variant is adopted; several variants rank and
   a meaningful unique winner is adopted; otherwise no resume resolves. Ranking
@@ -217,19 +203,19 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - Proposal decisions are keyed by outcome plus each target's id, original text,
   proposed text, and reason. A mismatched key derives an empty decision map
   without setting state during render; the first decision initializes the new
-  key. The automatic document check separately tracks pending provider preflight
-  and a consumed request, and consumes the proposal key only after fetch starts.
+  key. A complete proposal payload forms its identity, so reused target ids
+  cannot carry decisions into a new response.
 - The document's ORIGIN (saved / uploaded / application / starter / blank) is
   explicit state. The bundled starter is sample content that passes every length
-  test, so it never satisfies resume readiness, Initial Fit, or an automatic
+  test, so it never satisfies resume readiness, Fit Assessment, or an automatic
   proposal, and Prepare names it ("Starter template") instead of claiming there
   is no document. Saving it as a base resume is what makes it the applicant's.
-- Combined Prepare and fit-only Retry must use the same retained posting and
-  exact exported rules block, while Job analysis and Initial Fit sanitize in
-  both directions. Assessment data remains in the shared Quick Fit contract;
+- Combined Prepare and reassessment must use the same retained posting and
+  exact exported rules block, while Job analysis and Fit Assessment sanitize in
+  both directions. Assessment data remains in the shared Fit Assessment contract;
   Resume/Cover automation labels, ordering, and thresholds remain client-only
-  in `autoPolishPolicy.ts`. Retry remains preparation-owned and available even
-  when no resume resolved.
+  in `autoPolishPolicy.ts`. Reassessment remains preparation-owned, always
+  dispatches when requested, and stays available even when no resume resolved.
 - Reuse `AiWorkflowProgress` for retryable AI operations and existing
   dialog/menu primitives for repeated interactions. Do not build parallel
   progress cards, modal shells, provider selectors, or status vocabularies.
@@ -287,9 +273,9 @@ bound listener rather than starting a second server.
 - Client/type changes: RoleFit build, plus focused evals.
 - Server/AI changes: server TypeScript gate, affected route/eval, and full app
   check when the contract is shared.
-- Initial Fit prompt, grounding, sanitizer, request, or lifecycle changes:
-  `quick-fit-probes.mjs`, `initial-fit-consistency-contracts.mjs`,
-  `ai-job-analysis-request-eval.mjs`, `quick-fit-lifecycle.mjs`,
+- Fit Assessment prompt, grounding, sanitizer, request, or lifecycle changes:
+  `fit-assessment-probes.mjs`, `fit-assessment-consistency-contracts.mjs`,
+  `ai-job-analysis-request-eval.mjs`, `fit-assessment-lifecycle.mjs`,
   `job-intake-entry-points.mjs`, and the full offline suite. Run the live
   synthetic consistency matrix only when provider behavior is in scope and the
   user authorizes provider calls.

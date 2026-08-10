@@ -4,10 +4,9 @@
  *
  * It used to live inside `ResumeProposalReview`, which was fine while nothing
  * outside that component cared when the user finished. The unified workflow
- * does care: the resulting resume only exists once every edit has a decision,
- * and that is exactly when the current-document check may run. Ownership moved
- * up so the workflow can observe "no decisions outstanding" instead of the
- * review component having to reach out and trigger it.
+ * does care: the resulting resume only exists once every edit has a decision.
+ * Ownership moved up so the workflow can observe "no decisions outstanding"
+ * without the review component owning the decision state.
  *
  * A decision is never the source of truth about the document. `outstanding`
  * re-derives from the LIVE resume every render, so a manual edit that happens
@@ -18,8 +17,10 @@ import { useCallback, useMemo, useState } from "react";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
 import {
+  clearProposalDecision,
   decisionsForProposal,
   recordProposalDecision,
+  resumeProposalEditState,
   resumeProposalEditIsPending,
   resumeProposalKey,
   type ResumeProposalDecisionState
@@ -112,6 +113,19 @@ export function useResumeProposalDecisions({
     ));
   }, [proposalKey]);
 
+  // Undo one decision. An accepted edit put its replacement in the document, so
+  // reverting has to put the original back before the row returns to pending;
+  // a discarded edit never touched the document and only needs its record gone.
+  const revert = useCallback((suggestion: ResumeProposalSuggestion) => {
+    const decision = decisions[suggestion.id];
+    const state = resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decision);
+    if (state !== "accepted" && state !== "discarded") return;
+    if (decision?.kind === "accepted") {
+      applyTarget(actions, suggestion, suggestion.currentText);
+    }
+    setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
+  }, [actions, decisions, proposalKey, resume]);
+
   const applyAll = useCallback(() => {
     const pending = suggestions.filter(isPending);
     for (const suggestion of pending) applyTarget(actions, suggestion, suggestion.proposedText);
@@ -126,11 +140,23 @@ export function useResumeProposalDecisions({
     ));
   }, [actions, isPending, proposalKey, suggestions]);
 
+  // The counterpart to Accept all, and the reason the resume's bulk pair now
+  // reads like the letter's: both documents can decline a whole proposal in one
+  // move. It mutates nothing — every discarded row still offers Undo.
+  const discardAll = useCallback(() => {
+    const pending = suggestions.filter(isPending);
+    setDecisionState((current) => pending.reduce(
+      (next, suggestion) => recordProposalDecision(next, proposalKey, suggestion.id, { kind: "discarded" }),
+      current
+    ));
+  }, [isPending, proposalKey, suggestions]);
+
   return {
     decisions,
     proposalKey,
     suggestions,
     outstanding,
+    decided: suggestions.length - outstanding,
     total: suggestions.length,
     // A proposal with no edits to decide (No changes / fully withheld) is
     // settled the moment it arrives; there is nothing for the user to resolve.
@@ -138,6 +164,8 @@ export function useResumeProposalDecisions({
     isPending,
     accept,
     discard,
-    applyAll
+    revert,
+    applyAll,
+    discardAll
   };
 }

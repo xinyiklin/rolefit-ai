@@ -92,7 +92,7 @@ writable operating-system userData
     cover-letters/              named `.cover` variants and `.trash/` history
     applications.json           tracker store
     applications/<id>/          saved `.resume` / `.cover` sources or uploaded PDFs
-    browser-preferences.json    allowlisted origin-portable preferences
+    workspace-preferences.json  canonical allowlisted workspace preferences
 ```
 
 The packaged server entry is a production bundle. It must not load Vite,
@@ -126,8 +126,10 @@ relaunches through normal owned-server cleanup. `ROLEFIT_DESKTOP_PORT` is a
 locked per-launch override and is never written to the settings document.
 
 Changing the port changes the browser origin. Browser `localStorage` from the
-old port is not migrated or merged with the new origin; personal workspace and
-provider data remain under the same operating-system `userData` directory. The
+old port is not migrated or merged with the new origin; recovery drafts and view
+preferences remain origin-scoped, while canonical workspace preferences are
+adopted from the unchanged personal workspace. Workspace and provider data
+remain under the same operating-system `userData` directory. The
 companion writes the resolved active port into the app-owned materialized
 extension's runtime config as a first-install seed. The extension's versioned
 browser setting owns the current numeric localhost port; the companion

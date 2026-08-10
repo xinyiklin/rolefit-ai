@@ -1,4 +1,4 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, ExternalLink, Eye } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye } from "lucide-react";
 import type { Application, ApplicationSource, ApplicationStatus } from "../../hooks/useApplications";
 import { APPLICATION_SOURCES } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
@@ -9,6 +9,7 @@ import {
   displayCompany,
   displayRole,
   appFitVerdict,
+  fitAssessmentRunLabel,
   formatCompactDate,
   hostLabel,
   nextAction
@@ -19,7 +20,6 @@ import { copyAiUsage } from "../../lib/aiUsage";
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
   { key: "resume-polish", label: "Resume Polish" },
-  { key: "final-check", label: "Document check" },
   { key: "cover", label: "Cover letter" }
 ];
 
@@ -60,6 +60,7 @@ export function TrackerInspector({
   }
 
   const verdict = appFitVerdict(selected);
+  const fitAssessmentMeta = selected.initialFit ? fitAssessmentRunLabel(selected.initialFit) : "";
   const verdictSource = selected.initialFit?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
@@ -79,17 +80,6 @@ export function TrackerInspector({
 
   return (
     <>
-      {/* Quick-open pinned to the panel's top-right corner so the header reads as
-          a clean mark + title pair. */}
-      <button
-        type="button"
-        className="pipeline-inspector__open ghost-button is-icon"
-        aria-label="Open full application details"
-        onClick={() => onOpenApplication(selected)}
-      >
-        <ExternalLink size={14} aria-hidden="true" />
-      </button>
-
       <header className="pipeline-inspector__head">
         <span className="application-company-mark" data-len={companyInitials(displayCompany(selected)).length}>{companyInitials(displayCompany(selected))}</span>
         <div>
@@ -101,7 +91,7 @@ export function TrackerInspector({
       <div className="application-detail-score application-detail-score--inline">
         <div className="figures-strip figures-strip--compact">
           <span className="figures-strip__item">
-            <em>Initial Fit</em>
+            <em>Fit Assessment</em>
             <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
               {verdict ? verdict.label : "Not checked"}
             </strong>
@@ -113,8 +103,9 @@ export function TrackerInspector({
           </span>
         </div>
         <p className="application-detail-score__reason">
-          {selected.initialFit?.result.summary ?? "Prepare this job with a resume to create an Initial Fit snapshot."}
+          {selected.initialFit?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
         </p>
+        {fitAssessmentMeta ? <p className="application-detail-score__meta">{fitAssessmentMeta}</p> : null}
       </div>
 
       <dl className="ledger-rows inspector-facts">
@@ -319,26 +310,12 @@ export function TrackerInspector({
 
       {selected.initialFit?.result.gaps.length ? (
         <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Initial Fit gaps</p>
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Fit Assessment gaps</p>
           <div className="application-chip-list">
             {selected.initialFit.result.gaps.map((gap) => (
               <span key={gap}>{gap}</span>
             ))}
           </div>
-        </section>
-      ) : null}
-
-      {selected.finalCheck ? (
-        <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Document check · {selected.finalCheck.status.replace("_", " ")}</p>
-          <p className="side-section__value">{selected.finalCheck.summary}</p>
-          {selected.finalCheck.issues.length ? (
-            <div className="application-chip-list">
-              {selected.finalCheck.issues.slice(0, 5).map((issue) => (
-                <span key={`${issue.kind}:${issue.detail}`}>{issue.kind.toLowerCase()}: {issue.detail}</span>
-              ))}
-            </div>
-          ) : null}
         </section>
       ) : null}
 

@@ -2,35 +2,18 @@ import assert from "node:assert/strict";
 
 import {
   AI_STAGE_COPY,
-  workflowCurrentIndex,
+  AI_WORKFLOW_TITLE,
   workflowInputFingerprint,
-  workflowRequestIsCurrent,
-  workflowStageCanAdvance,
-  workflowStageIsBlocked,
-  workflowStepLabel
+  workflowRequestIsCurrent
 } from "../aiWorkflow.ts";
 import { copyAiUsage } from "../aiUsage.ts";
 import { ApiError, classifyFailure } from "../failures.ts";
 
-const threeStages = (jobAnalysis, resumePolish, finalCheck) => [
-  { key: "job-analysis", state: { status: jobAnalysis } },
-  { key: "resume-polish", state: { status: resumePolish } },
-  { key: "final-check", state: { status: finalCheck } }
-];
-
-assert.equal(workflowStepLabel(1, 3), "Step 1 of 3", "the workflow exposes the first step count");
-assert.equal(workflowCurrentIndex(threeStages("running", "idle", "idle")), 0, "Job analysis is step 1");
-assert.equal(workflowCurrentIndex(threeStages("done", "running", "idle")), 1, "Resume Polish is step 2");
-assert.equal(workflowCurrentIndex(threeStages("done", "done", "running")), 2, "Final Check is step 3");
-
-const failedResumePolish = threeStages("done", "failed", "idle");
-assert.equal(workflowCurrentIndex(failedResumePolish), 1, "a failed stage remains the current step");
-assert.equal(workflowStageIsBlocked(failedResumePolish, 2), true, "a failed Resume Polish blocks a later stage");
-assert.equal(workflowStageCanAdvance({ status: "done" }), true, "only a completed stage may advance");
-assert.equal(workflowStageCanAdvance({ status: "failed" }), false, "a failed stage cannot advance");
-assert.equal(workflowStageCanAdvance({ status: "stopped" }), false, "a stopped stage cannot advance");
+assert.equal(AI_WORKFLOW_TITLE["job-analysis"], "Job analysis", "Job analysis owns its card title");
+assert.equal(AI_WORKFLOW_TITLE["resume-polish"], "Resume Polish", "Resume Polish owns its card title");
+assert.equal(AI_WORKFLOW_TITLE.cover, "Cover letter", "Cover Letter Polish owns a document-specific card title");
+assert.equal(AI_WORKFLOW_TITLE.answers, "Application answers", "answer drafting owns its card title");
 assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress uses Job analysis vocabulary");
-assert.equal(AI_STAGE_COPY["final-check"].running, "Checking document", "document-check progress is not resume-only");
 assert.equal(AI_STAGE_COPY.cover.running, "Polishing cover letter", "cover progress matches the Polish action");
 
 const storedUsage = {
@@ -94,4 +77,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 25/25 checks passed");
+console.log("AI workflow eval: 22/22 checks passed");

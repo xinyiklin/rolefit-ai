@@ -4,9 +4,12 @@ import { RotateCcw, X } from "lucide-react";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 import { AI_STAGES, type AiStageId } from "../config/aiStages";
 import {
+  AVAILABILITY_NOTICE_OPTIONS,
   CITIZENSHIP_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
+  type AvailabilityNotice,
+  type CandidateExperience,
   type CitizenshipStatus,
   type EducationLevel
 } from "../lib/candidateFacts";
@@ -16,6 +19,8 @@ import type {
   AvailableProviderConnection,
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
+import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
+import { ExperienceProfileFields } from "./ExperienceProfileFields";
 import { SettingsStage } from "./SettingsStage";
 import {
   AUTO_POLISH_THRESHOLD_OPTIONS,
@@ -44,10 +49,8 @@ type SettingsDialogProps = {
   availabilityStatus: ProviderAvailabilityStatus;
   availabilityMessage: string;
   onRefreshProviders: () => void | Promise<void>;
-  runInitialFit: boolean;
-  runFinalCheck: boolean;
-  onRunFinalCheckChange: (value: boolean) => void;
-  onRunInitialFitChange: (value: boolean) => void;
+  runFitAssessment: boolean;
+  onRunFitAssessmentChange: (value: boolean) => void;
   autoPolishResume: boolean;
   onAutoPolishResumeChange: (value: boolean) => void;
   resumeAutoPolishThreshold: AutoPolishThreshold;
@@ -68,6 +71,15 @@ type SettingsDialogProps = {
   onEducationLevelChange: (value: EducationLevel) => void;
   major: string;
   onMajorChange: (value: string) => void;
+  gpa: number | undefined;
+  onGpaChange: (value: number | undefined) => void;
+  availabilityNotice: AvailabilityNotice;
+  onAvailabilityNoticeChange: (value: AvailabilityNotice) => void;
+  availabilityDate: string;
+  onAvailabilityDateChange: (value: string) => void;
+  experienceProfile: CandidateExperience[];
+  onExperienceProfileChange: (value: CandidateExperience[]) => void;
+  workspacePreferencesStatus: WorkspacePreferencesStatus;
 
   // ----- Guidance -----
   honestContext: string;
@@ -98,10 +110,8 @@ export function SettingsDialog({
   availabilityStatus,
   availabilityMessage,
   onRefreshProviders,
-  runInitialFit,
-  runFinalCheck,
-  onRunFinalCheckChange,
-  onRunInitialFitChange,
+  runFitAssessment,
+  onRunFitAssessmentChange,
   autoPolishResume,
   onAutoPolishResumeChange,
   resumeAutoPolishThreshold,
@@ -120,6 +130,15 @@ export function SettingsDialog({
   onEducationLevelChange,
   major,
   onMajorChange,
+  gpa,
+  onGpaChange,
+  availabilityNotice,
+  onAvailabilityNoticeChange,
+  availabilityDate,
+  onAvailabilityDateChange,
+  experienceProfile,
+  onExperienceProfileChange,
+  workspacePreferencesStatus,
   honestContext,
   onHonestContextChange,
   honestContextRef,
@@ -152,7 +171,17 @@ export function SettingsDialog({
           <h2>Settings</h2>
           {/* Settings has no Save button because it autosaves. Say so once, here,
               rather than leaving a dialog with no obvious commit. */}
-          <span className="settings-dialog__autosave">Changes save as you make them.</span>
+          <span
+            className={`settings-dialog__autosave${workspacePreferencesStatus === "error" ? " is-error" : ""}`}
+            role="status"
+            aria-live="polite"
+          >
+            {workspacePreferencesStatus === "saving"
+              ? "Saving to this workspace…"
+              : workspacePreferencesStatus === "error"
+                ? "Workspace save failed; reconnect the companion to retry."
+                : "Changes save to this workspace."}
+          </span>
           <button
             ref={closeRef}
             type="button"
@@ -194,7 +223,9 @@ export function SettingsDialog({
             </div>
           </nav>
 
-          <div className="settings-panel">
+          {/* The open section is on the element so a panel's own row rhythm can
+              be styled without every section inventing a wrapper. */}
+          <div className="settings-panel" data-section={section}>
             {section === "stages" ? (
               <>
                 <p className="settings-panel__intro">
@@ -207,21 +238,23 @@ export function SettingsDialog({
                     <label className="check-row">
                       <input
                         type="checkbox"
-                        checked={runInitialFit}
-                        onChange={(event) => onRunInitialFitChange(event.target.checked)}
+                        checked={runFitAssessment}
+                        onChange={(event) => onRunFitAssessmentChange(event.target.checked)}
                       />
                       <span>
-                        <strong>Run Initial Fit after Prepare</strong>
-                        <small>Checks the selected resume in the same AI request.</small>
+                        <strong>Run Fit Assessment after Prepare</strong>
+                        <small>Assesses the selected resume with Job analysis. You can reassess anytime.</small>
                       </span>
                     </label>
+                    {/* One row per document. The checkbox label already names the
+                        document, so a Resume / Cover letter subhead over it was a
+                        second row saying the same word. */}
                     <div className="settings-automation__document">
-                      <h3>Resume</h3>
                       <label className="check-row">
                         <input
                           type="checkbox"
                           checked={autoPolishResume}
-                          disabled={!runInitialFit}
+                          disabled={!runFitAssessment}
                           onChange={(event) => onAutoPolishResumeChange(event.target.checked)}
                         />
                         <span><strong>Automatically Polish resume</strong></span>
@@ -229,8 +262,9 @@ export function SettingsDialog({
                       <label className="field field--inline settings-automation__threshold">
                         <span>Minimum fit</span>
                         <select
+                          className="select--compact"
                           value={resumeAutoPolishThreshold}
-                          disabled={!runInitialFit || !autoPolishResume}
+                          disabled={!runFitAssessment || !autoPolishResume}
                           onChange={(event) => onResumeAutoPolishThresholdChange(
                             event.target.value as AutoPolishThreshold
                           )}
@@ -242,12 +276,11 @@ export function SettingsDialog({
                       </label>
                     </div>
                     <div className="settings-automation__document">
-                      <h3>Cover letter</h3>
                       <label className="check-row">
                         <input
                           type="checkbox"
                           checked={autoPolishCoverLetter}
-                          disabled={!runInitialFit}
+                          disabled={!runFitAssessment}
                           onChange={(event) => onAutoPolishCoverLetterChange(event.target.checked)}
                         />
                         <span><strong>Automatically Polish cover letter</strong></span>
@@ -255,8 +288,9 @@ export function SettingsDialog({
                       <label className="field field--inline settings-automation__threshold">
                         <span>Minimum fit</span>
                         <select
+                          className="select--compact"
                           value={coverLetterAutoPolishThreshold}
-                          disabled={!runInitialFit || !autoPolishCoverLetter}
+                          disabled={!runFitAssessment || !autoPolishCoverLetter}
                           onChange={(event) => onCoverLetterAutoPolishThresholdChange(
                             event.target.value as AutoPolishThreshold
                           )}
@@ -267,17 +301,6 @@ export function SettingsDialog({
                         </select>
                       </label>
                     </div>
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={runFinalCheck}
-                        onChange={(event) => onRunFinalCheckChange(event.target.checked)}
-                      />
-                      <span>
-                        <strong>Check the document after Polish</strong>
-                        <small>Reviews the resulting document once your edit decisions settle.</small>
-                      </span>
-                    </label>
                   </div>
 
                   <p className="settings-automation__note">
@@ -302,6 +325,7 @@ export function SettingsDialog({
                       onCopyFrom={(from) => onCopyStage(from, stage.id)}
                       instructions={stageCustomInstructions[stage.id] ?? ""}
                       onInstructionsChange={(value) => onStageCustomInstructionChange(stage.id, value)}
+                      supportsInstructions={stage.supportsInstructions}
                     />
                   ))}
                 </div>
@@ -311,8 +335,8 @@ export function SettingsDialog({
             {section === "about" ? (
               <>
                 <p className="settings-panel__intro">
-                  Optional facts about you that are not on your resume. Nothing here is sent to the
-                  AI until you fill it in.
+                  Optional facts that clarify evidence on or beyond your resume. Nothing here is
+                  sent to the AI until you fill it in.
                 </p>
 
                 <label className="field field--inline">
@@ -380,18 +404,86 @@ export function SettingsDialog({
                 {educationLevel === "unspecified" ? (
                   <p className="micro-status">Choose a level to include your education as evidence.</p>
                 ) : (
-                  <label className="field">
-                    <span>Field of study <small>(optional)</small></span>
+                  <>
+                    <label className="field field--inline">
+                      <span>Field of study <small>(optional)</small></span>
+                      <input
+                        className="text-input"
+                        type="text"
+                        maxLength={MAJOR_MAX_LENGTH}
+                        value={major}
+                        placeholder="e.g. Mechanical Engineering"
+                        onChange={(event) => onMajorChange(event.target.value)}
+                      />
+                    </label>
+                    <label className="field field--inline" htmlFor="candidate-gpa">
+                      <span>GPA <small>(optional)</small></span>
+                      <input
+                        id="candidate-gpa"
+                        className="text-input text-input--narrow"
+                        type="number"
+                        min={0}
+                        max={4}
+                        step={0.01}
+                        inputMode="decimal"
+                        value={gpa ?? ""}
+                        placeholder="e.g. 3.8"
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          onGpaChange(value === "" ? undefined : Number(value));
+                        }}
+                      />
+                    </label>
+                  </>
+                )}
+
+                <div className="menu-subhead">
+                  <span className="menu-subhead__title">Availability</span>
+                </div>
+
+                <label className="field field--inline">
+                  <span><strong>Earliest start</strong></span>
+                  <select
+                    className="select--compact"
+                    value={availabilityNotice}
+                    onChange={(event) => {
+                      const next = event.target.value as AvailabilityNotice;
+                      onAvailabilityNoticeChange(next);
+                      if (next !== "specific-date") onAvailabilityDateChange("");
+                    }}
+                  >
+                    {AVAILABILITY_NOTICE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                {availabilityNotice === "specific-date" ? (
+                  <label className="field field--inline" htmlFor="candidate-availability-date">
+                    <span>Earliest available date</span>
                     <input
-                      className="input"
-                      type="text"
-                      maxLength={MAJOR_MAX_LENGTH}
-                      value={major}
-                      placeholder="e.g. Mechanical Engineering"
-                      onChange={(event) => onMajorChange(event.target.value)}
+                      id="candidate-availability-date"
+                      className="text-input text-input--narrow"
+                      type="date"
+                      value={availabilityDate}
+                      onChange={(event) => onAvailabilityDateChange(event.target.value)}
                     />
                   </label>
-                )}
+                ) : null}
+
+                <div className="menu-subhead">
+                  <span className="menu-subhead__title">Experience evidence</span>
+                </div>
+
+                <p className="settings-panel__supporting-copy">
+                  Break experience down by source so a strict professional-years requirement is not
+                  treated the same as academic or personal work. Relevance remains job-specific.
+                </p>
+
+                <ExperienceProfileFields
+                  value={experienceProfile}
+                  onChange={onExperienceProfileChange}
+                />
               </>
             ) : null}
 

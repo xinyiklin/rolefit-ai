@@ -36,7 +36,7 @@ assert.equal(
 );
 
 // The state Apply leaves behind: both strict sources stored, plus the metadata the
-// tracker owns (status, notes, dates, job details, Initial Fit) that no document save
+// tracker owns (status, notes, dates, job details, Fit Assessment) that no document save
 // may touch.
 const applied = {
   id: "app-1",

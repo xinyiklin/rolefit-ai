@@ -1,5 +1,6 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
-import type { QuickFitVerdict } from "../../shared/quickFitContract.ts";
+import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
+import { describeProviderModel } from "../config/aiOptions.ts";
 import { parseDate } from "./applicationFacts.ts";
 
 export { displayCompany, parseDate } from "./applicationFacts.ts";
@@ -82,7 +83,7 @@ export function companyInitials(name: string) {
     .join("");
 }
 
-const QUICK_FIT_DISPLAY: Record<QuickFitVerdict, {
+const FIT_ASSESSMENT_DISPLAY: Record<FitAssessmentVerdict, {
   label: string;
   tone: "strong" | "good" | "stretch" | "weak";
   rank: number;
@@ -93,20 +94,37 @@ const QUICK_FIT_DISPLAY: Record<QuickFitVerdict, {
   LIMITED: { label: "Limited fit", tone: "weak", rank: 1 }
 };
 
-// Tracker fit is the compact Initial Fit verdict captured for the exact resume
+// Tracker fit is the compact Fit Assessment verdict captured for the exact resume
 // selected during Prepare. There is no numeric fallback or historical review
 // reader.
 export function appFitVerdict(
   app: Application
-): { verdict: QuickFitVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
+): { verdict: FitAssessmentVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
   const verdict = app.initialFit?.result.verdict;
   if (!verdict) return null;
-  return { verdict, ...QUICK_FIT_DISPLAY[verdict] };
+  return { verdict, ...FIT_ASSESSMENT_DISPLAY[verdict] };
 }
 
-export function initialFitRank(app: Application): number {
+export function fitAssessmentRank(app: Application): number {
   const verdict = app.initialFit?.result.verdict;
-  return verdict ? QUICK_FIT_DISPLAY[verdict].rank : 0;
+  return verdict ? FIT_ASSESSMENT_DISPLAY[verdict].rank : 0;
+}
+
+export function fitAssessmentRunLabel(snapshot: FitAssessmentSnapshot): string {
+  const parts: string[] = [];
+  if (snapshot.assessedAt && Number.isFinite(Date.parse(snapshot.assessedAt))) {
+    parts.push(`Last assessed ${new Intl.DateTimeFormat(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short"
+    }).format(new Date(snapshot.assessedAt))}`);
+  }
+  if (snapshot.provider) {
+    parts.push(describeProviderModel(snapshot.provider, snapshot.model ?? ""));
+  }
+  if (snapshot.reasoningEffort) parts.push(`${snapshot.reasoningEffort} reasoning`);
+  const rubricVersion = snapshot.promptVersion?.match(/-v([1-9]\d*)$/)?.[1];
+  if (rubricVersion) parts.push(`rubric v${rubricVersion}`);
+  return parts.join(" · ");
 }
 
 export function nextAction(app: Application) {
@@ -119,7 +137,7 @@ export function nextAction(app: Application) {
 }
 
 export function priorityFor(app: Application) {
-  // Initial Fit stays advisory and sortable; it never silently changes the
+  // Fit Assessment stays advisory and sortable; it never silently changes the
   // user's queue priority. Only explicit priority or advanced status does.
   if (app.priority) return app.priority;
   if (app.status === "interviewing" || app.status === "offer") return "High";

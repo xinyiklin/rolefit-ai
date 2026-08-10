@@ -7,7 +7,6 @@ import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
 import { handleCoverLetter } from "./ai/coverLetter.ts";
-import { handleFinalCheck } from "./ai/finalCheck.ts";
 import { isApiPathname, sendJson } from "./http.ts";
 import {
   ensureJobWorkspace,
@@ -33,7 +32,7 @@ import {
   handleSaveApplications
 } from "./applications/trackerRoutes.ts";
 import { isApplicationDocumentKind } from "./applications/documents.ts";
-import { handleBrowserPreferences } from "./browserPreferences.ts";
+import { handleWorkspacePreferences } from "./workspacePreferences.ts";
 import {
   handleCoverLetterCandidates,
   handleRestoreCoverLetter,
@@ -415,11 +414,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/final-check") {
-      void handleFinalCheck(req, res);
-      return;
-    }
-
     if (pathname === "/api/job-analysis") {
       void handleJobAnalysis(req, res);
       return;
@@ -445,8 +439,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/workspace/browser-preferences") {
-      void handleBrowserPreferences(req, res, workspaceDir);
+    if (pathname === "/api/workspace/preferences") {
+      void handleWorkspacePreferences(req, res, workspaceDir);
       return;
     }
 

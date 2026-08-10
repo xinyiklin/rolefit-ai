@@ -11,7 +11,7 @@ const bundled = await esbuild.build({
   write: false,
   logLevel: "silent"
 });
-const { analyzeInitialFit, analyzeJobPosting } = await import(
+const { analyzeFitAssessment, analyzeJobPosting } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
 
@@ -36,7 +36,7 @@ const VALID_ANALYSIS = {
   title: "Backend Engineer",
   responsibilities: ["Build Python APIs and operate SQL data services."],
   requiredQualifications: ["Kubernetes experience is required for production deployments."],
-  initialFit: VALID_FIT
+  fitAssessment: VALID_FIT
 };
 
 let requests = [];
@@ -60,55 +60,55 @@ const unreadableResponse = () => ({
 
 nextResponse = response(VALID_ANALYSIS);
 const combined = await analyzeJobPosting(POSTING, {
-  initialFit: FIT_REQUEST,
+  fitAssessment: FIT_REQUEST,
   aiRequest: { provider: "codex-cli", model: "synthetic-model", reasoningEffort: "medium" }
 });
 assert.equal(combined.source, "ai");
-assert.equal(combined.initialFit?.verdict, "REASONABLE");
+assert.equal(combined.fitAssessment?.verdict, "REASONABLE");
 assert.equal(requests.length, 1, "combined analysis uses one endpoint request");
 assert.equal(requests[0].url, "/api/job-analysis");
 assert.equal(requests[0].payload.mode, undefined);
-assert.equal(requests[0].payload.initialFit.enabled, true);
-assert.equal(requests[0].payload.initialFit.resumeText, FIT_REQUEST.resumeText);
+assert.equal(requests[0].payload.fitAssessment.enabled, true);
+assert.equal(requests[0].payload.fitAssessment.resumeText, FIT_REQUEST.resumeText);
 
 requests = [];
-nextResponse = response({ initialFit: VALID_FIT });
-const retry = await analyzeInitialFit(POSTING, FIT_REQUEST, {
+nextResponse = response({ fitAssessment: VALID_FIT });
+const retry = await analyzeFitAssessment(POSTING, FIT_REQUEST, {
   aiRequest: { provider: "claude-cli", model: "synthetic-model", reasoningEffort: "low" }
 });
-assert.equal(retry.initialFit?.verdict, "REASONABLE");
-assert.equal(requests.length, 1, "fit-only retry uses the same endpoint boundary once");
-assert.equal(requests[0].payload.mode, "initial-fit");
+assert.equal(retry.fitAssessment?.verdict, "REASONABLE");
+assert.equal(requests.length, 1, "reassessment uses the same endpoint boundary once");
+assert.equal(requests[0].payload.mode, "fit-assessment");
 assert.equal(requests[0].payload.resumeText, FIT_REQUEST.resumeText);
 
 nextResponse = response({ error: "Synthetic provider unavailable." }, 503);
-const unavailable = await analyzeInitialFit(POSTING, FIT_REQUEST);
-assert.equal(unavailable.initialFit, null);
+const unavailable = await analyzeFitAssessment(POSTING, FIT_REQUEST);
+assert.equal(unavailable.fitAssessment, null);
 assert.equal(unavailable.failure?.detail, "Synthetic provider unavailable");
 
 nextResponse = unreadableResponse();
-const unreadable = await analyzeInitialFit(POSTING, FIT_REQUEST);
-assert.equal(unreadable.initialFit, null);
-assert.equal(unreadable.failure?.detail, "Initial Fit returned unreadable JSON");
+const unreadable = await analyzeFitAssessment(POSTING, FIT_REQUEST);
+assert.equal(unreadable.fitAssessment, null);
+assert.equal(unreadable.failure?.detail, "Fit Assessment returned unreadable JSON");
 
 nextResponse = response({ source: "unexpected" });
 const invalidJob = await analyzeJobPosting(POSTING);
 assert.equal(invalidJob.source, "local");
 assert.equal(invalidJob.failure?.detail, "The job analyzer returned an invalid response");
 
-nextResponse = response({ initialFit: { verdict: "NOT_A_VERDICT" } });
-const invalidFit = await analyzeInitialFit(POSTING, FIT_REQUEST);
-assert.equal(invalidFit.initialFit, null);
-assert.equal(invalidFit.failure?.detail, "Initial Fit returned no usable screening");
+nextResponse = response({ fitAssessment: { verdict: "NOT_A_VERDICT" } });
+const invalidFit = await analyzeFitAssessment(POSTING, FIT_REQUEST);
+assert.equal(invalidFit.fitAssessment, null);
+assert.equal(invalidFit.failure?.detail, "Fit Assessment returned no usable screening");
 
 nextResponse = new TypeError("Failed to fetch");
-const networkFailure = await analyzeInitialFit(POSTING, FIT_REQUEST);
+const networkFailure = await analyzeFitAssessment(POSTING, FIT_REQUEST);
 assert.equal(networkFailure.failure?.kind, "network");
 assert.equal(networkFailure.failure?.detail, "Couldn't reach the local server");
 
 nextResponse = new DOMException("Synthetic abort", "AbortError");
 await assert.rejects(
-  analyzeInitialFit(POSTING, FIT_REQUEST),
+  analyzeFitAssessment(POSTING, FIT_REQUEST),
   (error) => error instanceof DOMException && error.name === "AbortError",
   "a genuine abort still propagates so stale requests cannot settle"
 );

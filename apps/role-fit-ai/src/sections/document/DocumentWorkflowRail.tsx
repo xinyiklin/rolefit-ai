@@ -15,10 +15,6 @@ const TONES: Record<DocumentWorkflowStatus["state"], "neutral" | "working" | "at
   polishing: "working",
   proposal: "neutral",
   reviewing: "working",
-  checking: "working",
-  ready: "neutral",
-  review: "attention",
-  "needs-evidence": "attention",
   stale: "attention"
 };
 

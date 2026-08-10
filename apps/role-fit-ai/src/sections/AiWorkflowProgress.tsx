@@ -2,9 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, Circle, RotateCcw, Square, X } from "lucide-react";
 import {
   AI_STAGE_COPY,
-  workflowCurrentIndex,
-  workflowStageIsBlocked,
-  workflowStepLabel,
+  AI_WORKFLOW_TITLE,
   type AiStageKey,
   type AiStageState,
   type AiWorkflowStage
@@ -29,15 +27,9 @@ function StageIcon({ status }: { status: AiStageState["status"] }) {
 
 function StageRow({
   stage,
-  step,
-  total,
-  blockedByEarlierFailure,
   busy
 }: {
   stage: AiWorkflowStage;
-  step: number;
-  total: number;
-  blockedByEarlierFailure: boolean;
   busy: boolean;
 }) {
   const { state } = stage;
@@ -59,22 +51,19 @@ function StageRow({
   }, [state.status]);
 
   const statusCopy = state.status === "idle"
-    ? blockedByEarlierFailure ? "Not run" : "Waiting"
+    ? "Waiting"
     : AI_STAGE_COPY[stage.key][state.status];
-  const meta = [
-    workflowStepLabel(step, total),
-    state.status === "running" || elapsedMs > 0 ? formatElapsed(elapsedMs) : ""
-  ].filter(Boolean).join(" · ");
+  const meta = state.status === "running" || elapsedMs > 0 ? formatElapsed(elapsedMs) : "";
   const showFailure = state.status === "failed" || state.status === "stopped";
 
   return (
-    <div className={`ai-workflow__stage ai-workflow__stage--${state.status}${blockedByEarlierFailure ? " is-blocked" : ""}`}>
+    <div className={`ai-workflow__stage ai-workflow__stage--${state.status}`}>
       <span className="ai-workflow__stage-icon" aria-hidden="true">
         <StageIcon status={state.status} />
       </span>
       <div className="ai-workflow__stage-body">
         <span className="ai-workflow__stage-title">{statusCopy}</span>
-        <span className="ai-workflow__stage-meta">{meta}</span>
+        {meta ? <span className="ai-workflow__stage-meta">{meta}</span> : null}
         {state.status === "done" && state.note ? (
           <span className={`ai-workflow__note ai-workflow__note--${state.noteTone ?? "info"}`}>{state.note}</span>
         ) : null}
@@ -120,10 +109,11 @@ export function AiWorkflowProgress({
   const hasStarted = stages.some((stage) => stage.state.status !== "idle");
   const hasFailure = stages.some((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
   const allDone = stages.length > 0 && stages.every((stage) => stage.state.status === "done");
-  const currentIndex = workflowCurrentIndex(stages);
   const anyRunning = stages.some((stage) => stage.state.status === "running");
   const failedStage = stages.find((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
-  const currentStage = stages[Math.min(currentIndex, Math.max(0, stages.length - 1))];
+  const currentStage = stages.find((stage) => stage.state.status === "running")
+    ?? stages.find((stage) => stage.state.status === "idle")
+    ?? stages[stages.length - 1];
   const liveSummary = failedStage
     ? `${title}: ${AI_STAGE_COPY[failedStage.key][failedStage.state.status]}.`
     : allDone
@@ -157,10 +147,7 @@ export function AiWorkflowProgress({
           every second inside StageRow. */}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveSummary}</span>
       <header className="ai-workflow__head">
-        <div>
-          <strong>{title}</strong>
-          <span>{workflowStepLabel(currentIndex + 1, stages.length)}</span>
-        </div>
+        <strong>{title}</strong>
         <button
           type="button"
           className="ai-workflow__dismiss"
@@ -171,19 +158,7 @@ export function AiWorkflowProgress({
         </button>
       </header>
       <div className="ai-workflow__stages">
-        {stages.map((stage, index) => {
-          const blockedByEarlierFailure = workflowStageIsBlocked(stages, index);
-          return (
-            <StageRow
-              key={stage.key}
-              stage={stage}
-              step={index + 1}
-              total={stages.length}
-              blockedByEarlierFailure={blockedByEarlierFailure}
-              busy={busy}
-            />
-          );
-        })}
+        {stages.map((stage) => <StageRow key={stage.key} stage={stage} busy={busy} />)}
       </div>
     </section>
   );
@@ -193,19 +168,21 @@ export function TaskProgress({
   stageKey,
   state,
   onRetry,
+  onStop,
   onDismiss
 }: {
-  stageKey: Extract<AiStageKey, "cover" | "answers">;
+  stageKey: AiStageKey;
   state: AiStageState;
   onRetry?: () => void;
+  onStop?: () => void;
   onDismiss: () => void;
 }) {
   return (
     <AiWorkflowProgress
-      stages={[{ key: stageKey, state, onRetry }]}
+      stages={[{ key: stageKey, state, onRetry, onStop }]}
       onDismiss={onDismiss}
       busy={state.status === "running"}
-      title={stageKey === "cover" ? "Cover letter" : "Application answers"}
+      title={AI_WORKFLOW_TITLE[stageKey]}
     />
   );
 }

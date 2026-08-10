@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 
 import {
   AUTO_POLISH_THRESHOLD_OPTIONS,
-  quickFitMeetsThreshold
+  fitAssessmentMeetsThreshold
 } from "../autoPolishPolicy.ts";
 
 assert.deepEqual(
@@ -26,23 +26,23 @@ const expected = {
 const thresholds = AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => option.value);
 for (const [verdict, outcomes] of Object.entries(expected)) {
   assert.deepEqual(
-    thresholds.map((threshold) => quickFitMeetsThreshold(verdict, threshold)),
+    thresholds.map((threshold) => fitAssessmentMeetsThreshold(verdict, threshold)),
     outcomes,
     `${verdict} preserves every threshold boundary`
   );
 }
 
-assert.equal(quickFitMeetsThreshold("REASONABLE", "REASONABLE"), true);
-assert.equal(quickFitMeetsThreshold("REASONABLE", "STRONG"), false);
+assert.equal(fitAssessmentMeetsThreshold("REASONABLE", "REASONABLE"), true);
+assert.equal(fitAssessmentMeetsThreshold("REASONABLE", "STRONG"), false);
 
 const sharedContract = readFileSync(
-  new URL("../../../shared/quickFitContract.ts", import.meta.url),
+  new URL("../../../shared/fitAssessmentContract.ts", import.meta.url),
   "utf8"
 );
 assert.doesNotMatch(
   sharedContract,
-  /AutoPolishThreshold|AUTO_POLISH_THRESHOLD_OPTIONS|quickFitMeetsThreshold|FIT_RANK/,
-  "the shared Initial Fit contract contains no downstream automation policy"
+  /AutoPolishThreshold|AUTO_POLISH_THRESHOLD_OPTIONS|fitAssessmentMeetsThreshold|FIT_RANK/,
+  "the shared Fit Assessment contract contains no downstream automation policy"
 );
 
 console.log("auto-polish policy evals passed");

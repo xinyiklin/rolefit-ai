@@ -15,7 +15,12 @@ import {
   hasUnsupportedOwnershipIncrease,
   proseHasUngroundedTerm
 } from "./grounding.ts";
-import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
+import {
+  clipForPrompt,
+  fenceUntrusted,
+  inputFirewallRule,
+  polishSelfAuditInstructions
+} from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { containsStructuredMarkup, hasUngroundedNumericClaim } from "./sanitize.ts";
 import { UserSafeAiError } from "./errors.ts";
@@ -95,15 +100,18 @@ export function buildResumeProposalPrompts({
   targets,
   scopeText,
   honestContext,
-  customInstructions
+  customInstructions,
+  reasoningEffort
 }: {
   jobText: string;
   targets: FlatResumeTarget[];
   scopeText: string;
   honestContext: string;
   customInstructions: string;
+  reasoningEffort?: unknown;
 }) {
   const targetSelection = selectPromptTargets(targets, jobText);
+  const auditInstructions = polishSelfAuditInstructions(reasoningEffort);
   const systemPrompt = `You are a careful resume editor. Return exactly one JSON object and no markdown.
 
 ${inputFirewallRule()}
@@ -141,6 +149,8 @@ Rules:
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 - summary and remainingGaps are optional concise feedback, maximum 3 items each.
+
+${auditInstructions}
 
 Return this shape:
 {
@@ -360,7 +370,8 @@ export async function generateResumeProposal({
     targets,
     scopeText,
     honestContext,
-    customInstructions
+    customInstructions,
+    reasoningEffort
   });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider({

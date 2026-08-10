@@ -11,6 +11,7 @@ import {
   readApplications,
   writeApplications
 } from "../storage.ts";
+import { FIT_ASSESSMENT_SUMMARY } from "../../../shared/fitAssessmentContract.ts";
 
 const workspace = await mkdtemp(join(tmpdir(), "rolefit-applications-"));
 
@@ -25,17 +26,17 @@ try {
       status: "applied",
       initialFit: {
         resumeLabel: "Backend resume",
+        assessedAt: "2026-07-29T09:30:00.000Z",
+        provider: "codex-cli",
+        model: "gpt-5.6-sol",
+        reasoningEffort: "medium",
+        promptVersion: "fit-assessment-direct-rubric-v1",
         result: {
           verdict: "REASONABLE",
           summary: "The resume covers the central backend requirements.",
           matches: ["Python", "PostgreSQL"],
           gaps: ["Kubernetes"]
         }
-      },
-      finalCheck: {
-        status: "REVIEW",
-        summary: "One clarity issue remains.",
-        issues: [{ kind: "CLARITY", detail: "One bullet is vague.", action: "Name the specific system." }]
       },
       // Permanent legacy readers are gone: these fields must be omitted.
       fitScore: 82,
@@ -80,8 +81,6 @@ try {
         },
         // Empty-string optionals must drop rather than persist as "".
         "resume-polish": { source: "local", provider: "", model: "" },
-        // Invalid source enum → whole entry dropped.
-        "final-check": { source: "bogus", provider: "openai" },
         // attempts clamps to 1..9 (12 → 9).
         cover: { source: "ai", attempts: 12 },
         // Bad stage key (uppercase) → dropped.
@@ -102,7 +101,7 @@ try {
       createdAt: "2026-07-01T00:00:00.000Z",
       updatedAt: "2026-07-29T10:00:00.000Z",
       status: "interested",
-      aiUsage: { "final-check": { source: "nope" }, "9bad": { source: "ai" } }
+      aiUsage: { "9bad": { source: "ai" } }
     }
   ];
   const written = await writeApplications(workspace, sanitizeApplications(rawApplications));
@@ -115,10 +114,16 @@ try {
   if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
   if (valid?.initialFit?.result.verdict !== "REASONABLE" || valid.initialFit.resumeLabel !== "Backend resume") {
-    failures.push("compact Initial Fit snapshot did not roundtrip");
+    failures.push("compact Fit Assessment snapshot did not roundtrip");
   }
-  if (valid?.finalCheck?.status !== "REVIEW" || valid.finalCheck.issues[0]?.kind !== "CLARITY") {
-    failures.push("compact Final Check snapshot did not roundtrip");
+  if (
+    valid?.initialFit?.assessedAt !== "2026-07-29T09:30:00.000Z"
+    || valid.initialFit.provider !== "codex-cli"
+    || valid.initialFit.model !== "gpt-5.6-sol"
+    || valid.initialFit.reasoningEffort !== "medium"
+    || valid.initialFit.promptVersion !== "fit-assessment-direct-rubric-v1"
+  ) {
+    failures.push("Fit Assessment run metadata did not roundtrip");
   }
   for (const legacy of ["fitScore", "baseFitScore", "tailoredFitScore", "fitScoreSource", "review", "missingRequiredSkills"]) {
     if (legacy in (valid ?? {})) failures.push(`legacy tracker field survived storage normalization: ${legacy}`);
@@ -202,8 +207,7 @@ try {
   if (!su?.[0]?.addedAt) failures.push("sourceUrls addedAt default missing");
 
   // aiUsage: Job analysis valid, Resume Polish keeps only source (empty
-  // optionals dropped), Document check drops (bad source), cover attempts
-  // clamp to 9, and BADKEY drops.
+  // optionals dropped), cover attempts clamp to 9, and BADKEY drops.
   const ai = valid?.aiUsage;
   if (!ai || typeof ai !== "object") failures.push("aiUsage did not persist");
   if (ai?.["job-analysis"]?.bogusSubfield) failures.push("aiUsage unknown subfield survived");
@@ -211,7 +215,6 @@ try {
   if (ai?.["job-analysis"]?.attempts !== 2) failures.push("aiUsage valid attempts not preserved");
   if ("provider" in (ai?.["resume-polish"] ?? {}) || "model" in (ai?.["resume-polish"] ?? {})) failures.push("aiUsage empty-string optionals persisted");
   if (ai?.["resume-polish"]?.source !== "local") failures.push("aiUsage Resume Polish source lost");
-  if (ai && "final-check" in ai) failures.push("aiUsage invalid source enum did not drop the entry");
   if (ai?.cover?.attempts !== 9) failures.push("aiUsage attempts not clamped to 9");
   if (ai && "BADKEY" in ai) failures.push("aiUsage bad stage key survived");
 
@@ -243,6 +246,54 @@ try {
     duplicateWriteRejected = error instanceof ApplicationsStorageError && error.status === 400;
   }
   if (!duplicateWriteRejected) failures.push("duplicate application ids were accepted for storage");
+
+  // Fit Assessment summaries are fixed display copy derived from the verdict. A
+  // tracker written before that contract changed may contain the old generated
+  // sentence, but that redundant value must not make every tracker-dependent
+  // route fail while the rest of the record remains byte-for-byte canonical.
+  const staleSummaryRecord = sanitizeApplications([{
+    id: "stale-fit-assessment-summary",
+    title: "Stale Fit Assessment summary",
+    createdAt: canonicalCreatedAt,
+    updatedAt: canonicalUpdatedAt,
+    initialFit: {
+      resumeLabel: "Backend resume",
+      result: {
+        verdict: "REASONABLE",
+        summary: FIT_ASSESSMENT_SUMMARY.REASONABLE,
+        matches: ["Python APIs"],
+        gaps: ["Kubernetes"]
+      }
+    }
+  }])[0];
+  staleSummaryRecord.initialFit.result.summary = "Legacy provider-generated summary.";
+  const filePath = applicationsFilePath(workspace);
+  await writeFile(filePath, JSON.stringify({ applications: [staleSummaryRecord] }), "utf8");
+  try {
+    const normalizedSummaryRead = await readApplications(workspace);
+    if (normalizedSummaryRead[0]?.initialFit?.result.summary !== FIT_ASSESSMENT_SUMMARY.REASONABLE) {
+      failures.push("a stale derived Fit Assessment summary was not normalized on read");
+    }
+  } catch {
+    failures.push("a stale derived Fit Assessment summary blocked the otherwise canonical tracker");
+  }
+  for (const [label, malformedSummary] of [
+    ["missing", undefined],
+    ["non-string", 42],
+    ["blank", "   "]
+  ]) {
+    const malformed = structuredClone(staleSummaryRecord);
+    if (malformedSummary === undefined) delete malformed.initialFit.result.summary;
+    else malformed.initialFit.result.summary = malformedSummary;
+    await writeFile(filePath, JSON.stringify({ applications: [malformed] }), "utf8");
+    let rejected = false;
+    try {
+      await readApplications(workspace);
+    } catch (error) {
+      rejected = error instanceof ApplicationsStorageError;
+    }
+    if (!rejected) failures.push(`a ${label} Fit Assessment summary bypassed strict tracker validation`);
+  }
 
   const revisionA = "2026-07-29T10:00:00.000Z";
   const revisionB = "2026-07-29T11:00:00.000Z";
@@ -413,7 +464,6 @@ try {
   // Corruption must fail closed and remain byte-for-byte recoverable. Returning
   // [] here would let the next save overwrite the user's tracker as if it were
   // intentionally empty.
-  const filePath = applicationsFilePath(workspace);
   await writeFile(filePath, JSON.stringify({ applications: [
     { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
     { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }

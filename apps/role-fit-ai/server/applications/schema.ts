@@ -5,8 +5,7 @@ import {
   attachmentContentType,
   safeAttachmentFileName
 } from "./documents.ts";
-import { sanitizeQuickFit } from "../../shared/quickFitContract.ts";
-import { sanitizeFinalCheckWireResult } from "../../shared/finalCheckContract.ts";
+import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -66,11 +65,11 @@ const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board"
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (job-analysis / resume-polish / final-check / cover / answers). `source` is required and
+// output (job-analysis / resume-polish / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
-// A stage key is a short lowercase slug (e.g. "job-analysis", "resume-polish", "final-check",
+// A stage key is a short lowercase slug (e.g. "job-analysis", "resume-polish",
 // "cover", "answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;
@@ -170,12 +169,28 @@ function sanitizeAttachments(raw: unknown) {
   return attachments.length ? attachments : undefined;
 }
 
-function sanitizeInitialFitSnapshot(raw: unknown) {
+function sanitizeFitAssessmentSnapshot(raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
   const value = raw as Record<string, unknown>;
-  const result = sanitizeQuickFit(value.result);
+  const result = sanitizeFitAssessment(value.result);
   const resumeLabel = sanitizeString(value.resumeLabel, 200).trim();
-  return result && resumeLabel ? { result, resumeLabel } : undefined;
+  if (!result || !resumeLabel) return undefined;
+  const assessedAt = typeof value.assessedAt === "string" && Number.isFinite(Date.parse(value.assessedAt))
+    ? value.assessedAt
+    : "";
+  const provider = sanitizeString(value.provider, 80).trim();
+  const model = sanitizeString(value.model, 120).trim();
+  const reasoningEffort = sanitizeString(value.reasoningEffort, 40).trim();
+  const promptVersion = sanitizeString(value.promptVersion, 120).trim();
+  return {
+    result,
+    resumeLabel,
+    ...(assessedAt ? { assessedAt } : {}),
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(/^fit-assessment-direct-rubric-v[1-9]\d*$/.test(promptVersion) ? { promptVersion } : {})
+  };
 }
 
 function sanitizeApplicationAnswers(raw: unknown) {
@@ -359,8 +374,7 @@ function sanitizeApplication(raw: unknown) {
     coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
-    initialFit: sanitizeInitialFitSnapshot(r.initialFit),
-    finalCheck: sanitizeFinalCheckWireResult(r.finalCheck) ?? undefined,
+    initialFit: sanitizeFitAssessmentSnapshot(r.initialFit),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),

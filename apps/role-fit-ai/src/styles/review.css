@@ -1,54 +1,142 @@
+/* -------- Shared proposal review -------- */
+/* Both documents stage a proposal and commit it from the rail's sticky footer.
+   These rules own everything that must read identically across them; the
+   document-specific blocks below only describe their own unit. */
+
+.proposal-decisions {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--s2);
+  width: 100%;
+  min-width: 0;
+}
+
+.proposal-decisions__state {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+}
+
+.proposal-decisions__state p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+  line-height: 1.4;
+}
+
+.proposal-decisions__meter {
+  display: block;
+  overflow: hidden;
+  height: 3px;
+  border-radius: var(--r-pill);
+  background: var(--hairline-soft);
+}
+
+.proposal-decisions__meter > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: inline-size 160ms var(--ease);
+}
+
+.proposal-decisions__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+.proposal-decisions__actions > button {
+  min-height: 32px;
+}
+
+/* One decided-state vocabulary for both documents. */
+.proposal-chip {
+  padding: 1px 6px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  color: var(--ink-soft);
+  font: 600 0.64rem/1.6 var(--font-ui);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.proposal-chip[data-state="accepted"] {
+  border-color: var(--accent-soft);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.proposal-chip[data-state="changed"] {
+  border-color: var(--warm-soft);
+  background: var(--warm-veil);
+  color: var(--warm);
+}
+
+/* Changed words, marked the same way in a bullet and in a whole letter. */
+.proposal-diff__added {
+  border-radius: var(--r-sm);
+  background: var(--accent-soft);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.proposal-diff__removed {
+  color: var(--ink-faint);
+  text-decoration: line-through;
+  text-decoration-color: var(--warm);
+}
+
+.proposal-view {
+  /* The rail's panels are grid children; without this the switch stretches to
+     the full rail width and stops reading as a compact two-option control. */
+  justify-self: start;
+  display: inline-flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+}
+
+.proposal-view__option {
+  padding: 0 var(--s2);
+  min-height: 22px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font: 600 0.7rem/1 var(--font-ui);
+  cursor: pointer;
+}
+
+.proposal-view__option[aria-pressed="true"] {
+  background: var(--card);
+  box-shadow: var(--shadow-rest);
+  color: var(--ink-strong);
+}
+
+.proposal-view__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
 .resume-proposal {
   display: grid;
   gap: var(--s4);
 }
 
-.resume-proposal__section {
-  display: grid;
-  gap: var(--s2);
+.resume-proposal__edits {
   padding-top: var(--s3);
   border-top: 1px solid var(--hairline-soft);
 }
 
-.resume-proposal__section h3,
-.resume-proposal__section p {
-  margin: 0;
-}
-
-.resume-proposal__section h3 {
+.resume-proposal__edits > summary {
+  cursor: pointer;
   color: var(--ink-strong);
   font-size: 0.82rem;
   font-weight: 650;
-}
-
-.resume-proposal__section ul {
-  display: grid;
-  gap: var(--s1);
-  margin: 0;
-  padding-left: var(--s4);
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.resume-proposal__head {
-  display: flex;
-  align-items: start;
-  justify-content: space-between;
-  gap: var(--s3);
-}
-
-.resume-proposal__head p {
-  margin-top: 2px;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-}
-
-.resume-proposal__edits > summary {
-  cursor: pointer;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  font-weight: 600;
 }
 
 .resume-proposal__edit-list {
@@ -62,6 +150,42 @@
   gap: var(--s2);
   padding: var(--s3) 0;
   border-bottom: 1px solid var(--hairline-soft);
+}
+
+/* A decided row stays readable but stops competing with the ones still waiting
+   for a decision — the queue should show what is left, at a glance. */
+.resume-proposal__edit:not([data-state="pending"]) .resume-proposal__original,
+.resume-proposal__edit:not([data-state="pending"]) .resume-proposal__replacement,
+.resume-proposal__edit:not([data-state="pending"]) .resume-proposal__reason {
+  color: var(--ink-soft);
+}
+
+.resume-proposal__edit[data-state="discarded"] .resume-proposal__replacement {
+  text-decoration: line-through;
+  text-decoration-color: var(--hairline-strong);
+}
+
+.resume-proposal__edit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.resume-proposal__where {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.resume-proposal__decided-note {
+  margin: var(--s2) 0 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
 }
 
 .resume-proposal__label {
@@ -127,104 +251,6 @@
 
 .resume-proposal__empty.is-warn {
   color: var(--warm);
-}
-
-/* The closing phase of Polish, not a section of its own: no heading row, no
-   primary action, and nothing rendered at all until there is an outcome. The
-   old .final-check block carried a title, an explainer, and a Run button, which
-   is what made an internal phase look like a separate tool. */
-.document-check {
-  display: grid;
-  gap: var(--s2);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.document-check.is-checking,
-.document-check.is-failed {
-  align-items: baseline;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.document-check p,
-.document-check__note {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.document-check__note {
-  color: var(--ink-faint);
-}
-
-.document-check.is-failed strong {
-  color: var(--warm);
-}
-
-.document-check.is-stale {
-  opacity: 0.68;
-}
-
-.document-check button,
-.document-check button.is-compact {
-  flex: 0 0 auto;
-  justify-self: start;
-  white-space: normal;
-}
-
-.document-check__outcome {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.document-check__outcome span,
-.document-check__issues > li > span {
-  color: var(--ink-strong);
-  font-size: 0.68rem;
-  font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.document-check.is-review .document-check__outcome span,
-.document-check.is-needs-evidence .document-check__outcome span,
-.document-check.is-stale .document-check__outcome span {
-  color: var(--warm);
-}
-
-.document-check__outcome small {
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-}
-
-.document-check__issues {
-  display: grid;
-  gap: 0;
-  margin: var(--s1) 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.document-check__issues li {
-  display: grid;
-  gap: var(--s1);
-  padding: var(--s3) 0;
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.document-check__issues p,
-.document-check__issues small {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.document-check__issues small {
-  color: var(--ink-faint);
 }
 
 .proposal-feedback {

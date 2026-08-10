@@ -43,9 +43,7 @@ export type PresencePhase =
   | "idle"
   | "editing"
   | "analyzing-job"
-  | "tailoring"
-  | "reviewing"
-  | "tailoring+reviewing";
+  | "tailoring";
 
 export type PresenceEntry = {
   tabId: string;

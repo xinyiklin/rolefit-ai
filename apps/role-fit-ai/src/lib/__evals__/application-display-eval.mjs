@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { initialFitRank, priorityFor } from "../applicationDisplay.ts";
+import { fitAssessmentRank, fitAssessmentRunLabel, priorityFor } from "../applicationDisplay.ts";
 
 function application(overrides = {}) {
   return {
@@ -31,10 +31,22 @@ assert.equal(
   "Limited fit stays advisory and does not lower priority"
 );
 assert.ok(
-  initialFitRank(application()) > initialFitRank(application({
+  fitAssessmentRank(application()) > fitAssessmentRank(application({
     initialFit: { ...application().initialFit, result: { ...application().initialFit.result, verdict: "LIMITED" } }
   })),
-  "Initial Fit remains available for explicit tracker sorting"
+  "Fit Assessment remains available for explicit tracker sorting"
 );
+const assessmentLabel = fitAssessmentRunLabel({
+  ...application().initialFit,
+  assessedAt: "2026-08-08T12:00:00.000Z",
+  provider: "codex-cli",
+  model: "gpt-5.6-sol",
+  reasoningEffort: "medium",
+  promptVersion: "fit-assessment-direct-rubric-v1"
+});
+assert.match(assessmentLabel, /^Last assessed /, "assessment metadata names its completion time");
+assert.match(assessmentLabel, /Codex · CLI \(gpt-5\.6-sol\)/, "assessment metadata names its provider and model");
+assert.match(assessmentLabel, /medium reasoning/, "assessment metadata names reasoning effort");
+assert.match(assessmentLabel, /rubric v1$/, "assessment metadata names the rubric version");
 
 console.log("application display priority probes: passed");

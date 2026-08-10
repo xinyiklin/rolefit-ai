@@ -1,15 +1,15 @@
 import assert from "node:assert/strict";
 
 import {
-  QUICK_FIT_RULES,
-  buildQuickFitPrompts,
-  sanitizeQuickFitResponse
-} from "../quickFit.ts";
+  FIT_ASSESSMENT_RULES,
+  buildFitAssessmentPrompts,
+  sanitizeFitAssessmentResponse
+} from "../fitAssessment.ts";
 import { buildJobAnalysisPrompts } from "../jobAnalysis.ts";
 import {
-  QUICK_FIT_SUMMARY,
-  sanitizeQuickFit
-} from "../../../shared/quickFitContract.ts";
+  FIT_ASSESSMENT_SUMMARY,
+  sanitizeFitAssessment
+} from "../../../shared/fitAssessmentContract.ts";
 
 const jobText = `Senior Product Engineer
 Build accessible React workflows for healthcare teams.
@@ -53,9 +53,9 @@ const validRaw = {
   }
 };
 
-const valid = sanitizeQuickFitResponse(validRaw, { jobText, resumeText, candidateContext });
+const valid = sanitizeFitAssessmentResponse(validRaw, { jobText, resumeText, candidateContext });
 assert.ok(valid, "a fully anchored response is usable");
-assert.equal(valid.summary, QUICK_FIT_SUMMARY.REASONABLE, "the server owns stable public summary copy");
+assert.equal(valid.summary, FIT_ASSESSMENT_SUMMARY.REASONABLE, "the server owns stable public summary copy");
 assert.deepEqual(valid.matches, [
   "Build accessible React workflows for healthcare teams.",
   "Experience shipping TypeScript applications is required."
@@ -67,7 +67,7 @@ assert.deepEqual(valid.eligibility, {
 });
 
 assert.deepEqual(
-  sanitizeQuickFitResponse(
+  sanitizeFitAssessmentResponse(
     {
       verdict: "STRONG",
       matches: validRaw.matches,
@@ -86,7 +86,7 @@ assert.deepEqual(
 );
 
 assert.equal(
-  sanitizeQuickFitResponse(
+  sanitizeFitAssessmentResponse(
     {
       ...validRaw,
       matches: [{ ...validRaw.matches[0], jobExcerpt: "Invented responsibility" }]
@@ -98,7 +98,7 @@ assert.equal(
 );
 
 assert.equal(
-  sanitizeQuickFitResponse(
+  sanitizeFitAssessmentResponse(
     {
       ...validRaw,
       matches: [{ ...validRaw.matches[0], candidateExcerpt: "Invented candidate evidence" }]
@@ -110,7 +110,7 @@ assert.equal(
 );
 
 assert.equal(
-  sanitizeQuickFitResponse(
+  sanitizeFitAssessmentResponse(
     {
       ...validRaw,
       eligibility: {
@@ -126,7 +126,7 @@ assert.equal(
 );
 
 assert.equal(
-  sanitizeQuickFitResponse(
+  sanitizeFitAssessmentResponse(
     {
       ...validRaw,
       matches: [validRaw.matches[0], validRaw.matches[0]]
@@ -137,60 +137,87 @@ assert.equal(
   "duplicate findings are unusable instead of double-counted"
 );
 
-const clientResult = sanitizeQuickFit({
+const clientResult = sanitizeFitAssessment({
   verdict: "STRONG",
   summary: "Untrusted provider summary",
   matches: ["Build accessible React workflows for healthcare teams."],
   gaps: [],
   eligibility: { status: "CHECK", note: "Confirm work authorization." }
 });
-assert.equal(clientResult?.summary, QUICK_FIT_SUMMARY.STRONG);
+assert.equal(clientResult?.summary, FIT_ASSESSMENT_SUMMARY.STRONG);
 assert.equal(
-  sanitizeQuickFit({ verdict: "STRONG", matches: ["duplicate", "duplicate"], gaps: [] }),
+  sanitizeFitAssessment({ verdict: "STRONG", matches: ["duplicate", "duplicate"], gaps: [] }),
   null,
   "the client boundary also rejects duplicate public findings"
 );
 
-const prompts = buildQuickFitPrompts({ jobText, resumeText, candidateContext });
+const prompts = buildFitAssessmentPrompts({ jobText, resumeText, candidateContext });
 assert.equal(
-  prompts.systemPrompt.includes(QUICK_FIT_RULES),
+  prompts.systemPrompt.includes(FIT_ASSESSMENT_RULES),
   true,
-  "standalone Initial Fit renders the shared rules block"
+  "standalone Fit Assessment renders the shared rules block"
 );
-assert.match(QUICK_FIT_RULES, /Apply this rubric directly:/);
-assert.match(QUICK_FIT_RULES, /STRONG: The candidate explicitly demonstrates most main responsibilities/);
-assert.match(QUICK_FIT_RULES, /judge only the evidence currently supplied/i);
-assert.match(QUICK_FIT_RULES, /Missing evidence is a gap, not proof that the candidate is incapable/i);
-assert.match(QUICK_FIT_RULES, /Preserve posting order; when evidence is tied, choose the earliest material item/);
-assert.match(QUICK_FIT_RULES, /transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement/i);
-assert.match(QUICK_FIT_RULES, /never appear in both matches and gaps/i);
-assert.match(QUICK_FIT_RULES, /one gap per underlying missing need/i);
-assert.match(QUICK_FIT_RULES, /falls between adjacent categories, choose the lower category/i);
-assert.match(QUICK_FIT_RULES, /Determine the verdict without considering eligibility/i);
-assert.match(QUICK_FIT_RULES, /education, skills, and experience are fit evidence, not eligibility/i);
-assert.match(QUICK_FIT_RULES, /BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact/);
+assert.match(FIT_ASSESSMENT_RULES, /Apply this rubric directly:/);
+assert.match(FIT_ASSESSMENT_RULES, /STRONG: The candidate explicitly demonstrates most main responsibilities/);
+assert.match(FIT_ASSESSMENT_RULES, /judge only the evidence currently supplied/i);
+assert.match(FIT_ASSESSMENT_RULES, /Missing evidence is a gap, not proof that the candidate is incapable/i);
+assert.match(FIT_ASSESSMENT_RULES, /transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement/i);
+assert.match(FIT_ASSESSMENT_RULES, /professional, industry, commercial, production, or paid experience is not satisfied by academic, personal, volunteer, or open-source work/i);
+assert.match(FIT_ASSESSMENT_RULES, /experience categories may overlap\. Never add their years or counts together/i);
+assert.match(FIT_ASSESSMENT_RULES, /role\/project count does not imply duration/i);
+assert.match(
+  FIT_ASSESSMENT_RULES,
+  /classify.*main responsibilities.*core qualifications.*preferred qualifications.*logistics.*administrative/i,
+  "the rubric separates decision-critical role evidence from non-fit posting text"
+);
+assert.match(
+  FIT_ASSESSMENT_RULES,
+  /lacks substantive role responsibilities or qualifications.*LIMITED/i,
+  "the rubric fails conservatively on a content-poor posting"
+);
+assert.match(
+  FIT_ASSESSMENT_RULES,
+  /LIMITED versus STRETCH only.*substantive posting.*supporting core work.*role-defining specialization.*STRETCH.*Reserve LIMITED.*direct evidence.*sparse/i,
+  "supporting core evidence keeps a missing specialization at stretch rather than limited"
+);
+assert.match(
+  FIT_ASSESSMENT_RULES,
+  /most decision-relevant.*posting order.*tie-breaker/i,
+  "finding selection explains the verdict instead of favoring easy early excerpts"
+);
+assert.match(
+  FIT_ASSESSMENT_RULES,
+  /Before returning JSON.*exact contiguous character-for-character text.*Never rewrite, combine, or normalize punctuation.*omit that finding/i,
+  "the provider self-checks exact excerpts before the server grounding boundary"
+);
+assert.match(FIT_ASSESSMENT_RULES, /never appear in both matches and gaps/i);
+assert.match(FIT_ASSESSMENT_RULES, /one gap per underlying missing need/i);
+assert.match(FIT_ASSESSMENT_RULES, /falls between adjacent categories, choose the lower category/i);
+assert.match(FIT_ASSESSMENT_RULES, /Determine the verdict without considering eligibility/i);
+assert.match(FIT_ASSESSMENT_RULES, /education, skills, and experience are fit evidence, not eligibility/i);
+assert.match(FIT_ASSESSMENT_RULES, /BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact/);
 assert.match(prompts.userPrompt, /"candidateSource": "RESUME \| CANDIDATE_CONTEXT"/);
 assert.doesNotMatch(prompts.userPrompt, /requirementId|ADJACENT|coverage categor(?:y|ies)|calibration basis/i);
 assert.doesNotMatch(prompts.userPrompt, /selected_resume_label/i);
 
 const combinedPrompts = buildJobAnalysisPrompts({
   jobText: jobText.replaceAll("\n", "\r\n"),
-  initialFit: { resumeText, candidateContext }
+  fitAssessment: { resumeText, candidateContext }
 });
 const jobOnlyPrompts = buildJobAnalysisPrompts({ jobText });
 assert.equal(
-  jobOnlyPrompts.systemPrompt.includes(QUICK_FIT_RULES),
+  jobOnlyPrompts.systemPrompt.includes(FIT_ASSESSMENT_RULES),
   false,
-  "Job analysis without Initial Fit omits the screening rules"
+  "Job analysis without Fit Assessment omits the screening rules"
 );
 assert.equal(
-  combinedPrompts.systemPrompt.includes(QUICK_FIT_RULES),
+  combinedPrompts.systemPrompt.includes(FIT_ASSESSMENT_RULES),
   true,
-  "combined Prepare renders the exact shared Initial Fit rules block"
+  "combined Prepare renders the exact shared Fit Assessment rules block"
 );
 assert.equal(
-  combinedPrompts.systemPrompt.split(QUICK_FIT_RULES).length,
-  prompts.systemPrompt.split(QUICK_FIT_RULES).length,
+  combinedPrompts.systemPrompt.split(FIT_ASSESSMENT_RULES).length,
+  prompts.systemPrompt.split(FIT_ASSESSMENT_RULES).length,
   "combined and standalone prompts include the shared rules block identically"
 );
 assert.doesNotMatch(
@@ -199,4 +226,4 @@ assert.doesNotMatch(
   "combined Prepare sends the same normalized posting used by exact-excerpt validation"
 );
 
-console.log("quick-fit probes passed");
+console.log("fit-assessment probes passed");

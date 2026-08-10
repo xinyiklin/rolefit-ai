@@ -15,12 +15,10 @@ import {
   type TypesetEditorHandle,
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
+import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
-import type { FinalCheckResult } from "../../../shared/finalCheckContract.ts";
-import type { DocumentCheckSource } from "../../hooks/useDocumentCheck";
 import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
@@ -72,28 +70,16 @@ type ResumeTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   resumePolishProviderReady: boolean;
-  checkProviderReady: boolean;
-  checkProviderMessage: string;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
-  // Decision state for the proposal's individual edits, owned by the workflow
-  // because the current-resume check runs when the last one settles.
   proposalDecisions: ReturnType<typeof useResumeProposalDecisions>;
-  check: FinalCheckResult | null;
-  checkSource: DocumentCheckSource;
-  checkDocumentChanged: boolean;
-  checkInputsChanged: boolean;
-  checkProgress: AiStageState;
-  isChecking: boolean;
   onPolish: () => void;
   onRetryPolish: () => void;
   onStopPolish: () => void;
-  onCheck: () => void;
-  onStopCheck: () => void;
 };
 
-// The resume surface is edit-and-check: the owned typeset page is the editor
+// The resume surface is edit-and-polish: the owned typeset page is the editor
 // and export layout, and once a recruiter
 // review exists it docks beside the editor as an actionable rail — accept,
 // modify, or apply-all the suggested edits without leaving the document.
@@ -130,23 +116,13 @@ export function ResumeTab({
   resumeReady,
   jobReady,
   resumePolishProviderReady,
-  checkProviderReady,
-  checkProviderMessage,
   isPolishing,
   polishProgress,
   polishStatus,
   proposalDecisions,
-  check,
-  checkSource,
-  checkDocumentChanged,
-  checkInputsChanged,
-  checkProgress,
-  isChecking,
   onPolish,
   onRetryPolish,
   onStopPolish,
-  onCheck,
-  onStopCheck,
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -276,23 +252,13 @@ export function ResumeTab({
               resumeReady={resumeReady}
               jobReady={jobReady}
               resumePolishProviderReady={resumePolishProviderReady}
-              checkProviderReady={checkProviderReady}
-              checkProviderMessage={checkProviderMessage}
               selectedSectionCount={selectedSectionCount}
               polishSectionCount={polishSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
-              check={check}
-              checkSource={checkSource}
-              checkDocumentChanged={checkDocumentChanged}
-              checkInputsChanged={checkInputsChanged}
-              checkProgress={checkProgress}
-              isChecking={isChecking}
               onRetryPolish={onRetryPolish}
               onStop={onStopPolish}
-              onCheck={onCheck}
-              onStopCheck={onStopCheck}
               onHighlight={setHighlightTarget}
             />
           )

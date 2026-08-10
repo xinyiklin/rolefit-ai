@@ -111,7 +111,10 @@ for provider, prompt, sanitizer, and review work.
   `updatedAt` monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data.
+  data. The one safe tracker-read normalization is fixed Fit Assessment summary
+  copy derived from an otherwise valid verdict: older provider-era summary text
+  may differ without invalidating the tracker, while every other sanitizer
+  difference remains fail-closed.
 - Server changes require the server TypeScript gate and focused route/eval.
   Lifecycle/listener probes are explicit tests rather than auto-discovered
   offline evals because their loopback bind may require environment permission.

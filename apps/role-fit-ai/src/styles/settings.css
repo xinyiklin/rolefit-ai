@@ -9,7 +9,14 @@
 
    The shell mirrors .rename-dialog (fixed overlay + blurred backdrop + card) but
    needs a much larger card with its own two-column body, so it is a sibling
-   pattern rather than a modifier on a 420px confirm card. */
+   pattern rather than a modifier on a 420px confirm card.
+
+   A settings row is label-beside-control, not label-above-control: these are
+   short known values, and stacking each one cost a full row of height for no
+   added clarity. Controls stay content-width so one field does not run to the
+   panel edge while its neighbours stop short. The class for a text control is
+   `.text-input` — `.input` is not defined anywhere and renders as bare
+   borderless text. */
 
 .settings-dialog {
   position: fixed;
@@ -68,6 +75,10 @@
   color: var(--ink-soft);
   font-size: 0.7rem;
   text-align: right;
+}
+
+.settings-dialog__autosave.is-error {
+  color: var(--danger);
 }
 
 .settings-dialog__head h2 {
@@ -177,6 +188,140 @@
   line-height: 1.45;
 }
 
+/* About you is a settings list, not a form: label and control share a line, and
+   one label column keeps the controls aligned down the panel. Scoped to this
+   section because the Stages panel's only inline field is a short "Minimum fit"
+   that would gain a wide empty gutter from the same rule. */
+.settings-panel[data-section="about"] .field--inline > span {
+  min-inline-size: 152px;
+}
+
+.settings-panel[data-section="about"] .menu-subhead {
+  margin-top: var(--s2);
+}
+
+/* Text controls on these rows sit beside compact selects, so they take the same
+   height and stop at roughly the same width rather than being the one control
+   that runs to the panel edge. */
+.settings-panel[data-section="about"] .field--inline > .text-input {
+  min-inline-size: 0;
+  max-inline-size: 260px;
+  min-height: 28px;
+  font-size: 0.78rem;
+}
+
+.settings-panel[data-section="about"] .field--inline > .text-input--narrow {
+  max-inline-size: 148px;
+}
+
+.settings-panel__supporting-copy {
+  margin: calc(var(--s2) * -1) 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+/* GPA stays a numeric input for validation and mobile keyboards, but its tiny
+   browser stepper competes with the compact Settings field. Arrow-key stepping
+   remains available. */
+#candidate-gpa {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+#candidate-gpa::-webkit-inner-spin-button,
+#candidate-gpa::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+/* Experience sources are hairline-separated evidence rows, not nested cards.
+   The category label is the row's legend; quantities stay secondary and the
+   factual scope note gets the full line. */
+.experience-profile {
+  display: grid;
+  gap: var(--s2);
+}
+
+.experience-profile__add .field {
+  margin: 0;
+}
+
+.experience-profile__rows {
+  display: grid;
+}
+
+.experience-profile__row {
+  position: relative;
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  margin: 0;
+  padding: var(--s3) 0;
+  border: 0;
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.experience-profile__row legend {
+  max-width: calc(100% - 76px);
+  padding: 0;
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 620;
+}
+
+.experience-profile__remove {
+  position: absolute;
+  top: var(--s3);
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  cursor: pointer;
+}
+
+.experience-profile__remove:hover {
+  color: var(--danger);
+}
+
+.experience-profile__remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
+.experience-profile__metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--s2);
+}
+
+.experience-profile__row .field {
+  min-width: 0;
+  margin: 0;
+}
+
+.experience-profile__row .field > span {
+  font-size: 0.68rem;
+}
+
+.experience-profile__row .text-input {
+  min-width: 0;
+}
+
+.experience-profile__note {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 /* Automation controls are one labelled group, not a stack of framed cards. */
 .settings-automation-group {
   display: grid;
@@ -187,8 +332,7 @@
 
 .settings-automation {
   display: grid;
-  gap: var(--s2);
-  padding-bottom: var(--s2);
+  gap: 6px;
 }
 
 .settings-automation .check-row {
@@ -207,25 +351,32 @@
   line-height: 1.35;
 }
 
+/* One document, one line: its switch, then the threshold that qualifies it.
+   Indented under the Fit Assessment switch they depend on. */
 .settings-automation__document {
-  display: grid;
-  gap: var(--s1);
-  padding: var(--s2) 0 var(--s1) 22px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s1) var(--s3);
+  padding: 6px 0 6px 22px;
   border-top: 1px solid var(--hairline);
 }
 
-.settings-automation__document h3 {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+/* The row itself is the separator now. Left on, .check-row's own rule underlines
+   only the label, because a flex item is as wide as its text. */
+.settings-automation__document .check-row {
+  padding: 0;
+  border-bottom: 0;
 }
 
 .settings-automation__threshold {
   margin: 0;
-  max-width: 390px;
+}
+
+.settings-automation__threshold > span {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
 }
 
 .settings-automation__note {
@@ -532,6 +683,11 @@
   .settings-dialog__autosave {
     display: none;
   }
+
+  .experience-profile__metrics {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
 }
 
 @media (prefers-reduced-motion: reduce) {

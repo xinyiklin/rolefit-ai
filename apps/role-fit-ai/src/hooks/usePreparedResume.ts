@@ -3,7 +3,7 @@
  * preparation speak for" operation.
  *
  * It runs once per Prepare, immediately after the deterministic local job
- * analysis and before the combined AI Job analysis + Initial Fit request, and
+ * analysis and before the combined AI Job analysis + Fit Assessment request, and
  * it owns every step of that answer: wait for workspace hydration, protect a
  * real current document, adopt the sole saved variant or the ranked winner
  * through the guarded workspace loader, and return the exact text (plus its
@@ -11,7 +11,7 @@
  *
  * It replaced two independent selectors — a pre-fit pick that never adopted and
  * a post-Prepare ranking effect that could adopt a different variant — whose
- * disagreement made Initial Fit describe one resume while the editor held
+ * disagreement made Fit Assessment describe one resume while the editor held
  * another. "Workspace is still loading" is never treated as "no resume".
  *
  * State ownership: the recommendation note and the resolving flag are OWNED

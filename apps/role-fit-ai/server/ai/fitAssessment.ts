@@ -1,13 +1,13 @@
 import {
-  QUICK_FIT_ELIGIBILITY,
-  QUICK_FIT_EVIDENCE_SOURCES,
-  QUICK_FIT_SUMMARY,
-  QUICK_FIT_VERDICTS,
-  normalizeQuickFitInput,
-  type QuickFitEligibilityStatus,
-  type QuickFitResult,
-  type QuickFitVerdict
-} from "../../shared/quickFitContract.ts";
+  FIT_ASSESSMENT_ELIGIBILITY,
+  FIT_ASSESSMENT_EVIDENCE_SOURCES,
+  FIT_ASSESSMENT_SUMMARY,
+  FIT_ASSESSMENT_VERDICTS,
+  normalizeFitAssessmentInput,
+  type FitAssessmentEligibilityStatus,
+  type FitAssessmentResult,
+  type FitAssessmentVerdict
+} from "../../shared/fitAssessmentContract.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
@@ -18,11 +18,11 @@ const CANDIDATE_CONTEXT_CHAR_LIMIT = 4_000;
 const MAX_EXCERPT_LENGTH = 500;
 const MAX_NOTE_LENGTH = 240;
 
-const verdicts = new Set<string>(QUICK_FIT_VERDICTS);
-const eligibilityStatuses = new Set<string>(QUICK_FIT_ELIGIBILITY);
-const evidenceSources = new Set<string>(QUICK_FIT_EVIDENCE_SOURCES);
+const verdicts = new Set<string>(FIT_ASSESSMENT_VERDICTS);
+const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);
+const evidenceSources = new Set<string>(FIT_ASSESSMENT_EVIDENCE_SOURCES);
 
-export const QUICK_FIT_RESPONSE_SCHEMA = `{
+export const FIT_ASSESSMENT_RESPONSE_SCHEMA = `{
   "verdict": "STRONG | REASONABLE | STRETCH | LIMITED",
   "matches": [
     {
@@ -46,7 +46,7 @@ export const QUICK_FIT_RESPONSE_SCHEMA = `{
   }
 }`;
 
-export const QUICK_FIT_RULES = `Initial Fit rules:
+export const FIT_ASSESSMENT_RULES = `Fit Assessment rules:
 - Judge only the evidence currently supplied in the posting, selected resume, and candidate context. Assess the candidate's demonstrated fit for this role, not the potential of a future tailored resume.
 
 Apply this rubric directly:
@@ -54,12 +54,17 @@ Apply this rubric directly:
 - REASONABLE: The candidate explicitly demonstrates most main responsibilities, with only one or two material core gaps and a credible path to perform the role.
 - STRETCH: There is meaningful relevant overlap, but several important gaps remain or the core experience is mostly transferable rather than direct.
 - LIMITED: The candidate shows little direct evidence for the role's main responsibilities and core qualifications.
+- First classify posting text into main responsibilities, core qualifications, preferred qualifications, logistics, and administrative or form content. Determine the verdict from the main responsibilities and core qualifications. Missing preferred items alone must not lower an otherwise STRONG or REASONABLE result. Logistics, benefits, equal-opportunity text, and administrative or application-form questions are not fit evidence.
+- If the posting lacks substantive role responsibilities or qualifications after that classification, return LIMITED. Do not infer requirements from a title, employer description, or application form.
+- For LIMITED versus STRETCH only, when a substantive posting has meaningful direct evidence for supporting core work but the role-defining specialization is unshown, choose STRETCH. Reserve LIMITED for a content-poor posting or when direct evidence is sparse across both the role's main work and core qualifications. This boundary never promotes a candidate to REASONABLE or STRONG.
 
 Evidence rules:
 - Missing evidence is a gap, not proof that the candidate is incapable.
-- Return at most three matches and three gaps. Preserve posting order; when evidence is tied, choose the earliest material item in the posting.
+- Return at most three matches and three gaps. Select the most decision-relevant findings: the central evidence and limiting gaps that best explain the verdict. Use posting order only as a tie-breaker between equally material findings.
 - Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT.
 - A match requires direct candidate evidence for the cited job item. Transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement.
+- Respect the posting's experience source. A requirement for professional, industry, commercial, production, or paid experience is not satisfied by academic, personal, volunteer, or open-source work unless the posting explicitly accepts that source. When the posting does not constrain the source, judge each declared source by its direct relevance.
+- Candidate-context experience categories may overlap. Never add their years or counts together. A role/project count does not imply duration, and a duration in one category does not transfer to another.
 - Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
 - A job excerpt may appear only once and must never appear in both matches and gaps.
 - Return one gap per underlying missing need; do not count the same missing qualification twice through overlapping posting excerpts.
@@ -67,7 +72,9 @@ Evidence rules:
 - If the evidence genuinely falls between adjacent categories, choose the lower category unless direct candidate evidence supports the higher one.
 - Determine the verdict without considering eligibility, then assess employment eligibility separately. Work authorization never counts as a match or gap and never lowers the verdict.
 - Eligibility covers only work authorization, visa or sponsorship, security clearance, or legal ability to take the role; education, skills, and experience are fit evidence, not eligibility. CLEAR means no stated eligibility condition needs attention. CHECK means the posting states an eligibility condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
+- Location, onsite or hybrid schedule, relocation, and application-form questions are neither fit gaps nor eligibility conditions unless they state a legal-work restriction. When explicit candidate facts satisfy a stated eligibility condition, return CLEAR.
 - Eligibility never changes the verdict. If the candidate context does not explicitly conflict, never return BLOCKED.
+- Before returning JSON, locate and verify every job and candidate excerpt as exact contiguous character-for-character text in the supplied source. Never rewrite, combine, or normalize punctuation in an excerpt. If you cannot copy an exact excerpt, omit that finding. Verify that no job excerpt appears twice or in both lists and that each list has at most three items.
 - Return only the fields in the response shape.`;
 
 type PromptSources = {
@@ -86,10 +93,10 @@ function promptSources({
   candidateContext?: unknown;
 }): PromptSources {
   return {
-    jobText: clipForPrompt(normalizeQuickFitInput(jobText), JOB_CHAR_LIMIT, "job posting"),
-    resumeText: clipForPrompt(normalizeQuickFitInput(resumeText), RESUME_CHAR_LIMIT, "selected resume"),
+    jobText: clipForPrompt(normalizeFitAssessmentInput(jobText), JOB_CHAR_LIMIT, "job posting"),
+    resumeText: clipForPrompt(normalizeFitAssessmentInput(resumeText), RESUME_CHAR_LIMIT, "selected resume"),
     candidateContext: clipForPrompt(
-      normalizeQuickFitInput(candidateContext),
+      normalizeFitAssessmentInput(candidateContext),
       CANDIDATE_CONTEXT_CHAR_LIMIT,
       "candidate context"
     )
@@ -152,7 +159,7 @@ function sanitizeGaps(raw: unknown, sources: PromptSources, occupied: ReadonlySe
   return gaps;
 }
 
-function sanitizeEligibility(raw: unknown, sources: PromptSources): QuickFitResult["eligibility"] | null | undefined {
+function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmentResult["eligibility"] | null | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
@@ -171,15 +178,15 @@ function sanitizeEligibility(raw: unknown, sources: PromptSources): QuickFitResu
   }
 
   return {
-    status: status as QuickFitEligibilityStatus,
+    status: status as FitAssessmentEligibilityStatus,
     ...(note ? { note } : {})
   };
 }
 
-export function sanitizeQuickFitResponse(
+export function sanitizeFitAssessmentResponse(
   raw: unknown,
   input: { jobText: unknown; resumeText: unknown; candidateContext?: unknown }
-): QuickFitResult | null {
+): FitAssessmentResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
   const verdict = compactText(source.verdict, 24).toUpperCase();
@@ -192,17 +199,17 @@ export function sanitizeQuickFitResponse(
   const eligibility = sanitizeEligibility(source.eligibility, sources);
   if (eligibility === null) return null;
 
-  const typedVerdict = verdict as QuickFitVerdict;
+  const typedVerdict = verdict as FitAssessmentVerdict;
   return {
     verdict: typedVerdict,
-    summary: QUICK_FIT_SUMMARY[typedVerdict],
+    summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
     matches,
     gaps,
     ...(eligibility ? { eligibility } : {})
   };
 }
 
-export function quickFitPromptSection({
+export function fitAssessmentPromptSection({
   resumeText,
   candidateContext
 }: {
@@ -210,7 +217,7 @@ export function quickFitPromptSection({
   candidateContext?: unknown;
 }): string {
   const sources = promptSources({ jobText: "", resumeText, candidateContext });
-  return `Also produce a compact Initial Fit result using the candidate evidence below.
+  return `Also produce a compact Fit Assessment result using the candidate evidence below.
 
 <selected_resume>
 ${fenceUntrusted(sources.resumeText) || "No usable resume was provided."}
@@ -221,7 +228,7 @@ ${fenceUntrusted(sources.candidateContext) || "Not provided."}
 </candidate_context>`;
 }
 
-export function buildQuickFitPrompts({
+export function buildFitAssessmentPrompts({
   jobText,
   resumeText,
   candidateContext
@@ -237,21 +244,21 @@ ${inputFirewallRule()}
 
 Use only explicit evidence from the posting, selected resume, and candidate context. Never invent skills, experience, eligibility, employers, dates, metrics, tools, outcomes, requirements, or evidence excerpts.
 
-${QUICK_FIT_RULES}`;
+${FIT_ASSESSMENT_RULES}`;
   const userPrompt = `Screen the posting against the selected resume.
 
 <job_description>
 ${fenceUntrusted(sources.jobText) || "Not provided."}
 </job_description>
 
-${quickFitPromptSection({ resumeText: sources.resumeText, candidateContext: sources.candidateContext })}
+${fitAssessmentPromptSection({ resumeText: sources.resumeText, candidateContext: sources.candidateContext })}
 
-Return the Initial Fit result itself, without an outer key, in this shape:
-${QUICK_FIT_RESPONSE_SCHEMA}`;
+Return the Fit Assessment result itself, without an outer key, in this shape:
+${FIT_ASSESSMENT_RESPONSE_SCHEMA}`;
   return { systemPrompt, userPrompt };
 }
 
-export async function analyzeQuickFit({
+export async function analyzeFitAssessment({
   jobText,
   resumeText,
   candidateContext,
@@ -265,7 +272,7 @@ export async function analyzeQuickFit({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const { systemPrompt, userPrompt } = buildQuickFitPrompts({ jobText, resumeText, candidateContext });
+  const { systemPrompt, userPrompt } = buildFitAssessmentPrompts({ jobText, resumeText, candidateContext });
   const parsed = await callConfiguredProvider({
     provider,
     apiKey,
@@ -276,7 +283,7 @@ export async function analyzeQuickFit({
     signal
   });
   return {
-    initialFit: sanitizeQuickFitResponse(parsed, { jobText, resumeText, candidateContext }),
+    fitAssessment: sanitizeFitAssessmentResponse(parsed, { jobText, resumeText, candidateContext }),
     provider,
     model,
     reasoningEffort

@@ -1,6 +1,6 @@
-import type { QuickFitVerdict } from "../../shared/quickFitContract.ts";
+import type { FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
 
-export type AutoPolishThreshold = QuickFitVerdict;
+export type AutoPolishThreshold = FitAssessmentVerdict;
 
 export const AUTO_POLISH_THRESHOLD_OPTIONS: ReadonlyArray<{
   value: AutoPolishThreshold;
@@ -12,15 +12,15 @@ export const AUTO_POLISH_THRESHOLD_OPTIONS: ReadonlyArray<{
   { value: "LIMITED", label: "Any fit result" }
 ];
 
-const FIT_RANK: Record<QuickFitVerdict, number> = {
+const FIT_RANK: Record<FitAssessmentVerdict, number> = {
   LIMITED: 0,
   STRETCH: 1,
   REASONABLE: 2,
   STRONG: 3
 };
 
-export function quickFitMeetsThreshold(
-  verdict: QuickFitVerdict,
+export function fitAssessmentMeetsThreshold(
+  verdict: FitAssessmentVerdict,
   threshold: AutoPolishThreshold
 ): boolean {
   return FIT_RANK[verdict] >= FIT_RANK[threshold];

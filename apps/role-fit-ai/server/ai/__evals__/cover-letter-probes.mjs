@@ -391,6 +391,7 @@ assert.equal(
 // ----- prompt contract -----
 
 const prompts = buildCoverLetterTailorPrompts({
+  reasoningEffort: "high",
   jobText: "Acme needs a Software Engineer who builds dependable Python services.",
   sourceContext,
   evidenceItems: evidence,
@@ -398,6 +399,8 @@ const prompts = buildCoverLetterTailorPrompts({
   employerContext: [],
   customInstructions: "",
 });
+assert.match(prompts.systemPrompt, /deep self-audit/i, "high effort requests a deeper internal cover-letter audit");
+assert.match(prompts.systemPrompt, /Do not include audit notes or scratch work/i);
 assert.match(prompts.systemPrompt, /never candidate evidence/i);
 assert.match(prompts.systemPrompt, /structure and voice guide, not a form/i);
 assert.match(prompts.userPrompt, /Choose the experiences that most directly support/);
@@ -883,13 +886,18 @@ assert.match(
 );
 assert.match(
   clientHook,
-  /setPendingProposal\(\{[\s\S]{0,160}?sourceFingerprint: proposalInputFingerprint/,
-  "a valid letter becomes a proposal bound to its semantic inputs",
+  /setPendingProposal\(\{[\s\S]{0,160}?contentFingerprint: proposalContentFingerprint/,
+  "a valid letter becomes a proposal bound to its own semantic inputs",
 );
 assert.match(
   clientHook,
-  /stale: pendingProposal\.sourceFingerprint !== proposalInputFingerprint/,
-  "changed letter, resume, job, or instruction inputs mark a proposal stale",
+  /resumeFingerprint: proposalResumeFingerprint/,
+  "a valid letter separately captures the resume evidence it was checked against",
+);
+assert.match(
+  clientHook,
+  /resolveCoverLetterProposalFreshness\(pendingProposal/,
+  "proposal freshness distinguishes blocking content changes from resume-only changes",
 );
 assert.match(
   clientHook,
@@ -914,6 +922,16 @@ assert.match(
   "the complete proposed replacement is visible before acceptance",
 );
 assert.match(coverReview, /disabled=\{proposal\.stale\}/, "a stale proposal cannot be accepted");
+assert.match(
+  coverReview,
+  /proposal\.resumeChanged[\s\S]{0,320}?checked against the earlier resume/,
+  "a resume-only change asks for review without hiding the proposal",
+);
+assert.doesNotMatch(
+  coverReview,
+  /disabled=\{proposal\.resumeChanged\}/,
+  "a resume-only change does not disable proposal acceptance",
+);
 assert.doesNotMatch(
   clientHook,
   /mode: "(?:prepare|draft)"/,

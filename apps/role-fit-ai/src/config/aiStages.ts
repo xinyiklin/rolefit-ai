@@ -7,10 +7,10 @@
 // hardcoded to Resume Polish's provider in another — which is exactly the state the
 // cover letter and Q&A stages were in before they were added here.
 //
-// `settingsPrefix` is the localStorage key prefix. Resume Polish keeps its original
+// `settingsPrefix` is the persisted key prefix. Resume Polish keeps its original
 // unprefixed fields; the other stages use explicit names.
 
-export type AiStageId = "job-analysis" | "resume-polish" | "final-check" | "cover" | "answers";
+export type AiStageId = "job-analysis" | "fit-assessment" | "resume-polish" | "cover" | "answers";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -19,7 +19,8 @@ export type AiStageDescriptor = {
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
   readonly blurb: string;
-  readonly settingsPrefix: "" | "finalCheck" | "jobAnalysis" | "cover" | "answers";
+  readonly settingsPrefix: "" | "jobAnalysis" | "fitAssessment" | "cover" | "answers";
+  readonly supportsInstructions: boolean;
 };
 
 export const AI_STAGES: readonly AiStageDescriptor[] = [
@@ -27,36 +28,45 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     id: "job-analysis",
     label: "Job analysis",
     title: "Job analysis",
-    blurb: "Structures the posting and, when enabled, checks Initial Fit.",
-    settingsPrefix: "jobAnalysis"
+    blurb: "Structures the captured posting into the editable job brief.",
+    settingsPrefix: "jobAnalysis",
+    // Extraction is a fixed, complete posting-to-brief contract. A guidance
+    // control would promise influence that the request deliberately does not accept.
+    supportsInstructions: false
+  },
+  {
+    id: "fit-assessment",
+    label: "Fit Assessment",
+    title: "Fit Assessment",
+    blurb: "Assesses the selected resume and About you evidence against the captured posting.",
+    settingsPrefix: "fitAssessment",
+    // The assessment rubric is fixed. A free-form override could turn advisory
+    // screening into a user-authored verdict preference instead of evidence review.
+    supportsInstructions: false
   },
   {
     id: "resume-polish",
     label: "Resume Polish",
     title: "Resume Polish",
     blurb: "Creates one grounded proposal for the resume sections marked Polish.",
-    settingsPrefix: ""
-  },
-  {
-    id: "final-check",
-    label: "Document check",
-    title: "Check current document",
-    blurb: "Checks the current resume or cover letter after proposal decisions or later edits.",
-    settingsPrefix: "finalCheck"
+    settingsPrefix: "",
+    supportsInstructions: true
   },
   {
     id: "cover",
     label: "Cover letter",
     title: "Cover letter",
     blurb: "Creates a grounded whole-letter proposal for you to accept or discard.",
-    settingsPrefix: "cover"
+    settingsPrefix: "cover",
+    supportsInstructions: true
   },
   {
     id: "answers",
     label: "Application questions",
     title: "Application questions",
     blurb: "Drafts grounded answers to an application's written questions.",
-    settingsPrefix: "answers"
+    settingsPrefix: "answers",
+    supportsInstructions: true
   }
 ];
 

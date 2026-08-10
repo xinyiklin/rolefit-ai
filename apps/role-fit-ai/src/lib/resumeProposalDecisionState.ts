@@ -11,6 +11,8 @@ export type ResumeProposalDecisionState = {
   byTargetId: Record<string, ResumeProposalDecision>;
 };
 
+export type ResumeProposalEditState = "pending" | "accepted" | "discarded" | "changed";
+
 const EMPTY_DECISIONS: Readonly<Record<string, ResumeProposalDecision>> = Object.freeze({});
 
 function normalize(value: string): string {
@@ -50,11 +52,42 @@ export function recordProposalDecision(
   };
 }
 
+// Undo for one row. Clearing the record is only half of it for an accepted
+// edit — the caller restores the original text first, and this returns the row
+// to the pending set so it can be decided again.
+export function clearProposalDecision(
+  state: ResumeProposalDecisionState,
+  proposalKey: string,
+  targetId: string
+): ResumeProposalDecisionState {
+  if (state.proposalKey !== proposalKey || !(targetId in state.byTargetId)) return state;
+  const byTargetId = { ...state.byTargetId };
+  delete byTargetId[targetId];
+  return { proposalKey, byTargetId };
+}
+
 export function resumeProposalEditIsPending(
   currentText: string | null,
   suggestion: ResumeProposalSuggestion,
   decision?: ResumeProposalDecision
 ): boolean {
-  if (decision?.kind === "discarded") return false;
-  return currentText !== null && normalize(currentText) === normalize(suggestion.currentText);
+  return resumeProposalEditState(currentText, suggestion, decision) === "pending";
+}
+
+export function resumeProposalEditState(
+  currentText: string | null,
+  suggestion: ResumeProposalSuggestion,
+  decision?: ResumeProposalDecision
+): ResumeProposalEditState {
+  if (currentText === null) return "changed";
+  const current = normalize(currentText);
+  if (decision?.kind === "accepted") {
+    return current === normalize(decision.text) ? "accepted" : "changed";
+  }
+  if (decision?.kind === "discarded") {
+    return current === normalize(suggestion.currentText) ? "discarded" : "changed";
+  }
+  if (current === normalize(suggestion.currentText)) return "pending";
+  if (current === normalize(suggestion.proposedText)) return "accepted";
+  return "changed";
 }
