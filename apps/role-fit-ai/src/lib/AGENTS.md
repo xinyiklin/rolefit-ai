@@ -31,6 +31,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `applicationMutation.ts` owns sparse tracker request selection and
   reference-preserving own-write response reconciliation. It does not own
   persistence, queueing, conflicts, or React state.
+- `applicationUnloadGuard.ts` owns the complete host unload predicate, including
+  Apply's post-tracker document persistence. `workspaceLoadOwnership.ts` owns
+  the one-shot resume-bootstrap barrier and load generations; metadata refreshes
+  may claim a generation only after startup has committed.
 - `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
   letter variants and history. `coverLetterExport.ts` owns pure source/PDF
   artifact construction; neither helper owns React state or document history.

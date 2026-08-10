@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { DOC_STYLE_DEFAULTS } from "../../../../../packages/engine/src/lib/documentStyle.ts";
 import { serializeResumeFile } from "../../../../../packages/engine/src/lib/resumeFile.ts";
 import { buildStarterResume } from "../../../../../packages/engine/src/sampleResume.ts";
+import { createWorkspaceLoadOwnership } from "../../lib/workspaceLoadOwnership.ts";
 import { prepareResumeUpload } from "../useWorkspaceResume.ts";
 
 let reads = 0;
@@ -160,8 +161,72 @@ assert.match(
 );
 assert.match(
   source,
-  /workspaceLoadGenerationRef\.current[\s\S]*?generation !== workspaceLoadGenerationRef\.current/,
-  "reordered workspace responses are rejected by the latest-request generation"
+  /loadOwnership\.claim\(applyBaseResume\)[\s\S]*?!loadOwnership\.isCurrent\(claim\)/,
+  "workspace responses publish only while their shared load claim remains current"
 );
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+{
+  const ownership = createWorkspaceLoadOwnership();
+  const startupResponse = deferred();
+  const metadataResponse = deferred();
+  let startupApplied = false;
+  let metadataStarted = false;
+  let bootstrapSettles = 0;
+
+  async function loadWorkspace(applyBaseResume, response) {
+    const claim = await ownership.claim(applyBaseResume);
+    if (!applyBaseResume) metadataStarted = true;
+    const workspace = await response.promise;
+    if (!ownership.isCurrent(claim)) return;
+    if (applyBaseResume) startupApplied = workspace.hasResume;
+    if (ownership.startupMaySettle(claim)) {
+      // Production settles from an effect after the hydrated editor state has
+      // committed; this microtask is that commit boundary in the probe.
+      await Promise.resolve();
+      if (ownership.settleBootstrapAfterCommit()) bootstrapSettles += 1;
+    }
+  }
+
+  const startup = loadWorkspace(true, startupResponse);
+  await Promise.resolve();
+  const metadata = loadWorkspace(false, metadataResponse);
+  await Promise.resolve();
+  assert.equal(metadataStarted, false, "metadata refresh waits behind startup hydration");
+
+  startupResponse.resolve({ hasResume: true });
+  await startup;
+  metadataResponse.resolve({ hasResume: true });
+  await metadata;
+  assert.equal(startupApplied, true, "the startup resume is not silently skipped");
+  assert.equal(bootstrapSettles, 1, "the bootstrap promise resolves exactly once");
+  assert.equal(
+    ownership.settleBootstrapAfterCommit(),
+    false,
+    "later settlement attempts cannot resolve the one-shot bootstrap twice"
+  );
+
+  let prepareBusy = false;
+  async function prepare() {
+    if (prepareBusy) return false;
+    prepareBusy = true;
+    try {
+      await ownership.whenBootstrapped();
+      return startupApplied;
+    } finally {
+      prepareBusy = false;
+    }
+  }
+  assert.equal(await prepare(), true, "Prepare can claim a run after hydration");
+  assert.equal(prepareBusy, false, "Prepare releases its run after resolution");
+  assert.equal(await prepare(), true, "a subsequent manual Prepare can claim again");
+}
 
 console.log("Workspace resume lifecycle probes passed");

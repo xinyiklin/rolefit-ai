@@ -32,6 +32,7 @@ import { fetchBaseResumeCandidates } from "../lib/baseResumeWorkspaceRepository.
 import type { PreparedResumeAdoption, ResumeOrigin } from "../lib/preparedResume.ts";
 export type { ResumeOrigin };
 import { createBlankResumeData } from "../lib/blankResume.ts";
+import { createWorkspaceLoadOwnership } from "../lib/workspaceLoadOwnership.ts";
 
 export type WorkspaceBaseResume = {
   exists: boolean;
@@ -181,25 +182,22 @@ export function useWorkspaceResume({
   const baseResumeCandidateCacheRef = useRef<{ key: string; candidates: VariantCandidate[] } | null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
-  const workspaceLoadGenerationRef = useRef(0);
   // This is the one-shot startup check, not a generic loading flag. It begins
   // true so the first paint does not claim the workspace is empty, then only
   // ever settles to false. Explicit Reload actions keep the current editor on
   // screen while their request runs.
   const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
+  const workspaceLoadOwnershipRef = useRef<
+    ReturnType<typeof createWorkspaceLoadOwnership> | null
+  >(null);
+  if (workspaceLoadOwnershipRef.current === null) {
+    workspaceLoadOwnershipRef.current = createWorkspaceLoadOwnership();
+  }
   // Callers that must not mistake "still hydrating" for "no resume" await this
   // instead of sampling the boolean: an extension import can reach Prepare
   // before the mount load returns, and a boolean read at that instant is a lie.
-  const workspaceBootstrapSettledRef = useRef<{ promise: Promise<void>; settle: () => void }>(null!);
-  if (!workspaceBootstrapSettledRef.current) {
-    let settle!: () => void;
-    const promise = new Promise<void>((resolve) => {
-      settle = resolve;
-    });
-    workspaceBootstrapSettledRef.current = { promise, settle };
-  }
   const whenWorkspaceBootstrapped = useCallback(
-    () => workspaceBootstrapSettledRef.current.promise,
+    () => workspaceLoadOwnershipRef.current!.whenBootstrapped(),
     []
   );
   // Settled from an EFFECT, never from loadWorkspace's own finally. Resolving
@@ -210,7 +208,9 @@ export function useWorkspaceResume({
   // means the hydrated document is actually readable.
   const [bootstrapResolved, setBootstrapResolved] = useState(false);
   useEffect(() => {
-    if (bootstrapResolved) workspaceBootstrapSettledRef.current.settle();
+    if (bootstrapResolved) {
+      workspaceLoadOwnershipRef.current?.settleBootstrapAfterCommit();
+    }
   }, [bootstrapResolved]);
   const detachBaseResumeIdentity = useCallback(() => {
     setBaseResumeName("");
@@ -323,13 +323,13 @@ export function useWorkspaceResume({
   }
 
   async function loadWorkspace(applyBaseResume = false) {
-    const generation = workspaceLoadGenerationRef.current + 1;
-    workspaceLoadGenerationRef.current = generation;
+    const loadOwnership = workspaceLoadOwnershipRef.current!;
+    const claim = await loadOwnership.claim(applyBaseResume);
     try {
       const response = await fetch("/api/workspace");
       const workspace = (await response.json()) as JobWorkspace & { error?: string };
       if (!response.ok) throw new Error(workspace.error ?? "Workspace check failed.");
-      if (generation !== workspaceLoadGenerationRef.current) return;
+      if (!loadOwnership.isCurrent(claim)) return;
 
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.exists) {
@@ -388,15 +388,13 @@ export function useWorkspaceResume({
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
     } finally {
-      setIsWorkspaceBootstrapping(false);
-      // Only the startup load answers "which resume is loaded", and only while
-      // it is still the current one — a superseded run (Strict Mode's double
-      // mount, a Reload that overtook it) has applied nothing and must not
-      // release a waiter onto its empty result. Batched with the document
-      // updates above, so one commit publishes both; the effect above turns
-      // that commit into the resolved promise. Set on failure too: an
-      // unreachable workspace is a terminal answer, not a reason to wait.
-      if (applyBaseResume && generation === workspaceLoadGenerationRef.current) {
+      // Only a current startup load answers "which resume is loaded". Metadata
+      // refreshes wait behind that answer and therefore cannot supersede it.
+      // Batched with the document updates above, so one commit publishes both;
+      // the effect above turns that commit into the resolved promise. Failure
+      // is terminal too: an unreachable workspace is not a reason to wait.
+      if (loadOwnership.startupMaySettle(claim)) {
+        setIsWorkspaceBootstrapping(false);
         setBootstrapResolved(true);
       }
     }

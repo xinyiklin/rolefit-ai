@@ -107,6 +107,7 @@ import {
 } from "./lib/fitAssessmentLifecycle";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
+import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
 
 import { Masthead } from "./sections/Masthead";
 import { TaskProgress } from "./sections/AiWorkflowProgress";
@@ -1386,21 +1387,6 @@ function App() {
     phase: _myPhase
   });
 
-  // Warn before close/reload when there are unsaved edits or an AI operation is
-  // mid-flight (losing an in-progress run is as costly as losing edits).
-  // Apply marks each included document clean only after its source persists.
-  useBeforeUnloadGuard(
-    resumeDocumentDirty ||
-      coverLetterEditor.recoveryDirty ||
-      isGeneratingCover ||
-      isPolishStarting ||
-      isPolishing ||
-      jobAnalysisProgress.status === "running" ||
-      fitAssessmentRequestActive ||
-      preparationAutomationPending ||
-      pendingApplicationWrites > 0
-  );
-
   // ----- Handlers -----
 
   const handleSelectBaseResumeVariant = useCallback(
@@ -1909,6 +1895,24 @@ function App() {
     setActiveOutputTab,
     setExpandedApplicationId
   });
+
+  // Apply keeps isApplying true through tracker confirmation and every included
+  // strict source upload. Declare the guard below that owner so a clean editor
+  // cannot make the post-tracker fetch phase interruptible.
+  useBeforeUnloadGuard(
+    applicationUnloadGuardActive({
+      resumeDocumentDirty,
+      coverLetterRecoveryDirty: coverLetterEditor.recoveryDirty,
+      isGeneratingCover,
+      isPolishStarting,
+      isPolishing,
+      jobAnalysisRunning: jobAnalysisProgress.status === "running",
+      fitAssessmentRequestActive,
+      preparationAutomationPending,
+      pendingApplicationWrites,
+      isApplying
+    })
+  );
 
   async function handleLoadApplication(app: Application): Promise<boolean> {
     if (applicationOpenInFlightRef.current) return false;

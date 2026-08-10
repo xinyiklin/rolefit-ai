@@ -458,7 +458,7 @@ assert.match(
 );
 assert.match(
   appSource,
-  /useBeforeUnloadGuard\([\s\S]{0,350}?isPolishStarting \|\|[\s\S]{0,250}?fitAssessmentRequestActive \|\|[\s\S]{0,100}?preparationAutomationPending/,
+  /applicationUnloadGuardActive\(\{[\s\S]{0,350}?isPolishStarting,[\s\S]{0,250}?fitAssessmentRequestActive,[\s\S]{0,100}?preparationAutomationPending/,
   "the unload guard covers Resume pre-dispatch and the pending one-use Prepare automation decision"
 );
 assert.match(

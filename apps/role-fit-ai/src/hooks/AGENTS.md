@@ -75,7 +75,9 @@ browser-side effects; components render them and App composes them.
   and never adds persisted variant metadata. It reads every variant through one
   batch request (`lib/baseResumeWorkspaceRepository.ts`), caches the result
   against a candidate revision, and exposes a settled signal callers await
-  instead of sampling `isWorkspaceBootstrapping` mid-flight. Authoritative
+  instead of sampling `isWorkspaceBootstrapping` mid-flight. Metadata-only
+  refreshes wait behind that one-shot settlement before claiming a load
+  generation, so they cannot supersede startup document hydration. Authoritative
   workspace snapshots invalidate both the ranking key and the cached bytes,
   because a saved variant can change without changing its filename; automatic
   selection must also cancel before commit if the session becomes linked to an
@@ -99,6 +101,9 @@ browser-side effects; components render them and App composes them.
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,
   re-Apply preserves the existing application snapshot instead of clearing it.
+  Its `isApplying` lifetime spans tracker confirmation and every included strict
+  source save; App must include that entire phase in unload protection even when
+  both editors began clean.
 - `useApplicationDocumentSync` owns the session's application link and the two
   explicit per-document saves that follow Apply. Saving is always user
   initiated; no effect may write a document into an application. Apply or

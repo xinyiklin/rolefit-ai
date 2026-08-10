@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+import { applicationUnloadGuardActive } from "../../lib/applicationUnloadGuard.ts";
+
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
@@ -83,7 +85,22 @@ assert.match(
   "a failed detail save preserves the form with an actionable error"
 );
 assert.match(app, /const saved = await saveApplication\(application\)/, "App awaits modal persistence");
-assert.match(app, /pendingApplicationWrites > 0/, "before-unload protection includes pending tracker writes");
+assert.match(
+  app,
+  /applicationUnloadGuardActive\(\{[\s\S]{0,500}?pendingApplicationWrites,[\s\S]{0,80}?isApplying/,
+  "before-unload protection includes tracker writes and Apply's document phase"
+);
+const applyHookCall = app.indexOf("} = useApplyFlow({");
+const unloadGuardCall = app.indexOf("useBeforeUnloadGuard(", applyHookCall);
+assert.ok(
+  applyHookCall >= 0 && unloadGuardCall > applyHookCall,
+  "the unload guard is declared after Apply exposes its complete persistence phase"
+);
+assert.match(
+  app.slice(unloadGuardCall, unloadGuardCall + 900),
+  /isApplying/,
+  "before-unload protection includes Apply's tracker-plus-document lifecycle"
+);
 assert.match(
   app,
   /fitAssessmentPersistence:\s*fitAssessmentPersistenceDecision\(fitAssessmentState\)/,
@@ -94,5 +111,63 @@ assert.match(
   /fitAssessmentPersistence\.action === "set"[\s\S]{0,180}?fitAssessment: fitAssessmentPersistence\.snapshot[\s\S]{0,220}?fitAssessmentPersistence\.action === "clear"[\s\S]{0,120}?fitAssessment: undefined/,
   "Apply distinguishes replacing, preserving, and clearing a Fit Assessment"
 );
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+{
+  let pendingApplicationWrites = 1;
+  let isApplying = true;
+  const saveResumeDocument = deferred();
+  const saveCoverDocument = deferred();
+  const applicationPersistence = (async () => {
+    // Tracker confirmation has completed, but the included documents are still
+    // ordinary in-flight fetches and both editors began clean.
+    pendingApplicationWrites = 0;
+    await saveResumeDocument.promise;
+    await saveCoverDocument.promise;
+    isApplying = false;
+  })();
+  await Promise.resolve();
+
+  const state = () => ({
+    resumeDocumentDirty: false,
+    coverLetterRecoveryDirty: false,
+    isGeneratingCover: false,
+    isPolishStarting: false,
+    isPolishing: false,
+    jobAnalysisRunning: false,
+    fitAssessmentRequestActive: false,
+    preparationAutomationPending: false,
+    pendingApplicationWrites,
+    isApplying
+  });
+  assert.equal(
+    applicationUnloadGuardActive(state()),
+    true,
+    "clean documents remain unload-guarded after tracker confirmation while sources save"
+  );
+
+  saveResumeDocument.resolve();
+  await Promise.resolve();
+  assert.equal(
+    applicationUnloadGuardActive(state()),
+    true,
+    "the guard stays active between sequential included source saves"
+  );
+
+  saveCoverDocument.resolve();
+  await applicationPersistence;
+  assert.equal(
+    applicationUnloadGuardActive(state()),
+    false,
+    "the guard releases only after every included source save settles"
+  );
+}
 
 console.log("application persistence guards passed");

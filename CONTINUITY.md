@@ -52,7 +52,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
   revision rejects older acknowledgments. Deferred reverse-response and P1/P2
   application-save probes cover options, history, candidate revision, active
   identity, status, baseline,
-  and recovery state. Under pinned Node 24, dependency/package-script contracts,
+  and recovery state. A corrected final review found two more lifecycle gaps.
+  Apply now keeps unload protection through its post-tracker strict source
+  uploads even when both editors began clean. Resume workspace metadata refreshes
+  now wait behind the one-shot startup commit before claiming a load generation,
+  so Prepare cannot be stranded on an unresolved bootstrap promise. Deferred
+  two-document persistence and startup-versus-metadata probes cover both paths.
+  Under pinned Node 24, dependency/package-script contracts,
   every workspace check, the production and landing builds, desktop/security
   contracts, and all 91 offline evaluations pass. No layout changed; browser
   interaction QA remains UNCONFIRMED under the flag-first policy.
