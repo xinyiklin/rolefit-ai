@@ -100,12 +100,11 @@ Candidate-authored `cover-letters/*.cover` files and their local `.trash`
 history remain standalone editable documents outside the portable workspace
 contract. Download those `.cover` variants separately when moving devices.
 
-Schema version 2 is the sole accepted and written backup shape. It carries the
-tracked application's one active
+The single live schema above carries the tracked application's one active
 Resume/Cover letter representation (`resume.resume` or `resume.pdf`,
 `cover.cover` or `cover.pdf`) plus validated PDF files under `attachments/`.
 Application paths whose ids are absent from `applications.json` are excluded.
-Creation and schema-v2 restore also require an exact match between tracker
+Creation and restore also require an exact match between tracker
 artifact/attachment metadata and bundled bytes, so a portable restore cannot
 claim a document exists when its file is missing or install an untracked file.
 

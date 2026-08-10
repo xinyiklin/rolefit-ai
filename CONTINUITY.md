@@ -5,6 +5,77 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **RoleFit is prepared as 0.7.0 with browser extension 1.2.0
+  and desktop bridge API 13.** The minor slot is the right one under 0.x: this
+  release replaces numeric fit scoring with the categorical Fit Assessment,
+  unifies both documents on one Polish workflow, renames Distill to Job
+  analysis, and moves preferences into the workspace — behavioral breaks with no
+  migrations, which is what 0.x minors are for. **1.0 is deliberately not
+  claimed**, and its criteria are now explicit: a genuinely signed release
+  (every tag so far is an unsigned preview) and an inverted compatibility policy
+  that promises migrations for `.resume`, `.cover`, and `.rolefit-backup`.
+  0.x has unlimited runway because SemVer orders minors numerically — 0.10.0
+  follows 0.9.0 — so the counter never forces a 1.0.
+  The bump is prepared on merged `main` at `a774529`, not the squash-merged
+  feature branch. A user-affecting break is disclosed in the release notes: the
+  portable backup schema moved 2 -> 1 and rejects any other version, so a
+  `.rolefit-backup` written by installed 0.6.0 cannot restore into 0.7.0.
+  `workspace-backup.md` still claimed "Schema version 2 is the sole accepted and
+  written backup shape" while its own earlier paragraph and the code said 1;
+  that contradiction is corrected. Extension 1.2.0 reflects the popup redesign,
+  direct-import shortcut, and inline port Settings that landed after 1.1.0
+  shipped, so two different builds no longer both claim 1.1.0. API 13 was
+  already current while 0.6.0 shipped 12, so released and current converge here.
+  The companion screenshot was recaptured at 0.7.0 and its manifest updated —
+  the version-stamp guard fired exactly as designed. All 13 release-contract
+  tests pass. **The tag and release workflow have NOT run: no branch, commit,
+  push, tag, or publication has happened, so this versioned change is
+  incomplete until that completion is confirmed.**
+- [USER+CODE+TOOL] **The public landing page and every product screenshot now
+  describe the current workflow.** The page leads with Prepare — the first
+  surface and the only one that shows the Fit Assessment — then the two document
+  cards, then the tracker; the resume card no longer promises "Apply all" or a
+  separate recruiter audit. Eleven assets were recaptured at 1440x900 (social
+  preview 1200x630, companion 884x581, which is the Windows content size of its
+  900x620 window and now the declared intrinsic size): the shots predated the
+  Sessions rail move, the Prepare-first navigation, the tracker inspector, and
+  the 0.6.0 version stamp. They were taken from the synthetic Alex Morgan test
+  pack copied outside the repository, extended with six fictitious tracker rows
+  and Fit snapshots that round-trip the application sanitizer exactly, and
+  served through `ROLEFIT_WORKSPACE_DIR` on a spare port so no personal
+  workspace was involved. **Every asset is a 2x capture** (app 2880x1800, social
+  preview 2400x1260, companion 1784x1202 via Electron
+  `--force-device-scale-factor=2`), and each `<img>` declares that true
+  intrinsic size. The first pass shipped 1x to match the retired files and read
+  blurry: measured in the built page, the cards render those shots at 549-749
+  CSS px, so at device pixel ratio 2 the hero had 0.68x and the two large shots
+  0.96x of the pixels they needed. The 2x files measure 1.37x to 2.62x, and the
+  aspect ratios are unchanged so no layout moved. The companion shot is its
+  genuine just-installed
+  state — no providers connected, no extension paired — because seeding a
+  configured vault trips the companion's own provider/server boundary assertion
+  and inventing readiness in a hero image is not acceptable. Capture used a
+  dependency-free CDP driver over
+  **Edge**, because this machine's Chrome policy sets `DeveloperToolsDisabled=1`
+  and Chrome therefore refuses every DevTools page session. The landing build,
+  its release-catalog probes, and the output-boundary guard pass; real-browser
+  QA at 1440x900 and 390x844 shows no horizontal overflow
+  (`scrollWidth == clientWidth` at both) and all three `[data-reveal]` blocks
+  settling from opacity 0 to 1 on scroll.
+- [USER+CODE+TOOL] **A version printed inside a screenshot is now a checked
+  contract, not a silent one.** The companion shot prints `ROLEFIT 0.6.0` in its
+  footer while the page renders the live release version from the GitHub
+  catalog, so a bump without a retake contradicts the same page and no text
+  search can catch it. `landing/screenshot-manifest.json` records the version
+  each version-stamped image was captured at, and `assertScreenshotVersionStamps`
+  fails when it no longer equals the RoleFit package version. It runs in both
+  release workflows and in the Pages `verify` job that gates the site upload, so
+  the bump fails at exactly the moment someone should retake the image.
+  Capture was deliberately NOT automated in CI: it needs a real Electron run,
+  and runner font rendering would drift the site's screenshots between releases.
+  All 13 release-contract tests pass, including fixture-level rejection of a
+  stale version, a missing file, an unknown key, a traversing path, an empty
+  map, and a future schema, plus a red/green run against the real repository.
 - [USER+CODE+TOOL] **Preparation stabilization and its follow-on boundary review
   resolve Findings 1-8 without a schema-version bump or runtime migration
   aliases.** Fit Assessment

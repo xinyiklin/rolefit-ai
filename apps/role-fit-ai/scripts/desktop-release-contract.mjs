@@ -1,4 +1,4 @@
-import { appendFileSync, readFileSync } from "node:fs";
+import { appendFileSync, readFileSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
@@ -70,6 +70,75 @@ export function readRolefitPackageVersion(repoRoot) {
     fail(`expected ${packagePath} to describe the role-fit-ai workspace`);
   }
   return assertRolefitReleaseVersion(packageJson.version);
+}
+
+// Some landing screenshots contain the version in their pixels, where no text
+// search can find it. The page also renders the live release version from the
+// GitHub catalog, so a stale stamp contradicts the same page. The manifest
+// records the version each of those images was captured at; this fails the
+// release and site-deploy gates until the image is retaken.
+const SCREENSHOT_MANIFEST_PATH = ["apps", "role-fit-ai", "landing", "screenshot-manifest.json"];
+const SCREENSHOT_MANIFEST_KEYS = new Set(["schemaVersion", "note", "versionStamped"]);
+const SCREENSHOT_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
+
+function isPlainObject(value) {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+export function assertScreenshotVersionStamps(
+  repoRoot = fileURLToPath(new URL("../../..", import.meta.url)),
+  packageVersion = readRolefitPackageVersion(repoRoot),
+) {
+  const manifestPath = resolve(repoRoot, ...SCREENSHOT_MANIFEST_PATH);
+  let manifest;
+
+  try {
+    manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+  } catch (error) {
+    fail(`could not read ${manifestPath}: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (!isPlainObject(manifest) || !Object.keys(manifest).every((key) => SCREENSHOT_MANIFEST_KEYS.has(key))) {
+    fail("screenshot manifest must contain only schemaVersion, note, and versionStamped");
+  }
+  if (manifest.schemaVersion !== 1) {
+    fail("screenshot manifest schemaVersion must be 1");
+  }
+  if (!isPlainObject(manifest.versionStamped)) {
+    fail("screenshot manifest versionStamped must be an object of image path to captured version");
+  }
+
+  const entries = Object.entries(manifest.versionStamped);
+  if (entries.length === 0) {
+    fail("screenshot manifest must list at least one version-stamped image");
+  }
+
+  const landingRoot = resolve(repoRoot, "apps", "role-fit-ai", "landing");
+  const stale = [];
+
+  for (const [imagePath, capturedVersion] of entries) {
+    const traverses = imagePath.split("/").some((segment) => segment === "." || segment === "..");
+    if (!SCREENSHOT_PATH_PATTERN.test(imagePath) || traverses) {
+      fail(`screenshot manifest path ${imagePath} must be relative to the landing directory`);
+    }
+    const resolvedImage = resolve(landingRoot, imagePath);
+    try {
+      if (!statSync(resolvedImage).isFile()) throw new Error("not a file");
+    } catch {
+      fail(`screenshot manifest lists ${imagePath}, which is not a file under landing/`);
+    }
+    assertRolefitReleaseVersion(capturedVersion);
+    if (capturedVersion !== packageVersion) stale.push(`${imagePath} (captured at ${capturedVersion})`);
+  }
+
+  if (stale.length > 0) {
+    fail(
+      `package version ${packageVersion} does not match the version shown in ${stale.join(", ")}`
+        + " — retake the screenshot and update landing/screenshot-manifest.json",
+    );
+  }
+
+  return entries.map(([imagePath, capturedVersion]) => ({ imagePath, capturedVersion }));
 }
 
 function validateRolefitRef({
