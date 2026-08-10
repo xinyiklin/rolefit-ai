@@ -2,8 +2,9 @@
 
 A Manifest V3 popup (Chrome / Edge / Firefox) that prepares job postings in
 RoleFit AI. Click the toolbar icon to see whether you've already tracked or
-applied to that posting and open it in a fresh Prepare tab. Initial Fit runs only
-in the main app after RoleFit selects the resume variant to assess.
+applied to that posting and open it in a fresh Prepare tab. Fit score, coverage,
+and evidence ledgers are not extension concerns; compact Fit Assessment runs in the
+main app when enabled.
 
 Two ways to import the posting you are reading:
 
@@ -131,13 +132,13 @@ the keyboard command is an ES module.
    `{text, url}`. The receiving tab always runs provider-backed job analysis and
    loads the brief into that tab's Prepare page. If the analysis fails, a
    deterministic brief may remain available for inspection, but the stage is
-   failed and Tailor/Review do not start automatically.
+   failed and Polish does not start automatically.
 4. The `Ctrl+Shift+U` / `⌘⇧U` command runs steps 1 and 3 with no popup open,
    through the same shared bridge and the same status/approval handshake. It
    skips the tracker preview in step 2 — the app still runs its own duplicate
    gates on arrival. A failure leaves a badge on the toolbar icon and a single
    short explanation the popup shows and clears the next time you open it.
-5. The popup has no extension AI/deterministic or automatic-tailor toggles.
+5. The popup has no extension AI/deterministic or automatic-proposal toggles.
    Neither entry point has one. The handoff stops on Prepare after the
    duplicate gates and the Job analysis stage.
    The claim token keeps the new posting out of older visible tabs, and the
@@ -149,15 +150,14 @@ keeps the new posting out of older visible tabs while still allowing a
 no-strand fallback if the new tab never opens or closes before draining the
 import inbox entry.
 
-Duplicate detection is a workflow gate, not a fit assessment. A warning found before or
+Duplicate detection is a workflow gate, not a score. A warning found before or
 after Job analysis asks the user to continue the current pipeline or stop; stopping
 prevents all later selected AI stages.
 
 The extension does not read the workspace base resume or calculate a local fit
-estimate. Initial Fit in the app returns a categorical verdict, confidence,
-eligibility result, and evidence-linked requirement ledger. The server validates
-that contract and the later document-readiness assessment. Both still require
-human review.
+estimate. The app's compact Fit Assessment returns an advisory verdict without a
+score or full coverage ledger. Resume Polish keeps its grounding and
+pre-response audit contract, and all AI output still requires human review.
 
 No build or bundler — `popup.js` is a plain ES module loaded directly by
 `popup.html`. There is nothing to compile.

@@ -3,7 +3,6 @@ import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { handlePolish } from "./ai/polish.ts";
-import { handleFitAudit } from "./ai/fitAudit.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
@@ -11,6 +10,7 @@ import { handleCoverLetter } from "./ai/coverLetter.ts";
 import { isApiPathname, sendJson } from "./http.ts";
 import {
   ensureJobWorkspace,
+  handleBaseResumeCandidates,
   handleRestoreBaseResume,
   handleSelectBaseResume,
   handleWorkspace,
@@ -32,8 +32,9 @@ import {
   handleSaveApplications
 } from "./applications/trackerRoutes.ts";
 import { isApplicationDocumentKind } from "./applications/documents.ts";
-import { handleBrowserPreferences } from "./browserPreferences.ts";
+import { handleWorkspacePreferences } from "./workspacePreferences.ts";
 import {
+  handleCoverLetterCandidates,
   handleRestoreCoverLetter,
   handleSelectCoverLetter,
   handleWorkspaceCoverLetter
@@ -413,19 +414,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/fit-audit") {
-      void handleFitAudit(req, res);
-      return;
-    }
-
     if (pathname === "/api/job-analysis") {
-      void handleJobAnalysis(req, res);
-      return;
-    }
-
-    // Temporary one-preview compatibility alias for a tab running the previous
-    // browser bundle against a newly restarted local server.
-    if (pathname === "/api/distill") {
       void handleJobAnalysis(req, res);
       return;
     }
@@ -450,8 +439,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/workspace/browser-preferences") {
-      void handleBrowserPreferences(req, res, workspaceDir);
+    if (pathname === "/api/workspace/preferences") {
+      void handleWorkspacePreferences(req, res, workspaceDir);
       return;
     }
 
@@ -475,6 +464,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
+    if (pathname === "/api/workspace/base-resume/candidates") {
+      void handleBaseResumeCandidates(req, res, workspaceLocations);
+      return;
+    }
+
     if (pathname === "/api/workspace/base-resume/restore") {
       void handleRestoreBaseResume(req, res, workspaceLocations);
       return;
@@ -487,6 +481,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/workspace/cover-letter/select") {
       void handleSelectCoverLetter(req, res, workspaceLocations);
+      return;
+    }
+
+    if (pathname === "/api/workspace/cover-letter/candidates") {
+      void handleCoverLetterCandidates(req, res, workspaceLocations);
       return;
     }
 

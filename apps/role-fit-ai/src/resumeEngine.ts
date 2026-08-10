@@ -3,12 +3,9 @@
 // API so existing importers keep working unchanged.
 
 export type {
-  EvidenceType,
-  MissingRequiredSkill,
-  TailorChangeField,
-  TailorChangeRisk,
-  TailorChangeTarget,
-  TailorSuggestion,
+  ResumeProposalField,
+  ResumeProposalTarget,
+  ResumeProposalSuggestion,
   PolishedResume,
   ResumeAnalysis,
   DiffSegment,

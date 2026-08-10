@@ -10,20 +10,15 @@ import type { ExtractedJobTracking } from "../../lib/jobExtract";
 import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
-import type { PrepareAutomationState } from "../../hooks/usePrepareAutomation";
-import type { AutoPolishThreshold } from "../../lib/prepareAutomation";
 import { PreparedJobBriefSections, type PreparedJobBriefSection } from "./prepare/PreparedJobBriefSections";
 import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
 import { PreparedVariantRecommendation } from "./prepare/PreparedVariantRecommendation";
 import {
-  PrepareDecisionCheckpoint,
-  type PrepareInitialFitView
-} from "./prepare/PrepareDecisionCheckpoint";
-import {
   PrepareApplicationRail,
-  type PrepareActivity,
-  type PrepareSubmissionAssessment
+  type PrepareActivity
 } from "./prepare/PrepareApplicationRail";
+import type { FitAssessmentState } from "../../../shared/fitAssessmentContract.ts";
+import type { PolishedResume } from "../../resumeEngine";
 
 type SourceMethod = "url" | "paste";
 
@@ -89,6 +84,7 @@ export type PrepareTabProps = {
   onJobDescriptionChange: (value: string) => void;
   jobRawText: string;
   importedJob: ImportedJobSnapshot | null;
+  localPreparedPreview: ImportedJobSnapshot | null;
   onJobTrackingChange: (field: keyof ExtractedJobTracking, value: string | number | null) => void;
   onJobBriefChange: (field: PreparedJobBriefField, value: string) => void;
   jobPrepared: boolean;
@@ -102,20 +98,22 @@ export type PrepareTabProps = {
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
   resumeReady: boolean;
   isSelectingResume: boolean;
-  prepareAutomationBusy: boolean;
   includeResume: boolean;
   onIncludeResumeChange: (included: boolean) => void;
   baseResumeName: string;
   baseResumeOptions: BaseResumeOption[];
   onSelectBaseResume: (fileName: string) => void | Promise<unknown>;
   resumeVariantRecommendation: VariantRecommendation | null;
-  isRankingResumeVariants: boolean;
-  canTailor: boolean;
+  isResolvingPreparedResume: boolean;
+  // The loaded document is the bundled sample, not the applicant's resume.
+  resumeIsStarterSample: boolean;
+  canPolishResume: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishOutputCurrent: boolean;
+  polishOutcome?: PolishedResume["polishOutcome"];
   polishStatus: string;
-  onTailorPreparedResume: () => void | Promise<void>;
+  onPolishPreparedResume: () => void | Promise<void>;
   onReviewResume: () => void;
   includeCoverLetter: boolean;
   onIncludeCoverLetterChange: (included: boolean) => void;
@@ -132,15 +130,11 @@ export type PrepareTabProps = {
   coverLetterTailorHint: string;
   isTailoringCoverLetter: boolean;
   coverLetterStatus: string;
-  onTailorCoverLetter: () => void | Promise<unknown>;
+  onTailorCoverLetter: () => void | Promise<void>;
   onOpenCoverLetter: () => void;
-  initialFit: PrepareInitialFitView;
-  prepareAutomation: PrepareAutomationState;
-  resumeAutoPolishThreshold: AutoPolishThreshold;
-  coverAutoPolishThreshold: AutoPolishThreshold;
-  onRetryInitialFit: () => void | Promise<unknown>;
-  onStopInitialFit: () => void;
-  submissionAssessment: PrepareSubmissionAssessment | null;
+  fitAssessment: FitAssessmentState;
+  onAssessFit: () => void;
+  canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   isApplying: boolean;
@@ -154,6 +148,7 @@ export function PrepareTab({
   onJobDescriptionChange,
   jobRawText,
   importedJob,
+  localPreparedPreview,
   onJobTrackingChange,
   onJobBriefChange,
   jobPrepared,
@@ -167,20 +162,21 @@ export function PrepareTab({
   onPreparePosting,
   resumeReady,
   isSelectingResume,
-  prepareAutomationBusy,
   includeResume,
   onIncludeResumeChange,
   baseResumeName,
   baseResumeOptions,
   onSelectBaseResume,
   resumeVariantRecommendation,
-  isRankingResumeVariants,
-  canTailor,
+  isResolvingPreparedResume,
+  resumeIsStarterSample,
+  canPolishResume,
   isPolishing,
   polishProgress,
   polishOutputCurrent,
+  polishOutcome,
   polishStatus,
-  onTailorPreparedResume,
+  onPolishPreparedResume,
   onReviewResume,
   includeCoverLetter,
   onIncludeCoverLetterChange,
@@ -199,13 +195,9 @@ export function PrepareTab({
   coverLetterStatus,
   onTailorCoverLetter,
   onOpenCoverLetter,
-  initialFit,
-  prepareAutomation,
-  resumeAutoPolishThreshold,
-  coverAutoPolishThreshold,
-  onRetryInitialFit,
-  onStopInitialFit,
-  submissionAssessment,
+  fitAssessment,
+  onAssessFit,
+  canAssessFit,
   linkedApplication,
   readiness,
   isApplying,
@@ -215,22 +207,18 @@ export function PrepareTab({
   const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
     jobUrl.trim() || (!jobRawText.trim() && !jobDescription.trim()) ? "url" : "paste"
   );
-  const candidateGaps = initialFit.assessment?.requirements.filter(
-    (requirement) => requirement.coverage !== "COVERED"
-  ) ?? [];
-  const candidateGapsProvenance = initialFit.assessment
-    ? (initialFit.status === "saved" ? "saved" : "current")
-    : "none";
 
   useEffect(() => {
     setSourceMode(jobPrepared ? "collapsed" : "replace");
   }, [jobPrepared]);
 
-  const tracking = jobPrepared ? (importedJob?.tracking ?? {}) : {};
-  const brief = importedJob?.brief;
+  const displayedJob = jobPrepared ? importedJob : localPreparedPreview;
+  const hasPreparedPreview = Boolean(jobPrepared || (isPreparing && localPreparedPreview));
+  const tracking = displayedJob?.tracking ?? {};
+  const brief = displayedJob?.brief;
   const role = tracking.role || tracking.title || "Role not identified";
   const company = tracking.company || "Company not identified";
-  const manualReviewFields = jobPrepared ? (importedJob?.manualReviewFields ?? []) : [];
+  const manualReviewFields = hasPreparedPreview ? (displayedJob?.manualReviewFields ?? []) : [];
   const sourceLength = (jobRawText || jobDescription).trim().length;
   const isReceiving = extensionImportPhase === "receiving";
   const progressRunning = isPreparing || jobAnalysisProgress.status === "running";
@@ -252,23 +240,24 @@ export function PrepareTab({
         : preparationStatus
           ? { tone: "info", message: preparationStatus }
           : null;
-  const tailorDone = polishOutputCurrent && polishProgress.tailor.status === "done";
-  const reviewDone = polishOutputCurrent && polishProgress.review.status === "done";
+  const polishSettled = polishOutputCurrent && (
+    polishProgress.polish.status === "done" || polishOutcome === "WITHHELD"
+  );
   const resumeState =
-    isRankingResumeVariants || isSelectingResume
+    isResolvingPreparedResume || isSelectingResume
       ? "Selecting best match…"
       : isPolishing
-        ? polishProgress.review.status === "running"
-          ? "Auditing…"
-          : "Tailoring…"
-        : reviewDone
-          ? tailorDone
-            ? "Tailored · audited"
-            : "Audited"
-          : tailorDone
-            ? "Tailored"
-            : resumeReady
-              ? "Ready"
+        ? "Polishing…"
+        : polishSettled
+          ? polishOutcome === "PROPOSAL"
+            ? "Proposal ready"
+            : polishOutcome === "NO_CHANGES"
+              ? "No changes needed"
+              : "Suggestions withheld"
+          : resumeReady
+            ? "Ready"
+            : resumeIsStarterSample
+              ? "Starter template"
               : "No document";
   // A saved base letter is a template: it holds real prose and unresolved slots
   // like [Company]. Reporting that as "No draft" hid a document the user could
@@ -285,50 +274,49 @@ export function PrepareTab({
             : coverLetterWordCount > 0
               ? "Draft too short"
               : "No draft";
-  const canFetch = Boolean(jobUrl.trim()) && !isPreparing && jobAnalysisProviderReady;
+  const canFetch = Boolean(jobUrl.trim()) && !isPreparing;
   // URL edits invalidate readiness but must not swap the controlled replacement
   // textarea from the captured posting back to the compact tailoring scaffold.
   // Direct textarea edits clear jobRawText in useJobIntake, so this still hands
   // control to the user's replacement on the first keystroke.
   const preparationSourceText = jobRawText || jobDescription;
-  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing && jobAnalysisProviderReady;
+  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing;
   const fetchHint = !jobUrl.trim()
     ? "Enter a job URL first."
     : isPreparing
       ? "Wait for the current preparation to finish."
-      : !jobAnalysisProviderReady
-        ? jobAnalysisProviderMessage
-        : "";
+      : "";
   const prepareHint =
     preparationSourceText.trim().length < 80
       ? "Paste at least 80 characters from the job posting."
       : isPreparing
         ? "Wait for the current preparation to finish."
-        : !jobAnalysisProviderReady
-          ? jobAnalysisProviderMessage
-          : "";
-  const tailorHint = !jobPrepared
+        : "";
+  const localFallbackHint = !jobAnalysisProviderReady
+    ? jobPrepared || hasPreparedPreview
+      ? "Local brief ready. Connect an AI provider to improve it."
+      : `${jobAnalysisProviderMessage} Prepare will still create a local brief.`
+    : "";
+  const polishResumeHint = !jobPrepared
     ? "Prepare the job first."
     : !resumeReady
-      ? "Add your resume first."
-      : isSelectingResume || isRankingResumeVariants
+      ? resumeIsStarterSample
+        ? "The starter is a sample. Open or save your own resume."
+        : "Add your resume first."
+      : isSelectingResume || isResolvingPreparedResume
         ? "Wait for the resume variant selection to finish."
         : isPolishing
           ? "Wait for the current polish to finish."
-          : prepareAutomationBusy
-            ? "Wait for Prepare automation to finish."
-          : !canTailor
+          : !canPolishResume
             ? polishStatus || "Finish the resume and AI setup before polishing."
             : "";
-  const canStartTailor = canTailor && !isPolishing && jobPrepared;
+  const canStartPolishResume = canPolishResume && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
-    polishProgress.tailor.status === "failed" ||
-    polishProgress.tailor.status === "stopped" ||
-    polishProgress.review.status === "failed" ||
-    polishProgress.review.status === "stopped";
+    (polishProgress.polish.status === "failed" && polishOutcome !== "WITHHELD") ||
+    polishProgress.polish.status === "stopped";
   // Success receipts duplicate the state line. Keep only blockers and failures.
-  const resumeNote = !canStartTailor && tailorHint
-    ? tailorHint
+  const resumeNote = !canStartPolishResume && polishResumeHint
+    ? polishResumeHint
     : resumeWorkflowNeedsAttention
       ? polishStatus
       : "";
@@ -344,7 +332,7 @@ export function PrepareTab({
       : "";
   const jobTypeIsKnown = JOB_TYPES.includes(tracking.jobType as (typeof JOB_TYPES)[number]);
   const recommendationLiveText = [
-    variantRecommendationLiveText("resume", isRankingResumeVariants, resumeVariantRecommendation, baseResumeName),
+    variantRecommendationLiveText("resume", isResolvingPreparedResume, resumeVariantRecommendation, baseResumeName),
     variantRecommendationLiveText(
       "cover letter",
       isRankingCoverLetterVariants,
@@ -387,8 +375,14 @@ export function PrepareTab({
       <header className="workspace-page__head prepare-page__head">
         <h2 className="page-serif">Prepare</h2>
         <span className={`prepare-page__state${jobPrepared ? " is-ready" : ""}`}>
-          {jobPrepared ? <Check size={13} aria-hidden="true" /> : <Circle size={10} aria-hidden="true" />}
-          {jobPrepared ? `${role} · ${company}` : "No prepared application"}
+          {jobPrepared || hasPreparedPreview
+            ? <Check size={13} aria-hidden="true" />
+            : <Circle size={10} aria-hidden="true" />}
+          {jobPrepared
+            ? `${role} · ${company}`
+            : hasPreparedPreview
+              ? `Local brief ready · improving with AI`
+              : "No prepared application"}
         </span>
       </header>
 
@@ -551,6 +545,12 @@ export function PrepareTab({
                   ) : null}
                 </div>
 
+                {localFallbackHint ? (
+                  <p className="prepare-note is-info" role="status">
+                    {localFallbackHint}
+                  </p>
+                ) : null}
+
                 {!jobPrepared && activity ? (
                   <p className={`prepare-note is-${activity.tone}`} role="status">
                     {activity.tone === "working" ? (
@@ -567,11 +567,11 @@ export function PrepareTab({
             <div className="prepare-panel__head">
               <h3 id="prepare-brief-title">Job brief</h3>
               <span className="prepare-panel__meta">
-                {jobPrepared ? "Edits apply to tailoring and Apply" : "Not prepared"}
+                {jobPrepared ? "Edits apply to tailoring and Apply" : hasPreparedPreview ? "Local preview" : "Not prepared"}
               </span>
             </div>
 
-            {jobPrepared && brief ? (
+            {hasPreparedPreview && brief ? (
               <>
                 <fieldset className="prepare-brief-fields" disabled={isPreparing}>
                   <div className="prepare-detail-grid">
@@ -722,28 +722,6 @@ export function PrepareTab({
                       <p>None.</p>
                     )}
                   </div>
-                  <div>
-                    <p className="prepare-page__eyebrow">
-                      {candidateGapsProvenance === "saved" ? "Candidate gaps · historical" : "Candidate gaps"}
-                    </p>
-                    {candidateGaps.length ? (
-                      <ul>
-                        {candidateGaps.map((gap) => (
-                          <li key={gap.id}>
-                            <strong>{gap.requirement}</strong>
-                            <span>{gap.coverage.replace(/_/g, " ").toLowerCase()}</span>
-                            <p>{gap.explanation}</p>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : candidateGapsProvenance === "current" ? (
-                      <p>No candidate gaps identified by the current Initial Fit assessment.</p>
-                    ) : candidateGapsProvenance === "saved" ? (
-                      <p>None recorded in the saved Initial Fit assessment.</p>
-                    ) : (
-                      <p>Initial Fit will compare your evidence with the job.</p>
-                    )}
-                  </div>
                 </div>
               </>
             ) : (
@@ -760,21 +738,9 @@ export function PrepareTab({
         {jobPrepared ? (
           <PrepareApplicationRail
             activity={activity}
-            decisionCheckpoint={
-              <PrepareDecisionCheckpoint
-                initialFit={initialFit}
-                automation={prepareAutomation}
-                resumeThreshold={resumeAutoPolishThreshold}
-                coverThreshold={coverAutoPolishThreshold}
-                canPolishResume={canStartTailor}
-                canPolishCoverLetter={canTailorCoverLetter}
-                onRetryInitialFit={onRetryInitialFit}
-                onStopInitialFit={onStopInitialFit}
-                onPolishResume={onTailorPreparedResume}
-                onPolishCoverLetter={onTailorCoverLetter}
-              />
-            }
-            submissionAssessment={submissionAssessment}
+            fitAssessment={fitAssessment}
+            onAssessFit={onAssessFit}
+            canAssessFit={canAssessFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
             isApplying={isApplying}
@@ -791,7 +757,7 @@ export function PrepareTab({
               variantOptions={baseResumeOptions}
               emptyVariantLabel={resumeReady ? "Current draft" : "No saved variants"}
               variantDisabled={
-                isSelectingResume || isPolishing || isRankingResumeVariants || baseResumeOptions.length === 0
+                isSelectingResume || isPolishing || isResolvingPreparedResume || baseResumeOptions.length === 0
               }
               onVariantChange={(fileName) => void onSelectBaseResume(fileName)}
               actions={
@@ -799,9 +765,9 @@ export function PrepareTab({
                   <button
                     className="secondary-button is-compact"
                     type="button"
-                    onClick={() => void onTailorPreparedResume()}
-                    disabled={!canStartTailor}
-                    aria-describedby={!canStartTailor && tailorHint ? "prepare-resume-note" : undefined}
+                    onClick={() => void onPolishPreparedResume()}
+                    disabled={!canStartPolishResume}
+                    aria-describedby={!canStartPolishResume && polishResumeHint ? "prepare-resume-note" : undefined}
                   >
                     {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
                     {isPolishing ? "Polishing…" : "Polish"}
@@ -819,7 +785,7 @@ export function PrepareTab({
                 </p>
               ) : (
                 <PreparedVariantRecommendation
-                  isRanking={isRankingResumeVariants}
+                  isRanking={isResolvingPreparedResume}
                   recommendation={resumeVariantRecommendation}
                   selectedFileName={baseResumeName}
                   onUse={(fileName) => void onSelectBaseResume(fileName)}

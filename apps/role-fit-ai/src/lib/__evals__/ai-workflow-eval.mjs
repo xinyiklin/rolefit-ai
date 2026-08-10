@@ -2,58 +2,30 @@ import assert from "node:assert/strict";
 
 import {
   AI_STAGE_COPY,
-  workflowCurrentIndex,
+  AI_WORKFLOW_TITLE,
   workflowInputFingerprint,
-  workflowRequestIsCurrent,
-  workflowStageCanAdvance,
-  workflowStageIsBlocked,
-  workflowStepLabel
+  workflowRequestIsCurrent
 } from "../aiWorkflow.ts";
-import { canonicalizeAiUsageStageKeys } from "../aiUsage.ts";
+import { copyAiUsage } from "../aiUsage.ts";
 import { ApiError, classifyFailure } from "../failures.ts";
 
-const threeStages = (jobAnalysis, tailor, review) => [
-  { key: "job-analysis", state: { status: jobAnalysis } },
-  { key: "tailor", state: { status: tailor } },
-  { key: "review", state: { status: review } }
-];
-
-assert.equal(workflowStepLabel(1, 3), "Step 1 of 3", "the workflow exposes the first step count");
-assert.equal(workflowCurrentIndex(threeStages("running", "idle", "idle")), 0, "Job analysis is step 1");
-assert.equal(workflowCurrentIndex(threeStages("done", "running", "idle")), 1, "Tailor is step 2");
-assert.equal(workflowCurrentIndex(threeStages("done", "done", "running")), 2, "Review is step 3");
-
-const failedTailor = threeStages("done", "failed", "idle");
-assert.equal(workflowCurrentIndex(failedTailor), 1, "a failed stage remains the current step");
-assert.equal(workflowStageIsBlocked(failedTailor, 2), true, "a failed Tailor blocks Review");
-assert.equal(workflowStageCanAdvance({ status: "done" }), true, "only a completed stage may advance");
-assert.equal(workflowStageCanAdvance({ status: "failed" }), false, "a failed stage cannot advance");
-assert.equal(workflowStageCanAdvance({ status: "stopped" }), false, "a stopped stage cannot advance");
+assert.equal(AI_WORKFLOW_TITLE["job-analysis"], "Job analysis", "Job analysis owns its card title");
+assert.equal(AI_WORKFLOW_TITLE["resume-polish"], "Resume Polish", "Resume Polish owns its card title");
+assert.equal(AI_WORKFLOW_TITLE.cover, "Cover letter", "Cover Letter Polish owns a document-specific card title");
+assert.equal(AI_WORKFLOW_TITLE.answers, "Application answers", "answer drafting owns its card title");
 assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress uses Job analysis vocabulary");
+assert.equal(AI_STAGE_COPY.cover.running, "Polishing cover letter", "cover progress matches the Polish action");
 
-const legacyUsage = {
-  distill: { source: "ai", provider: "anthropic", model: "legacy-model" },
-  tailor: { source: "none" }
+const storedUsage = {
+  "job-analysis": { source: "ai", provider: "anthropic", model: "analysis-model" },
+  "resume-polish": { source: "none" }
 };
 assert.deepEqual(
-  canonicalizeAiUsageStageKeys(legacyUsage),
-  {
-    "job-analysis": { source: "ai", provider: "anthropic", model: "legacy-model" },
-    tailor: { source: "none" }
-  },
-  "historical Distill provenance is read as Job analysis"
+  copyAiUsage(storedUsage),
+  storedUsage,
+  "current AI usage receipts are copied unchanged"
 );
-assert.deepEqual(
-  canonicalizeAiUsageStageKeys({
-    ...legacyUsage,
-    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" }
-  }),
-  {
-    "job-analysis": { source: "ai", provider: "openai", model: "canonical-model" },
-    tailor: { source: "none" }
-  },
-  "canonical Job analysis provenance wins when both generations exist"
-);
+assert.notEqual(copyAiUsage(storedUsage), storedUsage, "the copy boundary does not expose stored mutation");
 
 const unusable = classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502));
 assert.equal(unusable.kind, "parse", "an unusable model response identifies the parsing failure");
@@ -105,4 +77,4 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 23/23 checks passed");
+console.log("AI workflow eval: 22/22 checks passed");

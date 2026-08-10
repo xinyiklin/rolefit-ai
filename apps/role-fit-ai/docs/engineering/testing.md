@@ -17,14 +17,13 @@ provider keys. A new offline eval is gated automatically unless it is explicitly
 classified as live.
 
 Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
-`node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs`. On a failed case the runner
+`node apps/role-fit-ai/server/ai/__evals__/resume-proposal-probes.mjs`. On a failed case the runner
 attaches the child's last output lines to the assertion so you can see which
 case broke without re-running.
 
-The LIVE evals (`fabrication-eval.mjs`, `tailor-quality-eval.mjs`) are excluded
-via the runner's `LIVE` denylist: they drive a real provider, cost tokens, and
-need a configured key. Run those by hand (see below). Any new network/model
-eval must be added to `LIVE` so it stays out of `npm test`.
+The live cover-letter and Resume Proposal quality evals are excluded via the
+runner's `LIVE` denylist: they drive a real provider, cost tokens, and need a configured provider. Any
+new network/model eval must be added to `LIVE` so it stays out of `npm test`.
 
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
@@ -74,16 +73,29 @@ Good server verification covers:
   the NodeNext, rewrite, and erasable-syntax options make this the type +
   native-runtime syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
-- `/api/polish` accepts a structured `tailorScope`, does not require or read
-  full-resume `resumeText`, and returns only suggestions targeting IDs from
-  the submitted scope
-- a fresh standalone Review skips tailoring and sends `suggestedChanges: []`
-  so it audits the current edited draft as submitted; the internal Review leg
-  of Both may send only the sanitized suggestions returned by that same Tailor
-  run, never stale suggestions from an earlier run
-- combined responses always classify cover work with
-  `coverStatus: "off" | "ok" | "failed"`; a failed cover pass preserves any
-  successful tailor/review result
+- normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
+  `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
+  provider dispatch. It prompts with flat `target-N` IDs only; only bullets and
+  actual Skills lists are mutable, while category labels, standard role/employer/subtitle/date,
+  education, and omitted sections never become targets. Oversized fixtures prove complete
+  JSON stays within budget, later job-relevant targets survive, response ids
+  outside the selected set are withheld, and the omitted count round-trips
+- one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
+  without discarding valid siblings. Malformed optional summary/gap items are
+  independently ignored. An all-drop returns Withheld, not a completed proposal;
+  explicit empty output can return No changes
+- the browser makes one `/api/polish` request per normal Resume Polish run,
+  exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
+  result as validation rather than `Parsing error`
+- Resume and Cover Letter Polish prompts include a silent pre-response audit of
+  evidence, claims, identifiers, and output shape. Probes cover focused,
+  standard, and deep wording while provider reasoning effort remains a request
+  setting rather than a second audit request
+- positive Fit Assessment starts enabled Resume and Cover proposals independently;
+  neither automatic request awaits or suppresses the other, and each failure is
+  confined to its own document workflow
+- `/api/polish` rejects every mode except `resume-proposal` and carries no cover,
+  Review, score, or multi-stage request fields
 - missing/unready configured providers and missing managed credentials surface
   a clear, user-safe error rather than a silent fallback
 - provider failures distinguish authentication, rate-limit/quota,
@@ -96,46 +108,75 @@ Good server verification covers:
   the suggestion list or polished preview; when possible, use a synthetic
   missing-skill case such as a no-Kubernetes resume against a
   Kubernetes-required JD
-- live prompt-eval changes can use
-  `EVAL_MODE=both node apps/role-fit-ai/server/ai/__evals__/fabrication-eval.mjs` to check
-  submission-review and regular-tailor modes, including one exact-evidence
-  positive case from honest context and an inferred-evidence OS case
-- sanitizer or AI-review contract changes must keep
-  `node apps/role-fit-ai/server/ai/__evals__/sanitize-probes.mjs` green — it is offline,
-  deterministic, and replays every live fabrication/evasion found during
-  the 2026-06-11 hardening (editor `<b>` tokens, ungrounded JD terms,
-  and placeholder evidence). Lock both AI-owned assessment contracts: valid
-  model output must pass through unchanged; malformed enums, inconsistent
-  requirement references, or ungrounded evidence must be rejected. Also lock
-  semantic-boundary guidance such as treating alternatives like
-  "Bachelor's or Master's" as alternatives rather than conjunctions
+- resume-proposal and Polish self-audit prompt changes must keep their focused
+  offline probes green, including ungrounded terms, invented numbers, invalid
+  targets, and all-withheld outcomes
 - prompt-budget changes must add probes that build oversized structured
-  payloads, extract each emitted JSON fragment (`tailor_scope`,
-  `context_sections`, `proposed_changes`, or equivalent), and parse it again;
-  serialized JSON must never be truncated by raw character count
+  payloads, extract each emitted JSON fragment (`editable_targets`,
+  `resume_context`, `proposed_changes`, or equivalent), and parse it again;
+  serialized JSON must never be truncated by raw character count. Resume target
+  selection must also prove it avoids prefix-order bias and sanitizes against
+  only the selected targets
 - job-analysis grounding changes must cover `roleDescription` and `jobType`
   alongside title/company/location, including negated, benefits-only, and
   qualification-only wording that must not false-ground tracking metadata
 - the Job analysis rename contract must keep current code and docs free of the
-  retired term except for the temporary route alias, settings/backup/provenance
-  readers, extension cleanup keys, compatibility tests, and historical release notes
-- tailor-quality changes can grade live consistency on the real resume:
-  `node apps/role-fit-ai/server/ai/__evals__/tailor-quality-eval.mjs apps/role-fit-ai/workspace/tailor-eval/samples/<jd>.json 3`
-  (metrics-only output; full responses land in gitignored
-  `workspace/tailor-eval/`); a matched JD should produce
-  evidence-backed suggestions and a defensible readiness assessment; a bad-fit
-  JD must remain candid about missing evidence
-- when an AI call for Job analysis, Tailor, or Review fails, the shared workflow identifies
-  the classified cause, keeps the failed step current, and leaves later steps
-  as not run; Job analysis may retain a deterministic local brief for inspection,
-  but that failed run cannot auto-launch Tailor or Review
+  retired term except for explicit rejection probes and intentional historical
+  release/continuity records
+- compact Fit Assessment probes must prove that disabling it omits resume/context
+  data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
+  invalid fit preserves valid job fields, the prompt contains the direct rubric
+  as one identical system-level block in combined and reassessment paths, includes
+  the conservative lower-category and stable posting-order tie breaks, all
+  match/gap/eligibility anchors are exact current-source excerpts without
+  whitespace rewriting, both sides of accepted match evidence reach the client,
+  every non-Limited verdict has at least one accepted match, public lists cap at
+  three and reject duplicates, malformed enums or anchors fail unavailable,
+  `CHECK` preserves its posting condition, `BLOCKED` preserves that condition
+  plus the explicit conflicting candidate fact, fixed public summaries replace
+  provider prose, and reassessments omit the Job analysis schema
+- `src/lib/__evals__/ai-job-analysis-request-eval.mjs` must exercise the one
+  browser request boundary with combined and reassessment success, provider HTTP
+  failure, unreadable and invalid responses, network failure, and abort
+  propagation and server-resolved provider/model/reasoning/attempt metadata.
+  Focused lifecycle and entry-point guards must keep one endpoint request helper
+  and one Fit Assessment outcome helper so entry paths cannot grow separate
+  settlements
+- `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
+  extension, and imported-posting Retry intake with both duplicate gates, local
+  and provider fallback, prepared-resume resolution, Fit Assessment on/off, and
+  snapshot commit order. They also prove the separate first Fit remains awaited,
+  identical Prepare runs receive distinct automation receipts, queued intake
+  captures settings only after it owns the lock, and settings changes during
+  readiness invalidate stale execution context. Stop, source changes, and restore
+  cancel in-flight resolution, while too-short and thrown-error paths settle Fit
+  out of `running`. Structural guards keep all four entry points on the single private
+  post-acquisition coordinator
+- auto-polish policy probes must cover every categorical threshold boundary,
+  preserve the threshold values/order/labels, and keep automation policy out of
+  the shared Fit Assessment contract
+- resume proposal probes must keep category labels out of the target set, allow
+  grounded list reordering/additions, reject category substitutions, job-only
+  skills, every upward ownership inflation (including level 1 to 2), and
+  `spearheaded`/`oversaw`/`orchestrated` inflation; unrelated sibling or broad
+  context leadership cannot authorize the target, and safe sibling edits remain
+  preserved
+- application storage probes must prove compact Fit Assessment snapshots
+  round-trip while numeric scores, full recruiter reviews, and missing-skill
+  compatibility fields are omitted at the storage boundary. Current preview
+  field names are strict; a contract rename requires an explicit private data
+  rewrite rather than a runtime alias
+- when Job analysis or Fit Assessment fails, Prepare keeps the immediate local
+  brief editable and manual Polish available; Fit Assessment is separately
+  retryable and cannot invalidate valid job fields. Resume Polish failure or
+  Withheld keeps the current resume unchanged and locally retryable
 - duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
   prevents the current and every downstream AI request, while Continue is
   acknowledged for the same job target so the pipeline does not prompt twice
 - cover-letter tailoring and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
   must prove the **one-click contract**: a template-only starter, a blank
-  document, and every base-variant job family reach Tailor with zero extra
+  document, and every base-variant job family reach Polish with zero extra
   fields; only a missing name/role/company or an unanswered private slot
   blocks; a recipient named in the source survives and an impersonal greeting
   falls back to the company hiring team; markdown links, citations, array
@@ -158,6 +199,32 @@ Good server verification covers:
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
+- Fit Assessment has a manual synthetic consistency calibration:
+  `npm run eval:live:fit-assessment --workspace apps/role-fit-ai -- [fixture-id[,fixture-id]|all] [runs]`.
+  It runs three to five repetitions through both combined Prepare and standalone
+  Retry prompts, measures verdict and eligibility distributions, non-adjacent
+  jumps, invalid responses, provider errors, repairs, and material-theme overlap,
+  and writes full synthetic receipts under gitignored
+  `workspace/fit-assessment-eval/`. `EVAL_PROVIDER`, `EVAL_MODEL`, and
+  `EVAL_REASONING_EFFORT` select one supported configuration; `EVAL_MATRIX`
+  accepts a JSON array of supported configurations. `EVAL_REPORT_ONLY=1`
+  recomputes the aggregate from existing receipts without provider calls. The
+  runner stops one provider configuration after its first provider failure and
+  is explicitly excluded from `npm test`.
+  Its seventeen tracked fixtures include the four verdicts, three eligibility
+  states, prompt injection, preferred-only gaps, adjacent technologies, unshown
+  years/degree, project-accepted entry-level work, specialized production-AI
+  gaps, partial compound requirements, one isolated duration gap, and a content-
+  poor application form. Private corpus calibration stays gitignored and is
+  reported only through anonymized aggregate counts.
+- Resume Proposal has a separate synthetic-only live smoke harness:
+  `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
+  Every run checks an aligned fixture where `NO_CHANGES` is valid and an
+  improvable fixture that must yield at least one safe proposal. It independently
+  verifies allowed target ids, locked skill labels, grounded tools/numbers/outcomes,
+  and target-specific ownership. It reads no workspace resume, prints only status/count summaries, writes full
+  synthetic receipts under gitignored `workspace/resume-proposal-eval/`, and is
+  never part of `npm test`.
 - resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
   as a one-time conversion into `ResumeData`; a `.resume` file loads its
   `ResumeData` directly, and export offers PDF + `.resume`
@@ -175,14 +242,14 @@ Good server verification covers:
   `.resume` data fails closed without destructive reseeding
 - portable workspace backup includes only app-managed resumes/history, tracker
   data, saved application `.resume` / `.cover` sources and PDF-only
-  replacements, and mirrored allowlisted RoleFit preferences; validates
+  replacements, and canonical allowlisted workspace preferences; validates
   decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
   malformed domain files; excludes standalone saved cover-letter variants and
   their history; and completes backup -> restore -> backup without byte drift.
   Every restore failure must leave the active workspace unchanged,
   a successful restore retains the previous saved workspace as a sibling
   safety copy and stages `source: "restore"` preferences, restore refuses with
-  409 while live tab presence is reported, and a corrupt preference mirror
+  409 while live tab presence is reported, and a corrupt preference record
   never blocks backing up resumes
 - routine AI logs remain shape-only and exclude model-authored target IDs,
   free-form error text, provider bodies, and private prompt content
@@ -218,37 +285,66 @@ Good frontend verification covers:
   above Settings in the bottom studio-rail utilities group, outside
   `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
-  state, every delivered posting and Retry require provider readiness and AI
-  Job analysis, a failed run may retain only the deterministic inspection brief, and
-  retry/stale guards cannot apply an earlier posting to the current session
-- extension intake supplies no Tailor command or threshold override; after a
-  successful receiving-tab Job analysis, ordinary Prepare safely settles the
-  exact resume selection, automatically runs one categorical Initial Fit assessment, and
-  independently evaluates Resume and Cover Letter thresholds. Multiple saved
-  variants are ranked from their strict document contents while the editor is
-  clean, with no persisted variant metadata
-- Initial Fit waits for selection to settle, uses the whole visible non-identity
-  resume as evidence, rejects stale/mismatched fingerprints and malformed or
-  semantically inconsistent results, exposes Retry/Stop/Re-audit, and never
-  falls back to a local judgment. Manual resume changes rerun once after loading; free edits
-  mark stale without per-keystroke reruns
-- Initial Fit adversarial probes cover normalized exact job/evidence excerpts,
-  duplicate and cross-ledger source requirements, one-token technology
-  insertion, clause-level sponsorship polarity with contractions, adverbs,
-  H-1B modifiers, and `no need for sponsorship` forms, `cannot relocate`,
-  token-anchored lower-bound years mismatches
-  including Java/JavaScript false-friends, explicit `MISSING`
-  versus evidence-free `UNCERTAIN`, the eligibility/recommendation matrix,
-  source-derived display labels, Strong Fit with failed eligibility, and
-  all-covered pessimistic verdicts. Contract and server-to-client round-trip
-  probes cover 17 covered rows, 17 adjacent rows, 17 missing-evidence rows, and
-  a 40-row split ledger. Submission probes require relevant, positive,
-  non-adverse honest-context evidence for `canSurfaceInResume=true`, cover
-  common contracted and equivalent negative wording, and reject
-  fabricated technology, metrics, proper claims, or outcomes in user-facing advice
-- the two threshold decisions are inclusive and independent: Cover can run when
-  Resume skips or fails, Cover does not require Include, automatic Resume always
-  includes Tailor, and neither workflow accepts a proposal or changes Include
+  state; every delivered posting and Retry asks the selected provider for Job
+  analysis after the local preview is published. Provider failure leaves that
+  preview usable, and retry/stale guards cannot apply an earlier posting to the
+  current session
+- extension intake never launches Resume Polish; multiple saved resume
+  variants may still be ranked from their actual strict document contents and
+  a clear high-confidence winner selected while the editor is clean, but that
+  is source selection, not tailoring, and no variant metadata is persisted
+- the prepared-resume resolution runs as REAL sequences rather than source
+  regexes (`src/hooks/__evals__/prepared-resume-resolution.mjs`): an import
+  arriving before workspace hydration, exactly one saved variant, a
+  starter-only workspace, a ranked winner, option addition/deletion during a
+  read, a same-filename candidate overwrite during a read, a changed candidate
+  before adoption, a protected document, and a refused adoption with no stale
+  recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
+  pins content-derived proposal identity, keyed resets, undo, and manual-match
+  behavior. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
+  request per candidate read at 1, 5, and 20 variants for both document kinds,
+  and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
+  routes' name guards, bounded size, skip-on-corrupt behavior, and that they
+  return candidates and nothing else
+- a valid Fit Assessment survives a local job-analysis fallback
+  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the compact fit
+  contract has threshold-boundary, exact-source-anchor, malformed-response, fixed-
+  summary, deduplication, and eligibility adversarial probes in
+  `server/ai/__evals__/fit-assessment-probes.mjs`
+- `src/hooks/__evals__/fit-assessment-lifecycle.mjs` executes combined-request and
+  reassessment provenance, canonical source replacement, displayed-brief independence,
+  cleared-resume invalidation, provider/model/reasoning identity invalidation,
+  friendly-label exclusion, setting-toggle restoration, explicit same-source reassessment,
+  and zero-provider-dispatch cases for starter-only, blank-origin edited, and
+  40-79-character stub documents
+- `src/hooks/__evals__/job-intake-entry-points.mjs` pins the configuration
+  boundary: matching Job analysis/Fit Assessment provider triples use one
+  combined request, while any difference sends Job analysis without candidate
+  evidence and dispatches assessment-only through Fit's provider/model/effort.
+- `src/lib/__evals__/workspace-preferences-sync-eval.mjs` pins latest-response
+  ownership, protects local edits that arrive during a focus refresh, and proves
+  a corrupt canonical record cannot be adopted or seeded from one browser cache.
+  `server/__evals__/workspace-preferences-probes.mjs` also refuses later ordinary
+  settings writes until that invalid record is explicitly repaired or restored.
+  The client probe keeps an unchanged focus adoption from consuming the user's
+  next real save;
+  `src/hooks/__evals__/application-persistence-guards.mjs` keeps tracker conflict,
+  Apply commit ordering, recovery clearing, and modal-save failure contracts
+  covered after the retired monolithic workflow guard was removed.
+- URL and paste intake remain enabled without an AI provider and produce the
+  deterministic local brief; only provider-backed enrichment stays unavailable
+- Fit Assessment shows only verdict, selected resume, summary, up to three
+  compact match explanations and gaps, and a relevant eligibility warning with
+  its accepted anchors. It exposes no score, confidence, broad evidence ledger,
+  recommendation, saved audit, or analytics metric
+- changing the selected resume dispatches only `mode: "fit-assessment"`; disabling
+  Fit Assessment sends no resume/context data. Resume and Cover Letter each use an
+  independent automatic Polish switch and categorical minimum-fit threshold;
+  `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
+  Polish remains available for every fit state
+- Fit Assessment never derives tracker priority: explicit user priority wins,
+  Interviewing/Offer may derive High, and every other record defaults Medium;
+  `fitAssessmentRank` remains available for explicit sorting
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
@@ -261,16 +357,13 @@ Good frontend verification covers:
   failed extraction without invalidating the matching prepared source snapshot:
   tracked job facts through one role context, responsibilities, required/preferred
   qualifications, technical keywords, seniority/domain signals, and benefits.
-  Extraction and candidate-review gaps remain visible until addressed; View
+  Deterministic extraction gaps remain visible until addressed; View
   source and Prepare again retain the captured posting, Apply stores the full
   corrected brief, and reopening restores benefits without adding them to the
-  Tailor projection. Candidate gaps from a saved Apply snapshot are labeled
-  historical until a matching Review replaces them
+  Resume Polish projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
-  on Prepare through the visible **Open preparation** action. Its saved Initial
-  Fit baseline and `initial-fit` usage provenance restore separately from the
-  final submission-readiness assessment; automation is not replayed
+  on Prepare through the visible **Open preparation** action
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and
@@ -279,16 +372,17 @@ Good frontend verification covers:
   fingerprinted whole-letter proposal, only explicit acceptance loads it into
   the editor with an exact one-click Restore, and that Restore plus its result
   summary disappear together the moment the user edits, opens another document,
-  or runs Tailor again. Duration grounding covers equivalent word and digit forms
+  or runs Polish again. Duration grounding covers equivalent word and digit forms
 - the owned typeset page stays the sole editor and live preview; the tracker may
-  render or open a saved application document as PDF, `ReviewRail` docks only after polish
-  produces review output, and a
-  hovered/focused review card highlights and scrolls to its exact editor field
+  render or open a saved application document as PDF. Resume's proposal rail
+  shows only What improved, Edits ready, and a withheld line;
+  individual cards support Accept/Edit/Discard and still highlight their exact
+  editor field, while no evidence/risk/keyword chips return
 - production builds keep `TrackerTab`, `AnalyticsTab`, and
   `ApplicationModal` in lazy chunks, and opening each surface loads cleanly
 - components reuse shared CSS classes and tokens from `src/styles/` instead of
   one-off styles
-- AI setup renders Job analysis, Tailor, and Review expanded together with no
+- AI setup renders every configured stage expanded together with no
   per-section collapse control or persisted collapse state; only explicitly
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests

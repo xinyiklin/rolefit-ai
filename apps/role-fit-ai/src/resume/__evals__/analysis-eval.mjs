@@ -1,7 +1,7 @@
 // Probes for analyzeResumeText (src/resume/analysis.ts) — the deterministic
-// mechanical document analysis the editor/tailor workflow reads for
+// mechanical document analysis the editor/Polish workflow reads for
 // missing-keyword hints and over-limit bullet groups. This module deliberately
-// excludes fit scoring/verdict (AI Review owns those); lock that it returns
+// excludes fit scoring/verdict; lock that it returns
 // only the two mechanical fields and stays well-behaved on empty input.
 //
 //   node src/resume/__evals__/analysis-eval.mjs
@@ -89,7 +89,7 @@ assert.deepEqual(analyzeResumeText("", ""), { missingKeywords: [], trimmedBullet
   assert.deepEqual(
     Object.keys(result).sort(),
     ["missingKeywords", "trimmedBulletGroups"],
-    "analyzeResumeText returns only the two mechanical fields — no fit verdict, coverage, or recommendation (Initial Fit's sole responsibility)"
+    "analyzeResumeText returns only the two mechanical fields — no fit judgment"
   );
 }
 

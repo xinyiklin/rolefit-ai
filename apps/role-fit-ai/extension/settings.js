@@ -1,7 +1,6 @@
 const SETTINGS_KEY = "rolefitExtensionSettings";
 const SETTINGS_SCHEMA_VERSION = 1;
 const DEFAULT_LOCAL_SITE_PORT = 5_181;
-const LEGACY_SETTINGS_KEYS = Object.freeze(["autoTailor", "distillAi"]);
 const PORT_INPUT_PATTERN = /^\d+$/;
 // A keyboard import runs with no popup open, so its failure is recorded here and
 // shown once the next time the popup opens. Bounded and short-lived: a stale
@@ -145,9 +144,8 @@ async function writeSettings(settings) {
   await callStorage("set", [{ [SETTINGS_KEY]: settings }]);
 }
 
-async function migrateSettings() {
+async function initializeSettings() {
   const settings = createSettingsRecord(getInstallSeedPort());
-  await callStorage("remove", [LEGACY_SETTINGS_KEYS]);
   await writeSettings(settings);
   return settings;
 }
@@ -194,7 +192,7 @@ export function loadExtensionSettings() {
   return enqueue(async () => {
     const saved = await readSavedSettings();
     if (saved) return saved;
-    return migrateSettings();
+    return initializeSettings();
   });
 }
 

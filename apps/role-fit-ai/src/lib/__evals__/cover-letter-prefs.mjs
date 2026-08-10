@@ -75,6 +75,15 @@ assert.deepEqual(
 );
 
 const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+const identityHook = readFileSync(
+  new URL("../../hooks/useCoverLetterDocumentIdentity.ts", import.meta.url),
+  "utf8"
+);
+const coverLetterToolbar = readFileSync(
+  new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url),
+  "utf8"
+);
+const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverLetter = readFileSync(
   new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
   "utf8"
@@ -86,13 +95,98 @@ assert.match(
 );
 assert.match(
   hook,
-  /const initialFingerprint = startupFingerprintRef\.current[\s\S]*coverLetterStartupIsCurrent/,
-  "startup snapshots the current editor fingerprint before loading the workspace"
+  /const initialDocumentVersion = documentVersionRef\.current[\s\S]*coverLetterStartupIsCurrent/,
+  "startup snapshots the exact current document and title before loading the workspace"
 );
 assert.match(
   hook,
-  /openWorkspaceCoverLetter\([\s\S]*startup\.fileName,[\s\S]*true,[\s\S]*coverLetterStartupIsCurrent/,
+  /openWorkspaceCoverLetter\([\s\S]*startup\.fileName,[\s\S]*startup: true,[\s\S]*coverLetterStartupIsCurrent/,
   "the selected response rechecks cancellation and edits before adopting its payload"
+);
+assert.match(
+  identityHook,
+  /const documentVersion = coverLetterDocumentVersion\(currentFingerprint, documentTitle\)[\s\S]*documentVersionRef\.current = documentVersion/,
+  "the replacement version contains the serialized document and its live title"
+);
+assert.match(
+  hook,
+  /const sourceRevisionAtSaveStart = sourceRevisionRef\.current[\s\S]{0,900}?const persistenceBaselineRevision = capturePersistenceBaselineRevision\(\)[\s\S]{0,120}?const saveClaim = saveOwnership\.claim\(\{[\s\S]{0,350}?persistenceBaselineRevision,[\s\S]{0,200}?sourceRevision: sourceRevisionAtSaveStart,[\s\S]{0,200}?activeFileName: activeFileNameAtSaveStart,[\s\S]{0,200}?intendedFileName/,
+  "workspace saves capture document, baseline, active variant, target, and source identity before dispatch"
+);
+assert.match(
+  hook,
+  /const queuedSave = workspaceSaveQueueRef\.current\.then\(runSave, runSave\)[\s\S]{0,180}?workspaceSaveQueueRef\.current = queuedSave\.then/,
+  "workspace saves enter one invocation-order queue before reaching the server"
+);
+assert.match(
+  hook,
+  /const completion = saveOwnership\.evaluate\([\s\S]{0,220}?if \(completion === "superseded"\) \{[\s\S]{0,180}?return false;[\s\S]{0,120}?applyCoverLetterSaveCompletion/,
+  "save ownership is evaluated before any workspace snapshot is published"
+);
+assert.match(
+  identityHook,
+  /capturePersistenceBaselineRevision[\s\S]{0,500}?commitPersistenceBaselineIfUnchanged[\s\S]{0,450}?commitIfUnchanged/,
+  "delayed persistence acknowledgments use the shared monotonic baseline revision"
+);
+assert.match(
+  coverLetterToolbar,
+  /workspaceMutationPending =\s*editor\.isWorkspaceSaving \|\| editor\.isWorkspaceReplacing/,
+  "the toolbar derives one visible pending boundary for workspace mutations"
+);
+assert.match(
+  coverLetterToolbar,
+  /<DocumentOpenMenu[\s\S]{0,180}?disabled=\{workspaceMutationPending\}/,
+  "pending workspace mutations disable saved opens and restores"
+);
+assert.match(
+  coverLetterToolbar,
+  /primary=\{\{[\s\S]{0,650}?disabled: workspaceSaveDisabled/,
+  "pending workspace mutations disable update-in-place saves"
+);
+assert.match(
+  coverLetterToolbar,
+  /variant=\{\{[\s\S]{0,500}?disabled: workspaceSaveDisabled/,
+  "pending workspace mutations disable named-variant saves"
+);
+assert.match(
+  coverLetterToolbar,
+  /applicationSync=\{\{[\s\S]{0,180}?applicationSync\.disabled \|\| workspaceMutationPending/,
+  "pending workspace mutations disable the conflicting application save"
+);
+assert.match(
+  hook,
+  /const \[isWorkspaceBootstrapping, setIsWorkspaceBootstrapping\] = useState\(true\)/,
+  "cover-letter startup is pending before the workspace options or saved document are known"
+);
+assert.match(
+  hook,
+  /const snapshot = await refreshCoverWorkspace\(\)[\s\S]*finally \{[\s\S]*setIsWorkspaceBootstrapping\(false\)/,
+  "cover-letter startup settles only after the workspace snapshot and optional saved-document open finish"
+);
+assert.match(
+  hook,
+  /return \{[\s\S]*isWorkspaceBootstrapping,[\s\S]*coverLetterOptions/,
+  "the editor exposes startup readiness beside the workspace options it qualifies"
+);
+assert.match(
+  app,
+  /const coverVariantResolutionPending = Boolean\(\s*coverLetterEditor\.isWorkspaceBootstrapping\s*\|\|\s*coverLetterEditor\.isWorkspaceReplacing\s*\|\|\s*isSelectingCoverVariant/,
+  "automatic Cover Letter Polish waits through startup and every editor-owned replacement transaction"
+);
+assert.match(
+  app,
+  /materialSelection\.coverLetter[\s\S]{0,120}?isGeneratingCover \|\| coverVariantResolutionPending/,
+  "Apply readiness remains pending while the included cover letter is being replaced"
+);
+assert.match(
+  hook,
+  /replaceWorkspaceCoverLetter = useCallback\([\s\S]{0,1000}?confirmReplace[\s\S]{0,900}?ownership\.claim\(documentVersionRef\.current\)[\s\S]{0,700}?ownership\.evaluate\(claim, documentVersionRef\.current\)/,
+  "saved and historical replacements claim one exact post-confirmation document version"
+);
+assert.match(
+  hook,
+  /openWorkspaceCoverLetter = useCallback\([\s\S]{0,450}?replaceWorkspaceCoverLetter[\s\S]*restoreWorkspaceCoverLetter = useCallback\([\s\S]{0,350}?replaceWorkspaceCoverLetter/,
+  "saved opens and history restores use the same replacement owner"
 );
 assert.match(
   hook,

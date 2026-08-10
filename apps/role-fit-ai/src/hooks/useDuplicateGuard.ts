@@ -4,7 +4,7 @@
  * blocking dialogs live behind one boundary:
  *
  *   1. confirmDuplicateBeforeJobAnalysis — blocking gate before Job analysis
- *   2. confirmDuplicateBeforePolish — blocking gate before Tailor / Review
+ *   2. confirmDuplicateBeforePolish — blocking gate before Resume Polish
  *   3. resolveApplyDuplicate — Apply-time confirm + merge-target resolution
  *
  * A confirmed warning is acknowledged once per job target: the ack is keyed by
@@ -122,7 +122,7 @@ export function useDuplicateGuard({
     return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "duplicate application"}`;
   }
 
-  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Tailor / Review"): Promise<DuplicateGateResult> {
+  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Resume Polish"): Promise<DuplicateGateResult> {
     const match = findDuplicatesForTarget(target)[0];
     if (!match || match.application.status === "interested") return { proceed: true, note: null };
 
@@ -181,17 +181,17 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    }, "Tailor / Review");
+    }, "Resume Polish");
   }
 
   // Blocking gate BEFORE any AI spend: if this job matches a tracked
   // application the user already acted on, confirm once per job target. The
   // acknowledgment carries through to Apply (which skips its own identical
-  // dialog), and the auto-tailor path funnels through the caller too — so an
+  // dialog), and the automatic proposal path funnels through the caller too — so an
   // extension import of an already-applied job pauses instead of silently
   // burning a polish run on it. Resolves true when polishing may proceed.
   async function confirmDuplicateBeforePolish(): Promise<boolean> {
-    return (await confirmDuplicateGate(currentTarget(), "Tailor / Review")).proceed;
+    return (await confirmDuplicateGate(currentTarget(), "Resume Polish")).proceed;
   }
 
   // Apply-time resolution: warn/confirm as needed and name the record this

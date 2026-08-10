@@ -1,24 +1,37 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   cliReasoningEffortOptionsFor,
   defaultCliReasoningEffort,
   providerOptions
 } from "../config/aiOptions";
 import { AI_STAGE_IDS } from "../config/aiStages";
-import { clearStoredSettings, loadSettings, saveSettings } from "../lib/settings";
+import { clearStoredSettings, loadSettings, saveSettings, type PersistedSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
 import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
-import type { CitizenshipStatus, EducationLevel } from "../lib/candidateFacts";
-import type { AutoPolishThreshold } from "../lib/prepareAutomation";
+import type {
+  AvailabilityNotice,
+  CandidateExperience,
+  CitizenshipStatus,
+  DeclaredAnswer,
+  EducationLevel
+} from "../lib/candidateFacts";
+import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
+import { materializeAiSettings } from "../lib/aiSettingsPersistence.ts";
+import {
+  WORKSPACE_PREFERENCES_APPLIED_EVENT,
+  WORKSPACE_PREFERENCES_STATUS_EVENT,
+  type WorkspacePreferencesStatus
+} from "../lib/workspacePreferencesSync.ts";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
-// config, the shared and per-stage guidance, the candidate facts, and the default
-// polish stage selection. All of these share one debounced localStorage write, so
-// they live together here rather than scattered across App. Credentials stay in
-// the local companion.
+// config, the shared and per-stage guidance, and candidate facts. These share
+// one debounced workspace write with a localStorage cache, so they live together
+// here rather than scattered across App. Credentials stay in the local companion.
 export function useAiSettings() {
   const saved = useMemo(() => loadSettings(), []);
+  const adoptedSettingsFingerprintRef = useRef<string | null>(null);
+  const latestSettingsRef = useRef<PersistedSettings>(materializeAiSettings(saved));
 
   const [stages, setStages] = useState<Record<StageId, StageConfig>>(() => seedStages(saved));
 
@@ -27,39 +40,114 @@ export function useAiSettings() {
   const [stageCustomInstructions, setStageCustomInstructions] = useState<Partial<Record<StageId, string>>>(
     () => saved.stageCustomInstructions ?? {}
   );
-  // Default "tailor" (no review) — preserve the user's choice once they opt in.
-  const [polishStages, setPolishStages] = useState<"tailor" | "review" | "both">(saved.polishStages ?? "both");
+  const [runFitAssessment, setRunFitAssessment] = useState(saved.runFitAssessment ?? true);
+  const [autoPolishResume, setAutoPolishResume] = useState(saved.autoPolishResume ?? false);
   const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.resumeAutoPolishThreshold ?? "OFF"
+    saved.resumeAutoPolishThreshold ?? "REASONABLE"
   );
-  const [coverAutoPolishThreshold, setCoverAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.coverAutoPolishThreshold ?? "OFF"
+  const [autoPolishCoverLetter, setAutoPolishCoverLetter] = useState(saved.autoPolishCoverLetter ?? false);
+  const [coverLetterAutoPolishThreshold, setCoverLetterAutoPolishThreshold] = useState<AutoPolishThreshold>(
+    saved.coverLetterAutoPolishThreshold ?? "STRONG"
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
-  const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
-  const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
+  const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState<DeclaredAnswer>(
+    saved.legallyAuthorizedToWork ?? "unspecified"
+  );
+  const [requiresSponsorship, setRequiresSponsorship] = useState<DeclaredAnswer>(
+    saved.requiresSponsorship ?? "unspecified"
+  );
   const [educationLevel, setEducationLevel] = useState<EducationLevel>(saved.educationLevel ?? "unspecified");
   const [major, setMajor] = useState(saved.major ?? "");
+  const [gpa, setGpa] = useState<number | undefined>(saved.gpa);
+  const [availabilityNotice, setAvailabilityNotice] = useState<AvailabilityNotice>(
+    saved.availabilityNotice ?? "unspecified"
+  );
+  const [availabilityDate, setAvailabilityDate] = useState(saved.availabilityDate ?? "");
+  const [experienceProfile, setExperienceProfile] = useState<CandidateExperience[]>(saved.experienceProfile ?? []);
+  const [workspacePreferencesStatus, setWorkspacePreferencesStatus] = useState<WorkspacePreferencesStatus>("idle");
+
+  // A different RoleFit client can update the canonical workspace record while
+  // this tab is open. workspacePreferencesSync refreshes it on focus and emits
+  // this event after updating the browser cache; reconcile the hook's live
+  // state so the UI does not immediately write an older snapshot back.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const adopt = () => {
+      const next = loadSettings();
+      adoptedSettingsFingerprintRef.current = JSON.stringify(materializeAiSettings(next));
+      setStages(seedStages(next));
+      setHonestContext(next.honestContext ?? "");
+      setCustomInstructions(next.customInstructions ?? "");
+      setStageCustomInstructions(next.stageCustomInstructions ?? {});
+      setRunFitAssessment(next.runFitAssessment ?? true);
+      setAutoPolishResume(next.autoPolishResume ?? false);
+      setResumeAutoPolishThreshold(next.resumeAutoPolishThreshold ?? "REASONABLE");
+      setAutoPolishCoverLetter(next.autoPolishCoverLetter ?? false);
+      setCoverLetterAutoPolishThreshold(next.coverLetterAutoPolishThreshold ?? "STRONG");
+      setCitizenshipStatus(next.citizenshipStatus ?? "unspecified");
+      setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? "unspecified");
+      setRequiresSponsorship(next.requiresSponsorship ?? "unspecified");
+      setEducationLevel(next.educationLevel ?? "unspecified");
+      setMajor(next.major ?? "");
+      setGpa(next.gpa);
+      setAvailabilityNotice(next.availabilityNotice ?? "unspecified");
+      setAvailabilityDate(next.availabilityDate ?? "");
+      setExperienceProfile(next.experienceProfile ?? []);
+    };
+    window.addEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
+    const updateStatus = (event: Event) => {
+      const status = (event as CustomEvent<WorkspacePreferencesStatus>).detail;
+      if (["idle", "saving", "saved", "error"].includes(status)) setWorkspacePreferencesStatus(status);
+    };
+    window.addEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, updateStatus);
+    return () => {
+      window.removeEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
+      window.removeEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, updateStatus);
+    };
+  }, []);
+
+  // The network owner keeps a durable pending marker, but it can only recover
+  // values that reached the browser cache. Capture the latest rendered settings
+  // synchronously when a reload or tab close interrupts the 400 ms UI debounce.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const persistLatestSettings = () => saveSettings(latestSettingsRef.current);
+    window.addEventListener("pagehide", persistLatestSettings);
+    return () => window.removeEventListener("pagehide", persistLatestSettings);
+  }, []);
 
   // Auto-save preferences so they survive reloads. Debounced so the free-text
-  // fields (honest context, custom instructions) don't serialize + write
-  // localStorage on every keystroke.
+  // fields (honest context, custom instructions) do not rewrite the cache and
+  // canonical workspace record on every keystroke.
   useEffect(() => {
+    const nextSettings: PersistedSettings = materializeAiSettings({
+      ...stageFieldsToPersist(stages),
+      honestContext,
+      customInstructions,
+      stageCustomInstructions,
+      runFitAssessment: runFitAssessment,
+      autoPolishResume,
+      resumeAutoPolishThreshold,
+      autoPolishCoverLetter,
+      coverLetterAutoPolishThreshold,
+      citizenshipStatus,
+      legallyAuthorizedToWork,
+      requiresSponsorship,
+      educationLevel,
+      major,
+      gpa,
+      availabilityNotice,
+      availabilityDate,
+      experienceProfile
+    });
+    latestSettingsRef.current = nextSettings;
+    const adoptedFingerprint = adoptedSettingsFingerprintRef.current;
+    adoptedSettingsFingerprintRef.current = null;
+    if (adoptedFingerprint === JSON.stringify(nextSettings)) {
+      return;
+    }
     const id = setTimeout(() => {
-      saveSettings({
-        ...stageFieldsToPersist(stages),
-        honestContext,
-        customInstructions,
-        stageCustomInstructions,
-        polishStages,
-        resumeAutoPolishThreshold,
-        coverAutoPolishThreshold,
-        citizenshipStatus,
-        legallyAuthorizedToWork,
-        requiresSponsorship,
-        educationLevel,
-        major
-      });
+      saveSettings(nextSettings);
     }, 400);
     return () => clearTimeout(id);
   }, [
@@ -67,14 +155,20 @@ export function useAiSettings() {
     honestContext,
     customInstructions,
     stageCustomInstructions,
-    polishStages,
+    runFitAssessment,
+    autoPolishResume,
     resumeAutoPolishThreshold,
-    coverAutoPolishThreshold,
+    autoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
     educationLevel,
-    major
+    major,
+    gpa,
+    availabilityNotice,
+    availabilityDate,
+    experienceProfile
   ]);
 
   // Keep each stage's reasoning effort valid for its selected model — the tiers
@@ -157,14 +251,20 @@ export function useAiSettings() {
     setHonestContext("");
     setCustomInstructions("");
     setStageCustomInstructions({});
-    setPolishStages("both");
-    setResumeAutoPolishThreshold("OFF");
-    setCoverAutoPolishThreshold("OFF");
+    setRunFitAssessment(true);
+    setAutoPolishResume(false);
+    setResumeAutoPolishThreshold("REASONABLE");
+    setAutoPolishCoverLetter(false);
+    setCoverLetterAutoPolishThreshold("STRONG");
     setCitizenshipStatus("unspecified");
-    setLegallyAuthorizedToWork(true);
-    setRequiresSponsorship(false);
+    setLegallyAuthorizedToWork("unspecified");
+    setRequiresSponsorship("unspecified");
     setEducationLevel("unspecified");
     setMajor("");
+    setGpa(undefined);
+    setAvailabilityNotice("unspecified");
+    setAvailabilityDate("");
+    setExperienceProfile([]);
   }
 
   return {
@@ -174,12 +274,16 @@ export function useAiSettings() {
     copyStage,
     honestContext,
     setHonestContext,
-    polishStages,
-    setPolishStages,
+    runFitAssessment,
+    setRunFitAssessment,
+    autoPolishResume,
+    setAutoPolishResume,
     resumeAutoPolishThreshold,
     setResumeAutoPolishThreshold,
-    coverAutoPolishThreshold,
-    setCoverAutoPolishThreshold,
+    autoPolishCoverLetter,
+    setAutoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
+    setCoverLetterAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -190,6 +294,15 @@ export function useAiSettings() {
     setEducationLevel,
     major,
     setMajor,
+    gpa,
+    setGpa,
+    availabilityNotice,
+    setAvailabilityNotice,
+    availabilityDate,
+    setAvailabilityDate,
+    experienceProfile,
+    setExperienceProfile,
+    workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,
     stageCustomInstructions,

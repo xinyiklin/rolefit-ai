@@ -1,7 +1,7 @@
 // Types + helpers shared across the section components.
 
-// "review" is gone as a tab: the AI recruiter review docks in the Resume tab's
-// rail.
+// "review" is gone as a tab: the Resume proposal
+// live in the Resume tab's rail.
 // "pipeline" and "calendar" are gone as top-level tabs: they merged into
 // "applications" as a Table / Calendar view switcher (TrackerTab).
 // Cover letters are a first-class editable document again. Materials remains
@@ -41,13 +41,3 @@ export type ApplicationAnswersResult = {
   answers: GeneratedAnswer[];
   roleDescriptions: GeneratedRoleDescription[];
 } | null;
-
-// Before/after fit numbers for the original (base) vs. tailored resume against
-// one job. Initial Fit and submission readiness are separate AI assessments;
-// there is no local fallback.
-export type FitComparison = {
-  source: "ai";
-  base: number;
-  tailored: number;
-  reason: string;
-};

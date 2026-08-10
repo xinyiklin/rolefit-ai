@@ -16,8 +16,8 @@ export function useCoverLetterPreTailorSnapshot(
     appliedBaselineRef.current = null;
   }, []);
 
-  // The first fingerprint after Tailor is its applied baseline. Any later
-  // document or style change retires the one-click replacement snapshot.
+  // The first fingerprint after a polished proposal is applied is its baseline.
+  // Any later document or style change retires the one-click replacement snapshot.
   useEffect(() => {
     if (!snapshot || currentFingerprint === null) return;
     if (appliedBaselineRef.current === null) {

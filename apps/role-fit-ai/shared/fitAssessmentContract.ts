@@ -1,417 +1,191 @@
-export const FIT_VERDICTS = [
-  "STRONG_FIT",
-  "REASONABLE_FIT",
-  "STRETCH",
-  "LIMITED_FIT"
-] as const;
+export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
+export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
+export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
+export const FIT_ASSESSMENT_INPUT_CHANGES = ["job", "resume", "candidate-context", "settings"] as const;
+export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v3";
 
-export type FitVerdict = (typeof FIT_VERDICTS)[number];
+export type FitAssessmentVerdict = (typeof FIT_ASSESSMENT_VERDICTS)[number];
+export type FitAssessmentEligibilityStatus = (typeof FIT_ASSESSMENT_ELIGIBILITY)[number];
+export type FitAssessmentEvidenceSource = (typeof FIT_ASSESSMENT_EVIDENCE_SOURCES)[number];
+export type FitAssessmentInputChange = (typeof FIT_ASSESSMENT_INPUT_CHANGES)[number];
 
-export const FIT_CONFIDENCES = ["HIGH", "MEDIUM", "LOW"] as const;
-export type FitConfidence = (typeof FIT_CONFIDENCES)[number];
-
-export const ELIGIBILITY_STATUSES = [
-  "SATISFIED",
-  "UNCERTAIN",
-  "NOT_SATISFIED"
-] as const;
-export type EligibilityStatus = (typeof ELIGIBILITY_STATUSES)[number];
-
-export const REQUIREMENT_IMPORTANCES = ["CORE", "SUPPORTING"] as const;
-export type RequirementImportance = (typeof REQUIREMENT_IMPORTANCES)[number];
-
-export const REQUIREMENT_COVERAGES = [
-  "COVERED",
-  "ADJACENT",
-  "MISSING",
-  "UNCERTAIN"
-] as const;
-export type RequirementCoverage = (typeof REQUIREMENT_COVERAGES)[number];
-
-export const EVIDENCE_SOURCES = ["RESUME", "HONEST_CONTEXT"] as const;
-export type EvidenceSource = (typeof EVIDENCE_SOURCES)[number];
-
-export type EvidenceReference = {
-  source: EvidenceSource;
-  excerpt: string;
+export type FitAssessmentMatch = {
+  jobExcerpt: string;
+  candidateSource: FitAssessmentEvidenceSource;
+  candidateExcerpt: string;
 };
 
-export type RequirementAssessment = {
-  id: string;
-  requirement: string;
-  sourceRequirement: string;
-  importance: RequirementImportance;
-  coverage: RequirementCoverage;
-  evidence: EvidenceReference[];
-  explanation: string;
-  canSurfaceInResume: boolean;
+export const FIT_ASSESSMENT_SUMMARY: Record<FitAssessmentVerdict, string> = {
+  STRONG: "Your background aligns closely with the role’s main requirements.",
+  REASONABLE: "Your background aligns well, with a few material gaps.",
+  STRETCH: "You have relevant experience, but several important gaps remain.",
+  LIMITED: "The resume shows limited direct evidence for the role’s main requirements."
 };
 
-export type EligibilityItem = {
-  id: string;
-  requirement: string;
-  sourceRequirement: string;
-  status: EligibilityStatus;
-  evidence: EvidenceReference[];
-  explanation: string;
-};
+// Fit Assessment uses the same canonical text on the client and server. Friendly
+// file labels stay outside this boundary because renaming a file does not
+// change what was screened.
+export function normalizeFitAssessmentInput(value: unknown): string {
+  return String(value ?? "").normalize("NFKC").replace(/\r\n?/g, "\n").trim();
+}
 
-export const FIT_RECOMMENDATION_ACTIONS = [
-  "APPLY",
-  "POLISH_FIRST",
-  "CONFIRM_ELIGIBILITY",
-  "APPLY_SELECTIVELY",
-  "NOT_RECOMMENDED"
-] as const;
-export type FitRecommendationAction = (typeof FIT_RECOMMENDATION_ACTIONS)[number];
-
-export type EligibilityAssessment = {
-  status: EligibilityStatus;
-  items: EligibilityItem[];
-};
-
-export type FitAssessment = {
-  verdict: FitVerdict;
-  confidence: FitConfidence;
+export type FitAssessmentResult = {
+  verdict: FitAssessmentVerdict;
   summary: string;
-  verdictReason: string;
-  eligibility: EligibilityAssessment;
-  requirements: RequirementAssessment[];
-  strengths: string[];
-  concerns: string[];
-  recommendation: {
-    action: FitRecommendationAction;
-    reason: string;
+  matches: FitAssessmentMatch[];
+  gaps: string[];
+  eligibility?: {
+    status: FitAssessmentEligibilityStatus;
+    jobExcerpt?: string;
+    candidateExcerpt?: string;
+    note?: string;
   };
 };
 
-export const SUBMISSION_READINESSES = [
-  "READY",
-  "REVISIONS_RECOMMENDED",
-  "EVIDENCE_NEEDED",
-  "NOT_READY"
-] as const;
-export type SubmissionReadiness = (typeof SUBMISSION_READINESSES)[number];
-
-export type SubmissionAssessment = {
-  readiness: SubmissionReadiness;
-  summary: string;
-  requirementVisibility: RequirementAssessment[];
-  unsupportedClaims: string[];
-  missingEvidence: string[];
-  presentationIssues: string[];
-  topEdits: string[];
+export type FitAssessmentSnapshot = {
+  result: FitAssessmentResult;
+  resumeLabel: string;
+  assessedAt?: string;
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempts?: number;
+  promptVersion?: string;
 };
 
-type ParseLimits = {
-  maxRequirements?: number;
-  maxEligibilityItems?: number;
-  maxEvidencePerItem?: number;
-  maxDerivedRequirementItems?: number;
-  maxAdviceItems?: number;
+export type FitAssessmentProvenance = {
+  screeningJobFingerprint: string;
+  resumeFingerprint: string;
+  candidateContextFingerprint: string;
+  requestIdentityFingerprint: string;
+  inputFingerprint: string;
 };
 
-const DEFAULT_LIMITS: Required<ParseLimits> = {
-  maxRequirements: 40,
-  maxEligibilityItems: 16,
-  maxEvidencePerItem: 8,
-  maxDerivedRequirementItems: 40,
-  maxAdviceItems: 16
+export type FitAssessmentRunKind = "prepare" | "reassess" | "resume-change";
+
+export type FitAssessmentActiveRun = {
+  id: string;
+  kind: FitAssessmentRunKind;
+  resumeLabel: string;
+  prepareRunId?: string;
+  // Only a Prepare-owned first assessment receives this one-use token.
+  // Retries, reassessments, resume changes, and restored results omit it.
+  automationToken?: string;
 };
 
-function record(value: unknown): Record<string, unknown> | null {
-  return value && typeof value === "object" && !Array.isArray(value)
-    ? value as Record<string, unknown>
-    : null;
+export type FitAssessmentCompleted = {
+  snapshot: FitAssessmentSnapshot;
+  // Tracker restores retain the result but cannot reconstruct exact request
+  // provenance, so they remain historical and automation-ineligible.
+  provenance?: FitAssessmentProvenance;
+  origin: "current" | "saved";
+  changes: FitAssessmentInputChange[];
+  previousPreparation: boolean;
+  prepareRunId?: string;
+  automationToken?: string;
+};
+
+// Durable completion and transient request state are deliberately independent.
+// Beginning, failing, disabling, or cancelling a new request must never erase
+// the last completed assessment.
+export type FitAssessmentState = {
+  enabled: boolean;
+  latestCompleted: FitAssessmentCompleted | null;
+  activeRun: FitAssessmentActiveRun | null;
+  lastError: { resumeLabel: string; message: string } | null;
+};
+
+const verdicts = new Set<string>(FIT_ASSESSMENT_VERDICTS);
+const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);
+
+function text(value: unknown, maxLength: number): string {
+  if (typeof value !== "string") return "";
+  return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
-function hasExactKeys(
-  value: Record<string, unknown> | null,
-  expected: readonly string[]
-): value is Record<string, unknown> {
-  if (!value) return false;
-  const keys = Object.keys(value);
-  return keys.length === expected.length && keys.every((key) => expected.includes(key));
+function excerpt(value: unknown, maxLength = 500): string {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  return trimmed.length <= maxLength ? trimmed : "";
 }
 
-function exactEnum<T extends string>(
-  value: unknown,
-  allowed: readonly T[]
-): T | null {
-  return typeof value === "string" && allowed.includes(value as T)
-    ? value as T
-    : null;
-}
-
-function text(value: unknown, maxLength: number): string | null {
-  if (typeof value !== "string") return null;
-  const normalized = value.trim();
-  return normalized && normalized.length <= maxLength ? normalized : null;
-}
-
-function stringList(value: unknown, maxItems: number, maxLength = 600): string[] | null {
-  if (!Array.isArray(value) || value.length > maxItems) return null;
-  const parsed = value.map((item) => text(item, maxLength));
-  return parsed.every((item): item is string => item !== null) ? parsed : null;
-}
-
-function parseEvidenceReferences(
-  value: unknown,
-  maxItems: number
-): EvidenceReference[] | null {
-  if (!Array.isArray(value) || value.length > maxItems) return null;
-  const parsed: EvidenceReference[] = [];
+function excerptList(value: unknown): string[] | null {
+  if (!Array.isArray(value) || value.length > 3) return null;
+  const seen = new Set<string>();
+  const result: string[] = [];
   for (const item of value) {
-    const source = record(item);
-    if (!hasExactKeys(source, ["source", "excerpt"])) return null;
-    const evidenceSource = exactEnum(source?.source, EVIDENCE_SOURCES);
-    const excerpt = text(source?.excerpt, 800);
-    if (!evidenceSource || !excerpt) return null;
-    parsed.push({ source: evidenceSource, excerpt });
+    const cleaned = excerpt(item);
+    const key = cleaned.toLocaleLowerCase().replace(/\s+/g, " ");
+    if (!cleaned || seen.has(key)) return null;
+    seen.add(key);
+    result.push(cleaned);
   }
-  return parsed;
+  return result;
 }
 
-function parseRequirement(
-  value: unknown,
-  maxEvidencePerItem: number,
-  mode: "FIT" | "VISIBILITY"
-): RequirementAssessment | null {
-  const source = record(value);
-  if (!hasExactKeys(source, [
-    "id",
-    "requirement",
-    "sourceRequirement",
-    "importance",
-    "coverage",
-    "evidence",
-    "explanation",
-    "canSurfaceInResume"
-  ])) return null;
-  const id = text(source?.id, 120);
-  const requirement = text(source?.requirement, 600);
-  const sourceRequirement = text(source?.sourceRequirement, 800);
-  const importance = exactEnum(source?.importance, REQUIREMENT_IMPORTANCES);
-  const coverage = exactEnum(source?.coverage, REQUIREMENT_COVERAGES);
-  const evidence = parseEvidenceReferences(source?.evidence, maxEvidencePerItem);
-  const explanation = text(source?.explanation, 1_200);
-  if (
-    !id ||
-    !requirement ||
-    !sourceRequirement ||
-    !importance ||
-    !coverage ||
-    !evidence ||
-    !explanation ||
-    typeof source?.canSurfaceInResume !== "boolean"
-  ) return null;
-  const hasHonestContextEvidence = evidence.some((item) => item.source === "HONEST_CONTEXT");
-  if (mode === "FIT") {
-    if (coverage !== "UNCERTAIN" && evidence.length === 0) return null;
-    if (coverage === "UNCERTAIN" && (evidence.length > 0 || source?.canSurfaceInResume === true)) return null;
-    if (coverage === "MISSING" && source?.canSurfaceInResume === true) return null;
-    if (source?.canSurfaceInResume === true && !hasHonestContextEvidence) return null;
-  } else {
-    if ((coverage === "COVERED" || coverage === "ADJACENT") && evidence.length === 0) return null;
-    if ((coverage === "COVERED" || coverage === "ADJACENT") && evidence.some((item) => item.source !== "RESUME")) return null;
-    if (coverage === "UNCERTAIN" && (evidence.length > 0 || source?.canSurfaceInResume === true)) return null;
-    if (coverage === "MISSING" && evidence.some((item) => item.source !== "HONEST_CONTEXT")) return null;
-    if (source?.canSurfaceInResume === true && !hasHonestContextEvidence) return null;
-    if (hasHonestContextEvidence && source?.canSurfaceInResume !== true) return null;
+function matchList(value: unknown): FitAssessmentMatch[] | null {
+  if (!Array.isArray(value) || value.length > 3) return null;
+  const seen = new Set<string>();
+  const matches: FitAssessmentMatch[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const source = item as Record<string, unknown>;
+    const jobExcerpt = excerpt(source.jobExcerpt);
+    const candidateExcerpt = excerpt(source.candidateExcerpt);
+    const candidateSource = text(source.candidateSource, 32).toUpperCase();
+    const key = jobExcerpt.toLocaleLowerCase().replace(/\s+/g, " ");
+    if (
+      !jobExcerpt
+      || !candidateExcerpt
+      || !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(candidateSource as FitAssessmentEvidenceSource)
+      || seen.has(key)
+    ) return null;
+    seen.add(key);
+    matches.push({
+      jobExcerpt,
+      candidateSource: candidateSource as FitAssessmentEvidenceSource,
+      candidateExcerpt
+    });
   }
-  return {
-    id,
-    requirement,
-    sourceRequirement,
-    importance,
-    coverage,
-    evidence,
-    explanation,
-    canSurfaceInResume: source.canSurfaceInResume
-  };
+  return matches;
 }
 
-function uniqueIds(items: { id: string }[]): boolean {
-  return new Set(items.map((item) => item.id)).size === items.length;
-}
+export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const verdict = text(source.verdict, 24).toUpperCase();
+  if (!verdicts.has(verdict)) return null;
+  const matches = matchList(source.matches);
+  const gaps = excerptList(source.gaps);
+  if (!matches || !gaps) return null;
+  if (verdict !== "LIMITED" && matches.length === 0) return null;
 
-function normalizedRequirementSource(value: string): string {
-  return value
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[’']/g, "'")
-    .replace(/[^a-z0-9.+#']+/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function uniqueRequirementSources(items: { sourceRequirement: string }[]): boolean {
-  const sources = items.map((item) => normalizedRequirementSource(item.sourceRequirement));
-  return new Set(sources).size === sources.length;
-}
-
-function requirementSourcesAreDisjoint(
-  requirements: RequirementAssessment[],
-  eligibilityItems: EligibilityItem[]
-): boolean {
-  const requirementSources = new Set(
-    requirements.map((item) => normalizedRequirementSource(item.sourceRequirement))
-  );
-  return eligibilityItems.every(
-    (item) => !requirementSources.has(normalizedRequirementSource(item.sourceRequirement))
-  );
-}
-
-function parseRequirements(
-  value: unknown,
-  limits: Required<ParseLimits>,
-  allowEmpty: boolean,
-  mode: "FIT" | "VISIBILITY"
-): RequirementAssessment[] | null {
-  if (!Array.isArray(value) || value.length > limits.maxRequirements) return null;
-  if (!allowEmpty && value.length === 0) return null;
-  const requirements = value.map((item) => parseRequirement(item, limits.maxEvidencePerItem, mode));
-  if (!requirements.every((item): item is RequirementAssessment => item !== null)) return null;
-  return uniqueIds(requirements) && uniqueRequirementSources(requirements) ? requirements : null;
-}
-
-function parseEligibilityItem(
-  value: unknown,
-  maxEvidencePerItem: number
-): EligibilityItem | null {
-  const source = record(value);
-  if (!hasExactKeys(source, ["id", "requirement", "sourceRequirement", "status", "evidence", "explanation"])) return null;
-  const id = text(source?.id, 120);
-  const requirement = text(source?.requirement, 600);
-  const sourceRequirement = text(source?.sourceRequirement, 800);
-  const status = exactEnum(source?.status, ELIGIBILITY_STATUSES);
-  const evidence = parseEvidenceReferences(source?.evidence, maxEvidencePerItem);
-  const explanation = text(source?.explanation, 1_200);
-  if (!id || !requirement || !sourceRequirement || !status || !evidence || !explanation) return null;
-  if ((status === "SATISFIED" || status === "NOT_SATISFIED") && evidence.length === 0) return null;
-  if (status === "UNCERTAIN" && evidence.length > 0) return null;
-  return { id, requirement, sourceRequirement, status, evidence, explanation };
-}
-
-function expectedEligibilityStatus(items: EligibilityItem[]): EligibilityStatus {
-  if (items.some((item) => item.status === "NOT_SATISFIED")) return "NOT_SATISFIED";
-  if (items.some((item) => item.status === "UNCERTAIN")) return "UNCERTAIN";
-  return "SATISFIED";
-}
-
-function parseEligibility(
-  value: unknown,
-  limits: Required<ParseLimits>
-): EligibilityAssessment | null {
-  const source = record(value);
-  if (!hasExactKeys(source, ["status", "items"])) return null;
-  const status = exactEnum(source?.status, ELIGIBILITY_STATUSES);
-  if (!status || !Array.isArray(source?.items) || source.items.length > limits.maxEligibilityItems) {
-    return null;
+  const rawEligibility = source.eligibility;
+  let eligibility: FitAssessmentResult["eligibility"];
+  if (rawEligibility !== undefined && rawEligibility !== null) {
+    if (typeof rawEligibility !== "object" || Array.isArray(rawEligibility)) return null;
+    const eligibilitySource = rawEligibility as Record<string, unknown>;
+    const status = text(eligibilitySource.status, 16).toUpperCase();
+    if (!eligibilityStatuses.has(status)) return null;
+    const note = text(eligibilitySource.note, 240);
+    const jobExcerpt = excerpt(eligibilitySource.jobExcerpt);
+    const candidateExcerpt = excerpt(eligibilitySource.candidateExcerpt);
+    if ((status === "CHECK" || status === "BLOCKED") && !jobExcerpt) return null;
+    if (status === "BLOCKED" && !candidateExcerpt) return null;
+    eligibility = {
+      status: status as FitAssessmentEligibilityStatus,
+      ...(jobExcerpt ? { jobExcerpt } : {}),
+      ...(candidateExcerpt ? { candidateExcerpt } : {}),
+      ...(note ? { note } : {})
+    };
   }
-  const items = source.items.map((item) => parseEligibilityItem(item, limits.maxEvidencePerItem));
-  if (
-    !items.every((item): item is EligibilityItem => item !== null)
-    || !uniqueIds(items)
-    || !uniqueRequirementSources(items)
-  ) return null;
-  return status === expectedEligibilityStatus(items) ? { status, items } : null;
-}
 
-export function parseFitAssessment(
-  value: unknown,
-  options: ParseLimits = {}
-): FitAssessment | null {
-  const limits = { ...DEFAULT_LIMITS, ...options };
-  const source = record(value);
-  if (!hasExactKeys(source, [
-    "verdict",
-    "confidence",
-    "summary",
-    "verdictReason",
-    "eligibility",
-    "requirements",
-    "strengths",
-    "concerns",
-    "recommendation"
-  ])) return null;
-  const verdict = exactEnum(source?.verdict, FIT_VERDICTS);
-  const confidence = exactEnum(source?.confidence, FIT_CONFIDENCES);
-  const summary = text(source?.summary, 1_200);
-  const verdictReason = text(source?.verdictReason, 1_200);
-  const eligibility = parseEligibility(source?.eligibility, limits);
-  const requirements = parseRequirements(source?.requirements, limits, false, "FIT");
-  const strengths = stringList(source?.strengths, limits.maxDerivedRequirementItems);
-  const concerns = stringList(source?.concerns, limits.maxDerivedRequirementItems);
-  const recommendationSource = record(source?.recommendation);
-  if (!hasExactKeys(recommendationSource, ["action", "reason"])) return null;
-  const action = exactEnum(recommendationSource?.action, FIT_RECOMMENDATION_ACTIONS);
-  const recommendationReason = text(recommendationSource?.reason, 1_200);
-  if (
-    !verdict ||
-    !confidence ||
-    !summary ||
-    !verdictReason ||
-    !eligibility ||
-    !requirements ||
-    !strengths ||
-    !concerns ||
-    !action ||
-    !recommendationReason
-  ) return null;
-  if (!requirementSourcesAreDisjoint(requirements, eligibility.items)) return null;
+  const typedVerdict = verdict as FitAssessmentVerdict;
   return {
-    verdict,
-    confidence,
-    summary,
-    verdictReason,
-    eligibility,
-    requirements,
-    strengths,
-    concerns,
-    recommendation: { action, reason: recommendationReason }
-  };
-}
-
-export function parseSubmissionAssessment(
-  value: unknown,
-  options: ParseLimits = {}
-): SubmissionAssessment | null {
-  const limits = { ...DEFAULT_LIMITS, ...options };
-  const source = record(value);
-  if (!hasExactKeys(source, [
-    "readiness",
-    "summary",
-    "requirementVisibility",
-    "unsupportedClaims",
-    "missingEvidence",
-    "presentationIssues",
-    "topEdits"
-  ])) return null;
-  const readiness = exactEnum(source?.readiness, SUBMISSION_READINESSES);
-  const summary = text(source?.summary, 1_200);
-  const requirementVisibility = parseRequirements(source?.requirementVisibility, limits, true, "VISIBILITY");
-  const unsupportedClaims = stringList(source?.unsupportedClaims, limits.maxAdviceItems);
-  const missingEvidence = stringList(source?.missingEvidence, limits.maxDerivedRequirementItems);
-  const presentationIssues = stringList(source?.presentationIssues, limits.maxAdviceItems);
-  const topEdits = stringList(source?.topEdits, limits.maxAdviceItems);
-  if (
-    !readiness ||
-    !summary ||
-    !requirementVisibility ||
-    !unsupportedClaims ||
-    !missingEvidence ||
-    !presentationIssues ||
-    !topEdits
-  ) return null;
-  if (readiness === "READY" && (unsupportedClaims.length > 0 || missingEvidence.length > 0)) return null;
-  return {
-    readiness,
-    summary,
-    requirementVisibility,
-    unsupportedClaims,
-    missingEvidence,
-    presentationIssues,
-    topEdits
+    verdict: typedVerdict,
+    summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
+    matches,
+    gaps,
+    ...(eligibility ? { eligibility } : {})
   };
 }

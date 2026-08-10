@@ -691,157 +691,6 @@
   gap: var(--s3);
 }
 
-.prepare-decision {
-  display: grid;
-  gap: 0;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.prepare-initial-fit,
-.prepare-automation {
-  display: grid;
-  gap: var(--s2);
-}
-
-.prepare-automation {
-  margin-top: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.prepare-decision__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.prepare-decision__head > span,
-.prepare-fit__provenance {
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  overflow-wrap: anywhere;
-}
-
-.prepare-initial-fit > p:not(.prepare-page__eyebrow, .prepare-note),
-.prepare-initial-fit__status {
-  margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.72rem;
-  line-height: 1.4;
-}
-
-.prepare-initial-fit__status.is-working {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--cool);
-}
-
-.prepare-fit-evidence {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
-.prepare-fit-evidence > div {
-  min-width: 0;
-}
-
-.prepare-fit-evidence strong {
-  color: var(--ink);
-  font-size: 0.7rem;
-  font-weight: 650;
-}
-
-.prepare-fit-evidence ul {
-  display: grid;
-  gap: 3px;
-  margin: 3px 0 0;
-  padding-left: 15px;
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  line-height: 1.35;
-}
-
-.prepare-decision__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  flex-wrap: wrap;
-}
-
-.prepare-automation > ul {
-  display: grid;
-  gap: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.prepare-automation__row {
-  display: grid;
-  grid-template-columns: 14px minmax(0, 1fr);
-  gap: 4px;
-  padding: 6px 0;
-}
-
-.prepare-automation__row + .prepare-automation__row {
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.prepare-automation__row > span {
-  display: grid;
-  place-items: center;
-  width: 14px;
-  min-height: 16px;
-  color: var(--ink-faint);
-}
-
-.prepare-automation__row.is-working > span {
-  color: var(--cool);
-}
-
-.prepare-automation__row > div {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px var(--s2);
-  min-width: 0;
-}
-
-.prepare-automation__row strong,
-.prepare-automation__row span {
-  font-size: 0.72rem;
-}
-
-.prepare-automation__row > div > span {
-  color: var(--ink-faint);
-}
-
-.prepare-automation__row.is-ready > div > span {
-  color: var(--accent-deep);
-}
-
-.prepare-automation__row.is-warn > div > span {
-  color: var(--danger);
-}
-
-.prepare-automation__row p {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  line-height: 1.35;
-}
-
-.prepare-automation__history-note {
-  margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.7rem;
-  line-height: 1.4;
-}
-
 .prepare-fit {
   display: grid;
   gap: var(--s2);
@@ -859,163 +708,130 @@
 .prepare-fit__summary > span {
   color: var(--ink-faint);
   font-size: 0.7rem;
-  text-transform: capitalize;
-}
-
-.prepare-initial-fit .prepare-fit__eligibility,
-.prepare-initial-fit .prepare-fit__requirement-summary,
-.prepare-initial-fit .prepare-fit__reason,
-.prepare-initial-fit .prepare-fit__verdict-reason {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.prepare-initial-fit .prepare-fit__eligibility {
-  color: var(--accent-deep);
-  font-size: 0.7rem;
-  font-weight: 650;
-}
-
-.prepare-initial-fit .prepare-fit__eligibility.is-uncertain {
-  color: var(--warm);
-}
-
-.prepare-initial-fit .prepare-fit__eligibility.is-not-satisfied {
-  color: var(--danger);
-}
-
-.prepare-initial-fit .prepare-fit__requirement-summary {
-  color: var(--ink-muted);
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.prepare-initial-fit .prepare-fit__reason {
-  color: var(--ink);
-  font-size: 0.82rem;
-  line-height: 1.45;
-}
-
-.prepare-initial-fit .prepare-fit__verdict-reason {
-  color: var(--ink-faint);
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-.prepare-fit-ledger {
-  border-block: 1px solid var(--hairline-soft);
-}
-
-.prepare-fit-ledger > summary {
-  padding-block: 7px;
-  color: var(--ink-muted);
-  cursor: pointer;
-  font-size: 0.7rem;
-  font-weight: 650;
-}
-
-.prepare-fit-ledger > ol {
-  display: grid;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.prepare-fit-ledger > ol > li {
-  min-width: 0;
-  padding-block: 8px;
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.prepare-fit-ledger__head {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s2);
-  align-items: baseline;
-}
-
-.prepare-fit-ledger__head strong {
-  min-width: 0;
-  color: var(--ink);
-  font-size: 0.82rem;
-  overflow-wrap: anywhere;
-}
-
-.prepare-fit-ledger__head span,
-.prepare-fit-ledger small {
-  color: var(--ink-faint);
-  font-size: 0.64rem;
-}
-
-.prepare-fit-ledger > ol > li > p {
-  margin: 3px 0 0;
-  color: var(--ink-faint);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.prepare-fit-ledger__evidence {
-  display: grid;
-  gap: 3px;
-  margin: 5px 0 0;
-  padding: 0;
-  list-style: none;
-}
-
-.prepare-fit-ledger__evidence li {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr);
-  gap: var(--s2);
-  align-items: baseline;
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  overflow-wrap: anywhere;
-}
-
-.prepare-fit-ledger__evidence span {
-  color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  text-transform: uppercase;
-}
-
-.prepare-fit-ledger small {
-  display: block;
-  margin-top: 4px;
-}
-
-.prepare-fit__recommendation {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 2px var(--s2);
-}
-
-.prepare-fit__recommendation strong,
-.prepare-fit__recommendation span {
-  font-size: 0.68rem;
-}
-
-.prepare-fit__recommendation span {
-  color: var(--ink-faint);
-  text-transform: capitalize;
-}
-
-.prepare-fit__recommendation p {
-  grid-column: 1 / -1;
-  margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.82rem;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
 }
 
 .prepare-fit > p:not(.prepare-page__eyebrow) {
   margin: 0;
-  color: var(--ink-faint);
-  font-size: 0.72rem;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
   line-height: 1.4;
+}
+
+.prepare-fit > .prepare-fit__meta {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.fit-assessment-verdict {
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-pill);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.fit-assessment-verdict.is-strong {
+  color: var(--on-accent);
+  background: var(--accent);
+  border-color: var(--accent-deep);
+}
+
+.fit-assessment-verdict.is-reasonable {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.fit-assessment-verdict.is-stretch {
+  color: var(--warm);
+  background: var(--warm-veil);
+  border-color: var(--warm-soft);
+}
+
+.fit-assessment-verdict.is-limited {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+}
+
+.fit-assessment-list {
+  display: grid;
+  gap: 4px;
+}
+
+.fit-assessment-list > strong {
+  color: var(--ink-strong);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.fit-assessment-list ul {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding-left: var(--s4);
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
+.fit-assessment-list li {
+  overflow-wrap: anywhere;
+}
+
+.fit-assessment-list li small,
+.fit-assessment-eligibility small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.fit-assessment-eligibility {
+  padding: var(--s2);
+  color: var(--warm) !important;
+  background: var(--warm-veil);
+  border-radius: var(--r-md);
+}
+
+.fit-assessment-changes {
+  display: grid;
+  gap: 4px;
+  padding: var(--s2) 0;
+  border-top: 1px solid var(--hairline-soft);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.fit-assessment-changes > strong {
+  color: var(--ink-strong);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.fit-assessment-changes ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fit-assessment-changes li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--s2);
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+  line-height: 1.35;
+}
+
+.fit-assessment-changes small {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
 }
 
 .prepare-fit__empty {
@@ -1116,6 +932,83 @@
   text-align: center;
 }
 
+/* -------- Prepared two-pane height -------- */
+
+/* Prepare keeps one stable workspace height in both lifecycle states. Once
+   prepared, its two columns are unrelated lengths: the editable brief grows
+   with the posting, while the rail grows with Fit Assessment, materials, and
+   readiness. With the studio body as the only scroller, the taller column set
+   the page height and the shorter one left a long dead band beside it — and the
+   sticky rail could still be cut off by a much longer brief.
+
+   Bound the prepared row to the studio's own height and let whichever column
+   overflows scroll inside itself. Grid already knows each column's intrinsic
+   height, so no measurement, ResizeObserver, or JS is involved. Desktop only:
+   below 1080px the layout is a single column and the page scroll is correct. */
+@media (min-width: 1081px) {
+  .studio-body[data-tab="prepare"] {
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+    padding-bottom: var(--s4);
+  }
+
+  /* The spacer exists to keep bottom padding inside a SCROLLING grid container
+     (Firefox drops it otherwise). This container no longer scrolls, so the
+     padding above is enough and the spacer would only steal height. */
+  .studio-body[data-tab="prepare"]::after {
+    display: none;
+  }
+
+  .prepare-page {
+    height: 100%;
+    min-height: 0;
+    grid-template-rows: auto minmax(0, 1fr);
+    align-content: stretch;
+  }
+
+  .prepare-layout {
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .prepare-layout.is-intake > .prepare-main {
+    height: 100%;
+    min-height: 0;
+    align-content: start;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .prepare-layout.is-prepared {
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  .prepare-layout.is-prepared > .prepare-main,
+  .prepare-layout.is-prepared > .prepare-rail {
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  /* Sticky solved the old problem (a rail shorter than the page); an own
+     scroller solves it better and sticky inside one is meaningless. */
+  .prepare-layout.is-prepared > .prepare-rail {
+    position: static;
+  }
+
+  /* Opt out of grid-item stretch so wrapped content establishes the panel's
+     height. The minimum keeps a shorter panel filling the scrollport. */
+  .prepare-layout.is-prepared > .prepare-rail > .prepare-application {
+    align-self: start;
+    min-height: 100%;
+  }
+}
+
 @media (max-width: 1080px) {
   .prepare-layout {
     grid-template-columns: 1fr;
@@ -1150,7 +1043,6 @@
   .prepare-input-action,
   .prepare-detail-grid,
   .prepare-gaps,
-  .prepare-fit-evidence,
   .prepare-compensation {
     grid-template-columns: 1fr;
   }

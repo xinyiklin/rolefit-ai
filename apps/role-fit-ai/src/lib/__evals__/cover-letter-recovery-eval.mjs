@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 
 import { coverLetterRecoveryDirty } from "../coverLetterRecovery.ts";
 
@@ -28,6 +29,60 @@ assert.equal(
   }),
   true,
   "a style-only change to a blank letter is recoverable"
+);
+
+const identityHook = readFileSync(
+  new URL("../../hooks/useCoverLetterDocumentIdentity.ts", import.meta.url),
+  "utf8"
+);
+const editorHook = readFileSync(
+  new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url),
+  "utf8"
+);
+const autosaveHook = readFileSync(
+  new URL("../../hooks/useCoverLetterAutosaveDraft.ts", import.meta.url),
+  "utf8"
+);
+const toolbar = readFileSync(
+  new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url),
+  "utf8"
+);
+const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+
+assert.match(
+  identityHook,
+  /const recoveryDirty = coverLetterRecoveryDirty\([\s\S]{0,250}?documentDirty,[\s\S]{0,150}?documentTitle,[\s\S]{0,150}?persistedDocumentTitle/,
+  "the document identity owner derives title-inclusive recovery dirtiness once"
+);
+assert.match(
+  editorHook,
+  /return \{[\s\S]{0,350}?dirty,[\s\S]{0,80}?recoveryDirty,/,
+  "the editor exposes the canonical title-inclusive dirty value"
+);
+assert.match(
+  autosaveHook,
+  /recoveryDirty: boolean[\s\S]{0,650}?shouldSave: payload !== null && recoveryDirty/,
+  "cover-letter autosave consumes the canonical dirty value"
+);
+assert.match(
+  toolbar,
+  /if \(!editor\.recoveryDirty\) return true[\s\S]*!editor\.recoveryDirty[\s\S]{0,250}?draftAutosaveState/,
+  "replacement confirmation and recovery-save status include title-only edits"
+);
+assert.match(
+  app,
+  /if \(coverLetterEditor\.recoveryDirty\) setPendingCoverDraft\(null\)[\s\S]*useBeforeUnloadGuard\([\s\S]{0,180}?coverLetterEditor\.recoveryDirty/,
+  "title-only edits dismiss stale recovery offers and activate unload protection"
+);
+assert.match(
+  app,
+  /handleRestoreCoverDraft[\s\S]{0,300}?coverLetterEditor\.recoveryDirty && !\(await confirmReplaceCoverLetter\(\)\)/,
+  "restoring recovery asks before replacing a title-only edit"
+);
+assert.doesNotMatch(
+  app,
+  /coverLetterEditor\.dirty/,
+  "App loss-protection paths no longer bypass title-only dirtiness"
 );
 
 console.log("cover-letter recovery decisions: PASS");

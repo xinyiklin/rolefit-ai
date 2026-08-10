@@ -1,5 +1,4 @@
-// Offline, deterministic probes for the JD-term grounding gate and the
-// tailoring-summary grounding it drives. No model calls, no network:
+// Offline, deterministic probes for the shared JD-term grounding gate.
 //
 //   node server/ai/__evals__/grounding-probes.mjs
 //
@@ -15,54 +14,31 @@ import {
   findUngroundedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
+  hasUnsupportedOwnershipIncrease,
   isClaimTermGroundedInSource
 } from "../grounding.ts";
-import { groundChangeSummary } from "../polish.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 
-// "What changed" summary honesty: the summary is free model prose (NOT derived
-// from the sanitized suggestions), so it can claim a change that never landed.
-// groundChangeSummary drops a bullet naming a JD tool/term absent from the
-// tailored resume, keeping grounded/generic bullets. Honest context may support
-// a proposal, but cannot make the summary claim the proposal landed.
-const TAILORED = "languages: python, sql, javascript\ntools: git, docker, postgres";
-const JOB = "we need python, sql, salesforce administration, and kubernetes orchestration. docker a plus.";
-const gcs = (summary) => groundChangeSummary(summary, JOB, TAILORED);
-
 const checks = [
-  // --- changeSummary honesty: overclaims of unlanded changes are dropped ---
-  ["summary: ungrounded 'added Salesforce' overclaim dropped",
-    gcs(["Added Salesforce administration to your Skills section."]).length === 0],
-  ["summary: ungrounded 'Kubernetes' overclaim dropped",
-    gcs(["Highlighted Kubernetes orchestration across your tooling."]).length === 0],
-  ["summary: grounded bullet (Python/SQL in tailored resume) kept",
-    gcs(["Reorganized your Skills to surface Python and SQL first."]).length === 1],
-  ["summary: generic 'tightened wording' bullet kept (no JD term)",
-    gcs(["Tightened wording and removed redundancy."]).length === 1],
-  ["summary: provider prose is bounded and normalized before returning", (() => {
-    const out = gcs([`Tightened wording.\n${"removed redundant phrasing ".repeat(30)}`]);
-    return out.length === 1 && out[0].length <= 300 && !/[\r\n]/.test(out[0]);
-  })()],
-  ["summary: Claude Code/Codex addition withheld when it never reached the resume",
-    groundChangeSummary(
-      ["Add Claude Code and OpenAI Codex to surface the strongest direct match for the role's AI-tool requirement."],
-      "We value experience with AI-assisted developer tools.",
-      `${TAILORED}\ntooling: OpenAI`
-    ).length === 0],
-  ["summary: Claude Code/Codex addition kept only after it reached the resume",
-    groundChangeSummary(
-      ["Add Claude Code and OpenAI Codex to surface the strongest direct match for the role's AI-tool requirement."],
-      "We value experience with AI-assisted developer tools.",
-      `${TAILORED}\ntooling: Claude Code, OpenAI Codex`
-    ).length === 1],
-  ["summary: mixed batch keeps only the honest bullets",
-    gcs([
-      "Reorganized your Skills to surface Python and SQL first.",
-      "Added Salesforce administration to your Skills section.",
-      "Emphasized your Docker experience."
-    ]).length === 2],
-  ["summary: empty list passes through unchanged", gcs([]).length === 0],
+  ["every upward ownership step is gated",
+    hasUnsupportedOwnershipIncrease(
+      "Managed JavaScript billing integrations.",
+      "Contributed to JavaScript billing integrations.",
+      ""
+    )],
+  ["unrelated sibling leadership cannot authorize the target",
+    hasUnsupportedOwnershipIncrease(
+      "Oversaw JavaScript billing integrations.",
+      "Supported JavaScript billing integrations.",
+      "Led Kubernetes infrastructure migrations."
+    )],
+  ["tied honest evidence can substantiate the same ownership",
+    !hasUnsupportedOwnershipIncrease(
+      "Orchestrated JavaScript billing integrations.",
+      "Supported JavaScript billing integrations.",
+      "At Acme I orchestrated the JavaScript billing integrations."
+    )],
   ["ordinary outcome detector rejects invented outage/revenue results",
     findUngroundedOutcomeClaim("Prevented outages and protected revenue.", "Built a deterministic fallback.") === "prevent"],
   ["ordinary outcome detector accepts a result stated in evidence",
@@ -163,7 +139,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 35, `grounding probe count dropped below the floor (35): found ${checks.length}`);
+assert(checks.length >= 25, `grounding probe count dropped below the floor (25): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

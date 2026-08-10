@@ -38,7 +38,7 @@ export type CoverLetterTemplateAnalysis = {
   }>;
   slots: CoverLetterTemplateSlot[];
   // Slots that name a genuinely private fact (a referral, a prior personal
-  // relationship). Everything else is generative and never blocks Tailor.
+  // relationship). Everything else is generative and never blocks Polish.
   userInputSlots: CoverLetterTemplateSlot[];
   requiredInputs: CoverLetterTemplateSlot[];
   hasAuthoredVoice: boolean;

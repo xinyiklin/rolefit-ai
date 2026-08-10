@@ -35,7 +35,6 @@ import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import { useApplications, type Application } from "./hooks/useApplications";
-import { useResumeAnalysis } from "./hooks/useResumeAnalysis";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
@@ -63,24 +62,24 @@ import {
   resolveResumeApplicantName,
   sanitizeFileBase
 } from "./lib/downloads";
-import { buildStageRequestFields, type StageId } from "./lib/aiRequest";
+import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
-import { defaultTailorModes, fullResumeEvidenceText, type TailorMode } from "./lib/tailorScope";
+import {
+  defaultResumePolishScopeModes,
+  type ResumePolishScopeMode
+} from "./lib/resumePolishScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
-import { documentSourceFingerprint } from "./lib/documentSourceFingerprint";
-import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "./lib/aiUsage";
+import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
 import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
-import { usePolishPipeline } from "./hooks/usePolishPipeline";
+import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipeline";
+import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
-import { useInitialFitAudit } from "./hooks/useInitialFitAudit";
-import { usePreparedResumeSelection } from "./hooks/usePreparedResumeSelection";
-import { usePrepareAutomation } from "./hooks/usePrepareAutomation";
 import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
@@ -95,13 +94,23 @@ import {
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
-import { coverLetterRecoveryDirty } from "./lib/coverLetterRecovery";
+import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
+import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
+import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
+import {
+  automaticPolishActionDecision,
+  fitAssessmentMeetsThreshold
+} from "./lib/autoPolishPolicy";
+import {
+  fitAssessmentPersistenceDecision,
+  fitAssessmentMayTriggerAutoPolish
+} from "./lib/fitAssessmentLifecycle";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
+import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
 
 import { Masthead } from "./sections/Masthead";
-import { AiWorkflowProgress, TaskProgress } from "./sections/AiWorkflowProgress";
-import type { AiWorkflowStage } from "./lib/aiWorkflow";
+import { TaskProgress } from "./sections/AiWorkflowProgress";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
 import { DocumentSaveMenu } from "./sections/document/DocumentSaveMenu";
@@ -112,7 +121,6 @@ import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
-import type { PrepareInitialFitView } from "./sections/tabs/prepare/PrepareDecisionCheckpoint";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
 import { MaterialsTab } from "./sections/tabs/MaterialsTab";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
@@ -244,7 +252,7 @@ function App() {
   // ----- Dialog system -----
   const { alert, confirm } = useDialog();
 
-  // Draggable progress dock (Tailor/Review/Job analysis/Cover/Answers task cards) —
+  // Draggable progress dock for active AI task cards —
   // lets the user drag the fixed-position stack out of the way of whatever
   // studio content it would otherwise sit over.
   const dock = useDraggableDock();
@@ -282,7 +290,7 @@ function App() {
   const [isManuallySelectingResumeVariant, setIsManuallySelectingResumeVariant] = useState(false);
   const resumeManualVariantSelectionInFlightRef = useRef(false);
   const coverManualVariantSelectionInFlightRef = useRef(false);
-  // Tab-local document identity: independent tailoring sessions can name their
+  // Tab-local document identity: independent RoleFit sessions can name their
   // drafts independently, and the same title becomes the default PDF/.resume
   // file name. Successful imports/analyses replace it with the new job target.
   const [documentTitle, setDocumentTitle] = useState(() => {
@@ -293,19 +301,24 @@ function App() {
       return DEFAULT_DOCUMENT_TITLE;
     }
   });
-  // Per-stage AI usage snapshot (job analysis/tailor/review/cover), captured across
+  // Per-stage AI usage snapshot (job-analysis/resume-polish/cover/answers), captured across
   // the pipeline and snapshotted onto the Application at Apply time. Keys are
   // deleted (not set to "none") when a fresh polish run starts, so a stale
   // provider attribution can never linger from a prior run into the new one.
   const [pipelineAiUsage, setPipelineAiUsage] = useState<Record<string, StageAiUsage>>({});
   // Immutable captured posting text. It remains separate even when it initially
   // matches jobDescription so prepared-brief edits and "Prepare again" never
-  // rewrite or accidentally reanalyze the compact tailoring scaffold.
+  // rewrite or accidentally reanalyze the compact model-facing brief.
   const [jobRawText, setJobRawText] = useState("");
   // Starts empty; the mount effect (loadWorkspace) auto-loads a workspace
   // base-resume when one exists, otherwise the editor stays blank.
   const [resumeText, setResumeText] = useState("");
   const [fileName, setFileName] = useState("");
+  // What the loaded document actually is. The bundled starter is sample
+  // content: it is long enough to pass every length test while speaking for
+  // nobody, so readiness, Fit Assessment, and automatic proposals must not treat
+  // it as the applicant's resume until it is saved as a real base.
+  const [resumeOrigin, setResumeOrigin] = useState<ResumeOrigin>("blank");
 
   const [result, setResult] = useState<PolishedResume | null>(null);
   const [fileError, setFileError] = useState("");
@@ -313,10 +326,18 @@ function App() {
   const [linkStatus, setLinkStatus] = useState("");
   // Surfaces polish-flow feedback in the workflow rail.
   const [polishStatus, setPolishStatus] = useState("");
-  const [resumeVariantRecommendation, setResumeVariantRecommendation] = useState<VariantRecommendation | null>(null);
-  const [isRankingResumeVariants, setIsRankingResumeVariants] = useState(false);
-  const resumeVariantRecommendationKeyRef = useRef("");
-  const resumeVariantRecommendationGenerationRef = useRef(0);
+  // Resume seeding is composed before the workspace resolver but may clear a
+  // recommendation later, so this callback alone crosses that declaration order.
+  const clearPreparedResumeRecommendationRef = useRef<() => void>(() => undefined);
+  // Tracks the two independent actions for the one assessment that Prepare is
+  // allowed to use for automation. Later assessments are advisory-only upstream.
+  const autoProposalFitRef = useRef({
+    key: "",
+    resumeClaimed: false,
+    resumeSettled: false,
+    coverStarted: false
+  });
+  const [autoProposalSettlementRevision, setAutoProposalSettlementRevision] = useState(0);
   // Both document kinds use the same recommendation and safe auto-selection
   // contract; dirty editors and restored applications are never replaced.
   const [coverLetterVariantRecommendation, setCoverLetterVariantRecommendation] =
@@ -330,11 +351,9 @@ function App() {
   const exportStatusIsError = /failed|could not|couldn't|unavailable|load a resume/i.test(exportStatus);
   const [applyStatus, setApplyStatus] = useState("");
   const applyStatusIsError = /failed|could not|couldn't/i.test(applyStatus);
-  // All auto-saved AI preferences (primary provider/model, the reviewer-override
-  // audit* fields, and the polish prefs that persist with them) plus the
-  // debounced localStorage write live in useAiSettings. Credentials are owned
-  // by the local companion and have no browser state. Destructured into the
-  // same names the handlers + JSX already use.
+  // Per-stage provider settings and automation preferences, plus the debounced
+  // localStorage write, live in useAiSettings. Credentials are owned by the
+  // local companion and have no browser state.
   const providerAvailability = useAvailableProviders();
   const ai = useAiSettings();
   const resumeHistoryClock = useMemo(createHistoryClock, []);
@@ -345,12 +364,16 @@ function App() {
     copyStage,
     honestContext,
     setHonestContext,
-    polishStages,
-    setPolishStages,
+    runFitAssessment,
+    setRunFitAssessment,
+    autoPolishResume,
+    setAutoPolishResume,
     resumeAutoPolishThreshold,
     setResumeAutoPolishThreshold,
-    coverAutoPolishThreshold,
-    setCoverAutoPolishThreshold,
+    autoPolishCoverLetter,
+    setAutoPolishCoverLetter,
+    coverLetterAutoPolishThreshold,
+    setCoverLetterAutoPolishThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -361,6 +384,15 @@ function App() {
     setEducationLevel,
     major,
     setMajor,
+    gpa,
+    setGpa,
+    availabilityNotice,
+    setAvailabilityNotice,
+    availabilityDate,
+    setAvailabilityDate,
+    experienceProfile,
+    setExperienceProfile,
+    workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,
     stageCustomInstructions,
@@ -394,41 +426,46 @@ function App() {
     ]
   );
   const jobAnalysisStage = stages["job-analysis"];
+  const fitAssessmentStage = stages["fit-assessment"];
+  const resumePolishStage = stages["resume-polish"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
-  const tailorProviderReady = providerReady(stages.tailor.provider);
-  const reviewProviderReady = providerReady(stages.review.provider);
+  const resumePolishProviderReady = providerReady(resumePolishStage.provider);
   const coverProviderReady = providerReady(stages.cover.provider);
   const answersProviderReady = providerReady(stages.answers.provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
-  const tailorProviderMessage = providerRecoveryMessage(stages.tailor.provider);
+  const resumePolishProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureJobAnalysisProvider = useCallback(
-    () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
-    [jobAnalysisStage.provider, providerAvailability.ensureProvider]
+    (request: AiRequestFields) => providerAvailability.ensureProvider(request.provider),
+    [providerAvailability.ensureProvider]
   );
-  const ensureTailorProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.tailor.provider),
-    [providerAvailability.ensureProvider, stages.tailor.provider]
+  const ensureFitAssessmentProvider = useCallback(
+    (request: AiRequestFields) => providerAvailability.ensureProvider(request.provider),
+    [providerAvailability.ensureProvider]
   );
-  const ensureReviewProvider = useCallback(
-    () => providerAvailability.ensureProvider(stages.review.provider),
-    [providerAvailability.ensureProvider, stages.review.provider]
+  const ensureResumePolishProvider = useCallback(
+    () => providerAvailability.ensureProvider(resumePolishStage.provider),
+    [providerAvailability.ensureProvider, resumePolishStage.provider]
   );
-  const selectedPolishProvidersReady =
-    (polishStages === "review" || tailorProviderReady) && (polishStages === "tailor" || reviewProviderReady);
+  const selectedPolishProvidersReady = resumePolishProviderReady;
   const candidateFactsContext = buildCandidateFactsContext({
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
     educationLevel,
-    major
+    major,
+    gpa,
+    availabilityNotice,
+    availabilityDate,
+    experienceProfile
   });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
   // Job analysis runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every job analysis entry point
   // (link, paste, extension import, and their retries).
   const jobAnalysisRequestFields = () => buildStageRequestFields(jobAnalysisStage);
+  const fitAssessmentRequestFields = () => buildStageRequestFields(fitAssessmentStage);
   const [activeOutputTab, setActiveOutputTab] = useState<OutputTab>("prepare");
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
@@ -492,22 +529,19 @@ function App() {
   const [pendingAutosaveDraft, setPendingAutosaveDraft] = useState<AutosavedDraft | null>(null);
   // The cover letter's own recovery draft — the two editors recover the same way.
   const [pendingCoverDraft, setPendingCoverDraft] = useState<CoverLetterAutosavedDraft | null>(null);
-  // Track whether the resume proposal or job changed since the last audit.
-  // When true, show a quiet stale notice in the proposal review.
-  const [reviewStale, setReviewStale] = useState(false);
+  // A proposal is bound to the prepared job. Individual resume fields validate
+  // themselves against their original text, so only a changed job stales the
+  // whole proposal.
+  const [proposalStale, setProposalStale] = useState(false);
 
   // ----- Structured resume editor -----
   // editedResume is the canonical editable model; it seeds at discrete events
   // (a fresh polish, a loaded base resume, a restored snapshot). `currentResumeText`
   // is its serialization (falling back to the raw polish output) — the bridge every
-  // text consumer (assessment, diff, exports, print, application snapshots) reads.
+  // text consumer (scoring, diff, exports, print, application snapshots) reads.
   const {
     editedResume,
     dirty: resumeEdited,
-    // Free-form hand-edits only (NOT accepting/undoing a reviewed suggestion).
-    // Gates readiness provenance so applying reviewed suggestions keeps the
-    // reviewed assessment; arbitrary typing makes it stale until Review runs again.
-    manualEdited: resumeManuallyEdited,
     canUndo: canUndoResume,
     canRedo: canRedoResume,
     undoSequence: resumeUndoSequence,
@@ -566,18 +600,14 @@ function App() {
   const setCoverLetterTitle = coverLetterEditor.setDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
-  const currentResumeText = serializedResume || result?.polishedText || "";
+  const currentResumeText = serializedResume || result?.proposalBaselineText || "";
   const coverReplacementStateRef = useRef({
     dirty: false,
     version: ""
   });
   coverReplacementStateRef.current = {
-    dirty: coverLetterRecoveryDirty({
-      documentDirty: coverLetterEditor.dirty,
-      documentTitle: coverLetterEditor.documentTitle,
-      persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle
-    }),
-    version: `${coverLetterEditor.draftPayload ?? ""}\u0000${coverLetterEditor.documentTitle}`
+    dirty: coverLetterEditor.recoveryDirty,
+    version: coverLetterEditor.documentVersion
   };
 
   const handleSelectPreparedCoverLetter = useCallback(
@@ -592,20 +622,10 @@ function App() {
       coverManualVariantSelectionInFlightRef.current = true;
       setIsSelectingCoverVariant(true);
       try {
-        if (coverReplacementStateRef.current.dirty && !(await confirmReplaceCoverLetter())) {
-          return;
-        }
-        const approvedVersion = coverReplacementStateRef.current.version;
-        const opened = await coverLetterEditor.openWorkspaceCoverLetter(
-          fileName,
-          false,
-          () => coverReplacementStateRef.current.version !== approvedVersion
-        );
-        if (!opened && coverReplacementStateRef.current.version !== approvedVersion) {
-          coverLetterEditor.setStatus(
-            "The cover letter changed while that variant was loading. The current draft was kept."
-          );
-        }
+        await coverLetterEditor.openWorkspaceCoverLetter(fileName, {
+          confirmReplace: async () =>
+            !coverReplacementStateRef.current.dirty || confirmReplaceCoverLetter()
+        });
       } finally {
         coverManualVariantSelectionInFlightRef.current = false;
         setIsSelectingCoverVariant(false);
@@ -614,8 +634,7 @@ function App() {
     [
       confirmReplaceCoverLetter,
       coverLetterEditor.activeCoverFileName,
-      coverLetterEditor.openWorkspaceCoverLetter,
-      coverLetterEditor.setStatus
+      coverLetterEditor.openWorkspaceCoverLetter
     ]
   );
 
@@ -642,7 +661,7 @@ function App() {
       if (!continuesPreparedSource) {
         setApplicationOfRecordId(null);
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
-        setResumeVariantRecommendation(null);
+        clearPreparedResumeRecommendationRef.current();
         setCoverLetterVariantRecommendation(null);
       }
       if (!snapshot) return;
@@ -718,14 +737,12 @@ function App() {
     },
     [importedJob]
   );
-  // Per-section tailoring choice. Off is the implicit default (absent key); the
-  // map stores only "tailor"/"include" so the three states are mutually exclusive
-  // by construction.
-  const [tailorModes, setTailorModes] = useState<Record<string, TailorMode>>({});
+  // Per-section Polish choice. Off is the implicit default (absent key).
+  const [polishScopeModes, setPolishScopeModes] = useState<Record<string, ResumePolishScopeMode>>({});
   // Stable identity keeps the typeset editor's section controls from
   // re-rendering solely because App rendered.
-  const setTailorMode = useCallback((sectionId: string, mode: TailorMode) => {
-    setTailorModes((current) => {
+  const setPolishScopeMode = useCallback((sectionId: string, mode: ResumePolishScopeMode) => {
+    setPolishScopeModes((current) => {
       const next = { ...current };
       if (mode === "off") delete next[sectionId];
       else next[sectionId] = mode;
@@ -878,6 +895,7 @@ function App() {
     editedResume,
     docStyle: docStyle.style,
     dirty: resumeDocumentDirty,
+    resumeOrigin,
     jobLabel: _autosaveJobLabel,
     pipelineAiUsage,
     jobRawText,
@@ -889,8 +907,7 @@ function App() {
   const coverDraftAutosaveState = useCoverLetterAutosaveDraft({
     payload: coverLetterEditor.draftPayload,
     documentTitle: coverLetterEditor.documentTitle,
-    persistedDocumentTitle: coverLetterEditor.persistedDocumentTitle,
-    dirty: coverLetterEditor.dirty,
+    recoveryDirty: coverLetterEditor.recoveryDirty,
     jobLabel: _autosaveJobLabel
   });
 
@@ -949,6 +966,7 @@ function App() {
     handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
+    stopAnswers,
     retryAnswers
   } = useApplicationAnswers({
     resumeText: currentResumeText || resumeText,
@@ -971,18 +989,18 @@ function App() {
     findForTarget
   });
 
-  // Cover tailoring stages a whole-document proposal. The dedicated editor
+  // Cover Polish stages a whole-document proposal. The dedicated editor
   // remains the single owner for accepted text, direct edits, file lifecycle,
   // the pre-acceptance Restore snapshot, and application save.
   const {
     coverLetterText,
     resetCoverWorkflow,
-    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleTailorCoverLetter,
     coverProgress,
     dismissCoverProgress,
+    stopCoverPolish,
     preflight: coverLetterPreflight,
     updateDetail: updateCoverLetterDetail,
     slotAnswers: coverLetterSlotAnswers,
@@ -1014,7 +1032,6 @@ function App() {
       company: jobTracking.company
     },
     onApplyTailored: coverLetterEditor.applyTailoredText,
-    onApplyExternal: coverLetterEditor.applyExternalText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
   });
 
@@ -1039,22 +1056,22 @@ function App() {
   }, [resumeDocumentDirty]);
 
   useEffect(() => {
-    if (coverLetterEditor.dirty) setPendingCoverDraft(null);
-  }, [coverLetterEditor.dirty]);
+    if (coverLetterEditor.recoveryDirty) setPendingCoverDraft(null);
+  }, [coverLetterEditor.recoveryDirty]);
 
   const resumeSectionIdsKey = editedResume?.sections.map((section) => section.id).join("|") ?? "";
   useEffect(() => {
     if (!editedResume) {
-      setTailorModes({});
+      setPolishScopeModes({});
       return;
     }
     const validIds = new Set(editedResume.sections.map((section) => section.id));
-    setTailorModes((current) => {
-      const preserved: Record<string, TailorMode> = {};
+    setPolishScopeModes((current) => {
+      const preserved: Record<string, ResumePolishScopeMode> = {};
       for (const [id, mode] of Object.entries(current)) {
         if (validIds.has(id)) preserved[id] = mode;
       }
-      return Object.keys(preserved).length ? preserved : defaultTailorModes(editedResume);
+      return Object.keys(preserved).length ? preserved : defaultResumePolishScopeModes(editedResume);
     });
     // Only reset when sections are added/removed/reparsed. Heading/text edits
     // should not wipe the user's explicit scope choices.
@@ -1071,41 +1088,41 @@ function App() {
     }
   }, [applications, expandedApplicationId]);
 
-  // Stale AI output: when the JD changes after Tailor or Review, that result
-  // describes the old posting. Track whether the text still matches what the
-  // result was based on, including valid Tailor runs with zero suggestions.
+  // A Polish proposal is bound to the job it was generated for. Track that
+  // input even when a valid run returns zero suggestions.
   const lastPolishedJobRef = useRef<string>("");
   useEffect(() => {
     if (!result) return;
     // result changed (new polish) — record the current JD as "last polished JD".
     lastPolishedJobRef.current = jobDescription;
-    setReviewStale(false);
+    setProposalStale(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result]);
   useEffect(() => {
-    // Any AI result is bound to its job input, even when Tailor correctly found
-    // zero suggestions and there is no submission Review payload.
+    // Any AI result is bound to its job input, even when Polish correctly found
+    // zero suggestions.
     if (!result) return;
     if (result.source !== "ai") return;
-    setReviewStale(jobDescription !== lastPolishedJobRef.current);
+    setProposalStale(jobDescription !== lastPolishedJobRef.current);
   }, [jobDescription, result]);
-  useEffect(() => {
-    // Resume freely edited after a review completed — mark the submission
-    // assessment stale. Accepting a reviewed suggestion is not a free edit.
-    // Only fires when there is an AI review to flag.
-    if (!result?.submissionAssessment) return;
-    if (resumeManuallyEdited) setReviewStale(true);
-    // We deliberately do NOT reset on !resumeManuallyEdited — the stale flag
-    // should clear only when a new polish result lands (the result effect above).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeManuallyEdited]);
 
   // ----- Derived (memos) -----
   // The job link has its own field now: the description textarea holds the text
-  // we tailor against, while `jobUrl` is optional metadata saved with the
+  // Resume Polish uses, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
-  const resumeReady = Boolean((currentResumeText || resumeText).trim().length > 80);
+  const resumeIsStarterSample = resumeOrigin === "starter" && applicationOfRecordId === null;
+  const resumeReady = Boolean(
+    (currentResumeText || resumeText).trim().length > 80 && !resumeIsStarterSample
+  );
+  useEffect(() => {
+    const nextOrigin = resumeOriginAfterEdit(
+      resumeOrigin,
+      resumeDocumentDirty,
+      currentResumeText || resumeText
+    );
+    if (nextOrigin !== resumeOrigin) setResumeOrigin(nextOrigin);
+  }, [currentResumeText, resumeDocumentDirty, resumeOrigin, resumeText]);
   const coverLetterReady =
     coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
   // A usable application starts with a completed intake snapshot. Nonempty
@@ -1116,34 +1133,20 @@ function App() {
     importedJob &&
     importedJob.tailoringText.length > 40
   );
-  // Everything except provider readiness. Every stage selection needs these —
-  // buildPolishContext requires an editable Tailor scope even for Review only —
-  // so this gates the Polish trigger while selectedPolishProvidersReady gates
-  // only the providers that the remembered workflow will call.
+  // Everything except provider readiness. Resume Polish needs at least one
+  // editable section; provider readiness is gated separately.
   const polishInputsReady = useMemo(() => {
     return Boolean(
       jobPrepared &&
       editedResume &&
       resumeReady &&
-      Object.values(tailorModes).some((mode) => mode === "tailor") &&
+      Object.values(polishScopeModes).some((mode) => mode === "polish") &&
       jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, jobPrepared, resumeReady, tailorModes]);
+  }, [editedResume, jobDescription, jobPrepared, resumeReady, polishScopeModes]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
 
-  // The edited resume is debounced before the diff recompute so typing in the
-  // editor stays smooth (the editor preview itself updates live).
-  const debouncedCurrentResumeText = useDebouncedValue(currentResumeText);
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
-
-  // Review diff and job-condition derivation is pure (read-only) and lives
-  // in useResumeAnalysis, so it stays decoupled from App's setters.
-  const { resumeDiff, jobConstraints } = useResumeAnalysis({
-    resumeText,
-    jobDescription,
-    debouncedCurrentResumeText,
-    result
-  });
 
   // ----- Derived (non-memo) -----
   const jobReady = jobPrepared;
@@ -1184,155 +1187,17 @@ function App() {
     setExportStatus
   });
 
-  // ----- Job intake (job analysis/import flows) -----
-  // Link analysis, pasted-posting analysis, the browser-extension inbox import, and
-  // each entry point's Retry — extracted to
-  // src/hooks/useJobIntake.ts. isExtractingLink/jobAnalysisProgress/
-  // jobAnalysisProgressVisible/jobAnalysisRetry are owned by the hook; App only reads
-  // them below for render + the presence phase + the before-unload guard.
-  const {
-    isExtractingLink,
-    extensionImportPhase,
-    jobAnalysisProgress,
-    jobAnalysisProgressVisible,
-    dismissJobAnalysisProgress,
-    jobAnalysisRetry,
-    handleManualJobDescriptionChange,
-    handleExtractFromLink,
-    handleAnalyzePaste
-  } = useJobIntake({
-    jobUrl,
-    setJobUrl,
-    jobDescription,
-    setJobDescription,
-    setImportedJob: setImportedJobAndDocumentTitle,
-    setResult,
-    resetCoverWorkflow,
-    setPipelineAiUsage,
-    setJobRawText,
-    setPolishStatus,
-    setLinkStatus,
-    onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
-    onExtensionJobReceived: () => setActiveOutputTab("prepare"),
-    confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
-    confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
-    jobAnalysisRequestFields,
-    ensureProviderReady: ensureJobAnalysisProvider,
-    extensionImportsReady: hasLoadedApplications,
-  });
-  const jobPreparationActive =
-    isExtractingLink || extensionImportPhase !== null || jobAnalysisProgress.status === "running";
-
-  // ----- Polish pipeline (Tailor -> Review) -----
-  // buildPolishContext, the reviewer-attribution + merge helpers, the two
-  // stage runners, handlePolish, retryStage, and Stop — extracted to
-  // src/hooks/usePolishPipeline.ts. isPolishing/polishProgress/
-  // polishProgressVisible are owned by the hook; App only reads them below for
-  // render + the presence phase + the before-unload guard.
-  const {
-    isPolishing,
-    polishProgress,
-    polishProgressVisible,
-    setPolishProgressVisible,
-    handlePolish,
-    retryStage,
-    stopPolish
-  } = usePolishPipeline({
-    editedResume,
-    tailorModes,
-    currentResumeText,
-    jobDescription,
-    includeCoverLetter: false,
-    requestHonestContext,
-    customInstructionsFor,
-    polishStages,
-    tailor: stages.tailor,
-    review: stages.review,
-    ensureTailorProviderReady: ensureTailorProvider,
-    ensureReviewProviderReady: ensureReviewProvider,
-    setResult,
-    applyPolishCoverResult,
-    setActiveOutputTab,
-    setPipelineAiUsage,
-    setPolishStatus,
-    resetExportStatuses,
-    setExportStatus,
-    confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
-  });
-  const lastResumePolishModeRef = useRef<"automatic" | "manual" | null>(null);
-  const aiWorkflowStages: AiWorkflowStage[] = [];
-  if (jobAnalysisProgressVisible) {
-    aiWorkflowStages.push({
-      key: "job-analysis",
-      state: jobAnalysisProgress,
-      onRetry: jobAnalysisRetry
-    });
-  }
-  if (polishProgressVisible) {
-    if (polishStages !== "review") {
-      aiWorkflowStages.push({
-        key: "tailor",
-        state: polishProgress.tailor,
-        onRetry: () => {
-          lastResumePolishModeRef.current = "manual";
-          void retryStage("tailor");
-        },
-        onStop: stopPolish
-      });
-    }
-    if (polishStages !== "tailor") {
-      aiWorkflowStages.push({
-        key: "review",
-        state: polishProgress.review,
-        onRetry: () => {
-          lastResumePolishModeRef.current = "manual";
-          void retryStage("review");
-        },
-        onStop: stopPolish
-      });
-    }
-  }
-
-  function dismissAiWorkflow() {
-    dismissJobAnalysisProgress();
-    setPolishProgressVisible(false);
-  }
-
-  // Cross-tab presence: each browser tab is an independent tailoring session, so
-  // we publish this tab's coarse phase (derived from existing flow state — never
-  // instrumented into the stage runners) and read back the OTHER live tabs for
-  // the shared in-progress card. Privacy: only the role · company label leaves
-  // the tab, never JD/resume text.
-  const _myPhase: PresencePhase =
-    jobAnalysisProgress.status === "running"
-      ? "analyzing-job"
-      : isPolishing
-        ? polishStages === "review"
-          ? "reviewing"
-          : polishStages === "tailor"
-            ? "tailoring"
-            : "tailoring+reviewing"
-        : resumeDocumentDirty
-          ? "editing"
-          : "idle";
-  const otherSessions = useTabPresence({
-    jobLabel: _autosaveJobLabel,
-    phase: _myPhase
-  });
-
-  // ----- Handlers -----
-
-  // The workspace / base-resume cluster (state + handlers) lives in
-  // useWorkspaceResume; App passes in the editor/export/dialog dependencies it
-  // needs and reads back the workspace state + the handlers the Open menu wires up.
+  // Workspace state must be available before Job intake reads the current
+  // prepared-resume selection. The same authoritative snapshot drives initial
+  // preparation, Retry, stale-fit visibility, and manual variant adoption.
   const {
     baseResumeName,
     baseResumeOptions,
     baseResumeHistory,
-    baseResumeCandidatesRevision,
     workspaceStatus,
     isSavingBaseResume,
     isWorkspaceBootstrapping,
+    whenWorkspaceBootstrapped,
     loadWorkspace,
     loadStarterTemplate,
     startBlankResume,
@@ -1340,6 +1205,7 @@ function App() {
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
     readBaseResumeCandidates,
+    readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
     handleFileUpload
   } = useWorkspaceResume({
@@ -1358,11 +1224,200 @@ function App() {
     resetExportStatuses,
     setExportStatus,
     seedResumeData,
+    setResumeOrigin,
     currentResumeText,
     resumeText,
     editedResume,
     docStyle
   });
+
+  // Every live value the resolver's decision depends on, read at dispatch time
+  // rather than captured: preparation begins from an event, and a stale closure
+  // is exactly how "workspace still hydrating" became "no resume".
+  const preparedResumeStateRef = useRef<PreparedResumeResolverState>(null!);
+  preparedResumeStateRef.current = {
+    baseResumeName,
+    options: baseResumeOptions,
+    resumeOrigin,
+    applicationOwned: applicationOfRecordId !== null,
+    currentText: currentResumeText || resumeText,
+    documentTitle,
+    documentDirty: resumeDocumentDirty,
+    manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
+    savingBaseResume: isSavingBaseResume,
+    candidateRevision: readBaseResumeCandidatesRevision()
+  };
+  const readPreparedResumeState = useCallback(
+    () => ({
+      ...preparedResumeStateRef.current,
+      // Read the ref at resolution time: an authoritative snapshot can arrive
+      // while candidate I/O is in flight, before React republishes App state.
+      candidateRevision: readBaseResumeCandidatesRevision()
+    }),
+    [readBaseResumeCandidatesRevision]
+  );
+  const {
+    resolvePreparedResume,
+    cancelPreparedResumeResolution,
+    clearPreparedResumeRecommendation,
+    resumeVariantRecommendation,
+    isResolvingPreparedResume
+  } = usePreparedResume({
+    readState: readPreparedResumeState,
+    whenWorkspaceBootstrapped,
+    readBaseResumeCandidates,
+    loadBaseResumeVersion
+  });
+  clearPreparedResumeRecommendationRef.current = clearPreparedResumeRecommendation;
+
+  // ----- Job intake (job analysis/import flows) -----
+  // Link analysis, pasted-posting analysis, the browser-extension inbox import, and
+  // each entry point's Retry — extracted to
+  // src/hooks/useJobIntake.ts. isExtractingLink/jobAnalysisProgress/
+  // jobAnalysisProgressVisible/jobAnalysisRetry are owned by the hook; App only reads
+  // them below for render + the presence phase + the before-unload guard.
+  const {
+    isExtractingLink,
+    extensionImportPhase,
+    jobAnalysisProgress,
+    jobAnalysisProgressVisible,
+    dismissJobAnalysisProgress,
+    stopJobAnalysis,
+    jobAnalysisRetry,
+    fitAssessmentState,
+    fitAssessmentRequestActive,
+    preparationAutomationPending,
+    acknowledgeFitAutomation,
+    restorePreparedFitAssessment,
+    reassessFit,
+    canAssessFit,
+    assessFitForResume,
+    localPreparedPreview,
+    handleManualJobDescriptionChange,
+    handleJobUrlChange,
+    handleExtractFromLink,
+    handleAnalyzePaste
+  } = useJobIntake({
+    jobUrl,
+    setJobUrl,
+    jobDescription,
+    setJobDescription,
+    jobRawText,
+    setImportedJob: setImportedJobAndDocumentTitle,
+    setResult,
+    resetCoverWorkflow,
+    setPipelineAiUsage,
+    setJobRawText,
+    setPolishStatus,
+    setLinkStatus,
+    onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
+    onExtensionJobReceived: () => setActiveOutputTab("prepare"),
+    confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
+    confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
+    jobAnalysisRequestFields,
+    fitAssessmentRequestFields,
+    ensureProviderReady: ensureJobAnalysisProvider,
+    ensureFitAssessmentProviderReady: ensureFitAssessmentProvider,
+    runFitAssessment,
+    resolvePreparedResume,
+    cancelPreparedResumeResolution,
+    candidateContext: () => requestHonestContext,
+    currentResume: () => currentResumeSelection(readPreparedResumeState()),
+    extensionImportsReady: hasLoadedApplications,
+  });
+  const jobPreparationActive =
+    isExtractingLink
+    || extensionImportPhase !== null
+    || jobAnalysisProgress.status === "running"
+    || preparationAutomationPending;
+
+  // ----- Resume Polish -----
+  // Proposal generation, retry, cancellation, and stale-response protection are
+  // extracted to
+  // src/hooks/usePolishPipeline.ts. The hook owns the pre-dispatch and active
+  // phases plus progress state; App only reads them for orchestration, render,
+  // presence, and unload protection.
+  const {
+    isPolishStarting,
+    isPolishing,
+    polishProgress,
+    polishProgressVisible,
+    setPolishProgressVisible,
+    handlePolish,
+    retryStage,
+    stopPolish
+  } = usePolishPipeline({
+    editedResume,
+    polishScopeModes,
+    currentResumeText,
+    jobDescription,
+    requestHonestContext,
+    customInstructionsFor,
+    resumePolish: resumePolishStage,
+    ensureResumePolishProviderReady: ensureResumePolishProvider,
+    setResult,
+    setActiveOutputTab,
+    setPipelineAiUsage,
+    setPolishStatus,
+    resetExportStatuses,
+    setExportStatus,
+    confirmDuplicateBeforePolish: duplicateGuard.confirmDuplicateBeforePolish
+  });
+  // Accept / edit / discard state for the proposal's individual edits.
+  const resumeProposalDecisions = useResumeProposalDecisions({
+    result,
+    resume: editedResume,
+    actions: resumeEditorActions
+  });
+  // Cross-tab presence: each browser tab is an independent RoleFit session, so
+  // we publish this tab's coarse phase (derived from existing flow state — never
+  // instrumented into the stage runners) and read back the OTHER live tabs for
+  // the shared in-progress card. Privacy: only the role · company label leaves
+  // the tab, never JD/resume text.
+  const _myPhase: PresencePhase =
+    jobAnalysisProgress.status === "running"
+      ? "analyzing-job"
+      : isPolishing
+        ? "tailoring"
+        : resumeDocumentDirty
+          ? "editing"
+          : "idle";
+  const otherSessions = useTabPresence({
+    jobLabel: _autosaveJobLabel,
+    phase: _myPhase
+  });
+
+  // ----- Handlers -----
+
+  const handleSelectBaseResumeVariant = useCallback(
+    async (fileName: string) => {
+      if (
+        !fileName ||
+        fileName === baseResumeName ||
+        resumeManualVariantSelectionInFlightRef.current
+      ) {
+        return;
+      }
+      resumeManualVariantSelectionInFlightRef.current = true;
+      setIsManuallySelectingResumeVariant(true);
+      try {
+        const loaded = await loadBaseResumeVersion(fileName);
+        if (loaded && runFitAssessment && jobPrepared) {
+          assessFitForResume(loaded);
+        }
+      } finally {
+        resumeManualVariantSelectionInFlightRef.current = false;
+        setIsManuallySelectingResumeVariant(false);
+      }
+    },
+    [
+      baseResumeName,
+      jobPrepared,
+      loadBaseResumeVersion,
+      assessFitForResume,
+      runFitAssessment
+    ]
+  );
 
   const workspaceRestoreAdoptionHandlerRef = useRef<() => void>(() => undefined);
   workspaceRestoreAdoptionHandlerRef.current = () => {
@@ -1377,10 +1432,8 @@ function App() {
       void loadWorkspace(false);
       setLinkStatus("Workspace restored in another window. Refreshed saved resume options.");
     }
-    const coverDocumentDirty =
-      coverLetterEditor.dirty || coverLetterEditor.documentTitle !== coverLetterEditor.persistedDocumentTitle;
     coverLetterEditor.setStatus(
-      coverDocumentDirty
+      coverLetterEditor.recoveryDirty
         ? "A workspace restore finished in another window. Your unsaved cover letter remains preserved in this tab."
         : "Workspace restored in another window. Reopen a saved cover letter to use the restored copy."
     );
@@ -1399,286 +1452,7 @@ function App() {
   const activeBaseResumeLabel =
     baseResumeOptions.find((option) => option.fileName === baseResumeName)?.label || baseResumeName;
 
-  const activeResumeFileName = baseResumeName || fileName;
-  const initialFitPreparationId =
-    jobPrepared && jobAnalysisProgress.status === "done" && importedJob
-      ? importedJob.preparationId
-      : "";
-  useEffect(() => {
-    lastResumePolishModeRef.current = null;
-  }, [initialFitPreparationId]);
-  const preparedResumeSelection = usePreparedResumeSelection({
-    preparationId: initialFitPreparationId,
-    currentFileName: activeResumeFileName,
-    currentDocumentVersion: resumeDocumentVersion,
-    resumeReady,
-    busy:
-      isRankingResumeVariants ||
-      isSavingBaseResume ||
-      isManuallySelectingResumeVariant ||
-      isWorkspaceBootstrapping
-  });
-
-  const handleSelectBaseResumeVariant = useCallback(
-    async (fileName: string) => {
-      if (
-        !fileName ||
-        fileName === baseResumeName ||
-        resumeManualVariantSelectionInFlightRef.current
-      ) {
-        return;
-      }
-      resumeManualVariantSelectionInFlightRef.current = true;
-      setIsManuallySelectingResumeVariant(true);
-      try {
-        const applied = await loadBaseResumeVersion(fileName);
-        if (applied && initialFitPreparationId) {
-          const sequence = preparedResumeSelection.begin("manual");
-          preparedResumeSelection.complete(sequence, fileName, "manual");
-        }
-      } finally {
-        resumeManualVariantSelectionInFlightRef.current = false;
-        setIsManuallySelectingResumeVariant(false);
-      }
-    },
-    [
-      baseResumeName,
-      initialFitPreparationId,
-      loadBaseResumeVersion,
-      preparedResumeSelection.begin,
-      preparedResumeSelection.complete
-    ]
-  );
-
   const rankingJobDescription = debouncedPreparedJobDescription.trim();
-  const resumeVariantRecommendationInputKey =
-    jobPrepared && rankingJobDescription === jobDescription.trim() && baseResumeOptions.length > 1
-      ? JSON.stringify({
-          preparationId: initialFitPreparationId,
-          job: rankingJobDescription,
-          variants: baseResumeOptions.map((option) => option.fileName),
-          candidatesRevision: baseResumeCandidatesRevision
-        })
-      : "";
-  const resumeVariantSelectionStateRef = useRef({
-    baseResumeName,
-    activeResumeFileName,
-    resumeDocumentDirty,
-    documentVersion: resumeReplacementStateRef.current.version,
-    isWorkspaceBootstrapping,
-    isSavingBaseResume,
-    applicationOfRecordId,
-    jobPrepared,
-    preparationId: initialFitPreparationId,
-    preparedJobDescription: jobDescription.trim(),
-    options: baseResumeOptions,
-    loadBaseResumeVersion
-  });
-  resumeVariantSelectionStateRef.current = {
-    baseResumeName,
-    activeResumeFileName,
-    resumeDocumentDirty,
-    documentVersion: resumeReplacementStateRef.current.version,
-    isWorkspaceBootstrapping,
-    isSavingBaseResume,
-    applicationOfRecordId,
-    jobPrepared,
-    preparationId: initialFitPreparationId,
-    preparedJobDescription: jobDescription.trim(),
-    options: baseResumeOptions,
-    loadBaseResumeVersion
-  };
-
-  useEffect(() => {
-    if (!resumeVariantRecommendationInputKey) {
-      resumeVariantRecommendationKeyRef.current = "";
-      resumeVariantRecommendationGenerationRef.current += 1;
-      setResumeVariantRecommendation(null);
-      setIsRankingResumeVariants(false);
-      return;
-    }
-    if (resumeVariantRecommendationKeyRef.current === resumeVariantRecommendationInputKey) {
-      return;
-    }
-
-    resumeVariantRecommendationKeyRef.current = resumeVariantRecommendationInputKey;
-    const generation = resumeVariantRecommendationGenerationRef.current + 1;
-    resumeVariantRecommendationGenerationRef.current = generation;
-    const startState = resumeVariantSelectionStateRef.current;
-    const startingBaseResumeName = startState.baseResumeName;
-    const startingDocumentVersion = startState.documentVersion;
-    const options = startState.options;
-    const selectionSequence = initialFitPreparationId
-      ? preparedResumeSelection.begin("automatic")
-      : 0;
-    setIsRankingResumeVariants(true);
-    setResumeVariantRecommendation(null);
-
-    void (async () => {
-      const candidates = await readBaseResumeCandidates(options);
-      if (
-        generation !== resumeVariantRecommendationGenerationRef.current ||
-        !resumeVariantSelectionStateRef.current.jobPrepared ||
-        resumeVariantSelectionStateRef.current.preparationId !== initialFitPreparationId ||
-        resumeVariantSelectionStateRef.current.preparedJobDescription !== rankingJobDescription
-      ) {
-        return;
-      }
-      const recommendation = recommendVariant(rankingJobDescription, candidates, options.length);
-      setResumeVariantRecommendation(recommendation);
-
-      const current = resumeVariantSelectionStateRef.current;
-      let selectedFileName = current.activeResumeFileName;
-      const canAdoptRecommendation =
-        recommendation !== null &&
-        current.preparedJobDescription === rankingJobDescription &&
-        recommendation.fileName !== current.baseResumeName &&
-        current.baseResumeName === startingBaseResumeName &&
-        current.documentVersion === startingDocumentVersion &&
-        current.applicationOfRecordId === null &&
-        !current.resumeDocumentDirty &&
-        !resumeManualVariantSelectionInFlightRef.current &&
-        !current.isWorkspaceBootstrapping &&
-        !current.isSavingBaseResume;
-      if (canAdoptRecommendation) {
-        const applied = await current.loadBaseResumeVersion(recommendation.fileName, true, () => {
-          const latest = resumeVariantSelectionStateRef.current;
-          return (
-            generation !== resumeVariantRecommendationGenerationRef.current ||
-            !latest.jobPrepared ||
-            latest.preparationId !== initialFitPreparationId ||
-            latest.preparedJobDescription !== rankingJobDescription ||
-            latest.applicationOfRecordId !== null ||
-            latest.documentVersion !== startingDocumentVersion ||
-            latest.resumeDocumentDirty ||
-            latest.baseResumeName !== startingBaseResumeName ||
-            resumeManualVariantSelectionInFlightRef.current
-          );
-        });
-        if (applied) selectedFileName = recommendation.fileName;
-      }
-      if (generation === resumeVariantRecommendationGenerationRef.current) {
-        setIsRankingResumeVariants(false);
-        if (selectionSequence) {
-          preparedResumeSelection.complete(selectionSequence, selectedFileName, "automatic");
-        }
-      }
-    })();
-
-    return () => {
-      if (generation === resumeVariantRecommendationGenerationRef.current) {
-        resumeVariantRecommendationGenerationRef.current += 1;
-      }
-    };
-  }, [
-    initialFitPreparationId,
-    preparedResumeSelection.begin,
-    preparedResumeSelection.complete,
-    readBaseResumeCandidates,
-    rankingJobDescription,
-    resumeVariantRecommendationInputKey
-  ]);
-
-  const simplePreparedResumeSelectionKeyRef = useRef("");
-  useEffect(() => {
-    if (!initialFitPreparationId || baseResumeOptions.length > 1 || isWorkspaceBootstrapping) {
-      if (!initialFitPreparationId) simplePreparedResumeSelectionKeyRef.current = "";
-      return;
-    }
-    if (simplePreparedResumeSelectionKeyRef.current === initialFitPreparationId) return;
-    simplePreparedResumeSelectionKeyRef.current = initialFitPreparationId;
-    const sequence = preparedResumeSelection.begin("automatic");
-    preparedResumeSelection.complete(sequence, activeResumeFileName, "automatic");
-  }, [
-    activeResumeFileName,
-    baseResumeOptions.length,
-    initialFitPreparationId,
-    isWorkspaceBootstrapping,
-    preparedResumeSelection.begin,
-    preparedResumeSelection.complete
-  ]);
-
-  const currentInitialFitResumeVersion = documentSourceFingerprint(resumeDocumentVersion);
-  const selectedResumeIsCurrent =
-    preparedResumeSelection.state.status === "settled" &&
-    preparedResumeSelection.state.preparationId === initialFitPreparationId &&
-    preparedResumeSelection.state.resumeFileName === activeResumeFileName;
-  const initialFitAuditInput = useMemo(() => {
-    if (
-      !selectedResumeIsCurrent ||
-      preparedResumeSelection.state.status !== "settled" ||
-      !editedResume
-    ) {
-      return null;
-    }
-    return {
-      preparationId: preparedResumeSelection.state.preparationId,
-      jobText: jobDescription.trim(),
-      resumeFileName: preparedResumeSelection.state.resumeFileName,
-      resumeDocumentVersion: currentInitialFitResumeVersion,
-      resumeText: fullResumeEvidenceText(editedResume),
-      honestContext: requestHonestContext,
-      reviewInstructions: customInstructionsFor("review"),
-      review: stages.review
-    };
-  }, [
-    currentInitialFitResumeVersion,
-    customInstructionsFor,
-    editedResume,
-    jobDescription,
-    preparedResumeSelection.state,
-    requestHonestContext,
-    selectedResumeIsCurrent,
-    stages.review
-  ]);
-  const initialFitAudit = useInitialFitAudit({
-    input: initialFitAuditInput,
-    ensureReviewProviderReady: ensureReviewProvider
-  });
-  const readyInitialFitAudit =
-    initialFitAudit.state.status === "ready" &&
-    initialFitAudit.state.result.fingerprint === initialFitAudit.fingerprint
-      ? initialFitAudit.state.result
-      : null;
-  const initialFitPreparationRef = useRef(initialFitPreparationId);
-  useEffect(() => {
-    if (initialFitPreparationRef.current === initialFitPreparationId) return;
-    initialFitPreparationRef.current = initialFitPreparationId;
-    initialFitAudit.reset();
-  }, [initialFitAudit.reset, initialFitPreparationId]);
-  useEffect(() => {
-    if (readyInitialFitAudit) {
-      const usage = readyInitialFitAudit.usage;
-      setPipelineAiUsage((current) => ({ ...current, "initial-fit": usage }));
-      return;
-    }
-    if (
-      initialFitAudit.state.status === "running" ||
-      initialFitAudit.state.status === "stale" ||
-      initialFitAudit.state.status === "failed" ||
-      initialFitAudit.state.status === "stopped" ||
-      (initialFitAudit.state.status === "ready" && !readyInitialFitAudit)
-    ) {
-      setPipelineAiUsage((current) => {
-        if (!("initial-fit" in current)) return current;
-        const next = { ...current };
-        delete next["initial-fit"];
-        return next;
-      });
-    }
-  }, [initialFitAudit.state, readyInitialFitAudit]);
-  const initialFitAutoRunKey =
-    initialFitAuditInput &&
-    preparedResumeSelection.state.status === "settled" &&
-    preparedResumeSelection.state.resumeDocumentVersion === currentInitialFitResumeVersion
-      ? `${preparedResumeSelection.state.preparationId}:${preparedResumeSelection.state.sequence}:${currentInitialFitResumeVersion}`
-      : "";
-  const dispatchedInitialFitKeysRef = useRef(new Set<string>());
-  useEffect(() => {
-    if (!initialFitAutoRunKey || dispatchedInitialFitKeysRef.current.has(initialFitAutoRunKey)) return;
-    dispatchedInitialFitKeysRef.current.add(initialFitAutoRunKey);
-    void initialFitAudit.run();
-  }, [initialFitAudit.run, initialFitAutoRunKey]);
 
   // Cover letters follow the same rule as resumes: select a meaningful unique
   // winner, but only while the current editor is clean and not application-owned.
@@ -1687,7 +1461,6 @@ function App() {
     rankingJobDescription === jobDescription.trim() &&
     coverLetterEditor.coverLetterOptions.length > 1
       ? JSON.stringify({
-          preparationId: initialFitPreparationId,
           job: rankingJobDescription,
           variants: coverLetterEditor.coverLetterOptions.map((option) => option.fileName),
           candidatesRevision: coverLetterEditor.coverLetterCandidatesRevision
@@ -1695,6 +1468,22 @@ function App() {
       : "";
   const coverLetterVariantOptionsRef = useRef(coverLetterEditor.coverLetterOptions);
   coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
+  const coverVariantResolutionPending = Boolean(
+    coverLetterEditor.isWorkspaceBootstrapping
+    || coverLetterEditor.isWorkspaceReplacing
+    || isSelectingCoverVariant
+    || (
+      jobPrepared
+      && coverLetterEditor.coverLetterOptions.length > 1
+      && (
+        rankingJobDescription !== jobDescription.trim()
+        || !coverLetterVariantRecommendationInputKey
+        || coverLetterVariantRecommendationKeyRef.current
+          !== coverLetterVariantRecommendationInputKey
+        || isRankingCoverLetterVariants
+      )
+    )
+  );
   const readCoverLetterVariantCandidates = coverLetterEditor.readCoverLetterVariantCandidates;
   const openWorkspaceCoverLetter = coverLetterEditor.openWorkspaceCoverLetter;
   const coverLetterVariantSelectionStateRef = useRef({
@@ -1759,18 +1548,21 @@ function App() {
         !coverManualVariantSelectionInFlightRef.current &&
         !current.isSelecting;
       if (canAdoptRecommendation) {
-        await current.openWorkspaceCoverLetter(recommendation.fileName, "recommendation", () => {
-          const latest = coverLetterVariantSelectionStateRef.current;
-          return (
-            generation !== coverLetterVariantRecommendationGenerationRef.current ||
-            !latest.jobPrepared ||
-            latest.preparedJobDescription !== rankingJobDescription ||
-            latest.applicationOfRecordId !== null ||
-            latest.dirty ||
-            latest.activeFileName !== startingFileName ||
-            latest.documentVersion !== startingDocumentVersion ||
-            coverManualVariantSelectionInFlightRef.current
-          );
+        await current.openWorkspaceCoverLetter(recommendation.fileName, {
+          background: true,
+          shouldCancel: () => {
+            const latest = coverLetterVariantSelectionStateRef.current;
+            return (
+              generation !== coverLetterVariantRecommendationGenerationRef.current ||
+              !latest.jobPrepared ||
+              latest.preparedJobDescription !== rankingJobDescription ||
+              latest.applicationOfRecordId !== null ||
+              latest.dirty ||
+              latest.activeFileName !== startingFileName ||
+              latest.documentVersion !== startingDocumentVersion ||
+              coverManualVariantSelectionInFlightRef.current
+            );
+          }
         });
       }
       if (generation === coverLetterVariantRecommendationGenerationRef.current) {
@@ -1789,63 +1581,53 @@ function App() {
     readCoverLetterVariantCandidates
   ]);
 
-  const coverVariantSelectionSettled =
-    !isSelectingCoverVariant &&
-    !isRankingCoverLetterVariants &&
-    (coverLetterEditor.coverLetterOptions.length <= 1 ||
-      (Boolean(coverLetterVariantRecommendationInputKey) &&
-        coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey));
-  const prepareAutomation = usePrepareAutomation({
-    audit: readyInitialFitAudit,
-    resumeThreshold: resumeAutoPolishThreshold,
-    coverThreshold: coverAutoPolishThreshold,
-    polishStages,
-    coverSelectionSettled: coverVariantSelectionSettled,
-    runResume: (stagesOverride) => {
-      lastResumePolishModeRef.current = "automatic";
-      return handlePolish({
-        revealResumeOnSuccess: false,
-        stagesOverride
-      });
-    },
-    runCoverLetter: handleTailorCoverLetter
-  });
-  const currentInitialFitFingerprint =
-    readyInitialFitAudit?.fingerprint ?? "";
-  const prepareAutomationActive =
-    Boolean(currentInitialFitFingerprint) &&
-    (prepareAutomation.auditFingerprint !== currentInitialFitFingerprint ||
-      prepareAutomation.resume.status === "waiting" ||
-      prepareAutomation.resume.status === "running" ||
-      prepareAutomation.coverLetter.status === "waiting" ||
-      prepareAutomation.coverLetter.status === "running");
+  // Starting Polish — directly or through the user's enabled automatic proposal
+  // setting — is a decision to work on that document for this application.
+  // Reflect that intent in the package without coupling the sibling material.
+  function includeMaterialForPolish(material: "resume" | "coverLetter") {
+    setMaterialSelection((current) =>
+      current[material] ? current : { ...current, [material]: true }
+    );
+  }
 
-  // Warn before close/reload when there are unsaved edits OR any Prepare AI
-  // lifecycle is active. Apply marks each included document clean only after
-  // its source persists.
-  useBeforeUnloadGuard(
-    resumeDocumentDirty ||
-      coverLetterEditor.dirty ||
-      isGeneratingCover ||
-      isPolishing ||
-      initialFitAudit.isRunning ||
-      prepareAutomationActive ||
-      jobAnalysisProgress.status === "running" ||
-      pendingApplicationWrites > 0
-  );
+  function handleResumePolish(
+    options: PolishRunOptions = {}
+  ): boolean {
+    if (
+      isPolishStarting
+      || isPolishing
+      || isSavingBaseResume
+      || isManuallySelectingResumeVariant
+      || isResolvingPreparedResume
+    ) return false;
+    const claimed = handlePolish(options);
+    if (!claimed) return false;
+    includeMaterialForPolish("resume");
+    return true;
+  }
+
+  function handleCoverLetterPolish(): boolean {
+    if (
+      isGeneratingCover
+      || isSelectingCoverVariant
+      || coverVariantResolutionPending
+    ) return false;
+    includeMaterialForPolish("coverLetter");
+    void handleTailorCoverLetter();
+    return true;
+  }
 
   const applicationPreparationActive =
     jobPreparationActive ||
-    initialFitAudit.isRunning ||
-    prepareAutomationActive ||
     (materialSelection.resume &&
-      (isPolishing ||
-        isRankingResumeVariants ||
+      (isPolishStarting ||
+        isPolishing ||
+        isResolvingPreparedResume ||
         isSavingBaseResume ||
         isManuallySelectingResumeVariant ||
         isWorkspaceBootstrapping)) ||
     (materialSelection.coverLetter &&
-      (isGeneratingCover || isRankingCoverLetterVariants || isSelectingCoverVariant));
+      (isGeneratingCover || coverVariantResolutionPending));
   const preparationReadiness = getPreparationReadiness({
     jobPrepared,
     includeResume: materialSelection.resume,
@@ -1854,22 +1636,137 @@ function App() {
     coverLetterReady,
     isPreparing: applicationPreparationActive
   });
-  function handleTailorPreparedResume() {
+  function handlePolishPreparedResume() {
     if (
       !jobPrepared ||
       !canPolish ||
+      isPolishStarting ||
       isPolishing ||
       isSavingBaseResume ||
       isManuallySelectingResumeVariant ||
-      isRankingResumeVariants ||
-      prepareAutomationActive
+      isResolvingPreparedResume
     ) return;
-    // This click is explicit: it tailors exactly the resume currently shown;
+    // This click is explicit: it polishes exactly the resume currently shown;
     // loading a different variant remains protected by useWorkspaceResume's
     // dirty-document confirmation.
-    lastResumePolishModeRef.current = "manual";
-    void handlePolish({ revealResumeOnSuccess: false });
+    void handleResumePolish({ revealResumeOnSuccess: false });
   }
+
+  useEffect(() => {
+    const pendingToken = fitAssessmentState.latestCompleted?.automationToken;
+    const candidate = runFitAssessment
+      ? fitAssessmentMayTriggerAutoPolish(fitAssessmentState)
+      : null;
+    if (!candidate) {
+      // A stale, disabled, or previous-preparation assessment is a permanent
+      // decline, not an automation decision that can be revived by later edits.
+      if (pendingToken) acknowledgeFitAutomation(pendingToken);
+      return;
+    }
+    const { result: fit } = candidate.snapshot;
+    const key = candidate.automationToken;
+    if (autoProposalFitRef.current.key !== key) {
+      autoProposalFitRef.current = {
+        key,
+        resumeClaimed: false,
+        resumeSettled: false,
+        coverStarted: false
+      };
+    }
+    const receipt = autoProposalFitRef.current;
+    const automationBlocked = fit.eligibility?.status === "BLOCKED";
+    const resumePolishCanStart =
+      jobPrepared &&
+      canPolish &&
+      !isPolishStarting &&
+      !isPolishing &&
+      !isSavingBaseResume &&
+      !isManuallySelectingResumeVariant &&
+      !isResolvingPreparedResume;
+    const resumeDecision = automaticPolishActionDecision({
+      enabled: autoPolishResume,
+      thresholdMet: fitAssessmentMeetsThreshold(
+        fit.verdict,
+        resumeAutoPolishThreshold
+      ),
+      automationBlocked,
+      prerequisitePending: false,
+      canStart: resumePolishCanStart
+    });
+    if (!receipt.resumeClaimed && !receipt.resumeSettled && resumeDecision === "start") {
+      const resumeClaimed = handleResumePolish({
+        revealResumeOnSuccess: false,
+        onStartSettled: () => {
+          const current = autoProposalFitRef.current;
+          if (current.key !== key || current.resumeSettled) return;
+          current.resumeSettled = true;
+          setAutoProposalSettlementRevision((revision) => revision + 1);
+        }
+      });
+      receipt.resumeClaimed = resumeClaimed;
+      if (!resumeClaimed) receipt.resumeSettled = true;
+    }
+
+    const coverPolishCanStart =
+      coverLetterPreflight.canTailor &&
+      resumeReady &&
+      jobPrepared &&
+      coverProviderReady &&
+      !isGeneratingCover &&
+      !isSelectingCoverVariant &&
+      !coverVariantResolutionPending;
+    const coverDecision = automaticPolishActionDecision({
+      enabled: autoPolishCoverLetter,
+      thresholdMet: fitAssessmentMeetsThreshold(
+        fit.verdict,
+        coverLetterAutoPolishThreshold
+      ),
+      automationBlocked,
+      prerequisitePending: coverVariantResolutionPending,
+      canStart: coverPolishCanStart
+    });
+    if (!receipt.coverStarted && coverDecision === "start") {
+      receipt.coverStarted = handleCoverLetterPolish();
+    }
+    // The token represents this Prepare run's one automation decision. Once
+    // both configured actions have either started or declined, later Settings
+    // changes cannot revive automation from an old Fit result.
+    const resumeSettled = receipt.resumeSettled
+      || (!receipt.resumeClaimed && resumeDecision === "decline");
+    const coverSettled = receipt.coverStarted || coverDecision === "decline";
+    if (resumeSettled && coverSettled) {
+      acknowledgeFitAutomation(candidate.automationToken);
+    }
+  }, [
+    autoPolishCoverLetter,
+    autoPolishResume,
+    autoProposalSettlementRevision,
+    canPolish,
+    coverLetterPreflight.canTailor,
+    coverLetterAutoPolishThreshold,
+    coverProviderReady,
+    coverVariantResolutionPending,
+    currentResumeText,
+    handlePolish,
+    handleTailorCoverLetter,
+    importedJob?.sourceText,
+    isGeneratingCover,
+    isManuallySelectingResumeVariant,
+    isPolishStarting,
+    isPolishing,
+    isRankingCoverLetterVariants,
+    isResolvingPreparedResume,
+    isSavingBaseResume,
+    isSelectingCoverVariant,
+    jobDescription,
+    jobPrepared,
+    jobRawText,
+    fitAssessmentState,
+    resumeAutoPolishThreshold,
+    resumeReady,
+    resumeText,
+    runFitAssessment
+  ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
   // Appends a template line to honestContext (unless the keyword is already there),
@@ -1942,126 +1839,10 @@ function App() {
     },
     [linkApplication]
   );
-  const polishOutputCurrent = result?.source === "ai" && !reviewStale && !resumeManuallyEdited;
-  const currentReviewAvailable = polishOutputCurrent && Boolean(result?.submissionAssessment);
-  const savedApplicationReviewAvailable = Boolean(
-    jobPrepared &&
-      preparedApplication?.submissionAssessment &&
-      (preparedApplication.jobDescription ?? "").trim() ===
-        preparedApplicationJobDescription.trim()
-  );
-  const prepareSubmissionAssessment =
-    currentReviewAvailable && result?.submissionAssessment
-      ? {
-          assessment: result.submissionAssessment,
-          provenance: "current" as const
-        }
-      : savedApplicationReviewAvailable && preparedApplication?.submissionAssessment
-        ? {
-            assessment: preparedApplication.submissionAssessment,
-            provenance: "saved" as const
-          }
-        : null;
-  const savedInitialFitMatchesApplication = Boolean(
-    preparedApplication?.initialFitAudit &&
-      (preparedApplication.jobDescription ?? "").trim() === preparedApplicationJobDescription.trim()
-  );
-  const currentInitialFitForApplication =
-    readyInitialFitAudit
-      ? {
-          assessment: readyInitialFitAudit.assessment,
-          resumeFileName: readyInitialFitAudit.resumeFileName,
-          completedAt: readyInitialFitAudit.completedAt
-        }
-      : savedInitialFitMatchesApplication
-        ? (preparedApplication?.initialFitAudit ?? null)
-        : null;
-  const liveInitialFitResult =
-    readyInitialFitAudit
-      ? readyInitialFitAudit
-      : initialFitAudit.state.status === "stale" &&
-          initialFitAudit.state.result.preparationId === initialFitPreparationId
-        ? initialFitAudit.state.result
-      : initialFitAudit.state.status === "running" || initialFitAudit.state.status === "stopped"
-        ? initialFitAudit.state.previous
-        : undefined;
-  const initialFitResultView = liveInitialFitResult
-    ? {
-        assessment: liveInitialFitResult.assessment,
-        resumeFileName: liveInitialFitResult.resumeFileName,
-        provenance: [
-          providerLabel(liveInitialFitResult.usage.provider ?? ""),
-          liveInitialFitResult.usage.model,
-          formatHistoryDate(liveInitialFitResult.completedAt)
-        ].filter(Boolean).join(" · ")
-      }
-    : null;
-  let prepareInitialFit: PrepareInitialFitView;
-  if (initialFitAudit.state.status === "running") {
-    prepareInitialFit = {
-      status: "running",
-      message: "Auditing the selected resume against the prepared job."
-    };
-  } else if (readyInitialFitAudit && initialFitResultView) {
-    prepareInitialFit = { status: "ready", ...initialFitResultView };
-  } else if (
-    initialFitAudit.state.status === "stale" &&
-    initialFitAudit.state.result.preparationId === initialFitPreparationId &&
-    initialFitResultView
-  ) {
-    prepareInitialFit = {
-      status: "stale",
-      ...initialFitResultView,
-      message: initialFitAudit.state.reason
-    };
-  } else if (initialFitAudit.state.status === "failed") {
-    prepareInitialFit = {
-      status: "failed",
-      message: `${initialFitAudit.state.errorHeadline}: ${initialFitAudit.state.error}`
-    };
-  } else if (initialFitAudit.state.status === "stopped") {
-    prepareInitialFit = {
-      status: "stopped",
-      message: initialFitAudit.state.error
-    };
-  } else if (preparedResumeSelection.state.status === "selecting" || isRankingResumeVariants) {
-    prepareInitialFit = {
-      status: "selecting",
-      message: "Selecting the best resume before Initial Fit."
-    };
-  } else if (preparedResumeSelection.state.status === "needs-user") {
-    prepareInitialFit = {
-      status: "waiting",
-      message: preparedResumeSelection.state.reason
-    };
-  } else if (savedInitialFitMatchesApplication && preparedApplication?.initialFitAudit) {
-    const savedUsage = preparedApplication.aiUsage?.["initial-fit"];
-    prepareInitialFit = {
-      status: "saved",
-      assessment: preparedApplication.initialFitAudit.assessment,
-      resumeFileName: preparedApplication.initialFitAudit.resumeFileName,
-      provenance: [
-        savedUsage?.provider ? providerLabel(savedUsage.provider) : "",
-        savedUsage?.model,
-        formatHistoryDate(preparedApplication.initialFitAudit.completedAt)
-      ].filter(Boolean).join(" · ")
-    };
-  } else {
-    prepareInitialFit = {
-      status: "waiting",
-      message: resumeReady
-        ? "Initial Fit starts after the prepared resume selection settles."
-        : "Choose a complete resume to continue to Initial Fit."
-    };
-  }
-  const applyPipelineAiUsage = initialFitPreparationId
-    ? (() => {
-        const usage = { ...pipelineAiUsage };
-        if (readyInitialFitAudit) usage["initial-fit"] = readyInitialFitAudit.usage;
-        else delete usage["initial-fit"];
-        return usage;
-      })()
-    : pipelineAiUsage;
+  // A one-pass proposal stays usable after per-field decisions: each edit card
+  // validates its own original target against the live document. Only a changed
+  // job invalidates the proposal wholesale.
+  const polishOutputCurrent = result?.source === "ai" && !proposalStale;
 
   // The Apply flow (download-prompt state + commitApply/handleApply/
   // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
@@ -2088,11 +1869,8 @@ function App() {
     jobRawText,
     result,
     currentResumeText,
-    pipelineAiUsage: applyPipelineAiUsage,
-    initialFitAudit: currentInitialFitForApplication,
-    resumePolishMode: result?.source === "ai"
-      ? lastResumePolishModeRef.current ?? undefined
-      : undefined,
+    fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
+    pipelineAiUsage,
     applications,
     linkedApplicationId: applicationOfRecordId,
     findForTarget,
@@ -2117,6 +1895,24 @@ function App() {
     setActiveOutputTab,
     setExpandedApplicationId
   });
+
+  // Apply keeps isApplying true through tracker confirmation and every included
+  // strict source upload. Declare the guard below that owner so a clean editor
+  // cannot make the post-tracker fetch phase interruptible.
+  useBeforeUnloadGuard(
+    applicationUnloadGuardActive({
+      resumeDocumentDirty,
+      coverLetterRecoveryDirty: coverLetterEditor.recoveryDirty,
+      isGeneratingCover,
+      isPolishStarting,
+      isPolishing,
+      jobAnalysisRunning: jobAnalysisProgress.status === "running",
+      fitAssessmentRequestActive,
+      preparationAutomationPending,
+      pendingApplicationWrites,
+      isApplying
+    })
+  );
 
   async function handleLoadApplication(app: Application): Promise<boolean> {
     if (applicationOpenInFlightRef.current) return false;
@@ -2236,7 +2032,6 @@ function App() {
       setImportedJob(
         restoredTailoringText.length > 40
           ? {
-              preparationId: `restored-${documentSourceFingerprint(`${app.id}:${restoredSourceText}`)}`,
               url: (app.jobUrl || "").trim(),
               sourceText: restoredSourceText,
               tailoringText: restoredTailoringText,
@@ -2255,9 +2050,20 @@ function App() {
       // below runs — a tracker-restore must not carry over the PREVIOUS working
       // job's provider attribution or raw text.
       setPipelineAiUsage(
-        canonicalizeAiUsageStageKeys(app.aiUsage ?? { "job-analysis": { source: "none" } })
+        copyAiUsage(app.aiUsage ?? { "job-analysis": { source: "none" } })
       );
       setJobRawText(restoredSourceText);
+      restorePreparedFitAssessment(
+        {
+          localJobText: restoredTailoringText,
+          screeningJobText: restoredSourceText
+        },
+        app.fitAssessment,
+        {
+          url: (app.jobUrl || "").trim(),
+          sourceText: restoredSourceText
+        }
+      );
       // Include controls describe the NEXT Apply package, not which historical
       // artifacts happen to exist. Reopen with the documented defaults; retained
       // excluded artifacts remain visible in the saved-application summary.
@@ -2271,6 +2077,9 @@ function App() {
       linkPreparedApplication(app.id);
       detachBaseResumeIdentity();
       setFileName("");
+      // The only origin transition useWorkspaceResume cannot see: a restored
+      // application seeds the editor directly, outside every workspace path.
+      setResumeOrigin(restoredResumeData || restoredResume ? "application" : "blank");
       if (restoredResumeData || restoredResume) {
         const restoredAnalysis = analyzeResumeText(restoredResume, restoredTailoringText);
         setResumeText(restoredResume);
@@ -2279,9 +2088,7 @@ function App() {
         // resume in the dedicated editor.
         setResult({
           ...restoredAnalysis,
-          polishedText: restoredResume,
-          tailored: app.resumeUsed === "tailored",
-          submissionAssessment: app.submissionAssessment
+          proposalBaselineText: restoredResume
         });
         if (restoredResumeData) {
           seedResumeData(restoredResumeData);
@@ -2330,6 +2137,12 @@ function App() {
     const restored = parseResumeFile(draft.resumeSource);
     seedResumeData(restored.data);
     docStyle.replaceDocumentStyle(restored.documentStyle);
+    // Recovery cannot prove that the current workspace/file identity belongs to
+    // these draft bytes. Keep the draft's applicant origin, but require an
+    // explicit save target instead of risking an overwrite of another variant.
+    detachBaseResumeIdentity();
+    setFileName("");
+    setResumeOrigin(draft.resumeOrigin);
     resetCoverWorkflow();
     // The autosave doesn't carry the job description/URL, so a saved
     // pipelineAiUsage/rawText only applies when the SAME job target is still
@@ -2342,7 +2155,7 @@ function App() {
       : Boolean(draft.jobLabel && draft.jobLabel === _autosaveJobLabel);
     if (provenanceApplies) {
       if (draft.pipelineAiUsage) {
-        setPipelineAiUsage(canonicalizeAiUsageStageKeys(draft.pipelineAiUsage));
+        setPipelineAiUsage(copyAiUsage(draft.pipelineAiUsage));
       }
       if (draft.jobRawText) setJobRawText(draft.jobRawText);
     }
@@ -2359,7 +2172,7 @@ function App() {
   // until the letter is safe elsewhere: openRecoveryDraft seeds CLEAN, so a
   // crash immediately after restoring still has something to recover.
   async function handleRestoreCoverDraft(draft: CoverLetterAutosavedDraft) {
-    if (coverLetterEditor.dirty && !(await confirmReplaceCoverLetter())) return;
+    if (coverLetterEditor.recoveryDirty && !(await confirmReplaceCoverLetter())) return;
     if (coverLetterEditor.openRecoveryDraft(draft.coverPayload, draft.documentTitle)) {
       setPendingCoverDraft(null);
     }
@@ -2461,21 +2274,36 @@ function App() {
           onPointerDown={dock.onPointerDown}
           aria-label="Task progress"
         >
-          <AiWorkflowProgress
-            stages={aiWorkflowStages}
-            onDismiss={dismissAiWorkflow}
-            busy={isExtractingLink || isPolishing}
-          />
+          {jobAnalysisProgressVisible ? (
+            <TaskProgress
+              stageKey="job-analysis"
+              state={jobAnalysisProgress}
+              onRetry={jobAnalysisRetry}
+              onStop={isExtractingLink ? stopJobAnalysis : undefined}
+              onDismiss={dismissJobAnalysisProgress}
+            />
+          ) : null}
+          {polishProgressVisible ? (
+            <TaskProgress
+              stageKey="resume-polish"
+              state={polishProgress.polish}
+              onRetry={() => void retryStage()}
+              onStop={stopPolish}
+              onDismiss={() => setPolishProgressVisible(false)}
+            />
+          ) : null}
           <TaskProgress
             stageKey="cover"
             state={coverProgress}
             onRetry={handleTailorCoverLetter}
+            onStop={stopCoverPolish}
             onDismiss={dismissCoverProgress}
           />
           <TaskProgress
             stageKey="answers"
             state={answersProgress}
             onRetry={retryAnswers}
+            onStop={stopAnswers}
             onDismiss={dismissAnswersProgress}
           />
         </div>
@@ -2524,11 +2352,12 @@ function App() {
           {activeOutputTab === "prepare" ? (
             <PrepareTab
               jobUrl={jobUrl}
-              onJobUrlChange={setJobUrl}
+              onJobUrlChange={handleJobUrlChange}
               jobDescription={jobDescription}
               onJobDescriptionChange={handleManualJobDescriptionChange}
               jobRawText={jobRawText}
               importedJob={importedJob}
+              localPreparedPreview={localPreparedPreview}
               onJobTrackingChange={handlePreparedJobTrackingChange}
               onJobBriefChange={handlePreparedJobBriefChange}
               jobPrepared={jobPrepared}
@@ -2541,27 +2370,27 @@ function App() {
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}
-              prepareAutomationBusy={prepareAutomationActive}
               includeResume={materialSelection.resume}
               onIncludeResumeChange={(resume) => setMaterialSelection((current) => ({ ...current, resume }))}
               baseResumeName={baseResumeName}
               baseResumeOptions={baseResumeOptions}
               onSelectBaseResume={handleSelectBaseResumeVariant}
               resumeVariantRecommendation={resumeVariantRecommendation}
-              isRankingResumeVariants={isRankingResumeVariants}
+              isResolvingPreparedResume={isResolvingPreparedResume}
+              resumeIsStarterSample={resumeIsStarterSample}
               isSelectingResume={isSavingBaseResume || isManuallySelectingResumeVariant}
-              canTailor={
+              canPolishResume={
                 canPolish &&
                 !isSavingBaseResume &&
                 !isManuallySelectingResumeVariant &&
-                !isRankingResumeVariants &&
-                !prepareAutomationActive
+                !isResolvingPreparedResume
               }
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}
+              polishOutcome={result?.polishOutcome}
               polishStatus={polishStatus}
-              onTailorPreparedResume={handleTailorPreparedResume}
+              onPolishPreparedResume={handlePolishPreparedResume}
               onReviewResume={() => setActiveOutputTab("resume")}
               includeCoverLetter={materialSelection.coverLetter}
               onIncludeCoverLetterChange={(coverLetter) =>
@@ -2583,8 +2412,7 @@ function App() {
                 coverProviderReady &&
                 !isGeneratingCover &&
                 !isSelectingCoverVariant &&
-                !isRankingCoverLetterVariants &&
-                !prepareAutomationActive
+                !isRankingCoverLetterVariants
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
@@ -2595,23 +2423,19 @@ function App() {
                       ? "Prepare the job first."
                       : isSelectingCoverVariant || isRankingCoverLetterVariants
                         ? "Wait for the cover-letter variant selection to finish."
-                        : prepareAutomationActive
-                          ? "Wait for Prepare automation to finish."
-                          : !coverProviderReady
-                            ? coverProviderMessage
-                            : (coverLetterPreflight.blockers[0] ?? "")
+                      : !coverProviderReady
+                        ? coverProviderMessage
+                        : (coverLetterPreflight.blockers[0] ?? "")
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
-              onTailorCoverLetter={handleTailorCoverLetter}
+              onTailorCoverLetter={() => {
+                handleCoverLetterPolish();
+              }}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
-              initialFit={prepareInitialFit}
-              prepareAutomation={prepareAutomation}
-              resumeAutoPolishThreshold={resumeAutoPolishThreshold}
-              coverAutoPolishThreshold={coverAutoPolishThreshold}
-              onRetryInitialFit={initialFitAudit.retry}
-              onStopInitialFit={initialFitAudit.stop}
-              submissionAssessment={prepareSubmissionAssessment}
+              fitAssessment={fitAssessmentState}
+              onAssessFit={() => void reassessFit()}
+              canAssessFit={canAssessFit}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               isApplying={isApplying}
@@ -2631,9 +2455,7 @@ function App() {
               contentRedoSequence={resumeRedoSequence}
               dirty={resumeDocumentDirty}
               draftAutosaveState={draftAutosaveState}
-              jobConstraints={jobConstraints}
               result={result}
-              resumeDiff={resumeDiff}
               docStyle={docStyle}
               formattingToolbar={
                 <FormattingToolbar
@@ -2793,35 +2615,22 @@ function App() {
               }}
               onInlineFormatStateChange={setInlineFormat}
               onRequestLinkEditor={() => setLinkEditorOpen(true)}
-              tailorModes={tailorModes}
-              onSetTailorMode={setTailorMode}
-              onAddHonestContext={handleAddHonestContext}
+              polishScopeModes={polishScopeModes}
+              onSetPolishScopeMode={setPolishScopeMode}
               pendingAutosaveDraft={pendingAutosaveDraft}
               onRestoreAutosaveDraft={handleRestoreAutosaveDraft}
               onDismissAutosaveDraft={handleDismissAutosaveDraft}
-              reviewStale={reviewStale}
+              proposalStale={proposalStale}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              tailorProviderReady={tailorProviderReady}
-              auditProviderReady={reviewProviderReady}
-              polishStages={polishStages}
+              resumePolishProviderReady={resumePolishProviderReady}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
-              onPolish={() => {
-                lastResumePolishModeRef.current = "manual";
-                void handlePolish();
-              }}
-              onRetryTailor={() => {
-                lastResumePolishModeRef.current = "manual";
-                void retryStage("tailor");
-              }}
-              onRetryAudit={() => {
-                lastResumePolishModeRef.current = "manual";
-                void retryStage("review");
-              }}
+              proposalDecisions={resumeProposalDecisions}
+              onPolish={() => void handleResumePolish()}
+              onRetryPolish={() => void retryStage()}
               onStopPolish={stopPolish}
-              onProposalChange={() => setReviewStale(true)}
               jobTarget={materialsJobTarget}
               documentActions={
                 <>
@@ -2993,7 +2802,9 @@ function App() {
               }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
-              onTailor={handleTailorCoverLetter}
+              onTailor={() => {
+                handleCoverLetterPolish();
+              }}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}
@@ -3067,8 +2878,8 @@ function App() {
               isGeneratingAnswers={isGeneratingAnswers}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              aiProviderReady={tailorProviderReady}
-              aiProviderMessage={tailorProviderMessage}
+              aiProviderReady={resumePolishProviderReady}
+              aiProviderMessage={resumePolishProviderMessage}
               canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
               onGenerate={handleGenerateAnswers}
               onSaveAnswers={handleSaveAnswers}
@@ -3103,12 +2914,16 @@ function App() {
           availabilityStatus={providerAvailability.status}
           availabilityMessage={providerAvailability.message}
           onRefreshProviders={providerAvailability.refresh}
-          polishStages={polishStages}
-          onPolishStagesChange={setPolishStages}
+          runFitAssessment={runFitAssessment}
+          onRunFitAssessmentChange={setRunFitAssessment}
+          autoPolishResume={autoPolishResume}
+          onAutoPolishResumeChange={setAutoPolishResume}
           resumeAutoPolishThreshold={resumeAutoPolishThreshold}
           onResumeAutoPolishThresholdChange={setResumeAutoPolishThreshold}
-          coverAutoPolishThreshold={coverAutoPolishThreshold}
-          onCoverAutoPolishThresholdChange={setCoverAutoPolishThreshold}
+          autoPolishCoverLetter={autoPolishCoverLetter}
+          onAutoPolishCoverLetterChange={setAutoPolishCoverLetter}
+          coverLetterAutoPolishThreshold={coverLetterAutoPolishThreshold}
+          onCoverLetterAutoPolishThresholdChange={setCoverLetterAutoPolishThreshold}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}
@@ -3119,6 +2934,15 @@ function App() {
           onEducationLevelChange={setEducationLevel}
           major={major}
           onMajorChange={setMajor}
+          gpa={gpa}
+          onGpaChange={setGpa}
+          availabilityNotice={availabilityNotice}
+          onAvailabilityNoticeChange={setAvailabilityNotice}
+          availabilityDate={availabilityDate}
+          onAvailabilityDateChange={setAvailabilityDate}
+          experienceProfile={experienceProfile}
+          onExperienceProfileChange={setExperienceProfile}
+          workspacePreferencesStatus={workspacePreferencesStatus}
           honestContext={honestContext}
           onHonestContextChange={setHonestContext}
           honestContextRef={honestContextTextareaRef}

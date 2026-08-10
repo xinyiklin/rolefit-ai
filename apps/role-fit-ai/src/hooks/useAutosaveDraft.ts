@@ -3,6 +3,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import { serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import type { StageAiUsage } from "../lib/aiUsage";
+import type { ResumeOrigin } from "../lib/resumeOrigin.ts";
 import {
   parseResumeAutosaveDraft,
   type AutosavedDraft
@@ -19,9 +20,9 @@ export type { AutosavedDraft };
 // The RESUME recovery draft. Tab scoping, live-sibling protection, orphan
 // migration, and expiry live in lib/autosaveDraftStorage.ts, which the cover
 // letter's draft shares; only the payload below is resume-specific.
-// Stores strict editable resume source, a timestamp, a light job-target label,
-// and optional recovery-only raw job text / AI-usage snapshot. API keys and
-// provider credentials are never stored here.
+// Stores strict editable resume source, its applicant-ownership origin, a
+// timestamp, a light job-target label, and optional recovery-only raw job text /
+// AI-usage snapshot. API keys and provider credentials are never stored here.
 
 // Clear THIS tab's resume draft (call on Apply / base-resume Save so a
 // recovered draft doesn't reappear after the edits are safely persisted
@@ -38,6 +39,7 @@ type UseAutosaveDraftArgs = {
   editedResume: ResumeData | null;
   docStyle: DocStyle;
   dirty: boolean;
+  resumeOrigin: ResumeOrigin;
   // A short label for the current job target (role + company) — stored as
   // context only, never the full JD body.
   jobLabel: string;
@@ -57,15 +59,15 @@ type UseAutosaveDraftArgs = {
 // 1200 ms debounce balances responsiveness against write frequency.
 export type { DraftAutosaveState };
 
-export function useAutosaveDraft({ editedResume, docStyle, dirty, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
+export function useAutosaveDraft({ editedResume, docStyle, dirty, resumeOrigin, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
   // Latest usage/raw-text read inside the debounced write without re-triggering
-  // the effect (and its debounce reset) on every job-analysis/tailor/review tick —
-  // only dirty/editedResume/jobLabel changes should reschedule the write.
+  // the effect (and its debounce reset) on every Job analysis/Polish/check tick —
+  // only document/job-label/origin changes should reschedule the write.
   const latestExtras = useRef({ pipelineAiUsage, jobRawText, getJobKeyHash });
   latestExtras.current = { pipelineAiUsage, jobRawText, getJobKeyHash };
   const revision = useMemo(
-    () => ({ editedResume, docStyle, jobLabel }),
-    [docStyle, editedResume, jobLabel]
+    () => ({ editedResume, docStyle, jobLabel, resumeOrigin }),
+    [docStyle, editedResume, jobLabel, resumeOrigin]
   );
   return useDebouncedRecoveryDraft({
     shouldSave: dirty && editedResume !== null,
@@ -80,6 +82,7 @@ export function useAutosaveDraft({ editedResume, docStyle, dirty, jobLabel, pipe
       } = latestExtras.current;
       return saveTabDraft("resume", {
         resumeSource,
+        resumeOrigin,
         savedAt: new Date().toISOString(),
         jobLabel,
         ...(usage && Object.keys(usage).length ? { pipelineAiUsage: usage } : {}),

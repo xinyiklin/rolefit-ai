@@ -1,4 +1,5 @@
-// Offline probes for keyword matching/extraction. No personal data, no network.
+// Offline probes for keyword matching/extraction — the inputs to
+// scoreKeywordFit. No personal data, no network.
 //
 //   node src/resume/__evals__/keywords-eval.mjs
 //

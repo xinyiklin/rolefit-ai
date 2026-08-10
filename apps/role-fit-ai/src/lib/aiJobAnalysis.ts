@@ -17,6 +17,10 @@ import {
 import type { AiRequestFields } from "./aiRequest";
 import type { StageAiUsage } from "./aiUsage";
 import { ApiError, classifyFailure, type ClassifiedFailure } from "./failures";
+import {
+  sanitizeFitAssessment,
+  type FitAssessmentResult
+} from "../../shared/fitAssessmentContract.ts";
 
 // The structured fields /api/job-analysis returns (already grounded/anti-fab on the
 // server). Every field is optional at runtime — the model output is untrusted.
@@ -44,6 +48,8 @@ export type AiJobAnalysisFields = {
   model?: string;
   reasoningEffort?: string;
   attempts?: number;
+  fitAssessment?: unknown;
+  fitAssessmentStatus?: unknown;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -108,10 +114,150 @@ export type JobAnalysisResult = {
   source: "ai" | "local";
   usage: StageAiUsage;
   failure?: ClassifiedFailure;
+  fitAssessmentRequested: boolean;
+  fitAssessment: FitAssessmentResult | null;
 };
+
+export type FitAssessmentRequest = {
+  resumeText: string;
+  resumeLabel: string;
+  candidateContext?: string;
+};
+
+export type FitAssessmentExecutionUsage = {
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempts?: number;
+};
+
+export function localJobAnalysisResult(
+  text: string,
+  options: {
+    url?: string;
+    aiRequest?: Partial<AiRequestFields>;
+    localExtracted?: ExtractedJobPosting;
+    failure?: ClassifiedFailure;
+    fitAssessmentRequested?: boolean;
+  } = {}
+): JobAnalysisResult {
+  const extracted = options.localExtracted ?? extractJobPosting(text, { url: options.url });
+  if (!options.failure) {
+    return {
+      extracted,
+      source: "local",
+      usage: localOnlyUsage(),
+      fitAssessmentRequested: options.fitAssessmentRequested ?? false,
+      fitAssessment: null
+    };
+  }
+  return {
+    extracted,
+    source: "local",
+    usage: localFallbackUsage(options.aiRequest),
+    failure: options.failure,
+    fitAssessmentRequested: options.fitAssessmentRequested ?? false,
+    fitAssessment: null
+  };
+}
 
 function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== "")) as Partial<T>;
+}
+
+type JobAnalysisFailure = { failure: ClassifiedFailure };
+type AnalysisApiOutcome = { mode: "analysis"; fields: Partial<AiJobAnalysisFields> };
+type FitAssessmentApiOutcome = {
+  mode: "fit-assessment";
+  fitAssessment: FitAssessmentResult;
+  usage: FitAssessmentExecutionUsage;
+};
+type JobAnalysisApiOutcome = AnalysisApiOutcome | FitAssessmentApiOutcome | JobAnalysisFailure;
+
+function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "analysis"; signal?: AbortSignal }
+): Promise<AnalysisApiOutcome | JobAnalysisFailure>;
+function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "fit-assessment"; signal?: AbortSignal }
+): Promise<FitAssessmentApiOutcome | JobAnalysisFailure>;
+async function postJobAnalysisRequest(
+  payload: Record<string, unknown>,
+  options: { mode: "analysis" | "fit-assessment"; signal?: AbortSignal }
+): Promise<JobAnalysisApiOutcome> {
+  const { mode, signal } = options;
+  try {
+    const response = await fetch("/api/job-analysis", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      signal
+    });
+    if (!response.ok) {
+      let message = mode === "analysis"
+        ? "AI job analysis request failed"
+        : "Fit Assessment request failed";
+      try {
+        const body = await response.json() as { error?: unknown };
+        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
+      } catch {
+        // The status code still classifies a non-JSON failure safely.
+      }
+      return { failure: classifyFailure(new ApiError(message, response.status)) };
+    }
+
+    let body: unknown;
+    try {
+      body = await response.json();
+    } catch {
+      const message = mode === "analysis"
+        ? "The job analyzer returned an unparseable response"
+        : "Fit Assessment returned unreadable JSON";
+      return { failure: classifyFailure(new ApiError(message, 502)) };
+    }
+
+    if (mode === "analysis") {
+      if (!body || typeof body !== "object" || Array.isArray(body) || (body as { source?: unknown }).source !== "ai") {
+        return {
+          failure: classifyFailure(new ApiError("The job analyzer returned an invalid response", 502))
+        };
+      }
+      return { mode, fields: body as Partial<AiJobAnalysisFields> };
+    }
+
+    const fitBody = body && typeof body === "object" && !Array.isArray(body)
+      ? body as Record<string, unknown>
+      : null;
+    const fitAssessment = fitBody
+      ? sanitizeFitAssessment(fitBody.fitAssessment)
+      : null;
+    return fitAssessment
+      ? {
+          mode,
+          fitAssessment,
+          usage: {
+            ...(typeof fitBody?.provider === "string" && fitBody.provider.trim()
+              ? { provider: fitBody.provider.trim() }
+              : {}),
+            ...(typeof fitBody?.model === "string" && fitBody.model.trim()
+              ? { model: fitBody.model.trim() }
+              : {}),
+            ...(typeof fitBody?.reasoningEffort === "string" && fitBody.reasoningEffort.trim()
+              ? { reasoningEffort: fitBody.reasoningEffort.trim() }
+              : {}),
+            ...(typeof fitBody?.attempts === "number" && Number.isFinite(fitBody.attempts)
+              ? { attempts: Math.max(1, Math.min(9, Math.round(fitBody.attempts))) }
+              : {})
+          }
+        }
+      : {
+          failure: classifyFailure(new ApiError("Fit Assessment returned no usable screening", 502))
+        };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw error;
+    return { failure: classifyFailure(error) };
+  }
 }
 
 // Usage attribution for an AI-accepted analysis: the resolved provider/model
@@ -150,15 +296,15 @@ function localOnlyUsage(): StageAiUsage {
 // import (both analyze client-side through `/api/job-analysis`; the extension's server
 // pass only prepares the raw text).
 //
-// "Usable AI content" mirrors the tailor pass's usable-response guard (needs
-// suggestions/gaps/summary) and review's reviewStatus="failed": a reply the
+// "Usable AI content" mirrors the other model-backed stages' usable-response
+// guards: a reply the
 // server grounded down to nothing of substance is an AI no-op. A bare title or
 // other metadata scalar does NOT count — the deterministic engine extracts those
 // too, so reporting them as "ai" mislabels a failure as success while the same
-// misbehaving provider makes tailor/review show a fallback. We key off ONLY the
+// misbehaving provider makes Resume Polish show a fallback. We key off ONLY the
 // server-grounded content lists (responsibilities/qualifications/tech/seniority/
 // domain). roleDescription is deliberately NOT a signal here: a grounded summary
-// alone still provides no actionable requirements for tailoring. When all lists
+// alone still provides no actionable requirements for polishing. When all lists
 // are empty we defer to the local engine and label the result "local" honestly.
 function hasUsableAiContent(fields: Partial<AiJobAnalysisFields>): boolean {
   return (
@@ -183,16 +329,31 @@ export function extractedFromAiOrLocal(
   text: string,
   url?: string,
   aiRequest?: Partial<AiRequestFields>,
-  localExtracted?: ExtractedJobPosting
+  localExtracted?: ExtractedJobPosting,
+  fitAssessmentRequested = false
 ): JobAnalysisResult {
+  // The server sanitizes the job subsection and the Fit Assessment subsection
+  // independently, so a valid screening can arrive beside job fields too weak
+  // to use. Discarding the fit with them threw away a good half of the one
+  // combined request and invited a second assessment-only call; the two sources stay
+  // independent here for the same reason.
+  const fitAssessment = fitAssessmentRequested ? sanitizeFitAssessment(fields?.fitAssessment) : null;
   if (fields && hasUsableAiContent(fields)) {
-    return { extracted: buildExtractedFromAi(fields, text, url), source: "ai", usage: aiUsageFromFields(fields) };
+    return {
+      extracted: buildExtractedFromAi(fields, text, url),
+      source: "ai",
+      usage: aiUsageFromFields(fields),
+      fitAssessmentRequested,
+      fitAssessment
+    };
   }
   return {
     extracted: localExtracted ?? extractJobPosting(text, { url }),
     source: "local",
     usage: localFallbackUsage(aiRequest),
-    failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502))
+    failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502)),
+    fitAssessmentRequested,
+    fitAssessment
   };
 }
 
@@ -205,6 +366,7 @@ export async function analyzeJobPosting(
     url?: string;
     signal?: AbortSignal;
     aiRequest?: Partial<AiRequestFields>;
+    fitAssessment?: FitAssessmentRequest;
     // Precomputed extractJobPosting(text, { url }) result from a caller's own
     // gate parse (same text/url). Every local-fallback branch below reuses it
     // instead of re-running the parser; falls back to computing it here, once,
@@ -213,51 +375,75 @@ export async function analyzeJobPosting(
     localExtracted?: ExtractedJobPosting;
   } = {}
 ): Promise<JobAnalysisResult> {
-  const { url, signal, aiRequest, localExtracted } = options;
+  const { url, signal, aiRequest, fitAssessment, localExtracted } = options;
+  const fitAssessmentRequested = Boolean(fitAssessment?.resumeText.trim());
   let memoizedLocalExtracted: ExtractedJobPosting | undefined;
   const resolveLocalExtracted = (): ExtractedJobPosting =>
     localExtracted ?? (memoizedLocalExtracted ??= extractJobPosting(text, { url }));
   // No AI attempted at all (text too short to bother calling out).
-  const localOnly = (): JobAnalysisResult => ({ extracted: resolveLocalExtracted(), source: "local", usage: localOnlyUsage() });
+  const localOnly = (): JobAnalysisResult => localJobAnalysisResult(text, {
+    url,
+    localExtracted: resolveLocalExtracted(),
+    fitAssessmentRequested
+  });
   // An AI call was made but didn't produce a usable result.
-  const localAfterAttempt = (failure: ClassifiedFailure): JobAnalysisResult => ({
-    extracted: resolveLocalExtracted(),
-    source: "local",
-    usage: localFallbackUsage(aiRequest),
-    failure
+  const localAfterAttempt = (failure: ClassifiedFailure): JobAnalysisResult => localJobAnalysisResult(text, {
+    url,
+    aiRequest,
+    localExtracted: resolveLocalExtracted(),
+    failure,
+    fitAssessmentRequested
   });
   if (text.trim().length < 40) return localOnly();
 
-  try {
-    const res = await fetch("/api/job-analysis", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text, url, ...(aiRequest ?? {}) }),
-      signal
-    });
-    if (!res.ok) {
-      let message = "AI job analysis request failed";
-      try {
-        const body = (await res.json()) as { error?: unknown };
-        if (typeof body.error === "string" && body.error.trim()) message = body.error.trim();
-      } catch {
-        // The status code still classifies a non-JSON failure safely.
-      }
-      return localAfterAttempt(classifyFailure(new ApiError(message, res.status)));
-    }
-    let fields: Partial<AiJobAnalysisFields> | null;
-    try {
-      fields = (await res.json()) as Partial<AiJobAnalysisFields> | null;
-    } catch {
-      return localAfterAttempt(classifyFailure(new ApiError("The job analyzer returned an unparseable response", 502)));
-    }
-    if (!fields || fields.source !== "ai") {
-      return localAfterAttempt(classifyFailure(new ApiError("The job analyzer returned an invalid response", 502)));
-    }
-    return extractedFromAiOrLocal(fields, text, url, aiRequest, localExtracted);
-  } catch (error) {
-    // A genuine cancel should propagate; everything else falls back locally.
-    if (error instanceof DOMException && error.name === "AbortError") throw error;
-    return localAfterAttempt(classifyFailure(error));
-  }
+  const outcome = await postJobAnalysisRequest(
+    {
+      text,
+      url,
+      ...(aiRequest ?? {}),
+      ...(fitAssessmentRequested
+        ? {
+            fitAssessment: {
+              enabled: true,
+              resumeText: fitAssessment?.resumeText,
+              candidateContext: fitAssessment?.candidateContext
+            }
+          }
+        : {})
+    },
+    { mode: "analysis", signal }
+  );
+  if ("failure" in outcome) return localAfterAttempt(outcome.failure);
+  return extractedFromAiOrLocal(
+    outcome.fields,
+    text,
+    url,
+    aiRequest,
+    localExtracted,
+    fitAssessmentRequested
+  );
+}
+
+export async function analyzeFitAssessment(
+  text: string,
+  request: FitAssessmentRequest,
+  options: { signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
+): Promise<{
+  fitAssessment: FitAssessmentResult | null;
+  usage?: FitAssessmentExecutionUsage;
+  failure?: ClassifiedFailure;
+}> {
+  const outcome = await postJobAnalysisRequest(
+    {
+      text,
+      mode: "fit-assessment",
+      resumeText: request.resumeText,
+      candidateContext: request.candidateContext,
+      ...(options.aiRequest ?? {})
+    },
+    { mode: "fit-assessment", signal: options.signal }
+  );
+  return "failure" in outcome
+    ? { fitAssessment: null, failure: outcome.failure }
+    : { fitAssessment: outcome.fitAssessment, usage: outcome.usage };
 }

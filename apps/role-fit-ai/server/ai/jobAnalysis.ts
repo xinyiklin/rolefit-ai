@@ -24,7 +24,22 @@ import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
-import { findUngroundedCuratedClaimTerm } from "./grounding.ts";
+import {
+  LIST_STOPWORDS,
+  distinctiveTokenKeys,
+  findUngroundedCuratedClaimTerm
+} from "./grounding.ts";
+import {
+  FIT_ASSESSMENT_RULES,
+  FIT_ASSESSMENT_RESPONSE_SCHEMA,
+  analyzeFitAssessment,
+  fitAssessmentPromptSection,
+  sanitizeFitAssessmentResponse
+} from "./fitAssessment.ts";
+import {
+  normalizeFitAssessmentInput,
+  type FitAssessmentResult
+} from "../../shared/fitAssessmentContract.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
 type AttemptStats = { attempts?: number };
@@ -33,7 +48,18 @@ type StrListOptions = { maxItems: number; maxLen?: number; minLen?: number };
 
 const JOB_TEXT_CHAR_LIMIT = 24_000;
 
-export function buildJobAnalysisPrompts({ jobText }: { jobText: unknown }): { systemPrompt: string; userPrompt: string } {
+type FitAssessmentInput = {
+  resumeText: string;
+  candidateContext?: string;
+};
+
+export function buildJobAnalysisPrompts({
+  jobText,
+  fitAssessment
+}: {
+  jobText: unknown;
+  fitAssessment?: FitAssessmentInput | null;
+}): { systemPrompt: string; userPrompt: string } {
   const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
 
 ${inputFirewallRule()}
@@ -45,7 +71,9 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
 4. techKeywords are ONLY concrete technologies/languages/frameworks/tools/platforms NAMED in the posting (e.g. "Python", "React", "AWS", "Kubernetes"). Never a generic skill ("communication") and never a tool the posting does not name.
 5. roleDescription is a neutral extract or light trim of the posting's own role/company description. Do not synthesize a new summary, combine unrelated claims, or add implied context.
 6. Each list item is one concise duty/qualification (no numbering, no bullets).
-7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.`;
+7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.${fitAssessment ? `
+
+${FIT_ASSESSMENT_RULES}` : ""}`;
 
   const schema = `Return this JSON shape (use "" / null / [] for anything not stated):
 {
@@ -66,6 +94,16 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   "senioritySignals": ["e.g. \\"senior\\", \\"entry-level / junior\\", \\"3-5 years\\", \\"leadership\\""],
   "domainSignals": ["e.g. \\"fintech\\", \\"healthcare\\", \\"AI\\", \\"infrastructure\\""]
 }`;
+  const responseSchema = fitAssessment
+    ? `Return this JSON shape. The job and fitAssessment subsections are independent; always return the best job object even if Fit Assessment is unavailable:
+{
+  "job": ${schema.slice(schema.indexOf("{"))},
+  "fitAssessment": ${FIT_ASSESSMENT_RESPONSE_SCHEMA}
+}`
+    : schema;
+  // A combined request must show Fit Assessment the same normalized posting that
+  // its exact-excerpt validator will use after the response returns.
+  const promptJobText = fitAssessment ? normalizeFitAssessmentInput(jobText) : jobText;
 
   // The source URL is intentionally NOT included: it can carry private ATS
   // tokens / tracking params, and the product contract (README, ai-server.md)
@@ -73,12 +111,27 @@ ABSOLUTE RULES (anti-fabrication — this is the whole job):
   const userPrompt = `Parse the posting inside the <job_description> tags below.
 
 <job_description>
-${fenceUntrusted(clipForPrompt(jobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
+${fenceUntrusted(clipForPrompt(promptJobText, JOB_TEXT_CHAR_LIMIT, "job posting")) || "Not provided."}
 </job_description>
 
-${schema}`;
+${fitAssessment ? fitAssessmentPromptSection(fitAssessment) : ""}
+
+${responseSchema}`;
 
   return { systemPrompt, userPrompt };
+}
+
+function fitAssessmentInput(body: Record<string, unknown>): FitAssessmentInput | null {
+  const raw = body.fitAssessment;
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  if (source.enabled !== true) return null;
+  const resumeText = typeof source.resumeText === "string" ? source.resumeText : "";
+  if (resumeText.trim().length < 40) return null;
+  return {
+    resumeText,
+    ...(typeof source.candidateContext === "string" ? { candidateContext: source.candidateContext } : {})
+  };
 }
 
 // --- sanitizing + grounding ------------------------------------------------
@@ -113,48 +166,11 @@ function grounded(value: unknown, sourceNorm: string): boolean {
   return Boolean(v) && v.length >= 2 && sourceNorm.includes(v);
 }
 
-// Generic connective tissue that appears in almost every posting — matching one
-// of these does NOT count toward a list item being anchored in the source.
-const LIST_STOPWORDS = new Set([
-  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
-  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
-  "other", "using", "use", "used", "including", "include", "includes", "such",
-  "across", "within", "via", "ability", "able", "experience", "experienced",
-  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
-  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
-]);
-
 const ROLE_DESCRIPTION_STOPWORDS = new Set([
   ...LIST_STOPWORDS,
   "company", "business", "position", "candidate", "candidates", "looking", "seeking",
   "help", "helps", "helping", "join", "joining", "opportunity"
 ]);
-
-const ROLE_TOKEN_CANONICAL = new Map([
-  ["postgresql", "postgres"], ["postgres", "postgres"],
-  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
-  ["typescript", "typescript"], ["ts", "typescript"]
-]);
-
-// Light morphology keeps grounding paraphrase-friendly without turning it into
-// semantic guesswork: "building" can match "build" and "services" can match
-// "service", but an invented domain/tool still has no matching token.
-function tokenKey(token: string): string {
-  let key = token;
-  if (key.length > 5 && key.endsWith("ies")) key = `${key.slice(0, -3)}y`;
-  else if (key.length > 5 && key.endsWith("ing")) key = key.slice(0, -3).replace(/(.)\1$/, "$1");
-  else if (key.length > 4 && key.endsWith("ed")) key = key.slice(0, -2).replace(/(.)\1$/, "$1");
-  else if (key.length > 4 && key.endsWith("s")) key = key.slice(0, -1);
-  return ROLE_TOKEN_CANONICAL.get(key) ?? key;
-}
-
-function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
-  return [...new Set(norm(value)
-    .split(" ")
-    .filter((token) => token.length >= 3 && !stopwords.has(token))
-    .map(tokenKey)
-    .filter(Boolean))];
-}
 
 // Free-text fields need the same symbol/case-aware protection as techKeywords.
 // Otherwise generic token overlap lets clearance/business phrases ground an
@@ -245,18 +261,13 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
   return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
 }
 
-// workAuth is an eligibility fact that can yield NOT_SATISFIED and LIMITED_FIT;
-// persists into the application tracker — so it gets the same anti-fabrication
-// discipline as every other analyzed field (the old code passed it through
-// ungrounded). Keep it only when the SPECIFIC authorization class the model named
-// (clearance / citizenship / visa / sponsorship / work authorization / …) actually
-// appears in the posting: an invented "active security clearance required" for a
-// posting that never mentions clearance is dropped, while a genuine "authorized to
-// work without sponsorship" is kept. A workAuth naming no auth class at all is not
-// a real constraint and is dropped. AUTH_STEMS + the boundary-anchored matcher
-// live in the shared eligibility lexicon (./eligibilityLexicon.ts — the one
-// home for every work-auth/credential term list; its header documents how this
-// list deliberately differs from scoring's blocker/bucket lists).
+// workAuth is a tracked prepared-job fact that feeds a separate advisory
+// eligibility interpretation; it does not control Fit Assessment. Give it the same
+// anti-fabrication discipline as every other analyzed field: keep it only when
+// the specific authorization class the model named (clearance / citizenship /
+// visa / sponsorship / work authorization / …) actually appears in the posting.
+// AUTH_STEMS and its boundary-aware matcher live in the shared eligibility
+// lexicon so every advisory path uses the same vocabulary.
 function groundedWorkAuth(value: unknown, sourceLower: string): string {
   const wa = str(value, 240);
   if (!wa) return "";
@@ -422,11 +433,39 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
     requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
     techKeywords,
-    // senioritySignals/domainSignals feed AI Review and the visible job brief,
+    // senioritySignals/domainSignals feed the visible job brief and later checks,
     // so they get the same source-grounding as the content lists —
     // an invented "fintech" domain or "staff-level" seniority signal is dropped.
     senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),
     domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText)
+  };
+}
+
+export function sanitizePrepareAnalysisResponse(
+  parsed: unknown,
+  jobText: string,
+  // The Fit Assessment inputs, or null when no screening was requested. The two
+  // subsections are sanitized independently on purpose: a weak job half must
+  // not discard a valid screening, and vice versa.
+  fitInput: FitAssessmentInput | null
+): { fields: ReturnType<typeof sanitizeJobAnalysis>; fitAssessment?: FitAssessmentResult | null } {
+  const source = parsed && typeof parsed === "object" && !Array.isArray(parsed)
+    ? parsed as Record<string, unknown>
+    : {};
+  const rawJob = fitInput && source.job && typeof source.job === "object"
+    ? source.job
+    : source;
+  return {
+    fields: sanitizeJobAnalysis(rawJob, jobText),
+    ...(fitInput
+      ? {
+          fitAssessment: sanitizeFitAssessmentResponse(source.fitAssessment, {
+            jobText,
+            resumeText: fitInput.resumeText,
+            candidateContext: fitInput.candidateContext
+          })
+        }
+      : {})
   };
 }
 
@@ -448,14 +487,17 @@ export async function analyzeJobToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText });
+  const fitInput = fitAssessmentInput(body);
+  const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, fitAssessment: fitInput });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
     { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
     stats
   );
+  const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, fitInput);
   return {
-    fields: sanitizeJobAnalysis(parsed, jobText),
+    ...prepared,
+    fitAssessmentRequested: Boolean(fitInput),
     provider,
     model,
     reasoningEffort,
@@ -480,6 +522,30 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
     }
     // Resolve once for the error label / key validation, then analyze.
     provider = resolveProviderRequest(body).provider;
+    if (body.mode === "fit-assessment") {
+      const resumeText = String(body.resumeText ?? "");
+      if (resumeText.trim().length < 40) {
+        sendJson(res, 400, { error: "Load a resume before retrying Fit Assessment." });
+        return;
+      }
+      const fit = await analyzeFitAssessment({
+        jobText,
+        resumeText,
+        candidateContext: String(body.candidateContext ?? ""),
+        body,
+        signal: request.signal
+      });
+      sendJson(res, 200, {
+        source: "ai",
+        fitAssessment: fit.fitAssessment,
+        fitAssessmentStatus: fit.fitAssessment ? "ready" : "unavailable",
+        provider: fit.provider,
+        model: fit.model,
+        reasoningEffort: fit.reasoningEffort,
+        attempts: fit.attempts
+      });
+      return;
+    }
     const result = await analyzeJobToFields({ jobText, body, signal: request.signal });
     // Echo the RESOLVED provider/model/reasoningEffort (never the API key)
     // plus the dispatch attempt count so the client can record which model actually
@@ -490,7 +556,13 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       provider: result.provider,
       model: result.model,
       reasoningEffort: result.reasoningEffort,
-      attempts: result.attempts
+      attempts: result.attempts,
+      ...(result.fitAssessmentRequested
+        ? {
+            fitAssessment: result.fitAssessment,
+            fitAssessmentStatus: result.fitAssessment ? "ready" : "unavailable"
+          }
+        : {})
     });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;

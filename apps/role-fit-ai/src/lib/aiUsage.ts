@@ -1,9 +1,9 @@
-// Per-stage AI usage attribution, captured across Job analysis/Initial Fit/tailor/review/
+// Per-stage AI usage attribution, captured across Job analysis/Resume Polish/
 // cover pipeline and snapshotted onto an Application at Apply time (see
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.
 //
-// Stage keys are plain strings ("job-analysis" | "initial-fit" | "tailor" | "review" | "cover" today)
+// Stage keys are plain strings ("job-analysis" | "resume-polish" | "cover" today)
 // so a future stage can be added without a schema migration; the server sanitizer
 // constrains keys to /^[a-z][a-z0-9-]{0,23}$/.
 
@@ -28,16 +28,10 @@ export type StageAiUsage = {
 
 export type ApplicationAiUsage = Record<string, StageAiUsage>;
 
-// Historical applications used `distill`. Canonicalize at client read/merge
-// boundaries so the UI labels those records as Job analysis and every later
-// write emits only the new key. A canonical value wins if both are present.
-export function canonicalizeAiUsageStageKeys(
+// Copy at read/merge boundaries so callers can add current stage receipts
+// without mutating a stored application or recovery draft.
+export function copyAiUsage(
   usage: ApplicationAiUsage | undefined
 ): ApplicationAiUsage {
-  const canonical = { ...(usage ?? {}) };
-  if (!canonical["job-analysis"] && canonical.distill) {
-    canonical["job-analysis"] = canonical.distill;
-  }
-  delete canonical.distill;
-  return canonical;
+  return { ...(usage ?? {}) };
 }

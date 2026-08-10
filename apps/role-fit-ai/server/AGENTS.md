@@ -13,13 +13,22 @@ for provider, prompt, sanitizer, and review work.
   Vite/static serving, security guards, explicit route dispatch, and the
   start/close lifecycle used by the local web entry and isolated probes. It must
   not listen or create storage merely because it was imported. Reusability does
-  not make the full server a desktop companion protocol.
+  not make the full server a desktop companion protocol. Preview route renames
+  replace their old dispatch paths; do not retain compatibility aliases.
 - `http.ts` owns body/JSON/fetch utilities and request limits.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
 - `jobImport.ts` owns ATS/public job-text resolution.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from resume import and starter fallbacks.
+  Each kind exposes a bounded `/candidates` batch read beside its `/select`
+  route: ranking saved variants needs several documents at once, and `/select`
+  answers with a whole workspace snapshot under the workspace lock, so per-file
+  reads cost N serialized snapshots before the first AI result. A batch reads
+  only the requested files under ONE lock, returns nothing else, applies the
+  same name guards, and SKIPS an unreadable or invalid document rather than
+  failing — the client ranker treats a short candidate list as "no
+  recommendation", while a 500 would leave Prepare with no selection at all.
 - `applications/` owns tracker persistence and routes. `schema.ts` validates the
   current record shape, `storage.ts` owns the serialized write queue,
   `reconcile.ts` applies sparse revision-checked mutations, and
@@ -31,10 +40,6 @@ for provider, prompt, sanitizer, and review work.
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Every byte served back is a download (narrow
   content type, `nosniff`, no inline render).
-  Application records persist Initial Fit as a compact historical checkpoint
-  separate from the later submission-readiness assessment. Its sanitizer must
-  reject malformed categorical assessments, unsafe resume names, and
-  noncanonical timestamps without dropping the otherwise valid application.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin
@@ -106,7 +111,10 @@ for provider, prompt, sanitizer, and review work.
   `updatedAt` monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data.
+  data. The one safe tracker-read normalization is fixed Fit Assessment summary
+  copy derived from an otherwise valid verdict: older provider-era summary text
+  may differ without invalidating the tracker, while every other sanitizer
+  difference remains fail-closed.
 - Server changes require the server TypeScript gate and focused route/eval.
   Lifecycle/listener probes are explicit tests rather than auto-discovered
   offline evals because their loopback bind may require environment permission.

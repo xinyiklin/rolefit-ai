@@ -1,6 +1,6 @@
-// JD-term grounding for tailor suggestions: a term that appears in the job
+// JD-term grounding for Resume Polish suggestions: a term that appears in the job
 // description may be written into a proposedText ONLY if it already exists in
-// the grounding corpus (every current field text in the tailor scope plus the
+// the grounding corpus (every current field text in the resume scope plus the
 // user's honest context). The evidence field is model prose and can launder an
 // inferred fact ("clinics run Windows"); the source text cannot.
 //
@@ -129,14 +129,67 @@ const LEADING_ACTION_VERBS = new Set([
   "resolved", "analyzed", "evaluated", "researched", "prototyped"
 ]);
 
+const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
+  { level: 3, pattern: /\b(?:architect(?:ed|ing)?|led|lead|leading|owned|owning|drove|driven|directed|headed|spearheaded|oversaw|orchestrated)\b/i },
+  { level: 2, pattern: /\b(?:built|designed|implemented|developed|delivered|created|engineered|managed)\b/i },
+  { level: 1, pattern: /\b(?:assisted|supported|contributed|helped|collaborated|coordinated|participated)\b/i }
+];
+
+export function ownershipStrength(value: string): number {
+  for (const { level, pattern } of OWNERSHIP_LEVELS) {
+    if (pattern.test(value)) return level;
+  }
+  return 0;
+}
+
+const OWNERSHIP_CONTEXT_STOPWORDS = new Set([
+  "and", "the", "for", "with", "that", "this", "from", "into", "across",
+  "work", "worked", "working", "role", "project", "projects", "team", "teams",
+  "service", "services", "system", "systems", "platform", "platforms", "tool", "tools",
+  "delivery", "delivered", "build", "built", "develop", "developed", "design", "designed",
+  "implement", "implemented", "manage", "managed", "lead", "led", "leading", "owned",
+  "owning", "drove", "driven", "directed", "headed", "architected", "spearheaded",
+  "oversaw", "orchestrated", "support", "supported", "assist", "assisted", "contributed",
+  "helped", "collaborated", "coordinated", "participated", "created", "engineered"
+]);
+
+function ownershipSupportSegments(value: string): string[] {
+  return value
+    .split(/(?:\r?\n|[.!?]+\s+)/)
+    .map((segment) => segment.replace(/^[\s\u2022\u00b7*\-]+/, "").trim())
+    .filter(Boolean);
+}
+
+function ownershipSupportIsTied(targetText: string, supportText: string): boolean {
+  const targetTokens = distinctiveTokenKeys(targetText, OWNERSHIP_CONTEXT_STOPWORDS);
+  if (!targetTokens.length) return false;
+  const supportTokens = new Set(distinctiveTokenKeys(supportText, OWNERSHIP_CONTEXT_STOPWORDS));
+  const overlap = targetTokens.filter((token) => supportTokens.has(token)).length;
+  return overlap >= Math.min(2, targetTokens.length) && overlap * 2 >= targetTokens.length;
+}
+
+export function hasUnsupportedOwnershipIncrease(
+  proposed: string,
+  currentText: string,
+  supportText: string,
+  semanticTarget = currentText || proposed
+): boolean {
+  const proposedLevel = ownershipStrength(proposed);
+  if (proposedLevel <= ownershipStrength(currentText)) return false;
+  return !ownershipSupportSegments(supportText).some((segment) =>
+    ownershipStrength(segment) >= proposedLevel
+    && ownershipSupportIsTied(semanticTarget, segment)
+  );
+}
+
 function normalizePhrase(text: string): string {
   return text.replace(/[-/]+/g, " ");
 }
 
 // Token set for a corpus string: boundary periods freed (see stripBoundaryDots
 // below) then split into [a-z0-9.#+] tokens. Both the JD and the grounding
-// corpus are INVARIANT across the ~19 findUngroundedJdTerm calls a single review
-// sanitize makes (identical multi-KB strings every time), and isTermGrounded
+// corpus repeat across one request's grounding checks (identical multi-KB
+// strings every time), and isTermGrounded
 // re-tokenizes the same grounding corpus once per hit. Memoize on the raw string
 // with a tiny FIFO-evicted cache: corpora are per-request strings, so 4 entries
 // covers the JD + a couple of grounding variants in flight without the cache
@@ -218,8 +271,8 @@ function isGrounded(groundingText: string, groundingTokens: Set<string>, term: s
 // and legitimate. It skips detector 1 (which flags every capitalized JD token,
 // company and role names included) and relies on the curated tech-skill lexicons
 // (detectors 2-4) instead, so "excited about Acme's roadmap" is NOT flagged while
-// "I have Kubernetes/Terraform/ML experience" still is. Resume-field surfaces
-// Tailor's resume-field surface leaves it off and runs all detectors.
+// "I have Kubernetes/Terraform/ML experience" still is. Resume-field rewrites
+// leave it off and run all detectors.
 export function findUngroundedJdTerm(
   proposedText: unknown,
   jobLower: string,
@@ -233,7 +286,7 @@ export function findUngroundedJdTerm(
   // Boundary periods are freed before tokenizing (see stripBoundaryDots) so a
   // sentence-final "C#."/"ML." still produces the bare "c#"/"ml" token, for both
   // the lexicon sweeps below AND the grounding corpus that must ground them.
-  // grounding + jobLower are INVARIANT corpora across a review's ~19 calls, so
+  // grounding + jobLower are invariant corpora across repeated checks, so
   // they route through the memoized tokenize(); proposedTokens varies per call
   // and is tokenized fresh.
   const groundingTokens = tokenize(grounding);
@@ -518,9 +571,8 @@ export function findUngroundedProseProperClaimTerm(
 }
 
 // Prose-surface grounding predicate: true when `text` names a JD skill term
-// absent from the grounding corpus. The one shared shape behind five hand-rolled
-// copies (submission-review advisory prose, the change summary, cover letters, and
-// application answers/role descriptions) so the proseMode grounding contract
+// absent from the grounding corpus. Shared by proposal feedback, cover letters,
+// and application-answer/job-analysis prose so the proseMode grounding contract
 // lives in one place. Callers pass ALREADY-LOWERCASED jobLower/groundingLower
 // (the same pre-lowercased contract findUngroundedJdTerm documents) and do their
 // own one-time lowercasing, so the helper never re-lowercases a multi-KB corpus
@@ -530,9 +582,9 @@ export function proseHasUngroundedTerm(text: unknown, jobLower: string, groundin
   return Boolean(text) && Boolean(findUngroundedJdTerm(text, jobLower, groundingLower, { proseMode: true }));
 }
 
-// Alias/inflection-aware grounding check for a SINGLE term (a claimed hit
-// keyword), exposed so the tailor sanitizer's hit-keyword gate shares the exact
-// same discipline as findUngroundedJdTerm (which routes through isGrounded).
+// Alias/inflection-aware grounding check for a SINGLE claimed term. It shares
+// the exact discipline used by findUngroundedJdTerm (which routes through
+// isGrounded).
 // Without this the hit gate did a raw substring `grounding.includes(word)` that
 // is alias-blind: once grounding narrowed to a single entry's text, an honest
 // edit whose entry spells a tech in its short/alias form (k8s, postgres, ts)
@@ -547,7 +599,7 @@ export function isTermGrounded(term: unknown, grounding: unknown): boolean {
   const t = stripBoundaryDots(String(term ?? "").trim().toLowerCase()).trim();
   if (!t) return false;
   const groundingLower = String(grounding ?? "").toLowerCase();
-  // The grounding corpus repeats across a review's per-hit isTermGrounded calls,
+  // The grounding corpus repeats across per-claim isTermGrounded calls,
   // so route it through the same memoized tokenize() as findUngroundedJdTerm.
   const groundingTokens = tokenize(groundingLower);
   return isGrounded(groundingLower, groundingTokens, t);
@@ -572,4 +624,52 @@ export function isClaimTermGroundedInSource(term: unknown, source: unknown): boo
   if (normalized === "c") return /(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(rawSource);
   if (normalized === "r") return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(rawSource);
   return isTermGrounded(rawTerm, rawSource);
+}
+
+// ---------------------------------------------------------------------------
+// Distinctive-token anchoring. Owned here rather than by the job analyzer
+// because Fit Assessment anchors its gaps against the posting with exactly the
+// same rule; two copies of a stopword list would drift into two definitions of
+// "grounded".
+
+// Generic connective tissue that appears in almost every posting — matching one
+// of these does NOT count toward a list item being anchored in the source.
+export const LIST_STOPWORDS = new Set([
+  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
+  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
+  "other", "using", "use", "used", "including", "include", "includes", "such",
+  "across", "within", "via", "ability", "able", "experience", "experienced",
+  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
+  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
+]);
+
+const ROLE_TOKEN_CANONICAL = new Map([
+  ["postgresql", "postgres"], ["postgres", "postgres"],
+  ["k8s", "kubernetes"], ["kubernetes", "kubernetes"],
+  ["typescript", "typescript"], ["ts", "typescript"]
+]);
+
+// Light morphology keeps grounding paraphrase-friendly without turning it into
+// semantic guesswork: "building" can match "build" and "services" can match
+// "service", but an invented domain/tool still has no matching token.
+function tokenKey(token: string): string {
+  let key = token;
+  if (key.length > 5 && key.endsWith("ies")) key = `${key.slice(0, -3)}y`;
+  else if (key.length > 5 && key.endsWith("ing")) key = key.slice(0, -3).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("ed")) key = key.slice(0, -2).replace(/(.)\1$/, "$1");
+  else if (key.length > 4 && key.endsWith("s")) key = key.slice(0, -1);
+  return ROLE_TOKEN_CANONICAL.get(key) ?? key;
+}
+
+// Lowercase, strip everything but alphanumerics — the same normalization the
+// job analyzer's list grounding uses.
+const normalizeForTokens = (value: unknown): string =>
+  String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
+export function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
+  return [...new Set(normalizeForTokens(value)
+    .split(" ")
+    .filter((token: string) => token.length >= 3 && !stopwords.has(token))
+    .map(tokenKey)
+    .filter(Boolean))] as string[];
 }

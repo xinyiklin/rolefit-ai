@@ -341,11 +341,14 @@
   font-feature-settings: "tnum";
 }
 
-/* Categorical fit verdicts use the UI font rather than tabular display type. */
+/* Now a fit VERDICT word (Reasonable fit / Don't apply), not a "76%" figure —
+   so it uses the UI font, not mono ("Mono Means Data" is for numbers). */
+/* Left-aligned like the text columns beside it. It used to carry
+   `min-width: 42px; justify-content: center` from the numeric score badge this
+   replaced — with word labels that floor is wider than "Stretch" and nothing
+   else, so centering nudged exactly one verdict off the column's left edge. */
 .application-fit {
   display: inline-flex;
-  justify-content: center;
-  min-width: 42px;
   font-family: var(--font-ui);
   font-size: 0.74rem;
   font-weight: 600;
@@ -430,9 +433,9 @@
   flex: none;
 }
 
-/* Side-panel inline fit summary. Doubled class beats the later base rule in
-   the cascade. */
-.application-detail-fit.application-detail-fit--inline {
+/* Side-panel inline score row (replaces donut ring). Doubled class beats the
+   later .application-detail-score base rule in the cascade. */
+.application-detail-score.application-detail-score--inline {
   display: grid;
   grid-template-columns: 1fr;
   gap: var(--s2);
@@ -442,36 +445,51 @@
   padding: 0;
 }
 
-.application-detail-fit__reason {
+.application-detail-score__reason {
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.72rem;
   line-height: 1.35;
 }
 
+.application-detail-score__meta {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 /* -------- Table month-group divider -------- */
 
+.applications-table__month-group {
+  /* Expand to the rows' minimum grid width so the divider surface covers the
+     full horizontal scroll range while its label stays pinned in the viewport. */
+  width: fit-content;
+  min-width: 100%;
+}
+
 .applications-table__month-divider {
-  display: grid;
-  grid-template-columns: 1fr auto;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
   align-items: center;
-  gap: var(--s3);
+  width: 100%;
+  min-height: var(--applications-month-divider-height);
+  box-sizing: border-box;
   padding: var(--s2) var(--s3);
   border-top: 1px solid var(--hairline-soft);
   background: var(--paper-deep);
 }
 
-.applications-table__month-count {
-  font-family: var(--font-mono);
-  font-size: 0.66rem;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
-  color: var(--ink-faint);
+.applications-table__month-divider .table-eyebrow {
+  position: sticky;
+  left: var(--s3);
 }
 
-/* First group's divider row: suppress the top rule (table already has none there) */
-.applications-table__row--head + [role="group"] .applications-table__month-divider {
+/* First group's divider row: suppress the top rule (the head's bottom border
+   already draws it). Anchored on the body now that the head is its sibling. */
+.applications-table__body > [role="group"]:first-child .applications-table__month-divider {
   border-top: 0;
 }
 
@@ -615,27 +633,62 @@
 
 /* -------- Applications table -------- */
 
+/* The bordered box is the frame, not the scroller: it clips, the head sits in
+   its own row, and only the body scrolls. A sticky head inside one scroller was
+   simpler, but a scrollbar always spans its whole container, so the thumb ran up
+   alongside the column labels. Splitting them is what puts the scrollbar
+   entirely below the head. */
 .applications-table {
+  --applications-month-divider-height: 32px;
+
   display: grid;
-  /* Scroll horizontally (never clip) when the column template can't fit — the
-     inspector narrows the table column well below the row's natural width even
-     on a wide viewport, so this can't be gated on a viewport breakpoint. The
-     bordered box is the scroll frame; it stays put while the rows scroll inside.
-     Vertical stays clipped so the rounded corners still trim the row fills. */
-  overflow: auto hidden;
+  grid-template-rows: auto minmax(0, 1fr);
+  container-type: inline-size;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--hairline);
   border-radius: var(--r-lg);
   background: var(--card-elev);
   box-shadow: var(--shadow-rest);
+}
+
+/* Clipped, never scrolled by the user: TrackerTableView writes its scrollLeft
+   from the body so the columns stay registered while the body scrolls sideways.
+   The reserved gutter must match the body's or the flexible columns resolve
+   against a different width and the right-hand columns drift apart. */
+.applications-table__head {
+  overflow: hidden;
+  scrollbar-gutter: stable;
+}
+
+.applications-table__body {
+  /* Scroll horizontally (never clip) when the column template can't fit — the
+     inspector narrows the table column well below the row's natural width even
+     on a wide viewport, so this can't be gated on a viewport breakpoint. */
+  overflow: auto;
+  min-height: 0;
+  scrollbar-gutter: stable;
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: var(--hairline-strong) transparent;
 }
 
-.applications-table::-webkit-scrollbar {
+/* The stable scrollbar gutter prevents column-width jumps. Paint the sticky
+   month band through that reserved strip so it reads as one continuous row. */
+.applications-table__body.has-month-groups {
+  background: linear-gradient(
+    to bottom,
+    var(--paper-deep) 0 var(--applications-month-divider-height),
+    var(--card-elev) var(--applications-month-divider-height) 100%
+  );
+}
+
+.applications-table__body::-webkit-scrollbar {
+  width: 8px;
   height: 8px;
 }
 
-.applications-table::-webkit-scrollbar-thumb {
+.applications-table__body::-webkit-scrollbar-thumb {
   background: var(--hairline-strong);
   border-radius: var(--r-pill);
 }
@@ -659,6 +712,27 @@
   text-align: left;
 }
 
+/* The inspector can narrow this component while the viewport stays desktop
+   wide. Adapt to the register's own width: Next action remains available in
+   the selected application's details, while the required Fit verdict stays in
+   the visible primary register. The full template's exact minimum is 852px. */
+@container (max-width: 852px) {
+  .applications-table__row {
+    grid-template-columns:
+      minmax(105px, 1.25fr)
+      minmax(94px, 1fr)
+      96px
+      82px
+      70px
+      104px
+      18px;
+  }
+
+  .applications-table__row > .applications-table__cell--next-action {
+    display: none;
+  }
+}
+
 button.applications-table__row {
   width: 100%;
   cursor: pointer;
@@ -666,6 +740,9 @@ button.applications-table__row {
 
 .applications-table__row:first-child { border-top: 0; }
 
+/* Frozen by structure rather than by `position: sticky` — it lives outside the
+   scroller now. The columns it labels are sortable, which is exactly what a
+   reader loses when a long month scrolls the header away. */
 .applications-table__row--head {
   min-height: 36px;
   background: var(--card-soft);
@@ -1005,17 +1082,17 @@ button.table-sort svg {
 .pipeline-inspector {
   position: sticky;
   top: var(--s4);
+  /* An implicit auto track grows to long provider/model identifiers and pulls
+     every full-width child past the card. Keep the panel's one column bounded. */
+  grid-template-columns: minmax(0, 1fr);
+  /* Table view is denser than the shared card default without collapsing the
+     separation between inspector blocks. */
+  gap: var(--s2);
   padding: var(--s3);
   min-width: 0;
   max-width: 100%;
   /* Ensure the panel renders above board columns when sticky */
   z-index: 2;
-}
-
-/* Compact table-view inspector: tighter inter-block rhythm than the default s3,
-   but kept at s2 so blocks still breathe (no zero-gap stacking). */
-.pipeline-inspector {
-  gap: var(--s2);
 }
 
 /* The shared .field carries a menu-context margin-top that doubles the grid gap
@@ -1037,27 +1114,11 @@ button.table-sort svg {
   margin: 0;
 }
 
-/* Open-details quick action, pinned to the panel corner (the sticky panel is its
-   containing block). */
-.pipeline-inspector__open {
-  position: absolute;
-  top: var(--s2);
-  right: var(--s2);
-  z-index: 1;
-}
-
 .pipeline-inspector__head {
   display: grid;
-  grid-template-columns: auto 1fr auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: var(--s2);
-}
-
-/* Mark + title only; reserve the corner for the pinned open button so a long
-   company name never slides under it. */
-.pipeline-inspector__head {
-  grid-template-columns: auto 1fr;
-  padding-right: var(--s5);
 }
 
 .pipeline-inspector__head > div {
@@ -1082,7 +1143,7 @@ button.table-sort svg {
   white-space: nowrap;
 }
 
-.application-detail-fit {
+.application-detail-score {
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: center;
@@ -1093,13 +1154,13 @@ button.table-sort svg {
   background: var(--card-soft);
 }
 
-.application-detail-fit strong {
+.application-detail-score strong {
   display: block;
   color: var(--accent-deep);
   font-size: 0.82rem;
 }
 
-.application-detail-fit p {
+.application-detail-score p {
   margin-top: 3px;
   color: var(--ink-soft);
   font-size: 0.72rem;
@@ -1204,12 +1265,18 @@ button.table-sort svg {
   max-width: 100%;
 }
 
-.pipeline-inspector .application-chip-list a,
-.pipeline-inspector .application-chip-list span {
+.pipeline-inspector .application-chip-list a {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.pipeline-inspector .application-chip-list span {
+  min-width: 0;
+  max-width: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .application-chip-list span {
@@ -1694,6 +1761,12 @@ button.table-sort svg {
   font-style: normal;
 }
 
+.analytics-best-score {
+  font-size: 1.4rem;
+  min-width: 56px;
+  display: block;
+}
+
 .analytics-funnel {
   display: grid;
   gap: var(--s2);
@@ -2020,6 +2093,12 @@ button.table-sort svg {
   line-height: 1.4;
 }
 
+.application-match-card p.application-match-card__meta {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
 .application-checks {
   display: grid;
   gap: var(--s2);
@@ -2331,6 +2410,66 @@ button.table-sort svg {
 
 .duplicate-group-card__evidence span {
   background: var(--warm-veil);
+}
+
+/* -------- Applications two-pane height -------- */
+
+/* Match Prepare's desktop behavior: keep the page chrome stationary inside the
+   studio, then let the table workspace and inspector rail consume the remaining
+   container height and scroll independently. The stacked layout below 1080px
+   continues to use the studio's normal page scroll. */
+@media (min-width: 1081px) {
+  .studio-body[data-tab="applications"] {
+    grid-template-rows: minmax(0, 1fr);
+    overflow: hidden;
+    padding-bottom: var(--s4);
+  }
+
+  .studio-body[data-tab="applications"]::after {
+    display: none;
+  }
+
+  .applications-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .applications-page > .tracker-layout {
+    flex: 1 1 0;
+    height: 100%;
+    min-height: 0;
+    align-items: stretch;
+  }
+
+  /* Keep pagination outside the scrollport. The previous flex column allowed
+     the table to shrink while its vertical overflow was hidden, clipping rows
+     before the wrapper could scroll. */
+  .applications-page > .tracker-layout > .applications-table-wrap {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  /* Bound the frame to the wrapper so its body row (the minmax(0, 1fr) track)
+     has a height to scroll within. The scrolling itself lives on the body. */
+  .applications-page > .tracker-layout > .applications-table-wrap > .applications-table {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .applications-page > .tracker-layout > .pipeline-inspector {
+    position: static;
+    align-content: start;
+    height: 100%;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
 }
 
 @media (max-width: 1280px) {

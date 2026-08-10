@@ -2,8 +2,7 @@
 // decides what to use; the server resolves correspondence deterministically,
 // validates the result, and repairs once in silence before giving up. The
 // server has no approval stage; the browser stages a valid response as a
-// proposal. The legacy grounded reviser below still serves the older optional
-// /api/polish cover leg, which the browser never uses.
+// proposal.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
@@ -16,19 +15,13 @@ import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import {
-  buildCoverLetterPrompts,
   buildCoverLetterTailorPrompts,
   clipForPrompt,
-  COVER_JOB_CHAR_LIMIT,
-  COVER_RESUME_CHAR_LIMIT,
-  COVER_SOURCE_CHAR_LIMIT
+  COVER_JOB_CHAR_LIMIT
 } from "./prompts.ts";
 import { callConfiguredProvider } from "./clients.ts";
-import { findUngroundedJdTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
-import { hasUngroundedNumericClaim } from "./sanitize.ts";
 import {
   buildCoverLetterPreflight,
-  hasUnresolvedCoverLetterTokens,
   type ResolvedCoverLetterContext
 } from "../../src/lib/coverLetterPreflight.ts";
 import type {
@@ -38,16 +31,12 @@ import type {
 import {
   assembleCoverLetterText,
   coverLetterLengthWarnings,
-  COVER_LETTER_CHAR_LIMIT,
   evidenceUsedByParagraphs,
   parseCoverLetterEvidenceItems,
   SOURCE_LETTER_EVIDENCE_ID,
   validateCoverLetterTailorOutput
 } from "./coverLetterContracts.ts";
-import {
-  analyzeCoverLetterTemplate,
-  type CoverLetterSourceContext
-} from "../../src/lib/coverLetterTemplate.ts";
+import type { CoverLetterSourceContext } from "../../src/lib/coverLetterTemplate.ts";
 import {
   CoverLetterBlockedError,
   repairMessagesForCoverLetterIssues
@@ -61,87 +50,6 @@ type AttemptStats = { attempts?: number };
 // A public employer fact plus where it came from. Populated by an app-owned
 // research step; absent employer context never blocks or delays tailoring.
 export type CoverLetterEmployerFact = { fact: string; source: string };
-
-// The resolved provider config + grounding inputs the legacy reviser needs.
-type CoverLetterArgs = {
-  provider: string;
-  model: string;
-  reasoningEffort?: string | null;
-  apiKey?: string;
-  jobText: string;
-  resumeText: string;
-  sourceCoverLetterText: string;
-  honestContext: string;
-  customInstructions: string;
-  resolvedContext?: ResolvedCoverLetterContext;
-  signal?: AbortSignal;
-};
-
-// Build the cover-letter revision prompt, call the provider, and apply the grounding
-// backstop. The grounding corpus is the resume text fed to the prompt plus
-// honest context, so each caller grounds against exactly what produced the
-// letter. Returns the letter, or "" when it is empty or blanked for an
-// ungrounded claim (callers treat that as a failed revision).
-export async function reviseGroundedCoverLetter(
-  {
-    provider,
-    model,
-    reasoningEffort,
-    apiKey,
-    jobText,
-    resumeText,
-    sourceCoverLetterText,
-    honestContext,
-    customInstructions,
-    resolvedContext,
-    signal
-  }: CoverLetterArgs,
-  stats?: AttemptStats
-): Promise<string> {
-  const legacySource = analyzeCoverLetterTemplate({
-    text: sourceCoverLetterText,
-    candidateName: resolvedContext?.candidateName,
-    role: resolvedContext?.role,
-    company: resolvedContext?.company,
-    recipientName: resolvedContext?.recipientName,
-    date: resolvedContext?.date
-  });
-  const { systemPrompt, userPrompt } = buildCoverLetterPrompts({
-    jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
-    resumeText: clipForPrompt(resumeText, COVER_RESUME_CHAR_LIMIT, "resume"),
-    sourceCoverLetterText: clipForPrompt(
-      legacySource.authoredProse,
-      COVER_SOURCE_CHAR_LIMIT,
-      "source cover letter"
-    ),
-    honestContext,
-    customInstructions,
-    resolvedContext
-  });
-  const parsed = await callConfiguredProvider(
-    { provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal },
-    stats
-  );
-  const letter = String((parsed as { coverLetterText?: unknown }).coverLetterText ?? "")
-    .trim()
-    .slice(0, COVER_LETTER_CHAR_LIMIT);
-  const grounding = `${legacySource.authoredProse}\n${resumeText}\n${honestContext}\n${JSON.stringify(resolvedContext ?? {})}`;
-  if (
-    hasUnresolvedCoverLetterTokens(letter) ||
-    findUngroundedJdTerm(letter, jobText.toLowerCase(), grounding.toLowerCase(), {
-      proseMode: true
-    }) ||
-    hasUngroundedNumericClaim(letter, grounding) ||
-    findUngroundedOutcomeClaim(letter, grounding, { candidateProse: true })
-  ) {
-    console.warn(
-      "[ai] cover letter failed grounding or placeholder checks; returning an empty result",
-      { provider }
-    );
-    return "";
-  }
-  return letter;
-}
 
 type TailorCoverLetterArgs = {
   provider: string;
@@ -174,6 +82,7 @@ export async function tailorCoverLetter(
   stats?: AttemptStats
 ): Promise<CoverLetterTailorResult> {
   const promptInput = {
+    reasoningEffort,
     jobText: clipForPrompt(jobText, COVER_JOB_CHAR_LIMIT, "job description"),
     sourceContext: {
       structuredTemplate: sourceContext.structuredTemplate,
@@ -343,7 +252,7 @@ export async function handleCoverLetter(
 
     const evidenceItems = parseCoverLetterEvidenceItems(body.evidenceItems);
     if (!evidenceItems.some((item) => item.source === "resume")) {
-      sendJson(res, 400, { error: "Add your resume before tailoring a cover letter." });
+      sendJson(res, 400, { error: "Add your resume before polishing a cover letter." });
       return;
     }
 
@@ -415,7 +324,7 @@ export async function handleCoverLetter(
       return;
     }
     sendJson(res, 500, {
-      error: "Could not tailor the cover letter. Check AI settings and try again."
+      error: "Could not polish the cover letter. Check AI settings and try again."
     });
   } finally {
     request.dispose();

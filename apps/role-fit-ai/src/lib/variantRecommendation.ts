@@ -18,7 +18,7 @@ export type VariantRecommendation = {
 
 type RankedCandidate = VariantCandidate & {
   matchedKeywords: string[];
-  matchWeight: number;
+  score: number;
 };
 
 const SECTION_WEIGHTS = new Map([
@@ -88,19 +88,19 @@ export function recommendVariant(
   const ranked: RankedCandidate[] = usable
     .map((candidate) => {
       const matchedKeywords = keywords.filter((keyword) => includesKeyword(candidate.text, keyword));
-      const matchWeight = matchedKeywords.reduce(
+      const score = matchedKeywords.reduce(
         (sum, keyword) => sum + (keywordWeights.get(keyword) ?? 0),
         0
       );
       return {
         ...candidate,
         matchedKeywords,
-        matchWeight
+        score
       };
     })
     .sort(
       (left, right) =>
-        right.matchWeight - left.matchWeight ||
+        right.score - left.score ||
         right.matchedKeywords.length - left.matchedKeywords.length ||
         left.label.localeCompare(right.label)
     );
@@ -108,11 +108,11 @@ export function recommendVariant(
   const best = ranked[0];
   const runnerUp = ranked[1];
   if (!best || !runnerUp || !keywords.length) return null;
-  const lead = best.matchWeight - runnerUp.matchWeight;
+  const lead = best.score - runnerUp.score;
   // Do not turn alphabetical ordering or a negligible low-signal edge into a
   // recommendation. A recommendation must identify a meaningfully better source.
   const minimumLead = Math.max(1.5, totalWeight * 0.02);
-  if (best.matchWeight <= 0 || lead < minimumLead) return null;
+  if (best.score <= 0 || lead < minimumLead) return null;
 
   return {
     fileName: best.fileName,

@@ -16,8 +16,7 @@ owns the RoleFit React host and its integration with shared Typeset packages.
   dependency-free and side-effect-free, so the client-only caching layer sits
   beside it instead. Nothing under `server/` may import it.
 - `resume/` owns deterministic mechanical resume analysis and suggestion/diff
-  types. It never produces candidate-fit or eligibility judgments; Initial Fit
-  owns those through the shared categorical assessment contract.
+  types. It never calculates an AI score or fit verdict.
 - `sections/` owns UI composition. Read its guide before component work.
 - Shared document behavior comes from `@typeset/engine` and `@typeset/editor`.
   Do not recreate resume types, file parsing, editing, formatting toolbar,
@@ -29,7 +28,7 @@ owns the RoleFit React host and its integration with shared Typeset packages.
   exports contract.
 - RoleFit may adapt shared hooks/components through thin host adapters and
   documented slots. Keep provider/job/tracker state outside the packages.
-- The editor always paints the full `ResumeData`. Tailor/Include/Off controls AI
+- The editor always paints the full `ResumeData`. Polish/Include/Off controls AI
   payload scope; they do not project or filter the document.
 - Keep server/client request fields explicit and aligned. Unknown responses are
   untrusted until validated/coerced.

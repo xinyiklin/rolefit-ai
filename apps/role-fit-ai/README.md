@@ -2,7 +2,7 @@
 
 RoleFit AI is a local-first workspace for preparing job applications. Import a
 posting from the browser extension, a URL, or pasted text; choose a resume and
-cover-letter variant; run the selected resume stages; review grounded document
+cover-letter variant; create a grounded resume proposal; review document
 proposals; export the final files; and save the application record.
 
 The desktop companion starts the loopback Node server, manages the five
@@ -15,7 +15,8 @@ application-data service.
 
 Current desktop source version: **0.6.0** (preview).
 
-The main workflow is Prepare → Resume and Cover Letter → Apply → Applications.
+The default workflow is Prepare → Assess fit → Polish → Apply. Reassess fit at
+any time after preparation without repeating Job analysis.
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
 
@@ -57,7 +58,9 @@ editable documents.
   notes this posting actually warrants. Bracketed text is treated as an
   instruction to the writer, never as something you wrote about yourself.
   Grounding and placeholder checks run on the server, then the finished letter
-  appears beside the unchanged editor as a whole-document proposal. **Accept
+  appears beside the unchanged editor as a whole-document proposal, opening on a
+  **Changes** view that marks what accepting would rewrite (the full letter is one
+  click away). **Accept
   proposal** applies it atomically and enables **Restore previous** until the
   next edit; **Discard proposal** performs no document mutation. Validation blockers
   identify the rejected claim and whether to add evidence, edit the source, or
@@ -89,46 +92,52 @@ editable documents.
   Source panel shows only the selected URL or pasted-text method. Afterward it
   collapses above the complete editable job brief—tracked job facts, company
   context, responsibilities, required and preferred qualifications, technical
-  keywords, seniority and domain signals, benefits, and any extraction or
-  candidate-review gaps—while the Application rail keeps Resume, Cover Letter,
-  Initial Fit, independent automation receipts, readiness, and Apply together.
-  After safe resume selection settles, Initial Fit always assesses that exact
-  document with the configured Recruiter Audit provider. It shows a categorical
-  verdict, confidence, eligibility, requirement evidence, recommendation,
-  selected resume, and provenance; a reopened application shows its saved
-  baseline as historical. A later Review produces separate resume submission
-  readiness and never changes Initial Fit. Each material has an **Include** toggle and its
+  keywords, seniority and domain signals, benefits, and any extraction gaps—while
+  the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
+  Apply together. Fit Assessment is a reusable compact advisory for the selected resume,
+  with four categorical verdicts, bounded matches and gaps, and a separate
+  eligibility state. Each match shows the exact resume or About you evidence
+  beneath the posting excerpt. Rubric v3 prioritizes decision-critical responsibilities
+  and core qualifications, preserves explicit evidence-source boundaries, ignores
+  logistics or application-form noise when judging fit, and self-checks every
+  evidence excerpt before the server's exact-anchor boundary.
+  Its behavior and verdict meanings live in the
+  [Fit Assessment user contract](PRODUCT.md#fit-assessment-user-contract); provider,
+  grounding, reassessment, and provenance details live in the
+  [technical contract](server/ai/README.md#fit-assessment-technical-contract).
+  Each material has an **Include** toggle and its
   own named variant selector. Resume starts included and Cover Letter starts excluded;
   included material must be ready before Apply, while either or both can be
   excluded. The captured posting remains unchanged behind **View** and
   **Prepare again**; Apply stores the complete corrected brief, while resume
-  polishing continues to use the benefits-excluded projection. Candidate gaps
-  from a reopened application are explicitly historical until Recruiter audit runs
-  against the current resume and prepared job.
-- **Independent Prepare automation** — Settings > Automation keeps Initial Fit
-  always on and gives Resume and Cover Letter separate Off / Stretch or better /
-  Reasonable fit or better / Strong fit thresholds. Both decisions consume the
-  same Initial Fit verdict, inclusively and independently. Eligible Resume
-  automation always includes Tailor (plus the optional final audit selected in
-  Settings); eligible Cover Letter automation uses the dedicated proposal flow
-  even when Cover Letter is not included. Neither path accepts a proposal or
-  changes Include, and manual Polish remains available after any verdict.
+  polishing continues to use the benefits-excluded projection.
 - **Evidence-based variant recommendation** — when multiple saved variants
   exist, Prepare compares the actual strict `.resume` and `.cover` contents with
   weighted role, requirement, responsibility, and technology signals from the
   prepared job. A meaningful unique winner is selected automatically for either
   document while its editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current choice and makes no recommendation;
-  unsaved work is never replaced. Neither document persists parallel
-  variant metadata.
+  unsaved work and an explicitly uploaded resume are never replaced. Resume candidate bytes and option metadata
+  are resolved from one snapshot, with one retry if the saved option set changes
+  or any saved candidate is overwritten mid-read—even under the same filename;
+  a failed load keeps the current resume without advertising an unloaded winner.
+  Neither document persists parallel variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and fetch the
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
   boards. The configured Job analysis provider runs before the server's grounding
   and sanitization checks.
-  A deterministic parser can preserve a local brief for inspection if Job analysis
-  fails, but the failed stage stays failed and never starts resume Polish. The compact
+  A deterministic parser publishes a usable local brief immediately, so URL and
+  paste preparation remain available even before a provider is configured. Job analysis
+  can improve it, but provider failure leaves the local fields editable and does
+  not block manual Polish. Fit Assessment has its own provider/model/effort
+  setting. When that configuration exactly matches Job analysis, the same
+  provider dispatch returns it as an independent optional subsection; otherwise
+  the prepared brief commits before a separate assessment-only request, while
+  Prepare remains active until that first assessment and its one-use automation
+  decision settle. An
+  invalid fit cannot invalidate valid job fields. The compact
   job brief keeps role context, responsibilities,
   requirements, preferred qualifications, and technical/domain signals while
   dropping ATS/navigation/marketing/legal furniture. Prepare separately keeps
@@ -139,18 +148,34 @@ editable documents.
   check whether a posting is already tracked and open it on Prepare in a fresh
   RoleFit tab. On first use it sends a bounded local access request; approve
   that exact browser origin once in the companion. The extension does not
-  assess fit locally; Initial Fit runs in the app after resume selection. See
+  estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **Provider-run Initial Fit** — the selected Recruiter audit model returns one grounded categorical assessment: `STRONG_FIT`, `REASONABLE_FIT`, `STRETCH`, or `LIMITED_FIT`, with confidence, eligibility, a canonical requirement ledger, and an advisory recommendation. RoleFit validates the response and deterministic app policy decides automation.
-- **Separate submission review** — audit the current edited draft as-is, or review the sanitized proposal produced moments earlier in **Polish**, for requirement visibility, unsupported claims, missing evidence, presentation issues, prioritized edits, and `READY` / `REVISIONS_RECOMMENDED` / `EVIDENCE_NEEDED` / `NOT_READY` status. It never rewrites candidate fit.
-- **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Tailor/Include/Off scope, and review-field highlighting all operate on the exported page layout.
+- **One-pass Resume Polish** — one provider operation proposes grounded edits
+  through flat target IDs. Skills category labels are locked; actual skill lists
+  remain editable. The server drops malformed, unknown, unchanged, swapped, or
+  unsupported edits independently, so a bad optional note or one bad edit does
+  not discard safe siblings. Only bullets and Skills lists are mutable;
+  role, employer, subtitle, date, identity, contact, and education fields remain
+  read-only evidence. Large resumes prioritize material, job-relevant
+  fields inside the prompt budget, validate replies only against fields actually
+  sent, and show how many editable fields were outside that pass. Any upward
+  ownership rewrite is withheld unless evidence at that level is semantically
+  tied to the target's own work; leadership in an unrelated sibling bullet or
+  broad context cannot authorize it. The source
+  resume stays unchanged until the user applies all or accepts an individual edit.
+- **Optional Fit Assessment automation** — Fit Assessment defaults on, while Resume
+  and Cover Letter automatic Polish remain separate, default-off decisions.
+  Manual Polish stays available for every outcome; see the
+  [user contract](PRODUCT.md#fit-assessment-user-contract) for thresholds,
+  eligibility, staleness, and Retry behavior.
+- **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.
 - **One document workbench rail** — Resume and Cover Letter share the same
   always-present lifecycle hierarchy, readiness order, failure placement,
   collapsible desktop rail, and narrow accordion behavior while keeping their
-  own workflow state. Both spell the run **Polish**; Resume's Polish runs the
-  Tailor, Recruiter audit, or combined workflow remembered in Settings from both
-  Resume and Prepare, while Cover Letter stages an explicit proposal. Polish sits beside
+  own workflow state. Both spell the run **Polish**; Resume creates one proposal
+  from Resume or Prepare, while Cover Letter stages an explicit whole-document
+  proposal. Polish sits beside
   the rail's disclosure control in both states, so collapsing moves the pair to
   the document's edge rather than relocating the action. Each
   document remembers its own expanded or collapsed preference, and hidden
@@ -166,7 +191,18 @@ editable documents.
   typing and held Backspace/Delete bursts undo as groups; direction changes,
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
-- **Ordered AI workflow** — Job analysis, Tailor, and Recruiter audit share one progress surface with exact step counts, specific failure reasons, Retry/Stop behavior, and later stages marked not run after a failure.
+- **Truthful AI workflow** — Prepare shows its local brief while Job analysis and
+  optional Fit Assessment settle through one preparation lifecycle. A later
+  reassessment may run independently without erasing the latest completed Fit.
+  Resume Polish reports Proposal,
+  No changes, and Withheld as different outcomes, retains specific failure and
+  Stop behavior, and never presents an all-discarded response as a ready proposal.
+  Job analysis, Resume Polish, Cover letter, and Application answers each use an
+  independently named progress card with direct Stop control while its request runs.
+- **Internal Polish audit** — Resume and Cover Letter Polish silently re-check
+  evidence, claims, identifiers, and output shape before returning a proposal.
+  The configured reasoning effort controls the provider reasoning and audit
+  breadth; no separate check result is persisted or shown.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
@@ -192,8 +228,8 @@ editable documents.
   tab-owned: adopting a restored workspace clears this tab's stale draft and
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
-- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and mirrored allowlisted RoleFit preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes plus saved resume, cover letter, and additional PDF documents per application, and survives browser wipes. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+- **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and canonical allowlisted workspace preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Fit Assessment snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
   **Open preparation** restores a stored application's validated posting and
   available strict documents into the session, keeps the dirty-document
   replacement confirmation, and lands on Prepare. Apply saves only the
@@ -203,7 +239,7 @@ editable documents.
   prepared job. The Applications page's new-work action also returns to
   Prepare; its detail modal edits committed records instead of duplicating job
   intake.
-- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts plus user settings and context, but never API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
+- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
@@ -301,15 +337,19 @@ providers and their models in **Settings > AI stages**, opened from the foot of
 the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
-- **Job analysis** — job-link, paste, and import analysis into a compact job brief.
-- **Tailor** — evidence-grounded resume suggestions.
-- **Recruiter audit** — strict fit audit of the current edited draft.
-- **Cover letter** — one grounded revision pass over your own letter, run from
-  the Cover Letter page's **Polish** action.
-- **Application questions** — drafts for an application's free-text questions.
+- **Job analysis** — structures the captured posting into the editable job brief.
+- **Fit Assessment** — assesses the selected resume and About you evidence
+  against the captured posting.
+- **Resume Polish** — one evidence-grounded proposal request over selected fields.
+- **Cover letter** — creates one grounded whole-letter proposal for you to
+  accept or discard.
+- **Application questions** — drafts grounded responses to an application's
+  free-text questions.
 
-Each stage has its own provider/model/effort settings and an optional instruction
-override; use **Copy settings** to sync one stage from another. The browser never renders or submits an
+Each stage has its own provider/model/effort settings. Resume Polish, Cover
+letter, and Application questions expose an optional instruction override;
+Job analysis and Fit Assessment keep fixed analysis contracts and do not.
+Use **Copy settings** to sync one stage from another. The browser never renders or submits an
 API-key field. The companion accepts OpenAI and Claude keys as write-only
 values, encrypts them through Electron `safeStorage`, and never reveals a saved
 key. Removing an API provider deletes its encrypted RoleFit credential;
@@ -375,14 +415,19 @@ no API key required.
 The CLI auth/session remains provider-owned and tied to the device.
 Antigravity 1.1.x requires its non-interactive prompt in the local process
 argument list; unlike the Claude and Codex wrappers, that path cannot keep
-resume/job text exclusively on stdin while the subprocess is running.
+resume/job text exclusively on stdin while the subprocess is running. RoleFit
+uses the stable model slugs printed by current `agy models`; older saved display
+names migrate without losing the selected model.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-URL, pasted-text, and extension intake require AI-backed job analysis. When Job analysis fails,
-RoleFit may load the deterministic brief for inspection while
-leaving Job analysis failed and blocking resume Polish. Tailor, Recruiter audit, Cover Letter,
-and application-answer generation fail plainly; no local AI result silently stands in.
+URL, pasted-text, and extension intake request AI-backed Job analysis when its
+provider is available. RoleFit publishes the deterministic brief first; without
+a ready provider, or if Job analysis or Fit Assessment fails,
+that local brief remains editable and manual Polish stays available. Resume
+Polish, Cover Letter,
+and application-answer generation fail plainly; no local draft, score, or
+verdict silently stands in.
 
 ## Browser extension
 
@@ -405,15 +450,13 @@ preparation and duplicate checking to the job board. On any posting, click the
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
   tab on Prepare, lets the server resolve the raw page text, and always runs
   AI-backed job analysis with that tab's selected provider. The extension
-  handoff lands on Prepare. The receiving tab then follows the same required
-  resume-selection and Initial Fit continuation as any successful preparation;
-  its independent thresholds may start Resume or Cover Letter Polish. If the analysis fails, the
-  deterministic brief may remain available for inspection, but Job analysis stays
-  failed. The popup has no AI/deterministic or automatic-tailor toggle.
+  handoff stops on Prepare; it never implicitly starts resume Polish. If the
+  analysis fails, the deterministic brief remains usable and Fit Assessment shows
+  a separate retryable state. The popup has no workflow automation toggle.
 
 A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
 without opening the popup at all, through the same approval handshake and with
-the same Prepare continuation. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
+the same stop on Prepare. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
 editable in the browser's own extension-shortcut settings, and the popup's
 **Settings** view lists the assigned keys beside the localhost port and links
 there. A keyboard import that cannot finish badges the toolbar icon and explains
@@ -498,14 +541,18 @@ explicit source-development/test override, not a supported installed-app
 setting.
 
 Browser recovery is separate from the on-disk workspace. The active localhost
-origin may store a serialized recovery resume, optional raw job text, AI usage,
-per-stage settings, honest context, shared and per-stage custom instructions, and
-the facts declared in Settings > About you (citizenship, work authorization,
-sponsorship, education level, field of study) in browser storage. It never stores API keys. Changing the local
-port creates a different browser origin. RoleFit mirrors the allowlisted
-preferences into the workspace's `browser-preferences.json`, and a fresh origin
-with no saved RoleFit preferences adopts that mirror on load, so settings
-survive a port change; unsaved recovery drafts remain origin-scoped and do not
+origin may cache a serialized recovery resume, optional raw job text, AI usage,
+and allowlisted settings so the app can fail open when the companion is
+temporarily unavailable. The canonical per-stage settings, guidance, selected
+base resume, and facts declared in Settings > About you—including citizenship,
+work authorization, sponsorship, education and optional GPA, earliest-start availability,
+and the source/quantity/recency/scope of optional experience evidence—live in
+the owner-only workspace
+`workspace-preferences.json`. Every RoleFit client attached to that workspace
+adopts the same preferences at startup and on window focus, regardless of
+browser, origin, port, or incognito mode. The boundary is the current OS user
+and workspace, not every account on the machine. Preferences and browser caches
+never store API keys; unsaved recovery drafts remain origin-scoped and do not
 move.
 
 For a portable editable-document copy, download a `.resume` or `.cover` file.
@@ -513,7 +560,7 @@ For the saved RoleFit workspace, open the companion's **Workspace** section and
 choose **Back up workspace**. The resulting `.rolefit-backup` is unencrypted
 JSON containing app-managed base resumes, resume history, tracker data, saved
 application `.resume`, `.cover`, and PDF documents, PDF application
-attachments, and the mirrored allowlisted RoleFit preferences. It excludes
+attachments, and the allowlisted workspace preferences. It excludes
 arbitrary files in the workspace, saved standalone cover-letter variants,
 unsaved recovery drafts, provider configuration/API keys, CLI sessions, and
 companion port settings. Save a standalone `.cover` variant separately when
@@ -549,7 +596,8 @@ The workspace contains:
   contains either editable `resume.resume` / `cover.cover` source saved from
   RoleFit or an explicitly uploaded `resume.pdf` / `cover.pdf`; additional PDF
   uploads live under `attachments/`
-- `browser-preferences.json` — mirrored allowlisted RoleFit preferences
+- `workspace-preferences.json` — canonical allowlisted RoleFit preferences for
+  every browser attached to this OS-user workspace
 - Anything else you drop in there (left out of portable backups)
 
 The source-development folder is gitignored except its README. Personal

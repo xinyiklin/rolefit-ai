@@ -123,58 +123,27 @@ owns:
   raw CLI output, operation ids, or workspace details
 - `/api/polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
-  plus the native OpenAI and Anthropic APIs. The route supports independent
-  `tailor` and `review` requests plus a backward-compatible/headless `both`
-  request. The current UI implements Both as two sequential requests: Tailor
-  first (`stages: "tailor"`), then Review
-  (`stages: "review"`) with only the sanitized suggestions from that same run.
-  A headless `stages: "both"` request instead runs targeted suggestions first,
-  then runs its submission-readiness audit and optional cover pass in parallel.
-  No single model response is forced to suggest edits, audit candidate fit, and revise a letter
-  at the same time. The optional cover leg remains only for older/headless
-  clients and runs only when they supply a candidate-authored source letter.
-  Review-only skips the suggestion pass and audits the
-  current edited draft exactly as submitted; it must not regenerate or replay
-  stale tailoring changes. The suggestion pass
-  returns only structured `suggestedChanges` (no full-text rewrite and no fit
-  judgment). When the audit does not return a usable submission assessment,
-  the Review stage fails visibly and the client does not calculate or
-  substitute a local readiness judgment;
-  the `polishedText` preview is derived server-side by applying only sanitized
-  suggestions to the scoped text. Every applied suggestion has passed the
-  current deterministic grounding and sanitization gates before the audit,
-  cover letter, or UI diff sees it. Those gates reduce fabrication risk; they
-  are not proof of truth, and human review remains required. The polish request
-  sends a structured `tailorScope` of user-selected editable sections instead
-  of the full resume; identity, contact, education, and any omitted sections remain
-  locked out of the rewrite prompt unless the user selects them. In a combined
-  run, Review receives the server-derived polished resume after suggestion
-  grounding and sanitization. Review-only receives the current edited draft.
-  The Tailor stage supplies the primary provider for suggestion generation, cover-letter
-  revision, and application answers. The Review stage can use its own
-  provider/model (request `audit*`
-  fields, resolved by `resolveAuditProviderRequest`); when audit fields are
-  absent the server reuses the primary config. Only the non-rewriting audit
-  can differ inside `/api/polish`, so a reviewer model can never alter the
-  editor's resume output. A `/api/polish` response that ran Tailor echoes the
-  resolved `provider` / `model` / `reasoningEffort` plus `attempts`
-  (tailor-pass dispatch count); Review-only intentionally omits `attempts`
-  because it made no Tailor dispatch. Whenever Review ran (`review` or `both`),
-  the response carries `auditProvider`, `auditModel`, `auditReasoningEffort`, and
-  `auditAttempts`, so same-provider review remains distinguishable from no review.
-  The response also reports `coverStatus: "off" | "ok" | "failed"`; clients must not infer cover state
-  from a missing letter, and a cover failure must not discard successful
-  tailor/review results. The client surfaces "reviewed by" when either the
-  audit provider or audit model differs from the Tailor configuration.
-  `/api/fit-audit` is the automatic Prepare decision checkpoint. It reuses the
-  Recruiter Audit provider resolution and usage attribution, but uses the
-  categorical `FitAssessment` prompt and validation path. Its request binds the
-  successful `preparationId`, prepared job text, settled resume filename and document version, whole visible non-identity
-  resume evidence, honest context, provider/model/effort, and review
-  instructions into a versioned fingerprint. The server rejects mismatched
-  identity or malformed assessment; the client aborts or marks stale any
-  response whose live fingerprint changed. This route never rewrites a
-  document and never substitutes a local fit judgment.
+  plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
+  `mode: "resume-proposal"` and performs one provider operation. The server
+  flattens mutable fields to `target-1`, `target-2`, and so on, keeps their
+  document mapping private, and returns only outcome, changes, short feedback,
+  withheld counts, prompt-omitted target count, and provider provenance. If the
+  complete target set exceeds 42,000 serialized characters, the server selects
+  material bullets, summaries, actual skill lists, and job-relevant fields
+  without prefix-order bias. It serializes only complete target objects and
+  validates the reply against exactly that selected set. Skills category labels
+  are locked; actual skill lists remain targets. Category substitutions and
+  job-only skill additions are rejected independently beside unknown,
+  duplicate, unchanged, malformed, and unsupported mutations. Optional
+  feedback is tolerant while mutation validation stays strict. Only bullets and
+  actual Skills lists are mutable targets. Identity, contact,
+  education, and standard-entry role/employer/subtitle/date fields remain
+  read-only evidence; omitted sections are absent.
+  `/api/polish` accepts only the one-pass `resume-proposal` contract. Its prompt
+  includes a silent self-audit before the provider returns JSON; the selected
+  reasoning effort controls provider reasoning and the audit's breadth, while
+  the audit remains internal and never becomes a second route or response.
+  Cover letters and application answers use their own routes.
   `/api/cover-letter` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
@@ -209,7 +178,7 @@ owns:
   unchanged and offers recovery near the workflow heading. A valid response is
   also staged client-side as a fingerprinted proposal: only **Accept proposal**
   applies it, **Discard proposal** does not touch the editor, and changed semantic
-  inputs disable acceptance until Tailor runs again. The flow never escalates
+  inputs disable acceptance until Resume Polish runs again. The flow never escalates
   into asking the candidate to plan evidence. Length is advisory — outside
   180-420 words the letter still returns, with a warning attached. Pure employer
   facts are excluded from the candidate-claim surface, but employer-led sentences
@@ -237,9 +206,9 @@ owns:
   Company/Product Context, Core Responsibilities, Required Qualifications,
   Preferred Qualifications, Tech Stack/Keywords, Seniority Signals, and Domain
   Signals. Prepare adapts those fields plus the retained raw source into its
-  complete editable review brief, including benefits and extraction or
-  candidate-review gaps. Benefits remain review context and are not added to
-  the resume-tailoring prompt. Apply persists that complete review brief and the
+  complete editable review brief, including benefits and deterministic
+  extraction gaps. Benefits remain review context and are not added to
+  the Resume Polish prompt. Apply persists that complete review brief and the
   immutable captured posting separately; reopening reconstructs the same
   editable/model-facing projections. The link itself is kept only for pipeline
   tracking and is never sent to the AI.
@@ -256,18 +225,22 @@ owns:
   review. The source URL is never sent to the model
   (it can carry private ATS tokens, so only the posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
-  provider. When the request fails, a deterministic brief may
-  remain available for inspection, but the stage stays failed and cannot
-  start resume Polish. The
-  route sits behind the localhost CSRF/Host guard. `.env` keys stay server-side;
-  a menu-entered key reaches the route only in that transient request and is
-  never returned. The
-  success response echoes the RESOLVED `provider` / `model` / `reasoningEffort`
-  (never `apiKey`) plus `attempts` (dispatch count, ≥1) so the
-  client can record which model produced the brief.
-  For one preview release, `/api/distill` remains a server-only alias to this
-  handler so an already-open previous-preview browser bundle survives a local
-  server restart. Current clients call only `/api/job-analysis`.
+  provider after publishing the deterministic local brief. Combined analysis and
+  reassessment pass through one private request boundary that owns JSON decoding,
+  HTTP and network error translation, abort propagation, and mode-specific response
+  validation. When the request fails, that local brief remains editable and manual
+  Polish stays available.
+
+### Fit Assessment integration boundary
+
+The canonical prompt, structured-output, exact-grounding, provider, request-
+identity, and verification contract lives in
+[`server/ai/README.md`](../../server/ai/README.md#fit-assessment-technical-contract).
+At the server boundary, combined Job analysis and reassessment remain modes of
+the same guarded `/api/job-analysis` handler. Managed credentials remain server-
+side, and the response may echo resolved provider/model/reasoning provenance and
+dispatch attempts but never an API key.
+
 - browser-extension API (`/api/extension/*`, helpers in
   `server/extension/index.ts`): `status` (GET) is the content-free same-port
   service marker. For a syntactically valid extension Origin it returns the
@@ -302,22 +275,20 @@ owns:
   provider settings. The background pass survives the popup closing on focus
   loss, and a burst of imports is serialized to one in-flight resolve. `inbox`
   (GET) reports `{status:"preparing"}` while preparation runs, then hands only
-  `{text, url}` to the claiming app tab once before clearing it. The tab always
-  runs provider-backed job analysis with its selected provider; if that request
-  fails, the deterministic brief may remain visible for inspection while the
-  stage stays failed. Extension imports include a short
+  `{text, url}` to the claiming app tab once before clearing it. The tab requests
+  provider-backed Job analysis with its selected provider after publishing its
+  local brief; if that request fails, the deterministic brief remains usable
+  and manual Polish stays available. Extension imports include a short
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
-  callback selects Prepare before updating intake state. The extension handoff
-  ends after Job analysis and the duplicate gates; after success the receiving
-  tab's ordinary Prepare orchestration settles the resume, runs Initial Fit, and
-  applies its two independent automation thresholds. `extensionImport`,
+  callback selects Prepare before updating intake state, and extension intake
+  stops there after Job analysis and the duplicate gates. `extensionImport`,
   `claimToken`, `tabId`, and the `"preparing"` progress token remain stable;
   the retired `autoTailor`, `distillAi`, and pre-extracted `fields` values are
-  ignored and never cross the inbox handoff. Ordinary Prepare may rank strict
-  saved variants and select a clear winner before Initial Fit; the extension
-  provides no automatic-tailoring command or persisted variant metadata.
+  ignored and never cross the inbox handoff. Ordinary Prepare may still rank
+  strict saved variants and select a clear winner, but that is source selection,
+  not automatic tailoring or a persisted schema extension.
   `status` / `analyze` / `import` are reachable cross-origin from the extension
   popup. `analyze` and `import` require the popup's exact, explicitly configured
   `EXTENSION_ALLOWED_ORIGINS` identity (`chrome-extension://`,
@@ -333,8 +304,9 @@ owns:
   connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
-  the base resume or calculates a local fit assessment. Initial Fit runs only
-  in the app after resume selection; its output still requires human review.
+  the base resume or calculates a local fit estimate. Fit Assessment runs only
+  inside the app against its selected resume. RoleFit does not
+  create or persist a detailed numeric fit score.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
   upload, save, reload; source development defaults to `workspace/`,
   while packaged runs use `app.getPath("userData")/workspace/`).
@@ -343,22 +315,29 @@ owns:
 
 Deterministic keyword and mechanical resume analysis live in focused client
 helpers under `src/resume/` and `src/resumeEngine.ts`. They may describe text or
-evidence, but never produce fit, eligibility, or submission-readiness judgments.
-Keep those AI contracts out of `server.ts` orchestration.
+evidence, but never calculate a fit score or verdict. Keep that logic and
+model-backed judgment out of `server.ts` orchestration.
 
 When a workflow grows, split it into focused helpers (file readers,
 provider clients, request handlers) rather than packing more code into
 one large route.
 
-The `/api/polish` flow follows that rule — it is split across focused
+The resume AI flows follow that rule — they are split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
-- `polish.ts` — the `handlePolish` route (request parsing, the
-  suggest → parallel audit + cover orchestration, derived `polishedText`
-  assembly) only.
+- `polish.ts` — the `handlePolish` route for the sole
+  `mode: "resume-proposal"` request. It normalizes the editable scope and
+  dispatches `resumeProposal.ts`; cover letters and answers have dedicated
+  routes and cannot enter this handler.
+- `resumeScope.ts` — defensive normalization and plain-text serialization for
+  the structured editable resume scope.
+- `resumeProposal.ts` and `shared/resumePolishContract.ts` — flat target
+  construction (with category labels locked and `skill-list` semantics), the
+  compact one-pass prompt/wire contract, deterministic per-edit grounding, and
+  Proposal / No changes / Withheld derivation.
 - `providers.ts` — provider identity + per-request config resolution
   (`normalizeProvider`, default provider/model, provider-specific key lookup,
-  `resolveProviderRequest`, `resolveAuditProviderRequest`).
+  and `resolveProviderRequest`).
 - `clients.ts` — the outbound provider clients (OpenAI Responses and
   Anthropic Messages), CLI dispatch, and the
   `callConfiguredProvider` dispatch.
@@ -372,56 +351,37 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   data, never instructions. Prompt budgets are structural: clip individual
   fields/arrays before `JSON.stringify` (or parse, shrink, and re-serialize),
   never character-slice serialized JSON into an invalid payload.
-- `sanitize.ts` — missing-skill and structured Tailor suggestion validation.
-  It accepts only the editor's inline-mark vocabulary and rejects other markup,
-  LaTeX commands, newlines, ungrounded claims, and unsafe target shapes.
+- `sanitize.ts` — shared markup and numeric-claim guards used by the current
+  Resume Polish, Cover Letter, and Application Answers flows.
+  The markup gate allows exactly the editor's inline-mark vocabulary
+  (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
+  tokens in `currentText` and a faithful suggestion echoes them; all other
+  tags, LaTeX commands, and newlines still reject. Resume-specific proposal
+  sanitization lives beside its wire contract in `resumeProposal.ts`.
   Hit-keyword grounding: a suggestion whose claimed JD
   keyword appears in `proposedText` but whose significant words exist
   nowhere in the scope text or honest context is dropped
   (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
   inferred fact (e.g. "clinics run Windows") into the resume.
-- `fitAssessmentValidation.ts` validates both AI judgment boundaries. Initial
-  Fit returns one categorical `FitAssessment` with confidence, eligibility,
-  canonical requirement evidence, and an advisory recommendation. Review
-  returns a separate `SubmissionAssessment` for requirement visibility,
-  unsupported claims, missing evidence, presentation issues, and readiness.
-  Each requirement retains and displays an exact `sourceRequirement` excerpt
-  from the posting; candidate evidence is accepted only as a normalized exact
-  source quotation, so an inserted token or model-authored polarity inversion
-  fails closed. Source excerpts are unique within a ledger, and eligibility
-  rows must be disjoint from capability requirements. The shared parser permits
-  all 40 requirement-derived strengths, concerns, and missing-evidence rows;
-  independent advice lists remain capped at 16.
-  Initial Fit `MISSING` requires explicit adverse evidence or a minimum-years
-  mismatch whose candidate duration is anchored to the same qualification;
-  ranges use their lower bound, duration anchors match whole tokens rather than
-  prefixes, and ambiguity remains `UNCERTAIN`. Sponsorship polarity is resolved
-  per clause after normalizing common contractions, bounded adverbs, and
-  alphanumeric modifiers such as H-1B. `No need for [modifier] sponsorship`
-  is positive; generic `have no` detection applies only to explicit
-  qualification-absence nouns. Submission visibility uses a separate
-  rule: `MISSING` may keep exact `HONEST_CONTEXT` evidence only when common
-  contracted, possessive, experiential, and adjectival negative forms have been
-  rejected and relevant evidence positively establishes the qualification and
-  `canSurfaceInResume=true`. Eligibility never changes the fit verdict, and
-  `CONFIRM_ELIGIBILITY` is valid only while eligibility is unresolved.
-  Summary, reason, explanation, strength, concern, and missing-evidence prose
-  is derived from the validated ledger; remaining presentation advice passes
-  the existing technology, proper-claim, numeric, and outcome gates. Invalid
-  output fails its stage, and document review never overwrites candidate fit.
-- `eligibilityLexicon.ts` — work-authorization and credential stems used only
-  to ground facts extracted by the job analyzer. Eligibility judgment belongs
-  to Initial Fit; this module does not gate or select a verdict.
+- `eligibilityLexicon.ts` — work-authorization and credential stems used by the
+  job analyzer's `workAuth` grounding. It does not select a fit verdict.
+- `fitAssessment.ts` — executable prompt, response schema, and mechanical validation
+  for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
+  Model summary text is never part of the accepted contract.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
-  citizenship, work authorization, sponsorship, education level, and field of
-  study to the user's honest context, and that combined string is what the
-  grounding allowlist is built from. Every field is therefore opt-in by
-  construction: an unset value contributes no line, so an undeclared
-  citizenship, clearance eligibility, or DEGREE can never become groundable
-  wording. Citizenship gates the work-authorization lines; education level gates
-  the field of study. Any new fact added there widens the allowlist and needs the
-  grounding/sanitizer probes re-run.
+  citizenship, work authorization, sponsorship, education level, field of
+  study, optional 4.0-scale GPA, earliest-start availability, and source-aware
+  experience evidence to the user's honest context, and that combined string is
+  what the grounding allowlist is built from. Every field is therefore opt-in
+  by construction: an unset value contributes no line, so an undeclared
+  citizenship, clearance eligibility, degree, GPA, or start date can never
+  become groundable wording. Citizenship, work authorization, and sponsorship
+  are independently declared; citizenship never contributes clearance or
+  employment-eligibility wording. Education level gates the field of study and
+  GPA; a specific availability
+  date must be a real ISO calendar date. Any new fact added there widens the
+  allowlist and needs the grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
   sanitizers. The proposed-text gate compares normalized JD terms against the
   submitted resume scope and honest context; unsupported JD-only terms produce
@@ -459,26 +419,22 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
-`/api/polish` receives the Tailor config as `provider` / `model` /
-`reasoningEffort`, the Review pass receives the Review config as `audit*`
-fields, `/api/cover-letter` receives the Cover config, and
-`/api/application-answers` receives the Answers config. Cover and Answers ran on
-the Tailor config before they became separately configurable; an install that
-predates the split migrates them from Tailor on load, so its behavior does not
-change across the upgrade.
-
-Settings and workspace-backup loads migrate `distillProvider`,
-`distillSelectedModel`, `distillCliReasoningEffort`, and
-`stageCustomInstructions.distill` before strict normalization. A canonical Job
-analysis value wins if both generations are present. Historical tracker
-`aiUsage.distill` is read and displayed as Job analysis, while every new or
-subsequent tracker write emits only `aiUsage["job-analysis"]`.
+`/api/polish` receives the Resume Polish config as `provider` / `model` /
+`reasoningEffort`,
+`/api/cover-letter` receives the Cover config, and
+`/api/application-answers` receives the Answers config. Missing stage fields use
+that stage's own product default; no stage inherits another stage's persisted
+provider/model/effort triple. Workspace settings drop retired preview keys during
+strict normalization, and portable workspace preferences carrying them fail
+closed. The original unprefixed provider/model/effort fields remain the durable
+Resume Polish storage keys.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
-the shared instructions. Tailor and Review are separate requests, so one polish
-run may carry different guidance for each. The server contract is unchanged — one
-`customInstructions` string per request.
+ the shared instructions. Resume Polish is one proposal request. Its prompt
+ performs the internal evidence, claim, identifier, and schema audit before
+ returning, with breadth adapted to the selected reasoning effort. The server
+ contract remains one `customInstructions` string per request.
 
 Browser requests contain provider, model, and
 reasoning settings but no API credentials. If a request omits provider fields
@@ -507,13 +463,20 @@ Per-provider rules:
   Antigravity provider stays `authState: "unknown"` and is ready-to-verify on
   first use rather than falsely labeled signed in. It also requires the print
   prompt as `-p`'s argv value; stdin is not a supported prompt source, so its
-  local process argument list briefly contains the request.
+  local process argument list briefly contains the request. RoleFit submits the
+  stable slug from the first column of `agy models`; settings saved by older
+  builds migrate their display-name values before dispatch.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
   The supported GPT-5.6 choices are Sol, Terra, and Luna; the balanced default is
   `gpt-5.6-terra`.
 - **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
   trailing assistant prefill because current Claude models reject those patterns.
-  JSON is enforced by the strict-output prompt plus `parseAiJson`.
+  JSON is enforced by the strict-output prompt plus `parseAiJson`. The current
+  catalog exposes Fable 5, Opus 5, Sonnet 5, Haiku 4.5, and the still-available
+  Opus 4.8. Sonnet 5 and Opus 5 default to adaptive thinking, so this bounded
+  JSON workflow disables it explicitly; Fable 5 rejects that flag and is left
+  on its supported adaptive-thinking contract at low effort so reasoning does
+  not consume the bounded JSON output budget.
 - Managed browser requests accept provider/model/effort identifiers only. The
   server resolves an OpenAI/Claude key from the companion-owned in-memory
   credential snapshot immediately before dispatch; there is no browser
@@ -532,41 +495,36 @@ Per-provider rules:
 
 The AI must:
 
-- tailor only the provided `tailorScope` sections to the job description
+- polish only the provided `resumeScope` sections for the job description
 - keep each role to no more than five bullets
 - emphasize entry-level SDE / full-stack fit
 - strengthen wording and structure
-- return structured `suggestedChanges` that target existing section,
-  entry, and bullet IDs, so the user can accept, edit, or discard changes
-  in the resume editor
+- return normal Resume Polish changes using only the flat target IDs sent by
+  the server; composite section, entry, bullet, field, evidence, risk, and
+  keyword-hit metadata are not part of this contract
+- select oversized target sets before serialization by materiality and job
+  relevance, never by a raw JSON slice; reject response ids outside the exact
+  selected set and report the separate omitted-target count
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
-- never edit identity, contact, education, or omitted sections unless the
-  user explicitly selects those sections in the editor
+- never edit identity, contact, education, standard-entry role/employer/subtitle/date
+  fields, Skills category labels, or omitted sections; only bullets and actual Skills lists are mutable
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section
-  without exact evidence in the resume or optional honest context; surface
-  missing required skills as gaps instead
-- add bracketed placeholders where facts or metrics are missing
-- return a concise `changeSummary` (what changed and why, or why nothing
-  needed to); the reviewed document is derived server-side from sanitized
-  suggestions, and the editor remains the final source of truth
-- keep candidate fit and document readiness separate. Initial Fit distinguishes
-  absent, uncertain, adjacent, and covered requirements and treats acceptable
-  alternatives or ranges as one requirement. Authorization, citizenship,
-  clearance, and other eligibility conditions independently affect automation
-  and recommendation, never the capability verdict. Post-polish Review
-  evaluates only whether the document visibly and defensibly communicates
-  existing evidence; it returns categorical readiness and grounded prioritized
-  issues, never a second fit verdict or before/after comparison
+  without exact evidence in the resume or optional honest context
+- omit an edit when material support is missing; do not add drafting
+  placeholders or ungrounded gap judgments to the resume workflow
+- return up to three concise improvements. The server derives
+  Proposal / No changes / Withheld from accepted mutations, and the editor
+  remains the final source of truth
 - write bullets as engineering accomplishments in plain language — no
   brochure vocabulary, no claims the candidate could not defend in an
   interview, and proposed text stays close to the current field's length
   so the one-page layout survives
-- keep submission review non-rewriting: in a combined run it compares the original
-  scope with the sanitized tailored result; in review-only it audits the
-  current edited draft as-is
+- keep the Polish self-audit internal and non-rewriting: it validates evidence,
+  claims, identifiers, and output shape before the proposal is returned. The
+  deterministic proposal sanitizer remains the final acceptance boundary
 
 ### Career-writing guidance
 
@@ -591,13 +549,12 @@ These are prompt-quality inputs, not permission to fabricate. The shared
 truthfulness, source-attribution, grounding, and sanitization rules remain
 authoritative.
 
-The only deterministic non-AI alternative is the job analyzer
-(`src/lib/jobExtract.ts`). It is a successful path only when the user has AI
-disabled for Job analysis. If an AI-backed Job analysis request fails, the
-local brief may be retained for inspection but the selected stage remains failed. Tailor, Review,
-cover-letter tailoring, and application-answer failures have no local
-substitutes. No
-locally generated draft, fit assessment, or readiness assessment stands in.
+The deterministic job analyzer (`src/lib/jobExtract.ts`) is Prepare's immediate
+usable baseline. Job analysis may improve it, but an AI-backed failure leaves
+the baseline editable and does not block manual Polish. Fit Assessment is advisory
+and independently unavailable when its provider output is unusable. Resume
+Polish, cover-letter tailoring, and application-answer failures have no local
+substitutes; no locally generated draft, score, review, or verdict stands in.
 
 ## Job Posting Import
 

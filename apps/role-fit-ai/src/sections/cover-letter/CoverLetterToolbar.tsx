@@ -23,7 +23,6 @@ import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocument
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
 import type { CoverLetterEditorState } from "../../hooks/useCoverLetterEditor";
 import { useDialog } from "../../hooks/useDialog";
-import { coverLetterRecoveryDirty } from "../../lib/coverLetterRecovery";
 import { formatHistoryDate } from "../../lib/historyDate";
 import { ExportMenu } from "../ExportRail";
 import { DocumentOpenMenu } from "../document/DocumentOpenMenu";
@@ -82,15 +81,13 @@ export function CoverLetterToolbar({
   const { confirm } = useDialog();
   // The PDF rename prompt is opened from the Save menu's PDF row.
   const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
+  const workspaceMutationPending =
+    editor.isWorkspaceSaving || editor.isWorkspaceReplacing;
+  const workspaceSaveDisabled =
+    workspaceMutationPending || editor.isWorkspaceBootstrapping;
 
   async function confirmReplace(): Promise<boolean> {
-    if (!coverLetterRecoveryDirty({
-      documentDirty: editor.dirty,
-      documentTitle: editor.documentTitle,
-      persistedDocumentTitle: editor.persistedDocumentTitle
-    })) {
-      return true;
-    }
+    if (!editor.recoveryDirty) return true;
     return confirm({
       title: "Replace cover letter?",
       message: "Replace the current cover letter? Unsaved edits will be lost.",
@@ -116,11 +113,11 @@ export function CoverLetterToolbar({
   // upload does, so it asks first. Without this the Open menu's saved list threw
   // away unsaved edits silently — the resume's equivalents both confirm.
   async function openSaved(fileName: string) {
-    if (await confirmReplace()) await editor.openWorkspaceCoverLetter(fileName);
+    await editor.openWorkspaceCoverLetter(fileName, { confirmReplace });
   }
 
   async function restoreSaved(key: string) {
-    if (await confirmReplace()) await editor.restoreWorkspaceCoverLetter(key);
+    await editor.restoreWorkspaceCoverLetter(key, confirmReplace);
   }
 
   return (
@@ -152,7 +149,7 @@ export function CoverLetterToolbar({
         untitledDocumentTitle="Untitled cover letter"
         documentContext={targetLine}
         saveStatus={
-          !editor.dirty
+          !editor.recoveryDirty
             ? undefined
             : draftAutosaveState === "error"
               ? { state: "error", label: "Recovery save failed" }
@@ -168,6 +165,7 @@ export function CoverLetterToolbar({
             <DocumentOpenMenu
               tooltip="Open a cover letter"
               icon={<FolderOpen size={16} />}
+              disabled={workspaceMutationPending}
               title="Open cover letter"
               description={
                 editor.activeCoverLabel
@@ -241,7 +239,10 @@ export function CoverLetterToolbar({
                 description: editor.activeCoverFileName
                   ? "The version it replaces goes to history."
                   : "Opens automatically next time.",
-                onSelect: () => editor.saveToWorkspace()
+                disabled: workspaceSaveDisabled,
+                onSelect: async () => {
+                  await editor.saveToWorkspace();
+                }
               }}
               variant={{
                 fieldId: "cover-letter-variant-name",
@@ -249,9 +250,15 @@ export function CoverLetterToolbar({
                 placeholder: "e.g. Backend SDE",
                 fileNameFor: coverLetterVariantFileName,
                 existingNames: editor.coverLetterOptions.map((option) => option.fileName),
-                onSave: (fileName) => editor.saveToWorkspace({ fileName })
+                disabled: workspaceSaveDisabled,
+                onSave: async (fileName) => {
+                  await editor.saveToWorkspace({ fileName });
+                }
               }}
-              applicationSync={applicationSync}
+              applicationSync={{
+                ...applicationSync,
+                disabled: applicationSync.disabled || workspaceMutationPending
+              }}
               actions={[
                 {
                   key: "cover",

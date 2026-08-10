@@ -17,11 +17,11 @@ const client = readFileSync(clientUrl, "utf8");
 
 assert.match(runtime, /import \{ handleJobAnalysis \} from "\.\/ai\/jobAnalysis\.ts";/);
 assert.match(runtime, /pathname === "\/api\/job-analysis"/, "the canonical Job analysis route is dispatched");
-assert.match(runtime, /pathname === "\/api\/distill"/, "the temporary legacy route alias is retained");
+assert.doesNotMatch(runtime, /pathname === "\/api\/distill"/, "the retired route alias is gone");
 assert.equal(
   runtime.match(/handleJobAnalysis\(req, res\)/g)?.length,
-  2,
-  "both route generations share one handler"
+  1,
+  "Job analysis has one route and one handler dispatch"
 );
 assert.match(client, /fetch\("\/api\/job-analysis"/, "new browser code calls only the canonical route");
 assert.doesNotMatch(client, /fetch\("\/api\/distill"/, "new browser code never writes the legacy route");

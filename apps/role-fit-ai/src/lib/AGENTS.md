@@ -31,6 +31,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `applicationMutation.ts` owns sparse tracker request selection and
   reference-preserving own-write response reconciliation. It does not own
   persistence, queueing, conflicts, or React state.
+- `applicationUnloadGuard.ts` owns the complete host unload predicate, including
+  Apply's post-tracker document persistence. `workspaceLoadOwnership.ts` owns
+  the one-shot resume-bootstrap barrier and load generations; metadata refreshes
+  may claim a generation only after startup has committed.
 - `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
   letter variants and history. `coverLetterExport.ts` owns pure source/PDF
   artifact construction; neither helper owns React state or document history.
@@ -38,6 +42,16 @@ Applies to `apps/role-fit-ai/src/lib/`.
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe
   over-invalidation is preferable to a false cache hit.
+- `aiJobAnalysis.ts` owns one private `/api/job-analysis` request boundary for
+  combined analysis and reassessment. Keep HTTP error translation, JSON
+  decoding, abort propagation, and mode-specific response validation there.
+- `fitAssessmentLifecycle.ts` owns exact request provenance and the structured
+  list of changed assessment input groups. Keep that list domain-only; the
+  Prepare rail owns its compact user-facing labels and details.
+- `autoPolishPolicy.ts` owns the client-only minimum-verdict type, labels,
+  ordering, and comparison used independently by Resume and Cover Letter. The
+  shared Fit Assessment contract owns assessment data and must not import downstream
+  automation policy.
 - Add a focused deterministic eval for durable parsing, identity, workflow,
   naming, or evidence behavior. Cover adversarial and empty inputs, not only the
   happy path.

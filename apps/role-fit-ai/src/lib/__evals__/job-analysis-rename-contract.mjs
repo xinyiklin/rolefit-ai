@@ -12,30 +12,19 @@ const textExtensions = new Set([
   ".ts", ".tsx", ".txt", ".yaml", ".yml"
 ]);
 
-// Exact counts make this an intentional compatibility ledger, not a broad
+// Exact counts make this an intentional residual-name ledger, not a broad
 // file-level exemption. Adding even one stale mention requires a reviewed edit
-// here, while deleting a compatibility shim requires removing its old receipt.
+// here, while deleting a rejection probe or historical receipt removes its row.
 const expectedCounts = new Map([
-  ["CONTINUITY.md", 3],
+  ["CONTINUITY.md", 4],
   ["apps/role-fit-ai/__evals__/extension-popup-contract.mjs", 1],
-  ["apps/role-fit-ai/__evals__/extension-settings-contract.mjs", 2],
-  ["apps/role-fit-ai/docs/engineering/ai-server.md", 7],
+  ["apps/role-fit-ai/docs/engineering/ai-server.md", 1],
   ["apps/role-fit-ai/docs/engineering/testing.md", 1],
   ["apps/role-fit-ai/docs/releases/0.5.0-beta.11.md", 1],
-  ["apps/role-fit-ai/extension/settings.js", 1],
   ["apps/role-fit-ai/server/ai/__evals__/job-analysis-route-contract.mjs", 4],
-  ["apps/role-fit-ai/server/applications/__evals__/sanitize-applications.mjs", 7],
   ["apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs", 1],
-  ["apps/role-fit-ai/server/runtime.ts", 1],
-  ["apps/role-fit-ai/src/hooks/__evals__/client-workflow-guards.mjs", 3],
-  ["apps/role-fit-ai/src/hooks/useApplications.ts", 2],
-  ["apps/role-fit-ai/src/lib/__evals__/ai-workflow-eval.mjs", 2],
-  ["apps/role-fit-ai/src/lib/__evals__/stage-settings-eval.mjs", 24],
-  ["apps/role-fit-ai/src/lib/__evals__/workspace-backup-contract-eval.mjs", 5],
-  ["apps/role-fit-ai/src/lib/aiUsage.ts", 4],
-  ["apps/role-fit-ai/src/lib/settings.ts", 7],
-  ["apps/role-fit-ai/src/lib/tabPresence.ts", 1],
-  ["apps/role-fit-ai/src/sections/SessionsRail.tsx", 2]
+  ["apps/role-fit-ai/src/lib/__evals__/stage-settings-eval.mjs", 4],
+  ["apps/role-fit-ai/src/lib/__evals__/workspace-backup-contract-eval.mjs", 2]
 ]);
 
 // Driven by git rather than a directory walk: git reports POSIX separators, so
@@ -77,7 +66,7 @@ for (const file of scannedTextFiles()) {
 assert.deepEqual(
   [...actualCounts.entries()].sort(([a], [b]) => a.localeCompare(b)),
   [...expectedCounts.entries()].sort(([a], [b]) => a.localeCompare(b)),
-  "retired stage terminology is limited to the explicit compatibility, migration, test, and release-note ledger"
+  "retired stage terminology is limited to explicit rejection probes and historical records"
 );
 
 console.log(`job-analysis residual-name contract passed (${actualCounts.size} allowlisted files)`);

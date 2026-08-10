@@ -17,6 +17,13 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
+- About you stores optional evidence and scheduling facts, never self-scored
+  fit. GPA is a single bounded 4.0-scale value attached to declared education;
+  availability is a bounded notice period or valid exact date. Experience
+  remains divided by source with bounded duration, role/project count, recency,
+  and a factual scope note; job-specific relevance belongs to Fit Assessment.
+  Keep its category rows flat and do not collapse distinct evidence sources
+  into one additive years-of-experience total.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.
@@ -26,26 +33,26 @@ and `docs/engineering/ui-principles.md`.
   belong in hooks; components receive values and callbacks.
 - `PrepareTab` is the first/default and sole job-intake page. It composes the
   URL/paste fallbacks, receipt/Job analysis progress, collapsed source, editable
-  full job brief and its extraction/candidate-review gaps, resume-variant
+  full job brief and its extraction gaps, resume-variant
   recommendation, material selection, readiness, and the shared Apply callback;
   it does not own their async state. Its brief includes tracked job facts and
   one role context, responsibilities, required/preferred qualifications,
   technical keywords, seniority/domain signals, and benefits. Candidate gaps
-  restored from a saved Apply snapshot are visibly historical until Review
-  produces a matching current result.
+  restored from a saved Apply snapshot remain clearly historical compatibility
+  data rather than masquerading as current evidence.
 - Before preparation, Source is the only visible panel. URL and pasted text are
   two APG-tabbed methods inside it, only the selected method renders, and the
   intake column is centered instead of reserving an empty rail. A prepared
   source collapses into its panel head — captured size and origin — rather than
   repeating them in the body.
 - After preparation, the brief leads the main column and one Application rail
-  owns both material choices, a flat Initial Fit checkpoint, independent
-  automation receipts, readiness, saved-application summary, and Apply. Initial
-  Fit shows selection/audit progress, categorical verdict, confidence,
-  eligibility, requirement evidence,
-  provenance, Retry/Stop/Re-audit, and a historical label on restore. A later AI
-  Review appears separately as submission readiness and never changes or
-  overwrites Initial Fit.
+  owns both material choices, compact Fit Assessment, readiness,
+  saved-application summary, and Apply. Fit Assessment shows only its verdict,
+  selected resume, short summary, up to three matches and gaps, and a relevant
+  eligibility warning. When out of date, retain those facts only as a clearly
+  labeled previous assessment and add one flat Changed since assessment list
+  before Reassess fit. Running, disabled, and retryable-unavailable states stay
+  flat and never block manual Polish.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing
   card.
@@ -85,18 +92,13 @@ and `docs/engineering/ui-principles.md`.
   unavailable, the live status otherwise. Keep note text wrapping rather than
   ellipsed — the trailing clause is recovery guidance.
 - Both materials rank actual saved document contents with one weighted
-  prepared-job ranker and auto-select a meaningful unique winner while the
+  prepared-job scorer and auto-select a meaningful unique winner while the
   corresponding editor is clean and not application-owned. The selector is the
   receipt; do not repeat counts or explanations underneath it. Only a blocked
   automatic replacement gets the compact `PreparedVariantRecommendation`
   fallback. A tie or incomplete comparison returns no recommendation and keeps
   the current selection. Do not add persisted variant metadata to support this
   UI.
-- Initial Fit and Automation remain flat divided sections, not nested cards.
-  Automation rows name whether each material waited, started, completed,
-  skipped, stopped, or failed and why. Manual override buttons call the same
-  document commands, remain unavailable while automatic work is active, and do
-  not accept a proposal or change Include.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.
@@ -122,7 +124,7 @@ and `docs/engineering/ui-principles.md`.
   `FormattingToolbar`, and direct editor with the cover-letter layout and
   structure editing disabled. It replaces only the toolbar's resume style-menu
   slot with a RoleFit-owned line-height control plus the shared page control;
-  its file lifecycle, workflow rail, and deterministic resume proposal review
+  its file lifecycle, workflow rail, and whole-document proposal review
   remain RoleFit-owned. The
   editor is always mounted: without an opened or restored source, it starts as
   one empty editable paragraph.
@@ -130,11 +132,29 @@ and `docs/engineering/ui-principles.md`.
   shared state/target/readiness/failure/body/footer hierarchy for both document
   tabs. The shell places each document's one primary **Polish** action beside the
   rail disclosure control in whichever open or collapsed state is visible.
-  Resume dispatches the Settings-owned Tailor / Recruiter audit / Both choice
-  from both its document action and Prepare; no document-local stage menu exists.
+  Resume dispatches one proposal request from both its document action and
+  Prepare; no stage selector exists. Its compact feedback is What improved, the
+  proposed edits open in one disclosure with per-row Accept/Edit/Discard, Still
+  missing, and a quiet withheld line. Evidence, risk, and keyword chips do not
+  belong in the normal surface, and Withheld never receives success treatment.
   Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after acceptance.
+- `ProposalDecisionBar` and `ProposalDiff` are the shared accept surface, and
+  both documents must go through them. The bar is the ONLY place either document
+  commits: it renders in the rail's sticky footer, states what remains in that
+  document's own unit, and puts a primary accept before a secondary discard —
+  Accept all / Discard all for the resume's edits, Accept proposal / Discard
+  proposal for the letter's single replacement. Only a multi-decision proposal
+  gets its `progressbar`, and the rail description must not repeat the counts the
+  bar owns. `ProposalDiff` marks every changed word: `removed` and `added` for
+  the resume's Now/Proposed pair, `merged` for the letter's Changes view behind
+  its Changes / Full letter switch. It falls back to the plain rendered side when
+  either text carries inline marks, because a word diff can split a tag pair.
+  Resume decisions are individually reversible — `revert` restores an accepted
+  edit's original text before returning the row to the queue — and `discardAll`
+  is a decision record, never a mutation. Do not add a second commit location, a
+  third verb pair, or a document-private way of showing what changed.
   Typed post-draft issues render as one flat failure list with recovery beside
   each claim. When that rail is collapsed, its edge tab may show only the
   bounded issue count; readiness blockers and generic provider failures do not

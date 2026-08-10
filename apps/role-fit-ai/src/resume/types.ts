@@ -1,76 +1,44 @@
-import type { SubmissionAssessment } from "../../shared/fitAssessmentContract.ts";
+export type ResumeProposalField = "bullet" | "skill";
 
-export type EvidenceType = "exact" | "adjacent" | "none";
-
-export type MissingRequiredSkill = {
-  keyword: string;
-  evidenceType: EvidenceType;
-  canHonestlyAdd: boolean;
-  reason: string;
-};
-
-export type TailorChangeField = "bullet" | "skill" | "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
-
-export type TailorChangeRisk = "low" | "medium" | "high";
-
-export type TailorChangeTarget = {
+export type ResumeProposalTarget = {
   sectionId: string;
   entryId?: string;
   bulletId?: string;
-  field: TailorChangeField;
+  field: ResumeProposalField;
 };
 
-export type TailorSuggestion = {
+export type ResumeProposalSuggestion = {
   id: string;
-  target: TailorChangeTarget;
+  target: ResumeProposalTarget;
   sectionHeading: string;
   currentText: string;
   proposedText: string;
   reason: string;
-  evidenceType: EvidenceType;
-  evidence: string;
-  hits: string[];
-  risk: TailorChangeRisk;
-};
-
-// Counts of AI suggestions the server-side sanitizer withheld, grouped by reason.
-// `total` is every drop; `unsupported` is the anti-fabrication subset (ungrounded
-// or no-evidence edits). Surfaced so a caught fabrication doesn't look like a
-// clean "nothing to suggest" pass. Counts only — never suggestion text.
-export type DroppedSuggestions = {
-  total: number;
-  unsupported: number;
-  reasons: Record<string, number>;
 };
 
 export type PolishedResume = {
-  polishedText: string;
-  coverLetterText?: string;
+  // Exact resume text when the proposal was created. Apply compares the live
+  // document to this baseline; this is not an auto-applied polished output.
+  proposalBaselineText: string;
   source?: "ai";
-  // True only when this result includes a Tailor pass. A Review-only result is
-  // still AI-authored metadata, but the audited draft remains the base resume.
-  tailored?: boolean;
   missingKeywords: string[];
   // 1-3 bullets from the AI describing what changed (or why nothing needed
-  // changing). Absent when no Tailor pass ran.
+  // changing). Absent when no Resume Polish pass ran.
   changeSummary?: string[];
-  missingRequiredSkills?: MissingRequiredSkill[];
-  suggestedChanges?: TailorSuggestion[];
-  // Anti-fabrication catches the sanitizer withheld this run (counts only, no text).
-  droppedSuggestions?: DroppedSuggestions | null;
+  suggestedChanges?: ResumeProposalSuggestion[];
+  polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
+  omittedTargetCount?: number;
+  withheld?: {
+    count: number;
+    reasons: Array<"UNSUPPORTED" | "INVALID_TARGET" | "UNCHANGED" | "MALFORMED">;
+  };
   trimmedBulletGroups: number;
-  submissionAssessment?: SubmissionAssessment;
-  // Friendly label of the independent reviewer that ran the strict audit, set
-  // only when it differs from the rewrite provider (i.e. an audit override).
-  reviewedBy?: string;
-  // Server-reported outcome of the submission-review pass.
-  reviewStatus?: "ok" | "failed" | "off";
 };
 
-export type ResumeAnalysis = Omit<PolishedResume, "polishedText">;
+export type ResumeAnalysis = Omit<PolishedResume, "proposalBaselineText">;
 
 // One run of the inline before/after diff: text that is unchanged, newly added
-// in the tailored resume, or removed from the original. Adjacent runs of the
+// in the polished resume, or removed from the original. Adjacent runs of the
 // same type are merged so the renderer emits the fewest spans.
 export type DiffSegment = {
   type: "equal" | "added" | "removed";

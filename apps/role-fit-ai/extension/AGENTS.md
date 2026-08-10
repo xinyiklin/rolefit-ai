@@ -78,7 +78,7 @@ V3 client of the local RoleFit server.
 - Request only permissions required by the current import/container behavior.
   The keyboard path added none.
 - The extension may extract the visible posting and query duplicate status. It
-  never reads the workspace resume and never produces a fit assessment.
+  never reads the workspace resume and never calculates a fit score/verdict.
 - Keep all server access fixed to local RoleFit routes. The localhost server
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an
@@ -109,7 +109,7 @@ V3 client of the local RoleFit server.
   id stable, but configure the actual browser/profile Origin reported by
   `location.origin`; do not add a repo-authored Chrome manifest key or a static
   bearer value as a substitute for server-side identity validation.
-- The popup has no AI/deterministic or automatic-tailor toggles. Extension
+- The popup has no AI/deterministic or automatic-proposal toggles. Extension
   intake sends only `text`, `url`, and `claimToken` to import; the same-origin
   inbox delivers only `text` and `url`. The app always owns provider-backed AI
   job analysis, duplicate gates, the deterministic brief used only for failed-run

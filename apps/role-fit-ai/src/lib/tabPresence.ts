@@ -1,7 +1,7 @@
 // Cross-tab presence registry.
 //
-// Each browser tab is an INDEPENDENT tailoring session (its own job, draft, and
-// review). To make that safe we need two things this module provides:
+// Each browser tab is an independent RoleFit session (its own job and
+// documents). To make that safe we need two things this module provides:
 //
 //   1. A stable per-tab id. `sessionStorage` normally matches the lifetime we
 //      want: survives a reload of the same tab and clears on close. Some browser
@@ -43,11 +43,7 @@ export type PresencePhase =
   | "idle"
   | "editing"
   | "analyzing-job"
-  // A simultaneously open tab from the previous preview may still publish it.
-  | "distilling"
-  | "tailoring"
-  | "reviewing"
-  | "tailoring+reviewing";
+  | "tailoring";
 
 export type PresenceEntry = {
   tabId: string;

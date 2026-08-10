@@ -13,7 +13,6 @@ import { useMemo } from "react";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { clearTabDraft, recoverTabDraft, saveTabDraft } from "../lib/autosaveDraftStorage.ts";
-import { coverLetterRecoveryDirty } from "../lib/coverLetterRecovery.ts";
 import type { DraftAutosaveState } from "./useAutosaveDraft";
 import { useDebouncedRecoveryDraft } from "./useDebouncedRecoveryDraft.ts";
 
@@ -61,8 +60,7 @@ type UseCoverLetterAutosaveDraftArgs = {
   // The editor's serialized `.cover` payload, or null when no document is loaded.
   payload: string | null;
   documentTitle: string;
-  persistedDocumentTitle: string;
-  dirty: boolean;
+  recoveryDirty: boolean;
   jobLabel: string;
 };
 
@@ -71,22 +69,15 @@ type UseCoverLetterAutosaveDraftArgs = {
 export function useCoverLetterAutosaveDraft({
   payload,
   documentTitle,
-  persistedDocumentTitle,
-  dirty,
+  recoveryDirty,
   jobLabel
 }: UseCoverLetterAutosaveDraftArgs): DraftAutosaveState {
   const revision = useMemo(
-    () => ({ payload, documentTitle, persistedDocumentTitle, dirty, jobLabel }),
-    [dirty, documentTitle, jobLabel, payload, persistedDocumentTitle]
+    () => ({ payload, documentTitle, recoveryDirty, jobLabel }),
+    [documentTitle, jobLabel, payload, recoveryDirty]
   );
   return useDebouncedRecoveryDraft({
-    shouldSave:
-      payload !== null &&
-      coverLetterRecoveryDirty({
-        documentDirty: dirty,
-        documentTitle,
-        persistedDocumentTitle
-      }),
+    shouldSave: payload !== null && recoveryDirty,
     revision,
     save: () =>
       payload !== null &&

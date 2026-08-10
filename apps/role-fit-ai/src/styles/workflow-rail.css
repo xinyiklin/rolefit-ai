@@ -19,8 +19,9 @@
   text-transform: uppercase;
 }
 
-.workflow-rail--blocked .workflow-rail__eyebrow,
-.workflow-rail--stale .workflow-rail__eyebrow {
+/* Tone, not state: the shared workflow contract owns ten states, and the rail
+   only distinguishes the ones that need the user's attention. */
+.workflow-rail.is-attention .workflow-rail__eyebrow {
   color: var(--warm);
 }
 
@@ -55,7 +56,7 @@
   gap: var(--s2);
   padding-inline-start: 16px;
   color: var(--ink);
-  font-size: 0.76rem;
+  font-size: 0.82rem;
 }
 
 .workflow-rail__checks > li::before {
@@ -174,3 +175,23 @@
 .resume-workflow__steps .is-failed small {
   color: var(--warm);
 }
+
+.resume-workflow__single-step {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+  color: var(--ink);
+  font-size: 0.76rem;
+}
+
+.resume-workflow__single-step small {
+  color: var(--ink-faint);
+  text-transform: capitalize;
+}
+
+.resume-workflow__single-step.is-running small { color: var(--accent-deep); }
+.resume-workflow__single-step.is-failed small,
+.resume-workflow__single-step.is-stopped small,
+.resume-workflow__single-step.is-withheld small { color: var(--warm); }

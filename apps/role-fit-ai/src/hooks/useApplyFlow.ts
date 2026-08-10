@@ -14,21 +14,17 @@
  * usePolishPipeline's pattern.
  */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import {
-  makeApplicationDraft,
-  type Application,
-  type ApplicationInitialFitAudit,
-  type ApplicationStatus
-} from "./useApplications";
+import { makeApplicationDraft, type Application, type ApplicationStatus } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
-import { canonicalizeAiUsageStageKeys, type StageAiUsage } from "../lib/aiUsage";
+import { copyAiUsage, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
 import type { OutputTab } from "../sections/shared";
-import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
+import { resumeUsedForApplication } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
+import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -48,9 +44,8 @@ type UseApplyFlowArgs = {
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
+  fitAssessmentPersistence: FitAssessmentPersistenceDecision;
   pipelineAiUsage: Record<string, StageAiUsage>;
-  initialFitAudit: ApplicationInitialFitAudit | null;
-  resumePolishMode?: Application["resumePolishMode"];
   applications: Application[];
   linkedApplicationId: string | null;
   findForTarget: (url: string, desc: string) => Application | undefined;
@@ -98,9 +93,8 @@ export function useApplyFlow({
   jobRawText,
   result,
   currentResumeText,
+  fitAssessmentPersistence,
   pipelineAiUsage,
-  initialFitAudit,
-  resumePolishMode,
   applications,
   linkedApplicationId,
   findForTarget,
@@ -258,18 +252,8 @@ export function useApplyFlow({
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
     setIsCommittingApply(true);
     setApplySaveError("");
-    const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
-    const acceptedStructuredSuggestions =
-      hasStructuredSuggestions &&
-      Boolean(result?.polishedText) &&
-      normalizeDocumentSnapshot(currentResumeText) !== normalizeDocumentSnapshot(result?.polishedText ?? "");
-    const usedBase =
-      result?.tailored !== true ||
-      !result.polishedText ||
-      (hasStructuredSuggestions && !acceptedStructuredSuggestions);
-    const submissionAssessment = result?.tailored === true && usedBase
-      ? undefined
-      : result?.submissionAssessment;
+    const resumeUsed = resumeUsedForApplication(currentResumeText, result?.proposalBaselineText);
+    const usedBase = resumeUsed === "base";
     const materialSelection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     // A duplicate scan in handleApply may have already identified which record
     // this apply should merge into (exact/high confidence, user-confirmed when
@@ -285,13 +269,10 @@ export function useApplyFlow({
       existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
     const tracking = currentJobTracking();
     const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
-    const aiUsage: Record<string, StageAiUsage> = canonicalizeAiUsageStageKeys(existing?.aiUsage);
+    const aiUsage: Record<string, StageAiUsage> = copyAiUsage(existing?.aiUsage);
     aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
-    if (pipelineAiUsage["initial-fit"]) aiUsage["initial-fit"] = pipelineAiUsage["initial-fit"];
-    else if (!initialFitAudit || !existing?.initialFitAudit) delete aiUsage["initial-fit"];
     if (materialSelection.resume) {
-      aiUsage.tailor = pipelineAiUsage.tailor ?? { source: "none" };
-      aiUsage.review = pipelineAiUsage.review ?? { source: "none" };
+      aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
     }
     if (materialSelection.coverLetter) {
       if (pipelineAiUsage.cover) aiUsage.cover = pipelineAiUsage.cover;
@@ -339,17 +320,17 @@ export function useApplyFlow({
       status,
       appliedAt: existing?.appliedAt ?? now,
       aiUsage,
-      // App supplies the saved audit only when it still matches this prepared
-      // job. An explicit absence must clear an older baseline instead of
-      // retaining it without the matching initial-fit provenance above.
-      initialFitAudit: initialFitAudit ?? undefined,
+      // Fit Assessment belongs to the preparation receipt, not the document
+      // package. Preserve only when this session has no assessment decision;
+      // a known previous-preparation completion clears the linked old receipt.
+      ...(fitAssessmentPersistence.action === "set"
+        ? { fitAssessment: fitAssessmentPersistence.snapshot }
+        : fitAssessmentPersistence.action === "clear"
+          ? { fitAssessment: undefined }
+          : {}),
       ...(materialSelection.resume
         ? {
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
-            submissionAssessment: submissionAssessment ?? undefined,
-            resumePolishMode: usedBase
-              ? undefined
-              : resumePolishMode ?? existing?.resumePolishMode
           }
         : {})
     };

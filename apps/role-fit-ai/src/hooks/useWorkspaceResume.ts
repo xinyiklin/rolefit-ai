@@ -15,7 +15,7 @@
  * editor, export status, autosave draft, dialogs) stays owned by App and
  * arrives via args, mirroring usePolishPipeline's pattern.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { DOC_STYLE_DEFAULTS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
@@ -26,7 +26,13 @@ import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResum
 import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
 import type { VariantCandidate } from "../lib/variantRecommendation";
+import { fetchBaseResumeCandidates } from "../lib/baseResumeWorkspaceRepository.ts";
+// The document's origin is a domain fact about the resume, not workspace
+// plumbing; it lives beside the resolution rules that consume it.
+import type { PreparedResumeAdoption, ResumeOrigin } from "../lib/preparedResume.ts";
+export type { ResumeOrigin };
 import { createBlankResumeData } from "../lib/blankResume.ts";
+import { createWorkspaceLoadOwnership } from "../lib/workspaceLoadOwnership.ts";
 
 export type WorkspaceBaseResume = {
   exists: boolean;
@@ -133,6 +139,10 @@ type UseWorkspaceResumeArgs = {
   // the plain-text parser) — used when loading a `.resume` file, whose
   // content is already the structured model.
   seedResumeData: (data: ResumeData) => void;
+  // What the document in the editor actually is. App owns it because the one
+  // transition this hook cannot see — restoring a tracked application — seeds
+  // the editor directly; every workspace path below reports its own origin.
+  setResumeOrigin: (origin: ResumeOrigin) => void;
   currentResumeText: string;
   resumeText: string;
   editedResume: ResumeData;
@@ -155,6 +165,7 @@ export function useWorkspaceResume({
   resetExportStatuses,
   setExportStatus,
   seedResumeData,
+  setResumeOrigin,
   currentResumeText,
   resumeText,
   editedResume,
@@ -165,15 +176,42 @@ export function useWorkspaceResume({
   const [baseResumeName, setBaseResumeName] = useState("");
   const [baseResumeOptions, setBaseResumeOptions] = useState<BaseResumeOption[]>([]);
   const [baseResumeHistory, setBaseResumeHistory] = useState<BaseResumeHistoryGroup[]>([]);
-  const [baseResumeCandidatesRevision, setBaseResumeCandidatesRevision] = useState(0);
+  // A revision counter, not rendered state: every authoritative snapshot makes
+  // the cached candidate bytes stale, and nothing re-renders on that fact.
+  const baseResumeCandidatesRevisionRef = useRef(0);
+  const baseResumeCandidateCacheRef = useRef<{ key: string; candidates: VariantCandidate[] } | null>(null);
   const [workspaceStatus, setWorkspaceStatus] = useState("");
   const [isSavingBaseResume, setIsSavingBaseResume] = useState(false);
-  const workspaceLoadGenerationRef = useRef(0);
   // This is the one-shot startup check, not a generic loading flag. It begins
   // true so the first paint does not claim the workspace is empty, then only
   // ever settles to false. Explicit Reload actions keep the current editor on
   // screen while their request runs.
   const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
+  const workspaceLoadOwnershipRef = useRef<
+    ReturnType<typeof createWorkspaceLoadOwnership> | null
+  >(null);
+  if (workspaceLoadOwnershipRef.current === null) {
+    workspaceLoadOwnershipRef.current = createWorkspaceLoadOwnership();
+  }
+  // Callers that must not mistake "still hydrating" for "no resume" await this
+  // instead of sampling the boolean: an extension import can reach Prepare
+  // before the mount load returns, and a boolean read at that instant is a lie.
+  const whenWorkspaceBootstrapped = useCallback(
+    () => workspaceLoadOwnershipRef.current!.whenBootstrapped(),
+    []
+  );
+  // Settled from an EFFECT, never from loadWorkspace's own finally. Resolving
+  // there put the callback's microtask ahead of React's commit, so a caller
+  // that awaited this promise read the state ref as it was BEFORE hydration —
+  // origin "blank", an empty document — and concluded there was no resume. The
+  // effect runs after the commit that publishes those values, so awaiting this
+  // means the hydrated document is actually readable.
+  const [bootstrapResolved, setBootstrapResolved] = useState(false);
+  useEffect(() => {
+    if (bootstrapResolved) {
+      workspaceLoadOwnershipRef.current?.settleBootstrapAfterCommit();
+    }
+  }, [bootstrapResolved]);
   const detachBaseResumeIdentity = useCallback(() => {
     setBaseResumeName("");
     saveLastBaseResumeName("");
@@ -202,22 +240,22 @@ export function useWorkspaceResume({
     skipGuard = false,
     clearRecoveryOnCommit = false,
     shouldCancel?: () => boolean
-  ): Promise<boolean> {
-    if (!baseResume.exists || !baseResume.text) return false;
+  ): Promise<{ text: string } | null> {
+    if (!baseResume.exists || !baseResume.text) return null;
 
     let candidate: PreparedResumeCandidate;
     try {
       candidate = prepareResumeText(baseResume.text, baseResume.kind === "resume");
     } catch (error) {
       setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
-      return false;
+      return null;
     }
 
-    if (shouldCancel?.()) return false;
+    if (shouldCancel?.()) return null;
 
     if (!skipGuard) {
       const approved = await approveCurrentReplacement(approvedVersion);
-      if (approved === null) return false;
+      if (approved === null) return null;
       approvedVersion = approved;
 
       // This is the final await-free commit boundary. Re-read the live version
@@ -228,11 +266,11 @@ export function useWorkspaceResume({
         replacementGuard.currentVersion() !== approvedVersion
       ) {
         const refreshedApproval = await approveCurrentReplacement();
-        if (refreshedApproval === null) return false;
+        if (refreshedApproval === null) return null;
       }
       clearRecoveryOnCommit ||= replacementGuard.isDirtyNow();
     }
-    if (shouldCancel?.()) return false;
+    if (shouldCancel?.()) return null;
 
     // Validation and any required confirmation have both succeeded. Recovery
     // data is superseded only at this commit boundary, never while a file is
@@ -263,7 +301,9 @@ export function useWorkspaceResume({
       seedResumeEditor(candidate.text, "");
     }
     setFileStatus(status);
-    return true;
+    return {
+      text: candidate.kind === "resume" ? serializeResumeData(candidate.parsed.data) : candidate.text
+    };
   }
 
   function updateWorkspaceState(workspace: JobWorkspace) {
@@ -274,7 +314,8 @@ export function useWorkspaceResume({
     // Names alone cannot reveal that an existing variant was overwritten or
     // restored. Advance the recommendation key for every authoritative
     // workspace snapshot so Prepare re-reads the actual saved bytes.
-    setBaseResumeCandidatesRevision((revision) => revision + 1);
+    baseResumeCandidatesRevisionRef.current += 1;
+    baseResumeCandidateCacheRef.current = null;
     // Only overwrite history when the response actually carries it. A partial
     // response (e.g. a caller that forgets the field) must not silently wipe the
     // Recent list — that was the "history disappears on save" bug.
@@ -282,13 +323,13 @@ export function useWorkspaceResume({
   }
 
   async function loadWorkspace(applyBaseResume = false) {
-    const generation = workspaceLoadGenerationRef.current + 1;
-    workspaceLoadGenerationRef.current = generation;
+    const loadOwnership = workspaceLoadOwnershipRef.current!;
+    const claim = await loadOwnership.claim(applyBaseResume);
     try {
       const response = await fetch("/api/workspace");
       const workspace = (await response.json()) as JobWorkspace & { error?: string };
       if (!response.ok) throw new Error(workspace.error ?? "Workspace check failed.");
-      if (generation !== workspaceLoadGenerationRef.current) return;
+      if (!loadOwnership.isCurrent(claim)) return;
 
       updateWorkspaceState(workspace);
       if (workspace.baseResume?.exists) {
@@ -311,7 +352,7 @@ export function useWorkspaceResume({
             saveLastBaseResumeName("");
           }
           setWorkspaceStatus("");
-          await applyWorkspaceBaseResume(workspace.baseResume, "");
+          if (await applyWorkspaceBaseResume(workspace.baseResume, "")) setResumeOrigin("saved");
           return;
         }
         setWorkspaceStatus("");
@@ -336,6 +377,7 @@ export function useWorkspaceResume({
               setResumeText(starterText);
               seedResumeEditor(starterText, "");
             }
+            setResumeOrigin("starter");
             setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
           } catch {
             // Corrupt bundled starter — leave the editor empty rather than seed
@@ -346,7 +388,15 @@ export function useWorkspaceResume({
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Local workspace could not be checked.");
     } finally {
-      setIsWorkspaceBootstrapping(false);
+      // Only a current startup load answers "which resume is loaded". Metadata
+      // refreshes wait behind that answer and therefore cannot supersede it.
+      // Batched with the document updates above, so one commit publishes both;
+      // the effect above turns that commit into the resolved promise. Failure
+      // is terminal too: an unreachable workspace is not a reason to wait.
+      if (loadOwnership.startupMaySettle(claim)) {
+        setIsWorkspaceBootstrapping(false);
+        setBootstrapResolved(true);
+      }
     }
   }
 
@@ -367,6 +417,7 @@ export function useWorkspaceResume({
         true
       );
       if (!applied) return;
+      setResumeOrigin("starter");
       saveLastBaseResumeName("");
       setBaseResumeName("");
       updateWorkspaceState(workspace);
@@ -393,6 +444,7 @@ export function useWorkspaceResume({
     // workspace files are deliberately untouched.
     replacementGuard.onReplacementCommitted();
     detachBaseResumeIdentity();
+    setResumeOrigin("blank");
     setFileName("");
     setDocumentTitle("Resume");
     setResumeText("");
@@ -440,6 +492,9 @@ export function useWorkspaceResume({
         setWorkspaceStatus("Saved the base resume, but its returned file could not be loaded. The current editor was kept.");
         return;
       }
+      // Saving is exactly the act that turns a starter or an upload into the
+      // applicant's own base resume.
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -530,6 +585,7 @@ export function useWorkspaceResume({
         setWorkspaceStatus("The restored base resume could not be loaded. The current editor was kept.");
         return;
       }
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -561,7 +617,7 @@ export function useWorkspaceResume({
     fileName: string,
     clearRecoveryOnCommit = true,
     shouldCancel?: () => boolean
-  ): Promise<boolean> {
+  ): Promise<PreparedResumeAdoption | null> {
     setIsSavingBaseResume(true);
     setWorkspaceStatus("Loading base resume version…");
     try {
@@ -591,8 +647,9 @@ export function useWorkspaceResume({
         } else {
           setWorkspaceStatus("The selected base resume could not be loaded. The current editor was kept.");
         }
-        return false;
+        return null;
       }
+      setResumeOrigin("saved");
       updateWorkspaceState({
         path: workspace.path ?? workspacePath,
         baseResume: workspace.baseResume,
@@ -601,10 +658,18 @@ export function useWorkspaceResume({
         files: workspace.files ?? workspaceFiles
       });
       setWorkspaceStatus("");
-      return true;
+      const adoptedFileName = workspace.baseResume.fileName ?? "";
+      const adoptedLabel = workspace.baseResumeOptions?.find((option) => option.fileName === adoptedFileName)?.label
+        ?? workspace.baseResume.label
+        ?? adoptedFileName;
+      return {
+        fileName: adoptedFileName,
+        label: adoptedLabel,
+        text: applied.text
+      };
     } catch (error) {
       setWorkspaceStatus(error instanceof Error ? error.message : "Base resume load failed.");
-      return false;
+      return null;
     } finally {
       setIsSavingBaseResume(false);
     }
@@ -613,41 +678,24 @@ export function useWorkspaceResume({
   // Read every saved variant without adopting any of them into the editor.
   // Prepare uses this snapshot only for deterministic recommendation; the
   // existing guarded load path remains the sole document-replacement owner.
+  // Results are cached against the authoritative candidate revision, so
+  // resolving and then displaying the same ranking costs one request in total.
   const readBaseResumeCandidates = useCallback(
     async (options: BaseResumeOption[]): Promise<VariantCandidate[]> => {
-      const candidates = await Promise.all(
-        options.map(async (option): Promise<VariantCandidate | null> => {
-          try {
-            const response = await fetch("/api/workspace/base-resume/select", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ fileName: option.fileName })
-            });
-            const workspace = (await response.json()) as Partial<JobWorkspace> & {
-              baseResume?: WorkspaceBaseResume;
-            };
-            if (!response.ok || !workspace.baseResume?.text) return null;
-            const prepared = prepareResumeText(
-              workspace.baseResume.text,
-              workspace.baseResume.kind === "resume"
-            );
-            return {
-              fileName: option.fileName,
-              label: option.label,
-              text:
-                prepared.kind === "resume"
-                  ? serializeResumeData(prepared.parsed.data)
-                  : prepared.text
-            };
-          } catch {
-            return null;
-          }
-        })
-      );
-      return candidates.filter(
-        (candidate): candidate is VariantCandidate => candidate !== null
-      );
+      const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
+      if (!fileNames.length) return [];
+      const cacheKey = `${baseResumeCandidatesRevisionRef.current}|${[...fileNames].sort().join(",")}`;
+      const cached = baseResumeCandidateCacheRef.current;
+      if (cached?.key === cacheKey) return cached.candidates;
+
+      const candidates = await fetchBaseResumeCandidates(options);
+      baseResumeCandidateCacheRef.current = { key: cacheKey, candidates };
+      return candidates;
     },
+    []
+  );
+  const readBaseResumeCandidatesRevision = useCallback(
+    () => baseResumeCandidatesRevisionRef.current,
     []
   );
 
@@ -685,6 +733,7 @@ export function useWorkspaceResume({
     }
     replacementGuard.onReplacementCommitted();
 
+    setResumeOrigin("uploaded");
     setFileName(file.name);
     setFileError("");
     setFileStatus("");
@@ -716,10 +765,10 @@ export function useWorkspaceResume({
     baseResumeName,
     baseResumeOptions,
     baseResumeHistory,
-    baseResumeCandidatesRevision,
     workspaceStatus,
     isSavingBaseResume,
     isWorkspaceBootstrapping,
+    whenWorkspaceBootstrapped,
     loadWorkspace,
     loadStarterTemplate,
     startBlankResume,
@@ -728,6 +777,7 @@ export function useWorkspaceResume({
     saveCurrentAsBaseResume,
     loadBaseResumeVersion,
     readBaseResumeCandidates,
+    readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
     handleFileUpload
   };

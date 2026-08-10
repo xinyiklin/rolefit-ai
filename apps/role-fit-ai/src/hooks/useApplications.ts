@@ -3,7 +3,7 @@ import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
-import { canonicalizeAiUsageStageKeys, type ApplicationAiUsage } from "../lib/aiUsage";
+import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
 import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 import {
   applicationMutationRecords,
@@ -11,8 +11,7 @@ import {
   type ApplicationMutation
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
-import type { InitialFitAudit } from "../lib/initialFitAudit";
-import type { SubmissionAssessment } from "../../shared/fitAssessmentContract.ts";
+import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -38,15 +37,6 @@ export const APPLICATION_SOURCES: ApplicationSource[] = [
   "Recruiter",
   "Other"
 ];
-
-// Historical decision checkpoint captured separately from the later
-// post-polish readiness assessment. The full live review stays in Prepare; the
-// tracker keeps the decision, selected source, and timestamp without conflating
-// candidate fit with document readiness.
-export type ApplicationInitialFitAudit = Pick<
-  InitialFitAudit,
-  "assessment" | "resumeFileName" | "completedAt"
->;
 
 // A drafted application-question answer (or per-role description) the user chose
 // to save with this application from the Application Questions tab.
@@ -105,7 +95,7 @@ export type Application = {
   // jobDescription so later prepared-brief edits cannot rewrite View source or
   // change what "Prepare again" analyzes.
   rawJobDescription?: string;
-  // Per-stage AI usage snapshot (job analysis/initial fit/tailor/review/cover), captured at Apply
+  // Per-stage AI usage snapshot, captured at Apply
   // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
@@ -121,7 +111,7 @@ export type Application = {
   location?: string;
   jobType?: string;
   workAuth?: string;
-  // Explicit priority override; when unset the UI derives it from fit + stage.
+  // Explicit priority override; unset applications keep the default presentation.
   priority?: ApplicationPriority;
   // Compensation, as advertised or negotiated. Stored as plain integers in the
   // chosen currency; min/max may be set independently.
@@ -129,15 +119,14 @@ export type Application = {
   salaryMax?: number | null;
   salaryCurrency?: string;
   salaryPeriod?: SalaryPeriod;
-  // Free-text interview prep the user keeps for this role (the review snapshot
-  // below supplies the AI-derived risks/gaps that complement these notes).
+  // Free-text interview prep the user keeps for this role.
   interviewTips?: string;
   contacts?: ApplicationContact[];
-  initialFitAudit?: ApplicationInitialFitAudit;
-  submissionAssessment?: SubmissionAssessment;
-  // How the tailored resume workflow was started. This supports categorical
-  // workflow analytics without storing a fit number or automation heuristic.
-  resumePolishMode?: "automatic" | "manual";
+  // Compact, bounded Fit Assessment snapshot. Full provider responses and
+  // historical numeric scores never enter tracker storage.
+  // Current strict on-disk field name. Preview upgrades rewrite stored data
+  // explicitly rather than retaining runtime aliases.
+  fitAssessment?: FitAssessmentSnapshot;
   templateId?: string;
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.
@@ -154,17 +143,16 @@ export type Application = {
   duplicateDismissedIds?: string[];
 };
 
-// Historical tracker rows can still carry the preview-era `distill` stage key.
-// Normalize as records enter the client so every later mutation writes only the
-// canonical key, even when the user edits an unrelated tracker field.
+// Normalize historical stage keys as records enter the client so every later
+// mutation writes only canonical names.
 function canonicalizeApplicationAiUsage(application: Application): Application {
-  if (!application.aiUsage || !("distill" in application.aiUsage)) return application;
-  return { ...application, aiUsage: canonicalizeAiUsageStageKeys(application.aiUsage) };
+  if (!application.aiUsage) return application;
+  return { ...application, aiUsage: copyAiUsage(application.aiUsage) };
 }
 
 // Build the common skeleton for a new pipeline entry from the current job
 // target. Both the "Apply" and "Save answers" paths start here and
-// then add their own fields (fit/readiness assessments, or saved answers), so the
+// then add their own fields (check snapshots or saved answers), so the
 // shared shape — id, inferred title/company, trimmed job target, default
 // status, timestamps — lives in one place and cannot drift between them.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
@@ -587,7 +575,7 @@ export function useApplications() {
 
   // Merge a duplicate group into one canonical record: keep the canonical's
   // fields, absorb every other member's discovered URLs as sourceUrls, adopt the
-  // earliest createdAt, backfill rawJobDescription/aiUsage/Initial Fit only when the canonical
+  // earliest createdAt, backfill rawJobDescription/aiUsage only when the canonical
   // lacks them, then delete the other members. Destructive (removes rows) — the
   // caller confirms first. No-ops on an unknown canonicalId or a <2 member set,
   // so a stale group (already merged in another tab) can't drop data.
@@ -629,8 +617,6 @@ export function useApplications() {
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
-        initialFitAudit:
-          canonical.initialFitAudit ?? others.find((m) => m.initialFitAudit)?.initialFitAudit,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
         createdAt: earliestCreatedAt,
         updatedAt: nextApplicationRevision(canonical.updatedAt)

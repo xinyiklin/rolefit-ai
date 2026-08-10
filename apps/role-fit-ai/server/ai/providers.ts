@@ -1,8 +1,12 @@
 // Provider identity + per-request configuration resolution: which provider/
 // model/key/reasoning-effort a request resolves to, plus the default
-// provider and the validation shared by /api/polish and /api/application-answers.
+// provider and the validation shared by every provider-backed route.
 
 import { UserSafeAiError } from "./errors.ts";
+import {
+  DEFAULT_ANTIGRAVITY_MODEL,
+  normalizeAntigravityModelId
+} from "../../shared/antigravityModels.ts";
 import {
   getManagedApiKey,
   getManagedProviderConnection,
@@ -17,14 +21,6 @@ type ProviderRequestBody = {
   model?: unknown;
   reasoningEffort?: unknown;
 };
-
-type AuditRequestBody = {
-  auditProvider?: unknown;
-  auditModel?: unknown;
-  auditReasoningEffort?: unknown;
-};
-
-type ReviewOnlyRequestBody = ProviderRequestBody & AuditRequestBody;
 
 // The resolved per-request provider config the routes destructure. reasoningEffort
 // is narrowed to string at the return (the null case throws before returning).
@@ -75,8 +71,6 @@ const KNOWN_PROVIDERS = new Set([
   "antigravity-cli"
 ]);
 
-// Module-internal: only resolveAuditProviderRequest below rejects an unknown
-// reviewer provider with it. Not part of the module's public surface.
 function isKnownProvider(value: unknown): boolean {
   return KNOWN_PROVIDERS.has(String(value ?? "").trim().toLowerCase());
 }
@@ -112,7 +106,7 @@ function providerDefaultModel(provider: string): string {
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5",
       "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-5.6-sol",
-      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? "Gemini 3.5 Flash (High)"
+      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? DEFAULT_ANTIGRAVITY_MODEL
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );
 }
@@ -151,10 +145,9 @@ function assertCompanionProviderReady(provider: RoleFitManagedProviderId): void 
   }
 }
 
-// Resolve provider, key, model, and reasoning effort from a request
-// body, applying the same validation handlePolish used. Throws UserSafeAiError
-// (handled by each route's catch) on a missing key, bad model, or unsupported
-// CLI effort. Shared by /api/polish and /api/application-answers.
+// Resolve provider, key, model, and reasoning effort from a request body.
+// Throws UserSafeAiError (handled by each route's catch) on a missing key, bad
+// model, or unsupported CLI effort. Shared by every provider-backed route.
 export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProviderConfig {
   const requestedProvider = String(body.provider ?? "").trim();
   // An omitted provider keeps the headless/default path. An explicitly supplied
@@ -179,7 +172,10 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   // explicit request provider keeps its provider-specific default so a stale
   // global override cannot silently select an incompatible model after the user
   // chooses another provider in the UI.
-  const model = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
+  const selectedModel = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
+  const model = provider === "antigravity-cli"
+    ? normalizeAntigravityModelId(selectedModel)
+    : selectedModel;
   if (model.length > 120) {
     throw new UserSafeAiError("Configured model name is too long. Check AI settings and try again.", 400);
   }
@@ -197,11 +193,10 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
     // even though spaces/parens are allowed below.
     throw new UserSafeAiError("Model name cannot start with a dash.", 400);
   }
-  // Spaces and parentheses are permitted because the Antigravity CLI's model ids
-  // are display names like "Gemini 3.5 Flash (High)" (from `agy models`). They are
-  // injection-safe: CLI providers spawn with an argv array (no shell), so the
-  // value is one argument, and the leading-dash guard above still blocks flag
-  // injection. Hosted providers only place the model in a JSON body / encoded URL.
+  // Spaces and parentheses remain permitted for bounded compatibility with
+  // earlier Antigravity display-name values. Current Antigravity requests use
+  // stable lowercase slugs. Every CLI still receives the model as one argv
+  // element (never through a shell), and the leading-dash guard blocks flags.
   if (model && !/^[a-z0-9 _.:/@+()-]+$/i.test(model)) {
     throw new UserSafeAiError(
       "Model name can only use letters, numbers, spaces, dots, dashes, underscores, slashes, at signs, pluses, parentheses, or colons.",
@@ -213,53 +208,4 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   }
 
   return { provider, apiKey, model, reasoningEffort };
-}
-
-// Review-only requests do not dispatch the Tailor provider. Resolve the audit*
-// namespace directly when present so a missing/invalid UNUSED Tailor key cannot
-// block a valid standalone Review. Headless callers that omit auditProvider keep
-// the existing primary-field/default semantics.
-export function resolveReviewOnlyProviderRequest(body: ReviewOnlyRequestBody): ResolvedProviderConfig {
-  const raw = String(body.auditProvider ?? "").trim();
-  if (!raw) return resolveProviderRequest(body);
-  if (!isKnownProvider(raw)) {
-    throw new UserSafeAiError(
-      `Unknown reviewer provider "${raw.slice(0, 40)}". Pick a supported provider for the audit pass.`,
-      400
-    );
-  }
-  return resolveProviderRequest({
-    provider: raw,
-    model: body.auditModel,
-    reasoningEffort: body.auditReasoningEffort
-  });
-}
-
-// Resolve the optional independent-reviewer provider for the strict-audit pass.
-// When the request supplies no auditProvider, the audit reuses the already
-// resolved primary config so behavior is unchanged. A supplied auditProvider is
-// validated by the same rules as the primary (a hosted provider missing a key
-// still fails loudly). Reviewer fields are namespaced (audit*) so the primary
-// rewrite/cover config is untouched.
-export function resolveAuditProviderRequest(
-  body: AuditRequestBody,
-  primary: ResolvedProviderConfig
-): ResolvedProviderConfig {
-  const raw = String(body.auditProvider ?? "").trim();
-  if (!raw) return primary;
-  // Reject an unknown reviewer provider instead of letting normalizeProvider
-  // silently coerce a typo to OpenAI — otherwise the "independent reviewer"
-  // could audit with a provider the user never chose, and a later key error
-  // would mislead by naming OpenAI rather than the audit field.
-  if (!isKnownProvider(raw)) {
-    throw new UserSafeAiError(
-      `Unknown reviewer provider "${raw.slice(0, 40)}". Pick a supported provider for the audit pass, or leave it as same-as-primary.`,
-      400
-    );
-  }
-  return resolveProviderRequest({
-    provider: raw,
-    model: body.auditModel,
-    reasoningEffort: body.auditReasoningEffort
-  });
 }

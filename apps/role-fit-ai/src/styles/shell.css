@@ -462,8 +462,8 @@
   pointer-events: none;
 }
 
-/* One workflow sheet owns Job analysis, Tailor, and Review. Rows share a single
-   outline so the sequence reads as a process, not a stack of unrelated toasts. */
+/* Each AI workflow owns one named sheet. The shared dock keeps concurrent work
+   aligned without implying that independent requests are one sequence. */
 .ai-workflow {
   width: 100%;
   max-height: 360px;
@@ -505,20 +505,12 @@
   background: var(--card-soft);
 }
 
-.ai-workflow__head > div {
-  display: flex;
-  align-items: baseline;
-  gap: var(--s2);
-  min-width: 0;
-}
-
 .ai-workflow__head strong {
   color: var(--ink-strong);
   font-size: 0.78rem;
   font-weight: 650;
 }
 
-.ai-workflow__head span,
 .ai-workflow__stage-meta {
   color: var(--ink-faint);
   font-size: 0.7rem;
@@ -558,8 +550,6 @@
 .ai-workflow__stage:first-child { border-top: 0; }
 .ai-workflow__stage--running { background: color-mix(in srgb, var(--accent) 4%, var(--card)); }
 .ai-workflow__stage--idle { color: var(--ink-soft); }
-.ai-workflow__stage.is-blocked { opacity: 0.48; }
-
 .ai-workflow__stage-icon {
   display: inline-flex;
   align-items: center;
@@ -617,60 +607,6 @@
   .ai-workflow,
   .ai-workflow.is-leaving { animation: none; transition: opacity 120ms linear; }
   .ai-workflow__spinner { animation: none; }
-}
-
-/* -------- Segmented control (Polish stages) -------- */
-
-/* Inline row of radio-backed labels that behaves like a button group.
-   Used in the Options menu for "Tailor only / Review only / Both". */
-.segmented-control {
-  display: inline-flex;
-  align-items: stretch;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-sm);
-  overflow: hidden;
-  margin-top: var(--s1);
-}
-
-.segmented-control__option {
-  flex: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 3px var(--s2);
-  font-size: 0.76rem;
-  font-weight: 500;
-  color: var(--ink-soft);
-  background: var(--card-soft);
-  cursor: pointer;
-  border-right: 1px solid var(--hairline-strong);
-  transition: color 120ms var(--ease), background 120ms var(--ease);
-  white-space: nowrap;
-  user-select: none;
-}
-
-.segmented-control__option:last-child { border-right: 0; }
-
-.segmented-control__option:hover {
-  color: var(--ink);
-  background: var(--card-hover);
-}
-
-.segmented-control__option.is-selected {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-  font-weight: 600;
-}
-
-/* Stack the "Polish stages" label above its helper line (the field span keeps
-   strong + small inline by default, unlike .check-row). Scoped by id so other
-   fields' inline parenthetical hints are unaffected. */
-#polish-stages-label strong,
-#polish-stages-label small {
-  display: block;
-}
-#polish-stages-label small {
-  margin-top: 1px;
 }
 
 /* Visually hide the radio input — the label is the interactive target. */

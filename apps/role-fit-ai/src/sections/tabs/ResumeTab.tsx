@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type ReactNode, type RefObject } from "react";
 
-import type { PolishedResume, ResumeDiff } from "../../resumeEngine";
+import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import type { TailorMode } from "../../lib/tailorScope";
+import type { ResumePolishScopeMode } from "../../lib/resumePolishScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
-import type { TailorChangeTarget } from "../../resume/types";
+import type { ResumeProposalTarget } from "../../resume/types";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import { DOC_PAGE_WIDTH_PX, nextZoomOption } from "@typeset/engine/lib/documentStyle.ts";
 import { DocumentToolbar } from "@typeset/editor/components/toolbar/DocumentToolbar.tsx";
@@ -15,10 +15,11 @@ import {
   type TypesetEditorHandle,
   type TypesetEditorOverlayContext
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import type { JobConstraint } from "../../lib/jobConstraints";
 import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
+import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
+import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
 import { DraftRestoreBar } from "../DraftRestoreBar";
@@ -42,9 +43,7 @@ type ResumeTabProps = {
   dirty: boolean;
   draftAutosaveState: DraftAutosaveState;
   // JD lifestyle/logistical conditions for the pre-apply advisory (not fit).
-  jobConstraints?: JobConstraint[];
   result: PolishedResume | null;
-  resumeDiff: ResumeDiff | null;
   docStyle: DocStyleControls;
   formattingToolbar: ReactNode;
   editorRef: RefObject<TypesetEditorHandle | null>;
@@ -56,36 +55,31 @@ type ResumeTabProps = {
   onScrollExit: (top: number) => void;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onRequestLinkEditor: () => void;
-  tailorModes: Record<string, TailorMode>;
-  onSetTailorMode: (sectionId: string, mode: TailorMode) => void;
+  polishScopeModes: Record<string, ResumePolishScopeMode>;
+  onSetPolishScopeMode: (sectionId: string, mode: ResumePolishScopeMode) => void;
   documentActions?: ReactNode;
-  onAddHonestContext?: (keyword: string) => void;
   // Autosave recovery: non-null when a draft from a previous session was found.
   pendingAutosaveDraft?: AutosavedDraft | null;
   onRestoreAutosaveDraft?: (draft: AutosavedDraft) => void;
   onDismissAutosaveDraft?: () => void;
   // Job target context: displayed in the header so the user knows which role
-  // the resume is being tailored for.
+  // the resume is being polished for.
   jobTarget?: { role?: string; company?: string } | null;
-  // True when the JD changed since the last polish — the review describes an
-  // old posting and should be flagged as stale.
-  reviewStale?: boolean;
+  // True when the JD changed since the last Polish proposal.
+  proposalStale?: boolean;
   resumeReady: boolean;
   jobReady: boolean;
-  tailorProviderReady: boolean;
-  auditProviderReady: boolean;
-  polishStages: "tailor" | "review" | "both";
+  resumePolishProviderReady: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
+  proposalDecisions: ReturnType<typeof useResumeProposalDecisions>;
   onPolish: () => void;
-  onRetryTailor: () => void;
-  onRetryAudit: () => void;
+  onRetryPolish: () => void;
   onStopPolish: () => void;
-  onProposalChange: () => void;
 };
 
-// The resume surface is edit-and-check: the owned typeset page is the editor
+// The resume surface is edit-and-polish: the owned typeset page is the editor
 // and export layout, and once a recruiter
 // review exists it docks beside the editor as an actionable rail — accept,
 // modify, or apply-all the suggested edits without leaving the document.
@@ -100,9 +94,7 @@ export function ResumeTab({
   contentRedoSequence,
   dirty,
   draftAutosaveState,
-  jobConstraints,
   result,
-  resumeDiff,
   docStyle,
   formattingToolbar,
   editorRef,
@@ -113,28 +105,24 @@ export function ResumeTab({
   onScrollExit,
   onInlineFormatStateChange,
   onRequestLinkEditor,
-  tailorModes,
-  onSetTailorMode,
+  polishScopeModes,
+  onSetPolishScopeMode,
   documentActions,
-  onAddHonestContext,
   jobTarget,
   pendingAutosaveDraft,
   onRestoreAutosaveDraft,
   onDismissAutosaveDraft,
-  reviewStale,
+  proposalStale,
   resumeReady,
   jobReady,
-  tailorProviderReady,
-  auditProviderReady,
-  polishStages,
+  resumePolishProviderReady,
   isPolishing,
   polishProgress,
   polishStatus,
+  proposalDecisions,
   onPolish,
-  onRetryTailor,
-  onRetryAudit,
+  onRetryPolish,
   onStopPolish,
-  onProposalChange
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -166,31 +154,33 @@ export function ResumeTab({
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [docStyle]);
 
-  const [highlightTarget, setHighlightTarget] = useState<TailorChangeTarget | null>(null);
+  const [highlightTarget, setHighlightTarget] = useState<ResumeProposalTarget | null>(null);
   const highlightedFieldKey = fieldKeyForReviewTarget(editedResume, highlightTarget);
   const renderOverlay = useCallback(
     (context: TypesetEditorOverlayContext) => (
       <RoleFitEditorOverlay
         {...context}
-        actions={actions}
-        tailorModes={tailorModes}
-        onSetTailorMode={onSetTailorMode}
-        highlightTarget={highlightTarget}
+        polishScopeModes={polishScopeModes}
+        onSetPolishScopeMode={onSetPolishScopeMode}
       />
     ),
-    [actions, highlightTarget, onSetTailorMode, tailorModes]
+    [onSetPolishScopeMode, polishScopeModes]
   );
 
-  const selectedSectionCount = Object.values(tailorModes).filter((mode) => mode !== "off").length;
-  const tailorSectionCount = Object.values(tailorModes).filter((mode) => mode === "tailor").length;
-  const needsTailor = polishStages !== "review";
-  const needsAudit = polishStages !== "tailor";
+  const selectedSectionCount = Object.values(polishScopeModes).filter((mode) => mode !== "off").length;
+  const lockedSectionIds = new Set(
+    editedResume.sections
+      .filter((section) => resumePolishSectionIsLocked(section.heading))
+      .map((section) => section.id)
+  );
+  const polishSectionCount = Object.entries(polishScopeModes)
+    .filter(([sectionId, mode]) => mode === "polish" && !lockedSectionIds.has(sectionId))
+    .length;
   const canPolish =
     resumeReady &&
     jobReady &&
-    (!needsTailor || tailorProviderReady) &&
-    (!needsAudit || auditProviderReady) &&
-    tailorSectionCount > 0;
+    resumePolishProviderReady &&
+    polishSectionCount > 0;
   const documentContext = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ");
   // The rail's one primary action, handed to the shell so it sits beside the
   // disclosure control whether the rail is open or closed.
@@ -256,27 +246,20 @@ export function ResumeTab({
             <ResumeWorkflowRail
               result={result}
               resume={editedResume}
-              actions={actions}
-              resumeDiff={resumeDiff}
-              jobConstraints={jobConstraints}
-              reviewStale={reviewStale}
+              decisions={proposalDecisions}
+              proposalStale={proposalStale}
               jobTarget={jobTarget}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              tailorProviderReady={tailorProviderReady}
-              auditProviderReady={auditProviderReady}
-              polishStages={polishStages}
+              resumePolishProviderReady={resumePolishProviderReady}
               selectedSectionCount={selectedSectionCount}
-              tailorSectionCount={tailorSectionCount}
+              polishSectionCount={polishSectionCount}
               isPolishing={isPolishing}
               progress={polishProgress}
               status={polishStatus}
-              onRetryTailor={onRetryTailor}
-              onRetryAudit={onRetryAudit}
+              onRetryPolish={onRetryPolish}
               onStop={onStopPolish}
               onHighlight={setHighlightTarget}
-              onProposalChange={onProposalChange}
-              onAddHonestContext={onAddHonestContext}
             />
           )
         }}

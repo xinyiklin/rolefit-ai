@@ -1,14 +1,11 @@
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import {
-  parseFitAssessment,
-  parseSubmissionAssessment
-} from "../../shared/fitAssessmentContract.ts";
-import {
   MAX_ATTACHMENTS_PER_APPLICATION,
   MAX_DOCUMENT_BYTES,
   attachmentContentType,
   safeAttachmentFileName
 } from "./documents.ts";
+import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -68,11 +65,11 @@ const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board"
 const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (job-analysis / initial-fit / tailor / review / cover / answers). `source` is required and
+// output (job-analysis / resume-polish / cover / answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
-// A stage key is a short lowercase slug (e.g. "job-analysis", "initial-fit", "tailor", "review",
+// A stage key is a short lowercase slug (e.g. "job-analysis", "resume-polish",
 // "cover", "answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;
@@ -170,6 +167,34 @@ function sanitizeAttachments(raw: unknown) {
     }];
   });
   return attachments.length ? attachments : undefined;
+}
+
+function sanitizeFitAssessmentSnapshot(raw: unknown) {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const value = raw as Record<string, unknown>;
+  const result = sanitizeFitAssessment(value.result);
+  const resumeLabel = sanitizeString(value.resumeLabel, 200).trim();
+  if (!result || !resumeLabel) return undefined;
+  const assessedAt = typeof value.assessedAt === "string" && Number.isFinite(Date.parse(value.assessedAt))
+    ? value.assessedAt
+    : "";
+  const provider = sanitizeString(value.provider, 80).trim();
+  const model = sanitizeString(value.model, 120).trim();
+  const reasoningEffort = sanitizeString(value.reasoningEffort, 40).trim();
+  const attempts = typeof value.attempts === "number" && Number.isFinite(value.attempts)
+    ? Math.max(1, Math.min(9, Math.round(value.attempts)))
+    : undefined;
+  const promptVersion = sanitizeString(value.promptVersion, 120).trim();
+  return {
+    result,
+    resumeLabel,
+    ...(assessedAt ? { assessedAt } : {}),
+    ...(provider ? { provider } : {}),
+    ...(model ? { model } : {}),
+    ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(attempts ? { attempts } : {}),
+    ...(/^fit-assessment-direct-rubric-v[1-9]\d*$/.test(promptVersion) ? { promptVersion } : {})
+  };
 }
 
 function sanitizeApplicationAnswers(raw: unknown) {
@@ -297,31 +322,6 @@ function sanitizeAiUsage(raw: unknown) {
   return count ? out : undefined;
 }
 
-function sanitizeInitialFitAudit(raw: unknown) {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
-  const r = raw as Record<string, unknown>;
-  const keys = Object.keys(r);
-  if (
-    keys.length !== 3 ||
-    !keys.every((key) => ["assessment", "resumeFileName", "completedAt"].includes(key))
-  ) return undefined;
-  const assessment = parseFitAssessment(r.assessment);
-  if (
-    !assessment ||
-    !isCanonicalApplicationTimestamp(r.completedAt)
-  ) return undefined;
-  const resumeFileName = sanitizeString(r.resumeFileName, 240).trim();
-  if (
-    !resumeFileName ||
-    /[\u0000-\u001f\u007f/\\]/.test(resumeFileName)
-  ) return undefined;
-  return {
-    assessment,
-    resumeFileName,
-    completedAt: r.completedAt
-  };
-}
-
 function sanitizeApplication(raw: unknown) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const r = raw as Record<string, unknown>;
@@ -378,11 +378,7 @@ function sanitizeApplication(raw: unknown) {
     coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
-    initialFitAudit: sanitizeInitialFitAudit(r.initialFitAudit),
-    submissionAssessment: parseSubmissionAssessment(r.submissionAssessment) ?? undefined,
-    resumePolishMode: r.resumePolishMode === "automatic" || r.resumePolishMode === "manual"
-      ? r.resumePolishMode
-      : undefined,
+    fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),

@@ -184,6 +184,7 @@ export function CoverLetterTab({
           content: <CoverLetterReview
             words={wordCount(editor.text)}
             pageCount={pageCount}
+            currentText={editor.text}
             preflight={preflight}
             proposal={proposal}
             appliedResult={appliedResult}

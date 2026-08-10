@@ -89,30 +89,51 @@ export function selectCoverLetterWorkspaceDocument(
   );
 }
 
-// Ranking reads each saved letter through the same validated select route the
-// editor opens with, so a variant is compared by its real bytes rather than by
-// its filename. The select route is a pure read: it never changes which letter
-// the editor holds. A variant that fails to parse is skipped, not ranked as
-// empty, so one bad file cannot hand the recommendation to a weaker letter.
+// Ranking compares each saved letter by its real validated bytes rather than by
+// its filename. One batch request, not one select per letter: the select route
+// takes the server's serialized workspace lock and returns a cover-letter
+// snapshot each time, so per-file reads serialized N round trips behind it.
+// A variant that fails to parse is skipped, not ranked as empty, so one bad
+// file cannot hand the recommendation to a weaker letter.
 export async function readCoverLetterVariantCandidates(
   options: CoverLetterOption[]
 ): Promise<VariantCandidate[]> {
-  const candidates = await Promise.all(
-    options.map(async (option): Promise<VariantCandidate | null> => {
-      try {
-        const document = await selectCoverLetterWorkspaceDocument(option.fileName);
-        const parsed = parseCoverLetterFile(document.text);
-        return {
-          fileName: option.fileName,
-          label: option.label,
-          text: coverLetterPlainText(parsed.data)
-        };
-      } catch {
-        return null;
-      }
-    })
-  );
-  return candidates.filter((candidate): candidate is VariantCandidate => candidate !== null);
+  const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
+  if (!fileNames.length) return [];
+
+  let read: { fileName?: unknown; label?: unknown; text?: unknown }[];
+  try {
+    const response = await fetch("/api/workspace/cover-letter/candidates", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ fileNames })
+    });
+    const body = (await response.json()) as { candidates?: unknown };
+    if (!response.ok || !Array.isArray(body.candidates)) return [];
+    read = body.candidates as typeof read;
+  } catch {
+    return [];
+  }
+
+  const labels = new Map(options.map((option) => [option.fileName, option.label]));
+  const candidates: VariantCandidate[] = [];
+  for (const entry of read) {
+    const fileName = typeof entry?.fileName === "string" ? entry.fileName : "";
+    const text = typeof entry?.text === "string" ? entry.text : "";
+    if (!fileName || !text) continue;
+    try {
+      const parsed = parseCoverLetterFile(text);
+      candidates.push({
+        fileName,
+        label: labels.get(fileName) ?? (typeof entry.label === "string" ? entry.label : fileName),
+        text: coverLetterPlainText(parsed.data)
+      });
+    } catch {
+      // Skipped, never ranked empty — the ranker's completeness rule turns the
+      // short list into no recommendation.
+    }
+  }
+  return candidates;
 }
 
 export function restoreCoverLetterWorkspaceDocument(

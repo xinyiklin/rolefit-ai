@@ -41,9 +41,10 @@ configured and ready, AI actions stop with an actionable “Add a provider in
 RoleFit Companion” state rather than silently selecting a default or a paid
 provider.
 
-Job analysis, Tailor, and Review retain independent provider/model/effort choices in
-browser preferences. One stored API credential is shared by the local server
-for all stages using that provider; keys are not duplicated per stage.
+Job analysis, Fit Assessment, Resume Polish, Cover letter, and Application
+questions retain independent provider/model/effort choices in canonical
+workspace preferences. One stored API credential is shared by the local server for all
+stages using that provider; keys are not duplicated per stage.
 
 ## Interpretation of “browser app”
 
@@ -131,9 +132,10 @@ Standalone development continues to use `PORT`, while the companion-owned
 runtime uses only its desktop setting/override.
 
 A port is part of a browser origin. Changing it creates a different
-`localStorage` origin, so browser-only drafts and stage preferences from the old
-port do not automatically appear at the new one. Changing the port never moves
-the current workspace or provider vault; packaged runs keep both beneath their
+`localStorage` origin, so browser-only recovery drafts and view preferences from
+the old port do not automatically appear at the new one. Canonical stage and
+candidate preferences are adopted from the unchanged workspace. Changing the
+port never moves the current workspace or provider vault; packaged runs keep both beneath their
 operating-system `userData` locations. After resolving the active server, the
 companion writes its numeric port into the app-owned materialized extension's
 runtime config as a first-install seed. The extension's versioned
@@ -359,7 +361,8 @@ designed and signed custom protocol/pairing contract; it is not part of D4.
 | Data | Owner | Persistence |
 | --- | --- | --- |
 | Resume, tracker, application artifacts | RoleFit server | ignored local workspace |
-| Recovery resume/job drafts, sessions, stage settings, and user context/preferences | browser | origin-scoped browser storage, no API keys |
+| Recovery resume/job drafts, sessions, and view preferences | browser | origin-scoped browser storage, no API keys |
+| Stage settings, guidance, selected base resume, and About you facts | RoleFit server | owner-only `workspace-preferences.json`; browser storage is a fail-open cache |
 | API credential | Electron main | `safeStorage` encrypted bytes under `userData` |
 | Configured provider ids | Electron main | versioned non-secret registry under `userData` |
 | Local site port | Electron main | versioned non-secret settings under `userData` |
@@ -534,7 +537,7 @@ Manual verification:
    returns and no key appears in DOM, IPC results, HTTP, logs, or browser storage.
 3. Add/remove each CLI using fake status processes; verify installed,
    signed-out, configured, ready, and reconnect states.
-4. Confirm browser menus show only configured providers across all three stages.
+4. Confirm browser menus show only configured providers across all five stages.
 5. Confirm no provider disables AI but leaves editing/tracker/export usable.
 6. Confirm reused-server mode refuses managed vault injection.
 7. Confirm extension imports still claim fresh browser tabs and await initial

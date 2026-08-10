@@ -434,10 +434,10 @@ export async function callAntigravityCli({ model, systemPrompt, userPrompt, sign
   // rather than claiming the Antigravity path has the stronger stdin privacy
   // boundary. The argv-array spawn, --sandbox, throwaway cwd, and runCli timeout
   // below are the mitigations that remain available.
-  // --model: model id. agy has NO `-m` short alias (it errors "flags provided
-  //   but not defined: -m"); the ids are the exact display names from `agy
-  //   models`, e.g. "Gemini 3.5 Flash (High)" (spaces + parens — passed as one
-  //   argv element, so no shell parsing). --dangerously-skip-permissions: a
+  // --model: stable slug from the first column of `agy models` (supported since
+  //   1.1.5), e.g. `gemini-3.6-flash-high`. agy has NO `-m` short alias (it
+  //   errors "flags provided but not defined: -m").
+  //   --dangerously-skip-permissions: a
   //   non-interactive spawn otherwise blocks on a tool-approval prompt that never
   //   renders (agy is an agentic harness). The CLI also receives --sandbox and a
   //   throwaway cwd to reduce access; this is defense in depth, not a claim of

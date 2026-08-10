@@ -9,16 +9,16 @@
 import assert from "node:assert/strict";
 
 import {
-  BROWSER_PREFERENCES_FORMAT,
-  BROWSER_PREFERENCES_SCHEMA_VERSION,
+  WORKSPACE_PREFERENCES_FORMAT,
+  WORKSPACE_PREFERENCES_SCHEMA_VERSION,
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FORMAT,
   WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION,
   MAX_WORKSPACE_BACKUP_FILES,
   isManagedWorkspaceBackupPath,
-  parsePortableBrowserPreferences,
-  parseStoredBrowserPreferences,
+  parsePortableWorkspacePreferences,
+  parseStoredWorkspacePreferences,
   parseStoredWorkspaceRestoreMarker,
   parseWorkspaceBackupEnvelope
 } from "../workspaceBackupContract.ts";
@@ -45,42 +45,51 @@ for (const [name, bad] of [
   assert.throws(() => parseStoredWorkspaceRestoreMarker(bad), `parseStoredWorkspaceRestoreMarker rejects ${name}`);
 }
 
-// ── parsePortableBrowserPreferences ─────────────────────────────────────────
+// ── parsePortableWorkspacePreferences ───────────────────────────────────────
 
 const emptyPortable = { settings: {}, lastBaseResume: "" };
-assert.deepEqual(parsePortableBrowserPreferences(emptyPortable), emptyPortable, "empty settings + empty lastBaseResume is valid (a fresh browser with nothing saved yet)");
+assert.deepEqual(parsePortableWorkspacePreferences(emptyPortable), emptyPortable, "empty settings + empty lastBaseResume is valid");
 
 const knownSettingPortable = {
-  settings: { aiProvider: "openai", selectedModel: "gpt-5.6-terra", polishStages: "both", citizenshipStatus: "us-citizen" },
+  settings: {
+    aiProvider: "openai",
+    selectedModel: "gpt-5.6-terra",
+    autoPolishResume: true,
+    resumeAutoPolishThreshold: "REASONABLE",
+    citizenshipStatus: "us-citizen",
+    gpa: 3.86,
+    availabilityNotice: "specific-date",
+    availabilityDate: "2026-09-14",
+    experienceProfile: [{
+      category: "professional",
+      years: 2.5,
+      count: 2,
+      mostRecentYear: 2026,
+      details: "Production TypeScript services"
+    }]
+  },
   lastBaseResume: "fullstack.resume"
 };
 assert.deepEqual(
-  parsePortableBrowserPreferences(knownSettingPortable),
+  parsePortableWorkspacePreferences(knownSettingPortable),
   knownSettingPortable,
   "a settings bag of known, already-normalized keys/values round-trips unchanged"
 );
-const legacyJobAnalysisPortable = {
-  settings: {
-    distillProvider: "anthropic",
-    distillSelectedModel: "claude-opus-4-8",
-    distillCliReasoningEffort: "high",
-    stageCustomInstructions: { distill: "Use only grounded posting facts." }
-  },
-  lastBaseResume: "fullstack.resume"
-};
-assert.deepEqual(
-  parsePortableBrowserPreferences(legacyJobAnalysisPortable),
-  {
+assert.throws(
+  () => parsePortableWorkspacePreferences({
     settings: {
-      jobAnalysisProvider: "anthropic",
-      jobAnalysisSelectedModel: "claude-opus-4-8",
-      jobAnalysisCliReasoningEffort: "high",
-      stageCustomInstructions: { "job-analysis": "Use only grounded posting facts." }
+      distillProvider: "anthropic",
+      stageCustomInstructions: { distill: "Legacy analyzer instructions." }
     },
     lastBaseResume: "fullstack.resume"
-  },
-  "a backup carrying legacy Distill settings is migrated without losing preferences"
+  }),
+  "a backup carrying retired preview settings is rejected"
 );
+assert.throws(
+  () => parsePortableWorkspacePreferences({ settings: { strictReview: true }, lastBaseResume: "" }),
+  "retired strict-review settings are rejected instead of becoming permanent readers"
+);
+
 for (const [name, bad] of [
   ["null", null],
   ["a string", "settings"],
@@ -94,28 +103,28 @@ for (const [name, bad] of [
   // — this is how the module catches "unsupported or invalid" settings values.
   ["an unsupported provider value normalizeSettings would strip", { settings: { aiProvider: "not-a-real-provider" }, lastBaseResume: "" }],
   ["an unrecognized settings key normalizeSettings would strip", { settings: { notARealSetting: true }, lastBaseResume: "" }],
-  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { polishStages: true }, lastBaseResume: "" }],
+  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { runFitAssessment: "yes" }, lastBaseResume: "" }],
   ["settings JSON over the 100,000-byte cap", { settings: { customInstructions: "x".repeat(150_000) }, lastBaseResume: "" }],
   ["lastBaseResume over 200 chars", { settings: {}, lastBaseResume: `base-resume-${"a".repeat(200)}.resume` }],
   ["lastBaseResume not matching the base-resume filename contract", { settings: {}, lastBaseResume: "../../etc/passwd" }],
   ["lastBaseResume with an unsupported extension", { settings: {}, lastBaseResume: "base-resume.pdf" }]
 ]) {
-  assert.throws(() => parsePortableBrowserPreferences(bad), `parsePortableBrowserPreferences rejects ${name}`);
+  assert.throws(() => parsePortableWorkspacePreferences(bad), `parsePortableWorkspacePreferences rejects ${name}`);
 }
 
-// ── parseStoredBrowserPreferences ───────────────────────────────────────────
+// ── parseStoredWorkspacePreferences ─────────────────────────────────────────
 
 const validStoredPrefs = {
-  format: BROWSER_PREFERENCES_FORMAT,
-  schemaVersion: BROWSER_PREFERENCES_SCHEMA_VERSION,
+  format: WORKSPACE_PREFERENCES_FORMAT,
+  schemaVersion: WORKSPACE_PREFERENCES_SCHEMA_VERSION,
   updatedAt: RESTORED_AT,
-  source: "mirror",
+  source: "workspace",
   settings: { aiProvider: "openai" },
   lastBaseResume: ""
 };
-assert.deepEqual(parseStoredBrowserPreferences(validStoredPrefs), validStoredPrefs, "a well-formed mirror preferences record parses through unchanged");
+assert.deepEqual(parseStoredWorkspacePreferences(validStoredPrefs), validStoredPrefs, "a well-formed workspace preferences record parses through unchanged");
 assert.deepEqual(
-  parseStoredBrowserPreferences({ ...validStoredPrefs, source: "restore" }),
+  parseStoredWorkspacePreferences({ ...validStoredPrefs, source: "restore" }),
   { ...validStoredPrefs, source: "restore" },
   "source: 'restore' is the other valid enum value"
 );
@@ -133,7 +142,7 @@ for (const [name, bad] of [
   ["settings/lastBaseResume delegated-validation failure (bad settings)", { ...validStoredPrefs, settings: "not-a-record" }],
   ["truncated: only format+schemaVersion", { format: validStoredPrefs.format, schemaVersion: validStoredPrefs.schemaVersion }]
 ]) {
-  assert.throws(() => parseStoredBrowserPreferences(bad), `parseStoredBrowserPreferences rejects ${name}`);
+  assert.throws(() => parseStoredWorkspacePreferences(bad), `parseStoredWorkspacePreferences rejects ${name}`);
 }
 
 // ── parseWorkspaceBackupEnvelope ─────────────────────────────────────────────
@@ -188,20 +197,20 @@ for (const path of [
   );
 }
 
-const legacyEnvelope = {
+const unsupportedEnvelope = {
   ...validEnvelope,
-  schemaVersion: 1
+  schemaVersion: 2
 };
 assert.throws(
-  () => parseWorkspaceBackupEnvelope({ ...legacyEnvelope, files: [pdfFile] }),
-  "the retired workspace backup schema is rejected instead of migrated"
+  () => parseWorkspaceBackupEnvelope({ ...unsupportedEnvelope, files: [pdfFile] }),
+  "a non-v1 workspace backup schema is rejected instead of migrated"
 );
 
-const withBrowser = {
+const withPreferences = {
   ...validEnvelope,
-  browser: { settings: { aiProvider: "openai" }, lastBaseResume: "" }
+  preferences: { settings: { aiProvider: "openai" }, lastBaseResume: "" }
 };
-assert.deepEqual(parseWorkspaceBackupEnvelope(withBrowser), withBrowser, "the optional browser field delegates to parsePortableBrowserPreferences and round-trips");
+assert.deepEqual(parseWorkspaceBackupEnvelope(withPreferences), withPreferences, "the optional preferences field delegates to parsePortableWorkspacePreferences and round-trips");
 
 for (const [name, bad] of [
   ["null", null],
@@ -209,12 +218,12 @@ for (const [name, bad] of [
   ["missing files", { format: validEnvelope.format, schemaVersion: validEnvelope.schemaVersion, createdAt: RESTORED_AT }],
   ["an unknown extra top-level key", { ...validEnvelope, extra: true }],
   ["wrong format string", { ...validEnvelope, format: "wrong-format" }],
-  ["wrong schemaVersion", { ...validEnvelope, schemaVersion: 3 }],
+  ["wrong schemaVersion", { ...validEnvelope, schemaVersion: 99 }],
   ["non-string createdAt", { ...validEnvelope, createdAt: 123 }],
   ["unparseable createdAt", { ...validEnvelope, createdAt: "not-a-date" }],
   ["files not an array", { ...validEnvelope, files: {} }],
   ["files over MAX_WORKSPACE_BACKUP_FILES", { ...validEnvelope, files: Array.from({ length: MAX_WORKSPACE_BACKUP_FILES + 1 }, (_, i) => backupFile({ path: "applications.json" })) }],
-  ["an invalid browser field", { ...validEnvelope, browser: { settings: "nope", lastBaseResume: "" } }],
+  ["an invalid preferences field", { ...validEnvelope, preferences: { settings: "nope", lastBaseResume: "" } }],
   ["truncated: only format", { format: validEnvelope.format }]
 ]) {
   assert.throws(() => parseWorkspaceBackupEnvelope(bad), `parseWorkspaceBackupEnvelope rejects ${name}`);

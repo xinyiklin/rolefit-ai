@@ -1,4 +1,4 @@
-export type AiStageKey = "job-analysis" | "initial-fit" | "tailor" | "review" | "cover" | "answers";
+export type AiStageKey = "job-analysis" | "resume-polish" | "cover" | "answers";
 
 export type AiStageStatus = "idle" | "running" | "done" | "failed" | "stopped";
 
@@ -11,8 +11,7 @@ export type AiStageState = {
 };
 
 export type PolishProgressState = {
-  tailor: AiStageState;
-  review: AiStageState;
+  polish: AiStageState;
 };
 
 export type AiWorkflowStage = {
@@ -24,36 +23,17 @@ export type AiWorkflowStage = {
 
 export const AI_STAGE_COPY: Record<AiStageKey, Record<"idle" | "running" | "done" | "failed" | "stopped", string>> = {
   "job-analysis": { idle: "Job analysis", running: "Analyzing job", done: "Job analyzed", failed: "Job analysis failed", stopped: "Job analysis stopped" },
-  "initial-fit": { idle: "Initial Fit", running: "Auditing initial fit", done: "Initial Fit ready", failed: "Initial Fit failed", stopped: "Initial Fit stopped" },
-  tailor: { idle: "Tailor", running: "Tailoring", done: "Tailored", failed: "Tailor failed", stopped: "Tailor stopped" },
-  review: { idle: "Recruiter audit", running: "Auditing", done: "Audited", failed: "Audit failed", stopped: "Audit stopped" },
-  cover: { idle: "Cover letter", running: "Drafting cover letter", done: "Cover letter ready", failed: "Cover letter failed", stopped: "Cover letter stopped" },
+  "resume-polish": { idle: "Resume Polish", running: "Polishing resume", done: "Resume Polish complete", failed: "Resume Polish failed", stopped: "Resume Polish stopped" },
+  cover: { idle: "Cover letter", running: "Polishing cover letter", done: "Cover letter proposal ready", failed: "Cover letter failed", stopped: "Cover letter stopped" },
   answers: { idle: "Application answers", running: "Drafting answers", done: "Answers ready", failed: "Answers failed", stopped: "Answers stopped" }
 };
 
-export function workflowStepLabel(step: number, total: number): string {
-  return `Step ${step} of ${total}`;
-}
-
-export function workflowCurrentIndex(stages: Pick<AiWorkflowStage, "state">[]): number {
-  const running = stages.findIndex((stage) => stage.state.status === "running");
-  if (running >= 0) return running;
-  const stopped = stages.findIndex((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
-  if (stopped >= 0) return stopped;
-  const waiting = stages.findIndex((stage) => stage.state.status === "idle");
-  if (waiting >= 0) return waiting;
-  return Math.max(0, stages.length - 1);
-}
-
-export function workflowStageIsBlocked(stages: Pick<AiWorkflowStage, "state">[], index: number): boolean {
-  return stages
-    .slice(0, index)
-    .some((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
-}
-
-export function workflowStageCanAdvance(state: AiStageState): boolean {
-  return state.status === "done";
-}
+export const AI_WORKFLOW_TITLE: Record<AiStageKey, string> = {
+  "job-analysis": "Job analysis",
+  "resume-polish": "Resume Polish",
+  cover: "Cover letter",
+  answers: "Application answers"
+};
 
 // Stable-enough identity for one client workflow request. Inputs are plain
 // serializable request values; callers snapshot this before fetch and reject a

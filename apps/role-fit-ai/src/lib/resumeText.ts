@@ -4,7 +4,7 @@
 //
 // `parseResumeData` seeds the editor from plain-text resumes (upload/paste and
 // AI polish output); `serializeResumeData` derives the plain text the scoring,
-// diff, tailor-payload, and pipeline-snapshot consumers read.
+// diff, Polish-request, and pipeline-snapshot consumers read.
 //
 // All ids are minted through the engine's constructors so parse-seeded rows
 // can never collide with rows the editor mints later.

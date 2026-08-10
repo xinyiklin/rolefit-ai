@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  AlertTriangle,
   BriefcaseBusiness,
   CheckCircle2,
   ClipboardCheck,
@@ -28,8 +27,7 @@ import {
 import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
-import { STATUS_LABEL, formatSalary } from "../lib/applicationDisplay";
-import { VERDICT_LABEL } from "../lib/fitVerdict";
+import { STATUS_LABEL, appFitVerdict, fitAssessmentRunLabel, formatSalary } from "../lib/applicationDisplay";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
@@ -356,11 +354,9 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  const fitAssessment = application.initialFitAudit?.assessment;
-  const submissionAssessment = application.submissionAssessment;
-  const gaps = fitAssessment?.requirements.filter(
-    (item) => item.importance === "CORE" && item.coverage !== "COVERED"
-  ) ?? [];
+  const fitAssessment = application.fitAssessment;
+  const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
+  const fitVerdict = appFitVerdict(application);
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
   const compPreview = formatSalary({
@@ -554,30 +550,31 @@ export function ApplicationModal({
 
               <aside className="application-match-card">
                 <span className="application-match-card__eyebrow">
-                  <Sparkles size={14} aria-hidden="true" /> Initial Fit
+                  <Sparkles size={14} aria-hidden="true" /> AI match & insights
                 </span>
-                <div className="figures-strip figures-strip--compact" aria-label="Initial Fit assessment">
+                <div className="figures-strip figures-strip--compact" aria-label="Fit Assessment">
                   <span className="figures-strip__item">
-                    <em>Verdict</em>
-                    <strong className="is-prose">{fitAssessment ? VERDICT_LABEL[fitAssessment.verdict] : "Not assessed"}</strong>
+                    <em>Fit Assessment</em>
+                    <strong className={`application-fit application-fit--${fitVerdict?.tone ?? "neutral"}`}>{fitVerdict?.label ?? "Not checked"}</strong>
                   </span>
                   {fitAssessment ? (
                     <>
                       <span className="figures-strip__divider" aria-hidden="true" />
                       <span className="figures-strip__item">
-                        <em>Confidence</em>
-                        <strong className="is-prose">{fitAssessment.confidence.toLowerCase()}</strong>
+                        <em>Resume</em>
+                        <strong className="is-prose">{fitAssessment.resumeLabel}</strong>
                       </span>
                     </>
                   ) : null}
                 </div>
-                <p>{fitAssessment?.summary ?? "Run Initial Fit to assess the role against your selected resume."}</p>
-                {gaps.length ? (
+                <p>{fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}</p>
+                {fitAssessmentMeta ? <p className="application-match-card__meta">{fitAssessmentMeta}</p> : null}
+                {fitAssessment?.result.gaps.length ? (
                   <div className="application-match-card__gaps">
-                    <strong>Core requirements to review</strong>
+                    <strong>Top gaps</strong>
                     <div className="application-chip-list">
-                      {gaps.slice(0, 5).map((gap) => (
-                        <span key={gap.id}>{gap.requirement}</span>
+                      {fitAssessment.result.gaps.map((gap) => (
+                        <span key={gap}>{gap}</span>
                       ))}
                     </div>
                   </div>
@@ -622,30 +619,6 @@ export function ApplicationModal({
                 )}
               </div>
 
-              {submissionAssessment ? (
-                <div className="application-review">
-                  <h4><AlertTriangle size={14} aria-hidden="true" /> Submission readiness</h4>
-                  <p className="application-review__verdict">
-                    <strong>{submissionAssessment.readiness.replace(/_/g, " ").toLowerCase()}</strong>
-                    {`. ${submissionAssessment.summary}`}
-                  </p>
-                  {submissionAssessment.unsupportedClaims.length ? (
-                    <ul className="application-review__list">
-                      {submissionAssessment.unsupportedClaims.map((claim) => <li key={claim}><strong>Unsupported claim</strong><span>{claim}</span></li>)}
-                    </ul>
-                  ) : null}
-                  {submissionAssessment.topEdits.length ? (
-                    <div className="application-review__edits">
-                      <strong>Top edits before applying</strong>
-                      <ul>
-                        {submissionAssessment.topEdits.map((edit) => <li key={edit}>{edit}</li>)}
-                      </ul>
-                    </div>
-                  ) : null}
-                </div>
-              ) : (
-                <p className="application-muted">No submission assessment was saved for this application.</p>
-              )}
             </section>
           ) : null}
 

@@ -9,7 +9,8 @@ import assert from "node:assert/strict";
 import {
   applicationDocumentSyncState,
   applicationMatchesJobTarget,
-  normalizeDocumentSnapshot
+  normalizeDocumentSnapshot,
+  resumeUsedForApplication
 } from "../applicationDocuments.ts";
 import { applicationDocumentAvailability } from "../../../shared/applicationDocumentContract.ts";
 import { documentSourceFingerprint } from "../documentSourceFingerprint.ts";
@@ -36,7 +37,7 @@ assert.equal(
 );
 
 // The state Apply leaves behind: both strict sources stored, plus the metadata the
-// tracker owns (status, notes, dates, and job details) that no document save
+// tracker owns (status, notes, dates, job details, Fit Assessment) that no document save
 // may touch.
 const applied = {
   id: "app-1",
@@ -50,6 +51,19 @@ const applied = {
   updatedAt: "2026-07-20T10:00:00.000Z",
   appliedAt: "2026-07-20T10:00:00.000Z",
   notes: "Referred by a friend.",
+  fitAssessment: {
+    resumeLabel: "Backend resume",
+    result: {
+      verdict: "REASONABLE",
+      summary: "Backend evidence aligns with the role.",
+      matches: [{
+        jobExcerpt: "Build services.",
+        candidateSource: "RESUME",
+        candidateExcerpt: "services"
+      }],
+      gaps: []
+    }
+  },
   resumeUsed: "tailored",
   resumeArtifacts: {
     hasPdf: false,
@@ -144,6 +158,30 @@ assert.equal(
 );
 assert.equal(normalizeDocumentSnapshot("  a \n\n b  "), "a b", "snapshots normalize whitespace runs");
 
+// ----- Apply resume classification -----
+
+const proposalBaseline = "Backend engineer. Built reliable APIs and data services.";
+assert.equal(
+  resumeUsedForApplication(proposalBaseline, proposalBaseline),
+  "base",
+  "NO_CHANGES or WITHHELD proposal receipts do not relabel an unchanged resume as tailored"
+);
+assert.equal(
+  resumeUsedForApplication(`  ${proposalBaseline.replaceAll(" ", "  ")}\n`, proposalBaseline),
+  "base",
+  "formatting-only round trips do not count as an accepted proposal edit"
+);
+assert.equal(
+  resumeUsedForApplication(proposalBaseline, undefined),
+  "base",
+  "a resume with no proposal baseline remains classified as base"
+);
+assert.equal(
+  resumeUsedForApplication(`${proposalBaseline} Added a grounded Kubernetes bullet.`, proposalBaseline),
+  "tailored",
+  "Apply records tailored only when the live document differs materially from the proposal baseline"
+);
+
 // ----- Independent updates -----
 
 const afterResumeUpdate = {
@@ -195,6 +233,7 @@ for (const field of [
   "createdAt",
   "appliedAt",
   "notes",
+  "fitAssessment",
   "resumeUsed"
 ]) {
   assert.deepEqual(

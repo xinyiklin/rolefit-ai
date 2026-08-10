@@ -10,7 +10,7 @@ import assert from "node:assert/strict";
 import {
   decideAdoption,
   parseServerPreferencesResponse
-} from "../../lib/browserPrefsSync.ts";
+} from "../../lib/workspacePreferencesSync.ts";
 import {
   adoptWorkspaceRestoreDrafts,
   keyForTab,
@@ -31,10 +31,10 @@ function serverRestore(updatedAt) {
     restoreStamp: updatedAt
   };
 }
-function serverMirror(updatedAt = RESTORE_STAMP) {
+function serverWorkspace(updatedAt = RESTORE_STAMP) {
   return {
     exists: true,
-    source: "mirror",
+    source: "workspace",
     updatedAt,
     settings: { aiProvider: "anthropic" },
     lastBaseResume: "",
@@ -47,46 +47,33 @@ function serverMirror(updatedAt = RESTORE_STAMP) {
 // a. A restore this origin has not adopted yet always wins, and clears every
 //    autosave draft (they belong to the pre-restore world).
 assert.deepEqual(
-  decideAdoption(serverRestore(NEWER_RESTORE_STAMP), { hasLocalSettings: true, adoptedRestoreStamp: RESTORE_STAMP }),
+  decideAdoption(serverRestore(NEWER_RESTORE_STAMP), { adoptedRestoreStamp: RESTORE_STAMP }),
   { action: "adopt", clearDrafts: true, writeStamp: NEWER_RESTORE_STAMP },
   "an unseen restore adopts and clears drafts even when this origin already has local settings"
 );
 assert.deepEqual(
-  decideAdoption(serverRestore(RESTORE_STAMP), { hasLocalSettings: false, adoptedRestoreStamp: null }),
+  decideAdoption(serverRestore(RESTORE_STAMP), { adoptedRestoreStamp: null }),
   { action: "adopt", clearDrafts: true, writeStamp: RESTORE_STAMP },
   "a first-ever restore adopts and clears drafts regardless of local settings"
 );
 
-// Already-adopted restore falls through to rule (b)/(c) instead of re-clearing.
+// An already-adopted restore remains canonical but does not clear drafts again.
 assert.deepEqual(
-  decideAdoption(serverRestore(RESTORE_STAMP), { hasLocalSettings: true, adoptedRestoreStamp: RESTORE_STAMP }),
-  { action: "noop" },
-  "a restore already adopted, with local settings present, is a no-op"
-);
-assert.deepEqual(
-  decideAdoption(serverRestore(RESTORE_STAMP), { hasLocalSettings: false, adoptedRestoreStamp: RESTORE_STAMP }),
+  decideAdoption(serverRestore(RESTORE_STAMP), { adoptedRestoreStamp: RESTORE_STAMP }),
   { action: "adopt", clearDrafts: false, writeStamp: RESTORE_STAMP },
-  "a restore already adopted, but with local settings now missing (cleared storage / new origin), re-adopts without clearing drafts and rewrites the same stamp"
+  "an already-adopted restore still refreshes the browser cache without clearing drafts"
 );
 
-// b. An origin with no local preferences of its own adopts a mirror for
-//    continuity, without touching drafts or writing a restore stamp.
+// The workspace record wins regardless of whether this origin has cache data.
 assert.deepEqual(
-  decideAdoption(serverMirror(), { hasLocalSettings: false, adoptedRestoreStamp: null }),
+  decideAdoption(serverWorkspace(), { adoptedRestoreStamp: null }),
   { action: "adopt", clearDrafts: false, writeStamp: null },
-  "a mirror adopts for an origin with no local settings, without a stamp write"
-);
-
-// c. An origin with its own local settings ignores a mirror outright.
-assert.deepEqual(
-  decideAdoption(serverMirror(), { hasLocalSettings: true, adoptedRestoreStamp: null }),
-  { action: "noop" },
-  "a mirror is ignored when this origin already has local settings"
+  "canonical workspace preferences replace any origin-specific cache without a restore stamp"
 );
 
 // No server state at all is always a no-op.
 assert.deepEqual(
-  decideAdoption({ exists: false, restoreStamp: null }, { hasLocalSettings: false, adoptedRestoreStamp: null }),
+  decideAdoption({ exists: false, restoreStamp: null }, { adoptedRestoreStamp: null }),
   { action: "noop" },
   "no server preferences at all is a no-op even with nothing local"
 );
@@ -94,7 +81,7 @@ assert.deepEqual(
 assert.deepEqual(
   decideAdoption(
     { exists: false, restoreStamp: NEWER_RESTORE_STAMP },
-    { hasLocalSettings: true, adoptedRestoreStamp: RESTORE_STAMP }
+    { adoptedRestoreStamp: RESTORE_STAMP }
   ),
   { action: "clear-drafts", writeStamp: NEWER_RESTORE_STAMP },
   "a restore marker without preferences clears stale drafts without replacing local preferences"
@@ -102,36 +89,44 @@ assert.deepEqual(
 
 assert.deepEqual(
   decideAdoption(
-    { ...serverMirror(), restoreStamp: NEWER_RESTORE_STAMP },
-    { hasLocalSettings: true, adoptedRestoreStamp: RESTORE_STAMP }
+    { ...serverWorkspace(), restoreStamp: NEWER_RESTORE_STAMP },
+    { adoptedRestoreStamp: RESTORE_STAMP }
   ),
-  { action: "clear-drafts", writeStamp: NEWER_RESTORE_STAMP },
-  "a later mirror does not hide an unseen restore generation from another origin"
+  { action: "adopt", clearDrafts: true, writeStamp: NEWER_RESTORE_STAMP },
+  "a later workspace write does not hide an unseen restore generation"
 );
 
 // --- parseServerPreferencesResponse (malformed/invalid payload) ------------
 
-const invalidPayloads = [
+const malformedPayloads = [
   null,
   undefined,
   "not an object",
   {},
-  { exists: false },
-  { exists: false, invalid: true },
   { exists: true }, // missing source/updatedAt/settings/lastBaseResume
   { exists: true, source: "backup", updatedAt: RESTORE_STAMP, settings: {}, lastBaseResume: "" }, // invalid source enum
-  { exists: true, source: "mirror", updatedAt: "not-a-date", settings: {}, lastBaseResume: "" },
-  { exists: true, source: "mirror", updatedAt: RESTORE_STAMP, settings: null, lastBaseResume: "" },
-  { exists: true, source: "mirror", updatedAt: RESTORE_STAMP, settings: [], lastBaseResume: "" },
-  { exists: true, source: "mirror", updatedAt: RESTORE_STAMP, settings: {}, lastBaseResume: 42 }
+  { exists: true, source: "workspace", updatedAt: "not-a-date", settings: {}, lastBaseResume: "" },
+  { exists: true, source: "workspace", updatedAt: RESTORE_STAMP, settings: null, lastBaseResume: "" },
+  { exists: true, source: "workspace", updatedAt: RESTORE_STAMP, settings: [], lastBaseResume: "" },
+  { exists: true, source: "workspace", updatedAt: RESTORE_STAMP, settings: {}, lastBaseResume: 42 }
 ];
-for (const payload of invalidPayloads) {
+for (const payload of malformedPayloads) {
   assert.deepEqual(
     parseServerPreferencesResponse(payload),
-    { exists: false, restoreStamp: null },
-    `malformed payload coerces to exists:false: ${JSON.stringify(payload)}`
+    { exists: false, invalid: true, restoreStamp: null },
+    `malformed payload stays distinguishable from a missing file: ${JSON.stringify(payload)}`
   );
 }
+assert.deepEqual(
+  parseServerPreferencesResponse({ exists: false }),
+  { exists: false, invalid: false, restoreStamp: null },
+  "an explicit missing-file response remains seedable"
+);
+assert.deepEqual(
+  parseServerPreferencesResponse({ exists: false, invalid: true }),
+  { exists: false, invalid: true, restoreStamp: null },
+  "an invalid canonical file remains fail-closed"
+);
 
 const validRestore = {
   exists: true,
@@ -144,7 +139,7 @@ const validRestore = {
 assert.deepEqual(parseServerPreferencesResponse(validRestore), validRestore, "a well-formed restore payload parses through unchanged");
 assert.deepEqual(
   parseServerPreferencesResponse({ exists: false, restoreStamp: NEWER_RESTORE_STAMP }),
-  { exists: false, restoreStamp: NEWER_RESTORE_STAMP },
+  { exists: false, invalid: false, restoreStamp: NEWER_RESTORE_STAMP },
   "a marker-only response survives parsing so drafts can be cleared"
 );
 

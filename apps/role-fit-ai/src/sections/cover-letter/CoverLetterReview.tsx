@@ -1,22 +1,33 @@
+import { useEffect, useState } from "react";
+
 import type {
   CoverLetterFailure,
   CoverLetterProposal
 } from "../../hooks/useCoverLetter";
-import type { CoverLetterTailorResult } from "../../lib/coverLetterEvidence";
+import {
+  evidenceEntryName,
+  type CoverLetterTailorResult
+} from "../../lib/coverLetterEvidence";
 import type { CoverLetterIssue } from "../../lib/coverLetterFailure";
 import type {
   CoverLetterDetailKey,
   CoverLetterPreflight
 } from "../../lib/coverLetterPreflight";
+import { resolveDocumentWorkflowStatus } from "../../../shared/documentWorkflowContract.ts";
 import {
   DocumentWorkflowRail,
-  type DocumentWorkflowCheck,
-  type DocumentWorkflowPhase
+  type DocumentWorkflowCheck
 } from "../document/DocumentWorkflowRail";
+import { ProposalDecisionBar } from "../document/ProposalDecisionBar";
+import { ProposalDiff } from "../document/ProposalDiff";
+import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type CoverLetterReviewProps = {
   words: number;
   pageCount: number;
+  // The letter currently in the editor, so the proposal can show what accepting
+  // would change instead of only what it would leave behind.
+  currentText: string;
   preflight: CoverLetterPreflight;
   proposal: CoverLetterProposal | null;
   appliedResult: CoverLetterTailorResult | null;
@@ -46,7 +57,7 @@ const FIELD_COPY: Record<
   company: { placeholder: "Employer name", maxLength: 300 }
 };
 
-function check(label: string, ready: boolean, blockedDetail: string): DocumentWorkflowCheck {
+function readiness(label: string, ready: boolean, blockedDetail: string): DocumentWorkflowCheck {
   return {
     label,
     state: ready ? "ready" : "blocked",
@@ -54,11 +65,16 @@ function check(label: string, ready: boolean, blockedDetail: string): DocumentWo
   };
 }
 
+// Provenance names where a paragraph came from. The evidence item's `entry`
+// field is the model's full attribution context — dates, links, stack — so the
+// rail shows only its identifying head, never the whole serialized entry.
 function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]): string {
   const labels = new Map(
     result.evidenceUsed.map((item) => [
       item.id,
-      item.entry || item.section || (item.source === "honest_context" ? "Personal context" : "Resume evidence")
+      evidenceEntryName(item.entry)
+        || evidenceEntryName(item.section)
+        || (item.source === "honest_context" ? "Personal context" : "Resume evidence")
     ])
   );
   return evidenceIds
@@ -80,6 +96,7 @@ function issueRecovery(issue: CoverLetterIssue): string {
 export function CoverLetterReview({
   words,
   pageCount,
+  currentText,
   preflight,
   proposal,
   appliedResult,
@@ -99,6 +116,13 @@ export function CoverLetterReview({
   onAddHonestContext,
   status
 }: CoverLetterReviewProps) {
+  // The letter is decided whole, so "what changed" is a view of the proposal
+  // rather than a per-row marking. It leads, for the same reason the resume's
+  // edit list leads: the decision is about the change, not about the artifact.
+  const [proposalView, setProposalView] = useState<"changes" | "letter">("changes");
+  useEffect(() => {
+    setProposalView("changes");
+  }, [proposal?.result]);
   const { resolved } = preflight;
   const target = [resolved.role, resolved.company].filter(Boolean).join(" at ") || "Cover letter";
   const ready = preflight.canTailor && resumeReady && jobReady && providerReady;
@@ -110,32 +134,35 @@ export function CoverLetterReview({
   const detailsBlocked = slotBlocker
     ?? (fieldCount > 0 ? `${fieldCount} ${fieldCount === 1 ? "field" : "fields"} below` : "Complete the fields");
   const checks = [
-    check("Resume", resumeReady, "Add your resume"),
-    check("Prepared job", jobReady, "Prepare the job"),
-    check("Polish provider", providerReady, "Check AI settings"),
-    check("Template details", preflight.canTailor, detailsBlocked)
+    readiness("Resume", resumeReady, "Add your resume"),
+    readiness("Prepared job", jobReady, "Prepare the job"),
+    readiness("Polish provider", providerReady, "Check AI settings"),
+    readiness("Template details", preflight.canTailor, detailsBlocked)
   ];
 
-  let phase: DocumentWorkflowPhase = ready ? "ready" : "blocked";
-  let description = ready
-    ? "Polish creates a reviewable proposal from your current letter, resume evidence, and prepared job."
-    : "Complete the blocked rows before polishing.";
-  if (isTailoring) {
-    phase = "working";
-    description = "Polishing and checking every candidate claim against your evidence.";
-  } else if (failure) {
-    phase = "blocked";
-    description = "No changes were applied. Your current letter is unchanged.";
-  } else if (proposal?.stale) {
-    phase = "stale";
-    description = "The inputs changed after this proposal was created. Polish again before using it.";
-  } else if (proposal) {
-    phase = "proposal";
-    description = "Compare this replacement with the current editable letter before deciding.";
-  } else if (appliedResult && canRestore) {
-    phase = "applied";
-    description = "The accepted proposal is now the live document.";
-  }
+  // The letter's proposal is atomic: one accept-or-discard decision, which is
+  // 1 of 1 outstanding until it is made. That is how a whole-document
+  // replacement rides the same named sequence as the resume's granular edits
+  // without pretending to have them.
+  const workflow = resolveDocumentWorkflowStatus({
+    ready,
+    polishing: isTailoring,
+    proposal: proposal ? { outstanding: 1, total: 1 } : null,
+    proposalSuperseded: Boolean(proposal?.stale)
+  });
+  const description = isTailoring
+    ? "Creating a grounded cover-letter proposal from your evidence."
+    : failure
+        ? "No changes were applied. Your current letter is unchanged."
+        : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
+          ? "The letter's inputs changed after this proposal was created. Polish again before using it."
+          : workflow.state === "proposal"
+            ? "Your letter changes only if you accept this replacement."
+            : workflow.state === "ready-to-polish"
+              ? "Polish creates a reviewable proposal from your current letter, resume evidence, and prepared job."
+              : workflow.state === "blocked"
+                ? "Complete the blocked rows before polishing."
+                : "";
 
   const blockedFailure = failure?.kind === "blocked" ? failure : null;
   const errorFailure = failure?.kind === "error" ? failure : null;
@@ -164,9 +191,14 @@ export function CoverLetterReview({
   ) : null;
 
   // Polish itself lives beside the rail's disclosure control, in the header. The
-  // footer carries only the decisions an outcome adds.
+  // footer carries only the decisions an outcome adds — through the same bar the
+  // resume commits from, so both documents decide in one place with one verb pair.
   const footer = proposal ? (
-    <>
+    <ProposalDecisionBar
+      summary={proposal.stale
+        ? "Polish again before accepting"
+        : "One change · replaces your whole letter"}
+    >
       <button
         type="button"
         className="primary-button is-compact"
@@ -175,12 +207,10 @@ export function CoverLetterReview({
       >
         Accept proposal
       </button>
-      {/* Accept/Discard is the verb pair the resume's review rail already uses
-          for a proposed change; only the unit differs. */}
       <button type="button" className="secondary-button is-compact" onClick={onDiscardProposal}>
         Discard proposal
       </button>
-    </>
+    </ProposalDecisionBar>
   ) : failure ? (
     <button type="button" className="primary-button is-compact" onClick={onTailor}>
       Retry polish
@@ -194,7 +224,7 @@ export function CoverLetterReview({
   return (
     <DocumentWorkflowRail
       ariaLabel="Cover letter workflow"
-      phase={phase}
+      status={workflow}
       target={target}
       description={description}
       checks={proposal || appliedResult ? [] : checks}
@@ -208,7 +238,7 @@ export function CoverLetterReview({
           : { items: [errorFailure?.detail ?? "Try Polish again."] })
       } : null}
       footer={footer}
-      status={status}
+      statusLine={status}
     >
       {proposal ? (
         <section className="cover-letter-proposal" aria-label="Proposed replacement">
@@ -216,25 +246,58 @@ export function CoverLetterReview({
             <span>{proposal.result.coverLetterText.trim().split(/\s+/).length} words</span>
             {proposal.result.repaired ? <span>Repaired once</span> : <span>Passed first check</span>}
           </div>
-          {proposal.result.warnings.map((warning) => (
-            <p key={warning} className="cover-letter-proposal__warning">{warning}</p>
-          ))}
+          <ProposalFeedbackList title="Check before using" items={proposal.result.warnings} tone="warning" />
           {proposal.stale ? (
             <p className="cover-letter-proposal__stale" role="status">
-              The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.
+              The letter, job, Guidance, or polishing instructions changed. Polish again for the current inputs.
+            </p>
+          ) : proposal.resumeChanged ? (
+            <p className="cover-letter-proposal__stale" role="status">
+              Your resume changed after this proposal was created. It was checked against the earlier resume; review the proposal and its evidence before accepting.
             </p>
           ) : null}
+          {currentText.trim() ? (
+            <div className="proposal-view" role="group" aria-label="Proposal view">
+              {([["changes", "Changes"], ["letter", "Full letter"]] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  className="proposal-view__option"
+                  aria-pressed={proposalView === value}
+                  onClick={() => setProposalView(value)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          ) : null}
           <div className="cover-letter-proposal__document">
-            <p>{proposal.result.coverLetterText}</p>
+            <p>
+              {currentText.trim() && proposalView === "changes" ? (
+                <ProposalDiff
+                  original={currentText}
+                  proposed={proposal.result.coverLetterText}
+                  mode="merged"
+                />
+              ) : (
+                proposal.result.coverLetterText
+              )}
+            </p>
           </div>
-          <div className="cover-letter-proposal__evidence" aria-label="Evidence used by paragraph">
-            {proposal.result.bodyParagraphs.map((paragraph, index) => (
-              <section key={`${index}-${paragraph.text.slice(0, 24)}`}>
-                <h3>Paragraph {index + 1}</h3>
-                <small>{proposalEvidence(proposal.result, paragraph.evidenceIds)}</small>
-              </section>
-            ))}
-          </div>
+          {/* The block had only an aria-label, so a sighted reader met a column
+              of "Paragraph N" rows with no statement of what they were. The
+              title now matches the other feedback headings in this rail. */}
+          <section className="cover-letter-proposal__evidence">
+            <h3>Where each paragraph came from</h3>
+            <dl>
+              {proposal.result.bodyParagraphs.map((paragraph, index) => (
+                <div key={`${index}-${paragraph.text.slice(0, 24)}`}>
+                  <dt>Paragraph {index + 1}</dt>
+                  <dd>{proposalEvidence(proposal.result, paragraph.evidenceIds)}</dd>
+                </div>
+              ))}
+            </dl>
+          </section>
           {proposal.result.provider || proposal.result.model ? (
             <p className="cover-letter-proposal__provider">
               {[proposal.result.provider, proposal.result.model].filter(Boolean).join(" · ")}

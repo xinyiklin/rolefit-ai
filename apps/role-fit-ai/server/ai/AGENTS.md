@@ -10,11 +10,27 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess
   invocation and provider-specific process constraints.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
-- `sanitize.ts` validates suggestions and Review output; it does not invent or
-  recalculate a replacement judgment.
-- `polish.ts` orchestrates Tailor and Review; its optional cover leg is retained
-  only for compatibility with older clients.
-- `jobAnalysis.ts`, `coverLetter.ts`, and `applicationAnswers.ts` own their routes.
+- `sanitize.ts` owns shared deterministic markup and numeric-claim guards. Stage
+  modules own their response schemas and outcome derivation.
+- `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
+  target IDs, deterministic mutation grounding, tolerant optional feedback,
+  and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
+  are ranked by materiality and job relevance into complete JSON; the response
+  is validated only against that selected set and reports the omitted count.
+- `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
+  contract. Cover letters and application answers use their own routes.
+- `jobAnalysis.ts`, `fitAssessment.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
+  own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
+  Job analysis plus optional compact Fit Assessment in one provider dispatch only
+  when their provider/model/reasoning settings match; otherwise the client commits
+  Job analysis before using `mode: "fit-assessment"` with Fit's own configuration.
+  Their response subsections sanitize independently. `mode: "fit-assessment"`
+  reruns only the compact fit after a relevant input changes. Fit Assessment must
+  follow the canonical
+  [`server/ai/README.md`](README.md#fit-assessment-technical-contract)
+  contract: both paths render one exported rules block, every finding uses exact
+  current-source excerpts, and server acceptance stays mechanical rather than
+  becoming a second classifier or guessed fallback.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -22,7 +38,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   provider dispatch only for a genuinely unresolvable fact, and cannot return
   `ready` with template tokens or unresolved correspondence fields.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
-  checks, never a local fit-scoring system.
+  checks. The direct category rubric in `fitAssessment.ts` is provider-applied; do
+  not add a deterministic fit classifier, numeric scores, or a visible/persisted
+  ledger.
 - Evidence selection belongs to the model, not to the candidate and not to a
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,
@@ -53,41 +71,21 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
-## Trust and assessment contract
+## Trust contracts
 
-- Initial Fit owns the categorical candidate-fit verdict, confidence,
-  requirement ledger, eligibility result, and advisory recommendation. Review
-  owns only post-polish document readiness. Validate exact shape, enums,
-  evidence references, and semantic consistency; reject invalid output instead
-  of synthesizing a replacement.
-- Every requirement carries and displays its exact `sourceRequirement` excerpt
-  from the posting, and every candidate evidence excerpt must be a normalized
-  exact source quotation. Source excerpts are unique within each ledger, and
-  eligibility rows cannot reappear as capability requirements. Derived
-  requirement lists may cover all 40 rows; only independent advice lists keep
-  the 16-item cap.
-- Initial Fit `MISSING` requires explicit adverse evidence or a deterministically
-  anchored minimum-years mismatch while `UNCERTAIN` has none. Sponsorship
-  polarity is evaluated around each sponsorship clause after normalizing common
-  contractions and alphanumeric modifiers; `no need for sponsorship` is
-  positive, so generic `have no` detection is limited to named qualification
-  absences. Duration anchors are exact tokens, never prefixes. Submission
-  visibility may retain `HONEST_CONTEXT` evidence
-  for a `MISSING` row only when non-adverse, relevant evidence positively proves
-  the qualification can be surfaced; common contracted and adjectival negative
-  forms remain adverse before positive verbs are considered.
-  Eligibility never changes the fit verdict, and only unresolved eligibility
-  may recommend `CONFIRM_ELIGIBILITY`.
-- User-facing assessment prose derives from the validated ledger wherever
-  possible. Remaining Review advice must pass technology, proper-claim,
-  numeric, and outcome grounding before it can be returned.
-- Tailor emits targeted suggestions grounded in submitted resume/honest context.
-  Never import JD-only skills or fabricate claims.
-- Review-only audits the current edited draft. The Review leg of Both receives
-  only sanitized suggestions from that same Tailor run.
-- A failed stage fails plainly and stops downstream work. Job analysis may return a
-  deterministic local brief to the client for inspection, but that does not
-  convert the failed AI stage into success.
+- Resume Polish emits targeted suggestions grounded in the submitted
+  resume/honest context. Never import JD-only skills or fabricate claims.
+  Only bullets and actual Skills lists are mutable targets; category labels and standard
+  entry role, employer, subtitle, and date fields remain read-only evidence.
+  Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
+  independently. A category phrase or unsupported new list item is dropped
+  without erasing safe siblings.
+  Optional summary/gap failures never erase safe siblings, while an all-drop
+  returns Withheld rather than a successful empty proposal.
+- Polish failures fail plainly without changing the document.
+  Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
+  remains usable, invalid fit never invalidates valid job fields, and neither
+  failure authorizes silent fabrication or a substitute AI result.
 - Propagate request cancellation into native API fetches and CLI subprocesses.
   Browser disconnect or Stop must terminate matching provider work and never
   advance a later stage.
@@ -119,5 +117,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - Run the nearest offline eval under `server/ai/__evals__/`.
 - Prompt, grounding, sanitizer, provider-contract, or scoring-contract changes
   require adversarial probes and a diff review before handoff.
+- Fit Assessment changes require `fit-assessment-probes.mjs` and
+  `fit-assessment-consistency-contracts.mjs`; shared request or lifecycle changes
+  additionally require the client request, lifecycle, and intake entry-point
+  evals named in the app guide.
 - Live provider evals cost tokens and may expose private inputs; run them only
   with explicit authorization and synthetic or approved fixtures.

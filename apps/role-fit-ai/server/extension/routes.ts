@@ -361,8 +361,8 @@ export async function handleExtensionRoutes(
 
     const { title, company } = extractJobMeta(text, pageTitle);
 
-    // The extension intentionally does not read or assess the base resume. It
-    // identifies/imports the posting; AI Review in the main app owns fit.
+    // The extension intentionally does not read or score the base resume. It
+    // identifies/imports the posting; Fit Assessment in the main app owns fit.
     let previousApp: { id: string; status: string; appliedAt: string | null } | null = null;
     let duplicateMatch: { level: string; confidence: string; evidence: string[] } | null = null;
     try {

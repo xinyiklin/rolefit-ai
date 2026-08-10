@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
-import { AI_UNAVAILABLE, ApiError, classifyFailure } from "../lib/failures";
+import { ApiError, classifyFailure } from "../lib/failures";
 import {
   workflowInputFingerprint,
   workflowRequestIsCurrent,
@@ -22,6 +22,10 @@ import {
   parseCoverLetterBlockedFailure,
   type CoverLetterBlockedFailure,
 } from "../lib/coverLetterFailure";
+import {
+  resolveCoverLetterProposalFreshness,
+  type CoverLetterProposalIdentity,
+} from "../lib/coverLetterProposalFreshness";
 
 type UseCoverLetterArgs = {
   currentCoverLetterText: string;
@@ -41,35 +45,22 @@ type UseCoverLetterArgs = {
   tailorApplied: boolean;
   jobTarget?: { role?: string; company?: string };
   onApplyTailored: (text: string) => void;
-  onApplyExternal: (text: string) => void;
   onUsage?: (usage: StageAiUsage) => void;
-};
-
-export type PolishCoverResult = {
-  status: "off" | "ok" | "failed";
-  coverLetterText?: string;
-  provider?: string;
-  model?: string;
-  reasoningEffort?: string;
-  attempts?: number;
 };
 
 export type CoverLetterProposal = {
   result: CoverLetterTailorResult;
-  sourceFingerprint: string;
   stale: boolean;
+  resumeChanged: boolean;
+};
+
+type PendingCoverLetterProposal = CoverLetterProposalIdentity & {
+  result: CoverLetterTailorResult;
 };
 
 export type CoverLetterFailure =
   | CoverLetterBlockedFailure
   | { kind: "error"; headline: string; detail: string };
-
-export type CoverLetterRunOutcome =
-  | { status: "completed"; proposal: CoverLetterTailorResult }
-  | { status: "blocked"; reason: string }
-  | { status: "failed"; reason: string }
-  | { status: "stopped" }
-  | { status: "busy" };
 
 function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   if (!value || typeof value !== "object") return null;
@@ -105,7 +96,6 @@ export function useCoverLetter({
   tailorApplied,
   jobTarget,
   onApplyTailored,
-  onApplyExternal,
   onUsage,
 }: UseCoverLetterArgs) {
   const [coverStatus, setCoverStatus] = useState("");
@@ -119,7 +109,7 @@ export function useCoverLetter({
   const [lastAppliedResult, setLastAppliedResult] = useState<CoverLetterTailorResult | null>(
     null,
   );
-  const [pendingProposal, setPendingProposal] = useState<Omit<CoverLetterProposal, "stale"> | null>(null);
+  const [pendingProposal, setPendingProposal] = useState<PendingCoverLetterProposal | null>(null);
   const [failure, setFailure] = useState<CoverLetterFailure | null>(null);
   const failureRef = useRef<CoverLetterFailure | null>(failure);
   failureRef.current = failure;
@@ -165,30 +155,39 @@ export function useCoverLetter({
       }),
     [honestContext, resumeData, slotAnswers, slotLabels],
   );
-  const proposalInputFingerprint = workflowInputFingerprint({
+  const proposalContentFingerprint = workflowInputFingerprint({
     currentCoverLetterText,
-    currentResumeText,
-    resumeText,
     jobText,
     customInstructions,
     resolved: preflight.resolved,
-    evidenceItems,
+    evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
+  });
+  const proposalResumeFingerprint = workflowInputFingerprint({
+    currentResumeText,
+    resumeText,
+    evidenceItems: evidenceItems.filter((item) => item.source === "resume"),
   });
   const requestInputFingerprint = workflowInputFingerprint({
-    proposalInputFingerprint,
+    proposalContentFingerprint,
+    proposalResumeFingerprint,
     aiRequest: buildStageRequestFields(aiRequest),
   });
   const requestInputFingerprintRef = useRef(requestInputFingerprint);
   requestInputFingerprintRef.current = requestInputFingerprint;
   const previousRequestInputFingerprintRef = useRef(requestInputFingerprint);
   const proposal = useMemo<CoverLetterProposal | null>(
-    () => pendingProposal
-      ? {
-          ...pendingProposal,
-          stale: pendingProposal.sourceFingerprint !== proposalInputFingerprint,
-        }
-      : null,
-    [pendingProposal, proposalInputFingerprint],
+    () => {
+      if (!pendingProposal) return null;
+      const freshness = resolveCoverLetterProposalFreshness(pendingProposal, {
+        contentFingerprint: proposalContentFingerprint,
+        resumeFingerprint: proposalResumeFingerprint,
+      });
+      return {
+        result: pendingProposal.result,
+        ...freshness,
+      };
+    },
+    [pendingProposal, proposalContentFingerprint, proposalResumeFingerprint],
   );
 
   const invalidateCoverRequest = useCallback(() => {
@@ -241,19 +240,6 @@ export function useCoverLetter({
     [],
   );
 
-  const applyCoverLetter = useCallback(
-    (text: string) => {
-      invalidateCoverRequest();
-      onApplyExternal(text);
-      setPendingProposal(null);
-      setFailure(null);
-      setLastAppliedResult(null);
-      setCoverStatus("");
-      setCoverProgress({ status: "idle" });
-    },
-    [invalidateCoverRequest, onApplyExternal],
-  );
-
   const resetCoverWorkflow = useCallback(() => {
     invalidateCoverRequest();
     setSlotAnswers({});
@@ -263,36 +249,22 @@ export function useCoverLetter({
     setCoverProgress({ status: "idle" });
   }, [invalidateCoverRequest]);
 
-  // New browser requests never ask /api/polish for its compatibility cover leg.
-  // Refuse an unexpected legacy result instead of replacing the letter through a
-  // path that never ran RoleFit's evidence checks.
-  const applyPolishCoverResult = useCallback(
-    (result: PolishCoverResult) => {
-      if (result.status === "off") return;
-      invalidateCoverRequest();
-      setFailure({
-        kind: "error",
-        headline: AI_UNAVAILABLE,
-        detail: "The existing cover letter was not replaced.",
-      });
-      setCoverStatus(
-        result.status === "ok"
-          ? "A legacy cover-letter result was not applied. Use Polish on the Cover letter page."
-          : "The legacy cover-letter step failed. The existing letter was kept.",
-      );
-      setCoverProgress({
-        status: "failed",
-        errorHeadline: AI_UNAVAILABLE,
-        error: "The existing cover letter was not replaced.",
-      });
-    },
-    [invalidateCoverRequest],
-  );
-
   const dismissCoverProgress = useCallback(
     () => setCoverProgress({ status: "idle" }),
     [],
   );
+
+  const stopCoverPolish = useCallback(() => {
+    if (!requestAbortRef.current) return;
+    invalidateCoverRequest();
+    setFailure(null);
+    setCoverStatus("Cover Letter Polish stopped. Your current letter is unchanged.");
+    setCoverProgress({
+      status: "stopped",
+      errorHeadline: "Stopped",
+      error: "Cover Letter Polish was cancelled. Your current letter is unchanged.",
+    });
+  }, [invalidateCoverRequest]);
 
   const updateDetail = useCallback(
     (key: CoverLetterDetailKey, value: string) => {
@@ -323,23 +295,24 @@ export function useCoverLetter({
     return { controller, isCurrent };
   }, [invalidateCoverRequest]);
 
-  async function handleTailorCoverLetter(): Promise<CoverLetterRunOutcome> {
-    if (requestAbortRef.current) return { status: "busy" };
+  async function handleTailorCoverLetter() {
     if (!preflight.canTailor) {
-      const reason = preflight.blockers[0] ?? "Complete the missing detail first.";
-      setCoverStatus(reason);
-      return { status: "blocked", reason };
+      setCoverStatus(
+        preflight.blockers[0] ?? "Complete the missing detail first.",
+      );
+      return;
     }
     const hasResumeEvidence = evidenceItems.some((item) => item.source === "resume");
     const hasPreparedJob = jobText.trim().length >= 40;
     if (!hasResumeEvidence || !hasPreparedJob) {
-      const reason = !hasResumeEvidence && !hasPreparedJob
+      setCoverStatus(
+        !hasResumeEvidence && !hasPreparedJob
           ? "Add your resume and prepare the job on Prepare."
           : !hasResumeEvidence
             ? "Add your resume first."
-            : "Prepare the job on Prepare first.";
-      setCoverStatus(reason);
-      return { status: "blocked", reason };
+            : "Prepare the job on Prepare first."
+      );
+      return;
     }
     if (!providerReady) {
       setFailure({
@@ -353,7 +326,7 @@ export function useCoverLetter({
         errorHeadline: "Provider unavailable",
         error: providerMessage,
       });
-      return { status: "failed", reason: providerMessage };
+      return;
     }
 
     const { controller, isCurrent } = beginRequest();
@@ -382,7 +355,7 @@ export function useCoverLetter({
         signal: controller.signal,
       });
       const raw = await response.json();
-      if (!isCurrent()) return { status: "stopped" };
+      if (!isCurrent()) return;
       if (!response.ok) {
         const blocked = parseCoverLetterBlockedFailure(raw);
         if (blocked) {
@@ -402,23 +375,21 @@ export function useCoverLetter({
             requestedModel: aiRequest.selectedModel,
             completedAt: new Date().toISOString(),
           });
-          return {
-            status: "blocked",
-            reason: blocked.issues[0]?.detail ?? "Cover-letter evidence review blocked the proposal."
-          };
+          return;
         }
         throw new ApiError(
-          raw.error ?? raw.reasons?.[0] ?? "Could not tailor the cover letter.",
+          raw.error ?? raw.reasons?.[0] ?? "Could not polish the cover letter.",
           response.status,
         );
       }
       const result = tailorResponse(raw);
       if (!result) {
-        throw new ApiError("The tailored cover letter could not be read.", 502);
+        throw new ApiError("The polished cover letter could not be read.", 502);
       }
       setPendingProposal({
         result,
-        sourceFingerprint: proposalInputFingerprint,
+        contentFingerprint: proposalContentFingerprint,
+        resumeFingerprint: proposalResumeFingerprint,
       });
       setCoverStatus(
         `Proposal ready for ${preflight.resolved.role} at ${preflight.resolved.company}.`,
@@ -438,9 +409,8 @@ export function useCoverLetter({
         ...(result.attempts ? { attempts: result.attempts } : {}),
         completedAt: new Date().toISOString(),
       });
-      return { status: "completed", proposal: result };
     } catch (error) {
-      if (!isCurrent()) return { status: "stopped" };
+      if (!isCurrent()) return;
       const classified = classifyFailure(error);
       setFailure({ kind: "error", headline: classified.headline, detail: classified.detail });
       setCoverStatus("No changes were applied. Your current letter is unchanged.");
@@ -455,7 +425,6 @@ export function useCoverLetter({
         requestedModel: aiRequest.selectedModel,
         completedAt: new Date().toISOString(),
       });
-      return { status: "failed", reason: classified.detail };
     } finally {
       if (isCurrent()) {
         requestAbortRef.current = null;
@@ -468,7 +437,7 @@ export function useCoverLetter({
     if (!proposal) return;
     if (proposal.stale) {
       setCoverStatus(
-        "The letter, resume, job, or polishing instructions changed. Polish again for the current inputs.",
+        "The letter, job, Guidance, or polishing instructions changed. Polish again for the current inputs.",
       );
       return;
     }
@@ -490,14 +459,13 @@ export function useCoverLetter({
 
   return {
     coverLetterText: currentCoverLetterText,
-    applyCoverLetter,
     resetCoverWorkflow,
-    applyPolishCoverResult,
     coverStatus,
     isGeneratingCover,
     handleTailorCoverLetter,
     coverProgress,
     dismissCoverProgress,
+    stopCoverPolish,
     preflight,
     detailValues,
     updateDetail,

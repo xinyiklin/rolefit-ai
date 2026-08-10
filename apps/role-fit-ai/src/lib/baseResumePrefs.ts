@@ -1,30 +1,35 @@
 const KEY = "rolefit:lastBaseResume";
+let memoryLastBaseResume = "";
 
 export function loadLastBaseResumeName(): string {
-  if (typeof localStorage === "undefined") return "";
+  if (typeof localStorage === "undefined") return memoryLastBaseResume;
   try {
-    return localStorage.getItem(KEY)?.trim() ?? "";
+    const stored = localStorage.getItem(KEY)?.trim();
+    if (stored !== undefined && stored !== null) memoryLastBaseResume = stored;
+    return stored ?? memoryLastBaseResume;
   } catch {
-    return "";
+    return memoryLastBaseResume;
   }
 }
 
-// Set once by browserPrefsSync.ts when it loads (see that file's top comment
+// Set once by workspacePreferencesSync.ts when it loads (see that file's top comment
 // and the matching listener in settings.ts) — same cycle-avoidance shape as
 // setSettingsSaveListener.
-let lastBaseResumeSaveListener: (() => void) | null = null;
-export function setLastBaseResumeSaveListener(listener: (() => void) | null): void {
+let lastBaseResumeSaveListener: ((fileName: string) => void) | null = null;
+export function setLastBaseResumeSaveListener(listener: ((fileName: string) => void) | null): void {
   lastBaseResumeSaveListener = listener;
 }
 
 export function saveLastBaseResumeName(fileName: string): void {
-  if (typeof localStorage === "undefined") return;
+  const value = fileName.trim();
+  memoryLastBaseResume = value;
   try {
-    const value = fileName.trim();
-    if (value) localStorage.setItem(KEY, value);
-    else localStorage.removeItem(KEY);
-    lastBaseResumeSaveListener?.();
+    if (typeof localStorage !== "undefined") {
+      if (value) localStorage.setItem(KEY, value);
+      else localStorage.removeItem(KEY);
+    }
   } catch {
-    // Storage unavailable or over quota — the workspace still loads normally.
+    // The canonical workspace write below does not depend on this cache.
   }
+  lastBaseResumeSaveListener?.(value);
 }

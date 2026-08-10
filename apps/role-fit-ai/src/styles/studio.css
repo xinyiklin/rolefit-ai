@@ -2,7 +2,7 @@
 
 .studio-pane {
   display: grid;
-  grid-template-columns: clamp(148px, 11.5vw, 176px) minmax(0, 1fr);
+  grid-template-columns: calc(clamp(148px, 11.5vw, 176px) - 25px) minmax(0, 1fr);
   min-height: 0;
   background: var(--paper);
 }
@@ -406,7 +406,19 @@
   flex: 1 1 0;
   display: flex;
   flex-direction: column;
+  gap: 0;
   min-height: 0;
+}
+
+/* RoleFit has no product-name block inside its document toolbar, so the title
+   and job target can use more of the primary row on wide desktop canvases. The
+   shared 1100/1040px container rules still shorten and then hide the context. */
+@container typeset-toolbar (min-width: 1101px) {
+  :is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__title-field,
+  :is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__title-field input,
+  :is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__document-context {
+    max-width: 52ch;
+  }
 }
 
 /* -------- Studio card -------- */
