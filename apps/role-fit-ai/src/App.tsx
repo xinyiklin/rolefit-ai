@@ -97,7 +97,10 @@ import { recommendVariant, type VariantRecommendation } from "./lib/variantRecom
 import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
-import { fitAssessmentMeetsThreshold } from "./lib/autoPolishPolicy";
+import {
+  automaticPolishActionDecision,
+  fitAssessmentMeetsThreshold
+} from "./lib/autoPolishPolicy";
 import {
   fitAssessmentLatestSnapshot,
   fitAssessmentMayTriggerAutoPolish
@@ -127,6 +130,8 @@ import { formatHistoryDate } from "./lib/historyDate";
 import { type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
+
+type PolishStartReceipt = { started: boolean };
 
 const DEFAULT_MATERIAL_SELECTION = {
   resume: true,
@@ -901,6 +906,7 @@ function App() {
     editedResume,
     docStyle: docStyle.style,
     dirty: resumeDocumentDirty,
+    resumeOrigin,
     jobLabel: _autosaveJobLabel,
     pipelineAiUsage,
     jobRawText,
@@ -1308,6 +1314,7 @@ function App() {
     setJobUrl,
     jobDescription,
     setJobDescription,
+    jobRawText,
     setImportedJob: setImportedJobAndDocumentTitle,
     setResult,
     resetCoverWorkflow,
@@ -1401,6 +1408,7 @@ function App() {
       isPolishing ||
       jobAnalysisProgress.status === "running" ||
       fitAssessmentRequestActive ||
+      preparationAutomationPending ||
       pendingApplicationWrites > 0
   );
 
@@ -1487,6 +1495,20 @@ function App() {
       : "";
   const coverLetterVariantOptionsRef = useRef(coverLetterEditor.coverLetterOptions);
   coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
+  const coverVariantResolutionPending = Boolean(
+    isSelectingCoverVariant
+    || (
+      jobPrepared
+      && coverLetterEditor.coverLetterOptions.length > 1
+      && (
+        rankingJobDescription !== jobDescription.trim()
+        || !coverLetterVariantRecommendationInputKey
+        || coverLetterVariantRecommendationKeyRef.current
+          !== coverLetterVariantRecommendationInputKey
+        || isRankingCoverLetterVariants
+      )
+    )
+  );
   const readCoverLetterVariantCandidates = coverLetterEditor.readCoverLetterVariantCandidates;
   const openWorkspaceCoverLetter = coverLetterEditor.openWorkspaceCoverLetter;
   const coverLetterVariantSelectionStateRef = useRef({
@@ -1590,14 +1612,29 @@ function App() {
     );
   }
 
-  function handleResumePolish(options: { revealResumeOnSuccess?: boolean } = {}) {
+  function handleResumePolish(
+    options: { revealResumeOnSuccess?: boolean } = {}
+  ): PolishStartReceipt {
+    if (
+      isPolishing
+      || isSavingBaseResume
+      || isManuallySelectingResumeVariant
+      || isResolvingPreparedResume
+    ) return { started: false };
     includeMaterialForPolish("resume");
-    return handlePolish(options);
+    void handlePolish(options);
+    return { started: true };
   }
 
-  function handleCoverLetterPolish() {
+  function handleCoverLetterPolish(): PolishStartReceipt {
+    if (
+      isGeneratingCover
+      || isSelectingCoverVariant
+      || coverVariantResolutionPending
+    ) return { started: false };
     includeMaterialForPolish("coverLetter");
-    return handleTailorCoverLetter();
+    void handleTailorCoverLetter();
+    return { started: true };
   }
 
   const applicationPreparationActive =
@@ -1634,8 +1671,16 @@ function App() {
   }
 
   useEffect(() => {
-    const candidate = fitAssessmentMayTriggerAutoPolish(fitAssessmentState);
-    if (!candidate) return;
+    const pendingToken = fitAssessmentState.latestCompleted?.automationToken;
+    const candidate = runFitAssessment
+      ? fitAssessmentMayTriggerAutoPolish(fitAssessmentState)
+      : null;
+    if (!candidate) {
+      // A stale, disabled, or previous-preparation assessment is a permanent
+      // decline, not an automation decision that can be revived by later edits.
+      if (pendingToken) acknowledgeFitAutomation(pendingToken);
+      return;
+    }
     const { result: fit } = candidate.snapshot;
     const key = candidate.automationToken;
     if (autoProposalFitRef.current.key !== key) {
@@ -1643,40 +1688,58 @@ function App() {
     }
     const receipt = autoProposalFitRef.current;
     const automationBlocked = fit.eligibility?.status === "BLOCKED";
-    const canStartResume =
-      !automationBlocked &&
-      autoPolishResume &&
-      fitAssessmentMeetsThreshold(fit.verdict, resumeAutoPolishThreshold) &&
+    const resumePolishCanStart =
       jobPrepared &&
       canPolish &&
       !isPolishing &&
       !isSavingBaseResume &&
       !isManuallySelectingResumeVariant &&
       !isResolvingPreparedResume;
-    if (!receipt.resumeStarted && canStartResume) {
-      receipt.resumeStarted = true;
-      void handleResumePolish({ revealResumeOnSuccess: false });
+    const resumeDecision = automaticPolishActionDecision({
+      enabled: autoPolishResume,
+      thresholdMet: fitAssessmentMeetsThreshold(
+        fit.verdict,
+        resumeAutoPolishThreshold
+      ),
+      automationBlocked,
+      prerequisitePending: false,
+      canStart: resumePolishCanStart
+    });
+    if (!receipt.resumeStarted && resumeDecision === "start") {
+      receipt.resumeStarted = handleResumePolish({
+        revealResumeOnSuccess: false
+      }).started;
     }
 
-    const canStartCover =
-      !automationBlocked &&
-      autoPolishCoverLetter &&
-      fitAssessmentMeetsThreshold(fit.verdict, coverLetterAutoPolishThreshold) &&
+    const coverPolishCanStart =
       coverLetterPreflight.canTailor &&
       resumeReady &&
       jobPrepared &&
       coverProviderReady &&
       !isGeneratingCover &&
       !isSelectingCoverVariant &&
-      !isRankingCoverLetterVariants;
-    if (!receipt.coverStarted && canStartCover) {
-      receipt.coverStarted = true;
-      void handleCoverLetterPolish();
+      !coverVariantResolutionPending;
+    const coverDecision = automaticPolishActionDecision({
+      enabled: autoPolishCoverLetter,
+      thresholdMet: fitAssessmentMeetsThreshold(
+        fit.verdict,
+        coverLetterAutoPolishThreshold
+      ),
+      automationBlocked,
+      prerequisitePending: coverVariantResolutionPending,
+      canStart: coverPolishCanStart
+    });
+    if (!receipt.coverStarted && coverDecision === "start") {
+      receipt.coverStarted = handleCoverLetterPolish().started;
     }
     // The token represents this Prepare run's one automation decision. Once
     // both configured actions have either started or declined, later Settings
     // changes cannot revive automation from an old Fit result.
-    acknowledgeFitAutomation(candidate.automationToken);
+    const resumeSettled = receipt.resumeStarted || resumeDecision === "decline";
+    const coverSettled = receipt.coverStarted || coverDecision === "decline";
+    if (resumeSettled && coverSettled) {
+      acknowledgeFitAutomation(candidate.automationToken);
+    }
   }, [
     autoPolishCoverLetter,
     autoPolishResume,
@@ -1684,6 +1747,7 @@ function App() {
     coverLetterPreflight.canTailor,
     coverLetterAutoPolishThreshold,
     coverProviderReady,
+    coverVariantResolutionPending,
     currentResumeText,
     handlePolish,
     handleTailorCoverLetter,
@@ -1701,7 +1765,8 @@ function App() {
     fitAssessmentState,
     resumeAutoPolishThreshold,
     resumeReady,
-    resumeText
+    resumeText,
+    runFitAssessment
   ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
@@ -1979,7 +2044,7 @@ function App() {
         app.fitAssessment,
         {
           url: (app.jobUrl || "").trim(),
-          sourceText: restoredTailoringText
+          sourceText: restoredSourceText
         }
       );
       // Include controls describe the NEXT Apply package, not which historical
@@ -2055,6 +2120,12 @@ function App() {
     const restored = parseResumeFile(draft.resumeSource);
     seedResumeData(restored.data);
     docStyle.replaceDocumentStyle(restored.documentStyle);
+    // Recovery cannot prove that the current workspace/file identity belongs to
+    // these draft bytes. Keep the draft's applicant origin, but require an
+    // explicit save target instead of risking an overwrite of another variant.
+    detachBaseResumeIdentity();
+    setFileName("");
+    setResumeOrigin(draft.resumeOrigin);
     resetCoverWorkflow();
     // The autosave doesn't carry the job description/URL, so a saved
     // pipelineAiUsage/rawText only applies when the SAME job target is still
@@ -2341,7 +2412,9 @@ function App() {
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
-              onTailorCoverLetter={handleCoverLetterPolish}
+              onTailorCoverLetter={() => {
+                handleCoverLetterPolish();
+              }}
               onOpenCoverLetter={() => setActiveOutputTab("cover")}
               fitAssessment={fitAssessmentState}
               onAssessFit={() => void reassessFit()}
@@ -2712,7 +2785,9 @@ function App() {
               }}
               inlineFormat={coverLetterInlineFormat}
               onInlineFormatStateChange={setCoverLetterInlineFormat}
-              onTailor={handleCoverLetterPolish}
+              onTailor={() => {
+                handleCoverLetterPolish();
+              }}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}

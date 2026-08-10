@@ -176,6 +176,23 @@ assert.equal(
   "prepare-automation-1",
   "the first Fit Assessment completed by Prepare may trigger automatic Polish"
 );
+for (const staleState of [
+  { ...prepareReady, enabled: false },
+  {
+    ...prepareReady,
+    latestCompleted: { ...prepareReady.latestCompleted, changes: ["resume"] }
+  },
+  {
+    ...prepareReady,
+    latestCompleted: { ...prepareReady.latestCompleted, previousPreparation: true }
+  }
+]) {
+  assert.equal(
+    fitAssessmentMayTriggerAutoPolish(staleState),
+    null,
+    "disabled, changed, and previous-preparation assessments cannot authorize automatic Polish"
+  );
+}
 const reassessing = beginFitAssessmentRun(prepareReady, {
   id: "fit-reassess-1",
   kind: "reassess",
@@ -199,6 +216,32 @@ assert.equal(
   failedReassessment.lastError?.message,
   "Synthetic provider failure",
   "the failed attempt remains visible beside the durable completion"
+);
+const samePreparationStale = {
+  ...prepareReady,
+  latestCompleted: {
+    ...prepareReady.latestCompleted,
+    changes: ["resume"],
+    previousPreparation: false
+  }
+};
+assert.equal(
+  fitAssessmentLatestSnapshot(samePreparationStale),
+  savedSnapshot,
+  "same-preparation input changes retain the latest completed assessment for Apply"
+);
+const previousPreparation = {
+  ...prepareReady,
+  latestCompleted: {
+    ...prepareReady.latestCompleted,
+    changes: ["job"],
+    previousPreparation: true
+  }
+};
+assert.equal(
+  fitAssessmentLatestSnapshot(previousPreparation),
+  null,
+  "a completed assessment from another preparation is never persisted onto the new application"
 );
 const laterReady = completeFitAssessmentRun(
   beginFitAssessmentRun(prepareReady, {
@@ -239,17 +282,23 @@ assert.equal(
   "an incomplete assessment is never persisted as a completed snapshot"
 );
 assert.deepEqual(
-  restoredFitAssessmentState(true, savedSnapshot),
+  restoredFitAssessmentState(true, "prepare-restored", savedSnapshot),
   {
     enabled: true,
-    latestCompleted: { snapshot: savedSnapshot, origin: "saved", changes: [], previousPreparation: false },
+    latestCompleted: {
+      snapshot: savedSnapshot,
+      origin: "saved",
+      changes: [],
+      previousPreparation: false,
+      prepareRunId: "prepare-restored"
+    },
     activeRun: null,
     lastError: null
   },
   "opening a prepared application retains its compact assessment as historical, not current automation input"
 );
 assert.deepEqual(
-  restoredFitAssessmentState(true, undefined),
+  restoredFitAssessmentState(true, "prepare-without-fit", undefined),
   {
     enabled: true,
     latestCompleted: null,
@@ -262,46 +311,108 @@ assert.deepEqual(
   "a prepared application without a saved assessment invites a run instead of asking to Prepare again"
 );
 assert.deepEqual(
-  restoredFitAssessmentState(false, savedSnapshot),
+  restoredFitAssessmentState(false, "prepare-restored-disabled", savedSnapshot),
   {
     enabled: false,
-    latestCompleted: { snapshot: savedSnapshot, origin: "saved", changes: [], previousPreparation: false },
+    latestCompleted: {
+      snapshot: savedSnapshot,
+      origin: "saved",
+      changes: [],
+      previousPreparation: false,
+      prepareRunId: "prepare-restored-disabled"
+    },
     activeRun: null,
     lastError: null
   },
   "turning Fit Assessment off does not erase a restored completed result"
 );
 assert.equal(
-  fitAssessmentMayTriggerAutoPolish(restoredFitAssessmentState(true, savedSnapshot)),
+  fitAssessmentMayTriggerAutoPolish(
+    restoredFitAssessmentState(true, "prepare-restored-advisory", savedSnapshot)
+  ),
   null,
   "historical assessments never authorize automatic Polish"
 );
 
 const intakeSource = readFileSync(new URL("../useJobIntake.ts", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+const preparedBriefChangeSource = appSource.slice(
+  appSource.indexOf("const handlePreparedJobBriefChange"),
+  appSource.indexOf("// Per-section Polish choice")
+);
 const railSource = readFileSync(
   new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
   "utf8"
 );
 assert.match(
   intakeSource,
-  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(runFitAssessment, snapshot\)/,
+  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(runFitAssessment, prepareRunId, snapshot\)/,
   "application restore hydrates the hook-owned prepared-job receipt and historical assessment atomically"
 );
 assert.match(
+  intakeSource,
+  /completedAssessment\?\.prepareRunId[\s\S]{0,180}?completedAssessment\.prepareRunId !== currentPrepared\.id/,
+  "saved and current completions use preparation identity to detect cross-preparation history"
+);
+assert.match(
   appSource,
-  /restorePreparedFitAssessment\(\s*\{\s*localJobText: restoredTailoringText,\s*screeningJobText: restoredSourceText\s*\},\s*app\.fitAssessment,\s*\{\s*url:[\s\S]{0,100}?sourceText: restoredTailoringText/,
+  /restorePreparedFitAssessment\(\s*\{\s*localJobText: restoredTailoringText,\s*screeningJobText: restoredSourceText\s*\},\s*app\.fitAssessment,\s*\{\s*url:[\s\S]{0,100}?sourceText: restoredSourceText/,
   "opening a tracked application sends its restored brief, captured posting, saved assessment, and current draft identity to the intake owner"
+);
+assert.match(
+  intakeSource,
+  /const draftInputRef = useRef\(\{[\s\S]{0,180}?sourceText: jobRawText\.trim\(\) \|\| jobDescription\.trim\(\)/,
+  "draft identity prefers the immutable captured posting over the editable prepared projection"
+);
+assert.match(
+  intakeSource,
+  /commitPreparation\(\{\s*id: prepareIdentity\.prepareRunId,\s*draft: \{ url: url\.trim\(\), sourceText: screeningJobText\.trim\(\) \}/,
+  "a successful preparation commits its screening source rather than the generated brief"
+);
+assert.match(
+  preparedBriefChangeSource,
+  /preparedJobBriefFieldFromText\(field, value\)[\s\S]{0,700}?setJobDescription\(nextTailoringText\)/,
+  "structured brief edits update the prepared projection"
+);
+assert.doesNotMatch(
+  preparedBriefChangeSource,
+  /setJobRawText/,
+  "structured brief edits never replace the captured posting"
+);
+assert.match(
+  intakeSource,
+  /function handleManualJobDescriptionChange\(value: string\)[\s\S]{0,500}?setJobRawText\(""\)/,
+  "direct source-text replacement clears the captured posting identity"
 );
 assert.match(
   appSource,
   /fitAssessmentSnapshot:\s*fitAssessmentLatestSnapshot\(fitAssessmentState\)/,
-  "Apply includes the latest completed ready, stale, or restored assessment"
+  "Apply includes the latest completed assessment that belongs to the current preparation"
 );
 assert.match(
   appSource,
-  /const candidate = fitAssessmentMayTriggerAutoPolish\(fitAssessmentState\);[\s\S]*?acknowledgeFitAutomation\(candidate\.automationToken\)/,
-  "automatic Polish consumes the one-use token from the assessment authorized by Prepare"
+  /const pendingToken = fitAssessmentState\.latestCompleted\?\.automationToken;[\s\S]{0,350}?if \(!candidate\) \{[\s\S]{0,250}?acknowledgeFitAutomation\(pendingToken\)/,
+  "a stale or previous Prepare result consumes its token as a declined automation decision"
+);
+assert.match(
+  appSource,
+  /const coverVariantResolutionPending = Boolean\([\s\S]{0,500}?rankingJobDescription !== jobDescription\.trim\(\)[\s\S]{0,300}?coverLetterVariantRecommendationKeyRef\.current[\s\S]{0,200}?isRankingCoverLetterVariants/,
+  "Cover Letter automation sees pending variant resolution synchronously, including the pre-effect input-key mismatch"
+);
+assert.match(
+  appSource,
+  /const coverDecision = automaticPolishActionDecision\(\{[\s\S]{0,350}?prerequisitePending: coverVariantResolutionPending[\s\S]{0,650}?const coverSettled = receipt\.coverStarted \|\| coverDecision === "decline";[\s\S]{0,180}?if \(resumeSettled && coverSettled\)/,
+  "the Fit token stays pending while a qualified Cover Letter action waits and settles only after start or permanent decline"
+);
+assert.match(
+  appSource,
+  /function handleResumePolish\([\s\S]{0,300}?PolishStartReceipt[\s\S]{0,500}?return \{ started: true \};[\s\S]{0,180}?function handleCoverLetterPolish\(\): PolishStartReceipt/,
+  "both automatic document actions return an explicit start-boundary receipt"
+);
+assert.match(
+  appSource,
+  /useBeforeUnloadGuard\([\s\S]{0,350}?fitAssessmentRequestActive \|\|[\s\S]{0,100}?preparationAutomationPending/,
+  "the unload guard covers the pending one-use Prepare automation decision"
 );
 assert.match(
   intakeSource,

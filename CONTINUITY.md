@@ -5,8 +5,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
-- [USER+CODE+TOOL] **Preparation stabilization resolves review Findings 1-8
-  without a schema-version bump or runtime migration aliases.** Fit Assessment
+- [USER+CODE+TOOL] **Preparation stabilization and its follow-on boundary review
+  resolve Findings 1-8 without a schema-version bump or runtime migration
+  aliases.** Fit Assessment
   keeps its latest completion across later attempts, the first assessment is an
   awaited one-use Prepare automation decision, draft and committed preparation
   are distinct, and Stop/input changes cannot publish late success. Candidate
@@ -15,8 +16,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   one provider context, and ungrounded Resume Polish gaps are removed. The
   ignored preview workspace was backed up and manually rewritten (318 records,
   77 Fit snapshots); strict direct reads and live endpoints passed. The pinned
-  Node 24 RoleFit gate passes all 88 offline evaluations and the UI detector is
-  clean; browser interaction QA remains UNCONFIRMED under the flag-first policy.
+  follow-up rejects cross-preparation Fit persistence, declines stale automation,
+  waits for automatic cover-variant resolution before consuming its token,
+  keys preparation identity to the captured posting, and round-trips resume
+  origin through autosave recovery. The pinned Node 24 RoleFit gate passes all
+  89 offline evaluations. No rendered UI changed; browser interaction QA remains
+  UNCONFIRMED under the flag-first policy.
 
 ## 2026-08-09
 

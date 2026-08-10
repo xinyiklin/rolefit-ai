@@ -126,6 +126,7 @@ type UseJobIntakeArgs = {
   setJobUrl: (value: string) => void;
   jobDescription: string;
   setJobDescription: (value: string) => void;
+  jobRawText: string;
   setImportedJob: (value: ImportedJobSnapshot | null) => void;
   setResult: (value: PolishedResume | null) => void;
   resetCoverWorkflow: () => void;
@@ -211,6 +212,7 @@ export function useJobIntake({
   setJobUrl,
   jobDescription,
   setJobDescription,
+  jobRawText,
   setImportedJob,
   setResult,
   resetCoverWorkflow,
@@ -272,8 +274,14 @@ export function useJobIntake({
   // separate, so replacing them can mark this run previous without destroying it.
   const committedPreparationRef = useRef<PreparationRun | null>(null);
   committedPreparationRef.current = committedPreparation;
-  const draftInputRef = useRef({ url: jobUrl.trim(), sourceText: jobDescription.trim() });
-  draftInputRef.current = { url: jobUrl.trim(), sourceText: jobDescription.trim() };
+  const draftInputRef = useRef({
+    url: jobUrl.trim(),
+    sourceText: jobRawText.trim() || jobDescription.trim()
+  });
+  draftInputRef.current = {
+    url: jobUrl.trim(),
+    sourceText: jobRawText.trim() || jobDescription.trim()
+  };
   const prepareRunSequenceRef = useRef(0);
   const fitRunSequenceRef = useRef(0);
   // The stale-input guard tracks the job source, Fit Assessment setting, and
@@ -361,7 +369,7 @@ export function useJobIntake({
     snapshot?: FitAssessmentSnapshot,
     draft: { url: string; sourceText: string } = {
       url: jobUrl.trim(),
-      sourceText: jobDescription.trim()
+      sourceText: jobRawText.trim() || jobDescription.trim()
     }
   ) {
     // A tracker restore supersedes every request from the previous desk state.
@@ -384,7 +392,7 @@ export function useJobIntake({
     setJobAnalysisProgress({ status: "idle" });
     setJobAnalysisProgressVisible(false);
     setJobAnalysisRetrySource(null);
-    setFitAssessmentState(restoredFitAssessmentState(runFitAssessment, snapshot));
+    setFitAssessmentState(restoredFitAssessmentState(runFitAssessment, prepareRunId, snapshot));
   }
 
   useEffect(() => {
@@ -581,7 +589,7 @@ export function useJobIntake({
       aiRequest: capturedAiRequest
     }: {
       kind?: "prepare" | "reassess" | "resume-change";
-      activeRun?: { id: string; prepareRunId?: string; automationToken?: string };
+      activeRun?: { id?: string; prepareRunId?: string; automationToken?: string };
       aiRequest?: AiRequestFields;
     } = {}
   ) {
@@ -657,7 +665,10 @@ export function useJobIntake({
       resumeText: selection.text,
       resumeLabel: selection.label,
       candidateContext: candidateContext()
-    }, { kind: "resume-change" });
+    }, {
+      kind: "resume-change",
+      activeRun: { prepareRunId: committed.id }
+    });
   }
 
   async function reassessFit() {
@@ -675,7 +686,10 @@ export function useJobIntake({
       refresh: (screeningJobText, fitRequest) => evaluateFitAssessment(
         screeningJobText,
         fitRequest,
-        { kind: "reassess" }
+        {
+          kind: "reassess",
+          activeRun: { prepareRunId: committed.id }
+        }
       )
     });
   }
@@ -685,15 +699,14 @@ export function useJobIntake({
   const preparationDraftDiverged = Boolean(
     currentPrepared && (
       currentPrepared.draft.url !== jobUrl.trim()
-      || currentPrepared.draft.sourceText !== jobDescription.trim()
+      || currentPrepared.draft.sourceText !== (jobRawText.trim() || jobDescription.trim())
     )
   );
   const completedAssessment = fitAssessmentState.latestCompleted;
   const assessmentBelongsToPreviousPreparation = Boolean(
     preparationDraftDiverged
     || (
-      completedAssessment?.origin === "current"
-      && completedAssessment.prepareRunId
+      completedAssessment?.prepareRunId
       && currentPrepared
       && completedAssessment.prepareRunId !== currentPrepared.id
     )
@@ -928,7 +941,7 @@ export function useJobIntake({
     }));
     commitPreparation({
       id: prepareIdentity.prepareRunId,
-      draft: { url: url.trim(), sourceText: relevant.trim() },
+      draft: { url: url.trim(), sourceText: screeningJobText.trim() },
       preparedJob: { localJobText, screeningJobText },
       selectedResume: selection
     });

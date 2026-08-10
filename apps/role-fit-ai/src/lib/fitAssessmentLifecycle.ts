@@ -30,7 +30,10 @@ export function fitAssessmentMayTriggerAutoPolish(
   state: FitAssessmentState
 ): FitAssessmentCompleted & { provenance: FitAssessmentProvenance; automationToken: string } | null {
   const completed = state.latestCompleted;
-  return completed?.origin === "current"
+  return state.enabled
+    && completed?.origin === "current"
+    && !completed.previousPreparation
+    && completed.changes.length === 0
     && completed.provenance
     && completed.automationToken
     ? completed as FitAssessmentCompleted & {
@@ -43,7 +46,8 @@ export function fitAssessmentMayTriggerAutoPolish(
 export function fitAssessmentLatestSnapshot(
   state: FitAssessmentState
 ): FitAssessmentSnapshot | null {
-  return state.latestCompleted?.snapshot ?? null;
+  const completed = state.latestCompleted;
+  return completed && !completed.previousPreparation ? completed.snapshot : null;
 }
 
 export function emptyFitAssessmentState(
@@ -130,12 +134,19 @@ export function consumeFitAssessmentAutomationToken(
 
 export function restoredFitAssessmentState(
   runFitAssessment: boolean,
+  prepareRunId: string,
   snapshot?: FitAssessmentSnapshot
 ): FitAssessmentState {
   return {
     enabled: runFitAssessment,
     latestCompleted: snapshot
-      ? { snapshot, origin: "saved", changes: [], previousPreparation: false }
+      ? {
+          snapshot,
+          origin: "saved",
+          changes: [],
+          previousPreparation: false,
+          prepareRunId
+        }
       : null,
     activeRun: null,
     lastError: runFitAssessment && !snapshot

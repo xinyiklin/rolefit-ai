@@ -9,14 +9,12 @@
 
 import { contentFingerprint } from "./contentFingerprint.ts";
 import { recommendVariant, type VariantCandidate, type VariantRecommendation } from "./variantRecommendation.ts";
+import type { ResumeOrigin } from "./resumeOrigin.ts";
+export type { ResumeOrigin } from "./resumeOrigin.ts";
 
 // The same floor the variant ranker uses for a resume: anything shorter is a
 // stub, not a document worth screening a posting against.
 export const MINIMUM_PREPARED_RESUME_LENGTH = 80;
-
-// Where the document currently in the editor came from. Only `starter` is
-// sample content that must never be mistaken for the applicant's own resume.
-export type ResumeOrigin = "saved" | "uploaded" | "application" | "starter" | "blank" | "authored";
 
 export function resumeOriginAfterEdit(
   origin: ResumeOrigin,

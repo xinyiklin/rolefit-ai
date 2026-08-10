@@ -25,3 +25,23 @@ export function fitAssessmentMeetsThreshold(
 ): boolean {
   return FIT_RANK[verdict] >= FIT_RANK[threshold];
 }
+
+export type AutomaticPolishActionDecision = "start" | "wait" | "decline";
+
+export function automaticPolishActionDecision({
+  enabled,
+  thresholdMet,
+  automationBlocked,
+  prerequisitePending,
+  canStart
+}: {
+  enabled: boolean;
+  thresholdMet: boolean;
+  automationBlocked: boolean;
+  prerequisitePending: boolean;
+  canStart: boolean;
+}): AutomaticPolishActionDecision {
+  if (!enabled || !thresholdMet || automationBlocked) return "decline";
+  if (prerequisitePending) return "wait";
+  return canStart ? "start" : "decline";
+}

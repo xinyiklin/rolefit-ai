@@ -86,6 +86,7 @@ function assertOrder(log, expected, message) {
 function createHarness({
   routeUrl = JOB_URL,
   jobDescription = POSTING,
+  jobRawText = "",
   runFitAssessment = true,
   readiness = { ready: true },
   beforeProceed = true,
@@ -145,6 +146,7 @@ function createHarness({
     setJobUrl: record("setJobUrl"),
     jobDescription,
     setJobDescription: record("setJobDescription"),
+    jobRawText,
     setImportedJob: record("setImportedJob"),
     setResult: record("setResult"),
     resetCoverWorkflow: () => log.push({ event: "resetCoverWorkflow" }),
@@ -375,6 +377,32 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assertOrder(harness.log, sharedCommitOrder, "paste intake order");
   assert.equal(harness.requests.some(({ url }) => url === "/api/import-job"), false);
+}
+
+{
+  const harness = createHarness({ jobRawText: POSTING });
+  await runPaste(harness);
+  harness.args.jobDescription = `${POSTING}\nCorrected required qualification: Helm.`;
+  assert.equal(
+    harness.render().canAssessFit,
+    true,
+    "editing the structured prepared brief does not replace the captured screening source"
+  );
+  harness.args.jobRawText = "";
+  harness.args.jobDescription = `${POSTING}\nReplacement source posting.`;
+  assert.equal(
+    harness.render().canAssessFit,
+    false,
+    "replacing the raw source marks the committed preparation as diverged"
+  );
+  harness.args.jobRawText = POSTING;
+  harness.args.jobDescription = POSTING;
+  harness.args.jobUrl = `${JOB_URL}?replacement=1`;
+  assert.equal(
+    harness.render().canAssessFit,
+    false,
+    "changing the source URL also marks the committed preparation as diverged"
+  );
 }
 
 {
