@@ -97,10 +97,13 @@ tracker. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
 and Cover Letter starts excluded. Starting Polish for a document turns on that
 document's Include toggle without changing the sibling material; an enabled
-automatic proposal does the same when it starts. Apply creates the tracked
-application once the job is prepared and stores only included, ready materials;
-it also supports a tracker-only application with both cards excluded. On a
-later re-Apply, an excluded slot is left untouched so a
+automatic proposal does the same when it starts. A fresh Apply creates one
+tracked application; applying an interested draft changes that exact record to
+Applied; and opening a later-stage record exposes Update application, which
+preserves its identity, original application date, and current stage. Job
+matching never chooses between those write paths. Each path stores only
+included, ready materials and supports a tracker-only commit with both cards
+excluded. On a later update, an excluded slot is left untouched so a
 previously saved artifact is never deleted or replaced implicitly. The resume
 and cover letter keep independent
 saved/unsaved states and an explicit "Update application" action in their own
@@ -338,13 +341,15 @@ disappears into the task. Quiet competence, not salesmanship.
    workspace as a local safety copy; every browser attached to that workspace
    adopts restored preferences on its next load.
 10. Keep application readiness singular: the masthead and Prepare page expose
-    the same Apply command and blocker model. The current job must be prepared
+    the same session-derived command and blocker model: Apply for fresh work or
+    an interested draft, Update application for an explicitly restored submitted
+    record. The current job must be prepared
     and preparation for selected work must be idle. Resume and Cover Letter
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. Starting
     Polish for one document, manually or through its enabled automatic proposal,
     includes that document and leaves the other Include choice unchanged. A
-    later re-Apply must preserve any previously saved artifact for an excluded
+    later update must preserve any previously saved artifact for an excluded
     slot.
     Fit Assessment follows the [user contract](#fit-assessment-user-contract): one
     compact advisory in the Application rail, no hidden score or replacement

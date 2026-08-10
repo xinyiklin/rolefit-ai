@@ -329,8 +329,12 @@ Good frontend verification covers:
   The client probe keeps an unchanged focus adoption from consuming the user's
   next real save;
   `src/hooks/__evals__/application-persistence-guards.mjs` keeps tracker conflict,
-  Apply commit ordering, recovery clearing, and modal-save failure contracts
-  covered after the retired monolithic workflow guard was removed.
+  explicit create/update commit ordering, recovery clearing, and modal-save
+  failure contracts covered after the retired monolithic workflow guard was
+  removed. `src/lib/__evals__/preparation-application-commit.mjs` proves fresh
+  Apply creates, interested-draft Apply updates the same id, later-stage updates
+  preserve identity/date/stage, missing explicit targets fail closed, and all
+  primary surfaces use the shared action descriptor.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three
@@ -348,11 +352,11 @@ Good frontend verification covers:
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
-- masthead Apply and Prepare Apply invoke the same handler and readiness model:
+- masthead and Prepare primary actions invoke the same handler, action copy, and readiness model:
   a matching completed preparation is required, each included material must be
   ready while its work is idle, neither material is required, and non-empty
   source alone remains blocked. Applying with both excluded records the job;
-  excluding a previously saved material on re-Apply preserves that artifact
+  excluding a previously saved material on a later update preserves that artifact
 - every prepared JD field can be corrected locally on Prepare after partial or
   failed extraction without invalidating the matching prepared source snapshot:
   tracked job facts through one role context, responsibilities, required/preferred

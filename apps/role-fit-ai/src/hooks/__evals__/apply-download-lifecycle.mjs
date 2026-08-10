@@ -13,7 +13,7 @@ const downloadPickEnd = applyFlow.indexOf("\n\n  async function handleApplyOnly(
 const downloadPick = applyFlow.slice(downloadPickStart, downloadPickEnd);
 const compactDownloadPick = compact(downloadPick);
 const commitApplyStart = applyFlow.indexOf("async function commitApply(): Promise<boolean>");
-const commitApplyEnd = applyFlow.indexOf("\n  // Apply button handler:", commitApplyStart);
+const commitApplyEnd = applyFlow.indexOf("\n  // New preparations", commitApplyStart);
 const commitApply = applyFlow.slice(commitApplyStart, commitApplyEnd);
 const handleApplyStart = applyFlow.indexOf("async function handleApply()");
 const handleApplyEnd = applyFlow.indexOf("\n  // Downloads run sequentially:", handleApplyStart);
@@ -65,14 +65,18 @@ const captureMaterials = compactHandleApply.indexOf(
   "applyMaterialSelectionRef.current = {",
   showResolutionBusy
 );
+const captureSession = compactHandleApply.indexOf("applySessionRef.current = session;", captureMaterials);
+const newSessionGuard = compactHandleApply.indexOf('if (session.mode === "new")', captureSession);
 const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate()", showResolutionBusy);
 assert.ok(resolutionGuard >= 0, "Apply rejects reentry during any active lifecycle phase");
 assert.ok(
   claimResolution > resolutionGuard &&
     showResolutionBusy > claimResolution &&
     captureMaterials > showResolutionBusy &&
-    awaitResolution > captureMaterials,
-  "Apply claims visible duplicate-resolution ownership before shared mutation or await"
+    captureSession > captureMaterials &&
+    newSessionGuard > captureSession &&
+    awaitResolution > newSessionGuard,
+  "Apply captures the explicit session before limiting duplicate review to new preparations"
 );
 
 const resolutionFinally = compactHandleApply.lastIndexOf("finally");
@@ -98,8 +102,8 @@ assert.ok(
 );
 assert.match(
   handleApply,
-  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applyMergeTargetRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
-  "an unexpected duplicate-check failure clears shared targets and reports that nothing was saved"
+  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applySessionRef\.current = null;[\s\S]{0,180}?applyActionRef\.current = null;[\s\S]{0,180}?applyMergeTargetRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
+  "an unexpected duplicate-check failure clears the captured session and reports that nothing was saved"
 );
 
 const outerGuard = compactDownloadPick.indexOf(

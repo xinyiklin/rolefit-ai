@@ -9,6 +9,7 @@ import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { ExtractedJobTracking } from "../../lib/jobExtract";
 import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
+import type { PreparationPrimaryAction } from "../../lib/preparationSession";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
 import { PreparedJobBriefSections, type PreparedJobBriefSection } from "./prepare/PreparedJobBriefSections";
 import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
@@ -137,6 +138,7 @@ export type PrepareTabProps = {
   canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
+  primaryAction: PreparationPrimaryAction;
   isApplying: boolean;
   onApply: () => void | Promise<void>;
 };
@@ -200,6 +202,7 @@ export function PrepareTab({
   canAssessFit,
   linkedApplication,
   readiness,
+  primaryAction,
   isApplying,
   onApply
 }: PrepareTabProps) {
@@ -743,6 +746,7 @@ export function PrepareTab({
             canAssessFit={canAssessFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
+            primaryAction={primaryAction}
             isApplying={isApplying}
             onApply={onApply}
           >

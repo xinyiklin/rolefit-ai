@@ -1,10 +1,13 @@
 import { ClipboardCheck, X } from "lucide-react";
+import type { PreparationPrimaryAction } from "../lib/preparationSession";
 
 type MastheadProps = {
   // Mark the current role as applied and save the included materials. Runs a
   // duplicate-application scan first (which may await a confirm dialog), hence
   // the async-friendly signature.
   onApply: () => void | Promise<void>;
+  primaryAction: PreparationPrimaryAction;
+  busy: boolean;
   applyDisabled: boolean;
   // Explains why Apply is greyed out (mirrors polishHint).
   applyHint: string;
@@ -15,6 +18,8 @@ type MastheadProps = {
 
 export function Masthead({
   onApply,
+  primaryAction,
+  busy,
   applyDisabled,
   applyHint,
   applyStatus,
@@ -37,13 +42,13 @@ export function Masthead({
             onClick={() => {
               if (!applyDisabled) void onApply();
             }}
-            aria-label="Apply prepared application"
+            aria-label={`${primaryAction.label} prepared application`}
             aria-disabled={applyDisabled}
             aria-describedby={applyDisabled ? "masthead-apply-hint" : undefined}
-            title={applyDisabled ? applyHint : "Mark as applied and save included materials"}
+            title={applyDisabled ? applyHint : `${primaryAction.label} and save included materials`}
           >
             <ClipboardCheck size={14} aria-hidden="true" />
-            <span>Apply</span>
+            <span>{busy ? primaryAction.busyLabel : primaryAction.label}</span>
           </button>
           {applyDisabled ? (
             <span className="masthead-action__hint" id="masthead-apply-hint">
@@ -60,7 +65,7 @@ export function Masthead({
             >
               <span>{applyStatus}</span>
               {onDismissApplyStatus ? (
-                <button type="button" onClick={onDismissApplyStatus} aria-label="Dismiss Apply message">
+                <button type="button" onClick={onDismissApplyStatus} aria-label="Dismiss application action message">
                   <X size={13} aria-hidden="true" />
                 </button>
               ) : null}

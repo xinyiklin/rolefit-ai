@@ -3,8 +3,8 @@
  * state, commitApply, handleApply, handleApplyDownloadPick, handleApplyOnly,
  * and saveAppliedDocumentArtifacts.
  *
- * State ownership: applyMergeTargetRef/applyDownloadPrompt are OWNED here —
- * every mutator of them is one of these functions. App only reads
+ * State ownership: the captured preparation session and applyDownloadPrompt
+ * are OWNED here — every mutator of them is one of these functions. App only reads
  * applyDownloadPrompt for render (the ApplyDownloadDialog) and calls
  * handleApply from the Apply button.
  *
@@ -14,7 +14,7 @@
  * usePolishPipeline's pattern.
  */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { makeApplicationDraft, type Application, type ApplicationStatus } from "./useApplications";
+import { makeApplicationDraft, type Application } from "./useApplications";
 import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { copyAiUsage, type StageAiUsage } from "../lib/aiUsage";
@@ -25,6 +25,12 @@ import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
 import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
+import {
+  preparationPrimaryAction,
+  type PreparationPrimaryAction,
+  type PreparationSession
+} from "../lib/preparationSession.ts";
+import { appliedApplicationForSession } from "../lib/preparationApplication.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -47,9 +53,9 @@ type UseApplyFlowArgs = {
   fitAssessmentPersistence: FitAssessmentPersistenceDecision;
   pipelineAiUsage: Record<string, StageAiUsage>;
   applications: Application[];
-  linkedApplicationId: string | null;
-  findForTarget: (url: string, desc: string) => Application | undefined;
-  persistAppliedApplication: (app: Application) => Promise<boolean>;
+  preparationSession: PreparationSession;
+  createApplication: (app: Application) => Promise<boolean>;
+  updateApplicationById: (app: Application) => Promise<boolean>;
   saveApplicationDocument: (
     id: string,
     kind: "resume" | "cover",
@@ -96,9 +102,9 @@ export function useApplyFlow({
   fitAssessmentPersistence,
   pipelineAiUsage,
   applications,
-  linkedApplicationId,
-  findForTarget,
-  persistAppliedApplication,
+  preparationSession,
+  createApplication,
+  updateApplicationById,
   saveApplicationDocument,
   linkApplication,
   currentJobTracking,
@@ -117,12 +123,11 @@ export function useApplyFlow({
   setActiveOutputTab,
   setExpandedApplicationId
 }: UseApplyFlowArgs) {
-  // Set by handleApply when a duplicate scan finds an "exact"/"high"-confidence
-  // match, so commitApply merges into that record instead of (or in addition
-  // to) whatever findForTarget's own exact-only lookup would find. Cleared on
-  // every path where the apply flow completes or is abandoned. "possible"
-  // matches never set this — they never auto-merge.
+  // Transitional duplicate-review receipt. Phase 3 replaces this target-shaped
+  // result with a posting relationship; it never selects a write destination.
   const applyMergeTargetRef = useRef<string | null>(null);
+  const applySessionRef = useRef<PreparationSession | null>(null);
+  const applyActionRef = useRef<PreparationPrimaryAction | null>(null);
   const applyMaterialSelectionRef = useRef<{
     resume: boolean;
     coverLetter: boolean;
@@ -142,6 +147,7 @@ export function useApplyFlow({
     label: string;
     canDownloadResume: boolean;
     canDownloadCoverLetter: boolean;
+    action: PreparationPrimaryAction;
   } | null>(null);
   const [isResolvingApply, setIsResolvingApply] = useState(false);
   const [isCommittingApply, setIsCommittingApply] = useState(false);
@@ -166,7 +172,8 @@ export function useApplyFlow({
   async function saveAppliedDocumentArtifacts(
     id: string,
     label: string,
-    expectedVersions: { resume: string; coverLetter: string }
+    expectedVersions: { resume: string; coverLetter: string },
+    action: PreparationPrimaryAction
   ) {
     const selection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     const resume = selection.resume ? await getResumeArtifacts().catch(() => null) : null;
@@ -214,7 +221,7 @@ export function useApplyFlow({
         : [])
     ];
     if (failures.length) {
-      setApplyStatus(`Applied "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.`);
+      setApplyStatus(`${action.successVerb} "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.`);
       return {
         resumeSaved: Boolean(currentStoredResume?.ok),
         coverSaved: Boolean(currentStoredCover?.ok)
@@ -226,8 +233,8 @@ export function useApplyFlow({
     ];
     setApplyStatus(
       savedLabels.length
-        ? `Applied "${label}". Saved ${savedLabels.join(" and ")}.`
-        : `Applied "${label}". No documents were included in this Apply.`
+        ? `${action.successVerb} "${label}". Saved ${savedLabels.join(" and ")}.`
+        : `${action.successVerb} "${label}". No documents were included.`
     );
     return {
       resumeSaved: Boolean(currentStoredResume?.ok),
@@ -235,18 +242,25 @@ export function useApplyFlow({
     };
   }
 
-  // The actual apply: save the application, snapshot artifacts, update UI.
+  // Commit the current session through its explicit create/update path, then
+  // snapshot included artifacts and update UI.
   // Called directly when the user has opted to skip the download dialog, or
   // from the dialog's Download / Apply-only callbacks.
   async function commitApply(): Promise<boolean> {
+    const session = applySessionRef.current ?? preparationSession;
+    const existing = session.applicationId
+      ? applications.find((application) => application.id === session.applicationId) ?? null
+      : null;
+    const action = applyActionRef.current
+      ?? preparationPrimaryAction(session, existing?.status);
     if (!canApply) {
-      setApplyStatus(applyBlocker || "Finish preparing this application before applying.");
+      setApplyStatus(applyBlocker || "Finish preparation before continuing.");
       return false;
     }
     if (applyCommitInFlightRef.current) return false;
     applyCommitInFlightRef.current = true;
-    // The document sources and versions belong to the user's final Apply
-    // confirmation. If either editor changes while the tracker write is in
+    // The document sources and versions belong to the user's final confirmation.
+    // If either editor changes while the tracker write is in
     // flight, the older artifact must not be saved or mark the newer draft
     // clean.
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
@@ -255,18 +269,15 @@ export function useApplyFlow({
     const resumeUsed = resumeUsedForApplication(currentResumeText, result?.proposalBaselineText);
     const usedBase = resumeUsed === "base";
     const materialSelection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
-    // A duplicate scan in handleApply may have already identified which record
-    // this apply should merge into (exact/high confidence, user-confirmed when
-    // not "interested"). Prefer that over the exact-only findForTarget lookup;
-    // Retain the target until persistence succeeds so a recoverable retry keeps
-    // the user's confirmed merge decision; cancel and success both clear it.
-    const existing =
-      (applyMergeTargetRef.current ? applications.find((a) => a.id === applyMergeTargetRef.current) : undefined) ??
-      (linkedApplicationId ? applications.find((application) => application.id === linkedApplicationId) : undefined) ??
-      findForTarget(jobUrl, preparedJobDescription);
+    if (session.mode !== "new" && !existing) {
+      const message = "The saved record for this preparation is no longer available. Nothing was saved; return to Applications and open it again.";
+      setApplySaveError(message);
+      setApplyStatus(message);
+      applyCommitInFlightRef.current = false;
+      setIsCommittingApply(false);
+      return false;
+    }
     const now = new Date().toISOString();
-    const status: ApplicationStatus =
-      existing && existing.status && existing.status !== "interested" ? existing.status : "applied";
     const tracking = currentJobTracking();
     const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
     const aiUsage: Record<string, StageAiUsage> = copyAiUsage(existing?.aiUsage);
@@ -290,10 +301,8 @@ export function useApplyFlow({
       nextJobUrl,
       now
     );
-    const app: Application = {
-      ...(existing ?? {}),
+    const prepared: Application = {
       ...draft,
-      id: existing?.id ?? draft.id,
       title:
         [tracking.role || tracking.title, tracking.company]
           .map((value) => String(value ?? "").trim())
@@ -317,8 +326,6 @@ export function useApplyFlow({
       salaryCurrency: String(tracking.salaryCurrency ?? "").trim(),
       salaryPeriod: tracking.salaryPeriod || undefined,
       sourceUrls: sourceUrls.length ? sourceUrls : undefined,
-      status,
-      appliedAt: existing?.appliedAt ?? now,
       aiUsage,
       // Fit Assessment belongs to the preparation receipt, not the document
       // package. Preserve only when this session has no assessment decision;
@@ -334,15 +341,36 @@ export function useApplyFlow({
           }
         : {})
     };
+    const commit = appliedApplicationForSession({
+      session,
+      prepared,
+      existing,
+      now,
+      clearFields: [
+        ...(fitAssessmentPersistence.action === "clear" ? ["fitAssessment" as const] : []),
+        ...(!tracking.salaryPeriod ? ["salaryPeriod" as const] : [])
+      ]
+    });
+    if (!commit) {
+      const message = "The saved record no longer matches this preparation mode. Nothing was saved; reopen it from Applications and try again.";
+      setApplySaveError(message);
+      setApplyStatus(message);
+      applyCommitInFlightRef.current = false;
+      setIsCommittingApply(false);
+      return false;
+    }
+    const app = commit.application;
     let saved = false;
     try {
-      saved = await persistAppliedApplication(app);
+      saved = commit.operation === "create"
+        ? await createApplication(app)
+        : await updateApplicationById(app);
     } catch {
       // The store normally converts request failures to `false`; keep this
       // boundary fail-closed if a future adapter rejects unexpectedly.
     }
     if (!saved) {
-      const message = "Application could not be saved. Your recovery draft is still available; retry Apply.";
+      const message = `${action.label} could not be saved. Your recovery draft is still available; retry ${action.label}.`;
       setApplySaveError(message);
       setApplyStatus(message);
       applyCommitInFlightRef.current = false;
@@ -352,7 +380,7 @@ export function useApplyFlow({
     applyMergeTargetRef.current = null;
     // From here the session has one application of record: later resume or
     // cover-letter saves update THIS row rather than creating a duplicate.
-    linkApplication(existing?.id ?? app.id);
+    linkApplication(app.id);
     // The application record now exists; the strict source save below decides
     // whether the editor can safely stop advertising recovery.
     const selectedMaterials = [
@@ -360,17 +388,18 @@ export function useApplyFlow({
       ...(materialSelection.coverLetter ? ["cover letter"] : [])
     ];
     setApplyStatus(
-      `Applied. Saved "${existing?.title || app.title}" to Applications${
+      `${action.successVerb}. Saved "${app.title}" to Applications${
         selectedMaterials.length ? ` with ${selectedMaterials.join(" and ")}` : ""
       }.`
     );
     setActiveOutputTab("applications");
-    setExpandedApplicationId(existing?.id ?? app.id);
+    setExpandedApplicationId(app.id);
     try {
       const savedDocuments = await saveAppliedDocumentArtifacts(
-        existing?.id ?? app.id,
-        existing?.title || app.title,
-        expectedDocumentVersions
+        app.id,
+        app.title,
+        expectedDocumentVersions,
+        action
       );
       // Tracker text is not a reloadable document. Preserve recovery until the
       // corresponding strict editable source has also been committed.
@@ -379,27 +408,33 @@ export function useApplyFlow({
       return true;
     } catch {
       setApplyStatus(
-        `Applied "${existing?.title || app.title}", but the included documents could not be saved. Retry from each document's Save menu.`
+        `${action.successVerb} "${app.title}", but the included documents could not be saved. Retry from each document's Save menu.`
       );
       return true;
     } finally {
       applyMaterialSelectionRef.current = null;
+      applySessionRef.current = null;
+      applyActionRef.current = null;
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
     }
   }
 
-  // Apply button handler: runs the layered duplicate scan first (warn / confirm
-  // as needed — see findDuplicatesForTarget), then either commits immediately
-  // (no download dialog) or shows the pre-apply dialog for the file name.
+  // New preparations run duplicate review before commit. Draft/update sessions
+  // already carry their exact id and must never resolve another write target.
   async function handleApply() {
     if (
       applyResolutionInFlightRef.current ||
       applyCommitInFlightRef.current ||
       applyDownloadInFlightRef.current
     ) return;
+    const session = preparationSession;
+    const existing = session.applicationId
+      ? applications.find((application) => application.id === session.applicationId) ?? null
+      : null;
+    const action = preparationPrimaryAction(session, existing?.status);
     if (!canApply) {
-      setApplyStatus(applyBlocker || "Finish preparing this application before applying.");
+      setApplyStatus(applyBlocker || "Finish preparation before continuing.");
       return;
     }
     applyResolutionInFlightRef.current = true;
@@ -409,21 +444,29 @@ export function useApplyFlow({
       applyMaterialSelectionRef.current = {
         ...currentMaterialSelectionRef.current
       };
-      // Reset before evaluating so a prior call's stale target can never leak
-      // into an unrelated apply. The dialogs, acknowledgment, and merge-target
-      // decision live in useDuplicateGuard; commitApply consumes the ref.
+      applySessionRef.current = session;
+      applyActionRef.current = action;
+      // Reset before evaluating so a prior call's stale duplicate receipt can
+      // never leak into an unrelated apply. Phase 3 replaces the target-shaped
+      // result with a posting relationship.
       applyMergeTargetRef.current = null;
-      let resolution: ApplyDuplicateResolution;
-      try {
-        resolution = await resolveApplyDuplicate();
-      } catch {
-        applyMaterialSelectionRef.current = null;
-        applyMergeTargetRef.current = null;
-        setApplyStatus("Duplicate checking failed, so the application was not saved. Retry Apply.");
-        return;
+      let resolution: ApplyDuplicateResolution = { proceed: true, mergeTargetId: null };
+      if (session.mode === "new") {
+        try {
+          resolution = await resolveApplyDuplicate();
+        } catch {
+          applyMaterialSelectionRef.current = null;
+          applySessionRef.current = null;
+          applyActionRef.current = null;
+          applyMergeTargetRef.current = null;
+          setApplyStatus("Duplicate checking failed, so the application was not saved. Retry Apply.");
+          return;
+        }
       }
       if (!resolution.proceed) {
         applyMaterialSelectionRef.current = null;
+        applySessionRef.current = null;
+        applyActionRef.current = null;
         return;
       }
       applyMergeTargetRef.current = resolution.mergeTargetId;
@@ -435,13 +478,13 @@ export function useApplyFlow({
         await commitApply();
         return;
       }
-      const existing = findForTarget(jobUrl, preparedJobDescription);
       const draft = makeApplicationDraft(jobUrl, preparedJobDescription, currentJobTracking());
       setApplySaveError("");
       setApplyDownloadPrompt({
         label: existing?.title || draft.title,
         canDownloadResume,
-        canDownloadCoverLetter
+        canDownloadCoverLetter,
+        action
       });
     } finally {
       applyResolutionInFlightRef.current = false;
@@ -463,6 +506,9 @@ export function useApplyFlow({
     applyDownloadInFlightRef.current = true;
     setIsDownloadingApplyPdfs(true);
     const label = applyDownloadPrompt?.label ?? "";
+    const action = applyDownloadPrompt?.action
+      ?? applyActionRef.current
+      ?? preparationPrimaryAction(preparationSession);
     try {
       if (!(await commitApply())) return;
       const exportResume = async () => await handleDownloadPdf(names.resume || undefined);
@@ -476,10 +522,10 @@ export function useApplyFlow({
         const detail =
           `The ${failed.join(" and ")} PDF${failed.length > 1 ? "s" : ""} could not be exported.` +
           ` Retry from ${failed.length > 1 ? "each" : "that"} document's own export menu.`;
-        // commitApply has already reported the apply and any artifact-save
+        // commitApply has already reported the commit and any artifact-save
         // problem; keep that and add this rather than replacing it.
         setApplyStatus((current) =>
-          current ? `${current} ${detail}` : `Applied${label ? ` "${label}"` : ""}. ${detail}`
+          current ? `${current} ${detail}` : `${action.successVerb}${label ? ` "${label}"` : ""}. ${detail}`
         );
       }
       // Keep the modal mounted and busy until every selected attempt settles.
@@ -503,15 +549,21 @@ export function useApplyFlow({
     setApplyDownloadPrompt(null);
   }
 
+  function cancelApply() {
+    applyMergeTargetRef.current = null;
+    applyMaterialSelectionRef.current = null;
+    applySessionRef.current = null;
+    applyActionRef.current = null;
+    setApplyDownloadPrompt(null);
+  }
+
   return {
-    applyMergeTargetRef,
-    applyMaterialSelectionRef,
     applyDownloadPrompt,
-    setApplyDownloadPrompt,
     isApplying,
     applySaveError,
     handleApply,
     handleApplyDownloadPick,
-    handleApplyOnly
+    handleApplyOnly,
+    cancelApply
   };
 }

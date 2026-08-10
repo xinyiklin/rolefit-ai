@@ -110,6 +110,7 @@ import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
 import {
   newPreparationSession,
+  preparationPrimaryAction,
   preparationSessionForApplication
 } from "./lib/preparationSession";
 
@@ -922,6 +923,8 @@ function App() {
     error: applicationsError,
     pendingWrites: pendingApplicationWrites,
     upsert: upsertApplication,
+    createApplication,
+    updateApplicationById,
     saveApplication,
     updateStatus: updateApplicationStatus,
     updateNotes: updateApplicationNotes,
@@ -935,6 +938,13 @@ function App() {
     dismissDuplicateGroup,
     refresh: refreshApplications
   } = useApplications();
+  const preparationApplication = preparationSession.applicationId
+    ? applications.find((application) => application.id === preparationSession.applicationId) ?? null
+    : null;
+  const primaryPreparationAction = preparationPrimaryAction(
+    preparationSession,
+    preparationApplication?.status
+  );
 
   const applicationFiles = useApplicationFiles({
     getApplication,
@@ -1858,15 +1868,13 @@ function App() {
   // dependencies it needs and reads back the download-prompt state + handlers
   // the Apply button and ApplyDownloadDialog wire up.
   const {
-    applyMergeTargetRef,
-    applyMaterialSelectionRef,
     applyDownloadPrompt,
-    setApplyDownloadPrompt,
     isApplying,
     applySaveError,
     handleApply,
     handleApplyDownloadPick,
-    handleApplyOnly
+    handleApplyOnly,
+    cancelApply
   } = useApplyFlow({
     canApply: preparationReadiness.canApply,
     applyBlocker: preparationReadiness.primaryBlocker,
@@ -1880,9 +1888,9 @@ function App() {
     fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
     pipelineAiUsage,
     applications,
-    linkedApplicationId: applicationOfRecordId,
-    findForTarget,
-    persistAppliedApplication: saveApplication,
+    preparationSession,
+    createApplication,
+    updateApplicationById,
     saveApplicationDocument: applicationFiles.saveDocument,
     linkApplication: linkPreparedApplication,
     currentJobTracking,
@@ -2266,8 +2274,10 @@ function App() {
     <div className="app-shell">
       <Masthead
         onApply={handleApply}
+        primaryAction={primaryPreparationAction}
+        busy={isApplying}
         applyDisabled={!preparationReadiness.canApply || isApplying}
-        applyHint={preparationReadiness.primaryBlocker || "Applying…"}
+        applyHint={isApplying ? primaryPreparationAction.busyLabel : preparationReadiness.primaryBlocker}
         applyStatus={applyStatus}
         applyStatusIsError={applyStatusIsError}
         onDismissApplyStatus={() => setApplyStatus("")}
@@ -2447,6 +2457,7 @@ function App() {
               canAssessFit={canAssessFit}
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
+              primaryAction={primaryPreparationAction}
               isApplying={isApplying}
               onApply={handleApply}
             />
@@ -2987,20 +2998,14 @@ function App() {
       {applyDownloadPrompt ? (
         <ApplyDownloadDialog
           label={applyDownloadPrompt.label}
+          action={applyDownloadPrompt.action}
           defaultFileBaseName={resumeDownloadName("pdf").replace(/\.pdf$/i, "")}
           canDownloadResume={applyDownloadPrompt.canDownloadResume}
           canDownloadCoverLetter={applyDownloadPrompt.canDownloadCoverLetter}
           busy={isApplying}
           error={applySaveError}
           onDownload={handleApplyDownloadPick}
-          onSkip={() => {
-            // True cancel path (backdrop click / × / Escape) — abandons the
-            // whole apply without committing, so any duplicate-merge target
-            // this flow identified must not leak into a later apply.
-            applyMergeTargetRef.current = null;
-            applyMaterialSelectionRef.current = null;
-            setApplyDownloadPrompt(null);
-          }}
+          onSkip={cancelApply}
           onApplyOnly={handleApplyOnly}
         />
       ) : null}

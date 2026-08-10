@@ -64,14 +64,23 @@ assert.equal(
 );
 
 const documentVersionCapture = applyFlow.indexOf("const expectedDocumentVersions =");
-const awaitedSave = applyFlow.indexOf("saved = await persistAppliedApplication(app)");
+const awaitedSave = applyFlow.indexOf('? await createApplication(app)');
+const awaitedUpdate = applyFlow.indexOf(": await updateApplicationById(app)", awaitedSave);
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
 const artifactSave = applyFlow.indexOf("const savedDocuments = await saveAppliedDocumentArtifacts(", failedSave);
 const resumeRecoveryClear = applyFlow.indexOf("if (savedDocuments.resumeSaved) onResumeSaved();", artifactSave);
 const coverRecoveryClear = applyFlow.indexOf("if (savedDocuments.coverSaved) onCoverLetterSaved();", artifactSave);
 
 assert.ok(documentVersionCapture >= 0 && documentVersionCapture < awaitedSave, "Apply captures document versions before persistence yields");
-assert.ok(awaitedSave >= 0 && failedSave > awaitedSave, "Apply awaits tracker persistence and handles a failed confirmation");
+assert.ok(
+  awaitedSave >= 0 && awaitedUpdate > awaitedSave && failedSave > awaitedUpdate,
+  "Apply awaits its explicit create/update tracker path and handles a failed confirmation"
+);
+assert.match(
+  applyFlow,
+  /if \(session\.mode !== "new" && !existing\)[\s\S]{0,420}?return false;/,
+  "an explicit draft/update session fails closed when its id no longer exists"
+);
 assert.ok(artifactSave > failedSave, "document artifacts start only after tracker confirmation");
 assert.ok(
   resumeRecoveryClear > artifactSave && coverRecoveryClear > resumeRecoveryClear,

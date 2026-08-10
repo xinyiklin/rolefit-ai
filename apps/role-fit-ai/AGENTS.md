@@ -109,7 +109,7 @@ RoleFit owns:
 - `server.ts` and `server/`: local HTTP/Vite composition, provider calls, safe
   job preparation, workspace/application persistence, and extension routes;
 - `src/hooks/`: RoleFit workflow state and effects;
-- `src/sections/`: Apply-only masthead, read-only Sessions/Settings studio-rail
+- `src/sections/`: primary-action masthead, read-only Sessions/Settings studio-rail
   utilities, first/default Prepare intake, studio navigation and tabs, tracker,
   materials, proposal rails, reusable AI workflow progress,
   dialogs, and host
@@ -153,15 +153,21 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - Prepare is state-shaped: before preparation, one centered Source panel exposes
   one URL-or-paste method at a time and no empty downstream scaffolds; afterward,
   the editable brief leads beside one Application rail containing both material
-  choices, readiness, the saved-application summary, and Apply.
+  choices, readiness, the saved-application summary, and the session-derived
+  primary action.
 - Resume and Cover Letter use one material-card contract on Prepare: Include
   toggle, variant selector, readiness, and document-specific actions. Resume
   defaults included and Cover Letter defaults excluded; starting Polish for a
   document, manually or through its enabled automatic proposal, turns on only
   that document's Include toggle. Do not label either card optional.
-- Masthead and Prepare Apply controls share one handler and readiness model.
+- Masthead and Prepare primary controls share one handler, readiness model, and
+  action descriptor. Fresh and interested-draft sessions say Apply; an explicitly
+  restored submitted record says Update application. Commits branch on the
+  session's explicit id: fresh work creates, a draft updates that interested id,
+  and later-stage updates preserve the id, created/applied dates, and stage.
+  Job matching may warn or relate records but never selects the write target.
   Require the current prepared job and readiness only for included materials,
-  while allowing either or both to be excluded. Re-Apply must not delete or
+  while allowing either or both to be excluded. A later update must not delete or
   replace a previously saved artifact whose card is excluded.
 - The Apply download prompt covers every included, exportable material, not the
   resume alone. Resume and cover letter stay two separate PDFs — ATS uploads are

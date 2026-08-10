@@ -438,6 +438,58 @@ export function useApplications() {
     [persist]
   );
 
+  const createApplication = useCallback(
+    (incoming: Application) => {
+      const current = applicationsRef.current;
+      if (current.some((application) => application.id === incoming.id)) {
+        setError("A tracker record with this application id already exists. Nothing was saved.");
+        return Promise.resolve(false);
+      }
+      const now = new Date().toISOString();
+      const created: Application = {
+        ...incoming,
+        createdAt: incoming.createdAt || now,
+        updatedAt: now
+      };
+      const next = [created, ...current];
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(next, [{
+        id: created.id,
+        operation: "upsert",
+        baseUpdatedAt: null
+      }]);
+    },
+    [persist]
+  );
+
+  const updateApplicationById = useCallback(
+    (incoming: Application) => {
+      const current = applicationsRef.current;
+      const idx = current.findIndex((application) => application.id === incoming.id);
+      if (idx < 0) {
+        setError("The application selected for this preparation no longer exists. Nothing was saved.");
+        return Promise.resolve(false);
+      }
+      const existing = current[idx];
+      const updated: Application = {
+        ...incoming,
+        id: existing.id,
+        createdAt: existing.createdAt,
+        updatedAt: nextApplicationRevision(existing.updatedAt)
+      };
+      const next = current.map((application, index) => index === idx ? updated : application);
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(next, [{
+        id: existing.id,
+        operation: "upsert",
+        baseUpdatedAt: existing.updatedAt
+      }]);
+    },
+    [persist]
+  );
+
   // Full overwrite of one application by id (the detail/add modal's save path).
   // Unlike `upsert` — which deliberately preserves existing non-empty title /
   // company / role / source for deduplicated secondary writes — this lets
@@ -445,24 +497,11 @@ export function useApplications() {
   // and createdAt are pinned. A new id (no match) is prepended.
   const saveApplication = useCallback(
     (incoming: Application) => {
-      const current = applicationsRef.current;
-      const now = new Date().toISOString();
-      const idx = current.findIndex((a) => a.id === incoming.id);
-      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
-      const merged: Application =
-        idx >= 0
-          ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: revision }
-          : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: revision };
-      const next = idx >= 0 ? current.map((a, i) => (i === idx ? merged : a)) : [merged, ...current];
-      applicationsRef.current = next;
-      setApplications(next);
-      return persist(next, [{
-        id: merged.id,
-        operation: "upsert",
-        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
-      }]);
+      return applicationsRef.current.some((application) => application.id === incoming.id)
+        ? updateApplicationById(incoming)
+        : createApplication(incoming);
     },
-    [persist]
+    [createApplication, updateApplicationById]
   );
 
   const updateStatus = useCallback(
@@ -749,6 +788,8 @@ export function useApplications() {
     storagePath,
     pendingWrites,
     upsert,
+    createApplication,
+    updateApplicationById,
     saveApplication,
     updateStatus,
     updateNotes,

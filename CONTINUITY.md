@@ -5,6 +5,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The second Not applying workflow stage separates fresh
+  Apply, interested-draft Apply, and exact-record updates.** Fresh work creates
+  one new id; applying a draft updates that interested id and sets its first
+  application date; updating an explicitly opened later-stage record preserves
+  its id, creation/application dates, and stage, and fails closed if the target
+  disappears. Duplicate review runs only for fresh work and no longer chooses an
+  Apply write target. Masthead, Prepare rail, confirmation dialog, busy/error
+  copy, and receipts now use one session-derived Apply or Update application
+  descriptor. The production/landing/desktop builds and all 93 offline
+  evaluations pass under pinned Node 24. Browser QA
+  was not run because this stage changes bounded labels without layout structure.
+  No push or merge occurred.
 - [USER+CODE+TOOL] **The first Not applying workflow stage establishes safe
   preparation identity and posting relationships.** `PreparationSession` now
   distinguishes fresh, interested-draft, and exact-record update work; the
@@ -14,8 +26,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   every member of any joined groups in one sparse revision-checked mutation so
   a conflict cannot leave a partial relationship. Manual destructive duplicate
   merge remains separate. The RoleFit production build and all 92 offline
-  evaluations pass under pinned Node 24. Pass UI, mode-specific Apply commits,
-  and tracker presentation remain later stages. No push or merge occurred.
+  evaluations pass under pinned Node 24. Pass UI and tracker presentation remain
+  later stages; mode-specific Apply commits are completed by the next entry. No
+  push or merge occurred.
 - [USER+CODE+TOOL] **RoleFit is prepared as 0.7.0 with browser extension 1.2.0
   and desktop bridge API 13.** The minor slot is the right one under 0.x: this
   release replaces numeric fit scoring with the categorical Fit Assessment,

@@ -344,7 +344,7 @@
   gap: var(--s2);
 }
 
-/* -------- Pre-apply download prompt (reuses the rename-dialog shell) -------- */
+/* -------- Application commit download prompt (reuses the rename shell) ----- */
 
 .apply-download {
   position: relative;

@@ -4,6 +4,7 @@ import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 import type { Application } from "../../../hooks/useApplications";
 import { fitAssessmentRunLabel } from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
+import type { PreparationPrimaryAction } from "../../../lib/preparationSession";
 import type {
   FitAssessmentInputChange,
   FitAssessmentState,
@@ -41,6 +42,7 @@ type PrepareApplicationRailProps = {
   canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
+  primaryAction: PreparationPrimaryAction;
   isApplying: boolean;
   onApply: () => void | Promise<void>;
   children: ReactNode;
@@ -53,6 +55,7 @@ export function PrepareApplicationRail({
   canAssessFit,
   linkedApplication,
   readiness,
+  primaryAction,
   isApplying,
   onApply,
   children
@@ -90,7 +93,11 @@ export function PrepareApplicationRail({
       <section className="prepare-panel prepare-application">
         <div className="prepare-panel__head">
           <h3>Application</h3>
-          <span className="prepare-panel__meta">{readiness.canApply ? "Ready to apply" : "In progress"}</span>
+          <span className="prepare-panel__meta">
+            {readiness.canApply
+              ? primaryAction.kind === "apply" ? "Ready to apply" : "Ready to update"
+              : "In progress"}
+          </span>
         </div>
 
         <div className="prepare-materials" aria-label="Included materials">
@@ -242,10 +249,10 @@ export function PrepareApplicationRail({
           type="button"
           onClick={() => void onApply()}
           disabled={!readiness.canApply || isApplying}
-          title={readiness.canApply ? "Mark as applied and save included materials" : readiness.primaryBlocker}
+          title={readiness.canApply ? `${primaryAction.label} and save included materials` : readiness.primaryBlocker}
         >
           {isApplying ? <LoaderCircle className="spin" size={15} aria-hidden="true" /> : null}
-          {isApplying ? "Applying…" : "Apply"}
+          {isApplying ? primaryAction.busyLabel : primaryAction.label}
         </button>
         {!readiness.canApply ? <p className="prepare-apply-hint">{readiness.primaryBlocker}</p> : null}
       </section>
