@@ -778,6 +778,19 @@
   line-height: 1.4;
 }
 
+.fit-assessment-list li {
+  overflow-wrap: anywhere;
+}
+
+.fit-assessment-list li small,
+.fit-assessment-eligibility small {
+  display: block;
+  margin-top: 2px;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
 .fit-assessment-eligibility {
   padding: var(--s2);
   color: var(--warm) !important;

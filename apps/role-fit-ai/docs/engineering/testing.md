@@ -128,22 +128,27 @@ Good server verification covers:
   invalid fit preserves valid job fields, the prompt contains the direct rubric
   as one identical system-level block in combined and reassessment paths, includes
   the conservative lower-category and stable posting-order tie breaks, all
-  match/gap/eligibility anchors are exact
-  current-source excerpts, public lists cap at three and reject duplicates,
-  malformed enums or anchors fail unavailable, `BLOCKED` requires the explicit
-  conflicting candidate fact, fixed public summaries replace provider prose,
-  and reassessments omit the Job analysis schema
+  match/gap/eligibility anchors are exact current-source excerpts without
+  whitespace rewriting, both sides of accepted match evidence reach the client,
+  every non-Limited verdict has at least one accepted match, public lists cap at
+  three and reject duplicates, malformed enums or anchors fail unavailable,
+  `CHECK` preserves its posting condition, `BLOCKED` preserves that condition
+  plus the explicit conflicting candidate fact, fixed public summaries replace
+  provider prose, and reassessments omit the Job analysis schema
 - `src/lib/__evals__/ai-job-analysis-request-eval.mjs` must exercise the one
   browser request boundary with combined and reassessment success, provider HTTP
   failure, unreadable and invalid responses, network failure, and abort
-  propagation. Focused lifecycle and entry-point guards must keep one endpoint
-  request helper and one Fit Assessment outcome helper so entry paths cannot grow
-  separate settlements
+  propagation and server-resolved provider/model/reasoning/attempt metadata.
+  Focused lifecycle and entry-point guards must keep one endpoint request helper
+  and one Fit Assessment outcome helper so entry paths cannot grow separate
+  settlements
 - `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
   extension, and imported-posting Retry intake with both duplicate gates, local
   and provider fallback, prepared-resume resolution, Fit Assessment on/off, and
-  snapshot commit order. Structural guards keep all four entry points on the
-  single private post-acquisition coordinator
+  snapshot commit order. They also prove Stop, source changes, and restore cancel
+  in-flight resolution, while too-short and thrown-error paths settle Fit out of
+  `running`. Structural guards keep all four entry points on the single private
+  post-acquisition coordinator
 - auto-polish policy probes must cover every categorical threshold boundary,
   preserve the threshold values/order/labels, and keep automation policy out of
   the shared Fit Assessment contract
@@ -321,9 +326,12 @@ Good frontend verification covers:
   `src/hooks/__evals__/application-persistence-guards.mjs` keeps tracker conflict,
   Apply commit ordering, recovery clearing, and modal-save failure contracts
   covered after the retired monolithic workflow guard was removed.
-- Fit Assessment shows only verdict, selected resume, summary, up to three matches
-  and gaps, and a relevant eligibility warning. It exposes no score, confidence,
-  evidence ledger, quotations, recommendation, saved audit, or analytics metric
+- URL and paste intake remain enabled without an AI provider and produce the
+  deterministic local brief; only provider-backed enrichment stays unavailable
+- Fit Assessment shows only verdict, selected resume, summary, up to three
+  compact match explanations and gaps, and a relevant eligibility warning with
+  its accepted anchors. It exposes no score, confidence, broad evidence ledger,
+  recommendation, saved audit, or analytics metric
 - changing the selected resume dispatches only `mode: "fit-assessment"`; disabling
   Fit Assessment sends no resume/context data. Resume and Cover Letter each use an
   independent automatic Polish switch and categorical minimum-fit threshold;

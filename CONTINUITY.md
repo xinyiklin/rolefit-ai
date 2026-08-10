@@ -2678,3 +2678,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   `git diff --check` passed. The Impeccable detector reported only pre-existing
   advisory token matches in `shell.css`; browser QA was not run under the
   repository's flag-first policy.
+- [USER+CODE] 2026-08-09: The application-preparation hardening pass deliberately
+  leaves legacy tracker-schema compatibility to a one-user preview migration.
+  Prepare cancellation now invalidates prepared-resume selection before adoption,
+  all post-resolution failure/Stop paths settle Fit, and an explicit uploaded
+  resume is authoritative. URL and paste intake keep their deterministic local
+  fallback without a provider. Compact Fit results retain exact match and
+  eligibility anchors, reject non-Limited verdicts without a match, and record
+  resolved execution attribution while request provenance remains configured-input
+  identity.
+- [TOOL] 2026-08-09: The final RoleFit gate passed with loopback access: production
+  and landing builds, desktop contracts, and 88/88 offline evaluations. Focused
+  prepared-resume 60/60, intake lifecycle, Fit grounding, request-attribution,
+  tracker sanitization, and Prepare layout probes also passed; `git diff --check`
+  and both client/server TypeScript checks passed. The Impeccable detector found
+  only advisory type-ramp matches already present in `prepare.css`. Live-provider
+  and real-browser visual QA were not run.

@@ -131,9 +131,10 @@ Because Antigravity 1.1.x has no non-interactive auth-status command, an added,
 installed Antigravity CLI is request-eligible as **Ready to verify** while its
 auth state remains unknown; the first real provider request verifies the
 provider-owned session or reports sign-in recovery guidance.
-With none configured, editing, tracking, and export remain available while AI
-actions stop with a direct instruction to add a provider. RoleFit never chooses
-a paid replacement silently.
+With none configured, editing, tracking, export, and deterministic URL/paste
+preparation remain available while provider-backed improvement, Fit Assessment,
+and Polish stop with a direct instruction to add a provider. RoleFit never
+chooses a paid replacement silently.
 
 The companion defaults to local port `5181` and may persist another available
 port after explicit confirmation and restart. Browser-local recovery and view
@@ -189,9 +190,14 @@ the provider must re-check that every finding is copied exactly from its source;
 the server still rejects the entire result when any anchor is unusable.
 
 Prepare shows the verdict, fixed summary, selected resume, last-assessed time,
-provider/model/reasoning attribution, rubric version, and at most three direct
-matches and three not-shown gaps. Missing evidence is a gap, not proof that the
-candidate is incapable. The result has no numeric score, confidence, visible
+resolved provider/model/reasoning attribution, rubric version, and at most three
+direct matches and three not-shown gaps. Each match keeps the exact posting
+excerpt beside the exact resume or About you evidence that supports it. A Check
+or Blocked eligibility result keeps its exact posting condition, and Blocked
+also keeps the exact conflicting About you fact. Missing evidence is a gap, not
+proof that the candidate is incapable. Strong, Reasonable, and Stretch require
+at least one direct match; unusable or internally contradictory output fails
+closed. The result has no numeric score, confidence, visible
 requirement ledger, recommendation, or analytics role, and it never silently
 derives tracker priority. Unusable provider output becomes unavailable rather
 than a guessed result; the deterministic local job brief remains editable and
@@ -341,14 +347,16 @@ disappears into the task. Quiet competence, not salesmanship.
     resume Polish. A failed analysis leaves the deterministic brief editable and
     manual Polish available. Every preparation resolves which resume it speaks
     for exactly once, before the provider request: it waits for the local
-    workspace to finish loading, keeps a real current document, and otherwise
+    workspace to finish loading, keeps a real current document (including an
+    explicitly uploaded resume), and otherwise
     adopts the sole saved variant or a meaningful unique winner while the editor
     is clean and not application-owned; that selection is not tailoring. A tie or
     incomplete comparison keeps the current selection. Candidate bytes, option
     metadata, and the live candidate revision form one resolution snapshot, so
     overwriting a saved variant under the same filename forces a fresh read. Do
     not add persisted variant metadata or another document schema for this
-    decision.
+    decision. Stop, source replacement, application restore, and unmount cancel
+    that resolution before it can adopt a document or start Fit Assessment.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

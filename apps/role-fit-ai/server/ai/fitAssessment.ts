@@ -5,6 +5,7 @@ import {
   FIT_ASSESSMENT_VERDICTS,
   normalizeFitAssessmentInput,
   type FitAssessmentEligibilityStatus,
+  type FitAssessmentMatch,
   type FitAssessmentResult,
   type FitAssessmentVerdict
 } from "../../shared/fitAssessmentContract.ts";
@@ -21,6 +22,7 @@ const MAX_NOTE_LENGTH = 240;
 const verdicts = new Set<string>(FIT_ASSESSMENT_VERDICTS);
 const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);
 const evidenceSources = new Set<string>(FIT_ASSESSMENT_EVIDENCE_SOURCES);
+type AttemptStats = { attempts?: number };
 
 export const FIT_ASSESSMENT_RESPONSE_SCHEMA = `{
   "verdict": "STRONG | REASONABLE | STRETCH | LIMITED",
@@ -112,17 +114,17 @@ function exactExcerpt(value: unknown, source: string): string | null {
   if (typeof value !== "string") return null;
   const excerpt = value.trim();
   if (!excerpt || excerpt.length > MAX_EXCERPT_LENGTH || !source.includes(excerpt)) return null;
-  return excerpt.replace(/\s+/g, " ");
+  return excerpt;
 }
 
 function dedupeKey(value: string): string {
   return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function sanitizeMatches(raw: unknown, sources: PromptSources): string[] | null {
+function sanitizeMatches(raw: unknown, sources: PromptSources): FitAssessmentMatch[] | null {
   if (!Array.isArray(raw) || raw.length > 3) return null;
   const seen = new Set<string>();
-  const matches: string[] = [];
+  const matches: FitAssessmentMatch[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
     const source = item as Record<string, unknown>;
@@ -136,7 +138,11 @@ function sanitizeMatches(raw: unknown, sources: PromptSources): string[] | null 
     const key = dedupeKey(jobExcerpt);
     if (!candidateExcerpt || seen.has(key)) return null;
     seen.add(key);
-    matches.push(jobExcerpt);
+    matches.push({
+      jobExcerpt,
+      candidateSource: candidateSource as FitAssessmentMatch["candidateSource"],
+      candidateExcerpt
+    });
   }
   return matches;
 }
@@ -179,6 +185,12 @@ function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmen
 
   return {
     status: status as FitAssessmentEligibilityStatus,
+    ...((status === "CHECK" || status === "BLOCKED")
+      ? { jobExcerpt: exactExcerpt(source.jobExcerpt, sources.jobText) as string }
+      : {}),
+    ...(status === "BLOCKED"
+      ? { candidateExcerpt: exactExcerpt(source.candidateExcerpt, sources.candidateContext) as string }
+      : {}),
     ...(note ? { note } : {})
   };
 }
@@ -194,8 +206,9 @@ export function sanitizeFitAssessmentResponse(
   const sources = promptSources(input);
   const matches = sanitizeMatches(source.matches, sources);
   if (!matches) return null;
-  const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(dedupeKey)));
+  const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))));
   if (!gaps) return null;
+  if (verdict !== "LIMITED" && matches.length === 0) return null;
   const eligibility = sanitizeEligibility(source.eligibility, sources);
   if (eligibility === null) return null;
 
@@ -273,19 +286,16 @@ export async function analyzeFitAssessment({
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
   const { systemPrompt, userPrompt } = buildFitAssessmentPrompts({ jobText, resumeText, candidateContext });
-  const parsed = await callConfiguredProvider({
-    provider,
-    apiKey,
-    model,
-    reasoningEffort,
-    systemPrompt,
-    userPrompt,
-    signal
-  });
+  const stats: AttemptStats = {};
+  const parsed = await callConfiguredProvider(
+    { provider, apiKey, model, reasoningEffort, systemPrompt, userPrompt, signal },
+    stats
+  );
   return {
     fitAssessment: sanitizeFitAssessmentResponse(parsed, { jobText, resumeText, candidateContext }),
     provider,
     model,
-    reasoningEffort
+    reasoningEffort,
+    attempts: stats.attempts ?? 1
   };
 }

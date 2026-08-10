@@ -541,7 +541,8 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
         fitAssessmentStatus: fit.fitAssessment ? "ready" : "unavailable",
         provider: fit.provider,
         model: fit.model,
-        reasoningEffort: fit.reasoningEffort
+        reasoningEffort: fit.reasoningEffort,
+        attempts: fit.attempts
       });
       return;
     }

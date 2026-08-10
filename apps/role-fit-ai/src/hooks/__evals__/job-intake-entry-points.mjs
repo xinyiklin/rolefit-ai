@@ -54,7 +54,11 @@ const RESUME = [
 ].join(" ");
 const VALID_FIT = {
   verdict: "REASONABLE",
-  matches: ["Build Python APIs and operate SQL data services in production."],
+  matches: [{
+    jobExcerpt: "Build Python APIs and operate SQL data services in production.",
+    candidateSource: "RESUME",
+    candidateExcerpt: "Built Python APIs and operated SQL data services in production."
+  }],
   gaps: ["Kubernetes experience is required for production deployments."],
   eligibility: { status: "CLEAR" }
 };
@@ -90,7 +94,10 @@ function createHarness({
   fitModel = "synthetic-model",
   fitReasoningEffort = "medium",
   fitReadiness = { ready: true },
-  selection = { text: RESUME, label: "Synthetic resume" }
+  selection = { text: RESUME, label: "Synthetic resume" },
+  resolvePreparedResumeImpl,
+  analysisBody,
+  afterError
 } = {}) {
   const log = [];
   const requests = [];
@@ -148,6 +155,7 @@ function createHarness({
     },
     confirmDuplicateAfterJobAnalysis: async () => {
       log.push({ event: "duplicate:after" });
+      if (afterError) throw afterError;
       return { proceed: afterProceed, note: afterProceed ? null : "normalized duplicate" };
     },
     jobAnalysisRequestFields: () => ({
@@ -169,10 +177,13 @@ function createHarness({
       return fitReadiness;
     },
     runFitAssessment,
-    resolvePreparedResume: async (jobText) => {
+    resolvePreparedResume: async (jobText, controls) => {
       log.push({ event: "resolvePreparedResume", value: jobText });
-      return selection;
+      return resolvePreparedResumeImpl
+        ? resolvePreparedResumeImpl({ jobText, controls, selection, log })
+        : selection;
     },
+    cancelPreparedResumeResolution: () => log.push({ event: "cancelPreparedResumeResolution" }),
     candidateContext: () => "Authorized to work in the United States.",
     currentResume: () => selection,
     extensionImportsReady: true,
@@ -208,7 +219,7 @@ function createHarness({
         })
       };
     }
-    return {
+    return analysisBody ?? {
       ok: true,
       status: 200,
       json: async () => ({
@@ -241,6 +252,12 @@ function createHarness({
 
 async function settleDetachedAssessment() {
   await new Promise((resolve) => setImmediate(resolve));
+}
+
+function deferred() {
+  let resolve;
+  const promise = new Promise((done) => { resolve = done; });
+  return { promise, resolve };
 }
 
 async function runUrl(harness) {
@@ -375,6 +392,80 @@ const sharedCommitOrder = [
     harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
     /local brief is ready/i,
     "provider readiness failure commits the deterministic local brief"
+  );
+}
+
+{
+  const harness = createHarness({
+    analysisBody: {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        source: "ai",
+        responsibilities: ["Build."],
+        provider: "codex-cli",
+        model: "synthetic-model",
+        reasoningEffort: "medium",
+        attempts: 1,
+        fitAssessment: VALID_FIT
+      })
+    }
+  });
+  await runPaste(harness);
+  assert.notEqual(
+    harness.state[5].status,
+    "running",
+    "a too-short final brief terminalizes the Fit Assessment started by preparation"
+  );
+}
+
+{
+  const harness = createHarness({ afterError: new Error("Synthetic duplicate lookup failure") });
+  await runPaste(harness);
+  assert.notEqual(
+    harness.state[5].status,
+    "running",
+    "an unexpected post-resolution failure cannot strand Fit Assessment in running"
+  );
+}
+
+{
+  const resolutionGate = deferred();
+  const harness = createHarness({
+    resolvePreparedResumeImpl: async ({ controls, selection: pendingSelection, log }) => {
+      await resolutionGate.promise;
+      if (!controls?.isCurrent()) return null;
+      log.push({ event: "resolver:adopted" });
+      return pendingSelection;
+    }
+  });
+  const pending = runPaste(harness);
+  await settleDetachedAssessment();
+  harness.render().stopJobAnalysis();
+  resolutionGate.resolve();
+  await pending;
+  assert.equal(
+    harness.log.some(({ event }) => event === "cancelPreparedResumeResolution"),
+    true,
+    "Stop explicitly invalidates prepared-resume resolution"
+  );
+  assert.equal(
+    harness.log.some(({ event }) => event === "resolver:adopted"),
+    false,
+    "a stopped preparation cannot adopt a resume after Stop"
+  );
+  assert.notEqual(harness.state[5].status, "running", "Stop leaves no orphaned Fit Assessment state");
+}
+
+{
+  const harness = createHarness();
+  const intake = harness.render();
+  intake.handleManualJobDescriptionChange(`${POSTING}\nChanged source.`);
+  intake.restorePreparedFitAssessment({ localJobText: POSTING, screeningJobText: POSTING });
+  assert.equal(
+    harness.log.filter(({ event }) => event === "cancelPreparedResumeResolution").length,
+    2,
+    "manual input replacement and application restore both cancel prepared-resume resolution"
   );
 }
 

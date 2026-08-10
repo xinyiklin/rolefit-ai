@@ -49,10 +49,14 @@ verdict.
 
 The response contains one verdict, up to three matches with exact posting and
 resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps with exact
-posting excerpts, and at most one eligibility result. `CHECK` requires an exact
-posting condition; `BLOCKED` additionally requires an exact conflicting
-candidate-context fact. The accepted verdict maps to fixed public summary copy;
-model-authored summary text is not part of the wire contract.
+posting excerpts, and at most one eligibility result. The server retains both
+sides of each accepted match so the UI can show why it counts; exact excerpts
+are trimmed at their outer boundary but never whitespace-rewritten. Every
+non-`LIMITED` verdict requires at least one accepted match. `CHECK` requires an
+exact posting condition; `BLOCKED` additionally requires an exact conflicting
+candidate-context fact, and both accepted anchors remain in the response. The
+accepted verdict maps to fixed public summary copy; model-authored summary text
+is not part of the wire contract.
 
 `fitAssessment.ts` validates only shape, enums, bounds, deduplication, and exact
 excerpts from the same normalized, clipped sources the provider received. It
@@ -71,7 +75,10 @@ inputs are unchanged. It reads the same prepared-resume owner as Prepare,
 rejects starter/stub/blank-origin editor text, and remains available from the
 prepared-job receipt across a setting toggle. The accepted client snapshot adds
 its completion time plus provider, model, reasoning effort, and prompt/rubric
-version; tracker persistence keeps that bounded attribution with the result.
+version. The accepted snapshot records the server-resolved provider, model,
+reasoning effort, and dispatch-attempt count while provenance continues to
+identify the configuration that requested the work. Tracker persistence keeps
+that bounded attribution with the result.
 
 Job analysis and Fit Assessment own independent stage configurations. Prepare
 uses the combined response shape only when both resolved provider/model/reasoning

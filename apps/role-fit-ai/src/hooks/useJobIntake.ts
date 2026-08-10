@@ -24,6 +24,7 @@ import {
   analyzeFitAssessment,
   analyzeJobPosting,
   localJobAnalysisResult,
+  type FitAssessmentExecutionUsage,
   type FitAssessmentRequest,
   type JobAnalysisResult
 } from "../lib/aiJobAnalysis";
@@ -50,6 +51,7 @@ import {
   type FitAssessmentState
 } from "../../shared/fitAssessmentContract.ts";
 import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
+import type { PreparedResumeResolutionControls } from "./usePreparedResume.ts";
 import {
   createFitAssessmentProvenance,
   dispatchFitAssessment,
@@ -144,7 +146,11 @@ type UseJobIntakeArgs = {
   // job-analysis brief and adopted into the editor BEFORE the provider request.
   // It runs on every preparation, not only when Fit Assessment is on: which resume
   // this application speaks for is a workflow fact, not a fit-check detail.
-  resolvePreparedResume: (jobText: string) => Promise<PreparedResumeSelection | null>;
+  resolvePreparedResume: (
+    jobText: string,
+    controls?: PreparedResumeResolutionControls
+  ) => Promise<PreparedResumeSelection | null>;
+  cancelPreparedResumeResolution: () => void;
   candidateContext: () => string;
   currentResume: () => Pick<PreparedResumeSelection, "text" | "label"> | null;
   extensionImportsReady: boolean;
@@ -190,6 +196,7 @@ export function useJobIntake({
   ensureFitAssessmentProviderReady,
   runFitAssessment,
   resolvePreparedResume,
+  cancelPreparedResumeResolution,
   candidateContext,
   currentResume,
   extensionImportsReady,
@@ -247,6 +254,7 @@ export function useJobIntake({
   jobAnalysisInputFingerprintRef.current = jobAnalysisInputFingerprint;
 
   function startJobAnalysisRequest() {
+    cancelPreparedResumeResolution();
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
     fitAssessmentAbortRef.current?.abort();
@@ -279,6 +287,7 @@ export function useJobIntake({
     // A tracker restore supersedes every request from the previous desk state.
     // Without this generation bump, a late Job analysis could replace the
     // restored posting and its historical assessment after Open completes.
+    cancelPreparedResumeResolution();
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current?.abort();
     jobAnalysisAbortRef.current = null;
@@ -294,6 +303,7 @@ export function useJobIntake({
 
   useEffect(() => {
     if (!jobAnalysisAbortRef.current) return;
+    cancelPreparedResumeResolution();
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current.abort();
     jobAnalysisAbortRef.current = null;
@@ -304,7 +314,8 @@ export function useJobIntake({
     });
     setJobAnalysisProgressVisible(true);
     setLinkStatus("Job inputs changed. Prepare the current posting again.");
-  }, [jobAnalysisInputFingerprint, setLinkStatus]);
+    settlePreparationFit({ status: "inputs-changed" });
+  }, [cancelPreparedResumeResolution, jobAnalysisInputFingerprint, setLinkStatus]);
 
   useEffect(() => () => {
     jobAnalysisGenerationRef.current += 1;
@@ -355,9 +366,14 @@ export function useJobIntake({
   // this application will be tailored from.
   async function prepareResumeAndFitAssessment(
     localJobText: string,
-    screeningJobText: string
+    screeningJobText: string,
+    request: PreparedJobAnalysisRequest
   ): Promise<FitAssessmentRequest | null> {
-    const selection = await resolvePreparedResume(localJobText);
+    const selection = await resolvePreparedResume(localJobText, {
+      signal: request.signal,
+      isCurrent: request.isCurrent
+    });
+    if (!request.isCurrent()) return null;
     preparedJobForFitRef.current = { localJobText, screeningJobText };
     if (!runFitAssessment) {
       setFitAssessmentState({ status: "disabled" });
@@ -382,11 +398,41 @@ export function useJobIntake({
     return fitRequest;
   }
 
+  function settlePreparationFit({
+    status,
+    fitRequest
+  }: {
+    status: "too-short" | "failed" | "stopped" | "inputs-changed";
+    fitRequest?: FitAssessmentRequest | null;
+  }) {
+    if (!runFitAssessment) {
+      setFitAssessmentState({ status: "disabled" });
+      return;
+    }
+    const message = status === "stopped"
+      ? "Fit Assessment stopped with Job analysis. Prepare again or retry the assessment."
+      : status === "inputs-changed"
+        ? "Fit Assessment stopped because the preparation inputs changed. Prepare again or retry the assessment."
+        : status === "too-short"
+          ? "Fit Assessment stopped because the posting did not contain enough job-relevant text."
+          : "Fit Assessment stopped because preparation failed. Prepare again or retry the assessment.";
+    setFitAssessmentState((current) => {
+      if (current.status !== "running") return current;
+      if (fitRequest && current.resumeLabel !== fitRequest.resumeLabel) return current;
+      return {
+        status: "unavailable",
+        resumeLabel: current.resumeLabel,
+        message
+      };
+    });
+  }
+
   function applyFitAssessmentOutcome({
     outcome,
     fitRequest,
     screeningJobText,
     aiRequest,
+    executionUsage,
     autoPolishEligible = false,
     unavailableMessage = "Fit Assessment is unavailable. You can continue to Polish or retry the assessment."
   }: {
@@ -394,6 +440,7 @@ export function useJobIntake({
     fitRequest: FitAssessmentRequest | null;
     screeningJobText: string;
     aiRequest: AiRequestFields;
+    executionUsage?: FitAssessmentExecutionUsage;
     autoPolishEligible?: boolean;
     unavailableMessage?: string;
   }) {
@@ -409,9 +456,10 @@ export function useJobIntake({
           result: outcome,
           resumeLabel: fitRequest.resumeLabel,
           assessedAt: new Date().toISOString(),
-          provider: aiRequest.provider,
-          model: aiRequest.model,
-          reasoningEffort: aiRequest.reasoningEffort,
+          provider: executionUsage?.provider ?? aiRequest.provider,
+          model: executionUsage?.model ?? aiRequest.model,
+          reasoningEffort: executionUsage?.reasoningEffort ?? aiRequest.reasoningEffort,
+          ...(executionUsage?.attempts ? { attempts: executionUsage.attempts } : {}),
           promptVersion: FIT_ASSESSMENT_PROMPT_VERSION
         },
         provenance: createFitAssessmentProvenance(
@@ -468,6 +516,7 @@ export function useJobIntake({
         fitRequest,
         screeningJobText,
         aiRequest,
+        executionUsage: outcome.usage,
         autoPolishEligible
       });
     } catch (error) {
@@ -565,6 +614,7 @@ export function useJobIntake({
   function stopJobAnalysis() {
     const controller = jobAnalysisAbortRef.current;
     if (!controller) return;
+    cancelPreparedResumeResolution();
     jobAnalysisGenerationRef.current += 1;
     controller.abort();
     jobAnalysisAbortRef.current = null;
@@ -577,13 +627,7 @@ export function useJobIntake({
       error: "Job analysis was cancelled. The unfinished result did not replace your prepared job."
     });
     setLinkStatus("Job analysis stopped. Prepare again when you are ready.");
-    setFitAssessmentState((current) => current.status === "running"
-      ? {
-          status: "unavailable",
-          resumeLabel: current.resumeLabel,
-          message: "Fit Assessment stopped with Job analysis. Prepare again or retry the assessment."
-        }
-      : current);
+    settlePreparationFit({ status: "stopped" });
   }
 
   // Prepare's direct-typing path (manual edits to the description textarea) —
@@ -594,6 +638,7 @@ export function useJobIntake({
   // Deliberately keep later-stage usage: a manual edit leaves those outputs on
   // screen, so their attribution still describes what the user can see.
   function handleManualJobDescriptionChange(value: string) {
+    cancelPreparedResumeResolution();
     setJobDescription(value);
     // Typing or replacing source starts fresh intake immediately. Clear the
     // prepared snapshot so App also releases any restored/applied application
@@ -657,7 +702,7 @@ export function useJobIntake({
     // provenance retain the complete captured posting.
     const localJobText = localExtracted.tailoringText;
     setLocalPreparedPreview(importedJobSnapshot(url, localJobText, localExtracted, screeningJobText));
-    const fitRequest = await prepareResumeAndFitAssessment(localJobText, screeningJobText);
+    const fitRequest = await prepareResumeAndFitAssessment(localJobText, screeningJobText, request);
     if (!request.isCurrent()) return { status: "stale" };
     // Preserve Prepare's one-call fast path only when the two independently
     // configured stages resolve to the exact same provider request. A distinct
@@ -683,7 +728,10 @@ export function useJobIntake({
     if (!request.isCurrent()) return { status: "stale" };
 
     const relevant = result.extracted.tailoringText;
-    if (relevant.trim().length < 40) return { status: "too-short" };
+    if (relevant.trim().length < 40) {
+      settlePreparationFit({ status: "too-short", fitRequest });
+      return { status: "too-short" };
+    }
 
     const duplicateAfter = result.failure
       ? duplicateBefore
@@ -709,6 +757,7 @@ export function useJobIntake({
         fitRequest,
         screeningJobText,
         aiRequest: fitAssessmentAiRequest,
+        executionUsage: result.usage,
         autoPolishEligible: duplicateAfter.proceed
       });
     } else if (fitRequest) {
@@ -808,6 +857,7 @@ export function useJobIntake({
       setJobAnalysisProgress(jobAnalysisTerminalState(outcome.result, outcome.duplicateNote));
     } catch (error) {
       if (!request.isCurrent()) return;
+      settlePreparationFit({ status: "failed" });
       const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
       setImportedJob(null);
       setLinkStatus(`Couldn't extract from the link: ${message}. Paste the description instead.`);
@@ -909,6 +959,7 @@ export function useJobIntake({
       setJobAnalysisProgress(jobAnalysisTerminalState(outcome.result, outcome.duplicateNote));
     } catch (error) {
       if (!request.isCurrent()) return;
+      settlePreparationFit({ status: "failed" });
       // analyzeJobPosting is built to fall back to local rather than throw, so
       // this only fires on an unexpected error — surface it instead of leaving
       // the card stuck on "running".
@@ -1006,6 +1057,7 @@ export function useJobIntake({
         : "Application prepared from the browser extension.");
     } catch (error) {
       if (!request.isCurrent()) return;
+      settlePreparationFit({ status: "failed" });
       const f = classifyFailure(error);
       setJobAnalysisProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
       setPolishStatus(`The extension posting could not be prepared: ${f.detail}. Retry from the workflow card.`);
@@ -1076,6 +1128,7 @@ export function useJobIntake({
           : "Application prepared from the browser extension.");
       } catch (error) {
         if (!request.isCurrent()) return;
+        settlePreparationFit({ status: "failed" });
         const failure = classifyFailure(error);
         setJobAnalysisRetrySource("import");
         setJobAnalysisProgress({ status: "failed", errorHeadline: failure.headline, error: failure.detail });

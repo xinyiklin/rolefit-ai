@@ -5,6 +5,7 @@ const prepareStyles = readFileSync(
   new URL("../../../../styles/prepare.css", import.meta.url),
   "utf8"
 );
+const prepareSource = readFileSync(new URL("../../PrepareTab.tsx", import.meta.url), "utf8");
 
 const preparedHeightBlock = prepareStyles.slice(
   prepareStyles.indexOf("@media (min-width: 1081px)"),
@@ -33,4 +34,15 @@ assert.match(
   "both Prepare topologies fill the page's remaining height"
 );
 
-console.log("Prepare application rail layout eval: 4/4 checks passed");
+assert.doesNotMatch(
+  prepareSource,
+  /const can(?:Fetch|PreparePaste)\s*=.*jobAnalysisProviderReady/,
+  "manual URL and paste preparation stay reachable without a configured AI provider"
+);
+assert.match(
+  prepareSource,
+  /Local brief ready\. Connect an AI provider to improve it\./,
+  "Prepare explains the deterministic fallback without disabling the source action"
+);
+
+console.log("Prepare application rail layout eval: 6/6 checks passed");

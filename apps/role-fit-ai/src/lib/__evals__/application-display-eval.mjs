@@ -13,7 +13,11 @@ function application(overrides = {}) {
       result: {
         verdict: "STRONG",
         summary: "Grounded fit summary.",
-        matches: [],
+        matches: [{
+          jobExcerpt: "Build reliable backend services.",
+          candidateSource: "RESUME",
+          candidateExcerpt: "Built reliable backend services."
+        }],
         gaps: []
       }
     },

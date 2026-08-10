@@ -38,7 +38,11 @@ const POSTING = [
 const VALID_FIT = {
   verdict: "REASONABLE",
   summary: "Provider-owned summary is ignored.",
-  matches: ["Go services in production"],
+  matches: [{
+    jobExcerpt: "build Go services on Postgres",
+    candidateSource: "RESUME",
+    candidateExcerpt: "Go services in production"
+  }],
   gaps: ["Formal on-call rotation ownership"],
   eligibility: { status: "CLEAR" }
 };

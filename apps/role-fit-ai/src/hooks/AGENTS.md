@@ -162,6 +162,10 @@ browser-side effects; components render them and App composes them.
   enter the editor; Withheld is not a completed proposal. Prepare's deterministic brief is independently usable when
   Job analysis or compact Fit Assessment is unavailable. Preserve abort
   controllers, retry provenance, and stale-input guards inside the owner.
+  The outer preparation request token is part of prepared-resume resolution;
+  Stop, input replacement, restore, and cleanup invalidate both owners before
+  adoption. Too-short and thrown-error exits after Fit starts must terminalize
+  its visible state instead of leaving `running` without an active request.
 - Store hot transient values in refs when they must survive async callbacks
   without driving presentation. Keep visible state serializable and explicit.
 - Effects depend on stable primitive/derived signals, not freshly created
@@ -185,7 +189,8 @@ browser-side effects; components render them and App composes them.
   with weighted prepared-job sections and auto-select a meaningful unique
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
-  recommendation. A successful automatic proposal run must not force the Resume tab;
+  recommendation. An explicitly uploaded resume is authoritative even while
+  clean and is never an automatic-adoption target. A successful automatic proposal run must not force the Resume tab;
   user-initiated Resume Polish retains its normal reveal behavior.
 - Job analysis stale-input guards cover the job source, Fit Assessment setting,
   and both stages' AI settings. The selected resume is captured immediately

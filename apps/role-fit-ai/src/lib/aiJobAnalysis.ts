@@ -124,6 +124,13 @@ export type FitAssessmentRequest = {
   candidateContext?: string;
 };
 
+export type FitAssessmentExecutionUsage = {
+  provider?: string;
+  model?: string;
+  reasoningEffort?: string;
+  attempts?: number;
+};
+
 export function localJobAnalysisResult(
   text: string,
   options: {
@@ -160,7 +167,11 @@ function definedFields<T extends Record<string, unknown>>(obj: T): Partial<T> {
 
 type JobAnalysisFailure = { failure: ClassifiedFailure };
 type AnalysisApiOutcome = { mode: "analysis"; fields: Partial<AiJobAnalysisFields> };
-type FitAssessmentApiOutcome = { mode: "fit-assessment"; fitAssessment: FitAssessmentResult };
+type FitAssessmentApiOutcome = {
+  mode: "fit-assessment";
+  fitAssessment: FitAssessmentResult;
+  usage: FitAssessmentExecutionUsage;
+};
 type JobAnalysisApiOutcome = AnalysisApiOutcome | FitAssessmentApiOutcome | JobAnalysisFailure;
 
 function postJobAnalysisRequest(
@@ -215,11 +226,31 @@ async function postJobAnalysisRequest(
       return { mode, fields: body as Partial<AiJobAnalysisFields> };
     }
 
-    const fitAssessment = body && typeof body === "object" && !Array.isArray(body)
-      ? sanitizeFitAssessment((body as { fitAssessment?: unknown }).fitAssessment)
+    const fitBody = body && typeof body === "object" && !Array.isArray(body)
+      ? body as Record<string, unknown>
+      : null;
+    const fitAssessment = fitBody
+      ? sanitizeFitAssessment(fitBody.fitAssessment)
       : null;
     return fitAssessment
-      ? { mode, fitAssessment }
+      ? {
+          mode,
+          fitAssessment,
+          usage: {
+            ...(typeof fitBody?.provider === "string" && fitBody.provider.trim()
+              ? { provider: fitBody.provider.trim() }
+              : {}),
+            ...(typeof fitBody?.model === "string" && fitBody.model.trim()
+              ? { model: fitBody.model.trim() }
+              : {}),
+            ...(typeof fitBody?.reasoningEffort === "string" && fitBody.reasoningEffort.trim()
+              ? { reasoningEffort: fitBody.reasoningEffort.trim() }
+              : {}),
+            ...(typeof fitBody?.attempts === "number" && Number.isFinite(fitBody.attempts)
+              ? { attempts: Math.max(1, Math.min(9, Math.round(fitBody.attempts))) }
+              : {})
+          }
+        }
       : {
           failure: classifyFailure(new ApiError("Fit Assessment returned no usable screening", 502))
         };
@@ -397,7 +428,11 @@ export async function analyzeFitAssessment(
   text: string,
   request: FitAssessmentRequest,
   options: { signal?: AbortSignal; aiRequest?: Partial<AiRequestFields> } = {}
-): Promise<{ fitAssessment: FitAssessmentResult | null; failure?: ClassifiedFailure }> {
+): Promise<{
+  fitAssessment: FitAssessmentResult | null;
+  usage?: FitAssessmentExecutionUsage;
+  failure?: ClassifiedFailure;
+}> {
   const outcome = await postJobAnalysisRequest(
     {
       text,
@@ -410,5 +445,5 @@ export async function analyzeFitAssessment(
   );
   return "failure" in outcome
     ? { fitAssessment: null, failure: outcome.failure }
-    : { fitAssessment: outcome.fitAssessment };
+    : { fitAssessment: outcome.fitAssessment, usage: outcome.usage };
 }

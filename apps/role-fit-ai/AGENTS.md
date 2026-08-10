@@ -87,6 +87,10 @@ own a second resume model, editor, layout engine, or PDF implementation.
   configurations match exactly, otherwise it dispatches assessment-only after
   committing the brief.
   Resume Polish failure or Withheld leaves the document unchanged.
+- URL and paste preparation remain enabled without a ready Job analysis
+  provider. They commit the deterministic brief and explain that connecting a
+  provider can improve it; Fit Assessment remains unavailable when its own
+  provider cannot run, and Polish retains its existing provider gate.
 - Duplicate checks gate the pipeline before and after Job analysis. Stop means no
   downstream request; Continue is acknowledged for that job target.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
@@ -196,6 +200,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   is clean and not application-owned; an explicit manual variant choice
   synchronously preempts it; while an included variant is resolving or loading,
   preparation remains busy and Apply or another Polish action cannot start. A
+  clean explicit upload is authoritative and never replaced automatically.
+  Stop, source-input replacement, application restore, and component cleanup
+  invalidate both the outer preparation and this resolver before adoption or
+  Fit `running` can publish. Every terminal preparation path that entered Fit
+  `running` must settle it to ready, unavailable, or disabled. A
   tie or incomplete comparison returns no recommendation and keeps the current
   selection. Cover letters keep their own ranking effect and the same safety
   rules. Do not add persisted variant metadata or another schema for either

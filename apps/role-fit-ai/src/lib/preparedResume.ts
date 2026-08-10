@@ -156,6 +156,9 @@ export function resumeIsApplicantOwned(state: PreparedResumeState): boolean {
 function documentIsReplaceable(state: PreparedResumeState): boolean {
   return (
     !state.applicationOwned &&
+    // Opening a file is an explicit user choice. Clean only means unedited; it
+    // does not make that uploaded document less authoritative than a saved one.
+    state.resumeOrigin !== "uploaded" &&
     !state.documentDirty &&
     !state.manualSelectionInFlight &&
     !state.savingBaseResume

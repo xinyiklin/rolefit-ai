@@ -96,7 +96,8 @@ editable documents.
   the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
   Apply together. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
-  eligibility state. Rubric v3 prioritizes decision-critical responsibilities
+  eligibility state. Each match shows the exact resume or About you evidence
+  beneath the posting excerpt. Rubric v3 prioritizes decision-critical responsibilities
   and core qualifications, preserves explicit evidence-source boundaries, ignores
   logistics or application-form noise when judging fit, and self-checks every
   evidence excerpt before the server's exact-anchor boundary.
@@ -116,7 +117,7 @@ editable documents.
   prepared job. A meaningful unique winner is selected automatically for either
   document while its editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current choice and makes no recommendation;
-  unsaved work is never replaced. Resume candidate bytes and option metadata
+  unsaved work and an explicitly uploaded resume are never replaced. Resume candidate bytes and option metadata
   are resolved from one snapshot, with one retry if the saved option set changes
   or any saved candidate is overwritten mid-read—even under the same filename;
   a failed load keeps the current resume without advertising an unloaded winner.
@@ -127,7 +128,8 @@ editable documents.
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
   boards. The configured Job analysis provider runs before the server's grounding
   and sanitization checks.
-  A deterministic parser publishes a usable local brief immediately. Job analysis
+  A deterministic parser publishes a usable local brief immediately, so URL and
+  paste preparation remain available even before a provider is configured. Job analysis
   can improve it, but provider failure leaves the local fields editable and does
   not block manual Polish. Fit Assessment has its own provider/model/effort
   setting. When that configuration exactly matches Job analysis, the same
@@ -415,8 +417,9 @@ names migrate without losing the selected model.
 
 > **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
-URL, pasted-text, and extension intake request AI-backed Job analysis. RoleFit
-publishes the deterministic brief first; if Job analysis or Fit Assessment fails,
+URL, pasted-text, and extension intake request AI-backed Job analysis when its
+provider is available. RoleFit publishes the deterministic brief first; without
+a ready provider, or if Job analysis or Fit Assessment fails,
 that local brief remains editable and manual Polish stays available. Resume
 Polish, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or

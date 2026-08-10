@@ -364,6 +364,32 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
   }
 }
 
+// ── An explicitly uploaded resume is authoritative for this preparation ─────
+{
+  const uploadedText = resumeText("Specialized upload", "React accessibility design systems");
+  const olderSaved = {
+    fileName: "general.resume",
+    label: "General",
+    text: resumeText("General saved", "Go Postgres Kubernetes")
+  };
+  const run = harness({
+    state: baseState({
+      options: [{ fileName: olderSaved.fileName, label: olderSaved.label }],
+      resumeOrigin: "uploaded",
+      currentText: uploadedText,
+      documentTitle: "My specialized resume"
+    }),
+    candidates: [olderSaved]
+  });
+  const resolution = await resolvePreparedResumeSelection(run.deps);
+  check(resolution.selection?.text, uploadedText, "Prepare keeps the resume the user explicitly uploaded");
+  check(resolution.selection?.origin, "current", "an upload remains the authoritative current selection");
+  checkOk(
+    !run.log.some((entry) => entry.startsWith("readCandidates") || entry.startsWith("adopt:")),
+    "an uploaded resume is neither ranked against nor replaced by saved variants"
+  );
+}
+
 // ── Two rankings can disagree; one resolution cannot ────────────────────────
 {
   // The raw posting and the prepared brief weight different words. The old code

@@ -274,28 +274,29 @@ export function PrepareTab({
             : coverLetterWordCount > 0
               ? "Draft too short"
               : "No draft";
-  const canFetch = Boolean(jobUrl.trim()) && !isPreparing && jobAnalysisProviderReady;
+  const canFetch = Boolean(jobUrl.trim()) && !isPreparing;
   // URL edits invalidate readiness but must not swap the controlled replacement
   // textarea from the captured posting back to the compact tailoring scaffold.
   // Direct textarea edits clear jobRawText in useJobIntake, so this still hands
   // control to the user's replacement on the first keystroke.
   const preparationSourceText = jobRawText || jobDescription;
-  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing && jobAnalysisProviderReady;
+  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing;
   const fetchHint = !jobUrl.trim()
     ? "Enter a job URL first."
     : isPreparing
       ? "Wait for the current preparation to finish."
-      : !jobAnalysisProviderReady
-        ? jobAnalysisProviderMessage
-        : "";
+      : "";
   const prepareHint =
     preparationSourceText.trim().length < 80
       ? "Paste at least 80 characters from the job posting."
       : isPreparing
         ? "Wait for the current preparation to finish."
-        : !jobAnalysisProviderReady
-          ? jobAnalysisProviderMessage
-          : "";
+        : "";
+  const localFallbackHint = !jobAnalysisProviderReady
+    ? jobPrepared || hasPreparedPreview
+      ? "Local brief ready. Connect an AI provider to improve it."
+      : `${jobAnalysisProviderMessage} Prepare will still create a local brief.`
+    : "";
   const polishResumeHint = !jobPrepared
     ? "Prepare the job first."
     : !resumeReady
@@ -543,6 +544,12 @@ export function PrepareTab({
                     </p>
                   ) : null}
                 </div>
+
+                {localFallbackHint ? (
+                  <p className="prepare-note is-info" role="status">
+                    {localFallbackHint}
+                  </p>
+                ) : null}
 
                 {!jobPrepared && activity ? (
                   <p className={`prepare-note is-${activity.tone}`} role="status">

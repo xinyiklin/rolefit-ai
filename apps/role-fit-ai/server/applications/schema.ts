@@ -181,6 +181,9 @@ function sanitizeFitAssessmentSnapshot(raw: unknown) {
   const provider = sanitizeString(value.provider, 80).trim();
   const model = sanitizeString(value.model, 120).trim();
   const reasoningEffort = sanitizeString(value.reasoningEffort, 40).trim();
+  const attempts = typeof value.attempts === "number" && Number.isFinite(value.attempts)
+    ? Math.max(1, Math.min(9, Math.round(value.attempts)))
+    : undefined;
   const promptVersion = sanitizeString(value.promptVersion, 120).trim();
   return {
     result,
@@ -189,6 +192,7 @@ function sanitizeFitAssessmentSnapshot(raw: unknown) {
     ...(provider ? { provider } : {}),
     ...(model ? { model } : {}),
     ...(reasoningEffort ? { reasoningEffort } : {}),
+    ...(attempts ? { attempts } : {}),
     ...(/^fit-assessment-direct-rubric-v[1-9]\d*$/.test(promptVersion) ? { promptVersion } : {})
   };
 }

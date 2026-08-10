@@ -56,15 +56,62 @@ const validRaw = {
 const valid = sanitizeFitAssessmentResponse(validRaw, { jobText, resumeText, candidateContext });
 assert.ok(valid, "a fully anchored response is usable");
 assert.equal(valid.summary, FIT_ASSESSMENT_SUMMARY.REASONABLE, "the server owns stable public summary copy");
-assert.deepEqual(valid.matches, [
-  "Build accessible React workflows for healthcare teams.",
-  "Experience shipping TypeScript applications is required."
-]);
+assert.deepEqual(valid.matches, validRaw.matches, "validated candidate evidence remains inspectable");
 assert.deepEqual(valid.gaps, ["Lead design reviews with product and engineering partners."]);
 assert.deepEqual(valid.eligibility, {
   status: "BLOCKED",
+  jobExcerpt: "Must be authorized to work in the United States without sponsorship.",
+  candidateExcerpt: "I require employment sponsorship.",
   note: "The posting disallows the sponsorship the candidate says is required."
 });
+
+for (const verdict of ["STRONG", "REASONABLE", "STRETCH"]) {
+  assert.equal(
+    sanitizeFitAssessmentResponse(
+      { verdict, matches: [], gaps: validRaw.gaps, eligibility: { status: "CLEAR" } },
+      { jobText, resumeText, candidateContext }
+    ),
+    null,
+    `${verdict} cannot contradict its findings by claiming no direct match`
+  );
+}
+
+const multilineJobExcerpt = "Build accessible React workflows\nfor healthcare teams.";
+const multilineCandidateExcerpt = "Built accessible React workflows\nused by clinical operations teams.";
+const multiline = sanitizeFitAssessmentResponse(
+  {
+    verdict: "STRONG",
+    matches: [{
+      jobExcerpt: multilineJobExcerpt,
+      candidateSource: "RESUME",
+      candidateExcerpt: multilineCandidateExcerpt
+    }],
+    gaps: [],
+    eligibility: { status: "CLEAR" }
+  },
+  {
+    jobText: `Senior Product Engineer\n${multilineJobExcerpt}`,
+    resumeText: `Product Engineer\n${multilineCandidateExcerpt}`,
+    candidateContext: ""
+  }
+);
+assert.equal(multiline?.matches[0].jobExcerpt, multilineJobExcerpt, "exact job excerpts retain line breaks");
+assert.equal(
+  multiline?.matches[0].candidateExcerpt,
+  multilineCandidateExcerpt,
+  "exact candidate excerpts retain line breaks"
+);
+const clientGapExcerpt = "• Must ship systems\nin production.";
+assert.equal(
+  sanitizeFitAssessment({
+    verdict: "LIMITED",
+    matches: [],
+    gaps: [clientGapExcerpt],
+    eligibility: { status: "CLEAR" }
+  })?.gaps[0],
+  clientGapExcerpt,
+  "the client boundary preserves bullets and line breaks in exact gap excerpts"
+);
 
 assert.deepEqual(
   sanitizeFitAssessmentResponse(
@@ -140,13 +187,17 @@ assert.equal(
 const clientResult = sanitizeFitAssessment({
   verdict: "STRONG",
   summary: "Untrusted provider summary",
-  matches: ["Build accessible React workflows for healthcare teams."],
+  matches: [validRaw.matches[0]],
   gaps: [],
-  eligibility: { status: "CHECK", note: "Confirm work authorization." }
+  eligibility: {
+    status: "CHECK",
+    jobExcerpt: validRaw.eligibility.jobExcerpt,
+    note: "Confirm work authorization."
+  }
 });
 assert.equal(clientResult?.summary, FIT_ASSESSMENT_SUMMARY.STRONG);
 assert.equal(
-  sanitizeFitAssessment({ verdict: "STRONG", matches: ["duplicate", "duplicate"], gaps: [] }),
+  sanitizeFitAssessment({ verdict: "STRONG", matches: [validRaw.matches[0], validRaw.matches[0]], gaps: [] }),
   null,
   "the client boundary also rejects duplicate public findings"
 );

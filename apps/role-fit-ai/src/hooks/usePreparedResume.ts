@@ -21,7 +21,7 @@
  * through one `readState` thunk, because resolution runs at dispatch time
  * rather than render time and must never decide from a stale closure.
  */
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   resolvePreparedResumeSelection,
@@ -33,6 +33,10 @@ import type { VariantCandidate, VariantRecommendation } from "../lib/variantReco
 import type { BaseResumeOption } from "./useWorkspaceResume";
 
 export type PreparedResumeResolverState = PreparedResumeState;
+export type PreparedResumeResolutionControls = {
+  signal?: AbortSignal;
+  isCurrent?: () => boolean;
+};
 
 type UsePreparedResumeArgs = {
   readState: () => PreparedResumeResolverState;
@@ -56,17 +60,32 @@ export function usePreparedResume({
   const [isResolvingPreparedResume, setIsResolvingPreparedResume] = useState(false);
   const resolveGenerationRef = useRef(0);
 
-  const clearPreparedResumeRecommendation = useCallback(() => {
+  const cancelPreparedResumeResolution = useCallback(() => {
     resolveGenerationRef.current += 1;
     setResumeVariantRecommendation(null);
     setIsResolvingPreparedResume(false);
   }, []);
 
+  const clearPreparedResumeRecommendation = cancelPreparedResumeResolution;
+
+  useEffect(() => () => {
+    // Unmount must invalidate the resolver without publishing another state
+    // transition into a tree that is already being removed.
+    resolveGenerationRef.current += 1;
+  }, []);
+
   const resolvePreparedResume = useCallback(
-    async (jobText: string): Promise<PreparedResumeSelection | null> => {
+    async (
+      jobText: string,
+      controls: PreparedResumeResolutionControls = {}
+    ): Promise<PreparedResumeSelection | null> => {
       resolveGenerationRef.current += 1;
       const generation = resolveGenerationRef.current;
-      const isCurrent = () => generation === resolveGenerationRef.current;
+      const isCurrent = () => (
+        generation === resolveGenerationRef.current
+        && !controls.signal?.aborted
+        && (controls.isCurrent?.() ?? true)
+      );
       setIsResolvingPreparedResume(true);
       try {
         const resolution = await resolvePreparedResumeSelection({
@@ -88,7 +107,7 @@ export function usePreparedResume({
             }),
           isCurrent
         });
-        if (!resolution) return null;
+        if (!resolution || !isCurrent()) return null;
         setResumeVariantRecommendation(resolution.recommendation);
         return resolution.selection;
       } finally {
@@ -100,6 +119,7 @@ export function usePreparedResume({
 
   return {
     resolvePreparedResume,
+    cancelPreparedResumeResolution,
     clearPreparedResumeRecommendation,
     resumeVariantRecommendation,
     isResolvingPreparedResume

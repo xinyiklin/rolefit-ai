@@ -55,7 +55,11 @@ const applied = {
     result: {
       verdict: "REASONABLE",
       summary: "Backend evidence aligns with the role.",
-      matches: ["services"],
+      matches: [{
+        jobExcerpt: "Build services.",
+        candidateSource: "RESUME",
+        candidateExcerpt: "services"
+      }],
       gaps: []
     }
   },

@@ -143,7 +143,11 @@ const savedSnapshot = {
   result: {
     verdict: "REASONABLE",
     summary: "Your background aligns well, with a few material gaps.",
-    matches: ["JavaScript services"],
+    matches: [{
+      jobExcerpt: "Build reliable JavaScript services.",
+      candidateSource: "RESUME",
+      candidateExcerpt: "built reliable JavaScript services"
+    }],
     gaps: ["Finance domain experience"]
   },
   resumeLabel: "Saved application resume",

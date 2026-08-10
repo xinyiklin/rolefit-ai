@@ -27,7 +27,11 @@ const FIT_REQUEST = {
 };
 const VALID_FIT = {
   verdict: "REASONABLE",
-  matches: ["Build Python APIs and operate SQL data services."],
+  matches: [{
+    jobExcerpt: "Build Python APIs and operate SQL data services.",
+    candidateSource: "RESUME",
+    candidateExcerpt: "Built Python APIs and operated SQL data services in production."
+  }],
   gaps: ["Kubernetes experience is required for production deployments."],
   eligibility: { status: "CLEAR" }
 };
@@ -72,11 +76,23 @@ assert.equal(requests[0].payload.fitAssessment.enabled, true);
 assert.equal(requests[0].payload.fitAssessment.resumeText, FIT_REQUEST.resumeText);
 
 requests = [];
-nextResponse = response({ fitAssessment: VALID_FIT });
+nextResponse = response({
+  fitAssessment: VALID_FIT,
+  provider: "resolved-provider",
+  model: "resolved-model",
+  reasoningEffort: "resolved-effort",
+  attempts: 2
+});
 const retry = await analyzeFitAssessment(POSTING, FIT_REQUEST, {
   aiRequest: { provider: "claude-cli", model: "synthetic-model", reasoningEffort: "low" }
 });
 assert.equal(retry.fitAssessment?.verdict, "REASONABLE");
+assert.deepEqual(retry.usage, {
+  provider: "resolved-provider",
+  model: "resolved-model",
+  reasoningEffort: "resolved-effort",
+  attempts: 2
+}, "standalone Fit keeps the server-resolved execution attribution");
 assert.equal(requests.length, 1, "reassessment uses the same endpoint boundary once");
 assert.equal(requests[0].payload.mode, "fit-assessment");
 assert.equal(requests[0].payload.resumeText, FIT_REQUEST.resumeText);

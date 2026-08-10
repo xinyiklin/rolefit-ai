@@ -104,7 +104,14 @@ export function PrepareApplicationRail({
                 <div className="fit-assessment-list">
                   <strong>Matches</strong>
                   <ul>
-                    {assessmentSnapshot.result.matches.map((match) => <li key={match}>{match}</li>)}
+                    {assessmentSnapshot.result.matches.map((match) => (
+                      <li key={`${match.candidateSource}:${match.jobExcerpt}:${match.candidateExcerpt}`}>
+                        {match.jobExcerpt}
+                        <small>
+                          {match.candidateSource === "RESUME" ? "Resume" : "About you"}: {match.candidateExcerpt}
+                        </small>
+                      </li>
+                    ))}
                   </ul>
                 </div>
               ) : null}
@@ -118,7 +125,15 @@ export function PrepareApplicationRail({
               ) : null}
               {assessmentSnapshot.result.eligibility && assessmentSnapshot.result.eligibility.status !== "CLEAR" ? (
                 <p className="fit-assessment-eligibility">
-                  {assessmentSnapshot.result.eligibility.note || "Check the role's eligibility requirement before applying."}
+                  <strong>
+                    {assessmentSnapshot.result.eligibility.status === "BLOCKED"
+                      ? "Eligibility conflict."
+                      : "Confirm eligibility."}
+                  </strong>{" "}
+                  {assessmentSnapshot.result.eligibility.jobExcerpt}
+                  {assessmentSnapshot.result.eligibility.candidateExcerpt ? (
+                    <small>About you: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
+                  ) : null}
                 </p>
               ) : null}
               {fitAssessment.status === "stale" ? (

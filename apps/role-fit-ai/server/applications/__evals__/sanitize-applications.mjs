@@ -30,11 +30,15 @@ try {
         provider: "codex-cli",
         model: "gpt-5.6-sol",
         reasoningEffort: "medium",
+        attempts: 2,
         promptVersion: "fit-assessment-direct-rubric-v1",
         result: {
           verdict: "REASONABLE",
           summary: "The resume covers the central backend requirements.",
-          matches: ["Python", "PostgreSQL"],
+          matches: [
+            { jobExcerpt: "Python", candidateSource: "RESUME", candidateExcerpt: "Python" },
+            { jobExcerpt: "PostgreSQL", candidateSource: "RESUME", candidateExcerpt: "PostgreSQL" }
+          ],
           gaps: ["Kubernetes"]
         }
       },
@@ -121,6 +125,7 @@ try {
     || valid.initialFit.provider !== "codex-cli"
     || valid.initialFit.model !== "gpt-5.6-sol"
     || valid.initialFit.reasoningEffort !== "medium"
+    || valid.initialFit.attempts !== 2
     || valid.initialFit.promptVersion !== "fit-assessment-direct-rubric-v1"
   ) {
     failures.push("Fit Assessment run metadata did not roundtrip");
@@ -261,7 +266,11 @@ try {
       result: {
         verdict: "REASONABLE",
         summary: FIT_ASSESSMENT_SUMMARY.REASONABLE,
-        matches: ["Python APIs"],
+        matches: [{
+          jobExcerpt: "Python APIs",
+          candidateSource: "RESUME",
+          candidateExcerpt: "Python APIs"
+        }],
         gaps: ["Kubernetes"]
       }
     }

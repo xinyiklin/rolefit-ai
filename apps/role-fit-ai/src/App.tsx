@@ -1256,6 +1256,7 @@ function App() {
   );
   const {
     resolvePreparedResume,
+    cancelPreparedResumeResolution,
     clearPreparedResumeRecommendation,
     resumeVariantRecommendation,
     isResolvingPreparedResume
@@ -1312,6 +1313,7 @@ function App() {
     ensureFitAssessmentProviderReady: ensureFitAssessmentProvider,
     runFitAssessment,
     resolvePreparedResume,
+    cancelPreparedResumeResolution,
     candidateContext: () => requestHonestContext,
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,

@@ -127,7 +127,10 @@ const receiptFile = ({ config, fixture, path, run }) => join(
 
 function representedThemes(fixture, result) {
   if (!result) return [];
-  const findings = [...result.matches, ...result.gaps].join("\n").toLowerCase();
+  const findings = [
+    ...result.matches.flatMap((match) => [match.jobExcerpt, match.candidateExcerpt]),
+    ...result.gaps
+  ].join("\n").toLowerCase();
   return fixture.materialThemes
     .filter((theme) => theme.terms.some((term) => findings.includes(term.toLowerCase())))
     .map((theme) => theme.id);
