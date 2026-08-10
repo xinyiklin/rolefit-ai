@@ -1496,7 +1496,8 @@ function App() {
   const coverLetterVariantOptionsRef = useRef(coverLetterEditor.coverLetterOptions);
   coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
   const coverVariantResolutionPending = Boolean(
-    isSelectingCoverVariant
+    coverLetterEditor.isWorkspaceBootstrapping
+    || isSelectingCoverVariant
     || (
       jobPrepared
       && coverLetterEditor.coverLetterOptions.length > 1

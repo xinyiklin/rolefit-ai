@@ -19,8 +19,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   follow-up rejects cross-preparation Fit persistence, declines stale automation,
   waits for automatic cover-variant resolution before consuming its token,
   keys preparation identity to the captured posting, and round-trips resume
-  origin through autosave recovery. The pinned Node 24 RoleFit gate passes all
-  89 offline evaluations. No rendered UI changed; browser interaction QA remains
+  origin through autosave recovery. A follow-up GPT-5.6 Sol Pro branch review
+  found that the cover-variant wait did not include the initial workspace read;
+  the cover-letter editor now exposes that one-shot pending state, including the
+  empty-to-loaded and single-saved-variant paths, before automatic Polish may
+  consume its token. The pinned Node 24 RoleFit gate passes all 89 offline
+  evaluations. No rendered UI changed; browser interaction QA remains
   UNCONFIRMED under the flag-first policy.
 
 ## 2026-08-09

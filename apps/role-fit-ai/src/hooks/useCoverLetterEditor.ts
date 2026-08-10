@@ -111,6 +111,9 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   onOpenDocumentRef.current = options.onOpenDocument;
   const cancelStartupOpenRef = useRef(false);
   const workspaceOpenGenerationRef = useRef(0);
+  // One-shot readiness for the initial options read and optional saved-letter
+  // adoption. An explicit user open resolves startup ownership immediately.
+  const [isWorkspaceBootstrapping, setIsWorkspaceBootstrapping] = useState(true);
   const styleRef = useRef(style);
   styleRef.current = style;
   const text = useMemo(
@@ -150,6 +153,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       if (!automatic) {
         cancelStartupOpenRef.current = true;
         workspaceOpenGenerationRef.current += 1;
+        setIsWorkspaceBootstrapping(false);
       }
       editor.seedData(data);
       dropPreTailorSnapshot();
@@ -566,37 +570,41 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     let cancelled = false;
     const initialFingerprint = startupFingerprintRef.current;
     void (async () => {
-      const snapshot = await refreshCoverWorkspace();
-      if (
-        !coverLetterStartupIsCurrent(
-          initialFingerprint,
-          startupFingerprintRef.current,
-          cancelled || cancelStartupOpenRef.current
-        ) ||
-        !snapshot
-      )
-        return;
+      try {
+        const snapshot = await refreshCoverWorkspace();
+        if (
+          !coverLetterStartupIsCurrent(
+            initialFingerprint,
+            startupFingerprintRef.current,
+            cancelled || cancelStartupOpenRef.current
+          ) ||
+          !snapshot
+        )
+          return;
 
-      const available = snapshot.coverLetterOptions ?? [];
-      const startup = resolveCoverLetterStartup(
-        available.map((option) => option.fileName),
-        loadLastCoverLetterName()
-      );
-      if (startup.stale) saveLastCoverLetterName("");
-
-      // A startup response may adopt a saved letter only while the editor still
-      // matches the exact document, style, and title state it began with.
-      if (startup.fileName) {
-        await openWorkspaceCoverLetter(
-          startup.fileName,
-          true,
-          () =>
-            !coverLetterStartupIsCurrent(
-              initialFingerprint,
-              startupFingerprintRef.current,
-              cancelled
-            )
+        const available = snapshot.coverLetterOptions ?? [];
+        const startup = resolveCoverLetterStartup(
+          available.map((option) => option.fileName),
+          loadLastCoverLetterName()
         );
+        if (startup.stale) saveLastCoverLetterName("");
+
+        // A startup response may adopt a saved letter only while the editor still
+        // matches the exact document, style, and title state it began with.
+        if (startup.fileName) {
+          await openWorkspaceCoverLetter(
+            startup.fileName,
+            true,
+            () =>
+              !coverLetterStartupIsCurrent(
+                initialFingerprint,
+                startupFingerprintRef.current,
+                cancelled
+              )
+          );
+        }
+      } finally {
+        if (!cancelled) setIsWorkspaceBootstrapping(false);
       }
     })();
     return () => {
@@ -732,6 +740,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     status,
     setStatus,
     isRenderingPdf,
+    isWorkspaceBootstrapping,
     openFile,
     startBlank,
     startStarter,

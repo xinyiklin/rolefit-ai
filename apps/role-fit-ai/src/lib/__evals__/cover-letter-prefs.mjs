@@ -75,6 +75,7 @@ assert.deepEqual(
 );
 
 const hook = readFileSync(new URL("../../hooks/useCoverLetterEditor.ts", import.meta.url), "utf8");
+const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const coverLetter = readFileSync(
   new URL("../../../../../packages/engine/src/lib/coverLetter.ts", import.meta.url),
   "utf8"
@@ -93,6 +94,26 @@ assert.match(
   hook,
   /openWorkspaceCoverLetter\([\s\S]*startup\.fileName,[\s\S]*true,[\s\S]*coverLetterStartupIsCurrent/,
   "the selected response rechecks cancellation and edits before adopting its payload"
+);
+assert.match(
+  hook,
+  /const \[isWorkspaceBootstrapping, setIsWorkspaceBootstrapping\] = useState\(true\)/,
+  "cover-letter startup is pending before the workspace options or saved document are known"
+);
+assert.match(
+  hook,
+  /const snapshot = await refreshCoverWorkspace\(\)[\s\S]*finally \{[\s\S]*setIsWorkspaceBootstrapping\(false\)/,
+  "cover-letter startup settles only after the workspace snapshot and optional saved-document open finish"
+);
+assert.match(
+  hook,
+  /return \{[\s\S]*isWorkspaceBootstrapping,[\s\S]*coverLetterOptions/,
+  "the editor exposes startup readiness beside the workspace options it qualifies"
+);
+assert.match(
+  app,
+  /const coverVariantResolutionPending = Boolean\(\s*coverLetterEditor\.isWorkspaceBootstrapping\s*\|\|\s*isSelectingCoverVariant/,
+  "automatic Cover Letter Polish waits through the empty-to-loaded startup transition, including one saved variant"
 );
 assert.match(
   hook,
