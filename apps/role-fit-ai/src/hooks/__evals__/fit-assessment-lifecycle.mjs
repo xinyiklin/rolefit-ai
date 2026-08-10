@@ -433,8 +433,13 @@ assert.match(
 );
 assert.match(
   polishSource,
-  /function startRun\([\s\S]{0,300}?runLockRef\.current = true;[\s\S]{0,300}?setIsPolishStarting\(true\);[\s\S]{0,300}?void continueRun\(options\);[\s\S]{0,100}?return true/,
+  /function startRun\([\s\S]{0,300}?runLockRef\.current = true;[\s\S]{0,300}?setIsPolishStarting\(true\);[\s\S]{0,300}?void continueRun\(options, startGeneration\);[\s\S]{0,100}?return true/,
   "the pipeline returns an authoritative synchronous claim before continuing pre-dispatch"
+);
+assert.match(
+  polishSource,
+  /const duplicateConfirmed = await confirmDuplicateBeforePolish\(\);\s*if \(!startIsCurrent\(\)\) return;\s*if \(!duplicateConfirmed\)/,
+  "a stale duplicate preflight cannot act on a newer claim's shared run lock"
 );
 assert.match(
   polishSource,

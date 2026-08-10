@@ -287,11 +287,16 @@ export function usePolishPipeline({
     }
   }
 
-  async function continueRun(options: PolishRunOptions): Promise<void> {
+  async function continueRun(
+    options: PolishRunOptions,
+    startGeneration: number
+  ): Promise<void> {
+    const startIsCurrent = () =>
+      runLockRef.current && generationRef.current === startGeneration;
     let context: PolishContext | null = null;
     try {
       const provider = await ensureResumePolishProviderReady();
-      if (!runLockRef.current) return;
+      if (!startIsCurrent()) return;
       if (!provider.ready) {
         runLockRef.current = false;
         setIsPolishStarting(false);
@@ -303,13 +308,14 @@ export function usePolishPipeline({
         setPolishProgressVisible(true);
         return;
       }
-      if (!(await confirmDuplicateBeforePolish())) {
+      const duplicateConfirmed = await confirmDuplicateBeforePolish();
+      if (!startIsCurrent()) return;
+      if (!duplicateConfirmed) {
         runLockRef.current = false;
         setIsPolishStarting(false);
         settleStart("declined");
         return;
       }
-      if (!runLockRef.current) return;
       context = buildContext();
       if (!context) {
         runLockRef.current = false;
@@ -318,7 +324,7 @@ export function usePolishPipeline({
         return;
       }
     } catch (error) {
-      if (!runLockRef.current) return;
+      if (!startIsCurrent()) return;
       runLockRef.current = false;
       setIsPolishStarting(false);
       settleStart("declined");
@@ -360,7 +366,8 @@ export function usePolishPipeline({
     }
     startSettlementRef.current = options.onStartSettled;
     setIsPolishStarting(true);
-    void continueRun(options);
+    const startGeneration = generationRef.current;
+    void continueRun(options, startGeneration);
     return true;
   }
 

@@ -30,7 +30,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   an explicit set/preserve/clear Fit decision so it cannot reattach another
   preparation's saved snapshot. Resume Polish now returns a synchronous claim,
   publishes provider/duplicate preflight, guards unload, and settles the one-use
-  token only when that claim starts or permanently declines. The pinned Node 24
+  token only when that claim starts or permanently declines. Exact-head review
+  then found that an older asynchronous Polish preflight could mistake a newer
+  claim's boolean lock for its own; the existing input generation now scopes
+  preflight ownership. Workspace cover-letter saves also acknowledge the title
+  captured at dispatch and retain recovery when the title changes in flight,
+  rather than falsely marking that later edit persisted. The pinned Node 24
   RoleFit gate passes all 89 offline evaluations. No rendered UI changed;
   browser interaction QA remains UNCONFIRMED under the flag-first policy.
 

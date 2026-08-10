@@ -106,6 +106,16 @@ assert.match(
 );
 assert.match(
   hook,
+  /const titleAtSaveStart = documentTitleRef\.current;[\s\S]{0,700}?await saveCoverLetterWorkspace\([\s\S]{0,500}?commitPersistenceBaseline\(payload, titleAtSaveStart\)/,
+  "workspace saves acknowledge the title captured when the dispatched payload was created"
+);
+assert.match(
+  hook,
+  /if \(documentTitleRef\.current === titleAtSaveStart\) \{\s*clearCoverLetterAutosaveDraft\(\);\s*\}/,
+  "a title edited during a workspace save keeps its recovery draft"
+);
+assert.match(
+  hook,
   /const \[isWorkspaceBootstrapping, setIsWorkspaceBootstrapping\] = useState\(true\)/,
   "cover-letter startup is pending before the workspace options or saved document are known"
 );

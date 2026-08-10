@@ -529,6 +529,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         editor.editedResume,
         documentStyleToCoverLetterStyle(styleRef.current)
       );
+      const titleAtSaveStart = documentTitleRef.current;
       try {
         // `variant` is a LABEL the server slugs; `fileName` is already validated
         // workspace identity. Keeping that distinction here prevents an update
@@ -544,16 +545,18 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           saveLastCoverLetterName(data.fileName);
         }
         editor.markClean();
-        commitPersistenceBaseline(payload);
-        // The letter is durable in the workspace now, so the recovery draft has
-        // nothing left to protect. The next edit re-arms it.
-        clearCoverLetterAutosaveDraft();
+        commitPersistenceBaseline(payload, titleAtSaveStart);
+        // A title changed after dispatch was not part of this save. Keep its
+        // recovery copy until a later save acknowledges that exact title.
+        if (documentTitleRef.current === titleAtSaveStart) {
+          clearCoverLetterAutosaveDraft();
+        }
         setStatus(`Saved ${data.label ?? "cover letter"} to your workspace.`);
       } catch (error) {
         setStatus(error instanceof Error ? error.message : "Cover letter save failed.");
       }
     },
-    [activeCoverFileName, adoptCoverWorkspaceSnapshot, commitPersistenceBaseline, editor.editedResume, editor.markClean]
+    [activeCoverFileName, adoptCoverWorkspaceSnapshot, commitPersistenceBaseline, documentTitleRef, editor.editedResume, editor.markClean]
   );
 
   const openWorkspaceCoverLetter = useCallback(
