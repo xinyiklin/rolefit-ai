@@ -5,6 +5,17 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The first Not applying workflow stage establishes safe
+  preparation identity and posting relationships.** `PreparationSession` now
+  distinguishes fresh, interested-draft, and exact-record update work; the
+  application id carried by that session is the only ordinary write target.
+  General tracker upsert no longer matches by URL or description. Separate
+  attempts may share the optional `jobPostingGroupId`, and linking expands to
+  every member of any joined groups in one sparse revision-checked mutation so
+  a conflict cannot leave a partial relationship. Manual destructive duplicate
+  merge remains separate. The RoleFit production build and all 92 offline
+  evaluations pass under pinned Node 24. Pass UI, mode-specific Apply commits,
+  and tracker presentation remain later stages. No push or merge occurred.
 - [USER+CODE+TOOL] **RoleFit is prepared as 0.7.0 with browser extension 1.2.0
   and desktop bridge API 13.** The minor slot is the right one under 0.x: this
   release replaces numeric fit scoring with the categorical Fit Assessment,

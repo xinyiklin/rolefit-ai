@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
-import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
+import { dedupeSourceUrls, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
 import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
@@ -12,6 +12,7 @@ import {
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
+import { planPostingRecordLink } from "../lib/applicationRelationships.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -141,6 +142,9 @@ export type Application = {
   // Stable tracker ids the user reviewed and explicitly kept separate from this
   // application. Either side of a pair may carry the decision.
   duplicateDismissedIds?: string[];
+  // Separate decisions or attempts for the same posting share this relationship
+  // id while retaining independent application ids, dates, documents, and status.
+  jobPostingGroupId?: string;
 };
 
 // Normalize historical stage keys as records enter the client so every later
@@ -219,24 +223,6 @@ export function makeApplicationDraft(
   if (metadata.salaryCurrency) draft.salaryCurrency = cleanDraftString(metadata.salaryCurrency, 8);
   if (metadata.salaryPeriod) draft.salaryPeriod = metadata.salaryPeriod;
   return draft;
-}
-
-// EXACT-tier only: these two drive SILENT merges (Apply + Save answers), so
-// they must never widen to the fuzzy/layered matching findDuplicatesForTarget
-// below performs — only the URL-equality check itself is normalize-aware (so a
-// tracking-param variant of the same link still counts as the same target).
-function sameApplicationTarget(a: Application, incoming: Application) {
-  const incomingUrl = incoming.jobUrl.trim();
-  const aUrl = a.jobUrl.trim();
-  if (incomingUrl && aUrl && normalizeJobUrl(aUrl) === normalizeJobUrl(incomingUrl)) return true;
-
-  const incomingDescription = (incoming.jobDescription ?? "").trim();
-  return Boolean(
-    !incomingUrl &&
-    incomingDescription &&
-    !aUrl &&
-    (a.jobDescription ?? "").trim() === incomingDescription
-  );
 }
 
 const MAX_SOURCE_URLS = 10;
@@ -416,7 +402,9 @@ export function useApplications() {
     (incoming: Application) => {
       const current = applicationsRef.current;
       const now = new Date().toISOString();
-      const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
+      // A tracker id is the only ordinary write destination. Job identity is
+      // advisory relationship evidence and must never select a record to replace.
+      const idx = current.findIndex((a) => a.id === incoming.id);
       const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
       const merged: Application = idx >= 0
         ? {
@@ -547,9 +535,8 @@ export function useApplications() {
 
   // Find an existing application matching the current job target — by
   // normalized URL when present, else by exact job-description text for
-  // link-less entries. Shared by the "Apply" and "Save answers" paths so both
-  // update in place rather than creating duplicate rows. EXACT-tier only — see
-  // sameApplicationTarget.
+  // link-less entries. This is read-only duplicate/relationship evidence; it
+  // never selects an ordinary persistence destination. EXACT-tier only.
   const findForTarget = useCallback(
     (targetUrl: string, targetDescription: string) =>
       applications.find((application) =>
@@ -571,6 +558,53 @@ export function useApplications() {
   const findDuplicatesForTarget = useCallback(
     (target: DuplicateTarget) => findDuplicateApplications(target, applications),
     [applications]
+  );
+
+  // Assign one posting relationship to every requested record and every member
+  // of their pre-existing groups. The sparse multi-record mutation is one
+  // server-side lock/revision transaction, so a conflict cannot leave one side
+  // linked while another remains unchanged.
+  const linkPostingRecords = useCallback(
+    async (applicationIds: string[], groupId?: string) => {
+      const current = applicationsRef.current;
+      const plan = planPostingRecordLink(current, applicationIds, groupId);
+      if (!plan) return null;
+      const affectedIds = new Set(plan.applicationIds);
+      const affected = current.filter((application) => affectedIds.has(application.id));
+      const changed = affected.filter(
+        (application) => application.jobPostingGroupId !== plan.groupId
+      );
+      if (!changed.length) return plan.groupId;
+
+      const revisions = new Map(
+        changed.map((application) => [
+          application.id,
+          nextApplicationRevision(application.updatedAt)
+        ])
+      );
+      const next = current.map((application) => {
+        const revision = revisions.get(application.id);
+        return revision
+          ? {
+              ...application,
+              jobPostingGroupId: plan.groupId,
+              updatedAt: revision
+            }
+          : application;
+      });
+      applicationsRef.current = next;
+      setApplications(next);
+      const saved = await persist(
+        next,
+        changed.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        }))
+      );
+      return saved ? plan.groupId : null;
+    },
+    [persist]
   );
 
   // Merge a duplicate group into one canonical record: keep the canonical's
@@ -723,6 +757,7 @@ export function useApplications() {
     getApplication,
     findForTarget,
     findDuplicatesForTarget,
+    linkPostingRecords,
     mergeApplications,
     dismissDuplicateGroup,
     refresh

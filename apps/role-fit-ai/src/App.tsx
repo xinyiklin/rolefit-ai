@@ -108,6 +108,10 @@ import {
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
+import {
+  newPreparationSession,
+  preparationSessionForApplication
+} from "./lib/preparationSession";
 
 import { Masthead } from "./sections/Masthead";
 import { TaskProgress } from "./sections/AiWorkflowProgress";
@@ -479,10 +483,10 @@ function App() {
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
   const applicationOpenInFlightRef = useRef(false);
-  // Apply and tracker restore establish one application of record for the
-  // current preparation. Manual brief edits must keep targeting that row even
-  // though they intentionally make its last-saved job description stale.
-  const [applicationOfRecordId, setApplicationOfRecordId] = useState<string | null>(null);
+  // One explicit session state owns whether writes create, continue a draft,
+  // or update an exact saved record. Matching job text never supplies this id.
+  const [preparationSession, setPreparationSession] = useState(newPreparationSession);
+  const applicationOfRecordId = preparationSession.applicationId;
 
   useEffect(() => {
     const url = resumePreview?.url;
@@ -659,7 +663,7 @@ function App() {
       // existing preparation uses setImportedJob directly. Re-preparing the
       // same captured source also keeps its application-of-record identity.
       if (!continuesPreparedSource) {
-        setApplicationOfRecordId(null);
+        setPreparationSession(newPreparationSession());
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         clearPreparedResumeRecommendationRef.current();
         setCoverLetterVariantRecommendation(null);
@@ -1834,7 +1838,11 @@ function App() {
   });
   const linkPreparedApplication = useCallback(
     (id: string | null) => {
-      setApplicationOfRecordId(id);
+      setPreparationSession(
+        id
+          ? { mode: "update", applicationId: id, pendingRelationship: null }
+          : newPreparationSession()
+      );
       linkApplication(id);
     },
     [linkApplication]
@@ -2074,7 +2082,8 @@ function App() {
       duplicateGuard.ackApplication(app);
       // Work continues against THIS record: later document saves update it rather
       // than creating a second row for the same posting.
-      linkPreparedApplication(app.id);
+      setPreparationSession(preparationSessionForApplication(app));
+      linkApplication(app.id);
       detachBaseResumeIdentity();
       setFileName("");
       // The only origin transition useWorkspaceResume cannot see: a restored

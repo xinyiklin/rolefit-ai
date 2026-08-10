@@ -93,10 +93,13 @@ browser-side effects; components render them and App composes them.
   retain current. The guarded loader returns the exact committed
   document receipt, failed adoption clears the recommendation, and cancellation
   clears both the recommendation and visible resolving flag.
-- `useApplications` sends only mutation-named upsert records, keeps optimistic
-  updates serial, and reconciles successful own-write snapshots by id/revision
-  so unchanged objects retain identity. Manual refreshes and conflict snapshots
-  remain fresh authoritative objects.
+- `useApplications` sends only mutation-named records, keeps optimistic updates
+  serial, and reconciles successful own-write snapshots by id/revision so
+  unchanged objects retain identity. Ordinary saves match by application id
+  only. Same-posting records keep independent ids and use one atomic multi-row
+  `jobPostingGroupId` mutation; manual destructive merge remains a separate
+  operation. Manual refreshes and conflict snapshots remain fresh authoritative
+  objects.
 - `useApplyFlow` persists the latest completed Fit Assessment as an application
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,

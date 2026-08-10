@@ -42,6 +42,21 @@ assert.match(
   /setPendingWrites\(\(count\) => count \+ 1\)[\s\S]*finally \{[\s\S]*setPendingWrites/,
   "every tracker write enters and releases reactive pending state"
 );
+assert.doesNotMatch(
+  applications,
+  /sameApplicationTarget/,
+  "ordinary tracker persistence never selects a write target by matching job content"
+);
+assert.match(
+  applications,
+  /const idx = current\.findIndex\(\(a\) => a\.id === incoming\.id\)/,
+  "ordinary tracker persistence matches existing records by explicit id only"
+);
+assert.match(
+  applications,
+  /const linkPostingRecords =[\s\S]*await persist\([\s\S]*changed\.map/,
+  "posting relationships use one sparse multi-record persistence request"
+);
 assert.equal(
   applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
   3,

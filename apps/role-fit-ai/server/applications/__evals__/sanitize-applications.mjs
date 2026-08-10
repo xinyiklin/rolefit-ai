@@ -56,6 +56,7 @@ try {
       ],
       rawJobDescription: "  Raw JD text here.  ",
       duplicateDismissedIds: ["other-app", "other-app", "app_valid-123", "../bad"],
+      jobPostingGroupId: "posting-group-123",
       coverLetterArtifacts: {
         hasPdf: false,
         hasSource: true,
@@ -117,6 +118,7 @@ try {
 
   if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
+  if (valid?.jobPostingGroupId !== "posting-group-123") failures.push("posting relationship did not persist");
   if (valid?.fitAssessment?.result.verdict !== "REASONABLE" || valid.fitAssessment.resumeLabel !== "Backend resume") {
     failures.push("compact Fit Assessment snapshot did not roundtrip");
   }
@@ -370,6 +372,56 @@ try {
   ]);
   if (withNewRecords.map((application) => application.id).join(",") !== "record-new-b,record-new-a,record-a,record-b") {
     failures.push("multiple new upserts were not prepended in incoming order");
+  }
+
+  const relationshipExisting = sanitizeApplications([
+    { id: "link-a", title: "Link A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "link-b", title: "Link B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
+  ]);
+  const relationshipIncoming = sanitizeApplications([
+    {
+      ...relationshipExisting[0],
+      jobPostingGroupId: "posting-group-atomic",
+      updatedAt: revisionBNext
+    },
+    {
+      ...relationshipExisting[1],
+      jobPostingGroupId: "posting-group-atomic",
+      updatedAt: revisionC
+    }
+  ]);
+  const relationshipLinked = reconcileApplicationMutations(
+    relationshipExisting,
+    relationshipIncoming,
+    [
+      { id: "link-a", operation: "upsert", baseUpdatedAt: revisionA },
+      { id: "link-b", operation: "upsert", baseUpdatedAt: revisionB }
+    ]
+  );
+  if (
+    relationshipLinked.some(
+      (application) => application.jobPostingGroupId !== "posting-group-atomic"
+    )
+  ) {
+    failures.push("an atomic posting relationship did not update every named record");
+  }
+
+  let relationshipConflictRejected = false;
+  try {
+    reconcileApplicationMutations(relationshipExisting, relationshipIncoming, [
+      { id: "link-a", operation: "upsert", baseUpdatedAt: revisionA },
+      { id: "link-b", operation: "upsert", baseUpdatedAt: "stale-revision" }
+    ]);
+  } catch (error) {
+    relationshipConflictRejected =
+      error instanceof ApplicationsStorageError
+      && error.status === 409
+      && error.currentApplications?.every(
+        (application) => application.jobPostingGroupId === undefined
+      );
+  }
+  if (!relationshipConflictRejected) {
+    failures.push("a posting relationship conflict could leave a partial group");
   }
 
   const mergeSnapshot = sanitizeApplications([
