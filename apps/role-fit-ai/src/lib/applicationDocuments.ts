@@ -28,6 +28,19 @@ export function normalizeDocumentSnapshot(text: string): string {
   return text.replace(/\s+/g, " ").trim();
 }
 
+// Resume Polish stores the document as it existed when the proposal was made.
+// Apply calls a resume tailored only when the live document actually differs
+// from that baseline; an AI receipt by itself does not prove an edit was used.
+export function resumeUsedForApplication(
+  currentResumeText: string,
+  proposalBaselineText?: string
+): "base" | "tailored" {
+  if (!proposalBaselineText?.trim()) return "base";
+  return normalizeDocumentSnapshot(currentResumeText) === normalizeDocumentSnapshot(proposalBaselineText)
+    ? "base"
+    : "tailored";
+}
+
 export function applicationDocumentSyncState(
   application: Application | null | undefined,
   kind: ApplicationDocumentKind,

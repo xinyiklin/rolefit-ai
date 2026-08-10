@@ -6,6 +6,7 @@ import type { AutoPolishThreshold } from "./autoPolishPolicy.ts";
 import {
   AVAILABILITY_NOTICE_OPTIONS,
   CITIZENSHIP_OPTIONS,
+  DECLARED_ANSWER_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,
   normalizeAvailabilityDate,
   normalizeCandidateGpa,
@@ -14,6 +15,7 @@ import {
   type AvailabilityNotice,
   type CandidateExperience,
   type CitizenshipStatus,
+  type DeclaredAnswer,
   type EducationLevel
 } from "./candidateFacts.ts";
 
@@ -46,16 +48,16 @@ export type PersistedSettings = {
   customInstructions?: string;
   // Per-drafting-stage overrides. A missing or blank entry inherits customInstructions.
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
-  // Serialized v1 key retained so existing workspace preferences stay valid.
-  // Product and runtime language call this Fit Assessment.
-  runInitialFit?: boolean;
+  // Current persisted name; preview data is rewritten explicitly when this
+  // contract changes rather than accepted through runtime aliases.
+  runFitAssessment?: boolean;
   autoPolishResume?: boolean;
   resumeAutoPolishThreshold?: AutoPolishThreshold;
   autoPolishCoverLetter?: boolean;
   coverLetterAutoPolishThreshold?: AutoPolishThreshold;
   citizenshipStatus?: CitizenshipStatus;
-  legallyAuthorizedToWork?: boolean;
-  requiresSponsorship?: boolean;
+  legallyAuthorizedToWork?: DeclaredAnswer;
+  requiresSponsorship?: DeclaredAnswer;
   educationLevel?: EducationLevel;
   major?: string;
   gpa?: number;
@@ -86,7 +88,7 @@ const PERSISTED_SETTING_KEYS = [
   "honestContext",
   "customInstructions",
   "stageCustomInstructions",
-  "runInitialFit",
+  "runFitAssessment",
   "autoPolishResume",
   "resumeAutoPolishThreshold",
   "autoPolishCoverLetter",
@@ -150,7 +152,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["runInitialFit", "autoPolishResume", "autoPolishCoverLetter"] as const) {
+  for (const key of ["runFitAssessment", "autoPolishResume", "autoPolishCoverLetter"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);
@@ -167,11 +169,13 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   if (settings.educationLevel !== undefined && !validEducation.has(settings.educationLevel)) {
     delete settings.educationLevel;
   }
-  if (settings.legallyAuthorizedToWork !== undefined && typeof settings.legallyAuthorizedToWork !== "boolean") {
-    delete settings.legallyAuthorizedToWork;
-  }
-  if (settings.requiresSponsorship !== undefined && typeof settings.requiresSponsorship !== "boolean") {
-    delete settings.requiresSponsorship;
+  const validDeclaredAnswers = new Set<DeclaredAnswer>(
+    DECLARED_ANSWER_OPTIONS.map((option) => option.value)
+  );
+  for (const key of ["legallyAuthorizedToWork", "requiresSponsorship"] as const) {
+    if (settings[key] !== undefined && !validDeclaredAnswers.has(settings[key])) {
+      delete settings[key];
+    }
   }
   if (typeof settings.honestContext !== "string") delete settings.honestContext;
   else settings.honestContext = settings.honestContext.slice(0, 50_000);

@@ -304,8 +304,8 @@ dispatch attempts but never an API key.
   connectivity only and cannot authorize the caller.
   `inbox` is polled same-origin by the app and stays behind
   the localhost CSRF/Host guard with no CORS header. The extension never reads
-  the base resume or calculates a local fit estimate. Prepare's compact Initial
-  Fit runs only inside the app against its selected resume. RoleFit does not
+  the base resume or calculates a local fit estimate. Fit Assessment runs only
+  inside the app against its selected resume. RoleFit does not
   create or persist a detailed numeric fit score.
 - workspace file storage under the host-supplied `workspaceDir` (auto-load,
   upload, save, reload; source development defaults to `workspace/`,
@@ -376,8 +376,10 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   what the grounding allowlist is built from. Every field is therefore opt-in
   by construction: an unset value contributes no line, so an undeclared
   citizenship, clearance eligibility, degree, GPA, or start date can never
-  become groundable wording. Citizenship gates the work-authorization lines;
-  education level gates the field of study and GPA; a specific availability
+  become groundable wording. Citizenship, work authorization, and sponsorship
+  are independently declared; citizenship never contributes clearance or
+  employment-eligibility wording. Education level gates the field of study and
+  GPA; a specific availability
   date must be a real ISO calendar date. Any new fact added there widens the
   allowlist and needs the grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
@@ -510,11 +512,10 @@ The AI must:
 - treat honest context as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section
-  without exact evidence in the resume or optional honest context; surface
-  missing required skills as gaps instead
-- omit an edit when material support is missing and surface the important gap
-  separately; do not add drafting placeholders to the resume
-- return up to three concise improvements and remaining gaps. The server derives
+  without exact evidence in the resume or optional honest context
+- omit an edit when material support is missing; do not add drafting
+  placeholders or ungrounded gap judgments to the resume workflow
+- return up to three concise improvements. The server derives
   Proposal / No changes / Withheld from accepted mutations, and the editor
   remains the final source of truth
 - write bullets as engineering accomplishments in plain language — no

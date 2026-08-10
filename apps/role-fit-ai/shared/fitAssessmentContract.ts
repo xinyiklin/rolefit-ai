@@ -61,23 +61,39 @@ export type FitAssessmentProvenance = {
   inputFingerprint: string;
 };
 
-export type FitAssessmentState =
-  | { status: "disabled" }
-  | { status: "running"; resumeLabel: string }
-  | {
-      status: "ready";
-      snapshot: FitAssessmentSnapshot;
-      provenance: FitAssessmentProvenance;
-      // Only the first assessment launched by Prepare may authorize the
-      // optional automatic Polish actions. Later assessments stay advisory.
-      autoPolishEligible: boolean;
-    }
-  // A tracker restore can show the compact result saved with that application,
-  // but cannot reconstruct the exact candidate-context/request provenance. Keep
-  // it historical so it never participates in current-input automation.
-  | { status: "saved"; snapshot: FitAssessmentSnapshot }
-  | { status: "stale"; snapshot: FitAssessmentSnapshot; changes: FitAssessmentInputChange[] }
-  | { status: "unavailable"; resumeLabel: string; message: string };
+export type FitAssessmentRunKind = "prepare" | "reassess" | "resume-change";
+
+export type FitAssessmentActiveRun = {
+  id: string;
+  kind: FitAssessmentRunKind;
+  resumeLabel: string;
+  prepareRunId?: string;
+  // Only a Prepare-owned first assessment receives this one-use token.
+  // Retries, reassessments, resume changes, and restored results omit it.
+  automationToken?: string;
+};
+
+export type FitAssessmentCompleted = {
+  snapshot: FitAssessmentSnapshot;
+  // Tracker restores retain the result but cannot reconstruct exact request
+  // provenance, so they remain historical and automation-ineligible.
+  provenance?: FitAssessmentProvenance;
+  origin: "current" | "saved";
+  changes: FitAssessmentInputChange[];
+  previousPreparation: boolean;
+  prepareRunId?: string;
+  automationToken?: string;
+};
+
+// Durable completion and transient request state are deliberately independent.
+// Beginning, failing, disabling, or cancelling a new request must never erase
+// the last completed assessment.
+export type FitAssessmentState = {
+  enabled: boolean;
+  latestCompleted: FitAssessmentCompleted | null;
+  activeRun: FitAssessmentActiveRun | null;
+  lastError: { resumeLabel: string; message: string } | null;
+};
 
 const verdicts = new Set<string>(FIT_ASSESSMENT_VERDICTS);
 const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);

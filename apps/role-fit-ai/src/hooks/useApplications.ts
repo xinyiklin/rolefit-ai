@@ -124,8 +124,9 @@ export type Application = {
   contacts?: ApplicationContact[];
   // Compact, bounded Fit Assessment snapshot. Full provider responses and
   // historical numeric scores never enter tracker storage.
-  // Stable on-disk field name. The product concept is Fit Assessment.
-  initialFit?: FitAssessmentSnapshot;
+  // Current strict on-disk field name. Preview upgrades rewrite stored data
+  // explicitly rather than retaining runtime aliases.
+  fitAssessment?: FitAssessmentSnapshot;
   templateId?: string;
   // Which resume actually went out — the AI-tailored draft or the original/base
   // (the AI may judge the base already a strong fit). Captured at Apply time.

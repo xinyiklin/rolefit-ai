@@ -23,13 +23,13 @@ setSettingsSaveListener((settings) => {
   savedSettings = settings;
 });
 saveSettings({
-  runInitialFit: true,
+  runFitAssessment: true,
   gpa: 3.86,
   availabilityNotice: "two-weeks",
   experienceProfile: [{ category: "professional", years: 2.5, count: 2 }]
 });
 assert.deepEqual(savedSettings, {
-  runInitialFit: true,
+  runFitAssessment: true,
   gpa: 3.86,
   availabilityNotice: "two-weeks",
   experienceProfile: [{ category: "professional", years: 2.5, count: 2 }]

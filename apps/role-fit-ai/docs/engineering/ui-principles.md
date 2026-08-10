@@ -108,7 +108,10 @@ document schema for this decision.
 
 When enabled, Fit Assessment is an optional subsection of the same normal Prepare
 provider dispatch and sanitizes independently from Job analysis. A resume change
-reruns only Fit Assessment. Settings exposes one Fit Assessment toggle, default on,
+reruns only Fit Assessment. Its latest completed result remains visible while a
+new assessment runs, fails, or is disabled. Editing the posting draft marks the
+result as a Previous preparation and disables reassessment until Prepare commits
+the replacement. Settings exposes one Fit Assessment toggle, default on,
 plus independent Resume and Cover Letter automatic Polish switches and minimum-
 fit selects. Both switches default off; Resume defaults to Reasonable or better
 and Cover Letter to Strong only. `CHECK` may auto-start an eligible document,
@@ -284,8 +287,8 @@ stream as content. Zoom, spell-check, and preset labels do not.
 Polish should feel like a review queue, not a hidden overwrite. The user selects
 editable resume sections in the document; identity, contact, education, dates,
 and omitted sections stay locked. After AI returns, show What improved (up to
-three), the proposed edits open by default in one disclosure, Still missing (up
-to three), and one quiet withheld line. Do not render evidence, risk, or keyword
+three), the proposed edits open by default in one disclosure, and one quiet
+withheld line. Do not render evidence, risk, or keyword
 chips in this normal surface. The editor remains the final source of truth for
 export and pipeline tracking.
 
@@ -436,8 +439,10 @@ Never show:
 - Candidate facts (citizenship, work authorization, sponsorship, education
   level, field of study, optional GPA, earliest-start availability, and
   source-aware experience) are strictly opt-in. An unset field emits no prompt
-  line, so the model is never told a fact the user did not declare. Citizenship
-  gates the work-authorization lines; education level gates the field of study
+  line, so the model is never told a fact the user did not declare. Citizenship,
+  work authorization, and sponsorship are independent tri-state declarations;
+  citizenship implies neither employment eligibility nor clearance status.
+  Education level gates the field of study
   and 4.0-scale GPA; an exact availability date must be a valid calendar date.
   These blocks remain independent.
 - Retired Tailor/Review/Both and obsolete extra-pass settings are dropped.

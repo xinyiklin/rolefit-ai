@@ -62,7 +62,7 @@ import {
   resolveResumeApplicantName,
   sanitizeFileBase
 } from "./lib/downloads";
-import { buildStageRequestFields, type StageId } from "./lib/aiRequest";
+import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
@@ -94,7 +94,7 @@ import {
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
 import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
-import { currentResumeSelection } from "./lib/preparedResume";
+import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
 import { fitAssessmentMeetsThreshold } from "./lib/autoPolishPolicy";
@@ -428,12 +428,12 @@ function App() {
   const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
   const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
   const ensureJobAnalysisProvider = useCallback(
-    () => providerAvailability.ensureProvider(jobAnalysisStage.provider),
-    [jobAnalysisStage.provider, providerAvailability.ensureProvider]
+    (request: AiRequestFields) => providerAvailability.ensureProvider(request.provider),
+    [providerAvailability.ensureProvider]
   );
   const ensureFitAssessmentProvider = useCallback(
-    () => providerAvailability.ensureProvider(fitAssessmentStage.provider),
-    [fitAssessmentStage.provider, providerAvailability.ensureProvider]
+    (request: AiRequestFields) => providerAvailability.ensureProvider(request.provider),
+    [providerAvailability.ensureProvider]
   );
   const ensureResumePolishProvider = useCallback(
     () => providerAvailability.ensureProvider(resumePolishStage.provider),
@@ -591,7 +591,7 @@ function App() {
   const setCoverLetterTitle = coverLetterEditor.setDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
-  const currentResumeText = serializedResume || result?.polishedText || "";
+  const currentResumeText = serializedResume || result?.proposalBaselineText || "";
   const coverReplacementStateRef = useRef({
     dirty: false,
     version: ""
@@ -1121,6 +1121,14 @@ function App() {
   const resumeReady = Boolean(
     (currentResumeText || resumeText).trim().length > 80 && !resumeIsStarterSample
   );
+  useEffect(() => {
+    const nextOrigin = resumeOriginAfterEdit(
+      resumeOrigin,
+      resumeDocumentDirty,
+      currentResumeText || resumeText
+    );
+    if (nextOrigin !== resumeOrigin) setResumeOrigin(nextOrigin);
+  }, [currentResumeText, resumeDocumentDirty, resumeOrigin, resumeText]);
   const coverLetterReady =
     coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
   // A usable application starts with a completed intake snapshot. Nonempty
@@ -1283,12 +1291,16 @@ function App() {
     stopJobAnalysis,
     jobAnalysisRetry,
     fitAssessmentState,
+    fitAssessmentRequestActive,
+    preparationAutomationPending,
+    acknowledgeFitAutomation,
     restorePreparedFitAssessment,
     reassessFit,
     canAssessFit,
     assessFitForResume,
     localPreparedPreview,
     handleManualJobDescriptionChange,
+    handleJobUrlChange,
     handleExtractFromLink,
     handleAnalyzePaste
   } = useJobIntake({
@@ -1319,7 +1331,10 @@ function App() {
     extensionImportsReady: hasLoadedApplications,
   });
   const jobPreparationActive =
-    isExtractingLink || extensionImportPhase !== null || jobAnalysisProgress.status === "running";
+    isExtractingLink
+    || extensionImportPhase !== null
+    || jobAnalysisProgress.status === "running"
+    || preparationAutomationPending;
 
   // ----- Resume Polish -----
   // Proposal generation, retry, cancellation, and stale-response protection are
@@ -1385,6 +1400,7 @@ function App() {
       isGeneratingCover ||
       isPolishing ||
       jobAnalysisProgress.status === "running" ||
+      fitAssessmentRequestActive ||
       pendingApplicationWrites > 0
   );
 
@@ -1618,20 +1634,17 @@ function App() {
   }
 
   useEffect(() => {
-    if (!fitAssessmentMayTriggerAutoPolish(fitAssessmentState)) return;
-    const { result: fit } = fitAssessmentState.snapshot;
-    const { provenance } = fitAssessmentState;
-    if (fit.eligibility?.status === "BLOCKED") return;
-    const key = JSON.stringify({
-      input: provenance.inputFingerprint,
-      verdict: fit.verdict,
-      eligibility: fit.eligibility?.status ?? "CLEAR"
-    });
+    const candidate = fitAssessmentMayTriggerAutoPolish(fitAssessmentState);
+    if (!candidate) return;
+    const { result: fit } = candidate.snapshot;
+    const key = candidate.automationToken;
     if (autoProposalFitRef.current.key !== key) {
       autoProposalFitRef.current = { key, resumeStarted: false, coverStarted: false };
     }
     const receipt = autoProposalFitRef.current;
+    const automationBlocked = fit.eligibility?.status === "BLOCKED";
     const canStartResume =
+      !automationBlocked &&
       autoPolishResume &&
       fitAssessmentMeetsThreshold(fit.verdict, resumeAutoPolishThreshold) &&
       jobPrepared &&
@@ -1646,6 +1659,7 @@ function App() {
     }
 
     const canStartCover =
+      !automationBlocked &&
       autoPolishCoverLetter &&
       fitAssessmentMeetsThreshold(fit.verdict, coverLetterAutoPolishThreshold) &&
       coverLetterPreflight.canTailor &&
@@ -1659,6 +1673,10 @@ function App() {
       receipt.coverStarted = true;
       void handleCoverLetterPolish();
     }
+    // The token represents this Prepare run's one automation decision. Once
+    // both configured actions have either started or declined, later Settings
+    // changes cannot revive automation from an old Fit result.
+    acknowledgeFitAutomation(candidate.automationToken);
   }, [
     autoPolishCoverLetter,
     autoPolishResume,
@@ -1958,7 +1976,11 @@ function App() {
           localJobText: restoredTailoringText,
           screeningJobText: restoredSourceText
         },
-        app.initialFit
+        app.fitAssessment,
+        {
+          url: (app.jobUrl || "").trim(),
+          sourceText: restoredTailoringText
+        }
       );
       // Include controls describe the NEXT Apply package, not which historical
       // artifacts happen to exist. Reopen with the documented defaults; retained
@@ -1984,7 +2006,7 @@ function App() {
         // resume in the dedicated editor.
         setResult({
           ...restoredAnalysis,
-          polishedText: restoredResume
+          proposalBaselineText: restoredResume
         });
         if (restoredResumeData) {
           seedResumeData(restoredResumeData);
@@ -2242,7 +2264,7 @@ function App() {
           {activeOutputTab === "prepare" ? (
             <PrepareTab
               jobUrl={jobUrl}
-              onJobUrlChange={setJobUrl}
+              onJobUrlChange={handleJobUrlChange}
               jobDescription={jobDescription}
               onJobDescriptionChange={handleManualJobDescriptionChange}
               jobRawText={jobRawText}

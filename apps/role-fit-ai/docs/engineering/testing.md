@@ -145,9 +145,12 @@ Good server verification covers:
 - `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
   extension, and imported-posting Retry intake with both duplicate gates, local
   and provider fallback, prepared-resume resolution, Fit Assessment on/off, and
-  snapshot commit order. They also prove Stop, source changes, and restore cancel
-  in-flight resolution, while too-short and thrown-error paths settle Fit out of
-  `running`. Structural guards keep all four entry points on the single private
+  snapshot commit order. They also prove the separate first Fit remains awaited,
+  identical Prepare runs receive distinct automation receipts, queued intake
+  captures settings only after it owns the lock, and settings changes during
+  readiness invalidate stale execution context. Stop, source changes, and restore
+  cancel in-flight resolution, while too-short and thrown-error paths settle Fit
+  out of `running`. Structural guards keep all four entry points on the single private
   post-acquisition coordinator
 - auto-polish policy probes must cover every categorical threshold boundary,
   preserve the threshold values/order/labels, and keep automation policy out of
@@ -160,7 +163,9 @@ Good server verification covers:
   preserved
 - application storage probes must prove compact Fit Assessment snapshots
   round-trip while numeric scores, full recruiter reviews, and missing-skill
-  compatibility fields are omitted at the storage boundary
+  compatibility fields are omitted at the storage boundary. Current preview
+  field names are strict; a contract rename requires an explicit private data
+  rewrite rather than a runtime alias
 - when Job analysis or Fit Assessment fails, Prepare keeps the immediate local
   brief editable and manual Polish available; Fit Assessment is separately
   retryable and cannot invalidate valid job fields. Resume Polish failure or
@@ -370,7 +375,7 @@ Good frontend verification covers:
   or runs Polish again. Duration grounding covers equivalent word and digit forms
 - the owned typeset page stays the sole editor and live preview; the tracker may
   render or open a saved application document as PDF. Resume's proposal rail
-  shows only What improved, Edits ready, Still missing, and a withheld line;
+  shows only What improved, Edits ready, and a withheld line;
   individual cards support Accept/Edit/Discard and still highlight their exact
   editor field, while no evidence/risk/keyword chips return
 - production builds keep `TrackerTab`, `AnalyticsTab`, and

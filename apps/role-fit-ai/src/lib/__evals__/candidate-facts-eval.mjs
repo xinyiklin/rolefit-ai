@@ -17,54 +17,58 @@ import {
   normalizeCandidateExperience
 } from "../candidateFacts.ts";
 
-const base = { citizenshipStatus: "unspecified", legallyAuthorizedToWork: false, requiresSponsorship: false };
+const base = {
+  citizenshipStatus: "unspecified",
+  legallyAuthorizedToWork: "unspecified",
+  requiresSponsorship: "unspecified"
+};
 
 // ── "unspecified" default asserts nothing ───────────────────────────────────
 assert.equal(
   buildCandidateFactsContext(base),
   "",
-  "unspecified citizenship (the neutral default) returns empty context regardless of the other two flags"
+  "all neutral defaults return empty context"
 );
 assert.equal(
-  buildCandidateFactsContext({ ...base, legallyAuthorizedToWork: true, requiresSponsorship: true }),
-  "",
-  "unspecified citizenship stays the gate even when auth/sponsorship flags are set"
+  buildCandidateFactsContext({ ...base, legallyAuthorizedToWork: "yes", requiresSponsorship: "yes" }),
+  "Candidate facts:\n" +
+    "- Work authorization: legally authorized to work in the United States.\n" +
+    "- Visa sponsorship: will require employer visa sponsorship now or in the future.",
+  "work authorization and sponsorship are independent declarations, not citizenship inferences"
 );
 
 // ── Every citizenship line, verbatim ────────────────────────────────────────
 assert.equal(
-  buildCandidateFactsContext({ citizenshipStatus: "us-citizen", legallyAuthorizedToWork: true, requiresSponsorship: false }),
-  "Candidate facts:\n" +
-    "- Citizenship: U.S. citizen; eligible for security clearances and positions requiring U.S. citizenship.\n" +
-    "- Work authorization: legally authorized to work in the United States.\n" +
-    "- Visa sponsorship: does not require employer visa sponsorship now or in the future.",
-  "us-citizen line matches the exact grounding text verbatim"
+  buildCandidateFactsContext({ ...base, citizenshipStatus: "us-citizen" }),
+  "Candidate facts:\n- Citizenship: U.S. citizen.",
+  "citizenship never implies clearance eligibility, work authorization, or sponsorship"
 );
 assert.equal(
-  buildCandidateFactsContext({ citizenshipStatus: "permanent-resident", legallyAuthorizedToWork: true, requiresSponsorship: false }),
-  "Candidate facts:\n" +
-    "- Citizenship: U.S. permanent resident (green card holder); authorized to work, but not eligible for positions requiring U.S. citizenship or security clearances.\n" +
-    "- Work authorization: legally authorized to work in the United States.\n" +
-    "- Visa sponsorship: does not require employer visa sponsorship now or in the future.",
-  "permanent-resident line matches the exact grounding text verbatim"
+  buildCandidateFactsContext({ ...base, citizenshipStatus: "permanent-resident" }),
+  "Candidate facts:\n- Citizenship: U.S. permanent resident.",
+  "permanent residence emits only the declared citizenship status"
 );
 assert.equal(
-  buildCandidateFactsContext({ citizenshipStatus: "foreign-national", legallyAuthorizedToWork: false, requiresSponsorship: true }),
+  buildCandidateFactsContext({
+    citizenshipStatus: "foreign-national",
+    legallyAuthorizedToWork: "no",
+    requiresSponsorship: "yes"
+  }),
   "Candidate facts:\n" +
-    "- Citizenship: foreign national; not a U.S. citizen or permanent resident.\n" +
+    "- Citizenship: foreign national.\n" +
     "- Work authorization: not currently authorized to work in the United States.\n" +
     "- Visa sponsorship: will require employer visa sponsorship now or in the future.",
-  "foreign-national line matches the exact grounding text verbatim"
+  "each separately declared eligibility fact renders verbatim"
 );
 
-// ── Work-auth / sponsorship booleans flip independently of citizenship ─────
+// ── Work-auth / sponsorship answers are tri-state and independent ──────────
 assert.match(
-  buildCandidateFactsContext({ citizenshipStatus: "foreign-national", legallyAuthorizedToWork: true, requiresSponsorship: false }),
+  buildCandidateFactsContext({ ...base, legallyAuthorizedToWork: "yes", requiresSponsorship: "no" }),
   /- Work authorization: legally authorized to work in the United States\.\n- Visa sponsorship: does not require employer visa sponsorship now or in the future\.$/,
   "authorized + no-sponsorship combination renders the affirmative pair"
 );
 assert.match(
-  buildCandidateFactsContext({ citizenshipStatus: "foreign-national", legallyAuthorizedToWork: false, requiresSponsorship: true }),
+  buildCandidateFactsContext({ ...base, legallyAuthorizedToWork: "no", requiresSponsorship: "yes" }),
   /- Work authorization: not currently authorized to work in the United States\.\n- Visa sponsorship: will require employer visa sponsorship now or in the future\.$/,
   "not-authorized + requires-sponsorship combination renders the negative pair"
 );
@@ -96,19 +100,18 @@ assert.equal(
 // ── Malformed / defensive inputs ────────────────────────────────────────────
 // A citizenshipStatus outside the known union (e.g. corrupted storage that
 // bypassed settings.ts's normalizeSettings validation) must fail closed. The
-// authorization booleans belong to the same declared block and cannot survive
-// an invalid or missing gate as standalone claims.
+// independent declarations remain valid even if a different answer is corrupt.
 assert.equal(
-  buildCandidateFactsContext({ citizenshipStatus: "bogus-status", legallyAuthorizedToWork: true, requiresSponsorship: false }),
-  "",
-  "an out-of-union citizenshipStatus emits no citizenship, authorization, or sponsorship claims"
+  buildCandidateFactsContext({ citizenshipStatus: "bogus-status", legallyAuthorizedToWork: "yes", requiresSponsorship: "no" }),
+  "Candidate facts:\n" +
+    "- Work authorization: legally authorized to work in the United States.\n" +
+    "- Visa sponsorship: does not require employer visa sponsorship now or in the future.",
+  "an out-of-union citizenshipStatus cannot suppress separately declared answers"
 );
-// Missing/undefined booleans are falsy in the ternaries, so they read as the
-// negative branch rather than throwing.
-assert.match(
+assert.equal(
   buildCandidateFactsContext({ citizenshipStatus: "us-citizen" }),
-  /- Work authorization: not currently authorized to work in the United States\.\n- Visa sponsorship: does not require employer visa sponsorship now or in the future\.$/,
-  "missing legallyAuthorizedToWork/requiresSponsorship booleans read as the negative branch, never throw"
+  "Candidate facts:\n- Citizenship: U.S. citizen.",
+  "missing eligibility answers assert neither the positive nor negative branch"
 );
 assert.equal(
   buildCandidateFactsContext({}),
@@ -116,9 +119,11 @@ assert.equal(
   "an entirely empty facts object emits no claims"
 );
 assert.equal(
-  buildCandidateFactsContext({ citizenshipStatus: "", legallyAuthorizedToWork: true, requiresSponsorship: false }),
-  "",
-  "an empty persisted citizenship value cannot assert authorization or sponsorship facts"
+  buildCandidateFactsContext({ citizenshipStatus: "", legallyAuthorizedToWork: "yes", requiresSponsorship: "no" }),
+  "Candidate facts:\n" +
+    "- Work authorization: legally authorized to work in the United States.\n" +
+    "- Visa sponsorship: does not require employer visa sponsorship now or in the future.",
+  "an empty citizenship value cannot invent citizenship or invalidate independent declarations"
 );
 
 // ── Education: an independent opt-in, positively gated ──────────────────────
@@ -244,18 +249,18 @@ assert.equal(
 assert.equal(
   buildCandidateFactsContext({
     citizenshipStatus: "us-citizen",
-    legallyAuthorizedToWork: true,
-    requiresSponsorship: false,
+    legallyAuthorizedToWork: "yes",
+    requiresSponsorship: "no",
     educationLevel: "master",
     major: "Statistics"
   }),
   "Candidate facts:\n" +
-    "- Citizenship: U.S. citizen; eligible for security clearances and positions requiring U.S. citizenship.\n" +
+    "- Citizenship: U.S. citizen.\n" +
     "- Work authorization: legally authorized to work in the United States.\n" +
     "- Visa sponsorship: does not require employer visa sponsorship now or in the future.\n" +
     "- Education: highest completed level is a master's degree.\n" +
     "- Field of study: Statistics.",
-  "both blocks declared: citizenship trio first, then education pair, in one Candidate facts list"
+  "all declared eligibility facts precede the education pair in one Candidate facts list"
 );
 assert.match(
   buildCandidateFactsContext({ ...base, educationLevel: "doctorate" }),

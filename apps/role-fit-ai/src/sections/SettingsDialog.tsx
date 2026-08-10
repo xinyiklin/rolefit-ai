@@ -6,11 +6,13 @@ import { AI_STAGES, type AiStageId } from "../config/aiStages";
 import {
   AVAILABILITY_NOTICE_OPTIONS,
   CITIZENSHIP_OPTIONS,
+  DECLARED_ANSWER_OPTIONS,
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
   type AvailabilityNotice,
   type CandidateExperience,
   type CitizenshipStatus,
+  type DeclaredAnswer,
   type EducationLevel
 } from "../lib/candidateFacts";
 import type { AiProviderValue } from "../config/aiOptions";
@@ -63,10 +65,10 @@ type SettingsDialogProps = {
   // ----- About you -----
   citizenshipStatus: CitizenshipStatus;
   onCitizenshipChange: (value: CitizenshipStatus) => void;
-  legallyAuthorizedToWork: boolean;
-  onLegallyAuthorizedChange: (value: boolean) => void;
-  requiresSponsorship: boolean;
-  onRequiresSponsorshipChange: (value: boolean) => void;
+  legallyAuthorizedToWork: DeclaredAnswer;
+  onLegallyAuthorizedChange: (value: DeclaredAnswer) => void;
+  requiresSponsorship: DeclaredAnswer;
+  onRequiresSponsorshipChange: (value: DeclaredAnswer) => void;
   educationLevel: EducationLevel;
   onEducationLevelChange: (value: EducationLevel) => void;
   major: string;
@@ -355,31 +357,31 @@ export function SettingsDialog({
                   </select>
                 </label>
 
-                {/* Work-auth facts are sent to the AI only once a citizenship is chosen, so
-                    the checkboxes stay hidden (and inert) until then — nothing about
-                    citizenship/authorization is asserted by default. */}
-                {citizenshipStatus === "unspecified" ? (
-                  <p className="micro-status">Choose a status to include your work authorization as evidence.</p>
-                ) : (
-                  <>
-                    <label className="check-row">
-                      <input
-                        checked={legallyAuthorizedToWork}
-                        onChange={(event) => onLegallyAuthorizedChange(event.target.checked)}
-                        type="checkbox"
-                      />
-                      <span><strong>Legally authorized to work in the U.S.</strong></span>
-                    </label>
-                    <label className="check-row">
-                      <input
-                        checked={requiresSponsorship}
-                        onChange={(event) => onRequiresSponsorshipChange(event.target.checked)}
-                        type="checkbox"
-                      />
-                      <span><strong>Will require visa sponsorship</strong></span>
-                    </label>
-                  </>
-                )}
+                <label className="field field--inline">
+                  <span><strong>Authorized to work in the U.S.</strong></span>
+                  <select
+                    className="select--compact"
+                    value={legallyAuthorizedToWork}
+                    onChange={(event) => onLegallyAuthorizedChange(event.target.value as DeclaredAnswer)}
+                  >
+                    {DECLARED_ANSWER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="field field--inline">
+                  <span><strong>Requires visa sponsorship</strong></span>
+                  <select
+                    className="select--compact"
+                    value={requiresSponsorship}
+                    onChange={(event) => onRequiresSponsorshipChange(event.target.value as DeclaredAnswer)}
+                  >
+                    {DECLARED_ANSWER_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
 
                 <div className="menu-subhead">
                   <span className="menu-subhead__title">Education</span>

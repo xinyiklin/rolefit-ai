@@ -91,7 +91,7 @@ assert.match(
 );
 assert.match(
   applyFlow,
-  /initialFit: fitAssessmentSnapshot \?\? existing\?\.initialFit,[\s\S]{0,180}?\.\.\.\(materialSelection\.resume/,
+  /fitAssessment: fitAssessmentSnapshot \?\? existing\?\.fitAssessment,[\s\S]{0,180}?\.\.\.\(materialSelection\.resume/,
   "Apply persists Fit Assessment independently from resume inclusion and preserves an existing snapshot"
 );
 

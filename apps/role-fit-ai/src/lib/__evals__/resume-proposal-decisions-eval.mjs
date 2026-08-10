@@ -19,7 +19,7 @@ const suggestion = {
 };
 
 const proposal = (overrides = {}) => ({
-  polishedText: "",
+  proposalBaselineText: "",
   missingKeywords: [],
   trimmedBulletGroups: 0,
   polishOutcome: "PROPOSAL",

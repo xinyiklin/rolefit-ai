@@ -378,7 +378,7 @@ function sanitizeApplication(raw: unknown) {
     coverLetterArtifacts,
     attachments: sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
-    initialFit: sanitizeFitAssessmentSnapshot(r.initialFit),
+    fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),

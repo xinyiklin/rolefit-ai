@@ -9,6 +9,17 @@
 // default here to claim nothing.
 export type CitizenshipStatus = "unspecified" | "us-citizen" | "permanent-resident" | "foreign-national";
 
+// Employment eligibility claims are independent declarations. A boolean
+// cannot represent "not answered", so both questions use an explicit neutral
+// state and emit evidence only after the user selects yes or no.
+export type DeclaredAnswer = "unspecified" | "yes" | "no";
+
+export const DECLARED_ANSWER_OPTIONS: { value: DeclaredAnswer; label: string }[] = [
+  { value: "unspecified", label: "Not specified" },
+  { value: "yes", label: "Yes" },
+  { value: "no", label: "No" }
+];
+
 // Highest completed level of education. Same opt-in contract as citizenship: an
 // unset value emits no line, so the model is never told the candidate holds a
 // credential they did not declare. A degree is one of the easiest things for a
@@ -174,8 +185,8 @@ export function normalizeCandidateExperience(value: unknown): CandidateExperienc
 
 export type CandidateFacts = {
   citizenshipStatus: CitizenshipStatus;
-  legallyAuthorizedToWork: boolean;
-  requiresSponsorship: boolean;
+  legallyAuthorizedToWork: DeclaredAnswer;
+  requiresSponsorship: DeclaredAnswer;
   educationLevel: EducationLevel;
   major: string;
   gpa?: number;
@@ -186,9 +197,9 @@ export type CandidateFacts = {
 
 const CITIZENSHIP_CONTEXT: Record<CitizenshipStatus, string> = {
   unspecified: "",
-  "us-citizen": "Citizenship: U.S. citizen; eligible for security clearances and positions requiring U.S. citizenship.",
-  "permanent-resident": "Citizenship: U.S. permanent resident (green card holder); authorized to work, but not eligible for positions requiring U.S. citizenship or security clearances.",
-  "foreign-national": "Citizenship: foreign national; not a U.S. citizen or permanent resident."
+  "us-citizen": "Citizenship: U.S. citizen.",
+  "permanent-resident": "Citizenship: U.S. permanent resident.",
+  "foreign-national": "Citizenship: foreign national."
 };
 
 const EDUCATION_CONTEXT: Record<EducationLevel, string> = {
@@ -209,23 +220,22 @@ const AVAILABILITY_CONTEXT: Partial<Record<AvailabilityNotice, string>> = {
   "four-weeks": "Availability: can start after four weeks of notice."
 };
 
-// Two independent opt-in blocks. A known citizenship value gates the work-authorization lines
-// (authorization and sponsorship are meaningless without it), and education
-// gates its own two lines. Declaring one must not force or suppress the other,
-// so neither block short-circuits the whole function.
+// Every eligibility answer is independent. Citizenship never infers work
+// authorization, sponsorship, or clearance eligibility; each emitted line is
+// exactly one fact the user selected.
 export function buildCandidateFactsContext(facts: CandidateFacts): string {
   const lines: string[] = [];
   const citizenshipLine = CITIZENSHIP_CONTEXT[facts.citizenshipStatus];
-  if (citizenshipLine) {
-    lines.push(
-      citizenshipLine,
-      facts.legallyAuthorizedToWork
-        ? "Work authorization: legally authorized to work in the United States."
-        : "Work authorization: not currently authorized to work in the United States.",
-      facts.requiresSponsorship
-        ? "Visa sponsorship: will require employer visa sponsorship now or in the future."
-        : "Visa sponsorship: does not require employer visa sponsorship now or in the future."
-    );
+  if (citizenshipLine) lines.push(citizenshipLine);
+  if (facts.legallyAuthorizedToWork === "yes") {
+    lines.push("Work authorization: legally authorized to work in the United States.");
+  } else if (facts.legallyAuthorizedToWork === "no") {
+    lines.push("Work authorization: not currently authorized to work in the United States.");
+  }
+  if (facts.requiresSponsorship === "yes") {
+    lines.push("Visa sponsorship: will require employer visa sponsorship now or in the future.");
+  } else if (facts.requiresSponsorship === "no") {
+    lines.push("Visa sponsorship: does not require employer visa sponsorship now or in the future.");
   }
   // Education is gated POSITIVELY — on a known level producing a line — rather
   // than on `!== "unspecified"`. An absent, undefined, or out-of-union level yields no

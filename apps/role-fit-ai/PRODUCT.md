@@ -206,7 +206,10 @@ manual Polish remains available.
 Settings > About you may add optional candidate-declared education and
 scheduling facts: a 4.0-scale GPA attached to a declared education level, plus
 an earliest start of immediately, one to four weeks' notice, or a specific
-date. It may also add experience evidence by source: professional employment,
+date. Citizenship, U.S. work authorization, and sponsorship are three
+independent declarations; each defaults to Not specified, and citizenship
+never implies either employment answer or clearance eligibility. It may also
+add experience evidence by source: professional employment,
 internships, freelance/contract work, research, academic projects, personal
 projects, open source, volunteer work, or military/public service. Each source
 may declare duration, number of roles/projects, recency, and a short factual
@@ -230,22 +233,27 @@ Fit Assessment defaults on and owns provider, model, and reasoning settings
 independently from Job analysis. Its first run shares Prepare's Job analysis
 dispatch only when both stages resolve to the same request configuration;
 otherwise Prepare commits Job analysis and starts a separate assessment-only
-request. **Reassess fit** always starts a new assessment without repeating Job
+request. That first assessment remains part of the same Prepare transaction:
+Stop, input replacement, and unload protection cover it, and Apply does not
+become ready until its one-use automation decision settles. **Reassess fit**
+always starts a new assessment without repeating Job
 analysis, using the retained captured posting, current selected resume and
 candidate context, and the Fit Assessment stage's selected provider, model,
 reasoning effort, and rubric. Changing the selected resume also reruns only Fit
 Assessment. Editing the displayed prepared brief does not silently change the
 screened posting. A changed posting, authoritative resume, candidate context,
 provider/model/reasoning setting, or prompt version makes the displayed result
-out of date. Prepare retains that timestamped result as a clearly labeled
-previous assessment and lists which input groups changed — job posting, resume
+out of date. Beginning, failing, cancelling, or disabling a later assessment
+never erases the latest completed result. Prepare retains that timestamped
+result as a clearly labeled previous preparation and lists which input groups changed — job posting, resume
 content, About you, or assessment setup — without presenting its verdict as
 current. A successful reassessment supersedes that displayed result. Application
 records retain the latest completed assessment snapshot rather than a versioned
 assessment ledger. Apply saves that snapshot even when later input changes make
 it historical or the resume artifact is excluded; re-Apply preserves the stored
 snapshot when the current session has no newer completed assessment. The bundled
-starter and short or blank-origin stubs are not applicant resumes.
+starter and short stubs are not applicant resumes. A blank document becomes an
+applicant-authored resume once it has substantive dirty content.
 
 Resume and Cover Letter automatic Polish controls remain independent from each
 other. The first Fit Assessment launched by each successful Prepare is the only

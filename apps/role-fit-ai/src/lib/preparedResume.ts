@@ -1,5 +1,5 @@
-// Which resume this preparation speaks for — the ONE decision behind Initial
-// Fit, the editor's loaded document, Prepare's recommendation note, and whether
+// Which resume this preparation speaks for — the ONE decision behind Fit
+// Assessment, the editor's loaded document, Prepare's recommendation note, and whether
 // an automatic proposal may begin. Splitting that decision in two (a pre-fit
 // pick that never adopted, plus a post-Prepare ranking that could adopt a
 // different variant) let Fit Assessment describe resume A while the editor held
@@ -16,7 +16,19 @@ export const MINIMUM_PREPARED_RESUME_LENGTH = 80;
 
 // Where the document currently in the editor came from. Only `starter` is
 // sample content that must never be mistaken for the applicant's own resume.
-export type ResumeOrigin = "saved" | "uploaded" | "application" | "starter" | "blank";
+export type ResumeOrigin = "saved" | "uploaded" | "application" | "starter" | "blank" | "authored";
+
+export function resumeOriginAfterEdit(
+  origin: ResumeOrigin,
+  documentDirty: boolean,
+  currentText: string
+): ResumeOrigin {
+  return origin === "blank"
+    && documentDirty
+    && currentText.trim().length >= MINIMUM_PREPARED_RESUME_LENGTH
+    ? "authored"
+    : origin;
+}
 
 export type PreparedResumeOrigin = "current" | "sole-saved" | "ranked";
 

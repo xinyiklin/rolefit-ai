@@ -69,7 +69,8 @@ const STATE_LABELS = [
   "progress",
   "progressVisible",
   "fitAssessment",
-  "retrySource"
+  "retrySource",
+  "committedPreparation"
 ];
 
 function assertOrder(log, expected, message) {
@@ -94,6 +95,11 @@ function createHarness({
   fitModel = "synthetic-model",
   fitReasoningEffort = "medium",
   fitReadiness = { ready: true },
+  readinessImpl,
+  fitReadinessImpl,
+  requestFieldsRef,
+  jobAnalysisGate,
+  fitResponseGate,
   selection = { text: RESUME, label: "Synthetic resume" },
   resolvePreparedResumeImpl,
   analysisBody,
@@ -158,7 +164,7 @@ function createHarness({
       if (afterError) throw afterError;
       return { proceed: afterProceed, note: afterProceed ? null : "normalized duplicate" };
     },
-    jobAnalysisRequestFields: () => ({
+    jobAnalysisRequestFields: () => requestFieldsRef?.current ?? ({
       provider: "codex-cli",
       model: "synthetic-model",
       reasoningEffort: "medium"
@@ -168,13 +174,13 @@ function createHarness({
       model: fitModel,
       reasoningEffort: fitReasoningEffort
     }),
-    ensureProviderReady: async () => {
-      log.push({ event: "provider:ready" });
-      return readiness;
+    ensureProviderReady: async (request) => {
+      log.push({ event: "provider:ready", value: request });
+      return readinessImpl ? readinessImpl(request) : readiness;
     },
-    ensureFitAssessmentProviderReady: async () => {
-      log.push({ event: "provider:fit-ready" });
-      return fitReadiness;
+    ensureFitAssessmentProviderReady: async (request) => {
+      log.push({ event: "provider:fit-ready", value: request });
+      return fitReadinessImpl ? fitReadinessImpl(request) : fitReadiness;
     },
     runFitAssessment,
     resolvePreparedResume: async (jobText, controls) => {
@@ -207,6 +213,7 @@ function createHarness({
       };
     }
     if (payload.mode === "fit-assessment") {
+      if (fitResponseGate) await fitResponseGate.promise;
       return {
         ok: true,
         status: 200,
@@ -218,6 +225,11 @@ function createHarness({
           reasoningEffort: payload.reasoningEffort
         })
       };
+    }
+    if (jobAnalysisGate && requests.filter((request) => (
+      request.url === "/api/job-analysis" && request.payload.mode !== "fit-assessment"
+    )).length === 1) {
+      await jobAnalysisGate.promise;
     }
     return analysisBody ?? {
       ok: true,
@@ -250,7 +262,7 @@ function createHarness({
   };
 }
 
-async function settleDetachedAssessment() {
+async function settleAsyncWork() {
   await new Promise((resolve) => setImmediate(resolve));
 }
 
@@ -294,7 +306,8 @@ const sharedCommitOrder = [
   await runUrl(harness);
   assertOrder(harness.log, ["fetch:/api/import-job", ...sharedCommitOrder], "URL intake order");
   assert.equal(harness.requests.filter(({ url }) => url === "/api/job-analysis").length, 1);
-  assert.equal(harness.state[5].status, "ready", "URL intake settles fit after the snapshot commit");
+  assert.equal(harness.state[5].activeRun, null, "URL intake settles its Prepare-owned Fit request");
+  assert.equal(harness.state[5].latestCompleted?.snapshot.result.verdict, "REASONABLE");
 }
 
 {
@@ -304,7 +317,6 @@ const sharedCommitOrder = [
     fitReasoningEffort: "high"
   });
   await runPaste(harness);
-  await settleDetachedAssessment();
   const providerRequests = harness.requests.filter(({ url }) => url === "/api/job-analysis");
   assert.equal(providerRequests.length, 2, "distinct Job analysis and Fit settings dispatch two provider requests");
   assert.equal(providerRequests[0].payload.provider, "codex-cli");
@@ -312,8 +324,50 @@ const sharedCommitOrder = [
   assert.equal(providerRequests[1].payload.mode, "fit-assessment");
   assert.equal(providerRequests[1].payload.provider, "anthropic", "Fit Assessment uses its own provider");
   assert.equal(providerRequests[1].payload.model, "claude-opus-4-8", "Fit Assessment uses its own model");
-  assert.equal(harness.state[5].status, "ready", "the separately configured Fit stage settles independently");
-  assert.equal(harness.state[5].snapshot.provider, "anthropic", "Fit provenance records the Fit provider, not Job analysis");
+  assert.equal(harness.state[5].activeRun, null, "the separately configured Fit stage settles inside Prepare");
+  assert.equal(harness.state[5].latestCompleted.snapshot.provider, "anthropic", "Fit provenance records the Fit provider, not Job analysis");
+}
+
+{
+  const fitResponseGate = deferred();
+  const harness = createHarness({
+    fitProvider: "anthropic",
+    fitModel: "claude-opus-4-8",
+    fitResponseGate
+  });
+  let prepareSettled = false;
+  const pending = runPaste(harness).then(() => { prepareSettled = true; });
+  await settleAsyncWork();
+  assert.equal(prepareSettled, false, "Prepare remains unsettled while its separate first Fit request is running");
+  assert.equal(harness.state[5].activeRun?.kind, "prepare");
+  fitResponseGate.resolve();
+  await pending;
+  assert.equal(prepareSettled, true);
+}
+
+{
+  const fitResponseGate = deferred();
+  const harness = createHarness({
+    fitProvider: "anthropic",
+    fitModel: "claude-opus-4-8",
+    fitResponseGate
+  });
+  const pending = runPaste(harness);
+  await settleAsyncWork();
+  harness.render().stopJobAnalysis();
+  fitResponseGate.resolve();
+  await pending;
+  assert.equal(
+    harness.state[3].status,
+    "stopped",
+    "a late standalone Fit completion cannot overwrite an explicit Prepare stop"
+  );
+  assert.equal(harness.state[5].activeRun, null, "Stop terminalizes the awaited Fit run");
+  assert.match(
+    harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
+    /stopped/i,
+    "the outer handler does not publish a success message after Stop"
+  );
 }
 
 {
@@ -343,7 +397,8 @@ const sharedCommitOrder = [
   assert.equal(harness.log.some(({ event }) => event === "fetch:/api/job-analysis"), false);
   assert.equal(harness.log.some(({ event }) => event === "resolvePreparedResume"), false);
   assert.equal(harness.log.some(({ event }) => event === "setImportedJob"), true);
-  assert.equal(harness.state[5].status, "unavailable", "a pre-analysis duplicate cannot retain a fit");
+  assert.equal(harness.state[5].latestCompleted, null, "a pre-analysis duplicate cannot create a completed Fit");
+  assert.match(harness.state[5].lastError?.message ?? "", /duplicate review stopped/i);
 }
 
 {
@@ -351,10 +406,10 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assertOrder(harness.log, [...sharedCommitOrder, "state:progress", "setLinkStatus"], "post-analysis duplicate order");
   assert.equal(harness.state[3].status, "stopped");
-  assert.equal(harness.state[5].status, "ready", "post-analysis duplicate review retains completed Fit Assessment");
+  assert.equal(harness.state[5].latestCompleted?.snapshot.result.verdict, "REASONABLE", "post-analysis duplicate review retains completed Fit Assessment");
   assert.equal(
-    harness.state[5].autoPolishEligible,
-    false,
+    harness.state[5].latestCompleted?.automationToken,
+    undefined,
     "a completed combined assessment cannot authorize downstream Polish after duplicate review stops"
   );
 }
@@ -367,7 +422,6 @@ const sharedCommitOrder = [
     fitReasoningEffort: "high"
   });
   await runPaste(harness);
-  await settleDetachedAssessment();
   assert.equal(
     harness.requests.filter(({ url }) => url === "/api/job-analysis").length,
     1,
@@ -378,8 +432,8 @@ const sharedCommitOrder = [
     false,
     "duplicate review stops before Fit provider readiness"
   );
-  assert.equal(harness.state[5].status, "unavailable");
-  assert.match(harness.state[5].message, /duplicate review stopped/i);
+  assert.equal(harness.state[5].latestCompleted, null);
+  assert.match(harness.state[5].lastError?.message ?? "", /duplicate review stopped/i);
 }
 
 {
@@ -387,7 +441,8 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assert.equal(harness.log.some(({ event }) => event === "fetch:/api/job-analysis"), false);
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
-  assert.equal(harness.state[5].status, "unavailable");
+  assert.equal(harness.state[5].latestCompleted, null);
+  assert.match(harness.state[5].lastError?.message ?? "", /unavailable/i);
   assert.match(
     harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
     /local brief is ready/i,
@@ -412,9 +467,9 @@ const sharedCommitOrder = [
     }
   });
   await runPaste(harness);
-  assert.notEqual(
-    harness.state[5].status,
-    "running",
+  assert.equal(
+    harness.state[5].activeRun,
+    null,
     "a too-short final brief terminalizes the Fit Assessment started by preparation"
   );
 }
@@ -422,9 +477,9 @@ const sharedCommitOrder = [
 {
   const harness = createHarness({ afterError: new Error("Synthetic duplicate lookup failure") });
   await runPaste(harness);
-  assert.notEqual(
-    harness.state[5].status,
-    "running",
+  assert.equal(
+    harness.state[5].activeRun,
+    null,
     "an unexpected post-resolution failure cannot strand Fit Assessment in running"
   );
 }
@@ -440,7 +495,7 @@ const sharedCommitOrder = [
     }
   });
   const pending = runPaste(harness);
-  await settleDetachedAssessment();
+  await settleAsyncWork();
   harness.render().stopJobAnalysis();
   resolutionGate.resolve();
   await pending;
@@ -454,7 +509,7 @@ const sharedCommitOrder = [
     false,
     "a stopped preparation cannot adopt a resume after Stop"
   );
-  assert.notEqual(harness.state[5].status, "running", "Stop leaves no orphaned Fit Assessment state");
+  assert.equal(harness.state[5].activeRun, null, "Stop leaves no orphaned Fit Assessment state");
 }
 
 {
@@ -473,7 +528,8 @@ const sharedCommitOrder = [
   const harness = createHarness({ providerStatus: 503 });
   await runPaste(harness);
   assert.equal(harness.requests.filter(({ url }) => url === "/api/job-analysis").length, 1);
-  assert.equal(harness.state[5].status, "unavailable");
+  assert.equal(harness.state[5].latestCompleted, null);
+  assert.match(harness.state[5].lastError?.message ?? "", /unavailable/i);
   assert.match(
     harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
     /local brief is ready/i,
@@ -487,7 +543,7 @@ const sharedCommitOrder = [
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
   const request = harness.requests.find(({ url }) => url === "/api/job-analysis");
   assert.equal(request.payload.fitAssessment, undefined, "disabled Fit Assessment sends no resume payload");
-  assert.equal(harness.state[5].status, "disabled");
+  assert.equal(harness.state[5].enabled, false);
 }
 
 {
@@ -500,6 +556,77 @@ const sharedCommitOrder = [
     harness.log,
     ["state:preview", "resolvePreparedResume", "fetch:/api/job-analysis"],
     "resume resolution occurs after local preview and before provider dispatch"
+  );
+}
+
+{
+  const harness = createHarness();
+  await runPaste(harness);
+  const firstToken = harness.state[5].latestCompleted?.automationToken;
+  await runPaste(harness);
+  const secondToken = harness.state[5].latestCompleted?.automationToken;
+  assert.ok(firstToken);
+  assert.ok(secondToken);
+  assert.notEqual(
+    secondToken,
+    firstToken,
+    "an identical later Prepare receives a distinct automation receipt"
+  );
+}
+
+{
+  const readinessGate = deferred();
+  const requestFieldsRef = {
+    current: { provider: "codex-cli", model: "synthetic-model", reasoningEffort: "medium" }
+  };
+  const harness = createHarness({
+    requestFieldsRef,
+    readinessImpl: async () => readinessGate.promise
+  });
+  const pending = runPaste(harness);
+  await settleAsyncWork();
+  requestFieldsRef.current = {
+    provider: "anthropic",
+    model: "claude-opus-4-8",
+    reasoningEffort: "high"
+  };
+  harness.render();
+  readinessGate.resolve({ ready: true });
+  await pending;
+  assert.equal(
+    harness.requests.some(({ url }) => url === "/api/job-analysis"),
+    false,
+    "a settings change during readiness invalidates the captured execution context before dispatch"
+  );
+}
+
+{
+  const firstRequestGate = deferred();
+  const requestFieldsRef = {
+    current: { provider: "codex-cli", model: "synthetic-model", reasoningEffort: "medium" }
+  };
+  const harness = createHarness({ requestFieldsRef, jobAnalysisGate: firstRequestGate });
+  const first = runPaste(harness);
+  await settleAsyncWork();
+  harness.render();
+  const queuedExtension = harness.extension.onItem({ text: POSTING, url: JOB_URL });
+  requestFieldsRef.current = {
+    provider: "anthropic",
+    model: "claude-opus-4-8",
+    reasoningEffort: "high"
+  };
+  harness.render();
+  firstRequestGate.resolve();
+  await first;
+  await queuedExtension;
+  const jobRequests = harness.requests.filter(({ url, payload }) => (
+    url === "/api/job-analysis" && payload.mode !== "fit-assessment"
+  ));
+  assert.equal(jobRequests.length, 2);
+  assert.equal(
+    jobRequests[1].payload.provider,
+    "anthropic",
+    "a queued extension intake captures provider settings only after it owns the execution lock"
   );
 }
 

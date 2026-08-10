@@ -38,6 +38,7 @@ const {
   currentResumeSelection,
   decidePreparedResume,
   resolvePreparedResumeSelection,
+  resumeOriginAfterEdit,
   resumeIsApplicantOwned
 } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
@@ -348,14 +349,29 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
   check(
     currentResumeSelection(baseState({ resumeOrigin: "blank", currentText: resumeText("Edited blank") })),
     null,
-    "editing an unsaved blank document does not silently make it applicant-owned"
+    "a blank origin remains neutral until the editor records a substantive authored transition"
+  );
+  check(
+    resumeOriginAfterEdit("blank", true, resumeText("Edited blank")),
+    "authored",
+    "substantive edits promote a blank document to applicant-authored"
+  );
+  check(
+    resumeOriginAfterEdit("blank", false, resumeText("Edited blank")),
+    "blank",
+    "text without an editor-dirty receipt does not claim applicant authorship"
+  );
+  check(
+    currentResumeSelection(baseState({ resumeOrigin: "authored", currentText: resumeText("Edited blank") }))?.origin,
+    "current",
+    "an applicant-authored blank document becomes eligible for Fit and Polish"
   );
   check(
     currentResumeSelection(baseState({ resumeOrigin: "saved", currentText: "x".repeat(60) })),
     null,
     "a 40-79 character saved stub is unavailable for Fit Assessment"
   );
-  for (const origin of ["saved", "uploaded", "application"]) {
+  for (const origin of ["saved", "uploaded", "application", "authored"]) {
     check(
       resumeIsApplicantOwned(baseState({ resumeOrigin: origin, currentText: STARTER })),
       true,

@@ -103,7 +103,7 @@ for (const [name, bad] of [
   // — this is how the module catches "unsupported or invalid" settings values.
   ["an unsupported provider value normalizeSettings would strip", { settings: { aiProvider: "not-a-real-provider" }, lastBaseResume: "" }],
   ["an unrecognized settings key normalizeSettings would strip", { settings: { notARealSetting: true }, lastBaseResume: "" }],
-  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { runInitialFit: "yes" }, lastBaseResume: "" }],
+  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { runFitAssessment: "yes" }, lastBaseResume: "" }],
   ["settings JSON over the 100,000-byte cap", { settings: { customInstructions: "x".repeat(150_000) }, lastBaseResume: "" }],
   ["lastBaseResume over 200 chars", { settings: {}, lastBaseResume: `base-resume-${"a".repeat(200)}.resume` }],
   ["lastBaseResume not matching the base-resume filename contract", { settings: {}, lastBaseResume: "../../etc/passwd" }],

@@ -64,7 +64,7 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
       return application;
     }
     const raw = application as Record<string, unknown>;
-    const fitAssessment = raw.initialFit;
+    const fitAssessment = raw.fitAssessment;
     const canonicalApplication = canonical[index];
     if (
       !fitAssessment ||
@@ -77,7 +77,7 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
       return application;
     }
     const result = (fitAssessment as Record<string, unknown>).result;
-    const canonicalFitAssessment = (canonicalApplication as Record<string, unknown>).initialFit;
+    const canonicalFitAssessment = (canonicalApplication as Record<string, unknown>).fitAssessment;
     if (
       !result ||
       typeof result !== "object" ||
@@ -99,7 +99,7 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
     }
     return {
       ...raw,
-      initialFit: {
+      fitAssessment: {
         ...(fitAssessment as Record<string, unknown>),
         result: {
           ...(result as Record<string, unknown>),

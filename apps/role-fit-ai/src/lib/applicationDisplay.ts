@@ -100,13 +100,13 @@ const FIT_ASSESSMENT_DISPLAY: Record<FitAssessmentVerdict, {
 export function appFitVerdict(
   app: Application
 ): { verdict: FitAssessmentVerdict; label: string; tone: "strong" | "good" | "stretch" | "weak" } | null {
-  const verdict = app.initialFit?.result.verdict;
+  const verdict = app.fitAssessment?.result.verdict;
   if (!verdict) return null;
   return { verdict, ...FIT_ASSESSMENT_DISPLAY[verdict] };
 }
 
 export function fitAssessmentRank(app: Application): number {
-  const verdict = app.initialFit?.result.verdict;
+  const verdict = app.fitAssessment?.result.verdict;
   return verdict ? FIT_ASSESSMENT_DISPLAY[verdict].rank : 0;
 }
 

@@ -134,7 +134,9 @@ editable documents.
   not block manual Polish. Fit Assessment has its own provider/model/effort
   setting. When that configuration exactly matches Job analysis, the same
   provider dispatch returns it as an independent optional subsection; otherwise
-  the prepared brief commits before a separate assessment-only request. An
+  the prepared brief commits before a separate assessment-only request, while
+  Prepare remains active until that first assessment and its one-use automation
+  decision settle. An
   invalid fit cannot invalidate valid job fields. The compact
   job brief keeps role context, responsibilities,
   requirements, preferred qualifications, and technical/domain signals while
@@ -190,7 +192,9 @@ editable documents.
   caret or field moves, selections, formatting, structural edits, and pauses
   start a new group.
 - **Truthful AI workflow** — Prepare shows its local brief while Job analysis and
-  optional Fit Assessment settle independently. Resume Polish reports Proposal,
+  optional Fit Assessment settle through one preparation lifecycle. A later
+  reassessment may run independently without erasing the latest completed Fit.
+  Resume Polish reports Proposal,
   No changes, and Withheld as different outcomes, retains specific failure and
   Stop behavior, and never presents an all-discarded response as a ready proposal.
   Job analysis, Resume Polish, Cover letter, and Application answers each use an
@@ -541,7 +545,7 @@ origin may cache a serialized recovery resume, optional raw job text, AI usage,
 and allowlisted settings so the app can fail open when the companion is
 temporarily unavailable. The canonical per-stage settings, guidance, selected
 base resume, and facts declared in Settings > About you—including citizenship,
-work authorization, education and optional GPA, earliest-start availability,
+work authorization, sponsorship, education and optional GPA, earliest-start availability,
 and the source/quantity/recency/scope of optional experience evidence—live in
 the owner-only workspace
 `workspace-preferences.json`. Every RoleFit client attached to that workspace

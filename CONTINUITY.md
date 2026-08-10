@@ -3,6 +3,21 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-10
+
+- [USER+CODE+TOOL] **Preparation stabilization resolves review Findings 1-8
+  without a schema-version bump or runtime migration aliases.** Fit Assessment
+  keeps its latest completion across later attempts, the first assessment is an
+  awaited one-use Prepare automation decision, draft and committed preparation
+  are distinct, and Stop/input changes cannot publish late success. Candidate
+  facts are independent tri-state declarations, authored blank resumes become
+  applicant-owned, Apply records actual document delta, every intake captures
+  one provider context, and ungrounded Resume Polish gaps are removed. The
+  ignored preview workspace was backed up and manually rewritten (318 records,
+  77 Fit snapshots); strict direct reads and live endpoints passed. The pinned
+  Node 24 RoleFit gate passes all 88 offline evaluations and the UI detector is
+  clean; browser interaction QA remains UNCONFIRMED under the flag-first policy.
+
 ## 2026-08-09
 
 - [CODE+TOOL] **The full uncommitted Fit/workspace/document-workflow diff was

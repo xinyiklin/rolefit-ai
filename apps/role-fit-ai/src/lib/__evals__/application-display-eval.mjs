@@ -8,7 +8,7 @@ function application(overrides = {}) {
     createdAt: "2026-08-08T12:00:00.000Z",
     updatedAt: "2026-08-08T12:00:00.000Z",
     status: "interested",
-    initialFit: {
+    fitAssessment: {
       resumeLabel: "Backend resume",
       result: {
         verdict: "STRONG",
@@ -30,18 +30,18 @@ assert.equal(priorityFor(application({ status: "interviewing" })), "High", "Inte
 assert.equal(priorityFor(application({ status: "offer" })), "High", "Offer derives High");
 assert.equal(priorityFor(application()), "Medium", "Strong fit stays advisory and does not raise priority");
 assert.equal(
-  priorityFor(application({ initialFit: { ...application().initialFit, result: { ...application().initialFit.result, verdict: "LIMITED" } } })),
+  priorityFor(application({ fitAssessment: { ...application().fitAssessment, result: { ...application().fitAssessment.result, verdict: "LIMITED" } } })),
   "Medium",
   "Limited fit stays advisory and does not lower priority"
 );
 assert.ok(
   fitAssessmentRank(application()) > fitAssessmentRank(application({
-    initialFit: { ...application().initialFit, result: { ...application().initialFit.result, verdict: "LIMITED" } }
+    fitAssessment: { ...application().fitAssessment, result: { ...application().fitAssessment.result, verdict: "LIMITED" } }
   })),
   "Fit Assessment remains available for explicit tracker sorting"
 );
 const assessmentLabel = fitAssessmentRunLabel({
-  ...application().initialFit,
+  ...application().fitAssessment,
   assessedAt: "2026-08-08T12:00:00.000Z",
   provider: "codex-cli",
   model: "gpt-5.6-sol",

@@ -63,18 +63,27 @@ export function PrepareApplicationRail({
   const hasSavedCoverLetter = Boolean(
     linkedApplication?.coverLetterArtifacts?.hasSource || linkedApplication?.coverLetterArtifacts?.hasPdf
   );
-  const assessmentSnapshot = fitAssessment.status === "ready"
-    || fitAssessment.status === "saved"
-    || fitAssessment.status === "stale"
-    ? fitAssessment.snapshot
-    : null;
+  const completedAssessment = fitAssessment.latestCompleted;
+  const assessmentSnapshot = completedAssessment?.snapshot ?? null;
   const assessmentRunLabel = assessmentSnapshot ? fitAssessmentRunLabel(assessmentSnapshot) : "";
+  const assessmentIsPrevious = Boolean(
+    completedAssessment && (
+      completedAssessment.changes.length > 0
+      || fitAssessment.activeRun
+      || fitAssessment.lastError
+      || !fitAssessment.enabled
+    )
+  );
   const assessmentMeta = [
-    fitAssessment.status === "saved" ? "Saved with application" : "",
-    fitAssessment.status === "stale" ? "Previous assessment" : "",
+    completedAssessment?.origin === "saved" ? "Saved with application" : "",
+    completedAssessment?.previousPreparation
+      ? "Previous preparation"
+      : assessmentIsPrevious
+        ? "Previous assessment"
+        : "",
     assessmentRunLabel
   ].filter(Boolean).join(" · ");
-  const fitAssessmentMessage = "message" in fitAssessment ? fitAssessment.message : "";
+  const fitAssessmentMessage = fitAssessment.lastError?.message ?? "";
 
   return (
     <aside className="prepare-rail" aria-label="Application setup">
@@ -136,11 +145,11 @@ export function PrepareApplicationRail({
                   ) : null}
                 </p>
               ) : null}
-              {fitAssessment.status === "stale" ? (
+              {completedAssessment?.changes.length ? (
                 <div className="fit-assessment-changes" role="status">
                   <strong>Changed since assessment</strong>
                   <ul>
-                    {fitAssessment.changes.map((change) => (
+                    {completedAssessment.changes.map((change) => (
                       <li key={change}>
                         <span>{FIT_ASSESSMENT_CHANGE_COPY[change].label}</span>
                         <small>{FIT_ASSESSMENT_CHANGE_COPY[change].detail}</small>
@@ -149,18 +158,28 @@ export function PrepareApplicationRail({
                   </ul>
                 </div>
               ) : null}
-              {canAssessFit ? (
+              {fitAssessment.activeRun ? (
+                <p className="prepare-note is-working" role="status">
+                  <LoaderCircle className="spin" size={13} aria-hidden="true" />
+                  Assessing {fitAssessment.activeRun.resumeLabel}…
+                </p>
+              ) : fitAssessment.lastError ? (
+                <p className="prepare-note is-warn" role="status">{fitAssessment.lastError.message}</p>
+              ) : !fitAssessment.enabled ? (
+                <p className="prepare-note is-info">Fit Assessment is off. The completed result is retained.</p>
+              ) : null}
+              {canAssessFit && !fitAssessment.activeRun ? (
                 <button className="ghost-button is-compact" type="button" onClick={onAssessFit}>
                   Reassess fit
                 </button>
               ) : null}
             </>
-          ) : fitAssessment.status === "running" ? (
+          ) : fitAssessment.activeRun ? (
             <p className="prepare-note is-working" role="status">
               <LoaderCircle className="spin" size={13} aria-hidden="true" />
-              Assessing {fitAssessment.resumeLabel}…
+              Assessing {fitAssessment.activeRun.resumeLabel}…
             </p>
-          ) : fitAssessment.status === "disabled" ? (
+          ) : !fitAssessment.enabled ? (
             <p>Off in Settings. You can continue directly to Polish.</p>
           ) : (
             <>

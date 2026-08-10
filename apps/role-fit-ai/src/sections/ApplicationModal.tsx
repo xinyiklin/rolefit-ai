@@ -354,7 +354,7 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  const fitAssessment = application.initialFit;
+  const fitAssessment = application.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
   const fitVerdict = appFitVerdict(application);
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";

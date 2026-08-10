@@ -60,8 +60,8 @@ export function TrackerInspector({
   }
 
   const verdict = appFitVerdict(selected);
-  const fitAssessmentMeta = selected.initialFit ? fitAssessmentRunLabel(selected.initialFit) : "";
-  const verdictSource = selected.initialFit?.resumeLabel || "Not checked";
+  const fitAssessmentMeta = selected.fitAssessment ? fitAssessmentRunLabel(selected.fitAssessment) : "";
+  const verdictSource = selected.fitAssessment?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
 
@@ -103,7 +103,7 @@ export function TrackerInspector({
           </span>
         </div>
         <p className="application-detail-score__reason">
-          {selected.initialFit?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
+          {selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
         </p>
         {fitAssessmentMeta ? <p className="application-detail-score__meta">{fitAssessmentMeta}</p> : null}
       </div>
@@ -308,11 +308,11 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {selected.initialFit?.result.gaps.length ? (
+      {selected.fitAssessment?.result.gaps.length ? (
         <section className="side-section">
           <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Fit Assessment gaps</p>
           <div className="application-chip-list">
-            {selected.initialFit.result.gaps.map((gap) => (
+            {selected.fitAssessment.result.gaps.map((gap) => (
               <span key={gap}>{gap}</span>
             ))}
           </div>

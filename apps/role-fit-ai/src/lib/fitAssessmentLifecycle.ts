@@ -1,6 +1,8 @@
 import {
   FIT_ASSESSMENT_PROMPT_VERSION,
   normalizeFitAssessmentInput,
+  type FitAssessmentActiveRun,
+  type FitAssessmentCompleted,
   type FitAssessmentInputChange,
   type FitAssessmentProvenance,
   type FitAssessmentSnapshot,
@@ -26,28 +28,122 @@ export function fitAssessmentCanRun(
 
 export function fitAssessmentMayTriggerAutoPolish(
   state: FitAssessmentState
-): state is Extract<FitAssessmentState, { status: "ready" }> {
-  return state.status === "ready" && state.autoPolishEligible;
+): FitAssessmentCompleted & { provenance: FitAssessmentProvenance; automationToken: string } | null {
+  const completed = state.latestCompleted;
+  return completed?.origin === "current"
+    && completed.provenance
+    && completed.automationToken
+    ? completed as FitAssessmentCompleted & {
+        provenance: FitAssessmentProvenance;
+        automationToken: string;
+      }
+    : null;
 }
 
 export function fitAssessmentLatestSnapshot(
   state: FitAssessmentState
 ): FitAssessmentSnapshot | null {
-  return state.status === "ready" || state.status === "saved" || state.status === "stale"
-    ? state.snapshot
-    : null;
+  return state.latestCompleted?.snapshot ?? null;
+}
+
+export function emptyFitAssessmentState(
+  enabled: boolean,
+  message = "Prepare a job to run Fit Assessment."
+): FitAssessmentState {
+  return {
+    enabled,
+    latestCompleted: null,
+    activeRun: null,
+    lastError: enabled ? { resumeLabel: "", message } : null
+  };
+}
+
+export function beginFitAssessmentRun(
+  state: FitAssessmentState,
+  activeRun: FitAssessmentActiveRun
+): FitAssessmentState {
+  return {
+    ...state,
+    enabled: true,
+    activeRun,
+    lastError: null
+  };
+}
+
+export function completeFitAssessmentRun(
+  state: FitAssessmentState,
+  runId: string,
+  completed: Pick<FitAssessmentCompleted, "snapshot" | "provenance">
+): FitAssessmentState {
+  if (state.activeRun?.id !== runId) return state;
+  return {
+    ...state,
+    latestCompleted: {
+      ...completed,
+      origin: "current",
+      changes: [],
+      previousPreparation: false,
+      ...(state.activeRun.prepareRunId ? { prepareRunId: state.activeRun.prepareRunId } : {}),
+      ...(state.activeRun.automationToken ? { automationToken: state.activeRun.automationToken } : {})
+    },
+    activeRun: null,
+    lastError: null
+  };
+}
+
+export function failFitAssessmentRun(
+  state: FitAssessmentState,
+  runId: string | null,
+  error: { resumeLabel: string; message: string }
+): FitAssessmentState {
+  if (runId && state.activeRun?.id !== runId) return state;
+  return {
+    ...state,
+    activeRun: runId ? null : state.activeRun,
+    lastError: error
+  };
+}
+
+export function setFitAssessmentEnabled(
+  state: FitAssessmentState,
+  enabled: boolean,
+  message = "Prepare the current posting to run Fit Assessment."
+): FitAssessmentState {
+  return {
+    ...state,
+    enabled,
+    activeRun: null,
+    lastError: enabled && !state.latestCompleted
+      ? { resumeLabel: "", message }
+      : null
+  };
+}
+
+export function consumeFitAssessmentAutomationToken(
+  state: FitAssessmentState,
+  token: string
+): FitAssessmentState {
+  if (state.latestCompleted?.automationToken !== token) return state;
+  const { automationToken: _automationToken, ...completed } = state.latestCompleted;
+  return { ...state, latestCompleted: completed };
 }
 
 export function restoredFitAssessmentState(
   runFitAssessment: boolean,
   snapshot?: FitAssessmentSnapshot
 ): FitAssessmentState {
-  if (!runFitAssessment) return { status: "disabled" };
-  if (snapshot) return { status: "saved", snapshot };
   return {
-    status: "unavailable",
-    resumeLabel: "",
-    message: "No Fit Assessment is saved for this preparation. Run it against the restored resume."
+    enabled: runFitAssessment,
+    latestCompleted: snapshot
+      ? { snapshot, origin: "saved", changes: [], previousPreparation: false }
+      : null,
+    activeRun: null,
+    lastError: runFitAssessment && !snapshot
+      ? {
+          resumeLabel: "",
+          message: "No Fit Assessment is saved for this preparation. Run it against the restored resume."
+        }
+      : null
   };
 }
 

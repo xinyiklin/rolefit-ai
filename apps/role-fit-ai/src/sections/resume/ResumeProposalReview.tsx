@@ -163,7 +163,6 @@ export function ResumeProposalReview({
         </details>
       ) : null}
 
-      <ProposalFeedbackList title="Still missing" items={result.remainingGaps?.slice(0, 3) ?? []} tone="warning" />
 
       {result.withheld?.count ? (
         <p className="resume-proposal__withheld">

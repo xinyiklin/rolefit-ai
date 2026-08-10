@@ -216,11 +216,10 @@ export function usePolishPipeline({
       const analysis = analyzeResumeText(currentResumeText || context.scopedResumeText, jobDescription);
       setResult({
         ...analysis,
-        polishedText: currentResumeText || context.scopedResumeText,
+        proposalBaselineText: currentResumeText || context.scopedResumeText,
         source: "ai",
         polishOutcome: data.status,
         changeSummary: Array.isArray(data.summary) ? data.summary : [],
-        remainingGaps: Array.isArray(data.remainingGaps) ? data.remainingGaps : [],
         omittedTargetCount: data.omittedTargetCount,
         suggestedChanges: suggestions,
         withheld: data.withheld

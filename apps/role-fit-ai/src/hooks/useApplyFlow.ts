@@ -20,7 +20,7 @@ import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { copyAiUsage, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
 import type { OutputTab } from "../sections/shared";
-import { normalizeDocumentSnapshot } from "../lib/applicationDocuments";
+import { resumeUsedForApplication } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
@@ -252,12 +252,8 @@ export function useApplyFlow({
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
     setIsCommittingApply(true);
     setApplySaveError("");
-    const hasStructuredSuggestions = Boolean(result?.suggestedChanges?.length);
-    const acceptedStructuredSuggestions =
-      hasStructuredSuggestions &&
-      Boolean(result?.polishedText) &&
-      normalizeDocumentSnapshot(currentResumeText) !== normalizeDocumentSnapshot(result?.polishedText ?? "");
-    const usedBase = !result?.polishedText || (hasStructuredSuggestions && !acceptedStructuredSuggestions);
+    const resumeUsed = resumeUsedForApplication(currentResumeText, result?.proposalBaselineText);
+    const usedBase = resumeUsed === "base";
     const materialSelection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     // A duplicate scan in handleApply may have already identified which record
     // this apply should merge into (exact/high confidence, user-confirmed when
@@ -327,7 +323,7 @@ export function useApplyFlow({
       // Fit Assessment belongs to the application receipt, not the included
       // document package. Keep the latest completed snapshot even when current
       // inputs changed or this Apply excludes the resume artifact.
-      initialFit: fitAssessmentSnapshot ?? existing?.initialFit,
+      fitAssessment: fitAssessmentSnapshot ?? existing?.fitAssessment,
       ...(materialSelection.resume
         ? {
             resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),

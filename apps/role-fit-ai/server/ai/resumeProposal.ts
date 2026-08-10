@@ -148,7 +148,7 @@ Rules:
 - A new skill may come only from the resume or candidate context, never merely from the job description.
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
-- summary and remainingGaps are optional concise feedback, maximum 3 items each.
+- summary is optional concise feedback, maximum 3 items.
 
 ${auditInstructions}
 
@@ -158,8 +158,7 @@ Return this shape:
   "changes": [
     { "targetId": "target-1", "replacement": "complete replacement", "reason": "short optional reason" }
   ],
-  "summary": ["up to 3 material improvements"],
-  "remainingGaps": ["up to 3 important gaps"]
+  "summary": ["up to 3 material improvements"]
 }`;
   return { systemPrompt, userPrompt, ...targetSelection };
 }
@@ -337,7 +336,6 @@ export function sanitizeResumeProposal(
     status,
     changes,
     summary,
-    remainingGaps: optionalList(source.remainingGaps, 260),
     omittedTargetCount,
     withheld: { count: withheldCount, reasons: withheldReasons }
   };

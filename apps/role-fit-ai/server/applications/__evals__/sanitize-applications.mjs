@@ -24,7 +24,7 @@ try {
       updatedAt: "2026-07-29T10:00:00.000Z",
       jobUrl: "https://example.com/job",
       status: "applied",
-      initialFit: {
+      fitAssessment: {
         resumeLabel: "Backend resume",
         assessedAt: "2026-07-29T09:30:00.000Z",
         provider: "codex-cli",
@@ -117,16 +117,16 @@ try {
 
   if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
-  if (valid?.initialFit?.result.verdict !== "REASONABLE" || valid.initialFit.resumeLabel !== "Backend resume") {
+  if (valid?.fitAssessment?.result.verdict !== "REASONABLE" || valid.fitAssessment.resumeLabel !== "Backend resume") {
     failures.push("compact Fit Assessment snapshot did not roundtrip");
   }
   if (
-    valid?.initialFit?.assessedAt !== "2026-07-29T09:30:00.000Z"
-    || valid.initialFit.provider !== "codex-cli"
-    || valid.initialFit.model !== "gpt-5.6-sol"
-    || valid.initialFit.reasoningEffort !== "medium"
-    || valid.initialFit.attempts !== 2
-    || valid.initialFit.promptVersion !== "fit-assessment-direct-rubric-v1"
+    valid?.fitAssessment?.assessedAt !== "2026-07-29T09:30:00.000Z"
+    || valid.fitAssessment.provider !== "codex-cli"
+    || valid.fitAssessment.model !== "gpt-5.6-sol"
+    || valid.fitAssessment.reasoningEffort !== "medium"
+    || valid.fitAssessment.attempts !== 2
+    || valid.fitAssessment.promptVersion !== "fit-assessment-direct-rubric-v1"
   ) {
     failures.push("Fit Assessment run metadata did not roundtrip");
   }
@@ -261,7 +261,7 @@ try {
     title: "Stale Fit Assessment summary",
     createdAt: canonicalCreatedAt,
     updatedAt: canonicalUpdatedAt,
-    initialFit: {
+    fitAssessment: {
       resumeLabel: "Backend resume",
       result: {
         verdict: "REASONABLE",
@@ -275,12 +275,12 @@ try {
       }
     }
   }])[0];
-  staleSummaryRecord.initialFit.result.summary = "Legacy provider-generated summary.";
+  staleSummaryRecord.fitAssessment.result.summary = "Legacy provider-generated summary.";
   const filePath = applicationsFilePath(workspace);
   await writeFile(filePath, JSON.stringify({ applications: [staleSummaryRecord] }), "utf8");
   try {
     const normalizedSummaryRead = await readApplications(workspace);
-    if (normalizedSummaryRead[0]?.initialFit?.result.summary !== FIT_ASSESSMENT_SUMMARY.REASONABLE) {
+    if (normalizedSummaryRead[0]?.fitAssessment?.result.summary !== FIT_ASSESSMENT_SUMMARY.REASONABLE) {
       failures.push("a stale derived Fit Assessment summary was not normalized on read");
     }
   } catch {
@@ -292,8 +292,8 @@ try {
     ["blank", "   "]
   ]) {
     const malformed = structuredClone(staleSummaryRecord);
-    if (malformedSummary === undefined) delete malformed.initialFit.result.summary;
-    else malformed.initialFit.result.summary = malformedSummary;
+    if (malformedSummary === undefined) delete malformed.fitAssessment.result.summary;
+    else malformed.fitAssessment.result.summary = malformedSummary;
     await writeFile(filePath, JSON.stringify({ applications: [malformed] }), "utf8");
     let rejected = false;
     try {
@@ -303,6 +303,20 @@ try {
     }
     if (!rejected) failures.push(`a ${label} Fit Assessment summary bypassed strict tracker validation`);
   }
+
+  const retiredFitField = ["initial", "Fit"].join("");
+  const currentFit = staleSummaryRecord.fitAssessment;
+  const { fitAssessment: _currentFit, ...withoutCurrentFit } = staleSummaryRecord;
+  await writeFile(filePath, JSON.stringify({
+    applications: [{ ...withoutCurrentFit, [retiredFitField]: currentFit }]
+  }), "utf8");
+  let retiredFitFieldRejected = false;
+  try {
+    await readApplications(workspace);
+  } catch (error) {
+    retiredFitFieldRejected = error instanceof ApplicationsStorageError;
+  }
+  if (!retiredFitFieldRejected) failures.push("the retired Fit field name was accepted by the strict tracker reader");
 
   const revisionA = "2026-07-29T10:00:00.000Z";
   const revisionB = "2026-07-29T11:00:00.000Z";

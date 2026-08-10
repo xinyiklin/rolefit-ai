@@ -13,6 +13,7 @@ import type {
   AvailabilityNotice,
   CandidateExperience,
   CitizenshipStatus,
+  DeclaredAnswer,
   EducationLevel
 } from "../lib/candidateFacts";
 import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
@@ -39,7 +40,7 @@ export function useAiSettings() {
   const [stageCustomInstructions, setStageCustomInstructions] = useState<Partial<Record<StageId, string>>>(
     () => saved.stageCustomInstructions ?? {}
   );
-  const [runFitAssessment, setRunFitAssessment] = useState(saved.runInitialFit ?? true);
+  const [runFitAssessment, setRunFitAssessment] = useState(saved.runFitAssessment ?? true);
   const [autoPolishResume, setAutoPolishResume] = useState(saved.autoPolishResume ?? false);
   const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
     saved.resumeAutoPolishThreshold ?? "REASONABLE"
@@ -49,8 +50,12 @@ export function useAiSettings() {
     saved.coverLetterAutoPolishThreshold ?? "STRONG"
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
-  const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState(saved.legallyAuthorizedToWork ?? true);
-  const [requiresSponsorship, setRequiresSponsorship] = useState(saved.requiresSponsorship ?? false);
+  const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState<DeclaredAnswer>(
+    saved.legallyAuthorizedToWork ?? "unspecified"
+  );
+  const [requiresSponsorship, setRequiresSponsorship] = useState<DeclaredAnswer>(
+    saved.requiresSponsorship ?? "unspecified"
+  );
   const [educationLevel, setEducationLevel] = useState<EducationLevel>(saved.educationLevel ?? "unspecified");
   const [major, setMajor] = useState(saved.major ?? "");
   const [gpa, setGpa] = useState<number | undefined>(saved.gpa);
@@ -74,14 +79,14 @@ export function useAiSettings() {
       setHonestContext(next.honestContext ?? "");
       setCustomInstructions(next.customInstructions ?? "");
       setStageCustomInstructions(next.stageCustomInstructions ?? {});
-      setRunFitAssessment(next.runInitialFit ?? true);
+      setRunFitAssessment(next.runFitAssessment ?? true);
       setAutoPolishResume(next.autoPolishResume ?? false);
       setResumeAutoPolishThreshold(next.resumeAutoPolishThreshold ?? "REASONABLE");
       setAutoPolishCoverLetter(next.autoPolishCoverLetter ?? false);
       setCoverLetterAutoPolishThreshold(next.coverLetterAutoPolishThreshold ?? "STRONG");
       setCitizenshipStatus(next.citizenshipStatus ?? "unspecified");
-      setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? true);
-      setRequiresSponsorship(next.requiresSponsorship ?? false);
+      setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? "unspecified");
+      setRequiresSponsorship(next.requiresSponsorship ?? "unspecified");
       setEducationLevel(next.educationLevel ?? "unspecified");
       setMajor(next.major ?? "");
       setGpa(next.gpa);
@@ -120,7 +125,7 @@ export function useAiSettings() {
       honestContext,
       customInstructions,
       stageCustomInstructions,
-      runInitialFit: runFitAssessment,
+      runFitAssessment: runFitAssessment,
       autoPolishResume,
       resumeAutoPolishThreshold,
       autoPolishCoverLetter,
@@ -252,8 +257,8 @@ export function useAiSettings() {
     setAutoPolishCoverLetter(false);
     setCoverLetterAutoPolishThreshold("STRONG");
     setCitizenshipStatus("unspecified");
-    setLegallyAuthorizedToWork(true);
-    setRequiresSponsorship(false);
+    setLegallyAuthorizedToWork("unspecified");
+    setRequiresSponsorship("unspecified");
     setEducationLevel("unspecified");
     setMajor("");
     setGpa(undefined);

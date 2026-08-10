@@ -194,8 +194,7 @@ const partial = sanitizeResumeProposal(
       { targetId: "target-1", replacement: "Built Kubernetes systems." },
       { targetId: skillListTarget.targetId, replacement: "JavaScript, SQL, Kubernetes" }
     ],
-    summary: ["Clarified the JavaScript and SQL delivery work.", 42, "Invented Kubernetes expertise."],
-    remainingGaps: ["No public-sector experience is stated.", "Second gap", "Third gap", "Fourth gap"]
+    summary: ["Clarified the JavaScript and SQL delivery work.", 42, "Invented Kubernetes expertise."]
   },
   targets,
   jobText,
@@ -207,7 +206,6 @@ assert.equal(partial.changes.length, 1, "malformed or unsupported edits do not d
 assert.equal(partial.changes[0].targetId, "target-1");
 assert.equal(partial.withheld.count, 3);
 assert.deepEqual(partial.withheld.reasons, ["UNSUPPORTED", "INVALID_TARGET", "MALFORMED"]);
-assert.equal(partial.remainingGaps.length, 3);
 
 const safeSkillEdits = sanitizeResumeProposal(
   {

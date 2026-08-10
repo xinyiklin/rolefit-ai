@@ -134,9 +134,11 @@ assert.deepEqual(seedStages(flattened), seeded, "persist/normalize/seed is idemp
 
 const adoptedSparseSettings = materializeAiSettings({ honestContext: "Keep this workspace fact." });
 assert.equal(adoptedSparseSettings.honestContext, "Keep this workspace fact.");
-assert.equal(adoptedSparseSettings.runInitialFit, true);
+assert.equal(adoptedSparseSettings.runFitAssessment, true);
 assert.equal(adoptedSparseSettings.autoPolishResume, false);
 assert.equal(adoptedSparseSettings.coverLetterAutoPolishThreshold, "STRONG");
+assert.equal(adoptedSparseSettings.legallyAuthorizedToWork, "unspecified");
+assert.equal(adoptedSparseSettings.requiresSponsorship, "unspecified");
 assert.deepEqual(
   materializeAiSettings(adoptedSparseSettings),
   adoptedSparseSettings,
@@ -154,24 +156,48 @@ assert.equal(retiredAntigravityNames.coverSelectedModel, "gemini-3.6-flash-high"
 
 assert.deepEqual(
   normalizeSettings({
-    runInitialFit: false,
+    runFitAssessment: false,
     autoCreateResumeProposal: true,
     autoCreateCoverLetterProposal: false
   }),
   {
-    runInitialFit: false
+    runFitAssessment: false
   },
   "retired workflow preferences are dropped instead of migrated"
 );
 assert.deepEqual(
   normalizeSettings({
-    runInitialFit: "always",
+    runFitAssessment: "always",
     autoPolishResume: 1,
     autoPolishCoverLetter: null,
     resumeAutoPolishThreshold: "MOSTLY"
   }),
   {},
   "invalid workflow preferences are dropped"
+);
+assert.deepEqual(
+  normalizeSettings({
+    legallyAuthorizedToWork: "yes",
+    requiresSponsorship: "no"
+  }),
+  {
+    legallyAuthorizedToWork: "yes",
+    requiresSponsorship: "no"
+  },
+  "explicit tri-state employment eligibility answers round-trip"
+);
+assert.deepEqual(
+  normalizeSettings({
+    legallyAuthorizedToWork: true,
+    requiresSponsorship: false
+  }),
+  {},
+  "old boolean defaults are not accepted as current declarations"
+);
+assert.deepEqual(
+  normalizeSettings({ [["run", "Initial", "Fit"].join("")]: false }),
+  {},
+  "the retired Fit preference name is not a runtime alias"
 );
 assert.deepEqual(
   normalizeSettings({

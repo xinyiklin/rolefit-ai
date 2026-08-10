@@ -19,7 +19,6 @@ export type ResumePolishWireResult = {
   status: ResumePolishStatus;
   changes: ResumePolishWireChange[];
   summary: string[];
-  remainingGaps: string[];
   omittedTargetCount: number;
   withheld: {
     count: number;
@@ -176,7 +175,6 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     status: status as ResumePolishStatus,
     changes,
     summary: list(source.summary, 260),
-    remainingGaps: list(source.remainingGaps, 260),
     omittedTargetCount,
     withheld: { count, reasons }
   };

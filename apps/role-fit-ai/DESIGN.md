@@ -413,8 +413,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   Fit Assessment row follows the materials: show its verdict, selected resume,
   short summary, compact run attribution, at most three matches and gaps, and an
   eligibility warning only when relevant. A completed result offers **Reassess fit**; running, disabled,
-  unavailable/retry, and out-of-date/reassess states use the same flat hierarchy,
-  and an out-of-date result stays visible only as a **Previous assessment** with
+  unavailable/retry, and out-of-date/reassess states use the same flat hierarchy.
+  Starting or failing a new assessment keeps the latest completion visible, and
+  an out-of-date result stays visible only as a **Previous preparation** with
   its timestamp plus one compact, hairline-separated **Changed since assessment**
   list. That list names only the changed input groups — job posting, resume
   content, About you, or assessment setup — before **Reassess fit**. Never add
@@ -522,7 +523,7 @@ plain correspondence sheet + the same workflow-rail hierarchy. Both rails remain
 visible from idle through blocked, working, proposal, stale, and applied states.
 Resume's primary Polish action runs one grounded proposal request from either
 Resume or Prepare. Its rail shows What improved, the proposed edits open in one
-disclosure, Still missing, and one quiet withheld line; when the prompt budget
+disclosure, and one quiet withheld line; when the prompt budget
 excludes editable fields, one equally quiet neutral line reports that count.
 Proposal, No changes, and Withheld remain visibly distinct.
 Cover letter keeps
