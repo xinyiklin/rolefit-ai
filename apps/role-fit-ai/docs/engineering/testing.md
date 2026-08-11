@@ -28,8 +28,8 @@ new network/model eval must be added to `LIVE` so it stays out of `npm test`.
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
 fixed corpus to whatever it is today, so a refactor claiming "same results,
-less work" is reviewable. The matcher drives silent tracker merges and the
-merge path deletes rows, and its failure mode is silent — a dropped tier does
+less work" is reviewable. The matcher drives pipeline warnings, posting-link
+suggestions, and explicit manual-merge discovery, and its failure mode is silent — a dropped tier does
 not throw. When a matcher change is INTENTIONAL, regenerate the golden block
 with
 `ROLEFIT_GOLDEN_UPDATE=1 node apps/role-fit-ai/src/lib/__evals__/job-identity-golden.mjs`
@@ -170,9 +170,12 @@ Good server verification covers:
   brief editable and manual Polish available; Fit Assessment is separately
   retryable and cannot invalidate valid job fields. Resume Polish failure or
   Withheld keeps the current resume unchanged and locally retryable
-- duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
-  prevents the current and every downstream AI request, while Continue is
-  acknowledged for the same job target so the pipeline does not prompt twice
+- duplicate warnings before or after Job analysis must distinguish exact saved
+  applications, interested drafts, and similar matches. Opening/continuing an
+  existing record prevents the current and every downstream AI request; new
+  work captures a posting relationship; high/possible matches require Link or
+  Keep separate; and the decision is acknowledged for that target so the
+  pipeline does not prompt twice
 - cover-letter tailoring and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
   must prove the **one-click contract**: a template-only starter, a blank
@@ -335,6 +338,10 @@ Good frontend verification covers:
   Apply creates, interested-draft Apply updates the same id, later-stage updates
   preserve identity/date/stage, missing explicit targets fail closed, and all
   primary surfaces use the shared action descriptor.
+  `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
+  multi-choice duplicate gate, exact-draft continuation, confirmed linking,
+  remembered Keep separate decisions, and the create-then-atomic-link boundary;
+  it also pins destructive merge as a separate tracker operation.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three

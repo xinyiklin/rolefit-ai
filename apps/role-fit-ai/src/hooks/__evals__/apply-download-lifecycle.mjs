@@ -102,8 +102,18 @@ assert.ok(
 );
 assert.match(
   handleApply,
-  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applySessionRef\.current = null;[\s\S]{0,180}?applyActionRef\.current = null;[\s\S]{0,180}?applyMergeTargetRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
+  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applySessionRef\.current = null;[\s\S]{0,180}?applyActionRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
   "an unexpected duplicate-check failure clears the captured session and reports that nothing was saved"
+);
+assert.doesNotMatch(
+  applyFlow,
+  /mergeTargetId|applyMergeTargetRef/,
+  "the normal Apply lifecycle carries a relationship result, never a merge target"
+);
+assert.match(
+  handleApply,
+  /pendingRelationship: resolution\.relationship/,
+  "a confirmed relationship is captured into the new preparation before commit"
 );
 
 const outerGuard = compactDownloadPick.indexOf(

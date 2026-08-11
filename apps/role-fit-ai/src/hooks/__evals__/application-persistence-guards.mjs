@@ -57,6 +57,11 @@ assert.match(
   /const linkPostingRecords =[\s\S]*await persist\([\s\S]*changed\.map/,
   "posting relationships use one sparse multi-record persistence request"
 );
+assert.match(
+  applications,
+  /const markPostingRecordsUnrelated =[\s\S]*return persist\(next, mutations\)/,
+  "Keep separate decisions use one sparse multi-record persistence request"
+);
 assert.equal(
   applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
   3,

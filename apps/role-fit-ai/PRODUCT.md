@@ -115,6 +115,14 @@ when the user explicitly uploads one. Its Documents tab previews or downloads
 either form and accepts additional PDF files the posting asked for. Tracker
 text and analytics projections never count as a saved document and cannot
 reload or overwrite the strict source.
+Duplicate matching is advisory and relational. Before AI work, an exact prior
+application can be opened or continued as a new preparation; an exact interested
+draft continues that draft; and high/possible matches ask whether to link or keep
+the records separate. A Keep separate decision persists on both eventual records
+so the same pair is not suggested again. Continuing new work preserves every attempt and links the
+eventual new record to the matching posting group. It never overwrites or merges
+the prior application. Destructive merge remains a separate confirmed tracker
+cleanup action.
 Opening a stored application restores its validated posting and documents into
 the current session, lands on Prepare, and preserves the dirty-document
 replacement guard.

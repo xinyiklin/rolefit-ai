@@ -138,12 +138,12 @@ type UseJobIntakeArgs = {
     url: string,
     text: string,
     facts: ExtractedJobTracking
-  ) => Promise<{ proceed: boolean; note: string | null }>;
+  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
   confirmDuplicateAfterJobAnalysis: (
     url: string,
     text: string,
     facts: ExtractedJobTracking
-  ) => Promise<{ proceed: boolean; note: string | null }>;
+  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
   jobAnalysisRequestFields: () => AiRequestFields;
   fitAssessmentRequestFields: () => AiRequestFields;
   ensureProviderReady: (request: AiRequestFields) => Promise<ProviderReadiness>;
@@ -198,6 +198,7 @@ type PreparedResumeAndFit = {
 
 type PreparedJobAnalysisOutcome =
   | { status: "stale" }
+  | { status: "duplicate-handled" }
   | { status: "duplicate-before" }
   | { status: "too-short" }
   | {
@@ -763,6 +764,11 @@ export function useJobIntake({
     };
   }
 
+  function clearHandledDuplicateState(): void {
+    setJobAnalysisProgress({ status: "idle" });
+    setJobAnalysisProgressVisible(false);
+  }
+
   function dismissJobAnalysisProgress() {
     setJobAnalysisProgressVisible(false);
   }
@@ -855,6 +861,7 @@ export function useJobIntake({
     );
     if (!request.isCurrent()) return { status: "stale" };
     if (!duplicateBefore.proceed) {
+      if (duplicateBefore.handled) return { status: "duplicate-handled" };
       // Extension delivery can contain a short intermediate payload. The URL
       // and paste paths have already enforced their own acquisition floors.
       if (source === "link" || source === "paste" || localSourceText.trim().length >= 40) {
@@ -1038,6 +1045,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
@@ -1138,6 +1149,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
@@ -1244,6 +1259,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setPolishStatus("Preparation stopped because this application is already tracked.");
@@ -1308,6 +1327,10 @@ export function useJobIntake({
           request
         });
         if (outcome.status === "stale") return;
+        if (outcome.status === "duplicate-handled") {
+          clearHandledDuplicateState();
+          return;
+        }
         if (outcome.status === "duplicate-before") {
           setJobAnalysisProgress(duplicateStoppedState("before"));
           setJobAnalysisProgressVisible(true);

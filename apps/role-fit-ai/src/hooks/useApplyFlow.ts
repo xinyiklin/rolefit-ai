@@ -15,7 +15,7 @@
  */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationDraft, type Application } from "./useApplications";
-import type { ApplyDuplicateResolution } from "./useDuplicateGuard";
+import type { DuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import { copyAiUsage, type StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
@@ -56,6 +56,8 @@ type UseApplyFlowArgs = {
   preparationSession: PreparationSession;
   createApplication: (app: Application) => Promise<boolean>;
   updateApplicationById: (app: Application) => Promise<boolean>;
+  linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
+  markPostingRecordsUnrelated: (applicationIds: string[]) => Promise<boolean>;
   saveApplicationDocument: (
     id: string,
     kind: "resume" | "cover",
@@ -66,7 +68,7 @@ type UseApplyFlowArgs = {
   // a second record.
   linkApplication: (id: string | null) => void;
   currentJobTracking: () => ExtractedJobTracking;
-  resolveApplyDuplicate: () => Promise<ApplyDuplicateResolution>;
+  resolveApplyDuplicate: () => Promise<DuplicateResolution>;
   // Whether each PDF can actually be TYPESET, which is stricter than the export
   // rail's enabled-state: the engine needs the structured model, so a text-only
   // polish result must not put a resume checkbox in the download prompt.
@@ -105,6 +107,8 @@ export function useApplyFlow({
   preparationSession,
   createApplication,
   updateApplicationById,
+  linkPostingRecords,
+  markPostingRecordsUnrelated,
   saveApplicationDocument,
   linkApplication,
   currentJobTracking,
@@ -123,11 +127,9 @@ export function useApplyFlow({
   setActiveOutputTab,
   setExpandedApplicationId
 }: UseApplyFlowArgs) {
-  // Transitional duplicate-review receipt. Phase 3 replaces this target-shaped
-  // result with a posting relationship; it never selects a write destination.
-  const applyMergeTargetRef = useRef<string | null>(null);
   const applySessionRef = useRef<PreparationSession | null>(null);
   const applyActionRef = useRef<PreparationPrimaryAction | null>(null);
+  const applyUnrelatedApplicationIdRef = useRef<string | null>(null);
   const applyMaterialSelectionRef = useRef<{
     resume: boolean;
     coverLetter: boolean;
@@ -173,7 +175,8 @@ export function useApplyFlow({
     id: string,
     label: string,
     expectedVersions: { resume: string; coverLetter: string },
-    action: PreparationPrimaryAction
+    action: PreparationPrimaryAction,
+    relationshipWarning: string
   ) {
     const selection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     const resume = selection.resume ? await getResumeArtifacts().catch(() => null) : null;
@@ -221,7 +224,7 @@ export function useApplyFlow({
         : [])
     ];
     if (failures.length) {
-      setApplyStatus(`${action.successVerb} "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.`);
+      setApplyStatus(`${action.successVerb} "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.${relationshipWarning}`);
       return {
         resumeSaved: Boolean(currentStoredResume?.ok),
         coverSaved: Boolean(currentStoredCover?.ok)
@@ -233,8 +236,8 @@ export function useApplyFlow({
     ];
     setApplyStatus(
       savedLabels.length
-        ? `${action.successVerb} "${label}". Saved ${savedLabels.join(" and ")}.`
-        : `${action.successVerb} "${label}". No documents were included.`
+        ? `${action.successVerb} "${label}". Saved ${savedLabels.join(" and ")}.${relationshipWarning}`
+        : `${action.successVerb} "${label}". No documents were included.${relationshipWarning}`
     );
     return {
       resumeSaved: Boolean(currentStoredResume?.ok),
@@ -377,7 +380,25 @@ export function useApplyFlow({
       setIsCommittingApply(false);
       return false;
     }
-    applyMergeTargetRef.current = null;
+    let relationshipWarning = "";
+    if (commit.operation === "create" && session.pendingRelationship) {
+      const relationship = session.pendingRelationship;
+      const linkedGroupId = await linkPostingRecords(
+        [app.id, relationship.matchedApplicationId],
+        relationship.jobPostingGroupId
+      ).catch(() => null);
+      if (!linkedGroupId) {
+        relationshipWarning = " The related posting could not be linked; both records remain separate.";
+      }
+    } else if (commit.operation === "create" && applyUnrelatedApplicationIdRef.current) {
+      const savedSeparation = await markPostingRecordsUnrelated([
+        app.id,
+        applyUnrelatedApplicationIdRef.current
+      ]).catch(() => false);
+      if (!savedSeparation) {
+        relationshipWarning = " The Keep separate decision could not be saved; the records may appear in duplicate review.";
+      }
+    }
     // From here the session has one application of record: later resume or
     // cover-letter saves update THIS row rather than creating a duplicate.
     linkApplication(app.id);
@@ -390,7 +411,7 @@ export function useApplyFlow({
     setApplyStatus(
       `${action.successVerb}. Saved "${app.title}" to Applications${
         selectedMaterials.length ? ` with ${selectedMaterials.join(" and ")}` : ""
-      }.`
+      }.${relationshipWarning}`
     );
     setActiveOutputTab("applications");
     setExpandedApplicationId(app.id);
@@ -399,7 +420,8 @@ export function useApplyFlow({
         app.id,
         app.title,
         expectedDocumentVersions,
-        action
+        action,
+        relationshipWarning
       );
       // Tracker text is not a reloadable document. Preserve recovery until the
       // corresponding strict editable source has also been committed.
@@ -408,13 +430,14 @@ export function useApplyFlow({
       return true;
     } catch {
       setApplyStatus(
-        `${action.successVerb} "${app.title}", but the included documents could not be saved. Retry from each document's Save menu.`
+        `${action.successVerb} "${app.title}", but the included documents could not be saved. Retry from each document's Save menu.${relationshipWarning}`
       );
       return true;
     } finally {
       applyMaterialSelectionRef.current = null;
       applySessionRef.current = null;
       applyActionRef.current = null;
+      applyUnrelatedApplicationIdRef.current = null;
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
     }
@@ -446,11 +469,8 @@ export function useApplyFlow({
       };
       applySessionRef.current = session;
       applyActionRef.current = action;
-      // Reset before evaluating so a prior call's stale duplicate receipt can
-      // never leak into an unrelated apply. Phase 3 replaces the target-shaped
-      // result with a posting relationship.
-      applyMergeTargetRef.current = null;
-      let resolution: ApplyDuplicateResolution = { proceed: true, mergeTargetId: null };
+      applyUnrelatedApplicationIdRef.current = null;
+      let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
         try {
           resolution = await resolveApplyDuplicate();
@@ -458,18 +478,25 @@ export function useApplyFlow({
           applyMaterialSelectionRef.current = null;
           applySessionRef.current = null;
           applyActionRef.current = null;
-          applyMergeTargetRef.current = null;
+          applyUnrelatedApplicationIdRef.current = null;
           setApplyStatus("Duplicate checking failed, so the application was not saved. Retry Apply.");
           return;
         }
       }
-      if (!resolution.proceed) {
+      if (resolution.action !== "continue") {
         applyMaterialSelectionRef.current = null;
         applySessionRef.current = null;
         applyActionRef.current = null;
+        applyUnrelatedApplicationIdRef.current = null;
         return;
       }
-      applyMergeTargetRef.current = resolution.mergeTargetId;
+      applyUnrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
+      if (session.mode === "new") {
+        applySessionRef.current = {
+          ...session,
+          pendingRelationship: resolution.relationship
+        };
+      }
 
       const canDownloadResume = applyMaterialSelectionRef.current.resume && canExportResumePdf;
       const canDownloadCoverLetter =
@@ -550,10 +577,10 @@ export function useApplyFlow({
   }
 
   function cancelApply() {
-    applyMergeTargetRef.current = null;
     applyMaterialSelectionRef.current = null;
     applySessionRef.current = null;
     applyActionRef.current = null;
+    applyUnrelatedApplicationIdRef.current = null;
     setApplyDownloadPrompt(null);
   }
 

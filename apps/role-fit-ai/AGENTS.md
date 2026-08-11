@@ -91,8 +91,12 @@ own a second resume model, editor, layout engine, or PDF implementation.
   provider. They commit the deterministic brief and explain that connecting a
   provider can improve it; Fit Assessment remains unavailable when its own
   provider cannot run, and Polish retains its existing provider gate.
-- Duplicate checks gate the pipeline before and after Job analysis. Stop means no
-  downstream request; Continue is acknowledged for that job target.
+- Duplicate checks gate the pipeline before and after Job analysis. Exact saved
+  applications offer a new linked preparation or opening the existing record;
+  exact interested drafts continue that draft; high/possible matches require an
+  explicit Link or Keep separate choice. Cancel means no downstream request,
+  and the choice is acknowledged for that job target. Normal Apply/Pass paths
+  never call destructive merge or use a match as their write target.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.

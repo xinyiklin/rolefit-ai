@@ -1,70 +1,125 @@
 /**
- * useDuplicateGuard — the duplicate-application warning ladder for the CURRENT
- * job target, extracted from App.tsx so the acknowledgment state and the two
- * blocking dialogs live behind one boundary:
- *
- *   1. confirmDuplicateBeforeJobAnalysis — blocking gate before Job analysis
- *   2. confirmDuplicateBeforePolish — blocking gate before Resume Polish
- *   3. resolveApplyDuplicate — Apply-time confirm + merge-target resolution
- *
- * A confirmed warning is acknowledged once per job target: the ack is keyed by
- * the target's identity (URL + text prefix), so loading a different job
- * self-invalidates it with no reset bookkeeping, and Apply skips the identical
- * dialog the user already confirmed at the polish gate. Loading a tracked
- * application back into the studio pre-acknowledges its own record — merging
- * back into it is the point, not a duplicate.
- *
- * Merge-safety contract (same as the matcher's): only exact/high matches ever
- * produce a merge target, and only after the user confirms when the record was
- * already acted on; "possible" matches never merge.
+ * Duplicate review for the current posting. Matching can pause a workflow,
+ * open an exact saved record, or remember a non-destructive posting
+ * relationship. It never chooses a tracker write target.
  */
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Application } from "./useApplications";
 import type { DuplicateMatch, DuplicateTarget } from "../lib/jobIdentity";
-import type { ConfirmOptions } from "./useDialog";
-import { STATUS_LABEL, displayCompany, displayRole, formatCompactDate } from "../lib/applicationDisplay";
+import type { JobPostingRelationship } from "../lib/preparationSession";
+import {
+  STATUS_LABEL,
+  displayCompany,
+  displayRole,
+  formatCompactDate
+} from "../lib/applicationDisplay";
 
 type TrackingFacts = { company?: string; role?: string; location?: string };
+
+export type DuplicateResolution =
+  | {
+      action: "continue";
+      relationship: JobPostingRelationship | null;
+      unrelatedApplicationId?: string;
+    }
+  | { action: "open-existing"; applicationId: string }
+  | { action: "cancel" };
+
+export type DuplicatePreparationPrompt = {
+  kind: "existing-application" | "existing-draft" | "existing-not-applying" | "similar";
+  title: string;
+  message: string;
+};
+
+export type DuplicatePreparationChoice =
+  | "continue-new"
+  | "continue-existing"
+  | "review-again"
+  | "open-existing"
+  | "link"
+  | "separate"
+  | "cancel";
+
+export type DuplicateGateResult = {
+  proceed: boolean;
+  note: string | null;
+  handled?: boolean;
+};
 
 type UseDuplicateGuardArgs = {
   jobUrl: string;
   jobDescription: string;
   jobRawText: string;
-  // Lazily evaluated so declaration order in the caller doesn't matter.
   tracking: () => TrackingFacts;
   findDuplicatesForTarget: (target: DuplicateTarget) => DuplicateMatch<Application>[];
-  confirm: (opts: ConfirmOptions) => Promise<boolean>;
+  onOpenExisting: (applicationId: string) => Promise<boolean>;
+  onRelationshipResolved: (relationship: JobPostingRelationship | null) => void;
 };
 
-export type ApplyDuplicateResolution = {
-  proceed: boolean;
-  // The application to merge this apply into (exact/high match), or null for a
-  // normal new-record apply. Never set for "possible" matches.
-  mergeTargetId: string | null;
+type AcknowledgedDecision = "existing" | "link" | "separate";
+type Acknowledgment = {
+  appId: string;
+  jobKey: string;
+  decision: AcknowledgedDecision;
 };
 
-export type DuplicateGateResult = {
-  proceed: boolean;
-  note: string | null;
-};
-
-// Identity of a job target for duplicate-warning acknowledgments — URL plus a
-// text prefix is enough to detect "the same target is still loaded". The
-// separator is an escape sequence (not a raw control byte) so this file stays
-// plain text to grep/diff tooling.
 function makeJobKey(url: string, text: string): string {
   return `${url.trim()}\u0000${text.trim().slice(0, 500)}`;
 }
 
-// djb2 over the job key — a compact identity the autosave draft can persist to
-// gate provenance restores without storing JD text (a role·company label alone
-// collides across reposts, the exact case the duplicate matcher exists for).
 function hashKey(value: string): string {
   let hash = 5381;
-  for (let i = 0; i < value.length; i += 1) {
-    hash = ((hash << 5) + hash + value.charCodeAt(i)) | 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = ((hash << 5) + hash + value.charCodeAt(index)) | 0;
   }
   return (hash >>> 0).toString(36);
+}
+
+function relationshipFor(match: DuplicateMatch<Application>): JobPostingRelationship {
+  const isNotApplying = String(match.application.status) === "not_applying";
+  return {
+    matchedApplicationId: match.application.id,
+    ...(match.application.jobPostingGroupId
+      ? { jobPostingGroupId: match.application.jobPostingGroupId }
+      : {}),
+    confidence: match.confidence,
+    ...(isNotApplying ? { matchedNotApplyingRecordId: match.application.id } : {})
+  };
+}
+
+function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationPrompt {
+  const application = match.application;
+  const roleAtCompany = `${displayRole(application)} at ${displayCompany(application)}`;
+  const when = application.appliedAt || application.updatedAt;
+  const evidence = match.evidence.length ? `\n${match.evidence.join("\n")}` : "";
+
+  if (match.confidence !== "exact") {
+    return {
+      kind: "similar",
+      title: "Similar job found",
+      message: `This looks similar to ${roleAtCompany}.${evidence}\nIs this the same job posting?`
+    };
+  }
+  if (application.status === "interested") {
+    return {
+      kind: "existing-draft",
+      title: "Preparation already exists",
+      message: `You already started preparing ${roleAtCompany}.${evidence}`
+    };
+  }
+  if (String(application.status) === "not_applying") {
+    const notApplyingAt = (application as Application & { notApplyingAt?: string }).notApplyingAt;
+    return {
+      kind: "existing-not-applying",
+      title: "You previously passed on this job",
+      message: `Marked Not applying on ${formatCompactDate(notApplyingAt || when)}.${evidence}`
+    };
+  }
+  return {
+    kind: "existing-application",
+    title: "Previous application found",
+    message: `You applied to ${roleAtCompany} on ${formatCompactDate(when)}. Continuing will create a separate application linked to the same posting.${evidence}`
+  };
 }
 
 export function useDuplicateGuard({
@@ -73,11 +128,17 @@ export function useDuplicateGuard({
   jobRawText,
   tracking,
   findDuplicatesForTarget,
-  confirm
+  onOpenExisting,
+  onRelationshipResolved
 }: UseDuplicateGuardArgs) {
-  // The duplicate the user has ALREADY confirmed past (polish gate or an apply
-  // dialog) for the CURRENT job target.
-  const ackRef = useRef<{ appId: string; jobKey: string } | null>(null);
+  const acknowledgmentRef = useRef<Acknowledgment | null>(null);
+  const promptResolverRef = useRef<((choice: DuplicatePreparationChoice) => void) | null>(null);
+  const [duplicatePrompt, setDuplicatePrompt] = useState<DuplicatePreparationPrompt | null>(null);
+
+  useEffect(() => () => {
+    promptResolverRef.current?.("cancel");
+    promptResolverRef.current = null;
+  }, []);
 
   function targetJobKey(target: Pick<DuplicateTarget, "jobUrl" | "jobText">): string {
     return makeJobKey(target.jobUrl || "", target.jobText || "");
@@ -102,57 +163,116 @@ export function useDuplicateGuard({
     return hashKey(currentJobKey());
   }
 
-  // Duplicate lookup for the CURRENT job target (live state). Shared by the
-  // pre-polish gate and Apply so both stages see the same match.
   function currentMatch(): DuplicateMatch<Application> | undefined {
     return findDuplicatesForTarget(currentTarget())[0];
   }
 
-  function isTargetAcked(appId: string, target: Pick<DuplicateTarget, "jobUrl" | "jobText">): boolean {
-    const ack = ackRef.current;
-    return Boolean(ack && ack.appId === appId && ack.jobKey === targetJobKey(target));
+  function acknowledgedDecision(
+    appId: string,
+    target: Pick<DuplicateTarget, "jobUrl" | "jobText">
+  ): AcknowledgedDecision | null {
+    const acknowledgment = acknowledgmentRef.current;
+    return acknowledgment?.appId === appId && acknowledgment.jobKey === targetJobKey(target)
+      ? acknowledgment.decision
+      : null;
   }
 
-  function ackTarget(appId: string, target: Pick<DuplicateTarget, "jobUrl" | "jobText">): void {
-    ackRef.current = { appId, jobKey: targetJobKey(target) };
+  function acknowledge(
+    appId: string,
+    target: Pick<DuplicateTarget, "jobUrl" | "jobText">,
+    decision: AcknowledgedDecision
+  ): void {
+    acknowledgmentRef.current = { appId, jobKey: targetJobKey(target), decision };
   }
 
   function duplicateNote(match: DuplicateMatch<Application>): string {
     const when = match.application.appliedAt || match.application.updatedAt;
-    return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "duplicate application"}`;
+    return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "matching posting"}`;
   }
 
-  async function confirmDuplicateGate(target: DuplicateTarget, nextStage: "Job analysis" | "Resume Polish"): Promise<DuplicateGateResult> {
-    const match = findDuplicatesForTarget(target)[0];
-    if (!match || match.application.status === "interested") return { proceed: true, note: null };
-
-    const note = duplicateNote(match);
-    if (isTargetAcked(match.application.id, target)) return { proceed: true, note };
-
-    const when = match.application.appliedAt || match.application.updatedAt;
-    const proceed = await confirm({
-      title: "Duplicate application found",
-      message: [
-        `${displayCompany(match.application)} · ${displayRole(match.application)} is already ${STATUS_LABEL[match.application.status].toLowerCase()} as of ${formatCompactDate(when)}.`,
-        ...match.evidence,
-        `Continue to ${nextStage}?`
-      ].join("\n"),
-      confirmLabel: "Continue pipeline",
-      cancelLabel: "Stop here"
+  function requestChoice(prompt: DuplicatePreparationPrompt): Promise<DuplicatePreparationChoice> {
+    if (promptResolverRef.current) return Promise.resolve("cancel");
+    return new Promise((resolve) => {
+      promptResolverRef.current = resolve;
+      setDuplicatePrompt(prompt);
     });
-    if (proceed) ackTarget(match.application.id, target);
-    return { proceed, note };
   }
 
-  // Deliberately reloading a tracked application for another pass: don't make
-  // the polish/apply gates nag that it "already exists" — merging back into
-  // this record is the point. Keyed from the values being SET (the caller's
-  // state hasn't committed yet), mirroring currentJobKey's rawText-first
-  // fallback.
-  function ackApplication(app: Pick<Application, "id" | "jobUrl" | "jobDescription" | "rawJobDescription">): void {
-    ackRef.current = {
-      appId: app.id,
-      jobKey: makeJobKey(app.jobUrl || "", (app.rawJobDescription ?? "").trim() || app.jobDescription || "")
+  function chooseDuplicate(choice: DuplicatePreparationChoice): void {
+    const resolve = promptResolverRef.current;
+    if (!resolve) return;
+    promptResolverRef.current = null;
+    setDuplicatePrompt(null);
+    resolve(choice);
+  }
+
+  async function resolveMatch(
+    match: DuplicateMatch<Application>,
+    target: DuplicateTarget
+  ): Promise<DuplicateResolution> {
+    const priorDecision = acknowledgedDecision(match.application.id, target);
+    if (priorDecision) {
+      return {
+        action: "continue",
+        relationship: priorDecision === "link" ? relationshipFor(match) : null,
+        ...(priorDecision === "separate"
+          ? { unrelatedApplicationId: match.application.id }
+          : {})
+      };
+    }
+
+    const choice = await requestChoice(promptFor(match));
+    if (choice === "cancel") return { action: "cancel" };
+    if (choice === "open-existing" || choice === "continue-existing") {
+      const opened = await onOpenExisting(match.application.id);
+      return opened
+        ? { action: "open-existing", applicationId: match.application.id }
+        : { action: "cancel" };
+    }
+    if (choice === "separate") {
+      acknowledge(match.application.id, target, "separate");
+      onRelationshipResolved(null);
+      return {
+        action: "continue",
+        relationship: null,
+        unrelatedApplicationId: match.application.id
+      };
+    }
+
+    const relationship = relationshipFor(match);
+    acknowledge(match.application.id, target, "link");
+    onRelationshipResolved(relationship);
+    return { action: "continue", relationship };
+  }
+
+  async function confirmDuplicateGate(
+    target: DuplicateTarget,
+    _nextStage: "Job analysis" | "Resume Polish"
+  ): Promise<DuplicateGateResult> {
+    const match = findDuplicatesForTarget(target)[0];
+    if (!match) return { proceed: true, note: null };
+
+    const resolution = await resolveMatch(match, target);
+    if (resolution.action === "continue") {
+      return { proceed: true, note: duplicateNote(match) };
+    }
+    return {
+      proceed: false,
+      note: duplicateNote(match),
+      handled: resolution.action === "open-existing"
+    };
+  }
+
+  function ackApplication(
+    application: Pick<Application, "id" | "jobUrl" | "jobDescription" | "rawJobDescription">
+  ): void {
+    acknowledgmentRef.current = {
+      appId: application.id,
+      jobKey: makeJobKey(
+        application.jobUrl || "",
+        (application.rawJobDescription ?? "").trim() || application.jobDescription || ""
+      ),
+      decision: "existing"
     };
   }
 
@@ -184,65 +304,19 @@ export function useDuplicateGuard({
     }, "Resume Polish");
   }
 
-  // Blocking gate BEFORE any AI spend: if this job matches a tracked
-  // application the user already acted on, confirm once per job target. The
-  // acknowledgment carries through to Apply (which skips its own identical
-  // dialog), and the automatic proposal path funnels through the caller too — so an
-  // extension import of an already-applied job pauses instead of silently
-  // burning a polish run on it. Resolves true when polishing may proceed.
   async function confirmDuplicateBeforePolish(): Promise<boolean> {
     return (await confirmDuplicateGate(currentTarget(), "Resume Polish")).proceed;
   }
 
-  // Apply-time resolution: warn/confirm as needed and name the record this
-  // apply should merge into. exact/high matches merge (silently when still
-  // "interested" or already acknowledged this run); "possible" matches warn
-  // but always proceed as a NEW entry when confirmed.
-  async function resolveApplyDuplicate(): Promise<ApplyDuplicateResolution> {
+  async function resolveApplyDuplicate(): Promise<DuplicateResolution> {
+    const target = currentTarget();
     const match = currentMatch();
-
-    if (match && (match.confidence === "exact" || match.confidence === "high")) {
-      // Skip the dialog when the user already confirmed this same duplicate at
-      // the pre-polish gate — one warning per pipeline run; the merge target
-      // is returned either way.
-      if (match.application.status !== "interested" && !isTargetAcked(match.application.id, currentTarget())) {
-        const previousDate = match.application.appliedAt ?? match.application.updatedAt;
-        const proceed = await confirm({
-          title: "Already applied?",
-          message: [
-            `${displayCompany(match.application)} · ${displayRole(match.application)}. You already have this application ${STATUS_LABEL[match.application.status].toLowerCase()} on ${formatCompactDate(previousDate)}.`,
-            ...match.evidence
-          ].join("\n"),
-          confirmLabel: "Update existing entry"
-        });
-        if (!proceed) return { proceed: false, mergeTargetId: null };
-        ackTarget(match.application.id, currentTarget());
-      }
-      return { proceed: true, mergeTargetId: match.application.id };
-    }
-
-    if (match && match.confidence === "possible" && match.application.status !== "interested" && !isTargetAcked(match.application.id, currentTarget())) {
-      const previousDate = match.application.appliedAt ?? match.application.updatedAt;
-      const proceed = await confirm({
-        title: "Similar application found",
-        message: [
-          `This looks similar to ${displayCompany(match.application)} · ${displayRole(match.application)}, ${STATUS_LABEL[match.application.status].toLowerCase()} on ${formatCompactDate(previousDate)}.`,
-          ...match.evidence,
-          "Save as a separate application?"
-        ].join("\n"),
-        confirmLabel: "Save as new entry"
-      });
-      if (!proceed) return { proceed: false, mergeTargetId: null };
-      // Confirmed: proceed as a NEW entry — "possible" matches never merge.
-      ackTarget(match.application.id, currentTarget());
-    }
-
-    // No match, a "possible" match already "interested", or a duplicate the
-    // user already confirmed past this run — proceed as a normal apply.
-    return { proceed: true, mergeTargetId: null };
+    return match ? resolveMatch(match, target) : { action: "continue", relationship: null };
   }
 
   return {
+    duplicatePrompt,
+    chooseDuplicate,
     currentJobKeyHash,
     confirmDuplicateBeforeJobAnalysis,
     confirmDuplicateAfterJobAnalysis,

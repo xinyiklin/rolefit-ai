@@ -473,3 +473,15 @@
   width: auto;
   margin-top: 0;
 }
+
+.preparation-duplicate-dialog {
+  width: min(560px, 100%);
+}
+
+.preparation-duplicate-dialog .confirm-dialog__message {
+  white-space: pre-line;
+}
+
+.preparation-duplicate-dialog__actions {
+  flex-wrap: wrap;
+}

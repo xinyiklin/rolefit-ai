@@ -37,9 +37,6 @@ export function appliedApplicationForSession({
       operation: "create",
       application: {
         ...prepared,
-        ...(session.pendingRelationship?.jobPostingGroupId
-          ? { jobPostingGroupId: session.pendingRelationship.jobPostingGroupId }
-          : {}),
         status: "applied",
         appliedAt: now
       }
@@ -58,10 +55,7 @@ export function appliedApplicationForSession({
         id: existing.id,
         createdAt: existing.createdAt,
         status: "applied",
-        appliedAt: existing.appliedAt ?? now,
-        ...(session.pendingRelationship?.jobPostingGroupId
-          ? { jobPostingGroupId: session.pendingRelationship.jobPostingGroupId }
-          : {})
+        appliedAt: existing.appliedAt ?? now
       }
     };
   }

@@ -5,7 +5,8 @@
 // that the matcher's verdict for EVERY pair of a fixed corpus is exactly what
 // it is today. It encodes no opinion about whether those verdicts are right.
 //
-// Why: the matcher drives silent tracker merges, the apply-time duplicate gate,
+// Why: the matcher drives pipeline warnings, relationship suggestions, and
+// explicit manual-merge discovery,
 // and the extension /api/extension/analyze lookup. Its failure mode is silent —
 // a refactor that drops a tier does not throw, it just stops finding a
 // duplicate, and the merge path deletes rows. A pure-refactor claim ("same

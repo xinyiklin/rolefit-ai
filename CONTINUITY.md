@@ -5,6 +5,21 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The third Not applying workflow stage makes duplicate handling
+  relational rather than destructive.** Duplicate gates now distinguish an
+  exact prior application, an interested draft, and a high/possible similar
+  posting through a multi-choice dialog. Continuing new work carries a posting
+  relationship; continuing a draft opens its exact id; Keep separate is
+  acknowledged for the active target and persisted symmetrically when the new
+  record is created. Normal Apply contains no merge target and
+  never calls merge: it creates the new attempt first, then assigns the new and
+  matched records to one posting group through the existing atomic sparse
+  relationship mutation. A failed link leaves both records separate and reports
+  that result. Manual confirmed duplicate merge remains isolated in the tracker.
+  Production/landing/desktop builds and all 94 offline evaluations pass under
+  pinned Node 24. Browser QA was not run because this stage adds a modal whose
+  compact shared shell is covered structurally but still carries responsive and
+  keyboard-interaction risk. No push or merge occurred.
 - [USER+CODE+TOOL] **The second Not applying workflow stage separates fresh
   Apply, interested-draft Apply, and exact-record updates.** Fresh work creates
   one new id; applying a draft updates that interested id and sets its first

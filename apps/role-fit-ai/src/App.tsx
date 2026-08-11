@@ -123,6 +123,7 @@ import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
+import { PreparationDuplicateDialog } from "./sections/PreparationDuplicateDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
@@ -662,9 +663,15 @@ function App() {
       setImportedJob(snapshot);
       // This setter is owned by fresh intake paths. Restoring or editing an
       // existing preparation uses setImportedJob directly. Re-preparing the
-      // same captured source also keeps its application-of-record identity.
+      // same captured source also keeps its application-of-record identity. A
+      // duplicate choice made before analysis carries its pending relationship
+      // into the committed snapshot instead of being cleared by this setter.
       if (!continuesPreparedSource) {
-        setPreparationSession(newPreparationSession());
+        setPreparationSession((current) =>
+          current.mode === "new" && current.pendingRelationship
+            ? current
+            : newPreparationSession()
+        );
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         clearPreparedResumeRecommendationRef.current();
         setCoverLetterVariantRecommendation(null);
@@ -934,6 +941,8 @@ function App() {
     storagePath: applicationsPath,
     findForTarget,
     findDuplicatesForTarget,
+    linkPostingRecords,
+    markPostingRecordsUnrelated,
     mergeApplications,
     dismissDuplicateGroup,
     refresh: refreshApplications
@@ -952,8 +961,8 @@ function App() {
   });
 
   // Duplicate-warning ladder for the current job target (advisory note, the
-  // pre-polish blocking gate, and the Apply merge-target resolution) — the
-  // acknowledgment state and dialog copy live in the hook. `tracking` is lazy:
+  // pre-polish blocking gate, and non-destructive relationship resolution) —
+  // acknowledgment and dialog state live in the hook. `tracking` is lazy:
   // currentJobTracking is declared later in this component.
   const duplicateGuard = useDuplicateGuard({
     jobUrl,
@@ -961,7 +970,15 @@ function App() {
     jobRawText,
     tracking: () => currentJobTracking(),
     findDuplicatesForTarget,
-    confirm
+    onOpenExisting: async (applicationId) => {
+      const application = applications.find((candidate) => candidate.id === applicationId);
+      return application ? handleLoadApplication(application) : false;
+    },
+    onRelationshipResolved: (relationship) => {
+      setPreparationSession((current) =>
+        current.mode === "new" ? newPreparationSession(relationship) : current
+      );
+    }
   });
   const preparedSnapshotMatchesInputs = Boolean(
     importedJob &&
@@ -1891,6 +1908,8 @@ function App() {
     preparationSession,
     createApplication,
     updateApplicationById,
+    linkPostingRecords,
+    markPostingRecordsUnrelated,
     saveApplicationDocument: applicationFiles.saveDocument,
     linkApplication: linkPreparedApplication,
     currentJobTracking,
@@ -3007,6 +3026,13 @@ function App() {
           onDownload={handleApplyDownloadPick}
           onSkip={cancelApply}
           onApplyOnly={handleApplyOnly}
+        />
+      ) : null}
+
+      {duplicateGuard.duplicatePrompt ? (
+        <PreparationDuplicateDialog
+          prompt={duplicateGuard.duplicatePrompt}
+          onChoose={duplicateGuard.chooseDuplicate}
         />
       ) : null}
 

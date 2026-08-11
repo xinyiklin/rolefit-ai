@@ -591,9 +591,8 @@ export function useApplications() {
 
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
   // confidence) against every stored application — see src/lib/jobIdentity.ts.
-  // Unlike findForTarget, this NEVER drives a silent merge on its own; callers
-  // decide what to do with "high"/"possible" matches (e.g. App.tsx's apply-time
-  // warning dialog).
+  // This never selects a write target; callers decide how to handle
+  // exact/high/possible matches through the preparation relationship dialog.
   const findDuplicatesForTarget = useCallback(
     (target: DuplicateTarget) => findDuplicateApplications(target, applications),
     [applications]
@@ -712,16 +711,27 @@ export function useApplications() {
     [persist]
   );
 
-  // Persist the user's review decision for every pair in a duplicate cluster.
-  // The matcher treats a decision recorded on either record as sufficient, but
-  // writing it symmetrically keeps the decision intact if one row is later
-  // deleted or merged.
-  const dismissDuplicateGroup = useCallback(
-    (memberIds: string[]) => {
+  // Persist the user's unrelated decision symmetrically in one revision-checked
+  // mutation. Requested members bring their existing posting groups with them,
+  // so a later match against a peer cannot resurrect the same warning.
+  const markPostingRecordsUnrelated = useCallback(
+    async (memberIds: string[]) => {
       const current = applicationsRef.current;
       const requestedIds = new Set(memberIds);
-      const members = current.filter((application) => requestedIds.has(application.id));
-      if (members.length < 2) return;
+      const requested = current.filter((application) => requestedIds.has(application.id));
+      if (requested.length !== requestedIds.size || requested.length < 2) return false;
+      const requestedGroupIds = new Set(
+        requested.flatMap((application) =>
+          application.jobPostingGroupId ? [application.jobPostingGroupId] : []
+        )
+      );
+      const members = current.filter((application) =>
+        requestedIds.has(application.id)
+        || Boolean(
+          application.jobPostingGroupId
+          && requestedGroupIds.has(application.jobPostingGroupId)
+        )
+      );
 
       const memberIdSet = new Set(members.map((application) => application.id));
       const mutations: ApplicationMutation[] = [];
@@ -745,9 +755,18 @@ export function useApplications() {
 
       applicationsRef.current = next;
       setApplications(next);
-      void persist(next, mutations);
+      return persist(next, mutations);
     },
     [persist]
+  );
+
+  // Tracker cleanup keeps its fire-and-report UI contract; preparation flows
+  // call the awaited operation directly so their receipt can report conflicts.
+  const dismissDuplicateGroup = useCallback(
+    (memberIds: string[]) => {
+      void markPostingRecordsUnrelated(memberIds);
+    },
+    [markPostingRecordsUnrelated]
   );
 
   const refresh = useCallback(async () => {
@@ -799,6 +818,7 @@ export function useApplications() {
     findForTarget,
     findDuplicatesForTarget,
     linkPostingRecords,
+    markPostingRecordsUnrelated,
     mergeApplications,
     dismissDuplicateGroup,
     refresh
