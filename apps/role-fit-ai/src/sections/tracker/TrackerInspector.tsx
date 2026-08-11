@@ -1,9 +1,10 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Link2 } from "lucide-react";
-import type { Application, ApplicationSource, ApplicationStatus } from "../../hooks/useApplications";
-import { APPLICATION_SOURCES, NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
+import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Files, History } from "lucide-react";
+import type { Application } from "../../hooks/useApplications";
+import { NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   STATUS_LABEL,
+  applicationActivityDate,
   companyInitials,
   displayCompany,
   displayRole,
@@ -11,11 +12,12 @@ import {
   fitAssessmentRunLabel,
   formatCompactDate,
   hostLabel,
-  nextAction
+  nextAction,
+  safeExternalUrls
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { copyAiUsage } from "../../lib/aiUsage";
-import { applicationStatusOptions } from "../../lib/applicationStatusTransitions";
+import { ApplicationFitSummary } from "../application/ApplicationFitSummary";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
@@ -25,9 +27,6 @@ const AI_USAGE_STAGES: { key: string; label: string }[] = [
 
 type TrackerInspectorProps = {
   selected: Application | null;
-  onUpdateStatus: (id: string, status: ApplicationStatus) => void;
-  onUpdateField: (id: string, field: "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl", value: string) => void;
-  onUpdateNotes: (id: string, notes: string) => void;
   onOpenApplication: (app: Application) => void;
   onPreviewResume: (app: Application) => void;
   onLoad: (app: Application) => void;
@@ -40,9 +39,6 @@ type TrackerInspectorProps = {
 
 export function TrackerInspector({
   selected,
-  onUpdateStatus,
-  onUpdateField,
-  onUpdateNotes,
   onOpenApplication,
   onPreviewResume,
   onLoad,
@@ -63,10 +59,20 @@ export function TrackerInspector({
 
   const verdict = appFitVerdict(selected);
   const fitAssessmentMeta = selected.fitAssessment ? fitAssessmentRunLabel(selected.fitAssessment) : "";
-  const verdictSource = selected.fitAssessment?.resumeLabel || "Not checked";
-  const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
+  const foundOnUrls = safeExternalUrls([
+    selected.jobUrl,
+    ...(selected.sourceUrls ?? []).map((source) => source.url)
+  ]);
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
-  const editableStatuses = applicationStatusOptions(selected.status);
+  const statusDateLabel = selected.status === "not_applying" ? "Decision date" : "Application date";
+  const statusDate = selected.status === "not_applying" ? selected.notApplyingAt : selected.appliedAt;
+  const statusDetail = selected.status === "not_applying" && selected.notApplyingReason
+    ? `${STATUS_LABEL[selected.status]} · ${NOT_APPLYING_REASON_LABEL[selected.notApplyingReason]}`
+    : STATUS_LABEL[selected.status];
+  const hasPosting = Boolean(selected.rawJobDescription?.trim() || selected.jobDescription?.trim());
+  const hasResume = Boolean(selected.resumeArtifacts?.hasPdf || selected.resumeArtifacts?.hasSource);
+  const hasCoverLetter = Boolean(selected.coverLetterArtifacts?.hasPdf || selected.coverLetterArtifacts?.hasSource);
+  const additionalDocumentCount = selected.attachments?.length ?? 0;
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -88,58 +94,48 @@ export function TrackerInspector({
         <div>
           <h3>{displayCompany(selected)}</h3>
           <p>{displayRole(selected)}</p>
+          <p className="pipeline-inspector__identity">
+            <span className={`stage-dot stage-dot--${selected.status}`} aria-hidden="true" />
+            {statusDetail}
+            <span aria-hidden="true">·</span>
+            {formatCompactDate(statusDate || selected.createdAt)}
+          </p>
         </div>
       </header>
 
-      <div className="application-detail-score application-detail-score--inline">
-        <div className="figures-strip figures-strip--compact">
-          <span className="figures-strip__item">
-            <em>Fit Assessment</em>
-            <strong className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
-              {verdict ? verdict.label : "Not checked"}
-            </strong>
-          </span>
-          <span className="figures-strip__divider" aria-hidden="true" />
-          <span className="figures-strip__item">
-            <em>Source</em>
-            <strong className="is-prose">{verdictSource}</strong>
-          </span>
-        </div>
-        <p className="application-detail-score__reason">
-          {selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
-        </p>
-        {fitAssessmentMeta ? <p className="application-detail-score__meta">{fitAssessmentMeta}</p> : null}
-      </div>
-
-      <dl className="ledger-rows inspector-facts">
+      <dl className="ledger-rows inspector-facts" aria-label="Application summary">
         <div className="ledger-row">
           <dt><CalendarClock size={11} aria-hidden="true" /> Next action</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
           <dd className="is-prose">{nextAction(selected)}</dd>
         </div>
-        {selected.source ? (
-          <div className="ledger-row">
-            <dt>Source</dt>
-            <span className="ledger-row__leader" aria-hidden="true" />
-            <dd>{selected.source}</dd>
-          </div>
-        ) : null}
-        {selected.appliedAt ? (
-          <div className="ledger-row">
-            <dt>Applied</dt>
-            <span className="ledger-row__leader" aria-hidden="true" />
-            <dd>{selected.appliedAt.slice(0, 10)}</dd>
-          </div>
-        ) : null}
-        {safeJobUrl || selected.sourceUrls?.length ? (
+        <div className="ledger-row">
+          <dt>{statusDateLabel}</dt>
+          <span className="ledger-row__leader" aria-hidden="true" />
+          <dd>{statusDate ? formatCompactDate(statusDate) : "Not recorded"}</dd>
+        </div>
+        <div className="ledger-row">
+          <dt>Deadline</dt>
+          <span className="ledger-row__leader" aria-hidden="true" />
+          <dd>{selected.deadline ? formatCompactDate(selected.deadline) : "Not recorded"}</dd>
+        </div>
+        <div className="ledger-row">
+          <dt>Next step</dt>
+          <span className="ledger-row__leader" aria-hidden="true" />
+          <dd>{selected.followupAt ? formatCompactDate(selected.followupAt) : "Not recorded"}</dd>
+        </div>
+        <div className="ledger-row">
+          <dt>Source</dt>
+          <span className="ledger-row__leader" aria-hidden="true" />
+          <dd>{selected.source || "Not recorded"}</dd>
+        </div>
+        {foundOnUrls.length ? (
           <div className="ledger-row">
             <dt>Found on</dt>
             <span className="ledger-row__leader" aria-hidden="true" />
             <dd className="application-chip-list">
-              {[safeJobUrl, ...(selected.sourceUrls ?? []).map((s) => s.url)]
-                // hostLabel enforces the http(s)-only rule: "" filters the entry out.
-                .map((url) => ({ url, host: url ? hostLabel(url) : "" }))
-                .filter(({ host }) => host)
+              {foundOnUrls
+                .map((url) => ({ url, host: hostLabel(url) }))
                 .map(({ url, host }) => (
                   <a key={url} href={url} target="_blank" rel="noreferrer">
                     {host}
@@ -150,40 +146,66 @@ export function TrackerInspector({
         ) : null}
       </dl>
 
-      {relatedApplications.length ? (
+      <section className="application-inspector-fit" aria-labelledby="application-inspector-fit-title">
+        <h4 id="application-inspector-fit-title" className="application-match-card__title">Fit assessment</h4>
+        <ApplicationFitSummary
+          label={verdict?.label ?? "Not checked"}
+          tone={verdict?.tone ?? "neutral"}
+          summary={selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
+        />
+        {fitAssessmentMeta ? <p className="application-inspector-fit__meta">{fitAssessmentMeta}</p> : null}
+      </section>
+
+      {selected.fitAssessment?.result.gaps.length ? (
         <section className="side-section">
-          <p className="side-section__label">
-            <Link2 size={11} aria-hidden="true" /> Related records · {relatedApplications.length}
-            <span className="sr-only">
-              . Each decision or application keeps its own status, dates, notes, and documents.
-            </span>
-          </p>
-          <ul className="inspector-duplicates">
-            {relatedApplications.map((application) => (
-              <li key={application.id} className="inspector-duplicates__item">
-                <span className="inspector-duplicates__title">
-                  {STATUS_LABEL[application.status]}
-                  {application.status === "not_applying" && application.notApplyingReason
-                    ? ` · ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
-                    : ""}
-                </span>
-                <span className="inspector-duplicates__meta">
-                  {formatCompactDate(
-                    application.notApplyingAt || application.appliedAt || application.createdAt
-                  )}
-                </span>
-                <button
-                  type="button"
-                  className="ghost-button is-compact inspector-related-record__open"
-                  onClick={() => onOpenApplication(application)}
-                >
-                  Open
-                </button>
-              </li>
+          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Top gaps</p>
+          <ul className="application-gap-list">
+            {selected.fitAssessment.result.gaps.map((gap) => (
+              <li key={gap}>{gap}</li>
             ))}
           </ul>
         </section>
       ) : null}
+
+      <section className="side-section">
+        <p className="side-section__label">
+          <History size={11} aria-hidden="true" /> Job activity
+          <span className="sr-only">
+            . Each decision or application keeps its own status, dates, notes, and documents.
+          </span>
+        </p>
+        {relatedApplications.length ? (
+          <ul className="application-related-records">
+            {relatedApplications.map((application) => (
+              <li key={application.id}>
+                <span className="application-related-records__marker" aria-hidden="true">
+                  <span className={`stage-dot stage-dot--${application.status}`} />
+                </span>
+                <span className="application-related-records__label">
+                  <strong>{STATUS_LABEL[application.status]}</strong>
+                  <span>
+                    <time className="is-data">{formatCompactDate(applicationActivityDate(application))}</time>
+                    {application.status === "not_applying" && application.notApplyingReason
+                      ? ` · ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
+                      : ""}
+                  </span>
+                </span>
+                <span className="application-related-records__actions">
+                  <button
+                    type="button"
+                    className="secondary-button is-compact application-related-records__open"
+                    onClick={() => onOpenApplication(application)}
+                  >
+                    Open
+                  </button>
+                </span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="side-section__empty">No other saved decisions or applications for this job.</p>
+        )}
+      </section>
 
       {duplicateOthers.length ? (
         <section className="side-section">
@@ -196,7 +218,7 @@ export function TrackerInspector({
                 </span>
                 <span className="inspector-duplicates__meta">
                   {STATUS_LABEL[app.status]}
-                  {app.appliedAt ? ` · ${formatCompactDate(app.appliedAt)}` : ""}
+                  {` · ${formatCompactDate(applicationActivityDate(app))}`}
                 </span>
                 {edge ? (
                   <span className="inspector-duplicates__evidence">
@@ -215,61 +237,56 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {/* Sent dossier — only rendered when any of the three data points exist */}
-      {(selected.resumeUsed ||
-        selected.resumeArtifacts?.hasPdf ||
-        selected.resumeArtifacts?.hasSource ||
-        selected.coverLetterArtifacts?.hasPdf ||
-        selected.coverLetterArtifacts?.hasSource ||
-        selected.applicationAnswers?.length) ? (
-        <>
-          <div className="inspector-divider" aria-hidden="true" />
-          <p className="inspector-sent__eyebrow">Sent</p>
-          <dl className="ledger-rows inspector-facts">
-            {(selected.resumeUsed || selected.resumeArtifacts?.hasPdf || selected.resumeArtifacts?.hasSource) ? (
-              <div className="ledger-row">
-                <dt>Resume</dt>
-                <span className="ledger-row__leader" aria-hidden="true" />
-                <dd className="inspector-sent__value">
-                  <span>
-                    {selected.resumeUsed === "tailored" ? "Tailored" : selected.resumeUsed === "base" ? "Base" : "Saved"}
-                  </span>
-                  {selected.resumeArtifacts?.hasPdf ? (
-                    <button
-                      type="button"
-                      className="inspector-sent__preview"
-                      onClick={() => onPreviewResume(selected)}
-                      aria-label="Preview resume PDF"
-                      title="Preview resume PDF"
-                    >
-                      <Eye size={14} aria-hidden="true" />
-                    </button>
-                  ) : null}
-                </dd>
-              </div>
-            ) : null}
-            {(selected.coverLetterArtifacts?.hasPdf || selected.coverLetterArtifacts?.hasSource) ? (
-              <div className="ledger-row">
-                <dt>Cover letter</dt>
-                <span className="ledger-row__leader" aria-hidden="true" />
-                <dd>Saved</dd>
-              </div>
-            ) : null}
-            {selected.applicationAnswers?.length ? (
-              <div className="ledger-row">
-                <dt>Answers</dt>
-                <span className="ledger-row__leader" aria-hidden="true" />
-                <dd>{selected.applicationAnswers.length} saved</dd>
-              </div>
-            ) : null}
-          </dl>
-        </>
-      ) : null}
+      <section className="side-section">
+        <p className="side-section__label"><Files size={11} aria-hidden="true" /> Documents</p>
+        <dl className="ledger-rows inspector-facts">
+          <div className="ledger-row">
+            <dt>Job posting</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd>{hasPosting ? "Saved" : "Not saved"}</dd>
+          </div>
+          <div className="ledger-row">
+            <dt>Resume</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd className="inspector-sent__value">
+              <span>
+                {selected.resumeUsed === "tailored"
+                  ? "Tailored"
+                  : selected.resumeUsed === "base"
+                    ? "Base"
+                    : hasResume
+                      ? "Saved"
+                      : "Not saved"}
+              </span>
+              {hasResume ? (
+                <button
+                  type="button"
+                  className="inspector-sent__preview"
+                  onClick={() => onPreviewResume(selected)}
+                  aria-label="Preview resume"
+                  title="Preview resume"
+                >
+                  <Eye size={14} aria-hidden="true" />
+                </button>
+              ) : null}
+            </dd>
+          </div>
+          <div className="ledger-row">
+            <dt>Cover letter</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd>{hasCoverLetter ? "Saved" : "Not saved"}</dd>
+          </div>
+          <div className="ledger-row">
+            <dt>Additional documents</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd>{additionalDocumentCount}</dd>
+          </div>
+        </dl>
+      </section>
 
       {selected.aiUsage ? (
-        <>
-          <div className="inspector-divider" aria-hidden="true" />
-          <p className="inspector-sent__eyebrow">AI usage</p>
+        <section className="side-section">
+          <p className="side-section__label">AI usage</p>
           <dl className="ledger-rows inspector-facts">
             {AI_USAGE_STAGES.filter(({ key }) => displayedAiUsage[key]).map(({ key, label }) => {
               const usage = displayedAiUsage[key];
@@ -288,56 +305,8 @@ export function TrackerInspector({
               );
             })}
           </dl>
-        </>
+        </section>
       ) : null}
-
-      <div className="inspector-divider" aria-hidden="true" />
-
-      <label className="field">
-        <span>Stage</span>
-        <select
-          value={selected.status}
-          onChange={(event) => onUpdateStatus(selected.id, event.target.value as ApplicationStatus)}
-        >
-          {editableStatuses.map((status) => (
-            <option key={status} value={status}>
-              {STATUS_LABEL[status]}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span>Source</span>
-        <select
-          value={selected.source ?? ""}
-          onChange={(event) => onUpdateField(selected.id, "source", event.target.value as ApplicationSource)}
-        >
-          {APPLICATION_SOURCES.map((source) => (
-            <option key={source || "blank"} value={source}>
-              {source || "-"}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="field">
-        <span>Next date</span>
-        <input
-          className="text-input"
-          type="date"
-          value={(selected.followupAt ?? "").slice(0, 10)}
-          onChange={(event) => onUpdateField(selected.id, "followupAt", event.target.value)}
-        />
-      </label>
-      <label className="field">
-        <span>Notes</span>
-        <textarea
-          className="textarea"
-          value={selected.notes ?? ""}
-          onChange={(event) => onUpdateNotes(selected.id, event.target.value)}
-          rows={3}
-          placeholder="Interview focus, recruiter notes, or follow-up context."
-        />
-      </label>
 
       {selected.roleDescription ? (
         <section className="side-section">
@@ -346,29 +315,13 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {selected.fitAssessment?.result.gaps.length ? (
-        <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Fit Assessment gaps</p>
-          <div className="application-chip-list">
-            {selected.fitAssessment.result.gaps.map((gap) => (
-              <span key={gap}>{gap}</span>
-            ))}
-          </div>
-        </section>
-      ) : null}
-
       <div className="application-side-actions">
         <button type="button" className="primary-button is-compact" onClick={() => onOpenApplication(selected)}>
-          Details
+          Open details
         </button>
         <button type="button" className="secondary-button is-compact" onClick={() => onLoad(selected)}>
           Edit preparation
         </button>
-        {safeJobUrl ? (
-          <a className="secondary-button is-compact" href={safeJobUrl} target="_blank" rel="noreferrer">
-            Job link
-          </a>
-        ) : null}
         <button
           type="button"
           className="secondary-button is-compact danger-button"

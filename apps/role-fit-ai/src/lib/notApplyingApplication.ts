@@ -26,6 +26,7 @@ export function withoutSubmittedApplicationArtifacts(application: Application): 
   delete clean.resumeUsed;
   delete clean.resumeArtifacts;
   delete clean.coverLetterArtifacts;
+  delete clean.attachments;
   return clean;
 }
 

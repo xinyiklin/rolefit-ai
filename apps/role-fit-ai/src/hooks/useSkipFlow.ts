@@ -8,7 +8,10 @@ import type { DuplicateResolution } from "./useDuplicateGuard.ts";
 import type { ExtractedJobTracking } from "../lib/jobExtract.ts";
 import type { StageAiUsage } from "../lib/aiUsage.ts";
 import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
-import type { PreparationSession } from "../lib/preparationSession.ts";
+import {
+  preparationCommitIdentity,
+  type PreparationSession
+} from "../lib/preparationSession.ts";
 import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
 import {
   skipApplicationForSession,
@@ -66,11 +69,13 @@ export function useSkipFlow({
   const skipInFlightRef = useRef(false);
   const skipSessionRef = useRef<PreparationSession | null>(null);
   const unrelatedApplicationIdRef = useRef<string | null>(null);
+  const skipCommitIdentityRef = useRef<string | null>(null);
   const isSkipping = isResolvingSkip || isSavingSkip;
 
   function clearCapturedSkip(): void {
     skipSessionRef.current = null;
     unrelatedApplicationIdRef.current = null;
+    skipCommitIdentityRef.current = null;
   }
 
   async function handleSkip(): Promise<void> {
@@ -84,6 +89,12 @@ export function useSkipFlow({
     setSkipError("");
     try {
       const session = preparationSession;
+      skipCommitIdentityRef.current = preparationCommitIdentity({
+        session,
+        jobUrl,
+        preparedJobDescription,
+        jobRawText
+      });
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
         try {
@@ -92,10 +103,14 @@ export function useSkipFlow({
           const message = "Duplicate checking failed, so the job was not saved. Retry Skip & save job.";
           setSkipError(message);
           setApplyStatus(message);
+          clearCapturedSkip();
           return;
         }
       }
-      if (resolution.action !== "continue") return;
+      if (resolution.action !== "continue") {
+        clearCapturedSkip();
+        return;
+      }
       const capturedSession = session.mode === "new"
         ? { ...session, pendingRelationship: resolution.relationship }
         : session;
@@ -119,6 +134,19 @@ export function useSkipFlow({
     if (skipInFlightRef.current) return false;
     const session = skipSessionRef.current ?? preparationSession;
     if (session.mode === "update") return false;
+    if (
+      skipCommitIdentityRef.current !== preparationCommitIdentity({
+        session: preparationSession,
+        jobUrl,
+        preparedJobDescription,
+        jobRawText
+      })
+    ) {
+      const message = "The prepared job changed while this decision was open. Nothing was saved; cancel and choose Skip again.";
+      setSkipError(message);
+      setApplyStatus(message);
+      return false;
+    }
     skipInFlightRef.current = true;
     setIsSavingSkip(true);
     setSkipError("");
@@ -200,6 +228,11 @@ export function useSkipFlow({
       setSkipPrompt(null);
       clearCapturedSkip();
       return true;
+    } catch {
+      const message = "This decision could not be prepared or saved. The job and your reason are still here; retry Save as skipped.";
+      setSkipError(message);
+      setApplyStatus(message);
+      return false;
     } finally {
       skipInFlightRef.current = false;
       setIsSavingSkip(false);
@@ -250,6 +283,11 @@ export function useSkipFlow({
       }
       setApplyStatus(`Saved job updates for "${commit.application.title}".`);
       return true;
+    } catch {
+      const message = "Job updates could not be prepared or saved. The preparation is still available; retry Save job updates.";
+      setSkipError(message);
+      setApplyStatus(message);
+      return false;
     } finally {
       skipInFlightRef.current = false;
       setIsSavingSkip(false);

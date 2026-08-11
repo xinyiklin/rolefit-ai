@@ -40,6 +40,26 @@ export function preparationSessionForApplication(application: {
   };
 }
 
+export function preparationCommitIdentity({
+  session,
+  jobUrl,
+  preparedJobDescription,
+  jobRawText
+}: {
+  session: PreparationSession;
+  jobUrl: string;
+  preparedJobDescription: string;
+  jobRawText: string;
+}): string {
+  return [
+    session.mode,
+    session.applicationId ?? "",
+    jobUrl.trim(),
+    preparedJobDescription.trim(),
+    jobRawText.trim()
+  ].join("\u0000");
+}
+
 export function preparationPrimaryAction(
   session: PreparationSession,
   recordStatus?: string

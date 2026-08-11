@@ -54,13 +54,14 @@ const duplicate = (overrides = {}) => ({
   ...overrides
 });
 
-function createHarness(match) {
+function createHarness(match, initialTargetText = targetText) {
   const state = [];
   const refs = [];
   const opened = [];
   const relationships = [];
   let stateCursor = 0;
   let refCursor = 0;
+  let activeTargetText = initialTargetText;
 
   globalThis.__duplicateHarness = {
     useState(initial) {
@@ -77,26 +78,27 @@ function createHarness(match) {
     }
   };
 
-  const args = {
-    jobUrl: targetUrl,
-    jobDescription: targetText,
-    jobRawText: targetText,
-    tracking: () => ({ company: "Acme", role: "Software Engineer" }),
-    findDuplicatesForTarget: () => [match],
-    onOpenExisting: async (id) => {
-      opened.push(id);
-      return true;
-    },
-    onRelationshipResolved: (relationship) => relationships.push(relationship)
-  };
-
   return {
     opened,
     relationships,
+    setTargetText(next) {
+      activeTargetText = next;
+    },
     render() {
       stateCursor = 0;
       refCursor = 0;
-      return useDuplicateGuard(args);
+      return useDuplicateGuard({
+        jobUrl: targetUrl,
+        jobDescription: activeTargetText,
+        jobRawText: activeTargetText,
+        tracking: () => ({ company: "Acme", role: "Software Engineer" }),
+        findDuplicatesForTarget: () => [match],
+        onOpenExisting: async (id) => {
+          opened.push(id);
+          return true;
+        },
+        onRelationshipResolved: (relationship) => relationships.push(relationship)
+      });
     }
   };
 }
@@ -165,6 +167,46 @@ async function pendingGate(harness) {
     matchedApplicationId: "application-1",
     confidence: "possible"
   }, "a possible match links only after an explicit Yes choice");
+}
+
+{
+  const commonPrefix = "Shared posting header ".repeat(32);
+  const harness = createHarness(
+    duplicate(),
+    `${commonPrefix}First posting body`
+  );
+  const firstPending = harness.render().resolveApplyDuplicate();
+  harness.render().chooseDuplicate("continue-new");
+  assert.equal((await firstPending).action, "continue");
+
+  harness.setTargetText(`${commonPrefix}Materially different posting body`);
+  const secondPending = harness.render().resolveApplyDuplicate();
+  const secondPrompt = harness.render();
+  assert.ok(
+    secondPrompt.duplicatePrompt,
+    "an acknowledgment must not carry to a posting that differs after the first 500 characters"
+  );
+  secondPrompt.chooseDuplicate("cancel");
+  assert.deepEqual(await secondPending, { action: "cancel" });
+}
+
+{
+  const skippedAt = "2026-04-02T12:00:00.000Z";
+  const harness = createHarness(duplicate({
+    application: application({
+      status: "not_applying",
+      appliedAt: undefined,
+      notApplyingAt: skippedAt,
+      updatedAt: "2026-06-15T12:00:00.000Z"
+    })
+  }));
+  const { pending, prompted } = await pendingGate(harness);
+  prompted.chooseDuplicate("review-again");
+  assert.equal(
+    (await pending).note,
+    "Skipped · Apr 2: Same canonical posting URL",
+    "duplicate receipts use the Skipped decision date rather than a later edit date"
+  );
 }
 
 const applyFlow = readFileSync(new URL("../useApplyFlow.ts", import.meta.url), "utf8");

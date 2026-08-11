@@ -410,8 +410,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Fit Assessment row follows the materials: show its verdict, selected resume,
-  short summary, compact run attribution, at most three matches and gaps, and an
+  Fit Assessment row follows the materials: show its verdict, short summary,
+  compact run attribution, at most three matches and gaps, and an
   eligibility warning only when relevant. A completed result offers **Reassess fit**; running, disabled,
   unavailable/retry, and out-of-date/reassess states use the same flat hierarchy.
   Starting or failing a new assessment keeps the latest completion visible, and
@@ -448,7 +448,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.
   Either or both materials may be excluded, so a prepared tracker-only
-  application is valid. Re-Apply leaves any previously saved artifact intact
+  application is valid. A later update leaves any previously saved artifact intact
   when its card is excluded. Apply persists the latest completed Fit Assessment
   snapshot as historical evidence even when its inputs changed or Resume is
   excluded, and preserves an existing snapshot when no newer run completed.
@@ -470,36 +470,56 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   enters with a 150ms 6px slide-fade.
 - **Applications:** its new-work action returns to Prepare. The application
   detail modal edits committed tracker records and never becomes a second job
-  intake surface. The panel remains the outer sheet, while Details uses a small
+  intake surface. The broad viewport-bounded panel remains the outer working
+  sheet, while Overview uses a small
   number of compact outlined groups to make application controls and saved job
   facts scannable without recreating an intake form. Its head
-  carries the serif record name over one dot-led identity line (saved stage, the
+  carries the prominent sans record name over one dot-led identity line (saved stage, the
   date that stage governs, and the linked-record count), so stage never needs
   restating inside the body. Its sections are APG tabs, not toggle buttons:
   `tablist`/`tab`/`tabpanel`, roving tabindex, arrow/Home/End. Three task tabs
-  remain: Details, Prep, and Documents. Details is split by task rather than
-  storage fields: the wide working pane leads with compact Status and Timing
-  cards plus the conditional Skipped decision, then shows read-only Role &
-  company, Job details, Compensation, and Job snapshot cards. The 360px rail
-  leads with Fit and keeps related-record history directly below it. The conditional
-  Skipped decision states the outcome explicitly beside its reason and bounded
-  note, while general application notes remain independent data in Prep. Prep
+  remain: Overview, Prep, and Documents. Overview is split by task rather than
+  storage fields: the wide working pane leads with compact Application status and Key dates
+  cards, then shows read-only Role &
+  company, Job details, Compensation, and Job snapshot cards. The 392px rail
+  leads with Fit and always keeps Job activity directly below it, with a dated
+  timeline or an explicit no-other-records state. Source is
+  posting provenance, so Overview keeps it read-only under Job details rather
+  than beside Stage; correction remains in Prepare. A saved Skipped record uses
+  its compact dot-led Stage control as a disclosure trigger instead of showing a
+  one-option select or a second card. The trigger reads `Skipped · reason` on one
+  line and opens an accessibly labelled, visually headerless, focus-managed non-modal popover over the
+  sheet for the bounded decision fields; at narrow widths that surface becomes
+  a viewport-safe bottom sheet. The decision date remains in Key dates, while
+  general application notes remain independent data in Prep. Prep
   also owns contacts, saved application questions, and interview preparation.
+  Documents remains separate because it is the saved application record, not
+  preparation input: its primary row groups Job posting, Resume, and Cover
+  letter, while additional uploads sit below. A Skipped record keeps this tab
+  job-only: document and additional-upload controls explain that a new
+  application attempt is required and cannot write into the historical
+  decision. Job posting and saved-PDF previews
+  use the same 50–200% zoom strip and Ctrl/Cmd +/-/0 keyboard contract.
   The vertical divider supplies enough context, so neither pane repeats a pane
-  header. The card borders stay hairline-light, use the existing small radius,
+  header. The card borders stay hairline-light, use the restrained large-radius token,
   and group facts rather than decorate empty space. Dates and numeric values use
-  the mono data treatment. Prepared data is one full-width collapsed `Job snapshot`
-  card after the compact facts. Expanded, it uses the saved
+  the mono data treatment. Prepared data is one full-width, permanently expanded
+  `Job snapshot` card after the compact facts. Its header carries no item or
+  section count. It uses the saved
   brief's existing deterministic structure: Overview; Responsibilities;
   Required and Preferred qualifications; Benefits & policies; and compact tool,
   seniority, and domain signal rows. The potentially long Benefits & policies
   group stays locally collapsed; other list groups show four items before
   disclosing their remainder, so no section becomes another wall of text. The immutable source
-  posting remains available behind one final keyboard-scrollable disclosure;
-  the UI never synthesizes a replacement summary. On desktop,
-  the working pane and the 360px Fit/history rail scroll independently; at
+  posting opens from Job snapshot or Documents in a read-only overlay that follows the same
+  focus-managed stacked-viewer contract as saved PDF previews. The smaller
+  viewer centers the text in a bounded document panel so the large application
+  dialog does not make the posting feel stretched. The UI never synthesizes a replacement summary. On desktop,
+  the working pane and the 392px Fit/activity rail scroll independently; at
   and below 1080px they stack into one natural modal scroll. Fit remains a plain
-  advisory without AI-sparkle framing. Delete sits apart from Cancel/Close and Save changes, and closing
+  categorical advisory: the one-word Limited / Stretch / Reasonable / Strong
+  verdict stays left while the fixed summary sits right in one
+  quiet tinted block, with no score, ring, confidence, or implied gauge. Delete sits apart from Cancel/Close and Save changes, and closing
   edited fields confirms before discarding them. It labels its handoff Edit
   preparation for every stored record. Prepare uses one flat persistent banner
   — not a live region — to
@@ -515,8 +535,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   an intention rather than a recorded decision, and "Not applying"/"Applied"
   are too close to tell apart in the Stage column. "Passed" is reserved: beside
   Interviewing and Offer it reads as passing a round. The stored status key
-  remains `not_applying`. Any transition into a terminal, artifact-dropping
-  stage confirms destructively before it saves.
+  remains `not_applying`. Stage changes are forward-only; a submitted record
+  cannot be changed into Skipped or moved back to an earlier stage.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
   small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
   hairline-separated groups. Prepare is first and selected by default. The
@@ -555,6 +575,14 @@ live inside the drill-down menu; the page does not grow a second summary or
 "Up next" surface above the work. Table mode groups the chronological default
 under month dividers and keeps the selected application in the right inspector.
 Calendar mode reuses the same query and lifecycle filter state.
+The inspector mirrors Application Detail's information ownership without
+repeating its form: stage and governing date sit in the identity line; key dates
+and Source are read-only; Fit reuses the same two-column verdict-and-rationale
+advisory without repeating the assessed resume, and keeps Top gaps close;
+Job activity always renders, including its no-other-records state; and Documents
+always summarizes posting, resume, cover letter, and additional uploads. Open
+details owns application edits, while Edit preparation owns prepared-job edits.
+The row menu remains the compact exception for quick stage changes.
 
 ### Page Anatomy: Sheets Center, Rail Right
 

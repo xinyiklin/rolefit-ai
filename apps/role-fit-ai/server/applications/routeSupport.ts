@@ -121,6 +121,15 @@ export function requireApplicationRevision(
   return current;
 }
 
+export function assertApplicationAcceptsDocuments(application: { status: string }): void {
+  if (application.status === "not_applying") {
+    throw new ApplicationDocumentError(
+      "Skipped jobs cannot store application documents. Start a new application attempt first.",
+      409
+    );
+  }
+}
+
 export function nextApplicationRevision(previous: string): string {
   const now = Date.now();
   const previousTime = Date.parse(previous);

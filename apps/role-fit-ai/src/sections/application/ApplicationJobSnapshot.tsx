@@ -1,4 +1,5 @@
 import { memo, useMemo } from "react";
+import { ArrowRight, FileText } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import {
   buildPreparedJobBrief,
@@ -30,11 +31,12 @@ function SnapshotList({
   if (!items.length) return null;
   const visibleItems = items.slice(0, VISIBLE_LIST_ITEMS);
   const remainingItems = items.slice(VISIBLE_LIST_ITEMS);
+  const fullyCollapsed = collapsed && items.length > VISIBLE_LIST_ITEMS;
 
   return (
     <section className="application-job-snapshot__part">
-      <h5>{title}</h5>
-      {collapsed ? (
+      <h4>{title}</h4>
+      {fullyCollapsed ? (
         <details className="application-job-snapshot__more">
           <summary>{items.length} saved {items.length === 1 ? "detail" : "details"}</summary>
           <ul>
@@ -61,9 +63,11 @@ function SnapshotList({
 }
 
 export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
-  application
+  application,
+  onViewPosting
 }: {
   application: Application;
+  onViewPosting: () => void;
 }) {
   const snapshot = useMemo(() => {
     const preparedText = application.jobDescription?.trim() ?? "";
@@ -73,7 +77,7 @@ export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
       application.roleDescription
     );
     const overview = uniqueProse([application.roleDescription, brief.companyContext]);
-    const sectionCount = [
+    const hasStructuredSections = [
       overview,
       brief.responsibilities,
       brief.requiredQualifications,
@@ -82,7 +86,7 @@ export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
       brief.techKeywords,
       brief.senioritySignals,
       brief.domainSignals
-    ].filter((section) => section.length).length;
+    ].some((section) => section.length);
     const hasListSections = Boolean(
       brief.responsibilities.length
       || brief.requiredQualifications.length
@@ -93,41 +97,34 @@ export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
     return {
       brief,
       overview,
-      sectionCount,
+      hasStructuredSections,
       hasListSections,
-      fullText: sourceText,
-      fullTextLabel: application.rawJobDescription?.trim()
-        ? "Full source posting"
-        : "Full prepared text"
+      hasPostingText: Boolean(sourceText)
     };
   }, [application.jobDescription, application.rawJobDescription, application.roleDescription]);
 
-  if (!snapshot.sectionCount && !snapshot.fullText) return null;
-
-  if (!snapshot.sectionCount) {
-    return (
-      <details className="application-job-snapshot application-job-snapshot--source-only application-job-card application-job-card--wide">
-        <summary aria-label={`Job snapshot, ${snapshot.fullTextLabel}`}>
-          <span>Job snapshot</span>
-          <small>{snapshot.fullTextLabel}</small>
-        </summary>
-        <pre tabIndex={0} role="region" aria-label={snapshot.fullTextLabel}>
-          {snapshot.fullText}
-        </pre>
-      </details>
-    );
-  }
-
   return (
-    <details className="application-job-snapshot application-job-card application-job-card--wide">
-      <summary aria-label={`Job snapshot, ${snapshot.sectionCount} ${snapshot.sectionCount === 1 ? "section" : "sections"}`}>
-        <span>Job snapshot</span>
-        <small>{snapshot.sectionCount} {snapshot.sectionCount === 1 ? "section" : "sections"}</small>
-      </summary>
+    <section className="application-job-snapshot application-job-card application-job-card--wide" aria-labelledby="application-job-snapshot-title">
+      <header className="application-job-snapshot__head">
+        <h3 id="application-job-snapshot-title"><FileText size={16} aria-hidden="true" />Job snapshot</h3>
+        <div className="application-job-snapshot__actions">
+          <button type="button" className="ghost-button is-compact" onClick={onViewPosting}>
+            View posting <ArrowRight size={13} aria-hidden="true" />
+          </button>
+        </div>
+      </header>
       <div className="application-job-snapshot__content">
+        {!snapshot.hasStructuredSections ? (
+          <p className="application-job-snapshot__empty">
+            {snapshot.hasPostingText
+              ? "A structured snapshot was not saved. View posting opens the available text."
+              : "No job snapshot was saved with this record."}
+          </p>
+        ) : null}
+
         {snapshot.overview.length ? (
           <section className="application-job-snapshot__overview">
-            <h5>Overview</h5>
+            <h4>Overview</h4>
             {snapshot.overview.map((paragraph) => <p key={paragraph}>{paragraph}</p>)}
           </section>
         ) : null}
@@ -157,15 +154,7 @@ export const ApplicationJobSnapshot = memo(function ApplicationJobSnapshot({
           </dl>
         ) : null}
 
-        {snapshot.fullText ? (
-          <details className="application-job-snapshot__source">
-            <summary>{snapshot.fullTextLabel}</summary>
-            <pre tabIndex={0} role="region" aria-label={snapshot.fullTextLabel}>
-              {snapshot.fullText}
-            </pre>
-          </details>
-        ) : null}
       </div>
-    </details>
+    </section>
   );
 });

@@ -368,7 +368,7 @@ Good frontend verification covers:
   destructive merge controls.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
-- Fit Assessment shows only verdict, selected resume, summary, up to three
+- Fit Assessment shows only verdict, summary, up to three
   compact match explanations and gaps, and a relevant eligibility warning with
   its accepted anchors. It exposes no score, confidence, broad evidence ledger,
   recommendation, saved audit, or analytics metric

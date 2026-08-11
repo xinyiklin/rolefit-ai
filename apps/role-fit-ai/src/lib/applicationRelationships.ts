@@ -1,22 +1,18 @@
 export const JOB_POSTING_GROUP_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 
-export type PostingRelationshipRecord = {
+type PostingRelationshipRecord = {
   id: string;
   jobPostingGroupId?: string;
 };
 
-export type PostingRecordUnlinkPlan = {
+type PostingRecordUnlinkPlan = {
   detachedApplicationId: string;
   remainingApplicationIds: string[];
   applicationIds: string[];
   clearGroupApplicationIds: string[];
 };
 
-export function effectivePostingGroupId(application: PostingRelationshipRecord): string {
-  return application.jobPostingGroupId ?? `application:${application.id}`;
-}
-
-export function newJobPostingGroupId(): string {
+function newJobPostingGroupId(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return `posting-${crypto.randomUUID()}`;
   }
@@ -54,7 +50,7 @@ export function planPostingRecordLink<T extends PostingRelationshipRecord>(
   return { groupId, applicationIds };
 }
 
-export function explicitPostingGroups<T extends PostingRelationshipRecord>(
+function explicitPostingGroups<T extends PostingRelationshipRecord>(
   applications: readonly T[]
 ): T[][] {
   const groups = new Map<string, T[]>();

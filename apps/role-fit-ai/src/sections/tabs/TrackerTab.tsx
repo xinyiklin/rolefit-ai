@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
@@ -13,6 +13,7 @@ import {
   fitAssessmentRank,
   matchesActivityFilter,
   nextAction,
+  safeExternalUrl,
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
@@ -101,12 +102,6 @@ type TrackerTabProps = {
   trackerView: TrackerView;
   setTrackerView: (v: TrackerView) => void;
   onUpdateStatus: (id: string, status: ApplicationStatus) => void;
-  onUpdateField: (
-    id: string,
-    field: "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl",
-    value: string
-  ) => void;
-  onUpdateNotes: (id: string, notes: string) => void;
   onLoad: (app: Application) => void;
   onOpenApplication: (app: Application) => void;
   onPreviewResume: (app: Application) => void;
@@ -119,11 +114,6 @@ type TrackerTabProps = {
   // scan must not run app-wide on every applications change.
   onMergeApplications: (memberIds: string[], canonicalId: string) => Promise<boolean>;
   onDismissDuplicateGroup: (memberIds: string[]) => void;
-};
-
-const VIEW_LABELS: Record<TrackerView, string> = {
-  table: "Table",
-  calendar: "Calendar"
 };
 
 const ACTIVITY_GROUP_LABEL: Record<ApplicationActivityGroup, string> = {
@@ -154,8 +144,10 @@ function ActivityFilterMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const label = ACTIVITY_GROUP_LABEL[group];
+  const groupLabel = ACTIVITY_GROUP_LABEL[group];
   const isSelectedGroup = activityGroupForFilter(value) === group;
+  const selectedStatus = ACTIVITY_STATUS_GROUPS[group].find((status) => status === value);
+  const triggerLabel = selectedStatus ? STATUS_LABEL[selectedStatus] : groupLabel;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -221,46 +213,35 @@ function ActivityFilterMenu({
 
   return (
     <div className="pipeline-filter-menu-wrap" ref={wrapperRef}>
-      {/* Split segment: the label filters to the whole group instantly, the
-          caret is the only menu trigger for the per-status drill-down. This
-          keeps the primary click predictable instead of a segment that looks
-          like a filter but silently opens a popup. */}
-      <div className={`pipeline-filter pipeline-filter--split ${isSelectedGroup ? "is-active" : ""}`}>
-        <button
-          type="button"
-          className="pipeline-filter__main"
-          aria-pressed={isSelectedGroup}
-          onClick={() => {
-            onSelect(group);
-            onClose();
-          }}
-        >
-          {label}
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="pipeline-filter__disclosure"
-          aria-haspopup="menu"
-          aria-expanded={isOpen}
-          aria-controls={isOpen ? menuId : undefined}
-          aria-label={`${label} status options`}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className={`pipeline-filter__chevron ${isOpen ? "is-open" : ""}`}
-            size={13}
-            aria-hidden="true"
-          />
-        </button>
-      </div>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`pipeline-filter pipeline-filter--menu ${isSelectedGroup ? "is-active" : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? menuId : undefined}
+        aria-label={isSelectedGroup ? `${triggerLabel} filter, selected` : `${groupLabel} filters`}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          if (!isOpen) onToggle();
+        }}
+      >
+        <span className="pipeline-filter__label">{triggerLabel}</span>
+        <ChevronDown
+          className={`pipeline-filter__chevron ${isOpen ? "is-open" : ""}`}
+          size={13}
+          aria-hidden="true"
+        />
+      </button>
       {isOpen ? (
         <div
           ref={menuRef}
           id={menuId}
           className="activity-filter-menu"
           role="menu"
-          aria-label={`${label} application categories`}
+          aria-label={`${groupLabel} application categories`}
           onKeyDown={handleMenuKeyDown}
         >
           <button
@@ -299,6 +280,48 @@ function ActivityFilterMenu({
   );
 }
 
+type TrackerViewSelectorProps = {
+  value: TrackerView;
+  onChange: (view: TrackerView) => void;
+};
+
+function TrackerViewSelector({ value, onChange }: TrackerViewSelectorProps) {
+  const groupName = useId();
+
+  return (
+    <div className="view-switch" role="radiogroup" aria-label="Application view" data-view={value}>
+      <label className={`view-switch__option ${value === "table" ? "is-active" : ""}`} title="Show table view">
+        <input
+          className="view-switch__input"
+          type="radio"
+          name={groupName}
+          value="table"
+          checked={value === "table"}
+          onChange={() => onChange("table")}
+        />
+        <span className="view-switch__label">
+          <Table2 size={13} aria-hidden="true" />
+          Table
+        </span>
+      </label>
+      <label className={`view-switch__option ${value === "calendar" ? "is-active" : ""}`} title="Show calendar view">
+        <input
+          className="view-switch__input"
+          type="radio"
+          name={groupName}
+          value="calendar"
+          checked={value === "calendar"}
+          onChange={() => onChange("calendar")}
+        />
+        <span className="view-switch__label">
+          <CalendarDays size={13} aria-hidden="true" />
+          Calendar
+        </span>
+      </label>
+    </div>
+  );
+}
+
 export function TrackerTab({
   applications,
   applicationsPath,
@@ -312,8 +335,6 @@ export function TrackerTab({
   trackerView,
   setTrackerView,
   onUpdateStatus,
-  onUpdateField,
-  onUpdateNotes,
   onLoad,
   onOpenApplication,
   onPreviewResume,
@@ -331,6 +352,7 @@ export function TrackerTab({
   const [page, setPage] = useState(1);
   const [openActivityMenu, setOpenActivityMenu] =
     useState<ApplicationActivityGroup | null>(null);
+  const closeActivityMenu = useCallback(() => setOpenActivityMenu(null), []);
   // Right-click context menu: the target app + cursor anchor (viewport coords).
   const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
@@ -479,8 +501,8 @@ export function TrackerTab({
         }
         // Only offer the link for a real http(s) URL — never open a stored
         // javascript:/data:/protocol-less value.
-        if (app.jobUrl && /^https?:\/\//i.test(app.jobUrl)) {
-          const jobUrl = app.jobUrl;
+        const jobUrl = safeExternalUrl(app.jobUrl);
+        if (jobUrl) {
           items.push({
             kind: "action",
             label: "Open job posting",
@@ -606,7 +628,7 @@ export function TrackerTab({
                 isOpen={openActivityMenu === group}
                 key={group}
                 value={statusFilter}
-                onClose={() => setOpenActivityMenu(null)}
+                onClose={closeActivityMenu}
                 onSelect={setStatusFilter}
                 onToggle={() => {
                   setOpenActivityMenu((current) => (current === group ? null : group));
@@ -614,24 +636,7 @@ export function TrackerTab({
               />
             ))}
           </div>
-          <button
-            type="button"
-            className="view-switch"
-            role="switch"
-            aria-checked={trackerView === "calendar"}
-            aria-label="Calendar view"
-            title={`Switch to ${VIEW_LABELS[trackerView === "table" ? "calendar" : "table"]} view`}
-            onClick={() => setTrackerView(trackerView === "table" ? "calendar" : "table")}
-          >
-            <span className={trackerView === "table" ? "is-active" : ""}>
-              <Table2 size={13} aria-hidden="true" />
-              Table
-            </span>
-            <span className={trackerView === "calendar" ? "is-active" : ""}>
-              <CalendarDays size={13} aria-hidden="true" />
-              Calendar
-            </span>
-          </button>
+          <TrackerViewSelector value={trackerView} onChange={setTrackerView} />
         </div>
       </div>
 
@@ -718,9 +723,6 @@ export function TrackerTab({
           <aside className="pipeline-inspector" aria-label="Selected application">
             <TrackerInspector
               selected={selected}
-              onUpdateStatus={onUpdateStatus}
-              onUpdateField={onUpdateField}
-              onUpdateNotes={onUpdateNotes}
               onOpenApplication={onOpenApplication}
               onPreviewResume={onPreviewResume}
               onLoad={onLoad}

@@ -2,14 +2,12 @@ import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
 import { describeProviderModel } from "../config/aiOptions.ts";
 import { parseDate } from "./applicationFacts.ts";
+import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
 
 export { displayCompany, parseDate } from "./applicationFacts.ts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  // "Skipped" (not "Not applying"): every sibling label is a settled past-tense
-  // state, and "Not applying"/"Applied" differ by too little to scan apart in
-  // the Stage column. "Passed" was rejected — beside Interviewing/Offer it
-  // reads as passing a round. The stored key stays `not_applying`.
+  // Use a settled decision label while retaining the stored `not_applying` key.
   not_applying: "Skipped",
   applied: "Applied",
   interviewing: "Interviewing",
@@ -18,14 +16,7 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   withdrawn: "Withdrawn"
 };
 
-export const BOARD_STATUSES: ApplicationStatus[] = [
-  "not_applying",
-  "applied",
-  "interviewing",
-  "offer",
-  "rejected",
-  "withdrawn"
-];
+export const BOARD_STATUSES: readonly ApplicationStatus[] = APPLICATION_STATUSES;
 
 export type ApplicationActivityGroup = "active" | "inactive";
 
@@ -100,11 +91,15 @@ const FIT_ASSESSMENT_DISPLAY: Record<FitAssessmentVerdict, {
   tone: "strong" | "good" | "stretch" | "weak";
   rank: number;
 }> = {
-  STRONG: { label: "Strong fit", tone: "strong", rank: 4 },
-  REASONABLE: { label: "Reasonable fit", tone: "good", rank: 3 },
+  STRONG: { label: "Strong", tone: "strong", rank: 4 },
+  REASONABLE: { label: "Reasonable", tone: "good", rank: 3 },
   STRETCH: { label: "Stretch", tone: "stretch", rank: 2 },
-  LIMITED: { label: "Limited fit", tone: "weak", rank: 1 }
+  LIMITED: { label: "Limited", tone: "weak", rank: 1 }
 };
+
+export function fitAssessmentVerdictLabel(verdict: FitAssessmentVerdict): string {
+  return FIT_ASSESSMENT_DISPLAY[verdict].label;
+}
 
 // Tracker fit is the compact Fit Assessment verdict captured for the exact resume
 // selected during Prepare. There is no numeric fallback or historical review
@@ -198,17 +193,26 @@ export function statusCount(applications: Application[], status: ApplicationStat
   return applications.filter((app) => app.status === status).length;
 }
 
-// Compact display host for a posting link: http(s) only — anything else returns
-// "" and the caller skips rendering a link (one safety rule everywhere a stored
-// URL becomes clickable). Strips the leading "www." so boards read as short
-// chips. Shared by TrackerInspector's "Found on" chips and the duplicate-review
-// modal's member links.
-export function hostLabel(url: string): string {
+// Stored tracker URLs are untrusted text. Return only browser-safe external
+// destinations so every clickable posting link shares one boundary.
+export function safeExternalUrl(url: string): string {
   const trimmed = url.trim();
   if (!/^https?:\/\//i.test(trimmed)) return "";
   try {
-    return new URL(trimmed).hostname.replace(/^www\./, "");
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? trimmed : "";
   } catch {
     return "";
   }
+}
+
+export function safeExternalUrls(urls: readonly string[]): string[] {
+  return [...new Set(urls.map(safeExternalUrl).filter(Boolean))];
+}
+
+// Compact display host for a validated posting link. Strips the leading
+// "www." so boards read as short chips.
+export function hostLabel(url: string): string {
+  const safeUrl = safeExternalUrl(url);
+  return safeUrl ? new URL(safeUrl).hostname.replace(/^www\./, "") : "";
 }

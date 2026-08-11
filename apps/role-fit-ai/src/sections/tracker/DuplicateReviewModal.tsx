@@ -2,7 +2,15 @@ import { useEffect, useRef } from "react";
 import { X } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
-import { STATUS_LABEL, displayCompany, displayRole, formatCompactDate, hostLabel } from "../../lib/applicationDisplay";
+import {
+  STATUS_LABEL,
+  applicationActivityDate,
+  displayCompany,
+  displayRole,
+  formatCompactDate,
+  hostLabel,
+  safeExternalUrl
+} from "../../lib/applicationDisplay";
 import { useDialog } from "../../hooks/useDialog";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
@@ -95,9 +103,9 @@ function GroupCard({
   return (
     <div className="application-doc-card duplicate-group-card">
       <div className="application-doc-card__head">
-        <h4>
+        <h3>
           {displayCompany(group.applications[0])} · {group.applications.length} entries
-        </h4>
+        </h3>
         <span className={`application-fit application-fit--${group.confidence === "exact" ? "strong" : group.confidence === "high" ? "stretch" : "neutral"}`}>
           {group.confidence}
         </span>
@@ -112,7 +120,8 @@ function GroupCard({
       >
         <ul className="duplicate-group-card__members">
           {group.applications.map((app) => {
-            const host = hostLabel(app.jobUrl ?? "");
+            const safeJobUrl = safeExternalUrl(app.jobUrl ?? "");
+            const host = hostLabel(safeJobUrl);
             return (
               <li key={app.id} className="duplicate-group-card__member">
                 <label className="duplicate-group-card__radio">
@@ -125,11 +134,11 @@ function GroupCard({
                   </span>
                   <span className="duplicate-group-card__member-meta">
                     {STATUS_LABEL[app.status]}
-                    {app.appliedAt ? ` · ${formatCompactDate(app.appliedAt)}` : ""}
+                    {` · ${formatCompactDate(applicationActivityDate(app))}`}
                     {host ? (
                       <>
                         {" · "}
-                        <a href={app.jobUrl} target="_blank" rel="noreferrer">
+                        <a href={safeJobUrl} target="_blank" rel="noreferrer">
                           {host}
                         </a>
                       </>

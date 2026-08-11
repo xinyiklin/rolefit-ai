@@ -119,11 +119,8 @@ type MatchResult = { level: DuplicateLevel; confidence: DuplicateConfidence; evi
 // normalizeJobUrl as normalizeUrl.) normalizeJobUrl equality drives SILENT
 // tracker merges (tier 2), so this set is deliberately NARROWER than the old
 // display-only version: only params that are unambiguously analytics on every
-// site are stripped. Ambiguous ones the old set had — position, src, source,
-// ref, refid, savedjobid, pagenum — are KEPT, because some career sites use
-// them as the posting identifier and over-stripping would silently merge two
-// different jobs. Under-stripping only costs a tier-2 miss that the ATS-id,
-// requisition-id, and content tiers can still catch.
+// site are stripped. Ambiguous values stay because some career sites use them
+// as posting identifiers; the other identity tiers can recover an under-match.
 const TRACKING_PARAMS = new Set([
   "utm_source", "utm_medium", "utm_campaign", "utm_term", "utm_content",
   "gclid", "fbclid", "msclkid", "mc_cid", "mc_eid",
@@ -158,12 +155,8 @@ export function normalizeJobUrl(url: string): string {
   }
 }
 
-// Shared normalize-dedup for discovered posting URLs ("Found on" entries).
-// One implementation for the THREE writers — prepared application snapshots,
-// the manual duplicate-group merge, and the server sanitizer — so their rules
-// cannot drift. Entries whose normalized URL equals the primary are dropped; the same
-// normalized URL keeps its EARLIEST addedAt (ISO strings compare lexically) and
-// prefers whichever occurrence has a source label; capped at `max`.
+// Shared by prepared snapshots, duplicate merge, and the server sanitizer.
+// Primary URLs are excluded; duplicates keep the earliest timestamp and a label.
 export function dedupeSourceUrls(
   candidates: readonly { url?: string; source?: string; addedAt?: string }[] | undefined | null,
   primaryUrl: string | undefined | null,

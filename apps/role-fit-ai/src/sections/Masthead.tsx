@@ -26,6 +26,12 @@ export function Masthead({
   applyStatusIsError = false,
   onDismissApplyStatus
 }: MastheadProps) {
+  const actionDescription = primaryAction.kind === "update-job"
+    ? "Save prepared job updates"
+    : primaryAction.kind === "update-application"
+      ? "Update application and save included materials"
+      : "Apply prepared application and save included materials";
+
   return (
     <header className="masthead" aria-label="Workspace header">
       <div className="masthead__brand">
@@ -42,10 +48,11 @@ export function Masthead({
             onClick={() => {
               if (!applyDisabled) void onApply();
             }}
-            aria-label={`${primaryAction.label} prepared application`}
+            aria-label={actionDescription}
             aria-disabled={applyDisabled}
             aria-describedby={applyDisabled ? "masthead-apply-hint" : undefined}
-            title={applyDisabled ? applyHint : `${primaryAction.label} and save included materials`}
+            aria-busy={busy}
+            title={applyDisabled ? applyHint : actionDescription}
           >
             <ClipboardCheck size={14} aria-hidden="true" />
             <span>{busy ? primaryAction.busyLabel : primaryAction.label}</span>

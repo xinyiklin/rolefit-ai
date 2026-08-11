@@ -56,6 +56,13 @@ assert.deepEqual(
 assert.equal(prepared.application.resumeUsed, undefined);
 assert.equal(prepared.application.location, "Remote");
 assert.equal(prepared.application.salaryMin, 180000);
+prepared.application.attachments = [{
+  fileName: "work-sample.pdf",
+  label: "Work sample",
+  size: 1_024,
+  contentType: "application/pdf",
+  savedAt: now
+}];
 
 const created = skipApplicationForSession({
   session: newPreparationSession(),
@@ -72,6 +79,7 @@ assert.equal(created?.application.notApplyingReason, "fit");
 assert.equal(created?.application.appliedAt, undefined);
 assert.equal(created?.application.resumeArtifacts, undefined);
 assert.equal(created?.application.coverLetterArtifacts, undefined);
+assert.equal(created?.application.attachments, undefined);
 
 const priorDecision = base({
   id: "prior-skip",

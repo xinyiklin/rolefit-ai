@@ -1,23 +1,25 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Building2,
   BriefcaseBusiness,
   CalendarDays,
+  ChevronDown,
   CircleDollarSign,
   ClipboardCheck,
-  Clock3,
   ExternalLink,
   FileText,
+  History,
   Link2,
   MapPin,
   MoreHorizontal,
+  PencilLine,
   Plus,
   ShieldCheck,
   Trash2,
-  X
+  X,
+  type LucideIcon
 } from "lucide-react";
 import {
-  APPLICATION_SOURCES,
   NOT_APPLYING_REASON_LABEL,
   type Application,
   type ApplicationAnswer,
@@ -30,13 +32,17 @@ import {
 import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
+import { ApplicationFitSummary } from "./application/ApplicationFitSummary";
 import { ApplicationJobSnapshot } from "./application/ApplicationJobSnapshot";
+import { ApplicationPostingOverlay } from "./application/ApplicationPostingOverlay";
+import { SkippedDecisionPopover } from "./application/SkippedDecisionPopover";
 import { TrackerRowMenu, type RowMenuItem } from "./tracker/TrackerRowMenu";
 import {
   STATUS_LABEL,
   appFitVerdict,
   applicationActivityDate,
-  fitAssessmentRunLabel
+  fitAssessmentRunLabel,
+  safeExternalUrl
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
@@ -48,6 +54,7 @@ type ApplicationModalProps = {
   // Null is only a vanished-record safety state. New job intake belongs to
   // Prepare; this modal edits applications that already exist.
   application: Application | null;
+  stackedViewerOpen?: boolean;
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
@@ -76,6 +83,12 @@ type ApplicationModalProps = {
 };
 
 type ModalTab = "details" | "prep" | "documents";
+
+const APPLICATION_MODAL_TABS: Array<{ id: ModalTab; label: string; icon?: LucideIcon }> = [
+  { id: "details", label: "Overview" },
+  { id: "prep", label: "Prep", icon: ClipboardCheck },
+  { id: "documents", label: "Documents", icon: FileText }
+];
 
 type FormState = {
   company: string;
@@ -118,11 +131,6 @@ function formatDetailDate(iso?: string) {
 
 function relatedRecordLabel(application: Application) {
   return application.title || `${application.role || "Role"} at ${application.company || "company"}`;
-}
-
-function listPhrase(items: string[]) {
-  if (items.length <= 1) return items[0] ?? "";
-  return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
 
 function numberField(value: string) {
@@ -202,6 +210,7 @@ function formFromApplication(application: Application | null): FormState {
 export function ApplicationModal({
   open,
   application,
+  stackedViewerOpen = false,
   onClose,
   onSave,
   onDelete,
@@ -219,30 +228,43 @@ export function ApplicationModal({
 }: ApplicationModalProps) {
   const { confirm } = useDialog();
   const applicationId = application?.id ?? null;
+  const lastAvailableApplicationRef = useRef<Application | null>(application);
+  const activeApplication = application ?? lastAvailableApplicationRef.current;
+  const recordWasRemoved = open && !application && Boolean(activeApplication);
   const [tab, setTab] = useState<ModalTab>("details");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
   const [isSaving, setIsSaving] = useState(false);
   const [isOpeningPreparation, setIsOpeningPreparation] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const [skipDecisionOpen, setSkipDecisionOpen] = useState(false);
+  const [postingOverlayOpen, setPostingOverlayOpen] = useState(false);
   const [relatedMenu, setRelatedMenu] = useState<{ related: Application; x: number; y: number } | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const tablistRef = useRef<HTMLDivElement>(null);
-  const primaryInputRef = useRef<HTMLSelectElement>(null);
-  // Last application id the form was seeded from — the vanish-guard for the
-  // reseed effect below.
+  const primaryInputRef = useRef<HTMLElement>(null);
   const lastSeededId = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      lastAvailableApplicationRef.current = null;
+      return;
+    }
+    if (application) lastAvailableApplicationRef.current = application;
+  }, [application, open]);
 
   // Re-seed whenever the modal opens or targets a different application. Use
   // the stable id, not the whole application object, so async tracker refreshes
   // do not wipe unsaved form edits while the modal is open.
   useEffect(() => {
-    if (!open) return;
-    // A record that vanishes mid-edit (deleted in another tab, then a 409
-    // refresh replaced the list) must NOT reseed the form to blank Add-mode
-    // defaults — that wipes the user's unsaved edits while the save-error copy
-    // promises they are still here. Keep the form and say what happened.
+    if (!open) {
+      lastSeededId.current = null;
+      return;
+    }
+    // Keep unsaved edits when a concurrent delete removes the backing record.
     if (applicationId === null && lastSeededId.current !== null) {
-      setSaveError("This application was removed elsewhere. Saving now will re-create it.");
+      setSaveError(
+        "This application was removed elsewhere. Saving will re-create its tracker details without the removed files."
+      );
       return;
     }
     lastSeededId.current = applicationId;
@@ -251,15 +273,33 @@ export function ApplicationModal({
     setSaveError("");
     setIsSaving(false);
     setIsOpeningPreparation(false);
+    setSkipDecisionOpen(false);
+    setPostingOverlayOpen(false);
     setRelatedMenu(null);
   }, [open, applicationId]);
+
+  const closeSkipDecision = useCallback((restoreFocus = false) => {
+    setSkipDecisionOpen(false);
+    if (restoreFocus) window.requestAnimationFrame(() => primaryInputRef.current?.focus());
+  }, []);
+
+  function selectTab(nextTab: ModalTab) {
+    closeSkipDecision(false);
+    setRelatedMenu(null);
+    setTab(nextTab);
+  }
+
+  const openPosting = useCallback(() => {
+    setSkipDecisionOpen(false);
+    setPostingOverlayOpen(true);
+  }, []);
 
   const isBusy = isSaving || isOpeningPreparation;
   const formHasUnsavedChanges = useMemo(
     () =>
-      Boolean(application) &&
-      JSON.stringify(form) !== JSON.stringify(formFromApplication(application)),
-    [application, form]
+      Boolean(activeApplication) &&
+      JSON.stringify(form) !== JSON.stringify(formFromApplication(activeApplication)),
+    [activeApplication, form]
   );
 
   const requestClose = () => {
@@ -285,7 +325,7 @@ export function ApplicationModal({
     onClose: requestClose
   });
 
-  if (!open || !application) return null;
+  if (!open || !activeApplication) return null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((current) => ({ ...current, [key]: value }));
@@ -324,8 +364,9 @@ export function ApplicationModal({
     setForm((current) => ({ ...current, answers: current.answers.filter((_, i) => i !== index) }));
   }
 
-  function buildApplication(statusOverride: ApplicationStatus): Application {
-    const base = application as Application;
+  function buildApplication(statusOverride: ApplicationStatus): Application | null {
+    const base = activeApplication;
+    if (!base) return null;
     const now = new Date().toISOString();
     const cleanContacts = form.contacts
       .map((c) => ({
@@ -375,40 +416,25 @@ export function ApplicationModal({
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
       updatedAt: now
     };
-    return statusOverride === "not_applying"
+    const persisted = statusOverride === "not_applying"
       ? withoutSubmittedApplicationArtifacts(next)
       : next;
-  }
-
-  // Skipped is a terminal stage AND buildApplication drops the submitted-attempt
-  // fields on the way in, so a plain "Save changes" must not be the trigger —
-  // this is the same class of act as Merge duplicate, which already confirms.
-  async function confirmSkipDowngrade(statusOverride: ApplicationStatus) {
-    const base = application as Application;
-    if (statusOverride !== "not_applying" || base.status === "not_applying") return true;
-    const dropped = [
-      base.appliedAt ? "the application date" : "",
-      base.resumeUsed || base.resumeArtifacts ? "the saved resume" : "",
-      base.coverLetterArtifacts ? "the saved cover letter" : ""
-    ].filter(Boolean);
-    return confirm({
-      title: "Mark this job as Skipped?",
-      message:
-        "Skipped is final — this record cannot return to an earlier stage."
-        + (dropped.length ? ` Saving also clears ${listPhrase(dropped)} from it.` : ""),
-      confirmLabel: "Mark as Skipped",
-      tone: "danger"
-    });
+    if (recordWasRemoved) {
+      delete persisted.resumeArtifacts;
+      delete persisted.coverLetterArtifacts;
+      delete persisted.attachments;
+    }
+    return persisted;
   }
 
   async function save(statusOverride: ApplicationStatus = form.status) {
     if (isBusy) return;
-    if (!(await confirmSkipDowngrade(statusOverride))) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
     try {
-      saved = await onSave(buildApplication(statusOverride));
+      const next = buildApplication(statusOverride);
+      if (next) saved = await onSave(next);
     } catch {
       // Keep the form recoverable if a future persistence adapter rejects.
     }
@@ -422,23 +448,25 @@ export function ApplicationModal({
   }
 
   async function openPreparation() {
-    if (!application || !onLoad || isBusy) return;
-    if (formHasUnsavedChanges && !canSave) {
+    if (!onLoad || isBusy) return;
+    const mustPersistFirst = formHasUnsavedChanges || recordWasRemoved;
+    if (mustPersistFirst && !canSave) {
       setSaveError(
         "Add a company, role, or job URL before opening this preparation. Your edits are still here."
       );
       return;
     }
-    // Every path below that flushes the form must clear the same terminal-stage
-    // gate as Save changes — leaving via a side door cannot skip it.
-    if (formHasUnsavedChanges && !(await confirmSkipDowngrade(form.status))) return;
     setIsOpeningPreparation(true);
     setSaveError("");
     try {
-      const applicationToOpen = formHasUnsavedChanges
+      const applicationToOpen = mustPersistFirst
         ? buildApplication(form.status)
-        : application;
-      if (formHasUnsavedChanges && !(await onSave(applicationToOpen))) {
+        : activeApplication;
+      if (!applicationToOpen) {
+        setSaveError("This application is no longer available. Your edits are still here.");
+        return;
+      }
+      if (mustPersistFirst && !(await onSave(applicationToOpen))) {
         setSaveError(
           "Could not save your edits before opening this preparation. Your edits are still here; review and retry."
         );
@@ -463,11 +491,11 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before leaving this record. Your edits are still here.");
       return;
     }
-    if (!(await confirmSkipDowngrade(form.status))) return;
     setIsSaving(true);
     setSaveError("");
     try {
-      if (!(await onSave(buildApplication(form.status)))) {
+      const edited = buildApplication(form.status);
+      if (!edited || !(await onSave(edited))) {
         setSaveError(
           "Could not save your edits before opening the related record. Your edits are still here; review and retry."
         );
@@ -516,13 +544,15 @@ export function ApplicationModal({
       setSaveError("Add a company, role, or job URL before changing related records. Your edits are still here.");
       return;
     }
-    if (formHasUnsavedChanges && !(await confirmSkipDowngrade(form.status))) return;
     setIsSaving(true);
     setSaveError("");
     try {
-      if (formHasUnsavedChanges && !(await onSave(buildApplication(form.status)))) {
-        setSaveError("Could not save your edits before changing related records. Your edits are still here; review and retry.");
-        return;
+      if (formHasUnsavedChanges) {
+        const edited = buildApplication(form.status);
+        if (!edited || !(await onSave(edited))) {
+          setSaveError("Could not save your edits before changing related records. Your edits are still here; review and retry.");
+          return;
+        }
       }
       if (!(await callback(related))) {
         setSaveError(
@@ -540,13 +570,14 @@ export function ApplicationModal({
 
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
-  const editableStatuses = applicationStatusOptions(application.status);
-  const openPreparationBlocked = formHasUnsavedChanges && !canSave;
-  const fitAssessment = application.fitAssessment;
+  const editableStatuses = applicationStatusOptions(activeApplication.status);
+  const openPreparationBlocked = (formHasUnsavedChanges || recordWasRemoved) && !canSave;
+  const fitAssessment = activeApplication.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
-  const fitVerdict = appFitVerdict(application);
+  const fitVerdict = appFitVerdict(activeApplication);
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
+  const safeJobUrl = safeExternalUrl(form.jobUrl);
   const preparationActionLabel = "Edit preparation";
   // Only one of the two head messages renders at a time, so describedby has to
   // point at whichever exists — otherwise it dangles when both conditions hold.
@@ -575,16 +606,10 @@ export function ApplicationModal({
       ]
     : [];
 
-  const TABS: { id: ModalTab; label: string; icon: typeof BriefcaseBusiness }[] = [
-    { id: "details", label: "Details", icon: BriefcaseBusiness },
-    { id: "prep", label: "Prep", icon: ClipboardCheck },
-    { id: "documents", label: "Documents", icon: FileText }
-  ];
-
   // APG tabs: arrow/Home/End move selection AND focus. stopPropagation keeps
   // these off the dialog's own key handler.
   function handleTabsKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    const order = TABS.map((entry) => entry.id);
+    const order = APPLICATION_MODAL_TABS.map((entry) => entry.id);
     const current = order.indexOf(tab);
     const next =
       event.key === "ArrowRight" ? (current + 1) % order.length
@@ -595,16 +620,16 @@ export function ApplicationModal({
     if (next < 0) return;
     event.preventDefault();
     event.stopPropagation();
-    setTab(order[next]);
+    selectTab(order[next]);
     tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
   // The saved record's own line — stage, its governing date, and how many other
   // records share this posting. Reads the record, not the form, so a pending
   // stage edit cannot backdate a stage that was never saved.
-  const savedStageDate = formatDetailDate(applicationActivityDate(application));
+  const savedStageDate = formatDetailDate(applicationActivityDate(activeApplication));
   const headerMeta = [
-    STATUS_LABEL[application.status],
+    STATUS_LABEL[activeApplication.status],
     savedStageDate === "Date not recorded" ? "" : savedStageDate,
     relatedApplications.length
       ? `${relatedApplications.length} related ${relatedApplications.length === 1 ? "record" : "records"}`
@@ -614,20 +639,26 @@ export function ApplicationModal({
   return (
     <div
       className="application-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="application-modal-title"
-      onKeyDown={handleModalKeyDown}
     >
       <div className="application-modal__scrim" aria-hidden="true" onMouseDown={requestClose} />
-      <section className="application-modal__panel" ref={panelRef} tabIndex={-1} aria-busy={isBusy}>
+      <section
+        className="application-modal__panel application-detail-modal"
+        ref={panelRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="application-modal-title"
+        aria-busy={isBusy}
+        inert={postingOverlayOpen || stackedViewerOpen}
+        tabIndex={-1}
+        onKeyDown={handleModalKeyDown}
+      >
         <header className="application-modal__head">
-          <div>
+          <div className="application-modal__title-wrap">
             <h2 id="application-modal-title" className="page-serif">
               {headerName}
             </h2>
             <p className="application-modal__identity">
-              <span className={`stage-dot stage-dot--${application.status}`} aria-hidden="true" />
+              <span className={`stage-dot stage-dot--${activeApplication.status}`} aria-hidden="true" />
               {headerMeta.map((part, index) => (
                 <span key={part}>
                   {index ? <span className="application-modal__identity-sep" aria-hidden="true">·</span> : null}
@@ -654,7 +685,7 @@ export function ApplicationModal({
                 disabled={isBusy || openPreparationBlocked}
                 aria-describedby={openHintId}
               >
-                <ExternalLink size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : preparationActionLabel}
+                <PencilLine size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : preparationActionLabel}
               </button>
             ) : null}
             <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={requestClose} disabled={isBusy}>
@@ -671,7 +702,7 @@ export function ApplicationModal({
           onKeyDown={handleTabsKeyDown}
           inert={isBusy}
         >
-          {TABS.map(({ id, label, icon: Icon }) => (
+          {APPLICATION_MODAL_TABS.map(({ id, label, icon: Icon }) => (
             <button
               type="button"
               key={id}
@@ -681,9 +712,9 @@ export function ApplicationModal({
               aria-selected={tab === id}
               aria-controls="application-tabpanel"
               tabIndex={tab === id ? 0 : -1}
-              onClick={() => setTab(id)}
+              onClick={() => selectTab(id)}
             >
-              <Icon size={14} aria-hidden="true" /> {label}
+              {Icon ? <Icon size={14} aria-hidden="true" /> : null}{label}
             </button>
           ))}
         </div>
@@ -699,30 +730,53 @@ export function ApplicationModal({
             <>
               <section className="application-details-pane application-modal__main">
                 <div className="application-workflow-grid">
-                  <section className="application-details-section" aria-labelledby="application-status-title">
-                    <h4 id="application-status-title">Status</h4>
-                    <div className="application-details-grid application-details-grid--record">
-                      <label className="field">
-                        <span>Stage</span>
-                        <select ref={primaryInputRef} value={form.status} onChange={(e) => update("status", e.target.value as ApplicationStatus)}>
-                          {editableStatuses.map((status) => (
-                            <option key={status} value={status}>{STATUS_LABEL[status]}</option>
-                          ))}
-                        </select>
-                      </label>
-                      <label className="field">
-                        <span>Source</span>
-                        <select value={form.source} onChange={(e) => update("source", e.target.value as ApplicationSource)}>
-                          {APPLICATION_SOURCES.filter(Boolean).map((source) => (
-                            <option key={source} value={source}>{source}</option>
-                          ))}
-                        </select>
-                      </label>
+                  <section className="application-details-section application-details-section--status" aria-labelledby="application-status-title">
+                    <h3 id="application-status-title"><ClipboardCheck size={16} aria-hidden="true" />Application status</h3>
+                    <div className="application-stage-control field">
+                      <span id="application-stage-label">Stage</span>
+                      {form.status === "not_applying" ? (
+                        <button
+                          ref={(node) => { primaryInputRef.current = node; }}
+                          type="button"
+                          className={`application-skipped-trigger${skipDecisionOpen ? " is-open" : ""}`}
+                          aria-labelledby="application-stage-label application-skipped-trigger-label"
+                          aria-haspopup="dialog"
+                          aria-expanded={skipDecisionOpen}
+                          aria-controls="application-skipped-decision"
+                          onClick={() => setSkipDecisionOpen((current) => !current)}
+                        >
+                          <span className="stage-dot stage-dot--not_applying" aria-hidden="true" />
+                          <span className="application-skipped-trigger__copy">
+                            <strong id="application-skipped-trigger-label">Skipped</strong>
+                            <span aria-hidden="true">·</span>
+                            <span>
+                              {form.notApplyingReason
+                                ? NOT_APPLYING_REASON_LABEL[form.notApplyingReason]
+                                : "Reason not recorded"}
+                            </span>
+                          </span>
+                          <ChevronDown size={14} aria-hidden="true" />
+                        </button>
+                      ) : (
+                        <span className="application-status-select">
+                          <span className={`stage-dot stage-dot--${form.status}`} aria-hidden="true" />
+                          <select
+                            ref={(node) => { primaryInputRef.current = node; }}
+                            aria-labelledby="application-stage-label"
+                            value={form.status}
+                            onChange={(event) => update("status", event.target.value as ApplicationStatus)}
+                          >
+                            {editableStatuses.map((status) => (
+                              <option key={status} value={status}>{STATUS_LABEL[status]}</option>
+                            ))}
+                          </select>
+                        </span>
+                      )}
                     </div>
                   </section>
 
                   <section className="application-details-section" aria-labelledby="application-timing-title">
-                    <h4 id="application-timing-title">Timing</h4>
+                    <h3 id="application-timing-title"><CalendarDays size={16} aria-hidden="true" />Key dates</h3>
                     <div className="application-details-grid application-details-grid--timing">
                       {form.status === "not_applying" ? (
                         <label className="field">
@@ -746,34 +800,11 @@ export function ApplicationModal({
                     </div>
                   </section>
 
-                  {form.status === "not_applying" ? (
-                    <section className="application-details-section application-details-decision" aria-labelledby="application-decision-title">
-                      <div className="application-details-decision__head">
-                        <h4 id="application-decision-title">Skipped decision</h4>
-                        <strong><span className="stage-dot stage-dot--not_applying" aria-hidden="true" /> Skipped</strong>
-                      </div>
-                      <div className="application-details-grid application-details-grid--2">
-                        <label className="field">
-                          <span>Reason</span>
-                          <select value={form.notApplyingReason} onChange={(e) => update("notApplyingReason", e.target.value as FormState["notApplyingReason"])}>
-                            <option value="">No reason recorded</option>
-                            {Object.entries(NOT_APPLYING_REASON_LABEL).map(([value, label]) => (
-                              <option key={value} value={value}>{label}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label className="field">
-                          <span>Decision note <small>Optional</small></span>
-                          <textarea className="textarea" value={form.notApplyingNote} onChange={(e) => update("notApplyingNote", e.target.value)} placeholder="What made you skip this role?" rows={3} />
-                        </label>
-                      </div>
-                    </section>
-                  ) : null}
                 </div>
 
                 <div className="application-job-facts">
                   <section className="application-job-card" aria-labelledby="application-role-title">
-                    <h4 id="application-role-title">Role &amp; company</h4>
+                    <h3 id="application-role-title"><Building2 size={16} aria-hidden="true" />Role &amp; company</h3>
                     <dl className="application-fact-list application-fact-list--identity">
                       <div>
                         <dt><Building2 size={14} aria-hidden="true" /><span className="sr-only">Company</span></dt>
@@ -786,9 +817,9 @@ export function ApplicationModal({
                       <div>
                         <dt><Link2 size={14} aria-hidden="true" /><span className="sr-only">Job link</span></dt>
                         <dd>
-                          {form.jobUrl.trim() ? (
-                            <a href={form.jobUrl} target="_blank" rel="noreferrer">
-                              <span>{form.jobUrl}</span><ExternalLink size={13} aria-hidden="true" />
+                          {safeJobUrl ? (
+                            <a href={safeJobUrl} target="_blank" rel="noreferrer">
+                              <span>{safeJobUrl}</span><ExternalLink size={13} aria-hidden="true" />
                             </a>
                           ) : "Not recorded"}
                         </dd>
@@ -797,56 +828,54 @@ export function ApplicationModal({
                   </section>
 
                   <section className="application-job-card" aria-labelledby="application-work-title">
-                    <h4 id="application-work-title">Job details</h4>
+                    <h3 id="application-work-title"><BriefcaseBusiness size={16} aria-hidden="true" />Job details</h3>
                     <dl className="application-fact-list">
                       <div><dt><MapPin size={14} aria-hidden="true" />Location</dt><dd>{displayValue(form.location)}</dd></div>
-                      <div><dt><CalendarDays size={14} aria-hidden="true" />Job type</dt><dd>{displayValue(form.jobType)}</dd></div>
+                      <div><dt><BriefcaseBusiness size={14} aria-hidden="true" />Job type</dt><dd>{displayValue(form.jobType)}</dd></div>
                       <div><dt><ShieldCheck size={14} aria-hidden="true" />Work authorization</dt><dd>{displayValue(form.workAuth)}</dd></div>
+                      <div><dt><Link2 size={14} aria-hidden="true" />Source</dt><dd>{displayValue(form.source)}</dd></div>
                     </dl>
                   </section>
 
                   <section className="application-job-card application-job-card--wide" aria-labelledby="application-compensation-title">
-                    <h4 id="application-compensation-title">Compensation</h4>
+                    <h3 id="application-compensation-title"><CircleDollarSign size={16} aria-hidden="true" />Compensation</h3>
                     <dl className="application-compensation-facts">
-                      <div><dt><CircleDollarSign size={14} aria-hidden="true" />Minimum</dt><dd>{displaySalary(form.salaryMin)}</dd></div>
-                      <div><dt><CircleDollarSign size={14} aria-hidden="true" />Maximum</dt><dd>{displaySalary(form.salaryMax)}</dd></div>
-                      <div><dt><CircleDollarSign size={14} aria-hidden="true" />Currency</dt><dd>{displayValue(form.salaryCurrency)}</dd></div>
-                      <div><dt><Clock3 size={14} aria-hidden="true" />Period</dt><dd>{SALARY_PERIOD_LABEL[form.salaryPeriod]}</dd></div>
+                      <div><dt>Minimum</dt><dd>{displaySalary(form.salaryMin)}</dd></div>
+                      <div><dt>Maximum</dt><dd>{displaySalary(form.salaryMax)}</dd></div>
+                      <div><dt>Currency</dt><dd>{displayValue(form.salaryCurrency)}</dd></div>
+                      <div><dt>Period</dt><dd>{SALARY_PERIOD_LABEL[form.salaryPeriod]}</dd></div>
                     </dl>
                   </section>
 
-                  <ApplicationJobSnapshot application={application} />
+                  <ApplicationJobSnapshot application={activeApplication} onViewPosting={openPosting} />
                 </div>
 
               </section>
 
-              <aside className="application-details-pane application-modal__side" aria-label="Fit assessment and related history">
+              <aside className="application-details-pane application-modal__side" aria-label="Fit assessment and job activity">
                 <section className="application-match-card" aria-labelledby="application-fit-title">
-                  <h4 id="application-fit-title" className="application-match-card__title">Fit assessment</h4>
-                  <div className="application-fit-summary" aria-label="Fit Assessment">
-                    <strong className={`application-fit application-fit--ring application-fit--${fitVerdict?.tone ?? "neutral"}`}>{fitVerdict?.label ?? "Not checked"}</strong>
-                    <div className="application-fit-summary__resume">
-                      <span>{fitAssessment ? "Resume" : "Assessment"}</span>
-                      <strong>{fitAssessment?.resumeLabel ?? "Not yet run"}</strong>
-                    </div>
-                  </div>
-                  <p>{fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}</p>
+                  <h3 id="application-fit-title" className="application-match-card__title">Fit assessment</h3>
+                  <ApplicationFitSummary
+                    label={fitVerdict?.label ?? "Not checked"}
+                    tone={fitVerdict?.tone ?? "neutral"}
+                    summary={fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
+                  />
                   {fitAssessmentMeta ? <p className="application-match-card__meta">{fitAssessmentMeta}</p> : null}
                   {fitAssessment?.result.gaps.length ? (
                     <div className="application-match-card__gaps">
                       <strong>Top gaps</strong>
-                      <div className="application-chip-list">
+                      <ul className="application-gap-list">
                         {fitAssessment.result.gaps.map((gap) => (
-                          <span key={gap}>{gap}</span>
+                          <li key={gap}>{gap}</li>
                         ))}
-                      </div>
+                      </ul>
                     </div>
                   ) : null}
                 </section>
 
-                {relatedApplications.length ? (
-                  <section className="application-side-card" aria-labelledby="application-related-records-title">
-                    <h4 id="application-related-records-title">Related records history</h4>
+                <section className="application-side-card" aria-labelledby="application-job-activity-title">
+                  <h3 id="application-job-activity-title"><History size={16} aria-hidden="true" />Job activity</h3>
+                  {relatedApplications.length ? (
                     <ul className="application-related-records">
                       {relatedApplications.map((related) => (
                         <li key={related.id}>
@@ -888,8 +917,12 @@ export function ApplicationModal({
                         </li>
                       ))}
                     </ul>
-                  </section>
-                ) : null}
+                  ) : (
+                    <p className="application-related-records__empty">
+                      No other saved decisions or applications for this job.
+                    </p>
+                  )}
+                </section>
               </aside>
             </>
           ) : null}
@@ -962,11 +995,12 @@ export function ApplicationModal({
 
           {tab === "documents" ? (
             <ApplicationDocumentsTab
-              application={application}
+              application={activeApplication}
               downloadBase={downloadBase}
               onSaveDocument={onSaveDocument}
               onRemoveDocument={onRemoveDocument}
               onPreviewDocument={onPreviewDocument}
+              onPreviewPosting={openPosting}
               onDownloadDocument={onDownloadDocument}
               onSaveAttachment={onSaveAttachment}
               onRemoveAttachment={onRemoveAttachment}
@@ -975,9 +1009,21 @@ export function ApplicationModal({
 
         </div>
 
+        {form.status === "not_applying" ? (
+          <SkippedDecisionPopover
+            open={skipDecisionOpen}
+            triggerRef={primaryInputRef}
+            reason={form.notApplyingReason}
+            note={form.notApplyingNote}
+            onReasonChange={(value) => update("notApplyingReason", value)}
+            onNoteChange={(value) => update("notApplyingNote", value)}
+            onClose={closeSkipDecision}
+          />
+        ) : null}
+
         <footer className="application-modal__foot">
           {onDelete ? (
-            <button type="button" className="secondary-button is-compact danger-button" disabled={isBusy} onClick={() => onDelete(application.id, application.title)}>
+            <button type="button" className="secondary-button is-compact danger-button" disabled={isBusy} onClick={() => onDelete(activeApplication.id, activeApplication.title)}>
               <Trash2 size={14} aria-hidden="true" /> Delete
             </button>
           ) : null}
@@ -1000,6 +1046,12 @@ export function ApplicationModal({
           />
         ) : null}
       </section>
+
+      <ApplicationPostingOverlay
+        open={postingOverlayOpen}
+        application={activeApplication}
+        onClose={() => setPostingOverlayOpen(false)}
+      />
     </div>
   );
 }

@@ -723,11 +723,6 @@
   flex-wrap: wrap;
 }
 
-.prepare-fit__summary > span {
-  color: var(--ink-faint);
-  font-size: 0.7rem;
-}
-
 .prepare-fit > p:not(.prepare-page__eyebrow) {
   margin: 0;
   color: var(--ink-soft);

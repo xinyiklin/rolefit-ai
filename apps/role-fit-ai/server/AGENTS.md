@@ -39,7 +39,9 @@ for provider, prompt, sanitizer, and review work.
   Each document slot stores either strict editable source or an explicitly
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Every byte served back is a download (narrow
-  content type, `nosniff`, no inline render).
+  content type, `nosniff`, no inline render). Skipped records are job-only:
+  every document and attachment mutation must pass the shared
+  `routeSupport.ts` guard before any file I/O.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin

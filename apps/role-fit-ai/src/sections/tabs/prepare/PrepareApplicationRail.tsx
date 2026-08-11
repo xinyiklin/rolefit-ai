@@ -5,14 +5,14 @@ import type { Application } from "../../../hooks/useApplications";
 import {
   displayCompany,
   displayRole,
-  fitAssessmentRunLabel
+  fitAssessmentRunLabel,
+  fitAssessmentVerdictLabel
 } from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
 import type { PreparationPrimaryAction } from "../../../lib/preparationSession";
 import type {
   FitAssessmentInputChange,
-  FitAssessmentState,
-  FitAssessmentVerdict
+  FitAssessmentState
 } from "../../../../shared/fitAssessmentContract.ts";
 
 // Preparation is one of the readiness checks, so its progress earns rail space
@@ -20,13 +20,6 @@ import type {
 export type PrepareActivity = {
   tone: "working" | "warn" | "info";
   message: string;
-};
-
-const FIT_ASSESSMENT_LABEL: Record<FitAssessmentVerdict, string> = {
-  STRONG: "Strong fit",
-  REASONABLE: "Reasonable fit",
-  STRETCH: "Stretch",
-  LIMITED: "Limited fit"
 };
 
 const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: string; detail: string }> = {
@@ -151,9 +144,8 @@ export function PrepareApplicationRail({
             <>
               <div className="prepare-fit__summary">
                 <strong className={`fit-assessment-verdict is-${assessmentSnapshot.result.verdict.toLowerCase()}`}>
-                  {FIT_ASSESSMENT_LABEL[assessmentSnapshot.result.verdict]}
+                  {fitAssessmentVerdictLabel(assessmentSnapshot.result.verdict)}
                 </strong>
-                <span>{assessmentSnapshot.resumeLabel}</span>
               </div>
               <p>{assessmentSnapshot.result.summary}</p>
               {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
@@ -209,7 +201,7 @@ export function PrepareApplicationRail({
               {fitAssessment.activeRun ? (
                 <p className="prepare-note is-working" role="status">
                   <LoaderCircle className="spin" size={13} aria-hidden="true" />
-                  Assessing {fitAssessment.activeRun.resumeLabel}…
+                  Assessing fit…
                 </p>
               ) : fitAssessment.lastError ? (
                 <p className="prepare-note is-warn" role="status">{fitAssessment.lastError.message}</p>
@@ -225,7 +217,7 @@ export function PrepareApplicationRail({
           ) : fitAssessment.activeRun ? (
             <p className="prepare-note is-working" role="status">
               <LoaderCircle className="spin" size={13} aria-hidden="true" />
-              Assessing {fitAssessment.activeRun.resumeLabel}…
+              Assessing fit…
             </p>
           ) : !fitAssessment.enabled ? (
             <p>Off in Settings. You can continue directly to Polish.</p>
@@ -273,7 +265,7 @@ export function PrepareApplicationRail({
           </ul>
         </div>
 
-        {linkedApplication ? (
+        {linkedApplication && primaryAction.kind !== "update-job" ? (
           <div className="prepare-saved">
             <p className="prepare-page__eyebrow">Saved application</p>
             <strong>{linkedApplication.title}</strong>

@@ -2,11 +2,10 @@ import assert from "node:assert/strict";
 
 import {
   newPreparationSession,
+  preparationCommitIdentity,
   preparationSessionForApplication
 } from "../preparationSession.ts";
 import {
-  explicitPostingGroups,
-  effectivePostingGroupId,
   planPostingRecordLink,
   planPostingRecordUnlink,
   postingGroupSizeByApplicationId
@@ -25,15 +24,41 @@ assert.deepEqual(
   "a tracked outcome reopens in update-only mode"
 );
 
+const commitIdentity = preparationCommitIdentity({
+  session: fresh,
+  jobUrl: " https://jobs.example.com/123 ",
+  preparedJobDescription: " Prepared role ",
+  jobRawText: " Original posting "
+});
 assert.equal(
-  effectivePostingGroupId({ id: "solo" }),
-  "application:solo",
-  "a record without a posting group is its own singleton"
+  commitIdentity,
+  preparationCommitIdentity({
+    session: fresh,
+    jobUrl: "https://jobs.example.com/123",
+    preparedJobDescription: "Prepared role",
+    jobRawText: "Original posting"
+  }),
+  "a delayed confirmation still recognizes the exact prepared target"
 );
-assert.equal(
-  effectivePostingGroupId({ id: "member", jobPostingGroupId: "posting-group-1" }),
-  "posting-group-1",
-  "an explicit posting group owns relationship identity"
+assert.notEqual(
+  commitIdentity,
+  preparationCommitIdentity({
+    session: fresh,
+    jobUrl: "https://jobs.example.com/456",
+    preparedJobDescription: "Prepared role",
+    jobRawText: "Original posting"
+  }),
+  "a changed posting cannot reuse an earlier Apply or Skip confirmation"
+);
+assert.notEqual(
+  commitIdentity,
+  preparationCommitIdentity({
+    session: preparationSessionForApplication({ id: "applied-1" }),
+    jobUrl: "https://jobs.example.com/123",
+    preparedJobDescription: "Prepared role",
+    jobRawText: "Original posting"
+  }),
+  "a changed preparation session cannot reuse an earlier confirmation"
 );
 
 const records = [
@@ -59,11 +84,6 @@ assert.equal(
   "an unknown requested record fails closed"
 );
 
-assert.deepEqual(
-  explicitPostingGroups(records).map((group) => group.map((record) => record.id)),
-  [["a", "a-peer"], ["b", "b-peer"]],
-  "posting groups preserve every independent tracker record"
-);
 assert.deepEqual(
   [...postingGroupSizeByApplicationId(records)],
   [["a", 2], ["a-peer", 2], ["b", 2], ["b-peer", 2]],

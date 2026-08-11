@@ -6,26 +6,12 @@ import { swapDocumentTitleKind } from "../lib/downloads.ts";
 import type { ApplyDownloadNames, ApplyDownloadPicks } from "../hooks/useApplyFlow";
 import type { PreparationPrimaryAction } from "../lib/preparationSession";
 
-// Pre-commit confirmation: name each file, then save and download in one step.
-// The secondary action saves without starting a download. The close
-// button (×) cancels without saving. PDF is the only combined-download format
-// (the `.resume`/`.cover` saves are separate buttons, not part of this
-// concept), so there is no format picker here.
-//
-// The dialog covers whichever included materials are exportable, and the two
-// documents stay two PDFs — ATS uploads are per-document, and a merged file
-// would have to be split again before it could be submitted. Each document
-// carries its own name field: the cover letter's is seeded from the resume's
-// so the pair matches by default, and stays independently editable.
+// Confirms the tracker commit and optional PDF downloads. Resume and cover
+// letter remain separate files because application portals upload them separately.
 type ApplyDownloadDialogProps = {
-  // Application title, for context in the header ("Stripe — Software Engineer").
   label: string;
   action: PreparationPrimaryAction;
-  // System-proposed resume file name (extension excluded). Also seeds the
-  // cover letter's name, retargeted at its own document kind.
   defaultFileBaseName: string;
-  // Which materials this action can actually export. At least one is true
-  // whenever the dialog is open.
   canDownloadResume: boolean;
   canDownloadCoverLetter: boolean;
   busy: boolean;

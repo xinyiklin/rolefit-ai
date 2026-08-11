@@ -8,6 +8,9 @@ const compact = (source) =>
     .replace(/\(\s+/g, "(")
     .replace(/\s+\)/g, ")");
 const compactApplyFlow = compact(applyFlow);
+const clearCapturedApplyStart = applyFlow.indexOf("function clearCapturedApply(): void");
+const clearCapturedApplyEnd = applyFlow.indexOf("\n  }", clearCapturedApplyStart);
+const clearCapturedApply = applyFlow.slice(clearCapturedApplyStart, clearCapturedApplyEnd);
 const downloadPickStart = applyFlow.indexOf("async function handleApplyDownloadPick(");
 const downloadPickEnd = applyFlow.indexOf("\n\n  async function handleApplyOnly()", downloadPickStart);
 const downloadPick = applyFlow.slice(downloadPickStart, downloadPickEnd);
@@ -52,6 +55,19 @@ assert.match(
   /const isApplying = isResolvingApply \|\| isCommittingApply \|\| isDownloadingApplyPdfs;/,
   "public Apply busy state covers resolution, persistence, and exports"
 );
+assert.ok(clearCapturedApplyStart >= 0, "Apply centralizes captured-state cleanup");
+for (const ref of [
+  "applyMaterialSelectionRef",
+  "applySessionRef",
+  "applyActionRef",
+  "applyUnrelatedApplicationIdRef",
+  "applyCommitIdentityRef"
+]) {
+  assert.ok(
+    clearCapturedApply.includes(`${ref}.current = null;`),
+    `captured-state cleanup clears ${ref}`
+  );
+}
 
 const resolutionGuard = compactHandleApply.indexOf(
   "if (applyResolutionInFlightRef.current || applyCommitInFlightRef.current || applyDownloadInFlightRef.current) return;"
@@ -102,7 +118,7 @@ assert.ok(
 );
 assert.match(
   handleApply,
-  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applySessionRef\.current = null;[\s\S]{0,180}?applyActionRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
+  /catch \{[\s\S]{0,120}?clearCapturedApply\(\);[\s\S]{0,180}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
   "an unexpected duplicate-check failure clears the captured session and reports that nothing was saved"
 );
 assert.doesNotMatch(

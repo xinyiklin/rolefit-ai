@@ -1,20 +1,4 @@
-/**
- * useApplicationDocumentSync — save the resume or the cover letter to the
- * application this session is working on, after Apply has already created it.
- *
- * Apply stores whichever documents the user included in the prepared package.
- * This hook owns the per-document saved/unsaved state and the two explicit save
- * actions, so either document can be finished or revised after applying without
- * copying it by hand.
- *
- * State ownership: the per-document busy / status / just-saved state is OWNED
- * here. The explicit preparation application id, applications store, and the
- * two editors' current content arrive as args and are never mutated except
- * through the atomic application-file mutation boundary.
- *
- * Saving is ALWAYS user-initiated. Nothing here runs on an effect: regenerating
- * or editing a document must never silently rewrite what the application holds.
- */
+/** Owns explicit resume and cover-letter saves to the current application. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Application } from "./useApplications";
@@ -108,11 +92,14 @@ export function useApplicationDocumentSync({
   const application = applicationId
     ? applications.find((candidate) => candidate.id === applicationId) ?? null
     : null;
-  latestSaveIdentityRef.current = {
-    applicationId: application?.id ?? "",
-    resume: resumeDocumentVersion,
-    coverLetter: coverLetterDocumentVersion
-  };
+
+  useEffect(() => {
+    latestSaveIdentityRef.current = {
+      applicationId: application?.id ?? "",
+      resume: resumeDocumentVersion,
+      coverLetter: coverLetterDocumentVersion
+    };
+  }, [application?.id, coverLetterDocumentVersion, resumeDocumentVersion]);
 
   useEffect(() => {
     setResumeFeedback(NO_FEEDBACK);
@@ -143,15 +130,19 @@ export function useApplicationDocumentSync({
   const save = useCallback(
     async (kind: ApplicationDocumentKind) => {
       if (!application) return;
+      if (application.status === "not_applying") return;
       if (saveInFlight.current.has(kind)) return;
       // Never let an empty editor erase the version the application holds.
       if (!(kind === "resume" ? currentResumeText : coverLetterText).trim()) return;
       const setFeedback = kind === "resume" ? setResumeFeedback : setCoverFeedback;
+      const noun = kind === "resume" ? "Resume" : "Cover letter";
       const startedApplicationId = application.id;
       const startedVersion =
         kind === "resume"
           ? latestSaveIdentityRef.current.resume
           : latestSaveIdentityRef.current.coverLetter;
+      const sameApplication = () =>
+        latestSaveIdentityRef.current.applicationId === startedApplicationId;
       const stillCurrent = () => {
         const latest = latestSaveIdentityRef.current;
         return (
@@ -166,6 +157,7 @@ export function useApplicationDocumentSync({
       try {
         const artifacts = kind === "resume" ? await getResumeArtifacts() : await getCoverLetterArtifacts();
         if (!artifacts) {
+          if (!sameApplication()) return;
           setFeedback({
             status:
               kind === "resume"
@@ -176,6 +168,7 @@ export function useApplicationDocumentSync({
           });
           return;
         }
+        if (!sameApplication()) return;
         if (!stillCurrent()) {
           setFeedback({
             status:
@@ -187,8 +180,8 @@ export function useApplicationDocumentSync({
           });
           return;
         }
-        const noun = kind === "resume" ? "Resume" : "Cover letter";
         const result = await saveApplicationDocument(application.id, kind === "resume" ? "resume" : "cover", artifacts);
+        if (!sameApplication()) return;
         if (!result.ok) {
           setFeedback({
             status: result.error ?? `${noun} update failed. The saved application is unchanged.`,
@@ -210,6 +203,13 @@ export function useApplicationDocumentSync({
           status: `${noun} updated.`,
           statusIsError: false,
           savedAt: Date.now()
+        });
+      } catch {
+        if (!sameApplication()) return;
+        setFeedback({
+          status: `${noun} update could not be confirmed. Refresh Applications before retrying.`,
+          statusIsError: true,
+          savedAt: 0
         });
       } finally {
         saveInFlight.current.delete(kind);
@@ -292,6 +292,8 @@ function describe({
   const title =
     state === "no-application"
       ? "Save to application"
+      : state === "job-only"
+        ? "Not saved with skipped job"
       : state === "unsaved"
         ? isSaving
           ? "Updating application…"
@@ -300,6 +302,8 @@ function describe({
   const description =
     state === "no-application"
       ? "Apply first to create the application."
+      : state === "job-only"
+        ? `Start a new application attempt before saving a ${noun}.`
       : state === "unsaved"
         ? hasContent
           ? `Replace the ${noun} saved to ${targetLabel}.`

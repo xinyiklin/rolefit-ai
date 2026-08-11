@@ -101,6 +101,7 @@ function upgradeLegacyInterestedApplications(applications: unknown[]): {
       resumeUsed: _resumeUsed,
       resumeArtifacts: _resumeArtifacts,
       coverLetterArtifacts: _coverLetterArtifacts,
+      attachments: _attachments,
       ...preserved
     } = raw;
     upgraded = true;

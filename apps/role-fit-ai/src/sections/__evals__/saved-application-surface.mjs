@@ -1,150 +1,115 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-const modal = readFileSync(new URL("../ApplicationModal.tsx", import.meta.url), "utf8");
-const jobSnapshot = readFileSync(
-  new URL("../application/ApplicationJobSnapshot.tsx", import.meta.url),
-  "utf8"
-);
-const rail = readFileSync(
-  new URL("../tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
-  "utf8"
-);
-const tracker = readFileSync(new URL("../tabs/TrackerTab.tsx", import.meta.url), "utf8");
-const inspector = readFileSync(new URL("../tracker/TrackerInspector.tsx", import.meta.url), "utf8");
-const table = readFileSync(new URL("../tracker/TrackerTableView.tsx", import.meta.url), "utf8");
-const applicationStyles = readFileSync(
-  new URL("../../styles/application-pages.css", import.meta.url),
-  "utf8"
-);
+const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
+const app = read("../../App.tsx");
+const modal = read("../ApplicationModal.tsx");
+const fitSummary = read("../application/ApplicationFitSummary.tsx");
+const jobSnapshot = read("../application/ApplicationJobSnapshot.tsx");
+const skippedDecisionPopover = read("../application/SkippedDecisionPopover.tsx");
+const postingOverlay = read("../application/ApplicationPostingOverlay.tsx");
+const documentsTab = read("../application/ApplicationDocumentsTab.tsx");
+const previewOverlay = read("../PreviewOverlay.tsx");
+const previewZoomControls = read("../PreviewZoomControls.tsx");
+const rail = read("../tabs/prepare/PrepareApplicationRail.tsx");
+const tracker = read("../tabs/TrackerTab.tsx");
+const inspector = read("../tracker/TrackerInspector.tsx");
+const table = read("../tracker/TrackerTableView.tsx");
+const duplicateReview = read("../tracker/DuplicateReviewModal.tsx");
+const applicationStyles = read("../../styles/application-pages.css");
+const previewStyles = read("../../styles/preview-overlay.css");
 
 assert.ok(!modal.includes("value={form.roleDescription}"));
 assert.ok(!modal.includes("value={form.jobDescription}"));
-assert.ok(jobSnapshot.includes("Job snapshot"));
-assert.ok(!modal.includes("Continue preparation"));
+assert.ok(!modal.includes('value={form.source}'), "posting provenance is read-only");
+assert.match(modal, />Source<\/dt><dd>\{displayValue\(form\.source\)\}<\/dd>/);
 assert.ok(modal.includes("Edit preparation"));
 assert.ok(modal.includes("Decision date"));
-assert.ok(modal.includes("Related records"));
+assert.ok(modal.includes("Job activity"));
+assert.ok(jobSnapshot.includes("Job snapshot"));
+assert.ok(!modal.includes("Continue preparation"));
+assert.ok(rail.includes("fitAssessmentVerdictLabel(assessmentSnapshot.result.verdict)"));
+assert.ok(!rail.includes("Strong fit"), "Prepare uses the one-word verdict vocabulary");
+assert.ok(!rail.includes("assessmentSnapshot.resumeLabel"), "Prepare does not repeat the assessed resume beside Fit");
+assert.ok(!rail.includes("fitAssessment.activeRun.resumeLabel"), "Fit progress stays concise");
 
-// Details uses compact application-control cards followed by read-only job-fact
-// cards in the wide pane. Fit and related history form the right rail.
-for (const heading of ["Job details", "Compensation", "Status", "Timing", "Skipped decision", "Fit assessment", "Related records history"]) {
-  assert.match(modal, new RegExp(`>${heading}<`), `Details exposes ${heading}`);
+for (const heading of [
+  "Job details",
+  "Compensation",
+  "Application status",
+  "Key dates",
+  "Fit assessment",
+  "Job activity"
+]) {
+  assert.match(modal, new RegExp(`>${heading}<`), `Overview exposes ${heading}`);
 }
+assert.doesNotMatch(modal, /<h4/, "application sections follow the dialog h2 at level 3");
+assert.ok(jobSnapshot.includes('<h3 id="application-job-snapshot-title"'));
+assert.ok(!jobSnapshot.includes("<h5"), "snapshot subsections sit one level below its h3");
+assert.ok(!documentsTab.includes("<h4"), "document cards follow the dialog h2 at level 3");
 assert.ok(modal.includes(">Role &amp; company<"));
-assert.ok(!modal.includes("application-details-pane__head"));
-assert.ok(!modal.includes(">Opportunity<"));
-assert.ok(!modal.includes(">Application record<"));
-assert.match(
-  modal,
-  /application-modal__main[\s\S]{0,500}?application-workflow-grid[\s\S]{0,1200}?form\.status[\s\S]{0,800}?form\.source[\s\S]{0,2600}?Skipped decision[\s\S]{0,1800}?application-job-facts[\s\S]{0,1000}?form\.company[\s\S]{0,1400}?form\.location[\s\S]{0,1800}?form\.salaryMin[\s\S]{0,1800}?ApplicationJobSnapshot/,
-  "the wide pane owns editable application controls followed by compact saved job facts"
-);
-assert.match(
-  modal,
-  /aria-label="Fit assessment and related history"[\s\S]{0,500}?Fit assessment[\s\S]{0,2800}?Related records history/,
-  "the right rail leads with Fit and keeps related history directly beneath it"
-);
 assert.match(modal, /tab === "prep"[\s\S]{0,900}?form\.notes/, "general notes live in Prep");
-assert.ok(modal.includes('className="application-match-card__title">Fit assessment</h4>'));
-assert.ok(!modal.includes("application-decision-status"), "the outcome is not rendered as a form-field imitation");
+assert.ok(!modal.includes("form.priority"));
 
-// The selected reference uses real fact cards without reintroducing nested form
-// shells, and the tabs still follow the APG model.
-assert.ok(!modal.includes('className="application-comp"'));
-assert.ok(!modal.includes('className="application-form__grid"'));
-assert.ok(modal.includes('className="application-details-pane application-modal__main"'));
-assert.ok(modal.includes('className="application-details-pane application-modal__side"'));
-assert.ok(modal.includes('className="application-job-card"'));
-assert.ok(modal.includes('className="application-fit-summary"'));
+for (const surface of [modal, inspector]) {
+  assert.ok(surface.includes("<ApplicationFitSummary"), "saved views share the Fit advisory");
+  assert.ok(surface.includes('<ul className="application-gap-list">'));
+  assert.ok(surface.includes("<li key={gap}>{gap}</li>"));
+  assert.ok(surface.includes('<ul className="application-related-records">'));
+  assert.ok(surface.includes('className="application-related-records__marker"'));
+}
+assert.ok(fitSummary.includes(">Verdict<"));
+assert.ok(!modal.includes("application-fit--ring"));
+assert.ok(!modal.includes("application-fit-summary__resume"));
+assert.ok(!modal.includes("Selected resume"));
+assert.doesNotMatch(applicationStyles, /\.application-fit-summary__resume/);
+assert.ok(applicationStyles.includes("@container fit-card"), "Fit adapts to its host width");
+
+assert.ok(modal.includes('aria-haspopup="dialog"'));
+assert.ok(modal.includes("<SkippedDecisionPopover"));
+assert.ok(!modal.includes("application-details-decision"));
+assert.ok(skippedDecisionPopover.includes('role="dialog"'));
+assert.ok(skippedDecisionPopover.includes('aria-label="Skipped decision"'));
+assert.ok(skippedDecisionPopover.includes('event.key !== "Escape"'));
+assert.ok(skippedDecisionPopover.includes("onClose(true)"));
+assert.ok(modal.includes("primaryInputRef.current?.focus()"));
+assert.ok(skippedDecisionPopover.includes("maxLength={2_000}"));
+
 assert.ok(modal.includes('role="tablist"'));
 assert.match(modal, /role="tab"[\s\S]{0,400}?aria-selected=\{tab === id\}/);
-assert.match(modal, /tabIndex=\{tab === id \? 0 : -1\}/, "roving tabindex");
-assert.ok(!modal.includes("aria-pressed={tab === id}"), "tabs are not toggle buttons");
+assert.match(modal, /tabIndex=\{tab === id \? 0 : -1\}/, "tabs use roving tabindex");
+assert.ok(!modal.includes("aria-pressed={tab === id}"));
 assert.ok(modal.includes('role="tabpanel"'));
-assert.equal(
-  (modal.match(/aria-controls="application-tabpanel"/g) ?? []).length,
-  1,
-  "each mapped tab points to the single mounted tab panel"
-);
+assert.equal((modal.match(/aria-controls="application-tabpanel"/g) ?? []).length, 1);
 assert.ok(modal.includes('id="application-tabpanel"'));
-assert.ok(!modal.includes("application-tabpanel-${id}"));
-assert.deepEqual(
-  [...modal.matchAll(/\{ id: "(details|prep|documents)", label: "([^"]+)"/g)].map((match) => match[2]),
-  ["Details", "Prep", "Documents"],
-  "Application Detail exposes three task-oriented tabs"
-);
 for (const key of ["ArrowRight", "ArrowLeft", "Home", "End"]) {
   assert.ok(modal.includes(`"${key}"`), `the tablist handles ${key}`);
 }
-
-// The Mono Means Data Rule: dates and money render as data, not prose.
-assert.equal(
-  (modal.match(/className="text-input is-data"/g) ?? []).length,
-  4,
-  "both date branches, deadline, and next step retain the data treatment"
-);
-assert.ok(applicationStyles.includes(".application-compensation-facts > div:not(:last-child) dd"));
-
-// The AI card no longer restates fields that sit beside it in the form.
-assert.ok(!modal.includes("application-checks"));
-assert.ok(!modal.includes("Stage: {STATUS_LABEL[form.status]}"));
-assert.ok(modal.includes("Mark as unrelated"));
-assert.ok(modal.includes("Merge accidental duplicate?"));
-assert.match(modal, /Merge accidental duplicate\?[\s\S]{0,700}?tone: "danger"/);
-assert.ok(
-  modal.includes("withoutSubmittedApplicationArtifacts(next)"),
-  "a record changed to Skipped cannot retain sent-document artifacts"
-);
-
-// The terminal, artifact-dropping downgrade must never ride a bare Save.
 assert.match(
   modal,
-  /Mark this job as Skipped\?[\s\S]{0,400}?tone: "danger"/,
-  "changing stage to Skipped confirms destructively"
+  /function selectTab[\s\S]{0,300}?closeSkipDecision\(false\)[\s\S]{0,300}?setRelatedMenu\(null\)[\s\S]{0,300}?setTab\(nextTab\)/,
+  "changing tabs closes surfaces anchored in the previous tab"
 );
-for (const flushPath of [
-  "if (!(await confirmSkipDowngrade(statusOverride))) return;",
-  "if (formHasUnsavedChanges && !(await confirmSkipDowngrade(form.status))) return;",
-  "if (!(await confirmSkipDowngrade(form.status))) return;"
-]) {
-  assert.ok(modal.includes(flushPath), `every form flush gates on the skip confirm: ${flushPath}`);
+assert.ok(modal.includes("onClick={() => selectTab(id)}"));
+
+assert.ok(modal.includes("Mark as unrelated"));
+assert.match(modal, /Merge accidental duplicate\?[\s\S]{0,700}?tone: "danger"/);
+assert.ok(modal.includes("withoutSubmittedApplicationArtifacts(next)"));
+assert.ok(!modal.includes("confirmSkipDowngrade"));
+
+assert.ok(!modal.includes("if (!open || !application) return null"));
+assert.ok(modal.includes("application ?? lastAvailableApplicationRef.current"));
+for (const artifact of ["resumeArtifacts", "coverLetterArtifacts", "attachments"]) {
+  assert.ok(modal.includes(`delete persisted.${artifact}`), `recovery drops stale ${artifact}`);
 }
 
-// The wide pane owns edits and saved job facts; the right rail is deliberately
-// reserved for Fit and related history in the selected reference composition.
-assert.ok(modal.includes('<aside className="application-details-pane application-modal__side" aria-label="Fit assessment and related history">'));
-assert.ok(
-  modal.indexOf('aria-label="Fit assessment and related history"') < modal.indexOf("application-match-card__title"),
-  "Fit stays at the top of the right rail"
-);
-assert.ok(
-  modal.indexOf("application-match-card__title") < modal.indexOf("application-related-records-title"),
-  "related history follows Fit"
-);
-assert.match(applicationStyles, /grid-template-columns:\s*minmax\(0, 1fr\) 360px/);
-assert.match(applicationStyles, /\.application-details-pane\s*\{[\s\S]{0,180}?display:\s*grid/);
-assert.match(applicationStyles, /\.application-details-section > h4,[\s\S]{0,180}?margin:\s*0/);
-assert.match(applicationStyles, /\.application-workflow-grid\s*\{[\s\S]{0,160}?grid-template-columns:\s*minmax\(240px/);
-assert.match(applicationStyles, /\.application-job-facts\s*\{[\s\S]{0,160}?grid-template-columns:\s*repeat\(2/);
-assert.match(applicationStyles, /\.application-job-card\s*\{[\s\S]{0,220}?border:\s*1px solid var\(--hairline\)/);
-assert.match(applicationStyles, /\.application-fit-summary\s*\{[\s\S]{0,300}?grid-template-columns:\s*88px/);
-assert.match(applicationStyles, /\.application-related-records li:not\(:last-child\)::after/);
-assert.ok(!modal.includes("application-prepared-snapshot"));
-assert.ok(!modal.includes("application-posting-reference"));
-assert.ok(!modal.includes("form.priority"));
+assert.ok(modal.includes("No other saved decisions or applications for this job."));
 assert.match(
   modal,
-  /application-job-facts[\s\S]{0,5000}?<ApplicationJobSnapshot application=\{application\} \/>/,
-  "the structured job snapshot finishes the same compact job-fact grid"
+  /aria-labelledby="application-job-activity-title"[\s\S]{0,500}?relatedApplications\.length \?/,
+  "Job activity keeps its populated and empty states"
 );
-assert.ok(jobSnapshot.includes("buildPreparedJobBrief"));
-assert.ok(jobSnapshot.includes("removePreparedJobRoleSummary"));
-assert.ok(
-  jobSnapshot.includes("buildPreparedJobBrief(preparedText, preparedText)"),
-  "the digest reads every edited prepared section, including Benefits"
-);
-assert.ok(jobSnapshot.includes("memo(function ApplicationJobSnapshot"));
+assert.ok(jobSnapshot.includes("buildPreparedJobBrief(preparedText, preparedText)"));
 for (const part of [
   "Overview",
   "Responsibilities",
@@ -158,29 +123,58 @@ for (const part of [
   assert.ok(jobSnapshot.includes(part), `the job snapshot can render ${part}`);
 }
 assert.ok(jobSnapshot.includes("const VISIBLE_LIST_ITEMS = 4"));
-assert.ok(jobSnapshot.includes("remainingItems.length"), "long sections collapse their remainder");
-assert.ok(jobSnapshot.includes('items={snapshot.brief.benefits} collapsed'), "Benefits stays bounded when saved prose is unusually long");
-assert.ok(jobSnapshot.includes("aria-label={`Job snapshot,"));
-assert.ok(jobSnapshot.includes("sectionCount"), "the summary reports scannable sections, not a noisy item total");
-assert.ok(jobSnapshot.includes("application-job-snapshot--source-only"));
-assert.ok(jobSnapshot.includes("application-job-card application-job-card--wide"));
-assert.match(applicationStyles, /\.application-job-snapshot__grid\s*\{[\s\S]{0,180}?grid-template-columns:\s*repeat\(2/);
+assert.ok(jobSnapshot.includes('items={snapshot.brief.benefits} collapsed'));
+assert.ok(jobSnapshot.includes("collapsed && items.length > VISIBLE_LIST_ITEMS"));
+assert.ok(jobSnapshot.includes('aria-labelledby="application-job-snapshot-title"'));
+assert.ok(!jobSnapshot.includes("sectionCount"));
+assert.ok(!jobSnapshot.includes('<details className="application-job-snapshot application-job-card'));
+assert.ok(jobSnapshot.includes("View posting"));
 
-// Desktop Details columns scroll independently; the stacked breakpoint returns
-// them to one natural scroll surface.
-assert.ok(modal.includes('application-modal__body--${tab === "details" ? "details" : "single"}'));
-assert.match(applicationStyles, /\.application-modal__main\s*\{[\s\S]{0,300}?overflow-y:\s*auto/);
-assert.match(applicationStyles, /\.application-modal__side\s*\{[\s\S]{0,500}?overflow-y:\s*auto/);
-assert.match(
-  applicationStyles,
-  /@media \(max-width: 1080px\)[\s\S]{0,900}?\.application-modal__main,[\s\S]{0,160}?overflow:\s*visible/,
-  "stacked Details uses the modal body as its single scroll surface"
+assert.ok(modal.includes("<ApplicationPostingOverlay"));
+assert.ok(
+  modal.includes("inert={postingOverlayOpen || stackedViewerOpen}"),
+  "stacked posting and document previews disable the underlying detail dialog"
 );
+assert.ok(app.includes("stackedViewerOpen={Boolean(documentPreview)}"));
+assert.ok(postingOverlay.includes('className="preview-overlay application-posting-overlay"'));
+assert.ok(postingOverlay.includes('role="dialog"'));
+assert.ok(postingOverlay.includes('aria-modal="true"'));
+assert.ok(postingOverlay.includes("useModalFocus"));
+assert.ok(postingOverlay.includes("<PreviewZoomControls"));
+assert.match(postingOverlay, /<pre[^>]*tabIndex=\{0\}/);
 
-// The immutable source is secondary to the digest, opt-in, and keyboard-scrollable.
-assert.ok(jobSnapshot.includes("Full source posting"));
-assert.ok(jobSnapshot.includes("application.rawJobDescription?.trim() || preparedText"));
-assert.match(jobSnapshot, /<pre tabIndex=\{0\}/);
+assert.ok(documentsTab.includes('aria-label="Job posting"'));
+assert.ok(documentsTab.includes("<JobPostingPane"));
+assert.ok(documentsTab.includes('application?.status === "not_applying"'));
+assert.ok(documentsTab.includes("Skipped jobs keep job details only"));
+assert.match(documentsTab, /disabled=\{!application \|\| jobOnly \|\| busy\}/);
+assert.ok(previewOverlay.includes("<PreviewZoomControls"));
+assert.ok(previewOverlay.includes("usePreviewZoom"));
+assert.ok(previewOverlay.includes("Saved document PDF preview:"));
+assert.ok(app.includes("const applicationPreviewRequestRef = useRef(0)"));
+assert.match(
+  app,
+  /const requestId = \+\+applicationPreviewRequestRef\.current;[\s\S]{0,600}?await applicationDocumentPdfBlob[\s\S]{0,300}?if \(requestId !== applicationPreviewRequestRef\.current\) return;[\s\S]{0,300}?URL\.createObjectURL\(blob\)/,
+  "only the latest saved-document preview request may open the viewer"
+);
+assert.match(
+  app,
+  /function closeApplicationPreview\(\)[\s\S]{0,200}?applicationPreviewRequestRef\.current \+= 1;[\s\S]{0,200}?setDocumentPreview\(null\)/,
+  "closing a preview invalidates any slower request still in flight"
+);
+assert.ok(app.includes("onClose={closeApplicationPreview}"));
+assert.ok(previewZoomControls.includes("PREVIEW_ZOOM_STEPS"));
+assert.ok(previewZoomControls.includes('aria-live="polite"'));
+for (const key of ['event.key === "="', 'event.key === "+"', 'event.key === "-"', 'event.key === "0"']) {
+  assert.ok(previewZoomControls.includes(key), `shared preview zoom handles ${key}`);
+}
+assert.ok(!previewZoomControls.includes("event.shiftKey"));
+for (const source of [modal, documentsTab, postingOverlay]) {
+  assert.ok(source.includes("safeExternalUrl"), "posting links use the safe URL boundary");
+}
+assert.ok(previewStyles.includes("@media (pointer: coarse)"));
+assert.ok(previewStyles.includes("min-width: 44px"));
+assert.ok(previewStyles.includes("min-height: 44px"));
 
 for (const text of [
   "Editing saved application",
@@ -188,18 +182,28 @@ for (const text of [
   "Editing saved job",
   "No application is created"
 ]) {
-  assert.ok(rail.includes(text), `the update-mode banner includes ${text}`);
+  assert.ok(rail.includes(text), `the update banner includes ${text}`);
 }
-// A permanent banner is not an announcement.
 assert.ok(!rail.includes('className="prepare-update-banner" role="status"'));
 
 assert.ok(!tracker.includes('label: "Open preparation"'));
 assert.ok(tracker.includes('label: "Edit preparation"'));
 assert.ok(tracker.includes("postingGroupSizeByApplicationId"));
 assert.ok(table.includes("independent records are linked to this posting"));
-// The badge lives inside a row that carries its own aria-label, so it only
-// reaches assistive tech through the composed row label.
 assert.ok(table.includes("records linked to this posting`"));
 assert.ok(inspector.includes('className="sr-only"'));
 assert.ok(inspector.includes("Each decision or application keeps its own status, dates, notes, and documents."));
 assert.ok(!inspector.includes('title="Each decision or application keeps'));
+for (const label of ["Job activity", "Application date", "Decision date", "Deadline", "Next step", "Documents"]) {
+  assert.ok(inspector.includes(label), `the inspector exposes ${label}`);
+}
+assert.ok(inspector.includes("safeExternalUrls"));
+assert.ok(inspector.includes("applicationActivityDate(app)"));
+assert.ok(duplicateReview.includes("applicationActivityDate(app)"));
+assert.ok(!duplicateReview.includes("<h4"), "duplicate cards follow the review dialog h2 at level 3");
+assert.match(
+  inspector,
+  /const hasResume = Boolean\(selected\.resumeArtifacts\?\.hasPdf \|\| selected\.resumeArtifacts\?\.hasSource\)/
+);
+assert.ok(!inspector.includes('<label className="field">'));
+assert.ok(!inspector.includes("APPLICATION_SOURCES"));

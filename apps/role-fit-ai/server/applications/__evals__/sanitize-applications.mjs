@@ -131,7 +131,13 @@ try {
         hasSource: true,
         fileName: "must-not-survive.cover",
         savedAt: "2026-07-28T10:00:00.000Z"
-      }
+      },
+      attachments: [{
+        fileName: "must-not-survive.pdf",
+        label: "Must not survive",
+        size: 100,
+        savedAt: "2026-07-28T10:00:00.000Z"
+      }]
     }
   ];
   const written = await writeApplications(workspace, sanitizeApplications(rawApplications));
@@ -264,11 +270,24 @@ try {
   ) {
     failures.push("Not applying decision metadata did not roundtrip");
   }
+
+  if (sanitizeApplications([{
+    id: "missing-skip-date",
+    title: "Missing skip date",
+    status: "not_applying",
+    createdAt: canonicalCreatedAt,
+    updatedAt: canonicalUpdatedAt
+  }]).length !== 0) {
+    failures.push("a Skipped decision without a canonical decision date was accepted");
+  }
   if (passedJob?.appliedAt !== undefined || passedJob?.resumeUsed !== undefined) {
     failures.push("Not applying retained application-attempt fields");
   }
   if (passedJob?.resumeArtifacts !== undefined || passedJob?.coverLetterArtifacts !== undefined) {
     failures.push("Not applying retained sent-document artifacts");
+  }
+  if (passedJob?.attachments !== undefined) {
+    failures.push("Not applying retained additional application documents");
   }
   const storedJson = JSON.parse(await readFile(applicationsFilePath(workspace), "utf8"));
   const storedPass = storedJson.applications.find((entry) => entry.id === "passed-job");
@@ -412,7 +431,13 @@ try {
       sourceFingerprint: "typeset-resume-1",
       fileName: "draft.resume",
       savedAt: canonicalUpdatedAt
-    }
+    },
+    attachments: [{
+      fileName: "draft.pdf",
+      label: "Draft",
+      size: 100,
+      savedAt: canonicalUpdatedAt
+    }]
   };
   await writeFile(filePath, JSON.stringify({ applications: [legacyInterested] }), "utf8");
   try {
@@ -425,7 +450,11 @@ try {
     if (record?.applicationAnswers?.[0]?.answer !== "Product fit") {
       failures.push("a legacy Saved record lost its application answers during upgrade");
     }
-    if (record?.resumeUsed !== undefined || record?.resumeArtifacts !== undefined) {
+    if (
+      record?.resumeUsed !== undefined
+      || record?.resumeArtifacts !== undefined
+      || record?.attachments !== undefined
+    ) {
       failures.push("a legacy Saved record retained submitted-document metadata");
     }
     if (upgradedFile.applications?.[0]?.status !== "not_applying") {
@@ -489,6 +518,50 @@ try {
   }
   if (!fullSnapshotRejected) {
     failures.push("a retired full-snapshot mutation request was accepted");
+  }
+
+  const forbiddenStatusRewrite = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "not_applying",
+    notApplyingAt: revisionBNext,
+    updatedAt: revisionBNext
+  }]);
+  let forbiddenStatusRewriteRejected = false;
+  try {
+    reconcileApplicationMutations(serverSnapshot, forbiddenStatusRewrite, [
+      { id: "record-a", operation: "upsert", baseUpdatedAt: revisionA }
+    ]);
+  } catch (error) {
+    forbiddenStatusRewriteRejected =
+      error instanceof ApplicationsStorageError && error.status === 400;
+  }
+  if (!forbiddenStatusRewriteRejected) {
+    failures.push("the server accepted a client-side rewrite from Applied to Skipped");
+  }
+
+  const advancedServerSnapshot = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "interviewing",
+    updatedAt: revisionBNext
+  }]);
+  const staleBackwardStatus = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "applied",
+    updatedAt: revisionC
+  }]);
+  let staleStatusReturnedConflict = false;
+  try {
+    reconcileApplicationMutations(advancedServerSnapshot, staleBackwardStatus, [
+      { id: "record-a", operation: "upsert", baseUpdatedAt: revisionA }
+    ]);
+  } catch (error) {
+    staleStatusReturnedConflict =
+      error instanceof ApplicationsStorageError
+      && error.status === 409
+      && error.currentApplications === advancedServerSnapshot;
+  }
+  if (!staleStatusReturnedConflict) {
+    failures.push("a stale status mutation did not return the authoritative conflict snapshot");
   }
 
   const newRecords = sanitizeApplications([

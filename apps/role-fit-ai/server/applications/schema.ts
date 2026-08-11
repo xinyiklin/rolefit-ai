@@ -6,6 +6,8 @@ import {
   safeAttachmentFileName
 } from "./documents.ts";
 import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
+import { APPLICATION_STATUSES } from "../../src/lib/applicationStatusTransitions.ts";
+import { JOB_POSTING_GROUP_ID_RE } from "../../src/lib/applicationRelationships.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -16,12 +18,10 @@ const isPresent = <T>(v: T): v is NonNullable<T> => Boolean(v);
 const inList = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
 
-const APPLICATION_STATUSES = ["not_applying", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
 const NOT_APPLYING_REASONS = ["fit", "interest", "constraints", "other"] as const;
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
-const JOB_POSTING_GROUP_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 export const MAX_APPLICATIONS = 500;
 const MAX_FIELD = 50_000;
 const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
@@ -341,6 +341,13 @@ function sanitizeApplication(raw: unknown) {
 
   if (!inList(APPLICATION_STATUSES, r.status)) return null;
   const status = r.status;
+  const notApplyingAt = status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
+    ? r.notApplyingAt
+    : undefined;
+  // Skipped is a dated decision, not a generic holding status. Every current
+  // write supplies this timestamp, and the one legacy upgrade derives it from
+  // the row's canonical revision before the sanitizer runs.
+  if (status === "not_applying" && !notApplyingAt) return null;
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
@@ -363,10 +370,7 @@ function sanitizeApplication(raw: unknown) {
     status,
     createdAt,
     appliedAt: status === "not_applying" ? undefined : typeof r.appliedAt === "string" ? r.appliedAt : "",
-    notApplyingAt:
-      status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
-        ? r.notApplyingAt
-        : undefined,
+    notApplyingAt,
     notApplyingReason:
       status === "not_applying" && inList(NOT_APPLYING_REASONS, r.notApplyingReason)
         ? r.notApplyingReason
@@ -389,7 +393,7 @@ function sanitizeApplication(raw: unknown) {
     contacts: sanitizeContacts(r.contacts),
     resumeArtifacts,
     coverLetterArtifacts,
-    attachments: sanitizeAttachments(r.attachments),
+    attachments: status === "not_applying" ? undefined : sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",

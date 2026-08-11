@@ -1,14 +1,13 @@
 // Per-document application saves: Apply creates the record with both document
 // snapshots, and afterwards the resume and the cover letter are each saved on
 // their own. The rules that must hold are that one document's update never
-// rewrites the other, never disturbs application metadata, and never targets an
-// application belonging to a different job.
+// rewrites the other, never disturbs application metadata, and never changes
+// the owning application id.
 
 import assert from "node:assert/strict";
 
 import {
   applicationDocumentSyncState,
-  applicationMatchesJobTarget,
   normalizeDocumentSnapshot,
   resumeUsedForApplication
 } from "../applicationDocuments.ts";
@@ -90,6 +89,23 @@ assert.equal(
   applicationDocumentSyncState(null, "coverLetter", "anything", coverSource),
   "no-application",
   "with no application the cover letter has nothing to update"
+);
+assert.equal(
+  applicationDocumentSyncState(
+    {
+      ...applied,
+      status: "not_applying",
+      appliedAt: undefined,
+      notApplyingAt: "2026-07-21T10:00:00.000Z",
+      resumeArtifacts: undefined,
+      coverLetterArtifacts: undefined
+    },
+    "resume",
+    "A resume opened after the job was skipped.",
+    editedResumeSource
+  ),
+  "job-only",
+  "a Skipped job cannot present an application-document update action"
 );
 assert.equal(
   applicationDocumentSyncState(applied, "resume", "APPLIED RESUME TEXT", resumeSource),
@@ -248,47 +264,5 @@ assert.deepEqual(
   "a cover-letter update never disturbs the saved resume artifact metadata"
 );
 assert.equal(afterCoverUpdate.id, applied.id, "updates target the existing application, never a new id");
-
-// ----- Job-target ownership of the remembered application -----
-
-assert.equal(
-  applicationMatchesJobTarget(applied, "https://boards.acme.com/jobs/42", "Build services."),
-  true,
-  "the applied record matches its own job link"
-);
-assert.equal(
-  applicationMatchesJobTarget(applied, "https://boards.acme.com/jobs/42?utm_source=news", ""),
-  true,
-  "tracking parameters do not break the match"
-);
-assert.equal(
-  applicationMatchesJobTarget(applied, "https://jobs.other.com/roles/9", ""),
-  false,
-  "a different posting does not match, so its documents cannot be saved onto this record"
-);
-assert.equal(
-  applicationMatchesJobTarget(
-    { ...applied, sourceUrls: [{ url: "https://linkedin.com/jobs/view/7", addedAt: "2026-07-20T10:00:00.000Z" }] },
-    "https://linkedin.com/jobs/view/7",
-    ""
-  ),
-  true,
-  "a repost absorbed as an alternate posting location still matches"
-);
-assert.equal(
-  applicationMatchesJobTarget({ ...applied, jobUrl: "" }, "", "Build services."),
-  true,
-  "a link-less application matches by its exact job description"
-);
-assert.equal(
-  applicationMatchesJobTarget({ ...applied, jobUrl: "" }, "", "A different posting entirely."),
-  false,
-  "a link-less application does not match another posting's description"
-);
-assert.equal(
-  applicationMatchesJobTarget({ ...applied, jobUrl: "" }, "", ""),
-  false,
-  "an empty job target matches nothing"
-);
 
 console.log("application-documents-eval: all checks passed");

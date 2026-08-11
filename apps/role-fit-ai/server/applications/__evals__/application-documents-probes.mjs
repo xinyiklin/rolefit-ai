@@ -195,6 +195,35 @@ try {
     "app-traversal"
   ]);
 
+  {
+    const now = new Date().toISOString();
+    const current = await readApplications(workspaceDir);
+    await writeApplications(workspaceDir, [{
+      id: "app-skipped",
+      title: "Skipped job",
+      jobUrl: "",
+      status: "not_applying",
+      notApplyingAt: now,
+      createdAt: now,
+      updatedAt: now
+    }, ...current]);
+    const rejected = await saveDocument("app-skipped", "resume", {
+      sourceText: resumeSource,
+      fileName: "must-not-save.resume"
+    });
+    assert.equal(rejected.status, 409, "a Skipped job rejects application-document saves");
+    const rejectedAttachment = await uploadAttachment("app-skipped", {
+      fileName: "must-not-save.pdf",
+      dataBase64: b64(pdfBytes)
+    });
+    assert.equal(rejectedAttachment.status, 409, "a Skipped job rejects additional-document saves");
+    assert.equal(
+      await exists(dirOf("app-skipped")),
+      false,
+      "rejected Skipped-document saves leave no orphan personal file"
+    );
+  }
+
   // --- Document body validation ---
   assert.equal((await saveDocument("app-good", "resume", {})).status, 400, "a save with no document is rejected");
   assert.match((await saveDocument("app-good", "cover", {})).json.error, /No document to save/);

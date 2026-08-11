@@ -486,11 +486,11 @@ function App() {
   const [statusFilter, setStatusFilter] = useState<ApplicationActivityFilter>("all");
   const [trackerView, setTrackerView] = useState<TrackerView>("table");
   const [expandedApplicationId, setExpandedApplicationId] = useState<string | null>(null);
-  // Saved-application resume PDF preview ({url,name} → open; null → closed).
-  const [resumePreview, setResumePreview] = useState<{
+  const [documentPreview, setDocumentPreview] = useState<{
     url: string;
     name: string;
   } | null>(null);
+  const applicationPreviewRequestRef = useRef(0);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
   // null → the modal is in "add" mode; an id → it edits that application.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
@@ -504,12 +504,17 @@ function App() {
   ) => void) | null>(null);
   const applicationOfRecordId = preparationSession.applicationId;
 
+  useEffect(() => () => {
+    sourceReplacementResolverRef.current?.("cancel");
+    sourceReplacementResolverRef.current = null;
+  }, []);
+
   useEffect(() => {
-    const url = resumePreview?.url;
+    const url = documentPreview?.url;
     return () => {
       if (url?.startsWith("blob:")) URL.revokeObjectURL(url);
     };
-  }, [resumePreview?.url]);
+  }, [documentPreview?.url]);
 
   // Warm the code-split tab chunks once the boot work has quieted down, so a
   // first visit to Applications or Analytics does not start with a fetch. Idle
@@ -949,8 +954,6 @@ function App() {
     updateApplicationById,
     saveApplication,
     updateStatus: updateApplicationStatus,
-    updateNotes: updateApplicationNotes,
-    updateField: updateApplicationField,
     remove: removeApplication,
     getApplication,
     storagePath: applicationsPath,
@@ -1958,11 +1961,6 @@ function App() {
   // job invalidates the proposal wholesale.
   const polishOutputCurrent = result?.source === "ai" && !proposalStale;
 
-  // The Apply flow (download-prompt state + commitApply/handleApply/
-  // handleApplyDownloadPick/handleApplyOnly/saveAppliedDocumentArtifacts) lives in
-  // useApplyFlow; App passes in the job/resume/result/export/duplicate-guard
-  // dependencies it needs and reads back the download-prompt state + handlers
-  // the Apply button and ApplyDownloadDialog wire up.
   const {
     applyDownloadPrompt,
     isApplying,
@@ -2384,17 +2382,26 @@ function App() {
   // as well, so a missing file surfaces through the same recoverable dialog.
   async function handlePreviewApplicationDocument(application: Application, kind: ApplicationDocumentKind = "resume") {
     const base = sanitizeFileBase(application.company || application.role || application.title || "resume");
+    const requestId = ++applicationPreviewRequestRef.current;
     try {
-      setResumePreview({
-        url: URL.createObjectURL(await applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL)),
+      const blob = await applicationDocumentPdfBlob(application, kind, import.meta.env.BASE_URL);
+      if (requestId !== applicationPreviewRequestRef.current) return;
+      setDocumentPreview({
+        url: URL.createObjectURL(blob),
         name: `${base}_${kind === "resume" ? "Resume" : "Cover_Letter"}.pdf`
       });
     } catch (error) {
+      if (requestId !== applicationPreviewRequestRef.current) return;
       await alert({
         title: "Preview failed",
         message: error instanceof Error ? error.message : "The saved document could not be previewed."
       });
     }
+  }
+
+  function closeApplicationPreview() {
+    applicationPreviewRequestRef.current += 1;
+    setDocumentPreview(null);
   }
 
   async function handleDownloadApplicationDocument(application: Application, kind: ApplicationDocumentKind) {
@@ -2511,16 +2518,16 @@ function App() {
             </>
           }
           overlay={
-            resumePreview ? (
+            documentPreview ? (
               <Suspense fallback={null}>
                 {/* Saved-application resume preview (react-pdf): views a PDF saved
                     in the tracker. The live editor is its own WYSIWYG preview, so
                     there is no separate compile-preview of the current resume. */}
                 <PreviewOverlay
                   isOpen
-                  pdfUrl={resumePreview.url}
-                  fileName={resumePreview.name}
-                  onClose={() => setResumePreview(null)}
+                  pdfUrl={documentPreview.url}
+                  fileName={documentPreview.name}
+                  onClose={closeApplicationPreview}
                 />
               </Suspense>
             ) : null
@@ -3039,8 +3046,6 @@ function App() {
                 trackerView={trackerView}
                 setTrackerView={setTrackerView}
                 onUpdateStatus={updateApplicationStatus}
-                onUpdateField={updateApplicationField}
-                onUpdateNotes={updateApplicationNotes}
                 onLoad={handleLoadApplication}
                 onOpenApplication={handleOpenApplicationDetail}
                 onPreviewResume={(app) => handlePreviewApplicationDocument(app, "resume")}
@@ -3143,6 +3148,7 @@ function App() {
           <ApplicationModal
             open
             application={modalApplication}
+            stackedViewerOpen={Boolean(documentPreview)}
             relatedApplications={modalRelatedApplications}
             onOpenRelated={(application) => {
               setModalApplicationId(application.id);

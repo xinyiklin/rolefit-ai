@@ -63,7 +63,7 @@ Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the
 main column and one Application rail combines both material choices, readiness,
 the saved-application summary, a flat Fit Assessment summary, and Apply. Fit
-Assessment shows only its four-level verdict, selected resume, summary, up to three
+Assessment shows only its four-level verdict, summary, up to three
 matches and gaps, and a relevant eligibility warning. It has distinct running,
 disabled, and retryable-unavailable states and never shows scores, confidence,
 evidence ledgers, quotations, recommendations, or historical audit state. Nothing on
@@ -92,7 +92,7 @@ excluded. Do not add “optional” labels, badges, or card-specific visual
 hierarchy. The Prepare and masthead Apply buttons invoke one handler and
 one readiness model: the current job must match a completed preparation, and
 only included materials must be ready while their preparation is idle. Either
-or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
+or both cards may be excluded. A later update treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
 Skip & save job is a lower-emphasis action beneath the primary Apply command in
 the Prepare rail only. It uses a neutral confirmation dialog with optional

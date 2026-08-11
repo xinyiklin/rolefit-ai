@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useLayoutEffect, useRef } from "react";
 import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy, Link2 } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import type { SortKey, SortState } from "../tabs/TrackerTab";
@@ -172,8 +172,27 @@ export function TrackerTableView({
   postingGroupSizes
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
+  const tableRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  const syncScrollbarWidth = useCallback(() => {
+    const table = tableRef.current;
+    const body = bodyRef.current;
+    if (!table || !body) return;
+    const scrollbarWidth = Math.max(0, body.offsetWidth - body.clientWidth);
+    table.style.setProperty("--applications-scrollbar-width", `${scrollbarWidth}px`);
+  }, []);
+
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    syncScrollbarWidth();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(syncScrollbarWidth);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [grouped, syncScrollbarWidth, visible.length]);
 
   // The header is outside the vertical scroller so the scrollbar starts below it
   // rather than running up alongside the column labels. That costs the free
@@ -195,7 +214,7 @@ export function TrackerTableView({
   }, []);
 
   return (
-    <div className="applications-table" role="region" aria-label="Applications">
+    <div ref={tableRef} className="applications-table" role="region" aria-label="Applications">
       <div className="applications-table__head" ref={headRef} onScroll={mirrorScroll("head")}>
         <div className="applications-table__row applications-table__row--head">
           {COLUMNS.map((col) => {

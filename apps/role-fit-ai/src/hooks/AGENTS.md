@@ -70,7 +70,7 @@ browser-side effects; components render them and App composes them.
   Prepare controls; it requires the prepared job and readiness only for
   included materials. It captures the Resume/Cover Letter Include selection
   before duplicate or download dialogs, permits either or both to be excluded,
-  and leaves a previously saved excluded artifact untouched on re-Apply. Apply
+  and leaves a previously saved excluded artifact untouched on a later update. Apply
   stores the complete editable prepared brief (including benefits) while
   Resume Polish receives the benefits-excluded model-facing projection. The captured
   posting remains immutable and separately persisted even when it initially
@@ -108,7 +108,7 @@ browser-side effects; components render them and App composes them.
 - `useApplyFlow` persists the latest completed Fit Assessment as an application
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,
-  re-Apply preserves the existing application snapshot instead of clearing it.
+  a later update preserves the existing application snapshot instead of clearing it.
   Its `isApplying` lifetime spans tracker confirmation and every included strict
   source save; App must include that entire phase in unload protection even when
   both editors began clean.
@@ -116,8 +116,10 @@ browser-side effects; components render them and App composes them.
   follow an application-of-record id established by the preparation session.
   Saving is always user initiated; no effect may write a document into an
   application. Fresh work has no document target, while restored update work
-  uses only its explicit id. Job URL or text matching must never infer that
-  target. `useApplicationAnswers` owns generation only: answer drafts stay in
+  uses only its explicit id. A restored Skipped job remains job-only history
+  and cannot accept resume, cover-letter, or additional application-document
+  artifacts. Job URL or text matching
+  must never infer that target. `useApplicationAnswers` owns generation only: answer drafts stay in
   the current browser session for editing and copying and never create or update
   a tracker record.
   `useApplicationFiles` sends the current application revision and refreshes

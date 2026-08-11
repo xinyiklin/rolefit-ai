@@ -16,7 +16,11 @@ import {
   planPostingRecordUnlink
 } from "../lib/applicationRelationships.ts";
 import type { NotApplyingReason } from "../lib/notApplying.ts";
-import { applicationStatusTransitionAllowed } from "../lib/applicationStatusTransitions.ts";
+import {
+  APPLICATION_STATUSES,
+  applicationStatusTransitionAllowed,
+  type ApplicationStatus
+} from "../lib/applicationStatusTransitions.ts";
 
 export {
   NOT_APPLYING_REASON_LABEL,
@@ -25,22 +29,8 @@ export {
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
-export type ApplicationStatus =
-  | "not_applying"
-  | "applied"
-  | "interviewing"
-  | "offer"
-  | "rejected"
-  | "withdrawn";
-
-export const APPLICATION_STATUSES: ApplicationStatus[] = [
-  "not_applying",
-  "applied",
-  "interviewing",
-  "offer",
-  "rejected",
-  "withdrawn"
-];
+export { APPLICATION_STATUSES };
+export type { ApplicationStatus };
 
 export type ApplicationSource = "" | "LinkedIn" | "Company site" | "Referral" | "Job board" | "Recruiter" | "Other";
 
@@ -240,8 +230,6 @@ export function makeApplicationRecord(
 }
 
 const MAX_SOURCE_URLS = 10;
-
-type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
 class ApplicationConflictError extends Error {
   applications: Application[];
@@ -488,36 +476,6 @@ export function useApplications() {
     [persist]
   );
 
-  const updateNotes = useCallback(
-    (id: string, notes: string) => {
-      const current = applicationsRef.current;
-      const existing = current.find((a) => a.id === id);
-      if (!existing) return;
-      const next = current.map((a) =>
-        a.id === id ? { ...a, notes, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
-      );
-      applicationsRef.current = next;
-      setApplications(next);
-      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
-    },
-    [persist]
-  );
-
-  const updateField = useCallback(
-    (id: string, field: EditableField, value: string) => {
-      const current = applicationsRef.current;
-      const existing = current.find((a) => a.id === id);
-      if (!existing) return;
-      const next = current.map((a) =>
-        a.id === id ? { ...a, [field]: value, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
-      );
-      applicationsRef.current = next;
-      setApplications(next);
-      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
-    },
-    [persist]
-  );
-
   const remove = useCallback(
     (id: string) => {
       const current = applicationsRef.current;
@@ -633,13 +591,33 @@ export function useApplications() {
       const inheritedDismissals = Array.from(
         new Set(members.flatMap((member) => member.duplicateDismissedIds ?? []))
       ).filter((id) => !ids.has(id));
-      const retainedPostingGroupId = canonical.jobPostingGroupId
-        && current.some((application) =>
-          !ids.has(application.id)
-          && application.jobPostingGroupId === canonical.jobPostingGroupId
+      const postingPlan = planPostingRecordLink(
+        current,
+        members.map((member) => member.id),
+        canonical.jobPostingGroupId
+      );
+      const survivingPostingMemberIds = new Set(
+        (postingPlan?.applicationIds ?? []).filter(
+          (id) => id === canonical.id || !ids.has(id)
         )
-        ? canonical.jobPostingGroupId
+      );
+      const retainedPostingGroupId = survivingPostingMemberIds.size > 1
+        ? postingPlan?.groupId
         : undefined;
+      const relationshipChanges = retainedPostingGroupId
+        ? current.filter(
+            (application) =>
+              application.id !== canonical.id
+              && survivingPostingMemberIds.has(application.id)
+              && application.jobPostingGroupId !== retainedPostingGroupId
+          )
+        : [];
+      const relationshipRevisions = new Map(
+        relationshipChanges.map((application) => [
+          application.id,
+          nextApplicationRevision(application.updatedAt)
+        ])
+      );
       const merged: Application = {
         ...canonical,
         sourceUrls,
@@ -653,11 +631,22 @@ export function useApplications() {
 
       const next = current
         .filter((a) => !ids.has(a.id) || a.id === canonicalId)
-        .map((a) => (a.id === canonicalId ? merged : a));
+        .map((a) => {
+          if (a.id === canonicalId) return merged;
+          const revision = relationshipRevisions.get(a.id);
+          return revision
+            ? { ...a, jobPostingGroupId: retainedPostingGroupId, updatedAt: revision }
+            : a;
+        });
       applicationsRef.current = next;
       setApplications(next);
       return persist(next, [
         { id: canonical.id, operation: "upsert", baseUpdatedAt: canonical.updatedAt },
+        ...relationshipChanges.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        })),
         ...others.map((application): ApplicationMutation => ({
           id: application.id,
           operation: "delete",
@@ -811,8 +800,6 @@ export function useApplications() {
     updateApplicationById,
     saveApplication,
     updateStatus,
-    updateNotes,
-    updateField,
     remove,
     getApplication,
     findDuplicatesForTarget,

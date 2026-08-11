@@ -5,6 +5,7 @@ import {
   duplicateApplicationId,
   sanitizeApplications
 } from "./schema.ts";
+import { applicationStatusTransitionAllowed } from "../../src/lib/applicationStatusTransitions.ts";
 
 export type ApplicationMutation = {
   id: string;
@@ -100,6 +101,17 @@ export function reconcileApplicationMutations(
         "This application changed in another tab. The latest saved tracker has been restored; review it before trying again.",
         409,
         existing
+      );
+    }
+    if (
+      mutation.operation === "upsert" &&
+      current &&
+      requested &&
+      !applicationStatusTransitionAllowed(current.status, requested.status)
+    ) {
+      throw new ApplicationsStorageError(
+        "That stage change would rewrite application history. No tracker changes were saved.",
+        400
       );
     }
     if (

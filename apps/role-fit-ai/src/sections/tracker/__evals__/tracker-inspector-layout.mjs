@@ -59,6 +59,20 @@ assert.match(
   /\.applications-table__body\s*\{[\s\S]{0,260}?overflow:\s*auto/,
   "application rows scroll inside the fixed-height table without hiding pagination"
 );
+const tableHeadRule = css.match(/\.applications-table__head\s*\{([^}]*)\}/)?.[1] ?? "";
+const tableBodyRule = css.match(/\.applications-table__body\s*\{([^}]*)\}/)?.[1] ?? "";
+assert.doesNotMatch(tableHeadRule, /scrollbar-gutter:\s*stable/, "the table header does not reserve an empty scrollbar strip");
+assert.doesNotMatch(tableBodyRule, /scrollbar-gutter:\s*stable/, "the table body does not reserve an empty scrollbar strip");
+assert.match(
+  tableHeadRule,
+  /padding-right:\s*var\(--applications-scrollbar-width,\s*0px\)/,
+  "the header reserves only the measured width of a scrollbar that is actually present"
+);
+assert.match(
+  tableView,
+  /body\.offsetWidth\s*-\s*body\.clientWidth[\s\S]{0,500}?--applications-scrollbar-width/,
+  "the table measures the live vertical scrollbar so its header and rows stay aligned"
+);
 assert.match(
   applicationHeightBlock,
   /\.applications-page\s*>\s*\.tracker-layout\s*>\s*\.pipeline-inspector\s*\{[\s\S]{0,260}?overflow-y:\s*auto/,
@@ -71,8 +85,22 @@ assert.match(
 );
 assert.match(
   css,
-  /\.pipeline-inspector \.application-chip-list span\s*\{[\s\S]{0,220}?white-space:\s*normal;[\s\S]{0,220}?overflow-wrap:\s*anywhere/,
-  "long assessment gaps wrap inside the inspector instead of widening it"
+  /\.application-gap-list li\s*\{[\s\S]{0,300}?min-width:\s*0;[\s\S]{0,300}?overflow-wrap:\s*anywhere/,
+  "semantic assessment gap rows wrap instead of widening the inspector"
+);
+assert.ok(
+  inspector.includes('<ul className="application-gap-list">'),
+  "the inspector presents sentence-length gaps as a reading list rather than chips"
+);
+assert.match(
+  inspector,
+  /Job activity[\s\S]{0,700}?<ul className="application-related-records">[\s\S]{0,700}?application-related-records__marker/,
+  "job activity reuses the saved-record timeline instead of the generic duplicate list"
+);
+assert.doesNotMatch(
+  inspector,
+  /inspector-related-record__open/,
+  "job activity has no orphaned one-off Open treatment"
 );
 assert.doesNotMatch(
   tableView,
@@ -99,6 +127,22 @@ assert.doesNotMatch(
   /pipeline-inspector__open|Open full application details/,
   "the inspector relies on its labeled Details action instead of a duplicate open icon"
 );
+assert.doesNotMatch(
+  inspector,
+  />\s*Job link\s*</,
+  "the inspector rail does not duplicate the job-link action available in application details"
+);
+assert.doesNotMatch(
+  inspector,
+  /verdictResume|<em>Resume<\/em>/,
+  "the inspector does not repeat the assessed resume beside the Fit verdict"
+);
+assert.doesNotMatch(
+  inspector,
+  /figures-strip figures-strip--compact|application-detail-score__reason/,
+  "the inspector no longer maintains a second Fit presentation"
+);
+assert.match(inspector, /<ApplicationFitSummary[\s\S]{0,360}?summary=/, "the inspector renders the shared verdict-and-rationale component");
 assert.match(
   tableView,
   /applications-table__body\$\{grouped && visible\.length \? " has-month-groups" : ""\}/,
@@ -107,7 +151,7 @@ assert.match(
 assert.match(
   css,
   /\.applications-table__body\.has-month-groups\s*\{[\s\S]{0,260}?background:\s*linear-gradient\([\s\S]{0,260}?var\(--paper-deep\)[\s\S]{0,260}?var\(--applications-month-divider-height\)/,
-  "the reserved scrollbar gutter continues the visible sticky month surface"
+  "the scrollport surface continues the visible sticky month band beneath an active scrollbar track"
 );
 assert.match(
   css,
@@ -125,4 +169,4 @@ assert.doesNotMatch(
   "the Applications register does not retain the removed priority column or display path"
 );
 
-console.log("tracker inspector layout contract: 19/19 checks passed");
+console.log("tracker inspector layout contract checks passed");

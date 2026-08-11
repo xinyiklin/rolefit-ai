@@ -1,8 +1,4 @@
-/**
- * Duplicate review for the current posting. Matching can pause a workflow,
- * open an exact saved record, or remember a non-destructive posting
- * relationship. It never chooses a tracker write target.
- */
+/** Reviews duplicate evidence without choosing a tracker write target. */
 import { useEffect, useRef, useState } from "react";
 import type { Application } from "./useApplications";
 import { NOT_APPLYING_REASON_LABEL } from "../lib/notApplying.ts";
@@ -10,10 +6,12 @@ import type { DuplicateMatch, DuplicateTarget } from "../lib/jobIdentity";
 import type { JobPostingRelationship } from "../lib/preparationSession";
 import {
   STATUS_LABEL,
+  applicationActivityDate,
   displayCompany,
   displayRole,
   formatCompactDate
 } from "../lib/applicationDisplay";
+import { contentFingerprint } from "../lib/contentFingerprint.ts";
 
 type TrackingFacts = { company?: string; role?: string; location?: string };
 
@@ -64,15 +62,10 @@ type Acknowledgment = {
 };
 
 function makeJobKey(url: string, text: string): string {
-  return `${url.trim()}\u0000${text.trim().slice(0, 500)}`;
-}
-
-function hashKey(value: string): string {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = ((hash << 5) + hash + value.charCodeAt(index)) | 0;
-  }
-  return (hash >>> 0).toString(36);
+  // The acknowledgment and autosave provenance both describe the exact
+  // posting. Hash the complete bounded source rather than a shared header;
+  // many boards put role-specific content well after the first 500 characters.
+  return contentFingerprint(`${url.trim()}\u0000${text.trim()}`);
 }
 
 function relationshipFor(match: DuplicateMatch<Application>): JobPostingRelationship {
@@ -90,7 +83,7 @@ function relationshipFor(match: DuplicateMatch<Application>): JobPostingRelation
 function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationPrompt {
   const application = match.application;
   const roleAtCompany = `${displayRole(application)} at ${displayCompany(application)}`;
-  const when = application.appliedAt || application.updatedAt;
+  const when = applicationActivityDate(application) || application.updatedAt;
   const evidence = match.evidence.length ? `\n${match.evidence.join("\n")}` : "";
 
   if (match.confidence !== "exact") {
@@ -101,14 +94,13 @@ function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationProm
     };
   }
   if (String(application.status) === "not_applying") {
-    const notApplyingAt = application.notApplyingAt;
     const reason = application.notApplyingReason
       ? `\nReason: ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
       : "";
     return {
       kind: "existing-not-applying",
       title: "You previously skipped this job",
-      message: `Skipped on ${formatCompactDate(notApplyingAt || when)}.${reason}${evidence}`
+      message: `Skipped on ${formatCompactDate(when)}.${reason}${evidence}`
     };
   }
   return {
@@ -151,16 +143,8 @@ export function useDuplicateGuard({
     };
   }
 
-  function currentJobKey(): string {
-    return targetJobKey(currentTarget());
-  }
-
   function currentJobKeyHash(): string {
-    return hashKey(currentJobKey());
-  }
-
-  function currentMatch(): DuplicateMatch<Application> | undefined {
-    return findDuplicatesForTarget(currentTarget())[0];
+    return targetJobKey(currentTarget());
   }
 
   function acknowledgedDecision(
@@ -182,7 +166,7 @@ export function useDuplicateGuard({
   }
 
   function duplicateNote(match: DuplicateMatch<Application>): string {
-    const when = match.application.appliedAt || match.application.updatedAt;
+    const when = applicationActivityDate(match.application) || match.application.updatedAt;
     return `${STATUS_LABEL[match.application.status]} · ${formatCompactDate(when)}: ${match.evidence[0] ?? "matching posting"}`;
   }
 
@@ -241,10 +225,7 @@ export function useDuplicateGuard({
     return { action: "continue", relationship };
   }
 
-  async function confirmDuplicateGate(
-    target: DuplicateTarget,
-    _nextStage: "Job analysis" | "Resume Polish"
-  ): Promise<DuplicateGateResult> {
+  async function confirmDuplicateGate(target: DuplicateTarget): Promise<DuplicateGateResult> {
     const match = findDuplicatesForTarget(target)[0];
     if (!match) return { proceed: true, note: null };
 
@@ -272,7 +253,7 @@ export function useDuplicateGuard({
     };
   }
 
-  async function confirmDuplicateBeforeJobAnalysis(
+  async function confirmDuplicateForJobAnalysis(
     url: string,
     text: string,
     facts: TrackingFacts
@@ -283,30 +264,16 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    }, "Job analysis");
-  }
-
-  async function confirmDuplicateAfterJobAnalysis(
-    url: string,
-    text: string,
-    facts: TrackingFacts
-  ): Promise<DuplicateGateResult> {
-    return confirmDuplicateGate({
-      jobUrl: url,
-      jobText: text,
-      company: facts.company,
-      role: facts.role,
-      location: facts.location
-    }, "Resume Polish");
+    });
   }
 
   async function confirmDuplicateBeforePolish(): Promise<boolean> {
-    return (await confirmDuplicateGate(currentTarget(), "Resume Polish")).proceed;
+    return (await confirmDuplicateGate(currentTarget())).proceed;
   }
 
   async function resolveApplyDuplicate(): Promise<DuplicateResolution> {
     const target = currentTarget();
-    const match = currentMatch();
+    const match = findDuplicatesForTarget(target)[0];
     return match ? resolveMatch(match, target) : { action: "continue", relationship: null };
   }
 
@@ -314,8 +281,8 @@ export function useDuplicateGuard({
     duplicatePrompt,
     chooseDuplicate,
     currentJobKeyHash,
-    confirmDuplicateBeforeJobAnalysis,
-    confirmDuplicateAfterJobAnalysis,
+    confirmDuplicateBeforeJobAnalysis: confirmDuplicateForJobAnalysis,
+    confirmDuplicateAfterJobAnalysis: confirmDuplicateForJobAnalysis,
     confirmDuplicateBeforePolish,
     resolveApplyDuplicate,
     ackApplication
