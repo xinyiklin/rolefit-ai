@@ -5,6 +5,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The fifth Not applying workflow stage removes the remaining
+  job-match write destinations.** Per-document resume and cover-letter saves now
+  resolve only `PreparationSession.applicationId`; fresh work has no document
+  target, while draft/update work uses its exact id. Application-answer saves no
+  longer call a general upsert or exact-job lookup: a fresh save waits for the
+  tracker, reuses duplicate relationship review, creates one `interested` draft,
+  links or separates it explicitly, and publishes that id back as the draft
+  session; later saves fail closed or update that id. The unused ordinary
+  `upsert` and `findForTarget` store APIs are removed. Fit snapshots continue to
+  persist only through the session-scoped Apply/Pass/update builders. The
+  production, landing, and desktop builds plus all 96 offline evaluations pass
+  under pinned Node 24. Browser QA is not needed for this
+  state/persistence-only slice. No push or merge occurred.
 - [USER+CODE+TOOL] **The fourth Not applying workflow stage adds an explicit
   decision path without fabricating an application.** A quiet **Pass on this
   job** action appears only in the prepared Application rail for fresh work or

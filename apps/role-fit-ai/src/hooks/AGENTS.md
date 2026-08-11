@@ -107,12 +107,14 @@ browser-side effects; components render them and App composes them.
   Its `isApplying` lifetime spans tracker confirmation and every included strict
   source save; App must include that entire phase in unload protection even when
   both editors began clean.
-- `useApplicationDocumentSync` owns the session's application link and the two
-  explicit per-document saves that follow Apply. Saving is always user
-  initiated; no effect may write a document into an application. Apply or
-  tracker restore establishes an application of record, and editing its
-  prepared brief must not sever that identity; only fresh intake may release
-  the link.
+- `useApplicationDocumentSync` owns the two explicit per-document saves that
+  follow an application-of-record id established by the preparation session.
+  Saving is always user initiated; no effect may write a document into an
+  application. Fresh work has no document target, while draft/update work uses
+  only its explicit id. Job URL or text matching must never infer that target.
+  `useApplicationAnswers` follows the same identity rule: a first save in new
+  mode creates and publishes one interested-draft id after relationship review;
+  later saves update only that exact draft/update record.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

@@ -4,7 +4,6 @@ import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
 import { dedupeSourceUrls, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
-import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 import {
   applicationMutationRecords,
   reconcileApplicationWriteResponse,
@@ -111,7 +110,7 @@ export type Application = {
   // change what "Prepare again" analyzes.
   rawJobDescription?: string;
   // Per-stage AI usage snapshot, captured at Apply
-  // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
+  // time. Whole-map-replace on tracker write — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
   status: ApplicationStatus;
@@ -243,26 +242,6 @@ export function makeApplicationDraft(
 }
 
 const MAX_SOURCE_URLS = 10;
-
-// Union existing.sourceUrls + incoming.sourceUrls + whichever of the two
-// records' primary jobUrl is non-empty and is NOT the final merged primary —
-// so a URL that used to be primary (or an incoming primary that lost to the
-// existing one) is still remembered as an alternate posting location. The
-// dedup/cap/earliest-addedAt rules live in the shared dedupeSourceUrls (one
-// implementation with the group-merge path and the server sanitizer).
-function mergeSourceUrls(existing: Application, incoming: Application, now: string) {
-  const finalPrimary = (incoming.jobUrl || existing.jobUrl).trim();
-  const candidates: { url?: string; source?: string; addedAt?: string }[] = [
-    ...(existing.sourceUrls ?? []),
-    ...(incoming.sourceUrls ?? []),
-    ...[existing.jobUrl, incoming.jobUrl]
-      .map((rawUrl) => (rawUrl ?? "").trim())
-      .filter(Boolean)
-      .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
-  ];
-  const result = dedupeSourceUrls(candidates, finalPrimary, now, MAX_SOURCE_URLS);
-  return result.length ? result : undefined;
-}
 
 type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
@@ -415,46 +394,6 @@ export function useApplications() {
     }
   }, []);
 
-  const upsert = useCallback(
-    (incoming: Application) => {
-      const current = applicationsRef.current;
-      const now = new Date().toISOString();
-      // A tracker id is the only ordinary write destination. Job identity is
-      // advisory relationship evidence and must never select a record to replace.
-      const idx = current.findIndex((a) => a.id === incoming.id);
-      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
-      const merged: Application = idx >= 0
-        ? {
-            ...current[idx],
-            ...incoming,
-            id: current[idx].id,
-            title: current[idx].title || incoming.title,
-            company: current[idx].company || incoming.company,
-            role: current[idx].role || incoming.role,
-            source: current[idx].source || incoming.source,
-            jobUrl: incoming.jobUrl || current[idx].jobUrl,
-            jobDescription: incoming.jobDescription || current[idx].jobDescription,
-            rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
-            sourceUrls: mergeSourceUrls(current[idx], incoming, now),
-            updatedAt: revision,
-            createdAt: current[idx].createdAt
-          }
-        : { ...incoming, createdAt: now, updatedAt: revision };
-
-      const next = idx >= 0
-        ? current.map((a, i) => (i === idx ? merged : a))
-        : [merged, ...current];
-      applicationsRef.current = next;
-      setApplications(next);
-      return persist(next, [{
-        id: merged.id,
-        operation: "upsert",
-        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
-      }]);
-    },
-    [persist]
-  );
-
   const createApplication = useCallback(
     (incoming: Application) => {
       const current = applicationsRef.current;
@@ -507,11 +446,8 @@ export function useApplications() {
     [persist]
   );
 
-  // Full overwrite of one application by id (the detail/add modal's save path).
-  // Unlike `upsert` — which deliberately preserves existing non-empty title /
-  // company / role / source for deduplicated secondary writes — this lets
-  // the user actually edit those fields. Incoming wins for every field; only id
-  // and createdAt are pinned. A new id (no match) is prepended.
+  // Full overwrite of one application by id (the detail modal's save path).
+  // Incoming wins for every editable field; only id and createdAt are pinned.
   const saveApplication = useCallback(
     (incoming: Application) => {
       return applicationsRef.current.some((application) => application.id === incoming.id)
@@ -587,18 +523,6 @@ export function useApplications() {
       void persist(next, [{ id, operation: "delete", baseUpdatedAt: existing.updatedAt }]);
     },
     [persist]
-  );
-
-  // Find an existing application matching the current job target — by
-  // normalized URL when present, else by exact job-description text for
-  // link-less entries. This is read-only duplicate/relationship evidence; it
-  // never selects an ordinary persistence destination. EXACT-tier only.
-  const findForTarget = useCallback(
-    (targetUrl: string, targetDescription: string) =>
-      applications.find((application) =>
-        applicationMatchesJobTarget(application, targetUrl, targetDescription)
-      ),
-    [applications]
   );
 
   const getApplication = useCallback(
@@ -823,7 +747,6 @@ export function useApplications() {
     error,
     storagePath,
     pendingWrites,
-    upsert,
     createApplication,
     updateApplicationById,
     saveApplication,
@@ -832,7 +755,6 @@ export function useApplications() {
     updateField,
     remove,
     getApplication,
-    findForTarget,
     findDuplicatesForTarget,
     linkPostingRecords,
     markPostingRecordsUnrelated,

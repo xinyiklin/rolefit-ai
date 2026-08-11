@@ -348,6 +348,10 @@ Good frontend verification covers:
   quiet action remains in Prepare rather than the masthead. The storage probes
   additionally verify decision metadata roundtrips while `appliedAt` and sent
   document fields are omitted.
+  `src/lib/__evals__/explicit-application-write-targets.mjs` proves first-answer
+  draft creation, exact-id answer updates, missing-target failure, document-sync
+  ID ownership, relationship handling, and the absence of the retired
+  `findForTarget` and ordinary `upsert` write APIs.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three

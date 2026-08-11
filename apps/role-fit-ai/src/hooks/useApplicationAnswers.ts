@@ -11,6 +11,9 @@ import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { makeApplicationDraft, type Application } from "./useApplications";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
+import type { DuplicateResolution } from "./useDuplicateGuard.ts";
+import type { PreparationSession } from "../lib/preparationSession.ts";
+import { applicationAnswerCommit } from "../lib/applicationAnswerCommit.ts";
 
 type UseApplicationAnswersArgs = {
   resumeText: string;
@@ -26,8 +29,14 @@ type UseApplicationAnswersArgs = {
   aiRequest: StageConfig;
   providerReady: boolean;
   providerMessage: string;
-  upsertApplication: (app: Application) => Promise<boolean>;
-  findForTarget: (url: string, desc: string) => Application | undefined;
+  preparationSession: PreparationSession;
+  hasLoadedApplications: boolean;
+  createApplication: (app: Application) => Promise<boolean>;
+  updateApplicationById: (app: Application) => Promise<boolean>;
+  linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
+  markPostingRecordsUnrelated: (applicationIds: string[]) => Promise<boolean>;
+  resolvePreparationDuplicate: () => Promise<DuplicateResolution>;
+  onDraftCreated: (applicationId: string) => void;
 };
 
 // Owns the Application Questions tab: drafting answers/role descriptions via the
@@ -48,8 +57,14 @@ export function useApplicationAnswers({
   aiRequest,
   providerReady,
   providerMessage,
-  upsertApplication,
-  findForTarget
+  preparationSession,
+  hasLoadedApplications,
+  createApplication,
+  updateApplicationById,
+  linkPostingRecords,
+  markPostingRecordsUnrelated,
+  resolvePreparationDuplicate,
+  onDraftCreated
 }: UseApplicationAnswersArgs) {
   const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
   const [answersStatus, setAnswersStatus] = useState("");
@@ -82,6 +97,19 @@ export function useApplicationAnswers({
   const lastRequestRef = useRef<{ questions: string[]; includeRoleDescriptions: boolean } | null>(null);
   const requestGenerationRef = useRef(0);
   const requestAbortRef = useRef<AbortController | null>(null);
+  const answerSaveInFlightRef = useRef(false);
+  const preparationSessionRef = useRef(preparationSession);
+  preparationSessionRef.current = preparationSession;
+  const answerSaveContext = [
+    preparationSession.mode,
+    preparationSession.applicationId ?? "",
+    jobUrl.trim(),
+    applicationJobDescription,
+    applicationRawJobDescription,
+    JSON.stringify(applicationTracking)
+  ].join("\u0000");
+  const answerSaveContextRef = useRef(answerSaveContext);
+  answerSaveContextRef.current = answerSaveContext;
   const inputFingerprint = workflowInputFingerprint({
     resumeText,
     resumeData,
@@ -231,33 +259,100 @@ export function useApplicationAnswers({
   }
 
   async function handleSaveAnswers(items: { question: string; answer: string }[]) {
-    if (!items.length) return;
+    if (!items.length || answerSaveInFlightRef.current) return;
     if (!jobUrl.trim() && !jobDescription.trim()) {
       setAnswersStatus("Prepare a job on Prepare before saving answers to the pipeline.");
       return;
     }
-    const now = new Date().toISOString();
-    const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-    const existing = linkedApplication ?? findForTarget(jobUrl, applicationJobDescription);
-    if (existing) {
-      const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
-      for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
-      for (const a of saved) byQuestion.set(a.question, a);
-      const didSave = await upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
-      setAnswersStatus(didSave
-        ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`
-        : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entry and retry.");
-      return;
+    answerSaveInFlightRef.current = true;
+    try {
+      const session = preparationSession;
+      const now = new Date().toISOString();
+      const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
+      if (session.mode !== "new") {
+        const commit = applicationAnswerCommit({
+          session,
+          existing: linkedApplication,
+          draft: null,
+          answers: saved
+        });
+        if (!commit) {
+          setAnswersStatus(
+            "Could not save answers because the selected pipeline record is no longer available. Reopen the preparation and retry."
+          );
+          return;
+        }
+        const didSave = await updateApplicationById(commit.application).catch(() => false);
+        setAnswersStatus(didSave
+          ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${commit.application.title}" in the pipeline.`
+          : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entry and retry.");
+        return;
+      }
+
+      if (!hasLoadedApplications) {
+        setAnswersStatus("Wait for Applications to finish loading before saving answers.");
+        return;
+      }
+      const capturedSaveContext = answerSaveContext;
+      let resolution: DuplicateResolution;
+      try {
+        resolution = await resolvePreparationDuplicate();
+      } catch {
+        setAnswersStatus("Duplicate checking failed, so the answers were not saved. Retry Save selected.");
+        return;
+      }
+      if (resolution.action !== "continue") return;
+      if (
+        preparationSessionRef.current.mode !== "new"
+        || answerSaveContextRef.current !== capturedSaveContext
+      ) {
+        setAnswersStatus("The preparation changed while duplicate review was open. Review the current job and save again.");
+        return;
+      }
+
+      const draft: Application = {
+        ...makeApplicationDraft(jobUrl, applicationJobDescription, applicationTracking),
+        rawJobDescription: applicationRawJobDescription.trim()
+      };
+      const commit = applicationAnswerCommit({
+        session,
+        existing: null,
+        draft,
+        answers: saved
+      });
+      if (!commit) return;
+      const app = commit.application;
+      const didSave = await createApplication(app).catch(() => false);
+      if (!didSave) {
+        setAnswersStatus(
+          "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entries and retry."
+        );
+        return;
+      }
+
+      let relationshipWarning = "";
+      if (resolution.relationship) {
+        const linked = await linkPostingRecords(
+          [app.id, resolution.relationship.matchedApplicationId],
+          resolution.relationship.jobPostingGroupId
+        ).catch(() => null);
+        if (!linked) relationshipWarning = " The related posting could not be linked; both records remain separate.";
+      } else if (resolution.unrelatedApplicationId) {
+        const separated = await markPostingRecordsUnrelated([
+          app.id,
+          resolution.unrelatedApplicationId
+        ]).catch(() => false);
+        if (!separated) {
+          relationshipWarning = " The Keep separate decision could not be saved; the records may appear in duplicate review.";
+        }
+      }
+      onDraftCreated(app.id);
+      setAnswersStatus(
+        `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline draft, "${app.title}".${relationshipWarning}`
+      );
+    } finally {
+      answerSaveInFlightRef.current = false;
     }
-    const app: Application = {
-      ...makeApplicationDraft(jobUrl, applicationJobDescription, applicationTracking),
-      rawJobDescription: applicationRawJobDescription.trim(),
-      applicationAnswers: saved
-    };
-    const didSave = await upsertApplication(app);
-    setAnswersStatus(didSave
-      ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`
-      : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entries and retry.");
   }
 
   return {

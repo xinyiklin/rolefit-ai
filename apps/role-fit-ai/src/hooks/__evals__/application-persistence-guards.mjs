@@ -53,8 +53,8 @@ assert.doesNotMatch(
 );
 assert.match(
   applications,
-  /const idx = current\.findIndex\(\(a\) => a\.id === incoming\.id\)/,
-  "ordinary tracker persistence matches existing records by explicit id only"
+  /const updateApplicationById = useCallback[\s\S]{0,240}?current\.findIndex\(\(application\) => application\.id === incoming\.id\)/,
+  "the dedicated update path matches an existing record by explicit id only"
 );
 assert.match(
   applications,

@@ -7,10 +7,10 @@
  * actions, so either document can be finished or revised after applying without
  * copying it by hand.
  *
- * State ownership: the remembered application link, the per-document busy /
- * status / just-saved state are OWNED here. The applications store, the job
- * target, and the two editors' current content arrive as args and are never
- * mutated except through the atomic application-file mutation boundary.
+ * State ownership: the per-document busy / status / just-saved state is OWNED
+ * here. The explicit preparation application id, applications store, and the
+ * two editors' current content arrive as args and are never mutated except
+ * through the atomic application-file mutation boundary.
  *
  * Saving is ALWAYS user-initiated. Nothing here runs on an effect: regenerating
  * or editing a document must never silently rewrite what the application holds.
@@ -20,7 +20,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Application } from "./useApplications";
 import {
   applicationDocumentSyncState,
-  applicationMatchesJobTarget,
   type ApplicationDocumentKind,
   type ApplicationDocumentSyncState
 } from "../lib/applicationDocuments";
@@ -46,9 +45,7 @@ export type ApplicationDocumentSync = {
 
 type UseApplicationDocumentSyncArgs = {
   applications: Application[];
-  findForTarget: (url: string, desc: string) => Application | undefined;
-  jobUrl: string;
-  jobDescription: string;
+  applicationId: string | null;
   currentResumeText: string;
   currentResumeSource: string;
   resumeDocumentVersion: string;
@@ -66,9 +63,6 @@ type UseApplicationDocumentSyncArgs = {
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
   onResumeSaved: () => void;
   onCoverLetterSaved: () => void;
-  // Apply/restore explicitly establishes an application of record. Prepared
-  // brief edits may then change target text without meaning "new posting".
-  preserveLinkedApplication: boolean;
 };
 
 type DocumentFeedback = {
@@ -85,9 +79,7 @@ const NO_FEEDBACK: DocumentFeedback = {
 
 export function useApplicationDocumentSync({
   applications,
-  findForTarget,
-  jobUrl,
-  jobDescription,
+  applicationId,
   currentResumeText,
   currentResumeSource,
   resumeDocumentVersion,
@@ -98,13 +90,8 @@ export function useApplicationDocumentSync({
   getResumeArtifacts,
   getCoverLetterArtifacts,
   onResumeSaved,
-  onCoverLetterSaved,
-  preserveLinkedApplication
+  onCoverLetterSaved
 }: UseApplicationDocumentSyncArgs) {
-  // The application this session applied to (or restored from the tracker). It
-  // takes precedence over the job-target lookup because Apply may have merged
-  // into a record whose own primary URL is a different posting of the same role.
-  const [linkedId, setLinkedId] = useState<string | null>(null);
   const [savingKinds, setSavingKinds] = useState<Set<ApplicationDocumentKind>>(() => new Set());
   const [resumeFeedback, setResumeFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
   const [coverFeedback, setCoverFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
@@ -115,38 +102,22 @@ export function useApplicationDocumentSync({
     coverLetter: coverLetterDocumentVersion
   });
 
-  const linkApplication = useCallback((id: string | null) => {
-    setLinkedId(id);
-    setResumeFeedback(NO_FEEDBACK);
-    setCoverFeedback(NO_FEEDBACK);
-  }, []);
-
-  const targetMatch = findForTarget(jobUrl, jobDescription);
-  const linked = linkedId ? (applications.find((a) => a.id === linkedId) ?? null) : null;
-  const linkedMatchesTarget = Boolean(
-    linked && applicationMatchesJobTarget(linked, jobUrl, jobDescription)
-  );
-  // Do not wait for the cleanup effect before withholding a stale linked row:
-  // the save callback rendered in that frame must already target safely.
-  const eligibleLinked = linked && (preserveLinkedApplication || linkedMatchesTarget) ? linked : null;
-  const application = eligibleLinked ?? targetMatch ?? null;
+  // The explicit preparation id is the only document destination. A matching
+  // URL or job description is duplicate evidence, never permission to update a
+  // historical record.
+  const application = applicationId
+    ? applications.find((candidate) => candidate.id === applicationId) ?? null
+    : null;
   latestSaveIdentityRef.current = {
     applicationId: application?.id ?? "",
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
   };
 
-  // Drop the link once the desk is pointed at a different posting. Without this
-  // an "Update application" after loading a new job would write this job's
-  // document onto the previous role's record.
   useEffect(() => {
-    if (!linked) return;
-    if (preserveLinkedApplication) return;
-    if (linkedMatchesTarget) return;
-    setLinkedId(null);
     setResumeFeedback(NO_FEEDBACK);
     setCoverFeedback(NO_FEEDBACK);
-  }, [linked, linkedMatchesTarget, preserveLinkedApplication]);
+  }, [applicationId]);
 
   // "Updated just now" has to stop being true on its own — a timer drops the
   // marker (leaving any status line intact) so the row settles back to the
@@ -294,7 +265,7 @@ export function useApplicationDocumentSync({
     [coverFeedback, coverLetterText, coverState, saveCoverLetter, savingKinds, targetLabel]
   );
 
-  return { application, linkApplication, resume, coverLetter };
+  return { application, resume, coverLetter };
 }
 
 // Row copy for one document. Kept terse: a title that names the action (or the

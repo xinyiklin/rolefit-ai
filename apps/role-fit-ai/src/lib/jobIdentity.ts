@@ -159,9 +159,9 @@ export function normalizeJobUrl(url: string): string {
 }
 
 // Shared normalize-dedup for discovered posting URLs ("Found on" entries).
-// One implementation for the THREE writers — the client tracker's upsert merge,
-// its duplicate-group merge, and the server sanitizer — so their rules cannot
-// drift. Entries whose normalized URL equals the primary are dropped; the same
+// One implementation for the THREE writers — prepared application snapshots,
+// the manual duplicate-group merge, and the server sanitizer — so their rules
+// cannot drift. Entries whose normalized URL equals the primary are dropped; the same
 // normalized URL keeps its EARLIEST addedAt (ISO strings compare lexically) and
 // prefers whichever occurrence has a source label; capped at `max`.
 export function dedupeSourceUrls(

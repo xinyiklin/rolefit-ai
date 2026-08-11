@@ -93,7 +93,9 @@ a clean blank page with an editable header anchor, not an empty-state substitute
 That blank remains valid for editing and strict `.resume` save, but does not
 qualify for PDF export, Polish, or Apply until it contains meaningful evidence.
 The product also includes application-question drafts and a lightweight application pipeline
-tracker. Prepare gives Resume and Cover Letter matching material cards, each
+tracker. Saving questions during fresh preparation creates one interested draft
+and makes its id the session's explicit record; later answer and document saves
+use only that id, never a matching job URL or description. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
 and Cover Letter starts excluded. Starting Polish for a document turns on that
 document's Include toggle without changing the sibling material; an enabled

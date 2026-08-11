@@ -251,7 +251,9 @@ editable documents.
   Prepare; its detail modal edits committed records instead of duplicating job
   intake. A Not applying record reopens in job-update-only mode; Save job updates
   preserves its decision metadata, while reconsidering the role creates a
-  separate linked attempt.
+  separate linked attempt. Saving application answers from fresh work creates
+  one interested draft and binds later answer, document, and Apply writes to its
+  exact id; job matching supplies only warnings and relationships.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack

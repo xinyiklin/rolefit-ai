@@ -931,7 +931,6 @@ function App() {
     hasLoadedApplications,
     error: applicationsError,
     pendingWrites: pendingApplicationWrites,
-    upsert: upsertApplication,
     createApplication,
     updateApplicationById,
     saveApplication,
@@ -941,7 +940,6 @@ function App() {
     remove: removeApplication,
     getApplication,
     storagePath: applicationsPath,
-    findForTarget,
     findDuplicatesForTarget,
     linkPostingRecords,
     markPostingRecordsUnrelated,
@@ -1018,8 +1016,20 @@ function App() {
     aiRequest: stages.answers,
     providerReady: answersProviderReady,
     providerMessage: answersProviderMessage,
-    upsertApplication,
-    findForTarget
+    preparationSession,
+    hasLoadedApplications,
+    createApplication,
+    updateApplicationById,
+    linkPostingRecords,
+    markPostingRecordsUnrelated,
+    resolvePreparationDuplicate: duplicateGuard.resolveApplyDuplicate,
+    onDraftCreated: (applicationId) => {
+      setPreparationSession({
+        mode: "draft",
+        applicationId,
+        pendingRelationship: null
+      });
+    }
   });
 
   // Cover Polish stages a whole-document proposal. The dedicated editor
@@ -1844,14 +1854,11 @@ function App() {
   // "Update application" action in its Save menu.
   const {
     application: preparedApplication,
-    linkApplication,
     resume: resumeApplicationSync,
     coverLetter: coverLetterApplicationSync
   } = useApplicationDocumentSync({
     applications,
-    findForTarget,
-    jobUrl,
-    jobDescription: preparedApplicationJobDescription,
+    applicationId: preparationSession.applicationId,
     currentResumeText,
     currentResumeSource,
     resumeDocumentVersion: resumeReplacementStateRef.current.version,
@@ -1862,8 +1869,7 @@ function App() {
     getResumeArtifacts,
     getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
     onResumeSaved: markResumeApplicationSaved,
-    onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
-    preserveLinkedApplication: applicationOfRecordId !== null && jobPrepared
+    onCoverLetterSaved: coverLetterEditor.markApplicationSaved
   });
   const linkPreparedApplication = useCallback(
     (id: string | null) => {
@@ -1872,9 +1878,8 @@ function App() {
           ? { mode: "update", applicationId: id, pendingRelationship: null }
           : newPreparationSession()
       );
-      linkApplication(id);
     },
-    [linkApplication]
+    []
   );
   // A one-pass proposal stays usable after per-field decisions: each edit card
   // validates its own original target against the live document. Only a changed
@@ -2173,7 +2178,6 @@ function App() {
       // Work continues against THIS record: later document saves update it rather
       // than creating a second row for the same posting.
       setPreparationSession(preparationSessionForApplication(app));
-      linkApplication(app.id);
       detachBaseResumeIdentity();
       setFileName("");
       // The only origin transition useWorkspaceResume cannot see: a restored
