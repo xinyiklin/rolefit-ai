@@ -69,6 +69,14 @@ export function activityCount(
   return applications.filter((app) => matchesActivityFilter(app, filter)).length;
 }
 
+export function applicationActivityDate(
+  app: Pick<Application, "status" | "notApplyingAt" | "appliedAt" | "createdAt">
+): string {
+  return app.status === "not_applying"
+    ? app.notApplyingAt || app.createdAt || ""
+    : app.appliedAt || app.createdAt || "";
+}
+
 export function displayRole(app: Application) {
   return app.role?.trim() || "Role not set";
 }

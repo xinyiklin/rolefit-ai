@@ -5,6 +5,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The seventh Not applying workflow stage completes tracker
+  history and analytics provenance.** Not applying appears in All, Inactive, and
+  its own filter, sorts and groups by its decision date, and cannot emit a stale
+  calendar submission event. The shared submitted-metric predicate excludes it
+  even if a legacy record carries `appliedAt`; current submitted-month and
+  follow-up-hygiene projections use that boundary. Explicit posting groups keep
+  every decision and attempt as an independent row with a quiet group count and
+  date-ordered related history in the inspector and Application Detail. Detail
+  can open a related record, atomically detach it without deletion, or merge an
+  accidental duplicate only after destructive confirmation. Two-member unlink
+  clears both obsolete group ids; larger groups retain their remaining members,
+  and every affected row is revision-checked in one mutation. Production,
+  landing, and desktop builds plus all 99 offline evaluations pass under pinned
+  Node 24. Browser QA was not run because the new table badge, inspector section,
+  modal actions, focus, and responsive wrapping carry visual/interaction risk
+  under the flag-first policy. No push or merge occurred.
 - [USER+CODE+TOOL] **The sixth Not applying workflow stage separates saved-record
   detail from prepared-job editing and protects historical state.** Interested
   drafts use **Continue preparation**; acted-on records use **Edit preparation**.

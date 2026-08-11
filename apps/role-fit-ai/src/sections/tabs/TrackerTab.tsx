@@ -5,6 +5,7 @@ import {
   ACTIVITY_STATUS_GROUPS,
   BOARD_STATUSES,
   STATUS_LABEL,
+  applicationActivityDate,
   activityGroupForFilter,
   activityCount,
   displayCompany,
@@ -22,6 +23,8 @@ import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
+import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
+import { applicationStatusOptions } from "../../lib/applicationStatusTransitions";
 
 export type TrackerView = "table" | "calendar";
 
@@ -66,7 +69,7 @@ const STAGE_ORDER: Record<ApplicationStatus, number> = BOARD_STATUSES.reduce(
 const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
 function appliedKey(app: Application): string {
-  return app.appliedAt || app.createdAt || "";
+  return applicationActivityDate(app);
 }
 
 // Ascending comparator for a single column; direction + tie-break are applied by
@@ -121,7 +124,7 @@ type TrackerTabProps = {
   // App.tsx. The clusters themselves are computed HERE (this component only
   // mounts while the Applications tab is open), not in the hook — the O(n²)
   // scan must not run app-wide on every applications change.
-  onMergeApplications: (memberIds: string[], canonicalId: string) => void;
+  onMergeApplications: (memberIds: string[], canonicalId: string) => Promise<boolean>;
   onDismissDuplicateGroup: (memberIds: string[]) => void;
 };
 
@@ -419,6 +422,19 @@ export function TrackerTab({
     () => (selectedId ? duplicateGroups.find((g) => g.applications.some((a) => a.id === selectedId)) : undefined),
     [duplicateGroups, selectedId]
   );
+  const postingGroupSizes = useMemo(
+    () => postingGroupSizeByApplicationId(applications),
+    [applications]
+  );
+  const selectedRelatedApplications = useMemo(
+    () => selected?.jobPostingGroupId
+      ? applications.filter((application) =>
+          application.id !== selected.id
+          && application.jobPostingGroupId === selected.jobPostingGroupId
+        ).sort((a, b) => applicationActivityDate(b).localeCompare(applicationActivityDate(a)))
+      : [],
+    [applications, selected?.id, selected?.jobPostingGroupId]
+  );
 
   // If the previously-selected application was merged away (it no longer
   // appears in `applications` at all), clear the stale selection so the
@@ -481,7 +497,7 @@ export function TrackerTab({
         }
         items.push({ kind: "separator" });
         items.push({ kind: "header", label: "Move to stage" });
-        for (const status of BOARD_STATUSES) {
+        for (const status of applicationStatusOptions(app.status)) {
           items.push({
             kind: "action",
             label: STATUS_LABEL[status],
@@ -652,6 +668,7 @@ export function TrackerTab({
               onDoubleClick={onOpenApplication}
               onRowContextMenu={handleRowContextMenu}
               duplicateIds={duplicateIds}
+              postingGroupSizes={postingGroupSizes}
             />
 
             {sorted.length > 0 ? (
@@ -716,6 +733,7 @@ export function TrackerTab({
               onLoad={onLoad}
               onDelete={onDelete}
               duplicateGroup={selectedDuplicateGroup}
+              relatedApplications={selectedRelatedApplications}
               onReviewDuplicates={() => setIsDuplicateModalOpen(true)}
             />
           </aside>
@@ -737,7 +755,7 @@ export function TrackerTab({
           onClose={() => setIsDuplicateModalOpen(false)}
           onDismiss={onDismissDuplicateGroup}
           onMerge={(memberIds, canonicalId) => {
-            onMergeApplications(memberIds, canonicalId);
+            void onMergeApplications(memberIds, canonicalId);
             // Defensive: if the row currently pinned in the inspector was merged
             // away, clear the selection so it doesn't keep pointing at a deleted
             // id for one frame. App.tsx's own effect self-heals expandedApplicationId

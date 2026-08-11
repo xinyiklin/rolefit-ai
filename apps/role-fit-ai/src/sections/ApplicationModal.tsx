@@ -31,6 +31,7 @@ import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
 import { STATUS_LABEL, appFitVerdict, fitAssessmentRunLabel, formatSalary } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
+import { useDialog } from "../hooks/useDialog";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
@@ -45,6 +46,8 @@ type ApplicationModalProps = {
   onLoad?: (application: Application) => Promise<boolean>;
   relatedApplications?: Application[];
   onOpenRelated?: (application: Application) => void;
+  onMarkRelatedUnrelated?: (application: Application) => Promise<boolean>;
+  onMergeRelated?: (application: Application) => Promise<boolean>;
   // Open a saved application document in the in-app PDF viewer.
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
   // Render/download a source-only saved document as PDF on demand.
@@ -175,6 +178,8 @@ export function ApplicationModal({
   onLoad,
   relatedApplications = [],
   onOpenRelated,
+  onMarkRelatedUnrelated,
+  onMergeRelated,
   onPreviewDocument,
   onDownloadDocument,
   onSaveDocument,
@@ -182,6 +187,7 @@ export function ApplicationModal({
   onSaveAttachment,
   onRemoveAttachment
 }: ApplicationModalProps) {
+  const { confirm } = useDialog();
   const applicationId = application?.id ?? null;
   const [tab, setTab] = useState<ModalTab>("overview");
   const [form, setForm] = useState<FormState>(() => formFromApplication(application));
@@ -400,6 +406,62 @@ export function ApplicationModal({
       onOpenRelated(related);
     } catch {
       setSaveError("Could not open the related record. Your edits are still here.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function changeRelatedRecord(
+    related: Application,
+    action: "unlink" | "merge"
+  ) {
+    const callback = action === "unlink" ? onMarkRelatedUnrelated : onMergeRelated;
+    if (!callback || isBusy) return;
+    const relatedLabel = related.title || `${related.role || "Role"} at ${related.company || "company"}`;
+    const removesFiles = Boolean(
+      related.resumeArtifacts
+      || related.coverLetterArtifacts
+      || related.attachments?.length
+    );
+    const proceed = await confirm(
+      action === "unlink"
+        ? {
+            title: "Mark records as unrelated?",
+            message: `“${relatedLabel}” will leave this posting group. Both tracker records will remain.`,
+            confirmLabel: "Mark as unrelated"
+          }
+        : {
+            title: "Merge accidental duplicate?",
+            message:
+              `Merge “${relatedLabel}” into this record? The related tracker row will be removed.`
+              + (removesFiles
+                ? " Documents on the removed row will be moved to workspace trash and will not be combined."
+                : ""),
+            confirmLabel: "Merge",
+            tone: "danger"
+          }
+    );
+    if (!proceed) return;
+    if (formHasUnsavedChanges && !canSave) {
+      setSaveError("Add a company, role, or job URL before changing related records. Your edits are still here.");
+      return;
+    }
+    setIsSaving(true);
+    setSaveError("");
+    try {
+      if (formHasUnsavedChanges && !(await onSave(buildApplication(form.status)))) {
+        setSaveError("Could not save your edits before changing related records. Your edits are still here; review and retry.");
+        return;
+      }
+      if (!(await callback(related))) {
+        setSaveError(
+          action === "unlink"
+            ? "Could not unlink these records because storage was unavailable or a record changed elsewhere."
+            : "Could not merge these records because storage was unavailable or a record changed elsewhere."
+        );
+      }
+    } catch {
+      setSaveError("Could not change these related records. Review the tracker and retry.");
     } finally {
       setIsSaving(false);
     }
@@ -692,12 +754,27 @@ export function ApplicationModal({
                         <li key={related.id}>
                           <span>
                             {STATUS_LABEL[related.status]} · {formatDetailDate(related.notApplyingAt || related.appliedAt || related.createdAt)}
+                            {related.status === "not_applying" && related.notApplyingReason
+                              ? ` · ${NOT_APPLYING_REASON_LABEL[related.notApplyingReason]}`
+                              : ""}
                           </span>
-                          {onOpenRelated ? (
-                            <button type="button" className="ghost-button is-compact" onClick={() => void openRelatedApplication(related)} disabled={isBusy}>
-                              {isSaving ? "Saving…" : "Open"}
-                            </button>
-                          ) : null}
+                          <span className="application-related-records__actions">
+                            {onOpenRelated ? (
+                              <button type="button" className="ghost-button is-compact" onClick={() => void openRelatedApplication(related)} disabled={isBusy}>
+                                {isSaving ? "Saving…" : "Open"}
+                              </button>
+                            ) : null}
+                            {onMarkRelatedUnrelated ? (
+                              <button type="button" className="ghost-button is-compact" onClick={() => void changeRelatedRecord(related, "unlink")} disabled={isBusy}>
+                                Mark as unrelated
+                              </button>
+                            ) : null}
+                            {onMergeRelated ? (
+                              <button type="button" className="ghost-button is-compact danger-button" onClick={() => void changeRelatedRecord(related, "merge")} disabled={isBusy}>
+                                Merge duplicate
+                              </button>
+                            ) : null}
+                          </span>
                         </li>
                       ))}
                     </ul>

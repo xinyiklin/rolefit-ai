@@ -1,8 +1,15 @@
 export const JOB_POSTING_GROUP_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 
-type PostingRelationshipRecord = {
+export type PostingRelationshipRecord = {
   id: string;
   jobPostingGroupId?: string;
+};
+
+export type PostingRecordUnlinkPlan = {
+  detachedApplicationId: string;
+  remainingApplicationIds: string[];
+  applicationIds: string[];
+  clearGroupApplicationIds: string[];
 };
 
 export function effectivePostingGroupId(application: PostingRelationshipRecord): string {
@@ -45,4 +52,51 @@ export function planPostingRecordLink<T extends PostingRelationshipRecord>(
   );
 
   return { groupId, applicationIds };
+}
+
+export function explicitPostingGroups<T extends PostingRelationshipRecord>(
+  applications: readonly T[]
+): T[][] {
+  const groups = new Map<string, T[]>();
+  for (const application of applications) {
+    if (!application.jobPostingGroupId) continue;
+    const group = groups.get(application.jobPostingGroupId) ?? [];
+    group.push(application);
+    groups.set(application.jobPostingGroupId, group);
+  }
+  return [...groups.values()].filter((group) => group.length > 1);
+}
+
+export function postingGroupSizeByApplicationId<T extends PostingRelationshipRecord>(
+  applications: readonly T[]
+): Map<string, number> {
+  const sizes = new Map<string, number>();
+  for (const group of explicitPostingGroups(applications)) {
+    for (const application of group) sizes.set(application.id, group.length);
+  }
+  return sizes;
+}
+
+// A relationship group is an equivalence set. Detaching one record therefore
+// separates it from every remaining member. With only two members, both lose
+// the now-meaningless group id; larger groups keep their relationship intact.
+export function planPostingRecordUnlink<T extends PostingRelationshipRecord>(
+  applications: readonly T[],
+  detachedApplicationId: string
+): PostingRecordUnlinkPlan | null {
+  const detached = applications.find((application) => application.id === detachedApplicationId);
+  if (!detached?.jobPostingGroupId) return null;
+  const members = applications.filter(
+    (application) => application.jobPostingGroupId === detached.jobPostingGroupId
+  );
+  if (members.length < 2) return null;
+
+  const applicationIds = members.map((application) => application.id);
+  const remainingApplicationIds = applicationIds.filter((id) => id !== detachedApplicationId);
+  return {
+    detachedApplicationId,
+    remainingApplicationIds,
+    applicationIds,
+    clearGroupApplicationIds: members.length === 2 ? applicationIds : [detachedApplicationId]
+  };
 }

@@ -143,7 +143,7 @@ import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
 import { formatHistoryDate } from "./lib/historyDate";
-import { type ApplicationActivityFilter } from "./lib/applicationDisplay";
+import { applicationActivityDate, type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
 const PreviewOverlay = lazy(() => import("./sections/PreviewOverlay"));
 
@@ -956,6 +956,7 @@ function App() {
     storagePath: applicationsPath,
     findDuplicatesForTarget,
     linkPostingRecords,
+    unlinkPostingRecord,
     markPostingRecordsUnrelated,
     mergeApplications,
     dismissDuplicateGroup,
@@ -971,7 +972,7 @@ function App() {
     ? applications.filter((application) =>
         application.id !== modalApplication.id
         && application.jobPostingGroupId === modalApplication.jobPostingGroupId
-      )
+      ).sort((a, b) => applicationActivityDate(b).localeCompare(applicationActivityDate(a)))
     : [];
   const primaryPreparationAction = preparationPrimaryAction(
     preparationSession,
@@ -3170,6 +3171,14 @@ function App() {
             onOpenRelated={(application) => {
               setModalApplicationId(application.id);
               setExpandedApplicationId(application.id);
+            }}
+            onMarkRelatedUnrelated={(application) => unlinkPostingRecord(application.id)}
+            onMergeRelated={(application) => {
+              if (!modalApplication) return Promise.resolve(false);
+              return mergeApplications(
+                [modalApplication.id, application.id],
+                modalApplication.id
+              );
             }}
             onClose={() => setIsApplicationModalOpen(false)}
             onSave={handleSaveApplicationFromModal}

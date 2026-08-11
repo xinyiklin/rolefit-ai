@@ -5,8 +5,11 @@ import {
   preparationSessionForApplication
 } from "../preparationSession.ts";
 import {
+  explicitPostingGroups,
   effectivePostingGroupId,
-  planPostingRecordLink
+  planPostingRecordLink,
+  planPostingRecordUnlink,
+  postingGroupSizeByApplicationId
 } from "../applicationRelationships.ts";
 
 const fresh = newPreparationSession();
@@ -60,6 +63,48 @@ assert.equal(
   planPostingRecordLink(records, ["a", "missing"], "combined-group"),
   null,
   "an unknown requested record fails closed"
+);
+
+assert.deepEqual(
+  explicitPostingGroups(records).map((group) => group.map((record) => record.id)),
+  [["a", "a-peer"], ["b", "b-peer"]],
+  "posting groups preserve every independent tracker record"
+);
+assert.deepEqual(
+  [...postingGroupSizeByApplicationId(records)],
+  [["a", 2], ["a-peer", 2], ["b", 2], ["b-peer", 2]],
+  "group badges count independent records without collapsing them"
+);
+assert.deepEqual(
+  planPostingRecordUnlink(records, "a"),
+  {
+    detachedApplicationId: "a",
+    remainingApplicationIds: ["a-peer"],
+    applicationIds: ["a", "a-peer"],
+    clearGroupApplicationIds: ["a", "a-peer"]
+  },
+  "unlinking a two-record relationship clears both group ids without deleting either record"
+);
+assert.equal(
+  planPostingRecordUnlink(records, "unrelated"),
+  null,
+  "unlinking a singleton fails closed"
+);
+
+const threeRecordHistory = [
+  { id: "passed", status: "not_applying", jobPostingGroupId: "group-history" },
+  { id: "rejected", status: "rejected", jobPostingGroupId: "group-history" },
+  { id: "applied-again", status: "applied", jobPostingGroupId: "group-history" }
+];
+assert.deepEqual(
+  planPostingRecordUnlink(threeRecordHistory, "passed"),
+  {
+    detachedApplicationId: "passed",
+    remainingApplicationIds: ["rejected", "applied-again"],
+    applicationIds: ["passed", "rejected", "applied-again"],
+    clearGroupApplicationIds: ["passed"]
+  },
+  "detaching a pass decision keeps the remaining attempts linked"
 );
 
 console.log("Preparation session and posting relationships passed");

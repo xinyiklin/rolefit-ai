@@ -5,6 +5,13 @@ function monthBucket(date: Date) {
   return `${date.toLocaleDateString([], { month: "short" })} '${String(date.getFullYear()).slice(-2)}`;
 }
 
+export function isSubmittedApplication(application: Application) {
+  // Legacy or manually edited records may still carry appliedAt after being
+  // marked Not applying. Status is the authoritative decision provenance: a
+  // pass is never an employer submission event.
+  return application.status !== "not_applying" && Boolean(parseDate(application.appliedAt));
+}
+
 export function monthlyApplicationsSent(applications: Application[]) {
   // Only an explicit appliedAt is a submission event. createdAt is a tracking
   // event and updatedAt can represent any edit, so neither can stand in for an
@@ -12,6 +19,7 @@ export function monthlyApplicationsSent(applications: Application[]) {
   // the stored data.
   const buckets = new Map<string, { label: string; applications: number }>();
   for (const application of applications) {
+    if (!isSubmittedApplication(application)) continue;
     const date = parseDate(application.appliedAt);
     if (!date) continue;
     const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
@@ -39,11 +47,11 @@ export function trackingHygiene(applications: Application[]) {
   let submitted = 0;
 
   for (const application of applications) {
-    if (!application.followupAt && !["rejected", "withdrawn"].includes(application.status)) {
+    if (!application.followupAt && !["not_applying", "rejected", "withdrawn"].includes(application.status)) {
       missingFollowup += 1;
     }
     if (["rejected", "withdrawn"].includes(application.status)) closed += 1;
-    if (parseDate(application.appliedAt)) submitted += 1;
+    if (isSubmittedApplication(application)) submitted += 1;
   }
 
   return { missingFollowup, closed, submitted };

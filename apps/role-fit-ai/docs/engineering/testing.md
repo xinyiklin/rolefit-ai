@@ -341,7 +341,8 @@ Good frontend verification covers:
   `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
   multi-choice duplicate gate, exact-draft continuation, confirmed linking,
   remembered Keep separate decisions, and the create-then-atomic-link boundary;
-  it also pins destructive merge as a separate tracker operation.
+  it also pins destructive merge as a separate tracker operation and established
+  group unlinking as one all-member revision-checked mutation.
   `src/lib/__evals__/not-applying-application.mjs` proves new, draft, repeated,
   and update-only Not applying commits; job-only AI provenance; decision-date
   preservation; sent-artifact removal; exact dialog/receipt copy; and that the
@@ -358,6 +359,13 @@ Good frontend verification covers:
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or
   provider analysis.
+  `src/lib/__evals__/application-analytics-eval.mjs` treats Not applying as
+  visible reviewed history while excluding it from the shared submitted-metric
+  denominator, monthly submissions, and missing-follow-up hygiene even when a
+  legacy record carries `appliedAt`. The preparation/session relationship eval
+  pins independent multi-record groups, group counts, and two-versus-many unlink
+  plans; the saved-surface probe pins linked-history presentation plus confirmed
+  destructive merge controls.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three

@@ -1,9 +1,10 @@
 import { useCallback, useRef } from "react";
-import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy } from "lucide-react";
+import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy, Link2 } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import type { SortKey, SortState } from "../tabs/TrackerTab";
 import {
   STATUS_LABEL,
+  applicationActivityDate,
   companyInitials,
   displayCompany,
   displayRole,
@@ -25,6 +26,7 @@ type TrackerTableViewProps = {
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
   // Ids that appear in any duplicate group (see TrackerTab's duplicateGroups memo).
   duplicateIds: Set<string>;
+  postingGroupSizes: Map<string, number>;
 };
 
 // Column definitions in render order. `key` marks a sortable column.
@@ -32,7 +34,7 @@ const COLUMNS: Array<{ label: string; key: SortKey }> = [
   { label: "Company", key: "company" },
   { label: "Role", key: "role" },
   { label: "Stage", key: "stage" },
-  { label: "Applied", key: "applied" },
+  { label: "Date", key: "applied" },
   { label: "Priority", key: "priority" },
   { label: "Next action", key: "nextAction" },
   { label: "Fit", key: "fit" }
@@ -53,7 +55,7 @@ function monthLabel(iso: string): string {
 function groupByMonth(apps: Application[]): Array<{ month: string; rows: Application[] }> {
   const groups: Array<{ month: string; rows: Application[] }> = [];
   for (const app of apps) {
-    const label = monthLabel(app.appliedAt || app.createdAt);
+    const label = monthLabel(applicationActivityDate(app));
     const last = groups[groups.length - 1];
     if (last && last.month === label) {
       last.rows.push(app);
@@ -68,6 +70,7 @@ function ApplicationRow({
   app,
   isSelected,
   isDuplicate,
+  postingGroupSize,
   onSelect,
   onDoubleClick,
   onRowContextMenu
@@ -75,17 +78,19 @@ function ApplicationRow({
   app: Application;
   isSelected: boolean;
   isDuplicate: boolean;
+  postingGroupSize: number;
   onSelect: (id: string) => void;
   onDoubleClick: (app: Application) => void;
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
 }) {
   const verdict = appFitVerdict(app);
-  const appliedLabel = app.appliedAt ? formatCompactDate(app.appliedAt) : "date not set";
+  const activityDate = applicationActivityDate(app);
+  const activityLabel = activityDate ? formatCompactDate(activityDate) : "date not set";
   const rowLabel = [
     displayCompany(app),
     displayRole(app),
     `stage ${STATUS_LABEL[app.status]}`,
-    `applied ${appliedLabel}`,
+    `date ${activityLabel}`,
     `${priorityFor(app)} priority`,
     nextAction(app),
     verdict ? `fit ${verdict.label}` : "fit not scored"
@@ -115,6 +120,15 @@ function ApplicationRow({
             <Copy size={12} aria-hidden="true" />
           </span>
         ) : null}
+        {postingGroupSize > 1 ? (
+          <span
+            className="application-posting-group-badge"
+            title={`${postingGroupSize} independent records are linked to this posting.`}
+          >
+            <Link2 size={11} aria-hidden="true" />
+            {postingGroupSize}
+          </span>
+        ) : null}
       </span>
       <span className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>
         {displayRole(app)}
@@ -124,7 +138,7 @@ function ApplicationRow({
         <span className="stage-dot-label">{STATUS_LABEL[app.status]}</span>
       </span>
       <span className="table-date">
-        {app.appliedAt ? formatCompactDate(app.appliedAt) : "-"}
+        {activityDate ? formatCompactDate(activityDate) : "-"}
       </span>
       <span className="applications-table__cell--priority">
         {priorityFor(app) === "Medium" ? (
@@ -165,7 +179,8 @@ export function TrackerTableView({
   onSelect,
   onDoubleClick,
   onRowContextMenu,
-  duplicateIds
+  duplicateIds,
+  postingGroupSizes
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
   const headRef = useRef<HTMLDivElement>(null);
@@ -243,6 +258,7 @@ export function TrackerTableView({
                     app={app}
                     isSelected={selectedId === app.id}
                     isDuplicate={duplicateIds.has(app.id)}
+                    postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
                     onSelect={onSelect}
                     onDoubleClick={onDoubleClick}
                     onRowContextMenu={onRowContextMenu}
@@ -258,6 +274,7 @@ export function TrackerTableView({
                   app={app}
                   isSelected={selectedId === app.id}
                   isDuplicate={duplicateIds.has(app.id)}
+                  postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
                   onSelect={onSelect}
                   onDoubleClick={onDoubleClick}
                   onRowContextMenu={onRowContextMenu}

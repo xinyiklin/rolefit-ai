@@ -11,7 +11,10 @@ import {
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
-import { planPostingRecordLink } from "../lib/applicationRelationships.ts";
+import {
+  planPostingRecordLink,
+  planPostingRecordUnlink
+} from "../lib/applicationRelationships.ts";
 import type { NotApplyingReason } from "../lib/notApplying.ts";
 import { applicationStatusTransitionAllowed } from "../lib/applicationStatusTransitions.ts";
 
@@ -604,12 +607,12 @@ export function useApplications() {
   // caller confirms first. No-ops on an unknown canonicalId or a <2 member set,
   // so a stale group (already merged in another tab) can't drop data.
   const mergeApplications = useCallback(
-    (memberIds: string[], canonicalId: string) => {
+    async (memberIds: string[], canonicalId: string) => {
       const current = applicationsRef.current;
       const ids = new Set(memberIds);
       const members = current.filter((a) => ids.has(a.id));
       const canonical = members.find((a) => a.id === canonicalId);
-      if (!canonical || members.length < 2) return;
+      if (!canonical || members.length < 2) return false;
       const now = new Date().toISOString();
       const others = members.filter((a) => a.id !== canonicalId);
 
@@ -636,12 +639,20 @@ export function useApplications() {
       const inheritedDismissals = Array.from(
         new Set(members.flatMap((member) => member.duplicateDismissedIds ?? []))
       ).filter((id) => !ids.has(id));
+      const retainedPostingGroupId = canonical.jobPostingGroupId
+        && current.some((application) =>
+          !ids.has(application.id)
+          && application.jobPostingGroupId === canonical.jobPostingGroupId
+        )
+        ? canonical.jobPostingGroupId
+        : undefined;
       const merged: Application = {
         ...canonical,
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
+        jobPostingGroupId: retainedPostingGroupId,
         createdAt: earliestCreatedAt,
         updatedAt: nextApplicationRevision(canonical.updatedAt)
       };
@@ -651,7 +662,7 @@ export function useApplications() {
         .map((a) => (a.id === canonicalId ? merged : a));
       applicationsRef.current = next;
       setApplications(next);
-      void persist(next, [
+      return persist(next, [
         { id: canonical.id, operation: "upsert", baseUpdatedAt: canonical.updatedAt },
         ...others.map((application): ApplicationMutation => ({
           id: application.id,
@@ -659,6 +670,50 @@ export function useApplications() {
           baseUpdatedAt: application.updatedAt
         }))
       ]);
+    },
+    [persist]
+  );
+
+  // Detach one record from an existing posting relationship without deleting
+  // or merging history. Every group member is revision-checked in one batch,
+  // and cross-boundary duplicate dismissals keep the reviewed separation from
+  // immediately resurfacing as a duplicate suggestion.
+  const unlinkPostingRecord = useCallback(
+    async (applicationId: string) => {
+      const current = applicationsRef.current;
+      const plan = planPostingRecordUnlink(current, applicationId);
+      if (!plan) return false;
+      const affectedIds = new Set(plan.applicationIds);
+      const clearGroupIds = new Set(plan.clearGroupApplicationIds);
+      const remainingIds = new Set(plan.remainingApplicationIds);
+      const affected = current.filter((application) => affectedIds.has(application.id));
+      const next = current.map((application) => {
+        if (!affectedIds.has(application.id)) return application;
+        const dismissed = new Set(application.duplicateDismissedIds ?? []);
+        if (application.id === plan.detachedApplicationId) {
+          for (const id of remainingIds) dismissed.add(id);
+        } else {
+          dismissed.add(plan.detachedApplicationId);
+        }
+        const updated: Application = {
+          ...application,
+          duplicateDismissedIds: [...dismissed],
+          updatedAt: nextApplicationRevision(application.updatedAt)
+        };
+        if (clearGroupIds.has(application.id)) delete updated.jobPostingGroupId;
+        return updated;
+      });
+
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(
+        next,
+        affected.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        }))
+      );
     },
     [persist]
   );
@@ -768,6 +823,7 @@ export function useApplications() {
     getApplication,
     findDuplicatesForTarget,
     linkPostingRecords,
+    unlinkPostingRecord,
     markPostingRecordsUnrelated,
     mergeApplications,
     dismissDuplicateGroup,

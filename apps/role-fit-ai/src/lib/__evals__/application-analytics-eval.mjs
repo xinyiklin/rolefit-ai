@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 
 import {
+  isSubmittedApplication,
   monthlyApplicationsSent,
   topTrackedCompanies,
   trackingHygiene
 } from "../applicationAnalytics.ts";
+import {
+  activityCount,
+  applicationActivityDate,
+  matchesActivityFilter
+} from "../applicationDisplay.ts";
 import { parseDate } from "../applicationFacts.ts";
 
 const priorTimeZone = process.env.TZ;
@@ -44,6 +50,14 @@ const applications = [
     id: "saved",
     company: "Beta",
     status: "interested"
+  },
+  {
+    ...base,
+    id: "passed-with-legacy-submit-date",
+    company: "Gamma",
+    status: "not_applying",
+    appliedAt: "2026-06-08T12:00:00.000Z",
+    notApplyingAt: "2026-07-02T12:00:00.000Z"
   }
 ];
 
@@ -58,5 +72,22 @@ assert.deepEqual(
   "tracking facts are exact counts over stored fields"
 );
 assert.deepEqual(topTrackedCompanies(applications)[0], ["Acme", 2], "company counts aggregate displayed company identity");
+const passed = applications.find((application) => application.status === "not_applying");
+assert.ok(passed);
+assert.equal(matchesActivityFilter(passed, "all"), true, "pass decisions remain visible in All");
+assert.equal(matchesActivityFilter(passed, "not_applying"), true, "Not applying has a dedicated filter");
+assert.equal(matchesActivityFilter(passed, "inactive"), true, "pass decisions are grouped as inactive history");
+assert.equal(matchesActivityFilter(passed, "active"), false);
+assert.equal(activityCount(applications, "not_applying"), 1);
+assert.equal(
+  isSubmittedApplication(passed),
+  false,
+  "Not applying is excluded from the shared submitted-metric denominator even with stale appliedAt"
+);
+assert.equal(
+  applicationActivityDate(passed),
+  passed.notApplyingAt,
+  "tracker chronology uses the pass decision date rather than a stale appliedAt"
+);
 
 console.log("PASS application analytics provenance");

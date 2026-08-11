@@ -97,6 +97,12 @@ own a second resume model, editor, layout engine, or PDF implementation.
   explicit Link or Keep separate choice. Cancel means no downstream request,
   and the choice is acknowledged for that job target. Normal Apply/Pass paths
   never call destructive merge or use a match as their write target.
+- Posting groups are presentation and relationship metadata, never collapsed
+  tracker identity. Every decision or attempt keeps its own row, status, dates,
+  notes, and documents. Unlinking is an atomic non-destructive group mutation;
+  merging remains separately confirmed and destructive. Not applying records
+  may count as reviewed history but never as submitted-application metrics or
+  calendar submission events, even if a legacy record carries `appliedAt`.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.

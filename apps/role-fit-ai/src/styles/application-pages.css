@@ -257,6 +257,20 @@
   color: var(--ink-faint);
 }
 
+.application-posting-group-badge {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 2px;
+  min-height: 18px;
+  padding: 0 5px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  color: var(--ink-soft);
+  font-size: 0.62rem;
+  font-weight: 700;
+}
+
 /* application-stage still used in ApplicationModal documents tab — keep as a slim badge there */
 .application-stage {
   display: inline-flex;
@@ -1205,6 +1219,11 @@ button.table-sort svg {
 .inspector-duplicates__item {
   display: grid;
   gap: 2px;
+}
+
+.inspector-related-record__open {
+  justify-self: start;
+  margin-top: 2px;
 }
 
 .inspector-duplicates__title {
@@ -2181,6 +2200,13 @@ button.table-sort svg {
   border-top: 1px solid var(--hairline-soft);
   color: var(--ink-soft);
   font-size: 0.72rem;
+}
+
+.application-related-records__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: var(--s1);
 }
 
 .application-muted {

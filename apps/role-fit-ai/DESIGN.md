@@ -475,6 +475,10 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   labels its handoff Continue preparation for an interested draft or Edit
   preparation for historical records. Prepare uses one flat persistent banner
   to state which exact application or saved decision an update will mutate.
+  Related decisions and attempts never collapse into one row: a quiet linked
+  count sits beside the company, while the inspector and detail modal list each
+  dated status independently. Open and non-destructive Mark as unrelated are
+  quiet actions; destructive Merge duplicate always asks for confirmation.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
   small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
   hairline-separated groups. Prepare is first and selected by default. The

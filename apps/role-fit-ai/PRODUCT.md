@@ -124,7 +124,14 @@ the records separate. A Keep separate decision persists on both eventual records
 so the same pair is not suggested again. Continuing new work preserves every attempt and links the
 eventual new record to the matching posting group. It never overwrites or merges
 the prior application. Destructive merge remains a separate confirmed tracker
-cleanup action.
+cleanup action. The tracker keeps related decisions and attempts as independent
+rows, marks each with the posting-group size, and lists the other histories in
+the selected record inspector and Application Detail. Mark as unrelated detaches
+one record atomically without deleting either history; Merge accidental duplicate
+keeps the current record only after a destructive confirmation. A Not applying
+decision uses its decision date for tracker chronology and appears in All,
+Inactive, and Not applying filters, but it never contributes to submitted counts,
+submitted-month history, follow-up hygiene, or calendar submission events.
 Prepare also offers a quiet **Pass on this job** action beneath Apply for fresh
 work and interested drafts. It saves the posting as **Not applying**, with an
 optional reason and short note, without recording an application date or sent

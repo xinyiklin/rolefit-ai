@@ -7,6 +7,8 @@ const rail = readFileSync(
   "utf8"
 );
 const tracker = readFileSync(new URL("../tabs/TrackerTab.tsx", import.meta.url), "utf8");
+const inspector = readFileSync(new URL("../tracker/TrackerInspector.tsx", import.meta.url), "utf8");
+const table = readFileSync(new URL("../tracker/TrackerTableView.tsx", import.meta.url), "utf8");
 
 assert.ok(!modal.includes("value={form.roleDescription}"));
 assert.ok(!modal.includes("value={form.jobDescription}"));
@@ -16,6 +18,9 @@ assert.ok(modal.includes("Edit preparation"));
 assert.ok(modal.includes("Not applying date"));
 assert.ok(modal.includes("Decision note"));
 assert.ok(modal.includes("Related records"));
+assert.ok(modal.includes("Mark as unrelated"));
+assert.ok(modal.includes("Merge accidental duplicate?"));
+assert.match(modal, /Merge accidental duplicate\?[\s\S]{0,700}?tone: "danger"/);
 assert.ok(
   modal.includes("withoutSubmittedApplicationArtifacts(next)"),
   "an interested record changed to Not applying cannot retain sent-document artifacts"
@@ -32,3 +37,6 @@ for (const text of [
 
 assert.ok(!tracker.includes('label: "Open preparation"'));
 assert.ok(tracker.includes('label: app.status === "interested" ? "Continue preparation" : "Edit preparation"'));
+assert.ok(tracker.includes("postingGroupSizeByApplicationId"));
+assert.ok(table.includes("independent records are linked to this posting"));
+assert.ok(inspector.includes("Each decision or application keeps its own status, dates, notes, and documents."));

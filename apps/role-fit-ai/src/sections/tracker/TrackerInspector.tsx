@@ -1,6 +1,6 @@
-import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye } from "lucide-react";
+import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Link2 } from "lucide-react";
 import type { Application, ApplicationSource, ApplicationStatus } from "../../hooks/useApplications";
-import { APPLICATION_SOURCES } from "../../hooks/useApplications";
+import { APPLICATION_SOURCES, NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   STATUS_LABEL,
@@ -34,6 +34,7 @@ type TrackerInspectorProps = {
   onDelete: (id: string, title: string) => void;
   // The duplicate group containing `selected`, if any (undefined when not a member).
   duplicateGroup?: DuplicateGroup<Application>;
+  relatedApplications?: Application[];
   onReviewDuplicates?: () => void;
 };
 
@@ -47,6 +48,7 @@ export function TrackerInspector({
   onLoad,
   onDelete,
   duplicateGroup,
+  relatedApplications = [],
   onReviewDuplicates
 }: TrackerInspectorProps) {
   if (!selected) {
@@ -147,6 +149,41 @@ export function TrackerInspector({
           </div>
         ) : null}
       </dl>
+
+      {relatedApplications.length ? (
+        <section className="side-section">
+          <p className="side-section__label">
+            <Link2 size={11} aria-hidden="true" /> Related records · {relatedApplications.length}
+          </p>
+          <ul className="inspector-duplicates">
+            {relatedApplications.map((application) => (
+              <li key={application.id} className="inspector-duplicates__item">
+                <span className="inspector-duplicates__title">
+                  {STATUS_LABEL[application.status]}
+                  {application.status === "not_applying" && application.notApplyingReason
+                    ? ` · ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
+                    : ""}
+                </span>
+                <span className="inspector-duplicates__meta">
+                  {formatCompactDate(
+                    application.notApplyingAt || application.appliedAt || application.createdAt
+                  )}
+                </span>
+                <button
+                  type="button"
+                  className="ghost-button is-compact inspector-related-record__open"
+                  onClick={() => onOpenApplication(application)}
+                >
+                  Open
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="side-section__value">
+            Each decision or application keeps its own status, dates, notes, and documents.
+          </p>
+        </section>
+      ) : null}
 
       {duplicateOthers.length ? (
         <section className="side-section">

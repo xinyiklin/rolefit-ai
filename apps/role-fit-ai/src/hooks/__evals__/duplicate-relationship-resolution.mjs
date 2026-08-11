@@ -216,5 +216,10 @@ assert.match(
   /const markPostingRecordsUnrelated = useCallback[\s\S]{0,1800}?return persist\(next, mutations\)/,
   "Keep separate is persisted symmetrically through one revision-checked mutation"
 );
+assert.match(
+  trackerStore,
+  /const unlinkPostingRecord = useCallback[\s\S]{0,2600}?affected\.map[\s\S]{0,500}?baseUpdatedAt: application\.updatedAt/,
+  "unlinking an established posting group revision-checks every affected record in one mutation"
+);
 
 console.log("Duplicate relationship resolution passed");
