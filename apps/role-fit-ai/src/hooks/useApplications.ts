@@ -13,6 +13,7 @@ import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocum
 import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
 import { planPostingRecordLink } from "../lib/applicationRelationships.ts";
 import type { NotApplyingReason } from "../lib/notApplying.ts";
+import { applicationStatusTransitionAllowed } from "../lib/applicationStatusTransitions.ts";
 
 export {
   NOT_APPLYING_REASON_LABEL,
@@ -428,6 +429,12 @@ export function useApplications() {
         return Promise.resolve(false);
       }
       const existing = current[idx];
+      if (!applicationStatusTransitionAllowed(existing.status, incoming.status)) {
+        setError(
+          `The saved ${existing.status.replace("_", " ")} record cannot move to ${incoming.status.replace("_", " ")}. Nothing was saved.`
+        );
+        return Promise.resolve(false);
+      }
       const updated: Application = {
         ...incoming,
         id: existing.id,
@@ -462,6 +469,10 @@ export function useApplications() {
       const current = applicationsRef.current;
       const existing = current.find((a) => a.id === id);
       if (!existing) return;
+      if (!applicationStatusTransitionAllowed(existing.status, status)) {
+        setError("That stage change would rewrite application history. Nothing was saved.");
+        return;
+      }
       const now = nextApplicationRevision(existing.updatedAt);
       const next = current.map((a) =>
         a.id === id

@@ -470,7 +470,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   enters with a 150ms 6px slide-fade.
 - **Applications:** its new-work action returns to Prepare. The application
   detail modal edits committed tracker records and never becomes a second job
-  intake surface.
+  intake surface. It presents the prepared job as a read-only, bounded snapshot,
+  keeps Not applying decision fields and related posting records visible, and
+  labels its handoff Continue preparation for an interested draft or Edit
+  preparation for historical records. Prepare uses one flat persistent banner
+  to state which exact application or saved decision an update will mutate.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
   small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
   hairline-separated groups. Prepare is first and selected by default. The

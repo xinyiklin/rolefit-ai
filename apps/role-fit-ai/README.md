@@ -241,9 +241,16 @@ editable documents.
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and canonical allowlisted workspace preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Fit Assessment snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
-  **Open preparation** restores a stored application's validated posting and
-  available strict documents into the session, keeps the dirty-document
-  replacement confirmation, and lands on Prepare. Apply saves only the
+  **Continue preparation** restores an interested draft; **Edit preparation**
+  restores an acted-on record's validated posting and available strict documents,
+  keeps the dirty-document replacement confirmation, and lands on Prepare with
+  a persistent exact-record update banner. Application Detail owns stage, dates,
+  decision metadata, contacts, notes, and documents; its prepared job snapshot
+  is read-only because structured posting correction belongs to Prepare. Stage
+  choices move forward through the supported workflow and cannot rewrite a
+  submitted record as Not applying. A materially different replacement source
+  must explicitly start a new preparation before analysis continues; keeping the
+  current posting restores its prepared snapshot. Apply saves only the
   materials included for that action; excluding a document on a later re-Apply
   leaves any previously saved artifact intact rather than deleting or
   replacing it. Applying with both material cards excluded still records the

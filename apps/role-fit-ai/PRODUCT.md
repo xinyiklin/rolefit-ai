@@ -378,6 +378,14 @@ disappears into the task. Quiet competence, not salesmanship.
     compact advisory in the Application rail, no hidden score or replacement
     for human review. The bundled starter is sample content and never counts as
     a ready applicant resume.
+    Application Detail uses Continue preparation for an interested draft and
+    Edit preparation otherwise. It edits tracker facts and decision metadata,
+    while the prepared job snapshot stays read-only and structured correction
+    remains in Prepare. Update mode names the exact saved record persistently;
+    a candidate source that appears materially different pauses before provider
+    analysis and can proceed only as a new preparation. Status changes are
+    forward-only: submitted history cannot become Not applying or return to an
+    earlier stage.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis and stops on Prepare; it never implicitly starts
     resume Polish. A failed analysis leaves the deterministic brief editable and

@@ -5,6 +5,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The sixth Not applying workflow stage separates saved-record
+  detail from prepared-job editing and protects historical state.** Interested
+  drafts use **Continue preparation**; acted-on records use **Edit preparation**.
+  Application Detail now exposes a read-only prepared-job snapshot, explicit Not
+  applying date/reason/note fields, and linked posting records, while Prepare
+  persistently identifies the exact application or saved decision it will update.
+  Status options and persistence share one forward-only transition graph, so a
+  submitted or terminal record cannot become Not applying or move backward; an
+  interested-to-Not-applying edit also strips sent-document artifacts. Source
+  typing no longer clears an update target. A materially different locally
+  extracted candidate pauses before duplicate review or provider analysis for
+  Keep the current posting / Start a new preparation / Cancel, and only the
+  explicit new choice detaches the id. Production, landing, and desktop builds
+  plus all 99 offline evaluations pass under pinned Node 24. Browser QA was not
+  run because this stage has modal, rail, focus, and responsive risk under the
+  flag-first policy. No push or merge occurred.
 - [USER+CODE+TOOL] **The fifth Not applying workflow stage removes the remaining
   job-match write destinations.** Per-document resume and cover-letter saves now
   resolve only `PreparationSession.applicationId`; fresh work has no document

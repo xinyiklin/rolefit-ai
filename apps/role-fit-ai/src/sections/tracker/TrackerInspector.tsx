@@ -3,7 +3,6 @@ import type { Application, ApplicationSource, ApplicationStatus } from "../../ho
 import { APPLICATION_SOURCES } from "../../hooks/useApplications";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
-  BOARD_STATUSES,
   STATUS_LABEL,
   companyInitials,
   displayCompany,
@@ -16,6 +15,7 @@ import {
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { copyAiUsage } from "../../lib/aiUsage";
+import { applicationStatusOptions } from "../../lib/applicationStatusTransitions";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
@@ -64,9 +64,7 @@ export function TrackerInspector({
   const verdictSource = selected.fitAssessment?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
-  const editableStatuses = selected.status === "not_applying"
-    ? (["not_applying"] as const)
-    : BOARD_STATUSES.filter((status) => status !== "not_applying");
+  const editableStatuses = applicationStatusOptions(selected.status);
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -327,7 +325,7 @@ export function TrackerInspector({
           Details
         </button>
         <button type="button" className="secondary-button is-compact" onClick={() => onLoad(selected)}>
-          Polish
+          {selected.status === "interested" ? "Continue preparation" : "Edit preparation"}
         </button>
         {safeJobUrl ? (
           <a className="secondary-button is-compact" href={safeJobUrl} target="_blank" rel="noreferrer">

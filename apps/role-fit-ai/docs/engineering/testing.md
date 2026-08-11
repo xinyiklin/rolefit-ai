@@ -352,6 +352,12 @@ Good frontend verification covers:
   draft creation, exact-id answer updates, missing-target failure, document-sync
   ID ownership, relationship handling, and the absence of the retired
   `findForTarget` and ordinary `upsert` write APIs.
+  `src/lib/__evals__/application-status-transitions.mjs` pins the forward-only
+  status graph, including the interested-to-Not-applying decision and the ban on
+  rewriting submitted or terminal history. `src/lib/__evals__/prepared-source-replacement.mjs`
+  exercises same-posting corrections, reused generic URLs, conflicting posting
+  ids, and the update-mode guard order/copy that runs before duplicate review or
+  provider analysis.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three
@@ -384,7 +390,8 @@ Good frontend verification covers:
   Resume Polish projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
-  on Prepare through the visible **Open preparation** action
+  on Prepare through **Continue preparation** for an interested draft or **Edit
+  preparation** for an acted-on record
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and

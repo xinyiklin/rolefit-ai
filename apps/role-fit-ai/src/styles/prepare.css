@@ -691,6 +691,30 @@
   gap: var(--s3);
 }
 
+.prepare-update-banner {
+  display: grid;
+  gap: 3px;
+  padding: var(--s2) 0 var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.prepare-update-banner strong {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+}
+
+.prepare-update-banner span,
+.prepare-update-banner p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.prepare-update-banner p {
+  color: var(--ink-muted);
+}
+
 .prepare-fit {
   display: grid;
   gap: var(--s2);

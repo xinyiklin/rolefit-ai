@@ -14,11 +14,12 @@ import {
 } from "lucide-react";
 import {
   APPLICATION_SOURCES,
-  APPLICATION_STATUSES,
   JOB_TYPES,
+  NOT_APPLYING_REASON_LABEL,
   type Application,
   type ApplicationAnswer,
   type ApplicationContact,
+  type NotApplyingReason,
   type ApplicationPriority,
   type ApplicationSource,
   type ApplicationStatus,
@@ -28,6 +29,8 @@ import type { ApplicationDocumentKind } from "../lib/applicationDocumentRequests
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
 import { ApplicationDocumentsTab } from "./application/ApplicationDocumentsTab";
 import { STATUS_LABEL, appFitVerdict, fitAssessmentRunLabel, formatSalary } from "../lib/applicationDisplay";
+import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
+import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 
 type ApplicationModalProps = {
@@ -40,6 +43,8 @@ type ApplicationModalProps = {
   onDelete?: (id: string, title: string) => void;
   // Load this application's prepared job + saved documents into the workspace.
   onLoad?: (application: Application) => Promise<boolean>;
+  relatedApplications?: Application[];
+  onOpenRelated?: (application: Application) => void;
   // Open a saved application document in the in-app PDF viewer.
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
   // Render/download a source-only saved document as PDF on demand.
@@ -63,7 +68,6 @@ type ModalTab = "overview" | "interview" | "documents" | "questions";
 type FormState = {
   company: string;
   role: string;
-  roleDescription: string;
   status: ApplicationStatus;
   priority: "" | ApplicationPriority;
   source: ApplicationSource;
@@ -71,10 +75,12 @@ type FormState = {
   jobType: string;
   workAuth: string;
   appliedAt: string;
+  notApplyingAt: string;
+  notApplyingReason: "" | NotApplyingReason;
+  notApplyingNote: string;
   deadline: string;
   followupAt: string;
   jobUrl: string;
-  jobDescription: string;
   salaryMin: string;
   salaryMax: string;
   salaryCurrency: string;
@@ -94,6 +100,11 @@ function toIso(dateInput: string) {
   return dateInput ? new Date(`${dateInput}T12:00:00`).toISOString() : "";
 }
 
+function formatDetailDate(iso?: string) {
+  if (!iso || !Number.isFinite(Date.parse(iso))) return "Date not recorded";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));
+}
+
 function numberField(value: string) {
   if (!value.trim()) return null;
   const parsed = Number(value);
@@ -105,7 +116,6 @@ function formFromApplication(application: Application | null): FormState {
     return {
       company: "",
       role: "",
-      roleDescription: "",
       status: "applied",
       priority: "",
       source: "Company site",
@@ -113,10 +123,12 @@ function formFromApplication(application: Application | null): FormState {
       jobType: "Full-time",
       workAuth: "",
       appliedAt: new Date().toISOString().slice(0, 10),
+      notApplyingAt: "",
+      notApplyingReason: "",
+      notApplyingNote: "",
       deadline: "",
       followupAt: "",
       jobUrl: "",
-      jobDescription: "",
       salaryMin: "",
       salaryMax: "",
       salaryCurrency: "USD",
@@ -130,7 +142,6 @@ function formFromApplication(application: Application | null): FormState {
   return {
     company: application.company ?? "",
     role: application.role ?? "",
-    roleDescription: application.roleDescription ?? "",
     status: application.status,
     priority: application.priority ?? "",
     source: application.source ?? "",
@@ -138,10 +149,12 @@ function formFromApplication(application: Application | null): FormState {
     jobType: application.jobType ?? "",
     workAuth: application.workAuth ?? "",
     appliedAt: toDateInput(application.appliedAt),
+    notApplyingAt: toDateInput(application.notApplyingAt),
+    notApplyingReason: application.notApplyingReason ?? "",
+    notApplyingNote: application.notApplyingNote ?? "",
     deadline: toDateInput(application.deadline),
     followupAt: toDateInput(application.followupAt),
     jobUrl: application.jobUrl ?? "",
-    jobDescription: application.jobDescription ?? "",
     salaryMin: typeof application.salaryMin === "number" ? String(application.salaryMin) : "",
     salaryMax: typeof application.salaryMax === "number" ? String(application.salaryMax) : "",
     salaryCurrency: application.salaryCurrency ?? "USD",
@@ -160,6 +173,8 @@ export function ApplicationModal({
   onSave,
   onDelete,
   onLoad,
+  relatedApplications = [],
+  onOpenRelated,
   onPreviewDocument,
   onDownloadDocument,
   onSaveDocument,
@@ -273,13 +288,12 @@ export function ApplicationModal({
       .map((a) => ({ question: a.question.trim(), answer: a.answer.trim(), savedAt: a.savedAt || now }))
       .filter((a) => a.question && a.answer);
 
-    return {
+    const next: Application = {
       ...base,
       id: base.id,
       title: [form.role.trim(), form.company.trim()].filter(Boolean).join(" at ") || base.title,
       company: form.company.trim(),
       role: form.role.trim(),
-      roleDescription: form.roleDescription.trim(),
       source: form.source,
       status: statusOverride,
       location: form.location.trim(),
@@ -287,8 +301,18 @@ export function ApplicationModal({
       workAuth: form.workAuth.trim(),
       priority: form.priority || undefined,
       jobUrl: form.jobUrl.trim(),
-      jobDescription: form.jobDescription.trim(),
-      appliedAt: statusOverride === "interested" && !form.appliedAt ? undefined : toIso(form.appliedAt) || undefined,
+      appliedAt:
+        statusOverride === "interested" || statusOverride === "not_applying"
+          ? undefined
+          : toIso(form.appliedAt) || base.appliedAt || (statusOverride === "applied" ? now : undefined),
+      notApplyingAt:
+        statusOverride === "not_applying"
+          ? toIso(form.notApplyingAt) || base.notApplyingAt || now
+          : undefined,
+      notApplyingReason:
+        statusOverride === "not_applying" ? form.notApplyingReason || undefined : undefined,
+      notApplyingNote:
+        statusOverride === "not_applying" ? form.notApplyingNote.trim().slice(0, 2_000) || undefined : undefined,
       deadline: toIso(form.deadline) || undefined,
       followupAt: toIso(form.followupAt) || undefined,
       salaryMin: numberField(form.salaryMin),
@@ -301,6 +325,9 @@ export function ApplicationModal({
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
       updatedAt: now
     };
+    return statusOverride === "not_applying"
+      ? withoutSubmittedApplicationArtifacts(next)
+      : next;
   }
 
   async function save(statusOverride: ApplicationStatus = form.status) {
@@ -351,14 +378,36 @@ export function ApplicationModal({
     }
   }
 
+  async function openRelatedApplication(related: Application) {
+    if (!onOpenRelated || isBusy) return;
+    if (!formHasUnsavedChanges) {
+      onOpenRelated(related);
+      return;
+    }
+    if (!canSave) {
+      setSaveError("Add a company, role, or job URL before leaving this record. Your edits are still here.");
+      return;
+    }
+    setIsSaving(true);
+    setSaveError("");
+    try {
+      if (!(await onSave(buildApplication(form.status)))) {
+        setSaveError(
+          "Could not save your edits before opening the related record. Your edits are still here; review and retry."
+        );
+        return;
+      }
+      onOpenRelated(related);
+    } catch {
+      setSaveError("Could not open the related record. Your edits are still here.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
-  // A saved pass is a job decision, not an application stage. Reconsidering
-  // creates a separate linked attempt through Prepare instead of rewriting the
-  // historical decision into an application.
-  const editableStatuses: ApplicationStatus[] = form.status === "not_applying"
-    ? ["not_applying"]
-    : APPLICATION_STATUSES.filter((status) => status !== "not_applying");
+  const editableStatuses = applicationStatusOptions(application.status);
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
   const fitAssessment = application.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
@@ -371,6 +420,9 @@ export function ApplicationModal({
     salaryCurrency: form.salaryCurrency,
     salaryPeriod: form.salaryPeriod
   });
+  const preparationActionLabel = form.status === "interested"
+    ? "Continue preparation"
+    : "Edit preparation";
 
   const TABS: { id: ModalTab; label: string; icon: typeof BriefcaseBusiness }[] = [
     { id: "overview", label: "Overview", icon: BriefcaseBusiness },
@@ -413,12 +465,9 @@ export function ApplicationModal({
                 disabled={isBusy || openPreparationBlocked}
                 aria-describedby={openPreparationBlocked ? "application-open-requirements" : undefined}
               >
-                <ExternalLink size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : "Open preparation"}
+                <ExternalLink size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : preparationActionLabel}
               </button>
             ) : null}
-            <button type="button" className="primary-button is-compact" disabled={!canSave || isBusy} onClick={() => void save()}>
-              {isSaving ? "Saving…" : "Save changes"}
-            </button>
             <button type="button" className="ghost-button is-icon" aria-label="Close" onClick={requestClose} disabled={isBusy}>
               <X size={16} aria-hidden="true" />
             </button>
@@ -494,10 +543,28 @@ export function ApplicationModal({
                     <span>Work authorization</span>
                     <input className="text-input" value={form.workAuth} onChange={(e) => update("workAuth", e.target.value)} placeholder="US Citizen, H-1B, …" />
                   </label>
-                  <label className="field">
-                    <span>Application date</span>
-                    <input className="text-input" type="date" value={form.appliedAt} onChange={(e) => update("appliedAt", e.target.value)} />
-                  </label>
+                  {form.status === "not_applying" ? (
+                    <>
+                      <label className="field">
+                        <span>Not applying date</span>
+                        <input className="text-input" type="date" value={form.notApplyingAt} onChange={(e) => update("notApplyingAt", e.target.value)} />
+                      </label>
+                      <label className="field">
+                        <span>Reason</span>
+                        <select value={form.notApplyingReason} onChange={(e) => update("notApplyingReason", e.target.value as FormState["notApplyingReason"])}>
+                          <option value="">No reason recorded</option>
+                          {Object.entries(NOT_APPLYING_REASON_LABEL).map(([value, label]) => (
+                            <option key={value} value={value}>{label}</option>
+                          ))}
+                        </select>
+                      </label>
+                    </>
+                  ) : (
+                    <label className="field">
+                      <span>Application date</span>
+                      <input className="text-input" type="date" value={form.appliedAt} onChange={(e) => update("appliedAt", e.target.value)} />
+                    </label>
+                  )}
                   <label className="field">
                     <span>Deadline</span>
                     <input className="text-input" type="date" value={form.deadline} onChange={(e) => update("deadline", e.target.value)} />
@@ -538,15 +605,29 @@ export function ApplicationModal({
                   </div>
                 </fieldset>
 
-                <label className="field">
-                  <span>Role summary</span>
-                  <textarea className="textarea" value={form.roleDescription} onChange={(e) => update("roleDescription", e.target.value)} placeholder="Compact role overview for tracking." rows={3} />
-                </label>
+                {form.status === "not_applying" ? (
+                  <label className="field">
+                    <span>Decision note</span>
+                    <textarea className="textarea" value={form.notApplyingNote} onChange={(e) => update("notApplyingNote", e.target.value)} placeholder="Optional context for this decision." rows={2} />
+                  </label>
+                ) : null}
 
-                <label className="field">
-                  <span>Job description</span>
-                  <textarea className="textarea" value={form.jobDescription} onChange={(e) => update("jobDescription", e.target.value)} placeholder="Paste the role summary or requirements." rows={4} />
-                </label>
+                <section className="application-prepared-snapshot" aria-labelledby="application-prepared-snapshot-title">
+                  <div className="application-prepared-snapshot__head">
+                    <div>
+                      <h4 id="application-prepared-snapshot-title">Prepared job snapshot</h4>
+                      <p>Read-only here. Use {preparationActionLabel.toLowerCase()} to correct the prepared posting.</p>
+                    </div>
+                  </div>
+                  {application.roleDescription ? (
+                    <p className="application-prepared-snapshot__summary">{application.roleDescription}</p>
+                  ) : null}
+                  {application.jobDescription ? (
+                    <pre>{application.jobDescription}</pre>
+                  ) : (
+                    <p className="application-muted">No prepared snapshot is saved for this record.</p>
+                  )}
+                </section>
 
                 <label className="field">
                   <span>Notes</span>
@@ -590,6 +671,38 @@ export function ApplicationModal({
                   {form.location.trim() ? <li><CheckCircle2 size={13} aria-hidden="true" /> {form.location.trim()}</li> : null}
                   <li><CheckCircle2 size={13} aria-hidden="true" /> Stage: {STATUS_LABEL[form.status]}</li>
                 </ul>
+                {application.status === "not_applying" ? (
+                  <section className="application-related-records" aria-label="Not applying decision">
+                    <strong>Decision</strong>
+                    <p>Marked Not applying on {formatDetailDate(toIso(form.notApplyingAt))}.</p>
+                    {form.notApplyingReason ? (
+                      <p>{NOT_APPLYING_REASON_LABEL[form.notApplyingReason]}</p>
+                    ) : null}
+                    {form.notApplyingNote.trim() ? <p>{form.notApplyingNote.trim()}</p> : null}
+                  </section>
+                ) : null}
+                {relatedApplications.length ? (
+                  <section className="application-related-records" aria-labelledby="application-related-records-title">
+                    <strong id="application-related-records-title">Related records</strong>
+                    <p>
+                      {relatedApplications.length} other {relatedApplications.length === 1 ? "decision or application is" : "decisions or applications are"} linked to this posting.
+                    </p>
+                    <ul>
+                      {relatedApplications.map((related) => (
+                        <li key={related.id}>
+                          <span>
+                            {STATUS_LABEL[related.status]} · {formatDetailDate(related.notApplyingAt || related.appliedAt || related.createdAt)}
+                          </span>
+                          {onOpenRelated ? (
+                            <button type="button" className="ghost-button is-compact" onClick={() => void openRelatedApplication(related)} disabled={isBusy}>
+                              {isSaving ? "Saving…" : "Open"}
+                            </button>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                ) : null}
               </aside>
             </>
           ) : null}

@@ -92,6 +92,7 @@ function createHarness({
   beforeProceed = true,
   beforeHandled = false,
   afterProceed = true,
+  sourceReplacementChoice = "continue",
   providerStatus = 200,
   fitProvider = "codex-cli",
   fitModel = "synthetic-model",
@@ -158,6 +159,10 @@ function createHarness({
     setJobRawText: record("setJobRawText"),
     setPolishStatus: record("setPolishStatus"),
     setLinkStatus: record("setLinkStatus"),
+    confirmPreparedSourceReplacement: async () => {
+      log.push({ event: "source:replacement" });
+      return sourceReplacementChoice;
+    },
     confirmDuplicateBeforeJobAnalysis: async () => {
       log.push({ event: "duplicate:before" });
       return {
@@ -293,6 +298,7 @@ async function runExtension(harness) {
 }
 
 const sharedCommitOrder = [
+  "source:replacement",
   "duplicate:before",
   "state:preview",
   "resolvePreparedResume",

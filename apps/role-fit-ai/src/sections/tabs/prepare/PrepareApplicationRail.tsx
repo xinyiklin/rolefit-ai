@@ -2,7 +2,11 @@ import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
 import type { Application } from "../../../hooks/useApplications";
-import { fitAssessmentRunLabel } from "../../../lib/applicationDisplay";
+import {
+  displayCompany,
+  displayRole,
+  fitAssessmentRunLabel
+} from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
 import type { PreparationPrimaryAction } from "../../../lib/preparationSession";
 import type {
@@ -31,6 +35,11 @@ const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: stri
   "candidate-context": { label: "About you", detail: "Updated" },
   settings: { label: "Assessment setup", detail: "Changed" }
 };
+
+function formatSavedDate(iso?: string) {
+  if (!iso || !Number.isFinite(Date.parse(iso))) return "date not recorded";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));
+}
 
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
@@ -115,6 +124,24 @@ export function PrepareApplicationRail({
               : "In progress"}
           </span>
         </div>
+
+        {linkedApplication && primaryAction.kind !== "apply" ? (
+          <div className="prepare-update-banner" role="status">
+            <strong>
+              {primaryAction.kind === "update-job" ? "Editing saved job" : "Editing saved application"}
+            </strong>
+            <span>
+              {primaryAction.kind === "update-job"
+                ? `Marked Not applying on ${formatSavedDate(linkedApplication.notApplyingAt)}`
+                : `${displayRole(linkedApplication)} at ${displayCompany(linkedApplication)} · Applied ${formatSavedDate(linkedApplication.appliedAt)}`}
+            </span>
+            <p>
+              {primaryAction.kind === "update-job"
+                ? "Changes will update this saved decision. No application will be created."
+                : "Updates will be saved to this application. No new application will be created."}
+            </p>
+          </div>
+        ) : null}
 
         <div className="prepare-materials" aria-label="Included materials">
           {children}

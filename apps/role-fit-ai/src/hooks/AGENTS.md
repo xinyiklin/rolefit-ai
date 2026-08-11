@@ -24,7 +24,12 @@ browser-side effects; components render them and App composes them.
   extension delivery, and imported-posting Retry keep acquisition and recovery
   copy local but share one private post-acquisition coordinator for duplicate
   checks, preview, prepared-resume resolution, analysis/fallback, snapshot
-  commit, and fit settlement. Opening a tracked application hydrates the same
+  commit, and fit settlement. While update mode owns an explicit record, source
+  typing remains a non-writing draft: the coordinator compares the locally
+  extracted candidate before duplicate review or provider analysis. Same-posting
+  corrections retain the id; a materially different source pauses for Keep the
+  current posting / Start a new preparation / Cancel, and only the explicit new
+  choice detaches the record. Opening a tracked application hydrates the same
   retained prepared-job receipt. Its compact saved assessment is historical —
   visible and reassessable, but never eligible to trigger automatic Polish —
   because tracker storage cannot reconstruct exact current-input provenance.

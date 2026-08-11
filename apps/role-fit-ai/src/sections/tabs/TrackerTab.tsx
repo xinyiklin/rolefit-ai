@@ -451,14 +451,19 @@ export function TrackerTab({
   }
 
   // Context-menu actions for the right-clicked row. Open + Delete are the core;
-  // Polish, Preview (when a PDF was saved), and the job posting (when a URL
+  // preparation, Preview (when a PDF was saved), and the job posting (when a URL
   // exists) round it out.
   const rowMenuItems: RowMenuItem[] = rowMenu
     ? (() => {
         const app = rowMenu.app;
         const items: RowMenuItem[] = [
           { kind: "action", label: "Open details", icon: SquareArrowOutUpRight, onSelect: () => onOpenApplication(app) },
-          { kind: "action", label: "Open preparation", icon: Sparkles, onSelect: () => onLoad(app) }
+          {
+            kind: "action",
+            label: app.status === "interested" ? "Continue preparation" : "Edit preparation",
+            icon: Sparkles,
+            onSelect: () => onLoad(app)
+          }
         ];
         if (app.resumeArtifacts?.hasPdf) {
           items.push({ kind: "action", label: "Preview resume", icon: Eye, onSelect: () => onPreviewResume(app) });

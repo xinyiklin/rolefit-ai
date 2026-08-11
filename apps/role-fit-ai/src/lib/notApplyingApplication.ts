@@ -20,7 +20,7 @@ function mergeDefinedApplication(
   return merged;
 }
 
-function withoutApplicationArtifacts(application: Application): Application {
+export function withoutSubmittedApplicationArtifacts(application: Application): Application {
   const clean = { ...application };
   delete clean.appliedAt;
   delete clean.resumeUsed;
@@ -35,7 +35,7 @@ function withDecision(
   reason: NotApplyingReason | "",
   note: string
 ): Application {
-  const next = withoutApplicationArtifacts({
+  const next = withoutSubmittedApplicationArtifacts({
     ...application,
     status: "not_applying",
     notApplyingAt: now,
@@ -117,7 +117,7 @@ export function updateNotApplyingJob({
   for (const field of clearFields) delete merged[field];
   return {
     operation: "update",
-    application: withoutApplicationArtifacts({
+    application: withoutSubmittedApplicationArtifacts({
       ...merged,
       id: existing.id,
       createdAt: existing.createdAt,

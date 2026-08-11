@@ -110,6 +110,10 @@ import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/appl
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
 import {
+  preparedSourceAppearsDifferent,
+  type PreparedSourceCandidate
+} from "./lib/preparedSourceReplacement";
+import {
   newPreparationSession,
   preparationPrimaryAction,
   preparationSessionForApplication
@@ -126,6 +130,10 @@ import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { PassOnJobDialog } from "./sections/PassOnJobDialog";
 import { PreparationDuplicateDialog } from "./sections/PreparationDuplicateDialog";
+import {
+  PreparedSourceReplacementDialog,
+  type PreparedSourceReplacementChoice
+} from "./sections/PreparedSourceReplacementDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
@@ -490,6 +498,10 @@ function App() {
   // One explicit session state owns whether writes create, continue a draft,
   // or update an exact saved record. Matching job text never supplies this id.
   const [preparationSession, setPreparationSession] = useState(newPreparationSession);
+  const [sourceReplacementPromptOpen, setSourceReplacementPromptOpen] = useState(false);
+  const sourceReplacementResolverRef = useRef<((
+    choice: "continue" | "keep-current" | "cancel"
+  ) => void) | null>(null);
   const applicationOfRecordId = preparationSession.applicationId;
 
   useEffect(() => {
@@ -663,14 +675,17 @@ function App() {
           snapshot.sourceText === importedJob.sourceText
       );
       setImportedJob(snapshot);
-      // This setter is owned by fresh intake paths. Restoring or editing an
-      // existing preparation uses setImportedJob directly. Re-preparing the
-      // same captured source also keeps its application-of-record identity. A
-      // duplicate choice made before analysis carries its pending relationship
-      // into the committed snapshot instead of being cleared by this setter.
+      // A source draft is not a write-target decision. Keep an explicit saved
+      // record attached until the replacement is prepared and classified.
+      if (!snapshot) return;
+      // This setter is owned by committed intake paths. A guarded, same-posting
+      // update retains its exact id; choosing Start a new preparation clears it
+      // before this setter receives the replacement snapshot.
       if (!continuesPreparedSource) {
         setPreparationSession((current) =>
-          current.mode === "new" && current.pendingRelationship
+          current.mode === "update"
+            ? current
+            : current.mode === "new" && current.pendingRelationship
             ? current
             : newPreparationSession()
         );
@@ -678,7 +693,6 @@ function App() {
         clearPreparedResumeRecommendationRef.current();
         setCoverLetterVariantRecommendation(null);
       }
-      if (!snapshot) return;
       const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
       setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
       // Retitle the letter for the new role too. Leaving it behind would keep the
@@ -950,6 +964,15 @@ function App() {
   const preparationApplication = preparationSession.applicationId
     ? applications.find((application) => application.id === preparationSession.applicationId) ?? null
     : null;
+  const modalApplication = modalApplicationId
+    ? applications.find((application) => application.id === modalApplicationId) ?? null
+    : null;
+  const modalRelatedApplications = modalApplication?.jobPostingGroupId
+    ? applications.filter((application) =>
+        application.id !== modalApplication.id
+        && application.jobPostingGroupId === modalApplication.jobPostingGroupId
+      )
+    : [];
   const primaryPreparationAction = preparationPrimaryAction(
     preparationSession,
     preparationApplication?.status
@@ -1313,6 +1336,75 @@ function App() {
   });
   clearPreparedResumeRecommendationRef.current = clearPreparedResumeRecommendation;
 
+  const lastPreparedSourceRef = useRef<{
+    snapshot: ImportedJobSnapshot;
+    jobUrl: string;
+    jobDescription: string;
+    jobRawText: string;
+    aiUsage: Record<string, StageAiUsage>;
+  } | null>(null);
+  useEffect(() => {
+    if (!importedJob || preparationSession.mode !== "update") return;
+    lastPreparedSourceRef.current = {
+      snapshot: importedJob,
+      jobUrl,
+      jobDescription,
+      jobRawText,
+      aiUsage: copyAiUsage(pipelineAiUsage)
+    };
+  }, [importedJob, jobDescription, jobRawText, jobUrl, pipelineAiUsage, preparationSession.mode]);
+
+  const confirmPreparedSourceReplacement = useCallback(
+    (candidate: PreparedSourceCandidate): Promise<"continue" | "keep-current" | "cancel"> => {
+      if (
+        preparationSession.mode !== "update"
+        || !preparationApplication
+        || !preparedSourceAppearsDifferent(preparationApplication, candidate)
+      ) {
+        return Promise.resolve("continue");
+      }
+      return new Promise((resolve) => {
+        if (sourceReplacementResolverRef.current) {
+          resolve("cancel");
+          return;
+        }
+        sourceReplacementResolverRef.current = resolve;
+        setSourceReplacementPromptOpen(true);
+      });
+    },
+    [preparationApplication, preparationSession.mode]
+  );
+
+  const choosePreparedSourceReplacement = useCallback(
+    (choice: PreparedSourceReplacementChoice) => {
+      const resolve = sourceReplacementResolverRef.current;
+      if (!resolve) return;
+      sourceReplacementResolverRef.current = null;
+      setSourceReplacementPromptOpen(false);
+      if (choice === "keep-current") {
+        const saved = lastPreparedSourceRef.current;
+        if (saved) {
+          setJobUrl(saved.jobUrl);
+          setJobDescription(saved.jobDescription);
+          setJobRawText(saved.jobRawText);
+          setImportedJob(saved.snapshot);
+          setPipelineAiUsage(copyAiUsage(saved.aiUsage));
+        }
+        setLinkStatus("Kept the posting attached to the saved record.");
+        setPolishStatus("Kept the posting attached to the saved record.");
+        resolve("keep-current");
+        return;
+      }
+      if (choice === "start-new") {
+        setPreparationSession(newPreparationSession());
+        resolve("continue");
+        return;
+      }
+      resolve("cancel");
+    },
+    []
+  );
+
   // ----- Job intake (job analysis/import flows) -----
   // Link analysis, pasted-posting analysis, the browser-extension inbox import, and
   // each entry point's Retry — extracted to
@@ -1357,6 +1449,7 @@ function App() {
     onExtensionJobReceived: () => setActiveOutputTab("prepare"),
     confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
     confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
+    confirmPreparedSourceReplacement,
     jobAnalysisRequestFields,
     fitAssessmentRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
@@ -3072,9 +3165,12 @@ function App() {
         <Suspense fallback={<ApplicationModalLoading />}>
           <ApplicationModal
             open
-            application={
-              modalApplicationId ? (applications.find((app) => app.id === modalApplicationId) ?? null) : null
-            }
+            application={modalApplication}
+            relatedApplications={modalRelatedApplications}
+            onOpenRelated={(application) => {
+              setModalApplicationId(application.id);
+              setExpandedApplicationId(application.id);
+            }}
             onClose={() => setIsApplicationModalOpen(false)}
             onSave={handleSaveApplicationFromModal}
             onDelete={handleDeleteApplication}
@@ -3122,6 +3218,10 @@ function App() {
           prompt={duplicateGuard.duplicatePrompt}
           onChoose={duplicateGuard.chooseDuplicate}
         />
+      ) : null}
+
+      {sourceReplacementPromptOpen ? (
+        <PreparedSourceReplacementDialog onChoose={choosePreparedSourceReplacement} />
       ) : null}
 
       <ResumePrintLayer resume={editedResume} docStyle={docStyle.style} />
