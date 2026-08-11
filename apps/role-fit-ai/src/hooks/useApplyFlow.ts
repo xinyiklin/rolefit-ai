@@ -17,12 +17,11 @@ import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationDraft, type Application } from "./useApplications";
 import type { DuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
-import { copyAiUsage, type StageAiUsage } from "../lib/aiUsage";
+import type { StageAiUsage } from "../lib/aiUsage";
 import type { PolishedResume } from "../resumeEngine";
 import type { OutputTab } from "../sections/shared";
 import { resumeUsedForApplication } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
-import { dedupeSourceUrls } from "../lib/jobIdentity";
 import { runApplyPdfExports } from "../lib/applyPdfExports";
 import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
 import {
@@ -31,6 +30,7 @@ import {
   type PreparationSession
 } from "../lib/preparationSession.ts";
 import { appliedApplicationForSession } from "../lib/preparationApplication.ts";
+import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -283,76 +283,29 @@ export function useApplyFlow({
     const now = new Date().toISOString();
     const tracking = currentJobTracking();
     const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
-    const aiUsage: Record<string, StageAiUsage> = copyAiUsage(existing?.aiUsage);
-    aiUsage["job-analysis"] = pipelineAiUsage["job-analysis"] ?? { source: "none" };
-    if (materialSelection.resume) {
-      aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
-    }
-    if (materialSelection.coverLetter) {
-      if (pipelineAiUsage.cover) aiUsage.cover = pipelineAiUsage.cover;
-      else delete aiUsage.cover;
-    }
-    const nextJobUrl = jobUrl.trim();
-    const priorJobUrl = existing?.jobUrl.trim() ?? "";
-    const sourceUrls = dedupeSourceUrls(
-      [
-        ...(existing?.sourceUrls ?? []),
-        ...(priorJobUrl && priorJobUrl !== nextJobUrl
-          ? [{ url: priorJobUrl, source: existing?.source, addedAt: now }]
-          : [])
-      ],
-      nextJobUrl,
-      now
-    );
-    const prepared: Application = {
-      ...draft,
-      title:
-        [tracking.role || tracking.title, tracking.company]
-          .map((value) => String(value ?? "").trim())
-          .filter(Boolean)
-          .join(" at ") || draft.title,
-      company: String(tracking.company ?? "").trim(),
-      role: String(tracking.role || tracking.title || "").trim(),
-      source: draft.source,
-      jobUrl: nextJobUrl,
-      jobDescription: preparedJobDescription.trim(),
-      // Keep the captured source even when a no-AI import initially produced
-      // identical prepared text. Later manual edits must not rewrite View
-      // source or make Prepare again operate on an edited brief.
-      rawJobDescription: jobRawText.trim(),
-      roleDescription: String(tracking.roleDescription ?? "").trim(),
-      location: String(tracking.location ?? "").trim(),
-      jobType: String(tracking.jobType ?? "").trim(),
-      workAuth: String(tracking.workAuth ?? "").trim(),
-      salaryMin: tracking.salaryMin ?? null,
-      salaryMax: tracking.salaryMax ?? null,
-      salaryCurrency: String(tracking.salaryCurrency ?? "").trim(),
-      salaryPeriod: tracking.salaryPeriod || undefined,
-      sourceUrls: sourceUrls.length ? sourceUrls : undefined,
-      aiUsage,
-      // Fit Assessment belongs to the preparation receipt, not the document
-      // package. Preserve only when this session has no assessment decision;
-      // a known previous-preparation completion clears the linked old receipt.
-      ...(fitAssessmentPersistence.action === "set"
-        ? { fitAssessment: fitAssessmentPersistence.snapshot }
-        : fitAssessmentPersistence.action === "clear"
-          ? { fitAssessment: undefined }
-          : {}),
-      ...(materialSelection.resume
-        ? {
-            resumeUsed: usedBase ? ("base" as const) : ("tailored" as const),
-          }
-        : {})
-    };
+    const prepared = preparedApplicationRecord({
+      draft,
+      existing,
+      jobUrl,
+      preparedJobDescription,
+      jobRawText,
+      tracking,
+      pipelineAiUsage,
+      fitAssessmentPersistence,
+      now,
+      usage: {
+        mode: "application",
+        includeResume: materialSelection.resume,
+        includeCoverLetter: materialSelection.coverLetter,
+        resumeUsed: usedBase ? "base" : "tailored"
+      }
+    });
     const commit = appliedApplicationForSession({
       session,
-      prepared,
+      prepared: prepared.application,
       existing,
       now,
-      clearFields: [
-        ...(fitAssessmentPersistence.action === "clear" ? ["fitAssessment" as const] : []),
-        ...(!tracking.salaryPeriod ? ["salaryPeriod" as const] : [])
-      ]
+      clearFields: prepared.clearFields
     });
     if (!commit) {
       const message = "The saved record no longer matches this preparation mode. Nothing was saved; reopen it from Applications and try again.";

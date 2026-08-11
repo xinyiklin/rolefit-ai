@@ -342,6 +342,12 @@ Good frontend verification covers:
   multi-choice duplicate gate, exact-draft continuation, confirmed linking,
   remembered Keep separate decisions, and the create-then-atomic-link boundary;
   it also pins destructive merge as a separate tracker operation.
+  `src/lib/__evals__/not-applying-application.mjs` proves new, draft, repeated,
+  and update-only Not applying commits; job-only AI provenance; decision-date
+  preservation; sent-artifact removal; exact dialog/receipt copy; and that the
+  quiet action remains in Prepare rather than the masthead. The storage probes
+  additionally verify decision metadata roundtrips while `appliedAt` and sent
+  document fields are omitted.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
 - Fit Assessment shows only verdict, selected resume, summary, up to three

@@ -139,8 +139,16 @@ export type PrepareTabProps = {
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   primaryAction: PreparationPrimaryAction;
+  primaryActionReady: boolean;
+  primaryActionBlocker: string;
   isApplying: boolean;
+  applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
+  showPass: boolean;
+  canPass: boolean;
+  passHint: string;
+  isPassing: boolean;
+  onPass: () => void | Promise<void>;
 };
 
 export function PrepareTab({
@@ -203,8 +211,16 @@ export function PrepareTab({
   linkedApplication,
   readiness,
   primaryAction,
+  primaryActionReady,
+  primaryActionBlocker,
   isApplying,
-  onApply
+  applicationActionsBusy,
+  onApply,
+  showPass,
+  canPass,
+  passHint,
+  isPassing,
+  onPass
 }: PrepareTabProps) {
   const [sourceMode, setSourceMode] = useState<"collapsed" | "view" | "replace">(jobPrepared ? "collapsed" : "replace");
   const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
@@ -747,8 +763,16 @@ export function PrepareTab({
             linkedApplication={linkedApplication}
             readiness={readiness}
             primaryAction={primaryAction}
+            primaryActionReady={primaryActionReady}
+            primaryActionBlocker={primaryActionBlocker}
             isApplying={isApplying}
+            applicationActionsBusy={applicationActionsBusy}
             onApply={onApply}
+            showPass={showPass}
+            canPass={canPass}
+            passHint={passHint}
+            isPassing={isPassing}
+            onPass={onPass}
           >
             <PreparedMaterialCard
               id="prepare-resume"

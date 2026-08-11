@@ -81,6 +81,7 @@ import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipel
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
+import { usePassFlow } from "./hooks/usePassFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
 import { getPreparationReadiness } from "./lib/preparationReadiness";
@@ -123,6 +124,7 @@ import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
+import { PassOnJobDialog } from "./sections/PassOnJobDialog";
 import { PreparationDuplicateDialog } from "./sections/PreparationDuplicateDialog";
 import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx";
 import { ResumeTab } from "./sections/tabs/ResumeTab";
@@ -1931,6 +1933,67 @@ function App() {
     setExpandedApplicationId
   });
 
+  const passModeAvailable = preparationSession.mode !== "update";
+  const passBlocker = !hasLoadedApplications
+    ? "Wait for Applications to finish loading."
+    : !jobPrepared
+      ? "Prepare the posting first."
+      : preparationSession.mode === "update"
+        ? "Pass is unavailable while editing a saved record."
+        : pendingApplicationWrites > 0 || isApplying
+          ? "Wait for the current application save to finish."
+          : "";
+  const {
+    passPrompt,
+    passError,
+    isPassing,
+    handlePass,
+    savePass,
+    saveJobUpdates,
+    cancelPass
+  } = usePassFlow({
+    canPass: !passBlocker,
+    passBlocker,
+    jobUrl,
+    preparedJobDescription: preparedApplicationJobDescription,
+    jobRawText,
+    pipelineAiUsage,
+    fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
+    applications,
+    preparationSession,
+    currentJobTracking,
+    resolvePreparationDuplicate: duplicateGuard.resolveApplyDuplicate,
+    createApplication,
+    updateApplicationById,
+    linkPostingRecords,
+    markPostingRecordsUnrelated,
+    linkApplication: linkPreparedApplication,
+    setApplyStatus
+  });
+  const applicationActionsBusy = isApplying || isPassing;
+  const primaryActionBusy = isApplying || (
+    primaryPreparationAction.kind === "update-job" && isPassing
+  );
+  const primaryActionReady = primaryPreparationAction.kind === "update-job"
+    ? jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
+    : preparationReadiness.canApply;
+  const primaryActionBlocker = primaryPreparationAction.kind === "update-job"
+    ? !jobPrepared
+      ? "Prepare the posting first."
+      : jobPreparationActive
+        ? "Wait for job preparation to finish."
+        : pendingApplicationWrites > 0
+          ? "Wait for the current save to finish."
+          : ""
+    : preparationReadiness.primaryBlocker;
+  const handlePrimaryPreparationAction = async (): Promise<void> => {
+    if (primaryPreparationAction.kind === "update-job") {
+      await saveJobUpdates();
+      return;
+    }
+    await handleApply();
+  };
+
   // Apply keeps isApplying true through tracker confirmation and every included
   // strict source upload. Declare the guard below that owner so a clean editor
   // cannot make the post-tracker fetch phase interruptible.
@@ -1945,7 +2008,7 @@ function App() {
       fitAssessmentRequestActive,
       preparationAutomationPending,
       pendingApplicationWrites,
-      isApplying
+      isApplying: applicationActionsBusy
     })
   );
 
@@ -2292,11 +2355,11 @@ function App() {
   return (
     <div className="app-shell">
       <Masthead
-        onApply={handleApply}
+        onApply={handlePrimaryPreparationAction}
         primaryAction={primaryPreparationAction}
-        busy={isApplying}
-        applyDisabled={!preparationReadiness.canApply || isApplying}
-        applyHint={isApplying ? primaryPreparationAction.busyLabel : preparationReadiness.primaryBlocker}
+        busy={primaryActionBusy}
+        applyDisabled={!primaryActionReady || applicationActionsBusy}
+        applyHint={primaryActionBusy ? primaryPreparationAction.busyLabel : primaryActionBlocker}
         applyStatus={applyStatus}
         applyStatusIsError={applyStatusIsError}
         onDismissApplyStatus={() => setApplyStatus("")}
@@ -2477,8 +2540,16 @@ function App() {
               linkedApplication={preparedApplication}
               readiness={preparationReadiness}
               primaryAction={primaryPreparationAction}
-              isApplying={isApplying}
-              onApply={handleApply}
+              primaryActionReady={primaryActionReady}
+              primaryActionBlocker={primaryActionBlocker}
+              isApplying={primaryActionBusy}
+              applicationActionsBusy={applicationActionsBusy}
+              onApply={handlePrimaryPreparationAction}
+              showPass={passModeAvailable}
+              canPass={!passBlocker}
+              passHint={passBlocker}
+              isPassing={isPassing}
+              onPass={handlePass}
             />
           ) : null}
 
@@ -3026,6 +3097,19 @@ function App() {
           onDownload={handleApplyDownloadPick}
           onSkip={cancelApply}
           onApplyOnly={handleApplyOnly}
+        />
+      ) : null}
+
+      {passPrompt ? (
+        <PassOnJobDialog
+          initialReason={passPrompt.initialReason}
+          initialNote={passPrompt.initialNote}
+          busy={isPassing}
+          error={passError}
+          onSave={(reason, note) => {
+            void savePass(reason, note);
+          }}
+          onCancel={cancelPass}
         />
       ) : null}
 

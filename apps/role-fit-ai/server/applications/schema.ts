@@ -16,7 +16,8 @@ const isPresent = <T>(v: T): v is NonNullable<T> => Boolean(v);
 const inList = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
 
-const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+const APPLICATION_STATUSES = ["interested", "not_applying", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+const NOT_APPLYING_REASONS = ["fit", "interest", "constraints", "other"] as const;
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -344,8 +345,8 @@ function sanitizeApplication(raw: unknown) {
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
-  const resumeArtifacts = sanitizeDocumentArtifacts(r.resumeArtifacts);
-  const coverLetterArtifacts = sanitizeDocumentArtifacts(r.coverLetterArtifacts);
+  const resumeArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
+  const coverLetterArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
   if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
 
   return {
@@ -361,7 +362,19 @@ function sanitizeApplication(raw: unknown) {
     rawJobDescription: typeof r.rawJobDescription === "string" ? r.rawJobDescription.slice(0, MAX_FIELD) : "",
     status,
     createdAt,
-    appliedAt: typeof r.appliedAt === "string" ? r.appliedAt : "",
+    appliedAt: status === "not_applying" ? undefined : typeof r.appliedAt === "string" ? r.appliedAt : "",
+    notApplyingAt:
+      status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
+        ? r.notApplyingAt
+        : undefined,
+    notApplyingReason:
+      status === "not_applying" && inList(NOT_APPLYING_REASONS, r.notApplyingReason)
+        ? r.notApplyingReason
+        : undefined,
+    notApplyingNote:
+      status === "not_applying" && typeof r.notApplyingNote === "string"
+        ? r.notApplyingNote.slice(0, 2_000)
+        : undefined,
     updatedAt,
     followupAt: typeof r.followupAt === "string" ? r.followupAt : "",
     location: typeof r.location === "string" ? r.location.slice(0, 200) : "",
@@ -381,7 +394,10 @@ function sanitizeApplication(raw: unknown) {
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
-    resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
+    resumeUsed:
+      status !== "not_applying" && (r.resumeUsed === "base" || r.resumeUsed === "tailored")
+        ? r.resumeUsed
+        : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
     aiUsage: sanitizeAiUsage(r.aiUsage),
     duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id),

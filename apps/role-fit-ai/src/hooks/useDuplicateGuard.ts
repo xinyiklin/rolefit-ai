@@ -5,6 +5,7 @@
  */
 import { useEffect, useRef, useState } from "react";
 import type { Application } from "./useApplications";
+import { NOT_APPLYING_REASON_LABEL } from "../lib/notApplying.ts";
 import type { DuplicateMatch, DuplicateTarget } from "../lib/jobIdentity";
 import type { JobPostingRelationship } from "../lib/preparationSession";
 import {
@@ -108,11 +109,14 @@ function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationProm
     };
   }
   if (String(application.status) === "not_applying") {
-    const notApplyingAt = (application as Application & { notApplyingAt?: string }).notApplyingAt;
+    const notApplyingAt = application.notApplyingAt;
+    const reason = application.notApplyingReason
+      ? `\nReason: ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
+      : "";
     return {
       kind: "existing-not-applying",
       title: "You previously passed on this job",
-      message: `Marked Not applying on ${formatCompactDate(notApplyingAt || when)}.${evidence}`
+      message: `Marked Not applying on ${formatCompactDate(notApplyingAt || when)}.${reason}${evidence}`
     };
   }
   return {

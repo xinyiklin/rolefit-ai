@@ -13,13 +13,27 @@ import {
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
 import { planPostingRecordLink } from "../lib/applicationRelationships.ts";
+import type { NotApplyingReason } from "../lib/notApplying.ts";
+
+export {
+  NOT_APPLYING_REASON_LABEL,
+  type NotApplyingReason
+} from "../lib/notApplying.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
-export type ApplicationStatus = "interested" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
+export type ApplicationStatus =
+  | "interested"
+  | "not_applying"
+  | "applied"
+  | "interviewing"
+  | "offer"
+  | "rejected"
+  | "withdrawn";
 
 export const APPLICATION_STATUSES: ApplicationStatus[] = [
   "interested",
+  "not_applying",
   "applied",
   "interviewing",
   "offer",
@@ -103,6 +117,9 @@ export type Application = {
   status: ApplicationStatus;
   createdAt: string;
   appliedAt?: string;
+  notApplyingAt?: string;
+  notApplyingReason?: NotApplyingReason;
+  notApplyingNote?: string;
   updatedAt: string;
   followupAt?: string;
   // Application deadline (ISO date) — distinct from followupAt (next personal step).

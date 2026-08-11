@@ -5,6 +5,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **The fourth Not applying workflow stage adds an explicit
+  decision path without fabricating an application.** A quiet **Pass on this
+  job** action appears only in the prepared Application rail for fresh work or
+  an interested draft. Its confirmation optionally captures one bounded reason
+  and short note, then creates or updates a `not_applying` record with the job
+  snapshot, current valid Fit Assessment, decision metadata, and posting
+  relationship. It never sets `appliedAt`, saves sent-document artifacts, or
+  requires resume, cover-letter, provider, Fit, or Apply readiness. Repeated
+  passes update the prior decision id while preserving `createdAt`; reopening a
+  decision is update-only and exposes **Save job updates**, so reconsideration
+  remains a separate linked attempt. Failures keep the prepared session and
+  dialog inputs available for retry. Production build and all 95 offline
+  evaluations pass under pinned Node 24; the loopback probe required the normal
+  unsandboxed test context. Browser QA was not run because the new rail action
+  and modal carry responsive, focus, and interaction risk under the repository's
+  flag-first policy. No push or merge occurred.
 - [USER+CODE+TOOL] **The third Not applying workflow stage makes duplicate handling
   relational rather than destructive.** Duplicate gates now distinguish an
   exact prior application, an interested draft, and a high/possible similar

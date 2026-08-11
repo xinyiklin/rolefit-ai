@@ -43,8 +43,16 @@ type PrepareApplicationRailProps = {
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
   primaryAction: PreparationPrimaryAction;
+  primaryActionReady: boolean;
+  primaryActionBlocker: string;
   isApplying: boolean;
+  applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
+  showPass: boolean;
+  canPass: boolean;
+  passHint: string;
+  isPassing: boolean;
+  onPass: () => void | Promise<void>;
   children: ReactNode;
 };
 
@@ -56,8 +64,16 @@ export function PrepareApplicationRail({
   linkedApplication,
   readiness,
   primaryAction,
+  primaryActionReady,
+  primaryActionBlocker,
   isApplying,
+  applicationActionsBusy,
   onApply,
+  showPass,
+  canPass,
+  passHint,
+  isPassing,
+  onPass,
   children
 }: PrepareApplicationRailProps) {
   const hasSavedResume = Boolean(
@@ -94,7 +110,7 @@ export function PrepareApplicationRail({
         <div className="prepare-panel__head">
           <h3>Application</h3>
           <span className="prepare-panel__meta">
-            {readiness.canApply
+            {primaryActionReady
               ? primaryAction.kind === "apply" ? "Ready to apply" : "Ready to update"
               : "In progress"}
           </span>
@@ -248,13 +264,30 @@ export function PrepareApplicationRail({
           className="primary-button prepare-apply"
           type="button"
           onClick={() => void onApply()}
-          disabled={!readiness.canApply || isApplying}
-          title={readiness.canApply ? `${primaryAction.label} and save included materials` : readiness.primaryBlocker}
+          disabled={!primaryActionReady || applicationActionsBusy}
+          title={primaryActionReady ? primaryAction.label : primaryActionBlocker}
         >
           {isApplying ? <LoaderCircle className="spin" size={15} aria-hidden="true" /> : null}
           {isApplying ? primaryAction.busyLabel : primaryAction.label}
         </button>
-        {!readiness.canApply ? <p className="prepare-apply-hint">{readiness.primaryBlocker}</p> : null}
+        {!primaryActionReady && primaryActionBlocker ? (
+          <p className="prepare-apply-hint">{primaryActionBlocker}</p>
+        ) : null}
+        {showPass ? (
+          <div className="prepare-pass-action">
+            <button
+              className="ghost-button is-compact prepare-pass"
+              type="button"
+              onClick={() => void onPass()}
+              disabled={!canPass || applicationActionsBusy}
+              title={canPass ? "Save this posting without recording an application" : passHint}
+            >
+              {isPassing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+              {isPassing ? "Saving…" : "Pass on this job"}
+            </button>
+            {!canPass && passHint ? <p className="prepare-pass-hint">{passHint}</p> : null}
+          </div>
+        ) : null}
       </section>
     </aside>
   );

@@ -353,6 +353,12 @@ export function ApplicationModal({
 
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
+  // A saved pass is a job decision, not an application stage. Reconsidering
+  // creates a separate linked attempt through Prepare instead of rewriting the
+  // historical decision into an application.
+  const editableStatuses: ApplicationStatus[] = form.status === "not_applying"
+    ? ["not_applying"]
+    : APPLICATION_STATUSES.filter((status) => status !== "not_applying");
   const openPreparationBlocked = formHasUnsavedChanges && !canSave;
   const fitAssessment = application.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
@@ -449,7 +455,7 @@ export function ApplicationModal({
                   <label className="field">
                     <span>Stage</span>
                     <select value={form.status} onChange={(e) => update("status", e.target.value as ApplicationStatus)}>
-                      {APPLICATION_STATUSES.map((status) => (
+                      {editableStatuses.map((status) => (
                         <option key={status} value={status}>{STATUS_LABEL[status]}</option>
                       ))}
                     </select>

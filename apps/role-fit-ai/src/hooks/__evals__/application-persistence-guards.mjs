@@ -6,6 +6,10 @@ import { applicationUnloadGuardActive } from "../../lib/applicationUnloadGuard.t
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
+const preparedApplicationRecord = readFileSync(
+  new URL("../../lib/preparedApplicationRecord.ts", import.meta.url),
+  "utf8"
+);
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(
   new URL("../../sections/ApplicationModal.tsx", import.meta.url),
@@ -136,9 +140,9 @@ assert.match(
   "Apply receives an explicit Fit Assessment persistence decision"
 );
 assert.match(
-  applyFlow,
+  preparedApplicationRecord,
   /fitAssessmentPersistence\.action === "set"[\s\S]{0,180}?fitAssessment: fitAssessmentPersistence\.snapshot[\s\S]{0,220}?fitAssessmentPersistence\.action === "clear"[\s\S]{0,120}?fitAssessment: undefined/,
-  "Apply distinguishes replacing, preserving, and clearing a Fit Assessment"
+  "the shared prepared-record builder distinguishes replacing, preserving, and clearing a Fit Assessment"
 );
 
 function deferred() {

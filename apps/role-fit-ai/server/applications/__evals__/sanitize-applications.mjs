@@ -107,6 +107,31 @@ try {
       updatedAt: "2026-07-29T10:00:00.000Z",
       status: "interested",
       aiUsage: { "9bad": { source: "ai" } }
+    },
+    {
+      id: "passed-job",
+      title: "Passed job",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
+      jobUrl: "https://example.com/passed",
+      status: "not_applying",
+      appliedAt: "2026-07-28T10:00:00.000Z",
+      notApplyingAt: "2026-07-29T10:00:00.000Z",
+      notApplyingReason: "constraints",
+      notApplyingNote: "Location requirement",
+      resumeUsed: "tailored",
+      resumeArtifacts: {
+        hasPdf: true,
+        hasSource: false,
+        fileName: "must-not-survive.pdf",
+        savedAt: "2026-07-28T10:00:00.000Z"
+      },
+      coverLetterArtifacts: {
+        hasPdf: false,
+        hasSource: true,
+        fileName: "must-not-survive.cover",
+        savedAt: "2026-07-28T10:00:00.000Z"
+      }
     }
   ];
   const written = await writeApplications(workspace, sanitizeApplications(rawApplications));
@@ -115,8 +140,9 @@ try {
   const failures = [];
   const valid = read[0];
   const emptyAi = read.find((a) => a.id === "app_empty-ai");
+  const passedJob = read.find((a) => a.id === "passed-job");
 
-  if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
+  if (written.length !== 3 || read.length !== 3) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
   if (valid?.jobPostingGroupId !== "posting-group-123") failures.push("posting relationship did not persist");
   if (valid?.fitAssessment?.result.verdict !== "REASONABLE" || valid.fitAssessment.resumeLabel !== "Backend resume") {
@@ -227,6 +253,26 @@ try {
 
   // Empty aiUsage → undefined (no key persisted).
   if (emptyAi && emptyAi.aiUsage !== undefined) failures.push("empty aiUsage did not become undefined");
+
+  if (
+    passedJob?.status !== "not_applying"
+    || passedJob.notApplyingAt !== "2026-07-29T10:00:00.000Z"
+    || passedJob.notApplyingReason !== "constraints"
+    || passedJob.notApplyingNote !== "Location requirement"
+  ) {
+    failures.push("Not applying decision metadata did not roundtrip");
+  }
+  if (passedJob?.appliedAt !== undefined || passedJob?.resumeUsed !== undefined) {
+    failures.push("Not applying retained application-attempt fields");
+  }
+  if (passedJob?.resumeArtifacts !== undefined || passedJob?.coverLetterArtifacts !== undefined) {
+    failures.push("Not applying retained sent-document artifacts");
+  }
+  const storedJson = JSON.parse(await readFile(applicationsFilePath(workspace), "utf8"));
+  const storedPass = storedJson.applications.find((entry) => entry.id === "passed-job");
+  if (Object.hasOwn(storedPass ?? {}, "appliedAt")) {
+    failures.push("Not applying persisted an appliedAt field");
+  }
 
   let overflowRejected = false;
   try {

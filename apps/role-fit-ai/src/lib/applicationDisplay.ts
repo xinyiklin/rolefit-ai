@@ -7,6 +7,7 @@ export { displayCompany, parseDate } from "./applicationFacts.ts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interested: "Saved",
+  not_applying: "Not applying",
   applied: "Applied",
   interviewing: "Interviewing",
   offer: "Offer",
@@ -16,6 +17,7 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
 
 export const BOARD_STATUSES: ApplicationStatus[] = [
   "interested",
+  "not_applying",
   "applied",
   "interviewing",
   "offer",
@@ -30,7 +32,7 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   readonly ApplicationStatus[]
 > = {
   active: ["interested", "applied", "interviewing", "offer"],
-  inactive: ["rejected", "withdrawn"]
+  inactive: ["not_applying", "rejected", "withdrawn"]
 };
 
 export type ApplicationActivityFilter =
@@ -47,7 +49,7 @@ export function activityGroupForFilter(
 }
 
 export function isInactiveApplication(app: Pick<Application, "status">): boolean {
-  return app.status === "rejected" || app.status === "withdrawn";
+  return app.status === "not_applying" || app.status === "rejected" || app.status === "withdrawn";
 }
 
 export function matchesActivityFilter(
@@ -128,6 +130,7 @@ export function fitAssessmentRunLabel(snapshot: FitAssessmentSnapshot): string {
 }
 
 export function nextAction(app: Application) {
+  if (app.status === "not_applying") return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;
   if (app.status === "interviewing") return "Prepare interview";
   if (app.status === "offer") return "Review offer";

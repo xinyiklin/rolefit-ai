@@ -123,6 +123,15 @@ so the same pair is not suggested again. Continuing new work preserves every att
 eventual new record to the matching posting group. It never overwrites or merges
 the prior application. Destructive merge remains a separate confirmed tracker
 cleanup action.
+Prepare also offers a quiet **Pass on this job** action beneath Apply for fresh
+work and interested drafts. It saves the posting as **Not applying**, with an
+optional reason and short note, without recording an application date or sent
+documents. This job-only decision does not require a resume, cover letter, Fit
+Assessment, provider, or Apply readiness. Encountering the same posting again
+can update that decision's date, reason, note, and job snapshot while preserving
+its id and creation date. Opening the saved decision later is update-only:
+**Save job updates** refreshes job facts but preserves the original decision,
+and reconsidering the role creates a separate linked application attempt.
 Opening a stored application restores its validated posting and documents into
 the current session, lands on Prepare, and preserves the dirty-document
 replacement guard.
@@ -351,7 +360,8 @@ disappears into the task. Quiet competence, not salesmanship.
 10. Keep application readiness singular: the masthead and Prepare page expose
     the same session-derived command and blocker model: Apply for fresh work or
     an interested draft, Update application for an explicitly restored submitted
-    record. The current job must be prepared
+    record, and Save job updates for an explicitly restored Not applying
+    decision. The current job must be prepared
     and preparation for selected work must be idle. Resume and Cover Letter
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. Starting
@@ -359,6 +369,9 @@ disappears into the task. Quiet competence, not salesmanship.
     includes that document and leaves the other Include choice unchanged. A
     later update must preserve any previously saved artifact for an excluded
     slot.
+    Pass on this job is a separate quiet rail action, never a masthead action. It
+    requires only a completed prepared job and loaded tracker state; material,
+    Fit, provider, and Apply blockers do not control that explicit decision.
     Fit Assessment follows the [user contract](#fit-assessment-user-contract): one
     compact advisory in the Application rail, no hidden score or replacement
     for human review. The bundled starter is sample content and never counts as

@@ -64,6 +64,9 @@ export function TrackerInspector({
   const verdictSource = selected.fitAssessment?.resumeLabel || "Not checked";
   const safeJobUrl = /^https?:\/\//i.test(selected.jobUrl.trim()) ? selected.jobUrl.trim() : "";
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
+  const editableStatuses = selected.status === "not_applying"
+    ? (["not_applying"] as const)
+    : BOARD_STATUSES.filter((status) => status !== "not_applying");
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -261,7 +264,7 @@ export function TrackerInspector({
           value={selected.status}
           onChange={(event) => onUpdateStatus(selected.id, event.target.value as ApplicationStatus)}
         >
-          {BOARD_STATUSES.map((status) => (
+          {editableStatuses.map((status) => (
             <option key={status} value={status}>
               {STATUS_LABEL[status]}
             </option>
