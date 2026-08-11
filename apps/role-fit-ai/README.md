@@ -102,7 +102,11 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
-  Apply together. Fit Assessment is a reusable compact advisory for the selected resume,
+  Apply together. A quiet **Skip & save job** action beneath Apply saves the
+  prepared posting as **Skipped** with an optional reason and note; it does
+  not record an application, sent documents, or additional application uploads
+  and does not depend on material,
+  Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
   eligibility state. Each match shows the exact resume or About you evidence
   beneath the posting excerpt. Rubric v3 prioritizes decision-critical responsibilities
@@ -237,16 +241,52 @@ editable documents.
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and canonical allowlisted workspace preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Fit Assessment snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
-  **Open preparation** restores a stored application's validated posting and
-  available strict documents into the session, keeps the dirty-document
-  replacement confirmation, and lands on Prepare. Apply saves only the
-  materials included for that action; excluding a document on a later re-Apply
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. The selected-record inspector is now a read-only counterpart to Application Detail: status and governing date, key dates and Source, categorical Fit verdict and rationale, always-present Job activity, and the job posting/resume/cover/additional-document packet. Edits open Application Detail or Prepare instead of repeating a second form in the rail. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting without controlling tracker state or workflow. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+  **Edit preparation** restores a stored record's validated posting and
+  available strict documents,
+  keeps the dirty-document replacement confirmation, and lands on Prepare with
+  a persistent exact-record update banner. Application Detail owns stage, dates,
+  decision metadata, contacts, notes, and documents. Overview keeps editable
+  Application status and Key dates above compact read-only
+  Role & company, Job details, Compensation, and Job snapshot cards. Job details
+  retain Source as read-only provenance; correction belongs to
+  Prepare. For a saved Skipped record, the compact Stage control opens reason
+  and note in a headerless anchored decision popover instead of showing a one-option
+  select and a separate decision card; its closed receipt reads `Skipped · reason`
+  on one line, and Decision date stays in Key dates. Job snapshot remains expanded
+  as a permanent section with no section count, while the immutable original
+  posting is also the first artifact in Documents and opens in a focused viewer
+  above Application Detail, matching saved-PDF previews, their zoom controls,
+  and the centered document treatment. Documents remains separate from Overview
+  and Prep so saved evidence does not compete with scanning or editable preparation.
+  Its desktop
+  widened rail keeps Fit Assessment first and always shows Job activity directly below it,
+  including an explicit empty state when no other record is linked;
+  Fit remains categorical and shows no score or gauge;
+  the two panes scroll independently and become one stacked modal scroll on
+  narrow screens. Prepared job facts remain read-only because structured
+  posting correction belongs to Prepare. Stage
+  choices move forward through the supported workflow and cannot rewrite a
+  submitted record as Skipped. A materially different replacement source
+  must explicitly start a new preparation before analysis continues; keeping the
+  current posting restores its prepared snapshot. Apply saves only the
+  materials included for that action; excluding a document on a later update
   leaves any previously saved artifact intact rather than deleting or
   replacing it. Applying with both material cards excluded still records the
   prepared job. The Applications page's new-work action also returns to
   Prepare; its detail modal edits committed records instead of duplicating job
-  intake.
+  intake. A Skipped record reopens in job-update-only mode; Save job updates
+  preserves its decision metadata, while reconsidering the role creates a
+  separate linked attempt. Application-answer drafts stay session-local for
+  editing and copying and never create or update a tracker record; job matching
+  supplies only warnings and relationships. Linked
+  posting histories remain separate table rows with a quiet group count and a
+  date-ordered related-record list. Application Detail can open a related row,
+  atomically mark it unrelated without deletion, or explicitly merge an
+  accidental duplicate after destructive confirmation. Skipped uses its
+  decision date in tracker chronology and filters but is excluded from submitted
+  counts, application-sent history, follow-up hygiene, and submission calendar
+  events.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack

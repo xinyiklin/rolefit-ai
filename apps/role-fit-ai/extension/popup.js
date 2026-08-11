@@ -345,7 +345,6 @@ function trackerStatus(app) {
     }
     case "interviewing": return { tone: "active", label: "Interviewing" };
     case "offer": return { tone: "active", label: "Offer" };
-    case "interested": return { tone: "watch", label: "Tracking" };
     case "rejected": {
       const on = formatDate(app.appliedAt);
       return { tone: "closed", label: on ? `Not selected · ${on}` : "Not selected" };

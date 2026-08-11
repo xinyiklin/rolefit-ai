@@ -58,7 +58,7 @@ own a second resume model, editor, layout engine, or PDF implementation.
   technical contract in `server/ai/README.md`, and the executable
   `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
   hidden requirement bookkeeping, a server-derived fallback verdict, tracker
-  priority inference, or a second assessment path.
+  application-priority fields, or a second assessment path.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
@@ -91,8 +91,18 @@ own a second resume model, editor, layout engine, or PDF implementation.
   provider. They commit the deterministic brief and explain that connecting a
   provider can improve it; Fit Assessment remains unavailable when its own
   provider cannot run, and Polish retains its existing provider gate.
-- Duplicate checks gate the pipeline before and after Job analysis. Stop means no
-  downstream request; Continue is acknowledged for that job target.
+- Duplicate checks gate the pipeline before and after Job analysis. Exact saved
+  applications or decisions offer a new linked preparation or opening the
+  existing record; high/possible matches require an explicit Link or Keep
+  separate choice. Cancel means no downstream request,
+  and the choice is acknowledged for that job target. Normal Apply/Skip paths
+  never call destructive merge or use a match as their write target.
+- Posting groups are presentation and relationship metadata, never collapsed
+  tracker identity. Every decision or attempt keeps its own row, status, dates,
+  notes, and documents. Unlinking is an atomic non-destructive group mutation;
+  merging remains separately confirmed and destructive. Skipped records
+  may count as reviewed history but never as submitted-application metrics or
+  calendar submission events, even if a legacy record carries `appliedAt`.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.
@@ -109,7 +119,7 @@ RoleFit owns:
 - `server.ts` and `server/`: local HTTP/Vite composition, provider calls, safe
   job preparation, workspace/application persistence, and extension routes;
 - `src/hooks/`: RoleFit workflow state and effects;
-- `src/sections/`: Apply-only masthead, read-only Sessions/Settings studio-rail
+- `src/sections/`: primary-action masthead, read-only Sessions/Settings studio-rail
   utilities, first/default Prepare intake, studio navigation and tabs, tracker,
   materials, proposal rails, reusable AI workflow progress,
   dialogs, and host
@@ -153,15 +163,23 @@ or workspace state, keep it here and expose the smallest host seam instead.
 - Prepare is state-shaped: before preparation, one centered Source panel exposes
   one URL-or-paste method at a time and no empty downstream scaffolds; afterward,
   the editable brief leads beside one Application rail containing both material
-  choices, readiness, the saved-application summary, and Apply.
+  choices, readiness, the saved-application summary, and the session-derived
+  primary action.
 - Resume and Cover Letter use one material-card contract on Prepare: Include
   toggle, variant selector, readiness, and document-specific actions. Resume
   defaults included and Cover Letter defaults excluded; starting Polish for a
   document, manually or through its enabled automatic proposal, turns on only
   that document's Include toggle. Do not label either card optional.
-- Masthead and Prepare Apply controls share one handler and readiness model.
+- Masthead and Prepare primary controls share one handler, readiness model, and
+  action descriptor. Fresh sessions say Apply; an explicitly restored submitted
+  record says Update application, and a restored Skipped decision says Save job
+  updates. Fresh Apply creates; restored work updates only the session's exact
+  id while preserving its created/applied dates and stage.
+  Fresh preparation's quiet secondary action is labeled Skip & save job so its
+  persistence is explicit without implying that an application was saved.
+  Job matching may warn or relate records but never selects the write target.
   Require the current prepared job and readiness only for included materials,
-  while allowing either or both to be excluded. Re-Apply must not delete or
+  while allowing either or both to be excluded. A later update must not delete or
   replace a previously saved artifact whose card is excluded.
 - The Apply download prompt covers every included, exportable material, not the
   resume alone. Resume and cover letter stay two separate PDFs — ATS uploads are

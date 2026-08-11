@@ -15,6 +15,7 @@ import {
 } from "./storage.ts";
 import {
   applicationDocumentDir,
+  assertApplicationAcceptsDocuments,
   nextApplicationRevision,
   readOptionalApplicationFile,
   requireApplicationRevision,
@@ -65,6 +66,7 @@ export async function persistApplicationDocument({
   return withApplicationsLock(async () => {
     const existing = await readApplications(workspaceDir);
     const current = requireApplicationRevision(existing, id, baseUpdatedAt);
+    assertApplicationAcceptsDocuments(current);
     const pdfFileName = `${kind}.pdf`;
     const previousPdf = await readOptionalApplicationFile(
       join(dir, pdfFileName)

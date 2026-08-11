@@ -2,12 +2,17 @@ import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
 import type { Application } from "../../../hooks/useApplications";
-import { fitAssessmentRunLabel } from "../../../lib/applicationDisplay";
+import {
+  displayCompany,
+  displayRole,
+  fitAssessmentRunLabel,
+  fitAssessmentVerdictLabel
+} from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
+import type { PreparationPrimaryAction } from "../../../lib/preparationSession";
 import type {
   FitAssessmentInputChange,
-  FitAssessmentState,
-  FitAssessmentVerdict
+  FitAssessmentState
 } from "../../../../shared/fitAssessmentContract.ts";
 
 // Preparation is one of the readiness checks, so its progress earns rail space
@@ -17,19 +22,17 @@ export type PrepareActivity = {
   message: string;
 };
 
-const FIT_ASSESSMENT_LABEL: Record<FitAssessmentVerdict, string> = {
-  STRONG: "Strong fit",
-  REASONABLE: "Reasonable fit",
-  STRETCH: "Stretch",
-  LIMITED: "Limited fit"
-};
-
 const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: string; detail: string }> = {
   job: { label: "Job posting", detail: "Replaced" },
   resume: { label: "Resume content", detail: "Edited" },
   "candidate-context": { label: "About you", detail: "Updated" },
   settings: { label: "Assessment setup", detail: "Changed" }
 };
+
+function formatSavedDate(iso?: string) {
+  if (!iso || !Number.isFinite(Date.parse(iso))) return "date not recorded";
+  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(iso));
+}
 
 type PrepareApplicationRailProps = {
   activity: PrepareActivity | null;
@@ -41,8 +44,17 @@ type PrepareApplicationRailProps = {
   canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
+  primaryAction: PreparationPrimaryAction;
+  primaryActionReady: boolean;
+  primaryActionBlocker: string;
   isApplying: boolean;
+  applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
+  showSkip: boolean;
+  canSkip: boolean;
+  skipHint: string;
+  isSkipping: boolean;
+  onSkip: () => void | Promise<void>;
   children: ReactNode;
 };
 
@@ -53,8 +65,17 @@ export function PrepareApplicationRail({
   canAssessFit,
   linkedApplication,
   readiness,
+  primaryAction,
+  primaryActionReady,
+  primaryActionBlocker,
   isApplying,
+  applicationActionsBusy,
   onApply,
+  showSkip,
+  canSkip,
+  skipHint,
+  isSkipping,
+  onSkip,
   children
 }: PrepareApplicationRailProps) {
   const hasSavedResume = Boolean(
@@ -90,8 +111,28 @@ export function PrepareApplicationRail({
       <section className="prepare-panel prepare-application">
         <div className="prepare-panel__head">
           <h3>Application</h3>
-          <span className="prepare-panel__meta">{readiness.canApply ? "Ready to apply" : "In progress"}</span>
+          <span className="prepare-panel__meta">
+            {primaryActionReady
+              ? primaryAction.kind === "apply" ? "Ready to apply" : "Ready to update"
+              : "In progress"}
+          </span>
         </div>
+
+        {/* A persistent banner, not an announcement — no live region, and the
+            consequence rides the identity line rather than a third explainer
+            row. */}
+        {linkedApplication && primaryAction.kind !== "apply" ? (
+          <div className="prepare-update-banner">
+            <strong>
+              {primaryAction.kind === "update-job" ? "Editing saved job" : "Editing saved application"}
+            </strong>
+            <span>
+              {primaryAction.kind === "update-job"
+                ? `Skipped on ${formatSavedDate(linkedApplication.notApplyingAt)} · No application is created`
+                : `${displayRole(linkedApplication)} at ${displayCompany(linkedApplication)} · Applied ${formatSavedDate(linkedApplication.appliedAt)} · No new application is created`}
+            </span>
+          </div>
+        ) : null}
 
         <div className="prepare-materials" aria-label="Included materials">
           {children}
@@ -103,9 +144,8 @@ export function PrepareApplicationRail({
             <>
               <div className="prepare-fit__summary">
                 <strong className={`fit-assessment-verdict is-${assessmentSnapshot.result.verdict.toLowerCase()}`}>
-                  {FIT_ASSESSMENT_LABEL[assessmentSnapshot.result.verdict]}
+                  {fitAssessmentVerdictLabel(assessmentSnapshot.result.verdict)}
                 </strong>
-                <span>{assessmentSnapshot.resumeLabel}</span>
               </div>
               <p>{assessmentSnapshot.result.summary}</p>
               {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
@@ -161,7 +201,7 @@ export function PrepareApplicationRail({
               {fitAssessment.activeRun ? (
                 <p className="prepare-note is-working" role="status">
                   <LoaderCircle className="spin" size={13} aria-hidden="true" />
-                  Assessing {fitAssessment.activeRun.resumeLabel}…
+                  Assessing fit…
                 </p>
               ) : fitAssessment.lastError ? (
                 <p className="prepare-note is-warn" role="status">{fitAssessment.lastError.message}</p>
@@ -177,7 +217,7 @@ export function PrepareApplicationRail({
           ) : fitAssessment.activeRun ? (
             <p className="prepare-note is-working" role="status">
               <LoaderCircle className="spin" size={13} aria-hidden="true" />
-              Assessing {fitAssessment.activeRun.resumeLabel}…
+              Assessing fit…
             </p>
           ) : !fitAssessment.enabled ? (
             <p>Off in Settings. You can continue directly to Polish.</p>
@@ -225,7 +265,7 @@ export function PrepareApplicationRail({
           </ul>
         </div>
 
-        {linkedApplication ? (
+        {linkedApplication && primaryAction.kind !== "update-job" ? (
           <div className="prepare-saved">
             <p className="prepare-page__eyebrow">Saved application</p>
             <strong>{linkedApplication.title}</strong>
@@ -241,13 +281,30 @@ export function PrepareApplicationRail({
           className="primary-button prepare-apply"
           type="button"
           onClick={() => void onApply()}
-          disabled={!readiness.canApply || isApplying}
-          title={readiness.canApply ? "Mark as applied and save included materials" : readiness.primaryBlocker}
+          disabled={!primaryActionReady || applicationActionsBusy}
+          title={primaryActionReady ? primaryAction.label : primaryActionBlocker}
         >
           {isApplying ? <LoaderCircle className="spin" size={15} aria-hidden="true" /> : null}
-          {isApplying ? "Applying…" : "Apply"}
+          {isApplying ? primaryAction.busyLabel : primaryAction.label}
         </button>
-        {!readiness.canApply ? <p className="prepare-apply-hint">{readiness.primaryBlocker}</p> : null}
+        {!primaryActionReady && primaryActionBlocker ? (
+          <p className="prepare-apply-hint">{primaryActionBlocker}</p>
+        ) : null}
+        {showSkip ? (
+          <div className="prepare-skip-action">
+            <button
+              className="ghost-button is-compact prepare-skip"
+              type="button"
+              onClick={() => void onSkip()}
+              disabled={!canSkip || applicationActionsBusy}
+              title={canSkip ? "Save this posting without recording an application" : skipHint}
+            >
+              {isSkipping ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+              {isSkipping ? "Saving…" : "Skip & save job"}
+            </button>
+            {!canSkip && skipHint ? <p className="prepare-skip-hint">{skipHint}</p> : null}
+          </div>
+        ) : null}
       </section>
     </aside>
   );

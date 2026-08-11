@@ -1,20 +1,18 @@
 import { useEffect, useRef, useState } from "react";
-import { Download, Eye, Minus, Plus, RotateCcw, X } from "lucide-react";
+import { Download, Eye, X } from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
+import { PreviewZoomControls, usePreviewZoom } from "./PreviewZoomControls";
 
 // Use the bundled worker so no extra static-asset config is needed.
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   "pdfjs-dist/build/pdf.worker.min.mjs",
   import.meta.url
 ).toString();
-
-const ZOOM_STEPS = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
-const DEFAULT_ZOOM_INDEX = 2; // 100%
 
 // Views a saved application's stored PDF via react-pdf (react-pdf owns its own
 // loading/error UI). The live resume needs no compile preview — the editor is
@@ -33,11 +31,10 @@ export default function PreviewOverlay({
   onClose
 }: PreviewOverlayProps) {
   const [numPages, setNumPages] = useState<number | null>(null);
-  const [zoomIndex, setZoomIndex] = useState(DEFAULT_ZOOM_INDEX);
   const [downloadError, setDownloadError] = useState("");
   const chromeRef = useRef<HTMLDivElement>(null);
   const closeButtonRef = useRef<HTMLButtonElement>(null);
-  const zoom = ZOOM_STEPS[zoomIndex];
+  const { zoom, zoomIndex, setZoomIndex } = usePreviewZoom(isOpen, pdfUrl);
   const handleModalKeyDown = useModalFocus({
     active: isOpen,
     containerRef: chromeRef,
@@ -45,32 +42,10 @@ export default function PreviewOverlay({
     onClose
   });
 
-  // Reset zoom (and any stale download failure) when a new PDF loads.
   useEffect(() => {
     setNumPages(null);
     setDownloadError("");
-    if (pdfUrl) setZoomIndex(DEFAULT_ZOOM_INDEX);
   }, [pdfUrl]);
-
-  // Keyboard zoom: Ctrl/Cmd +/- within the overlay.
-  useEffect(() => {
-    if (!isOpen) return;
-    function onKeyDown(e: KeyboardEvent) {
-      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return;
-      if (e.key === "=" || e.key === "+") {
-        e.preventDefault();
-        setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1));
-      } else if (e.key === "-") {
-        e.preventDefault();
-        setZoomIndex((i) => Math.max(i - 1, 0));
-      } else if (e.key === "0") {
-        e.preventDefault();
-        setZoomIndex(DEFAULT_ZOOM_INDEX);
-      }
-    }
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [isOpen]);
 
   async function handleDownload() {
     if (!pdfUrl) return;
@@ -94,7 +69,7 @@ export default function PreviewOverlay({
     <div
       className="preview-overlay"
       role="dialog"
-      aria-label="Resume PDF preview"
+      aria-label={`Saved document PDF preview: ${fileName}`}
       aria-modal="true"
       onKeyDown={handleModalKeyDown}
     >
@@ -111,42 +86,7 @@ export default function PreviewOverlay({
           </span>
 
           <div className="preview-overlay__controls">
-            <div className="preview-overlay__zoom">
-              <button
-                type="button"
-                className="preview-overlay__zoom-btn"
-                onClick={() => setZoomIndex((i) => Math.max(i - 1, 0))}
-                disabled={zoomIndex === 0}
-                aria-label="Zoom out"
-                title="Zoom out"
-              >
-                <Minus size={14} />
-              </button>
-              <span className="preview-overlay__zoom-label">
-                {Math.round(zoom * 100)}%
-              </span>
-              <button
-                type="button"
-                className="preview-overlay__zoom-btn"
-                onClick={() => setZoomIndex((i) => Math.min(i + 1, ZOOM_STEPS.length - 1))}
-                disabled={zoomIndex === ZOOM_STEPS.length - 1}
-                aria-label="Zoom in"
-                title="Zoom in"
-              >
-                <Plus size={14} />
-              </button>
-              {zoomIndex !== DEFAULT_ZOOM_INDEX ? (
-                <button
-                  type="button"
-                  className="preview-overlay__zoom-btn"
-                  onClick={() => setZoomIndex(DEFAULT_ZOOM_INDEX)}
-                  aria-label="Reset zoom"
-                  title="Reset zoom"
-                >
-                  <RotateCcw size={12} />
-                </button>
-              ) : null}
-            </div>
+            <PreviewZoomControls zoomIndex={zoomIndex} setZoomIndex={setZoomIndex} />
 
             <button
               type="button"
@@ -156,7 +96,7 @@ export default function PreviewOverlay({
               aria-label="Download PDF"
               title="Download PDF"
             >
-              <Download size={14} />
+              <Download size={14} aria-hidden="true" />
             </button>
 
             <button
@@ -167,7 +107,7 @@ export default function PreviewOverlay({
               aria-label="Close preview"
               title="Close preview"
             >
-              <X size={16} />
+              <X size={16} aria-hidden="true" />
             </button>
           </div>
         </div>

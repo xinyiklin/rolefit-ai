@@ -2,11 +2,13 @@ import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
 import { describeProviderModel } from "../config/aiOptions.ts";
 import { parseDate } from "./applicationFacts.ts";
+import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
 
 export { displayCompany, parseDate } from "./applicationFacts.ts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  interested: "Saved",
+  // Use a settled decision label while retaining the stored `not_applying` key.
+  not_applying: "Skipped",
   applied: "Applied",
   interviewing: "Interviewing",
   offer: "Offer",
@@ -14,14 +16,7 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   withdrawn: "Withdrawn"
 };
 
-export const BOARD_STATUSES: ApplicationStatus[] = [
-  "interested",
-  "applied",
-  "interviewing",
-  "offer",
-  "rejected",
-  "withdrawn"
-];
+export const BOARD_STATUSES: readonly ApplicationStatus[] = APPLICATION_STATUSES;
 
 export type ApplicationActivityGroup = "active" | "inactive";
 
@@ -29,8 +24,8 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   ApplicationActivityGroup,
   readonly ApplicationStatus[]
 > = {
-  active: ["interested", "applied", "interviewing", "offer"],
-  inactive: ["rejected", "withdrawn"]
+  active: ["applied", "interviewing", "offer"],
+  inactive: ["not_applying", "rejected", "withdrawn"]
 };
 
 export type ApplicationActivityFilter =
@@ -47,7 +42,7 @@ export function activityGroupForFilter(
 }
 
 export function isInactiveApplication(app: Pick<Application, "status">): boolean {
-  return app.status === "rejected" || app.status === "withdrawn";
+  return app.status === "not_applying" || app.status === "rejected" || app.status === "withdrawn";
 }
 
 export function matchesActivityFilter(
@@ -65,6 +60,14 @@ export function activityCount(
   filter: Exclude<ApplicationActivityFilter, "all">
 ): number {
   return applications.filter((app) => matchesActivityFilter(app, filter)).length;
+}
+
+export function applicationActivityDate(
+  app: Pick<Application, "status" | "notApplyingAt" | "appliedAt" | "createdAt">
+): string {
+  return app.status === "not_applying"
+    ? app.notApplyingAt || app.createdAt || ""
+    : app.appliedAt || app.createdAt || "";
 }
 
 export function displayRole(app: Application) {
@@ -88,11 +91,15 @@ const FIT_ASSESSMENT_DISPLAY: Record<FitAssessmentVerdict, {
   tone: "strong" | "good" | "stretch" | "weak";
   rank: number;
 }> = {
-  STRONG: { label: "Strong fit", tone: "strong", rank: 4 },
-  REASONABLE: { label: "Reasonable fit", tone: "good", rank: 3 },
+  STRONG: { label: "Strong", tone: "strong", rank: 4 },
+  REASONABLE: { label: "Reasonable", tone: "good", rank: 3 },
   STRETCH: { label: "Stretch", tone: "stretch", rank: 2 },
-  LIMITED: { label: "Limited fit", tone: "weak", rank: 1 }
+  LIMITED: { label: "Limited", tone: "weak", rank: 1 }
 };
+
+export function fitAssessmentVerdictLabel(verdict: FitAssessmentVerdict): string {
+  return FIT_ASSESSMENT_DISPLAY[verdict].label;
+}
 
 // Tracker fit is the compact Fit Assessment verdict captured for the exact resume
 // selected during Prepare. There is no numeric fallback or historical review
@@ -128,20 +135,13 @@ export function fitAssessmentRunLabel(snapshot: FitAssessmentSnapshot): string {
 }
 
 export function nextAction(app: Application) {
+  if (app.status === "not_applying") return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;
   if (app.status === "interviewing") return "Prepare interview";
   if (app.status === "offer") return "Review offer";
   if (app.status === "applied") return "Awaiting response";
   if (app.status === "rejected" || app.status === "withdrawn") return "No action";
   return "Review job details";
-}
-
-export function priorityFor(app: Application) {
-  // Fit Assessment stays advisory and sortable; it never silently changes the
-  // user's queue priority. Only explicit priority or advanced status does.
-  if (app.priority) return app.priority;
-  if (app.status === "interviewing" || app.status === "offer") return "High";
-  return "Medium";
 }
 
 const SALARY_PERIOD_LABEL: Record<string, string> = { yr: "/yr", mo: "/mo", hr: "/hr" };
@@ -193,17 +193,26 @@ export function statusCount(applications: Application[], status: ApplicationStat
   return applications.filter((app) => app.status === status).length;
 }
 
-// Compact display host for a posting link: http(s) only — anything else returns
-// "" and the caller skips rendering a link (one safety rule everywhere a stored
-// URL becomes clickable). Strips the leading "www." so boards read as short
-// chips. Shared by TrackerInspector's "Found on" chips and the duplicate-review
-// modal's member links.
-export function hostLabel(url: string): string {
+// Stored tracker URLs are untrusted text. Return only browser-safe external
+// destinations so every clickable posting link shares one boundary.
+export function safeExternalUrl(url: string): string {
   const trimmed = url.trim();
   if (!/^https?:\/\//i.test(trimmed)) return "";
   try {
-    return new URL(trimmed).hostname.replace(/^www\./, "");
+    const parsed = new URL(trimmed);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? trimmed : "";
   } catch {
     return "";
   }
+}
+
+export function safeExternalUrls(urls: readonly string[]): string[] {
+  return [...new Set(urls.map(safeExternalUrl).filter(Boolean))];
+}
+
+// Compact display host for a validated posting link. Strips the leading
+// "www." so boards read as short chips.
+export function hostLabel(url: string): string {
+  const safeUrl = safeExternalUrl(url);
+  return safeUrl ? new URL(safeUrl).hostname.replace(/^www\./, "") : "";
 }

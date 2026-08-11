@@ -3,6 +3,14 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-11
+
+- [USER+CODE] Application preparation now has two explicit identities: fresh work creates a tracker row only on Apply or Skip & save job, while opening a saved record updates that exact id. Generated application answers remain session-local. Forward-only stages prevent submitted history from becoming Skipped or moving backward.
+- [CODE] Skipped records are dated job-only decisions and reject saved application documents. A narrow migration converts legacy Saved rows, removes retired priority metadata, and preserves strict fail-closed tracker validation. Duplicate handling links independent attempts by posting group or records a reviewed separation; destructive merge remains a separate confirmed cleanup.
+- [USER+CODE] Application Detail and the Applications inspector share the saved-record presentation: categorical Fit verdict and rationale, read-only posting snapshot, always-present job activity, and explicit document availability. The tracker toolbar keeps lifecycle filters and its native Table/Calendar selector aligned above the inspector rail.
+- [CODE] Three full-diff reviews removed dead backward-stage paths, inferred write-target and test-only helpers, brittle comment/layout assertions, dead CSS, repeated Fit resume labels, stale re-Apply terminology, and redundant Apply cleanup. They also fixed deleted-record recovery, duplicate-group preservation during merge, stale cross-application document-save feedback, Apply/Skip busy-state recovery, delayed-confirmation and document-preview races, activity-menu refocus, stacked-viewer modal semantics, transient-popover cleanup, section heading hierarchy, and skipped-job action copy.
+- [TOOL] The RoleFit production and landing builds, desktop contract suite, all 100 offline evaluations, and `git diff --check` pass after the third branch review. The UI detector reports only advisory design-token matches. Existing screenshots covered the changed desktop layouts, so no additional browser session was started under the repository's flag-first visual-QA policy.
+
 ## 2026-08-10
 
 - [USER+CODE+TOOL] **RoleFit is prepared as 0.7.0 with browser extension 1.2.0

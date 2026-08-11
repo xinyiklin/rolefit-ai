@@ -90,7 +90,9 @@ function createHarness({
   runFitAssessment = true,
   readiness = { ready: true },
   beforeProceed = true,
+  beforeHandled = false,
   afterProceed = true,
+  sourceReplacementChoice = "continue",
   providerStatus = 200,
   fitProvider = "codex-cli",
   fitModel = "synthetic-model",
@@ -157,9 +159,17 @@ function createHarness({
     setJobRawText: record("setJobRawText"),
     setPolishStatus: record("setPolishStatus"),
     setLinkStatus: record("setLinkStatus"),
+    confirmPreparedSourceReplacement: async () => {
+      log.push({ event: "source:replacement" });
+      return sourceReplacementChoice;
+    },
     confirmDuplicateBeforeJobAnalysis: async () => {
       log.push({ event: "duplicate:before" });
-      return { proceed: beforeProceed, note: beforeProceed ? null : "existing application" };
+      return {
+        proceed: beforeProceed,
+        note: beforeProceed ? null : "existing application",
+        ...(beforeHandled ? { handled: true } : {})
+      };
     },
     confirmDuplicateAfterJobAnalysis: async () => {
       log.push({ event: "duplicate:after" });
@@ -288,6 +298,7 @@ async function runExtension(harness) {
 }
 
 const sharedCommitOrder = [
+  "source:replacement",
   "duplicate:before",
   "state:preview",
   "resolvePreparedResume",
@@ -427,6 +438,18 @@ const sharedCommitOrder = [
   assert.equal(harness.log.some(({ event }) => event === "setImportedJob"), true);
   assert.equal(harness.state[5].latestCompleted, null, "a pre-analysis duplicate cannot create a completed Fit");
   assert.match(harness.state[5].lastError?.message ?? "", /duplicate review stopped/i);
+}
+
+{
+  const harness = createHarness({ beforeProceed: false, beforeHandled: true });
+  await runPaste(harness);
+  assert.equal(harness.log.some(({ event }) => event === "fetch:/api/job-analysis"), false);
+  assert.equal(
+    harness.log.some(({ event }) => event === "setImportedJob"),
+    false,
+    "opening the chosen saved record is not overwritten by the incoming raw posting"
+  );
+  assert.equal(harness.state[3].status, "idle");
 }
 
 {

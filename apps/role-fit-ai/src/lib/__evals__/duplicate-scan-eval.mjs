@@ -61,7 +61,7 @@ function app(overrides) {
     role: "Software Engineer II",
     jobUrl: "https://boards.greenhouse.io/northwind/jobs/4012345",
     jobDescription: JD_BODY,
-    status: "interested",
+    status: "applied",
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides
@@ -116,7 +116,6 @@ for (const [name, patch] of [
   ["createdAt", { createdAt: "2025-12-01T00:00:00.000Z" }],
   ["notes", { notes: "called the recruiter" }],
   ["followupAt", { followupAt: "2026-03-03T00:00:00.000Z" }],
-  ["priority", { priority: "High" }],
   ["resumeArtifacts", { resumeArtifacts: { hasPdf: true } }],
   ["attachments", { attachments: [{ fileName: "t.pdf", label: "T", size: 10, contentType: "application/pdf", savedAt: "2026-02-02T00:00:00.000Z" }] }]
 ]) {

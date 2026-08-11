@@ -28,6 +28,7 @@ import {
 } from "./storage.ts";
 import {
   applicationAttachmentsDir,
+  assertApplicationAcceptsDocuments,
   nextApplicationRevision,
   readOptionalApplicationFile,
   requireApplicationRevision,
@@ -87,6 +88,7 @@ export async function handleUploadApplicationAttachment(
         id,
         body.baseUpdatedAt
       );
+      assertApplicationAcceptsDocuments(current);
       await mkdir(dir, { recursive: true });
       // Replacing a file of the same name is an update, not a new attachment,
       // so it never counts against the cap.
@@ -221,6 +223,7 @@ export async function handleApplicationAttachmentFile(
           id,
           body.baseUpdatedAt
         );
+        assertApplicationAcceptsDocuments(current);
         const previousBytes = await readOptionalApplicationFile(filePath);
         const nextApplication = {
           ...current,

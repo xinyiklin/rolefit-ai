@@ -9,6 +9,7 @@ import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { ExtractedJobTracking } from "../../lib/jobExtract";
 import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
+import type { PreparationPrimaryAction } from "../../lib/preparationSession";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
 import { PreparedJobBriefSections, type PreparedJobBriefSection } from "./prepare/PreparedJobBriefSections";
 import { PreparedMaterialCard } from "./prepare/PreparedMaterialCard";
@@ -137,8 +138,17 @@ export type PrepareTabProps = {
   canAssessFit: boolean;
   linkedApplication: Application | null;
   readiness: PreparationReadiness;
+  primaryAction: PreparationPrimaryAction;
+  primaryActionReady: boolean;
+  primaryActionBlocker: string;
   isApplying: boolean;
+  applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
+  showSkip: boolean;
+  canSkip: boolean;
+  skipHint: string;
+  isSkipping: boolean;
+  onSkip: () => void | Promise<void>;
 };
 
 export function PrepareTab({
@@ -200,8 +210,17 @@ export function PrepareTab({
   canAssessFit,
   linkedApplication,
   readiness,
+  primaryAction,
+  primaryActionReady,
+  primaryActionBlocker,
   isApplying,
-  onApply
+  applicationActionsBusy,
+  onApply,
+  showSkip,
+  canSkip,
+  skipHint,
+  isSkipping,
+  onSkip
 }: PrepareTabProps) {
   const [sourceMode, setSourceMode] = useState<"collapsed" | "view" | "replace">(jobPrepared ? "collapsed" : "replace");
   const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
@@ -743,8 +762,17 @@ export function PrepareTab({
             canAssessFit={canAssessFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
+            primaryAction={primaryAction}
+            primaryActionReady={primaryActionReady}
+            primaryActionBlocker={primaryActionBlocker}
             isApplying={isApplying}
+            applicationActionsBusy={applicationActionsBusy}
             onApply={onApply}
+            showSkip={showSkip}
+            canSkip={canSkip}
+            skipHint={skipHint}
+            isSkipping={isSkipping}
+            onSkip={onSkip}
           >
             <PreparedMaterialCard
               id="prepare-resume"

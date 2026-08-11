@@ -1,16 +1,16 @@
-import { useCallback, useRef } from "react";
-import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy } from "lucide-react";
+import { useCallback, useLayoutEffect, useRef } from "react";
+import { BriefcaseBusiness, ChevronDown, ChevronRight, ChevronUp, Copy, Link2 } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import type { SortKey, SortState } from "../tabs/TrackerTab";
 import {
   STATUS_LABEL,
+  applicationActivityDate,
   companyInitials,
   displayCompany,
   displayRole,
   appFitVerdict,
   formatCompactDate,
-  nextAction,
-  priorityFor
+  nextAction
 } from "../../lib/applicationDisplay";
 
 type TrackerTableViewProps = {
@@ -25,6 +25,7 @@ type TrackerTableViewProps = {
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
   // Ids that appear in any duplicate group (see TrackerTab's duplicateGroups memo).
   duplicateIds: Set<string>;
+  postingGroupSizes: Map<string, number>;
 };
 
 // Column definitions in render order. `key` marks a sortable column.
@@ -32,8 +33,7 @@ const COLUMNS: Array<{ label: string; key: SortKey }> = [
   { label: "Company", key: "company" },
   { label: "Role", key: "role" },
   { label: "Stage", key: "stage" },
-  { label: "Applied", key: "applied" },
-  { label: "Priority", key: "priority" },
+  { label: "Date", key: "applied" },
   { label: "Next action", key: "nextAction" },
   { label: "Fit", key: "fit" }
 ];
@@ -53,7 +53,7 @@ function monthLabel(iso: string): string {
 function groupByMonth(apps: Application[]): Array<{ month: string; rows: Application[] }> {
   const groups: Array<{ month: string; rows: Application[] }> = [];
   for (const app of apps) {
-    const label = monthLabel(app.appliedAt || app.createdAt);
+    const label = monthLabel(applicationActivityDate(app));
     const last = groups[groups.length - 1];
     if (last && last.month === label) {
       last.rows.push(app);
@@ -68,6 +68,7 @@ function ApplicationRow({
   app,
   isSelected,
   isDuplicate,
+  postingGroupSize,
   onSelect,
   onDoubleClick,
   onRowContextMenu
@@ -75,21 +76,26 @@ function ApplicationRow({
   app: Application;
   isSelected: boolean;
   isDuplicate: boolean;
+  postingGroupSize: number;
   onSelect: (id: string) => void;
   onDoubleClick: (app: Application) => void;
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
 }) {
   const verdict = appFitVerdict(app);
-  const appliedLabel = app.appliedAt ? formatCompactDate(app.appliedAt) : "date not set";
+  const activityDate = applicationActivityDate(app);
+  const activityLabel = activityDate ? formatCompactDate(activityDate) : "date not set";
+  // The row carries an aria-label, so badges rendered inside it are invisible to
+  // assistive tech unless their meaning is spelled out here.
   const rowLabel = [
     displayCompany(app),
     displayRole(app),
     `stage ${STATUS_LABEL[app.status]}`,
-    `applied ${appliedLabel}`,
-    `${priorityFor(app)} priority`,
+    `date ${activityLabel}`,
     nextAction(app),
-    verdict ? `fit ${verdict.label}` : "fit not scored"
-  ].join(", ");
+    verdict ? `fit ${verdict.label}` : "fit not scored",
+    postingGroupSize > 1 ? `${postingGroupSize} records linked to this posting` : "",
+    isDuplicate ? "possible duplicate" : ""
+  ].filter(Boolean).join(", ");
   return (
     <button
       type="button"
@@ -115,6 +121,15 @@ function ApplicationRow({
             <Copy size={12} aria-hidden="true" />
           </span>
         ) : null}
+        {postingGroupSize > 1 ? (
+          <span
+            className="application-posting-group-badge"
+            title={`${postingGroupSize} independent records are linked to this posting.`}
+          >
+            <Link2 size={11} aria-hidden="true" />
+            {postingGroupSize}
+          </span>
+        ) : null}
       </span>
       <span className={displayRole(app) === "Role not set" ? "text-placeholder" : ""}>
         {displayRole(app)}
@@ -124,19 +139,7 @@ function ApplicationRow({
         <span className="stage-dot-label">{STATUS_LABEL[app.status]}</span>
       </span>
       <span className="table-date">
-        {app.appliedAt ? formatCompactDate(app.appliedAt) : "-"}
-      </span>
-      <span className="applications-table__cell--priority">
-        {priorityFor(app) === "Medium" ? (
-          <span className="priority-default">{priorityFor(app)}</span>
-        ) : (
-          <>
-            <span className={`priority-dot priority-dot--${priorityFor(app).toLowerCase()}`} aria-hidden="true" />
-            <span className={`priority-label priority-label--${priorityFor(app).toLowerCase()}`}>
-              {priorityFor(app)}
-            </span>
-          </>
-        )}
+        {activityDate ? formatCompactDate(activityDate) : "-"}
       </span>
       <span
         className={`applications-table__cell--next-action${
@@ -165,11 +168,31 @@ export function TrackerTableView({
   onSelect,
   onDoubleClick,
   onRowContextMenu,
-  duplicateIds
+  duplicateIds,
+  postingGroupSizes
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
+  const tableRef = useRef<HTMLDivElement>(null);
   const headRef = useRef<HTMLDivElement>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  const syncScrollbarWidth = useCallback(() => {
+    const table = tableRef.current;
+    const body = bodyRef.current;
+    if (!table || !body) return;
+    const scrollbarWidth = Math.max(0, body.offsetWidth - body.clientWidth);
+    table.style.setProperty("--applications-scrollbar-width", `${scrollbarWidth}px`);
+  }, []);
+
+  useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!body) return;
+    syncScrollbarWidth();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(syncScrollbarWidth);
+    observer.observe(body);
+    return () => observer.disconnect();
+  }, [grouped, syncScrollbarWidth, visible.length]);
 
   // The header is outside the vertical scroller so the scrollbar starts below it
   // rather than running up alongside the column labels. That costs the free
@@ -191,7 +214,7 @@ export function TrackerTableView({
   }, []);
 
   return (
-    <div className="applications-table" role="region" aria-label="Applications">
+    <div ref={tableRef} className="applications-table" role="region" aria-label="Applications">
       <div className="applications-table__head" ref={headRef} onScroll={mirrorScroll("head")}>
         <div className="applications-table__row applications-table__row--head">
           {COLUMNS.map((col) => {
@@ -202,11 +225,7 @@ export function TrackerTableView({
                 key={col.key}
                 aria-label={`Sort by ${col.label}${isActive ? `, currently ${sort.dir === "asc" ? "ascending" : "descending"}` : ""}`}
                 className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
-                  col.key === "priority"
-                    ? " applications-table__cell--priority"
-                    : col.key === "nextAction"
-                      ? " applications-table__cell--next-action"
-                      : ""
+                  col.key === "nextAction" ? " applications-table__cell--next-action" : ""
                 }`}
                 onClick={() => onSort(col.key)}
               >
@@ -243,6 +262,7 @@ export function TrackerTableView({
                     app={app}
                     isSelected={selectedId === app.id}
                     isDuplicate={duplicateIds.has(app.id)}
+                    postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
                     onSelect={onSelect}
                     onDoubleClick={onDoubleClick}
                     onRowContextMenu={onRowContextMenu}
@@ -258,6 +278,7 @@ export function TrackerTableView({
                   app={app}
                   isSelected={selectedId === app.id}
                   isDuplicate={duplicateIds.has(app.id)}
+                  postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
                   onSelect={onSelect}
                   onDoubleClick={onDoubleClick}
                   onRowContextMenu={onRowContextMenu}

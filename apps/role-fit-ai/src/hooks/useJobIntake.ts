@@ -52,6 +52,7 @@ import {
 } from "../../shared/fitAssessmentContract.ts";
 import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
 import type { PreparedResumeResolutionControls } from "./usePreparedResume.ts";
+import type { PreparedSourceCandidate } from "../lib/preparedSourceReplacement.ts";
 import {
   beginFitAssessmentRun,
   completeFitAssessmentRun,
@@ -138,12 +139,15 @@ type UseJobIntakeArgs = {
     url: string,
     text: string,
     facts: ExtractedJobTracking
-  ) => Promise<{ proceed: boolean; note: string | null }>;
+  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
   confirmDuplicateAfterJobAnalysis: (
     url: string,
     text: string,
     facts: ExtractedJobTracking
-  ) => Promise<{ proceed: boolean; note: string | null }>;
+  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
+  confirmPreparedSourceReplacement: (
+    candidate: PreparedSourceCandidate
+  ) => Promise<"continue" | "keep-current" | "cancel">;
   jobAnalysisRequestFields: () => AiRequestFields;
   fitAssessmentRequestFields: () => AiRequestFields;
   ensureProviderReady: (request: AiRequestFields) => Promise<ProviderReadiness>;
@@ -198,6 +202,8 @@ type PreparedResumeAndFit = {
 
 type PreparedJobAnalysisOutcome =
   | { status: "stale" }
+  | { status: "source-replacement-stopped"; choice: "keep-current" | "cancel" }
+  | { status: "duplicate-handled" }
   | { status: "duplicate-before" }
   | { status: "too-short" }
   | {
@@ -222,6 +228,7 @@ export function useJobIntake({
   setLinkStatus,
   confirmDuplicateBeforeJobAnalysis,
   confirmDuplicateAfterJobAnalysis,
+  confirmPreparedSourceReplacement,
   jobAnalysisRequestFields,
   fitAssessmentRequestFields,
   ensureProviderReady,
@@ -763,6 +770,28 @@ export function useJobIntake({
     };
   }
 
+  function settleSourceReplacementStop(
+    choice: "keep-current" | "cancel",
+    setStatus: (value: string) => void
+  ) {
+    const keptCurrent = choice === "keep-current";
+    const message = keptCurrent
+      ? "Kept the posting attached to the saved record."
+      : "Replacement canceled. The saved record was not changed.";
+    setJobAnalysisProgress({
+      status: "stopped",
+      errorHeadline: "Posting replacement paused",
+      error: message
+    });
+    setJobAnalysisProgressVisible(true);
+    setStatus(message);
+  }
+
+  function clearHandledDuplicateState(): void {
+    setJobAnalysisProgress({ status: "idle" });
+    setJobAnalysisProgressVisible(false);
+  }
+
   function dismissJobAnalysisProgress() {
     setJobAnalysisProgressVisible(false);
   }
@@ -848,6 +877,15 @@ export function useJobIntake({
     request: PreparedJobAnalysisRequest;
   }): Promise<PreparedJobAnalysisOutcome> {
     const localExtracted = extractJobPosting(localSourceText, { url: url || undefined });
+    const replacementChoice = await confirmPreparedSourceReplacement({
+      url,
+      sourceText: localSourceText,
+      tracking: localExtracted.tracking
+    });
+    if (!request.isCurrent()) return { status: "stale" };
+    if (replacementChoice !== "continue") {
+      return { status: "source-replacement-stopped", choice: replacementChoice };
+    }
     const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(
       url,
       localSourceText,
@@ -855,6 +893,7 @@ export function useJobIntake({
     );
     if (!request.isCurrent()) return { status: "stale" };
     if (!duplicateBefore.proceed) {
+      if (duplicateBefore.handled) return { status: "duplicate-handled" };
       // Extension delivery can contain a short intermediate payload. The URL
       // and paste paths have already enforced their own acquisition floors.
       if (source === "link" || source === "paste" || localSourceText.trim().length >= 40) {
@@ -1038,6 +1077,14 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "source-replacement-stopped") {
+        settleSourceReplacementStop(outcome.choice, setLinkStatus);
+        return;
+      }
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
@@ -1138,6 +1185,14 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "source-replacement-stopped") {
+        settleSourceReplacementStop(outcome.choice, setLinkStatus);
+        return;
+      }
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setLinkStatus("Preparation stopped because this application is already tracked.");
@@ -1244,6 +1299,14 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "source-replacement-stopped") {
+        settleSourceReplacementStop(outcome.choice, setPolishStatus);
+        return;
+      }
+      if (outcome.status === "duplicate-handled") {
+        clearHandledDuplicateState();
+        return;
+      }
       if (outcome.status === "duplicate-before") {
         setJobAnalysisProgress(duplicateStoppedState("before"));
         setPolishStatus("Preparation stopped because this application is already tracked.");
@@ -1308,6 +1371,14 @@ export function useJobIntake({
           request
         });
         if (outcome.status === "stale") return;
+        if (outcome.status === "source-replacement-stopped") {
+          settleSourceReplacementStop(outcome.choice, setPolishStatus);
+          return;
+        }
+        if (outcome.status === "duplicate-handled") {
+          clearHandledDuplicateState();
+          return;
+        }
         if (outcome.status === "duplicate-before") {
           setJobAnalysisProgress(duplicateStoppedState("before"));
           setJobAnalysisProgressVisible(true);

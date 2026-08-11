@@ -4,26 +4,14 @@ import { EXPORT_META } from "./ExportRail";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 import { swapDocumentTitleKind } from "../lib/downloads.ts";
 import type { ApplyDownloadNames, ApplyDownloadPicks } from "../hooks/useApplyFlow";
+import type { PreparationPrimaryAction } from "../lib/preparationSession";
 
-// Pre-apply confirmation: name each file, then Apply+Download in one step.
-// "Apply only" saves the application without starting a download. The close
-// button (×) cancels without applying. PDF is the only Apply-download format
-// (the `.resume`/`.cover` saves are separate buttons, not part of this
-// concept), so there is no format picker here.
-//
-// The dialog covers whichever included materials are exportable, and the two
-// documents stay two PDFs — ATS uploads are per-document, and a merged file
-// would have to be split again before it could be submitted. Each document
-// carries its own name field: the cover letter's is seeded from the resume's
-// so the pair matches by default, and stays independently editable.
+// Confirms the tracker commit and optional PDF downloads. Resume and cover
+// letter remain separate files because application portals upload them separately.
 type ApplyDownloadDialogProps = {
-  // Application title, for context in the header ("Stripe — Software Engineer").
   label: string;
-  // System-proposed resume file name (extension excluded). Also seeds the
-  // cover letter's name, retargeted at its own document kind.
+  action: PreparationPrimaryAction;
   defaultFileBaseName: string;
-  // Which materials this Apply can actually export. At least one is true
-  // whenever the dialog is open.
   canDownloadResume: boolean;
   canDownloadCoverLetter: boolean;
   busy: boolean;
@@ -35,6 +23,7 @@ type ApplyDownloadDialogProps = {
 
 export function ApplyDownloadDialog({
   label,
+  action,
   defaultFileBaseName,
   canDownloadResume,
   canDownloadCoverLetter,
@@ -51,7 +40,7 @@ export function ApplyDownloadDialog({
   const [resumeName, setResumeName] = useState(defaultFileBaseName);
   const [coverName, setCoverName] = useState(defaultCoverName);
   // Both exportable materials are checked by default; unchecking one skips only
-  // its download — the Apply itself and its saved artifacts are unaffected.
+  // its download — the tracker action and its saved artifacts are unaffected.
   const [pickResume, setPickResume] = useState(canDownloadResume);
   const [pickCoverLetter, setPickCoverLetter] = useState(canDownloadCoverLetter);
   const [submittedAction, setSubmittedAction] = useState<"apply" | "download" | null>(null);
@@ -68,7 +57,7 @@ export function ApplyDownloadDialog({
   });
 
   // Checkboxes only earn their place when there is a choice to make; with one
-  // exportable document "Apply only" already covers skipping the download.
+  // exportable document the secondary action already covers skipping download.
   const bothOffered = canDownloadResume && canDownloadCoverLetter;
   const downloadResume = canDownloadResume && (!bothOffered || pickResume);
   const downloadCoverLetter = canDownloadCoverLetter && (!bothOffered || pickCoverLetter);
@@ -76,8 +65,8 @@ export function ApplyDownloadDialog({
   const ext = EXPORT_META["pdf-engine"].ext;
   const busyMessage =
     submittedAction === "download"
-      ? `Applying and exporting ${selectedCount > 1 ? "both PDFs" : "the selected PDF"}…`
-      : "Applying and saving included materials…";
+      ? `${action.busyLabel} Exporting ${selectedCount > 1 ? "both PDFs" : "the selected PDF"}…`
+      : `${action.busyLabel} Saving included materials…`;
 
   const row = (
     kind: "resume" | "cover",
@@ -133,7 +122,7 @@ export function ApplyDownloadDialog({
       className="rename-dialog"
       role="dialog"
       aria-modal="true"
-      aria-label="Apply and download documents"
+      aria-label={`${action.label} and download documents`}
       onKeyDown={handleModalKeyDown}
     >
       <div
@@ -158,11 +147,12 @@ export function ApplyDownloadDialog({
           );
         }}
       >
-        <button type="button" className="apply-download__close" onClick={onSkip} aria-label="Cancel" title="Cancel without applying" disabled={busy}>
+        <button type="button" className="apply-download__close" onClick={onSkip} aria-label="Cancel" title={`Cancel without ${action.label.toLowerCase()}`} disabled={busy}>
           <X size={14} />
         </button>
         <p className="rename-dialog__hint">
-          Apply to <strong>{label}</strong>. Name each file before downloading.
+          {action.kind === "apply" ? "Apply to " : `${action.label} for `}
+          <strong>{label}</strong>. Name each file before downloading.
         </p>
 
         <div className="apply-download__picks">
@@ -208,18 +198,24 @@ export function ApplyDownloadDialog({
               setSubmittedAction("apply");
               void onApplyOnly();
             }}
-            title="Apply without downloading"
+            title={`${action.label} without downloading`}
             disabled={busy}
           >
-            {busy && submittedAction === "apply" ? "Applying…" : "Apply only"}
+            {busy && submittedAction === "apply"
+              ? action.busyLabel
+              : action.kind === "apply"
+                ? "Apply only"
+                : action.kind === "update-job"
+                  ? "Save without downloading"
+                  : "Update without downloading"}
           </button>
           <button type="submit" className="primary-button is-compact" disabled={busy || !selectedCount}>
             <Download size={13} aria-hidden="true" />
             {busy && submittedAction === "download"
-              ? "Applying & exporting…"
+              ? `${action.busyLabel.replace(/…$/, "")} & exporting…`
               : selectedCount > 1
-                ? "Apply & download both"
-                : "Apply & download"}
+                ? `${action.label} & download both`
+                : `${action.label} & download`}
           </button>
         </footer>
       </form>

@@ -24,7 +24,12 @@ browser-side effects; components render them and App composes them.
   extension delivery, and imported-posting Retry keep acquisition and recovery
   copy local but share one private post-acquisition coordinator for duplicate
   checks, preview, prepared-resume resolution, analysis/fallback, snapshot
-  commit, and fit settlement. Opening a tracked application hydrates the same
+  commit, and fit settlement. While update mode owns an explicit record, source
+  typing remains a non-writing draft: the coordinator compares the locally
+  extracted candidate before duplicate review or provider analysis. Same-posting
+  corrections retain the id; a materially different source pauses for Keep the
+  current posting / Start a new preparation / Cancel, and only the explicit new
+  choice detaches the record. Opening a tracked application hydrates the same
   retained prepared-job receipt. Its compact saved assessment is historical —
   visible and reassessable, but never eligible to trigger automatic Polish —
   because tracker storage cannot reconstruct exact current-input provenance.
@@ -65,7 +70,7 @@ browser-side effects; components render them and App composes them.
   Prepare controls; it requires the prepared job and readiness only for
   included materials. It captures the Resume/Cover Letter Include selection
   before duplicate or download dialogs, permits either or both to be excluded,
-  and leaves a previously saved excluded artifact untouched on re-Apply. Apply
+  and leaves a previously saved excluded artifact untouched on a later update. Apply
   stores the complete editable prepared brief (including benefits) while
   Resume Polish receives the benefits-excluded model-facing projection. The captured
   posting remains immutable and separately persisted even when it initially
@@ -93,23 +98,30 @@ browser-side effects; components render them and App composes them.
   retain current. The guarded loader returns the exact committed
   document receipt, failed adoption clears the recommendation, and cancellation
   clears both the recommendation and visible resolving flag.
-- `useApplications` sends only mutation-named upsert records, keeps optimistic
-  updates serial, and reconciles successful own-write snapshots by id/revision
-  so unchanged objects retain identity. Manual refreshes and conflict snapshots
-  remain fresh authoritative objects.
+- `useApplications` sends only mutation-named records, keeps optimistic updates
+  serial, and reconciles successful own-write snapshots by id/revision so
+  unchanged objects retain identity. Ordinary saves match by application id
+  only. Same-posting records keep independent ids and use one atomic multi-row
+  `jobPostingGroupId` mutation; manual destructive merge remains a separate
+  operation. Manual refreshes and conflict snapshots remain fresh authoritative
+  objects.
 - `useApplyFlow` persists the latest completed Fit Assessment as an application
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,
-  re-Apply preserves the existing application snapshot instead of clearing it.
+  a later update preserves the existing application snapshot instead of clearing it.
   Its `isApplying` lifetime spans tracker confirmation and every included strict
   source save; App must include that entire phase in unload protection even when
   both editors began clean.
-- `useApplicationDocumentSync` owns the session's application link and the two
-  explicit per-document saves that follow Apply. Saving is always user
-  initiated; no effect may write a document into an application. Apply or
-  tracker restore establishes an application of record, and editing its
-  prepared brief must not sever that identity; only fresh intake may release
-  the link.
+- `useApplicationDocumentSync` owns the two explicit per-document saves that
+  follow an application-of-record id established by the preparation session.
+  Saving is always user initiated; no effect may write a document into an
+  application. Fresh work has no document target, while restored update work
+  uses only its explicit id. A restored Skipped job remains job-only history
+  and cannot accept resume, cover-letter, or additional application-document
+  artifacts. Job URL or text matching
+  must never infer that target. `useApplicationAnswers` owns generation only: answer drafts stay in
+  the current browser session for editing and copying and never create or update
+  a tracker record.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

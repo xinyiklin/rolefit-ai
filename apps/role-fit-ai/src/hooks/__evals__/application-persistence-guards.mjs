@@ -6,6 +6,10 @@ import { applicationUnloadGuardActive } from "../../lib/applicationUnloadGuard.t
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
+const preparedApplicationRecord = readFileSync(
+  new URL("../../lib/preparedApplicationRecord.ts", import.meta.url),
+  "utf8"
+);
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const applicationModal = readFileSync(
   new URL("../../sections/ApplicationModal.tsx", import.meta.url),
@@ -42,6 +46,36 @@ assert.match(
   /setPendingWrites\(\(count\) => count \+ 1\)[\s\S]*finally \{[\s\S]*setPendingWrites/,
   "every tracker write enters and releases reactive pending state"
 );
+assert.doesNotMatch(
+  applications,
+  /sameApplicationTarget/,
+  "ordinary tracker persistence never selects a write target by matching job content"
+);
+assert.match(
+  applications,
+  /const updateApplicationById = useCallback[\s\S]{0,240}?current\.findIndex\(\(application\) => application\.id === incoming\.id\)/,
+  "the dedicated update path matches an existing record by explicit id only"
+);
+assert.match(
+  applications,
+  /const linkPostingRecords =[\s\S]*await persist\([\s\S]*changed\.map/,
+  "posting relationships use one sparse multi-record persistence request"
+);
+assert.match(
+  applications,
+  /const markPostingRecordsUnrelated =[\s\S]*return persist\(next, mutations\)/,
+  "Keep separate decisions use one sparse multi-record persistence request"
+);
+for (const contract of [
+  "const postingPlan = planPostingRecordLink(",
+  "const relationshipChanges = retainedPostingGroupId",
+  "...relationshipChanges.map"
+]) {
+  assert.ok(
+    applications.includes(contract),
+    "merging a duplicate preserves and atomically unifies surviving posting-history groups"
+  );
+}
 assert.equal(
   applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
   3,
@@ -49,14 +83,28 @@ assert.equal(
 );
 
 const documentVersionCapture = applyFlow.indexOf("const expectedDocumentVersions =");
-const awaitedSave = applyFlow.indexOf("saved = await persistAppliedApplication(app)");
+const awaitedSave = applyFlow.indexOf('? await createApplication(app)');
+const awaitedUpdate = applyFlow.indexOf(": await updateApplicationById(app)", awaitedSave);
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
 const artifactSave = applyFlow.indexOf("const savedDocuments = await saveAppliedDocumentArtifacts(", failedSave);
 const resumeRecoveryClear = applyFlow.indexOf("if (savedDocuments.resumeSaved) onResumeSaved();", artifactSave);
 const coverRecoveryClear = applyFlow.indexOf("if (savedDocuments.coverSaved) onCoverLetterSaved();", artifactSave);
 
 assert.ok(documentVersionCapture >= 0 && documentVersionCapture < awaitedSave, "Apply captures document versions before persistence yields");
-assert.ok(awaitedSave >= 0 && failedSave > awaitedSave, "Apply awaits tracker persistence and handles a failed confirmation");
+assert.ok(
+  awaitedSave >= 0 && awaitedUpdate > awaitedSave && failedSave > awaitedUpdate,
+  "Apply awaits its explicit create/update tracker path and handles a failed confirmation"
+);
+assert.match(
+  applyFlow,
+  /if \(session\.mode !== "new" && !existing\)[\s\S]{0,420}?return false;/,
+  "an explicit draft/update session fails closed when its id no longer exists"
+);
+assert.match(
+  applyFlow,
+  /could not be prepared for saving[\s\S]{0,320}?applyCommitInFlightRef\.current = false;[\s\S]{0,100}?setIsCommittingApply\(false\)/,
+  "unexpected pre-commit failures release Apply's busy state and keep the recovery draft"
+);
 assert.ok(artifactSave > failedSave, "document artifacts start only after tracker confirmation");
 assert.ok(
   resumeRecoveryClear > artifactSave && coverRecoveryClear > resumeRecoveryClear,
@@ -72,12 +120,6 @@ assert.match(
   /const cover = selection\.coverLetter[\s\S]{0,180}?getCoverLetterArtifacts\(\)/,
   "Apply snapshots a cover letter only when the captured package includes it"
 );
-assert.match(
-  applyFlow,
-  /never deletes an older tracker artifact/,
-  "excluding a material on re-Apply remains explicitly non-destructive"
-);
-
 assert.match(applicationModal, /saved = await onSave/, "the detail modal awaits tracker persistence");
 assert.match(
   applicationModal,
@@ -107,9 +149,9 @@ assert.match(
   "Apply receives an explicit Fit Assessment persistence decision"
 );
 assert.match(
-  applyFlow,
+  preparedApplicationRecord,
   /fitAssessmentPersistence\.action === "set"[\s\S]{0,180}?fitAssessment: fitAssessmentPersistence\.snapshot[\s\S]{0,220}?fitAssessmentPersistence\.action === "clear"[\s\S]{0,120}?fitAssessment: undefined/,
-  "Apply distinguishes replacing, preserving, and clearing a Fit Assessment"
+  "the shared prepared-record builder distinguishes replacing, preserving, and clearing a Fit Assessment"
 );
 
 function deferred() {

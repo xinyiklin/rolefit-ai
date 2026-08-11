@@ -1,5 +1,5 @@
 import { useRef, useState, type ChangeEvent, type RefObject } from "react";
-import { Download, Eye, FileText, Trash2, Upload } from "lucide-react";
+import { Download, ExternalLink, Eye, FileText, ScrollText, Trash2, Upload } from "lucide-react";
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 
@@ -19,6 +19,7 @@ import {
   applicationDocumentAvailability,
   type ApplicationDocumentAvailability
 } from "../../../shared/applicationDocumentContract.ts";
+import { safeExternalUrl } from "../../lib/applicationDisplay";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
@@ -34,12 +35,55 @@ type ApplicationDocumentsTabProps = {
     kind: ApplicationDocumentKind
   ) => Promise<{ ok: boolean; error?: string }>;
   onPreviewDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
+  onPreviewPosting?: () => void;
   onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
   onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
   onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 type UploadKind = ApplicationDocumentKind | "attachment";
+
+function JobPostingPane({
+  application,
+  onPreviewPosting
+}: {
+  application: Application | null;
+  onPreviewPosting?: () => void;
+}) {
+  const hasOriginalPosting = Boolean(application?.rawJobDescription?.trim());
+  const hasPreparedPosting = Boolean(application?.jobDescription?.trim());
+  const hasPosting = hasOriginalPosting || hasPreparedPosting;
+  const safeJobUrl = safeExternalUrl(application?.jobUrl ?? "");
+
+  return (
+    <article className="application-doc-card" aria-label="Job posting">
+      <div className="application-doc-card__head">
+        <h3><ScrollText size={14} aria-hidden="true" /> Job posting</h3>
+      </div>
+      <div className="application-doc-card__footer">
+        <span>
+          {hasOriginalPosting
+            ? "Original capture saved."
+            : hasPreparedPosting
+              ? "Prepared job text saved."
+              : "No posting text saved."}
+        </span>
+        <div className="application-doc-card__actions">
+          {hasPosting && onPreviewPosting ? (
+            <button type="button" className="secondary-button is-compact" onClick={onPreviewPosting}>
+              <Eye size={14} aria-hidden="true" /> Preview
+            </button>
+          ) : null}
+          {safeJobUrl ? (
+            <a className="secondary-button is-compact" href={safeJobUrl} target="_blank" rel="noreferrer">
+              <ExternalLink size={14} aria-hidden="true" /> Open link
+            </a>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}
 
 function fileToBase64(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -64,6 +108,7 @@ function DocumentPane({
   kind,
   artifacts,
   availability,
+  jobOnly,
   busy,
   uploadRef,
   downloadBase,
@@ -76,6 +121,7 @@ function DocumentPane({
   kind: ApplicationDocumentKind;
   artifacts?: DocumentArtifacts;
   availability: ApplicationDocumentAvailability;
+  jobOnly: boolean;
   busy: boolean;
   uploadRef: RefObject<HTMLInputElement | null>;
   downloadBase: string;
@@ -93,7 +139,7 @@ function DocumentPane({
   return (
     <article className="application-doc-card" aria-label={title}>
       <div className="application-doc-card__head">
-        <h4><FileText size={14} aria-hidden="true" /> {title}</h4>
+        <h3><FileText size={14} aria-hidden="true" /> {title}</h3>
         <div className="application-doc-card__actions">
           <input
             ref={uploadRef}
@@ -108,7 +154,7 @@ function DocumentPane({
             aria-label={`Upload ${title.toLowerCase()}`}
             title="Upload"
             onClick={() => uploadRef.current?.click()}
-            disabled={!application || busy}
+            disabled={!application || jobOnly || busy}
           >
             <Upload size={13} aria-hidden="true" />
           </button>
@@ -119,7 +165,7 @@ function DocumentPane({
               aria-label={`Remove ${title.toLowerCase()}`}
               title="Remove"
               onClick={() => onRemove(kind)}
-              disabled={busy}
+              disabled={jobOnly || busy}
             >
               <Trash2 size={13} aria-hidden="true" />
             </button>
@@ -181,6 +227,7 @@ export function ApplicationDocumentsTab({
   onSaveDocument,
   onRemoveDocument,
   onPreviewDocument,
+  onPreviewPosting,
   onDownloadDocument,
   onSaveAttachment,
   onRemoveAttachment
@@ -194,6 +241,7 @@ export function ApplicationDocumentsTab({
   const coverArtifacts = application?.coverLetterArtifacts;
   const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
   const coverAvailability = applicationDocumentAvailability(coverArtifacts);
+  const jobOnly = application?.status === "not_applying";
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -201,6 +249,13 @@ export function ApplicationDocumentsTab({
     if (!file || busy) return;
     if (!application) {
       await alert({ title: "Save application first", message: "Save the application before uploading a document." });
+      return;
+    }
+    if (jobOnly) {
+      await alert({
+        title: "Skipped job",
+        message: "Start a new application attempt before saving application documents."
+      });
       return;
     }
 
@@ -310,12 +365,19 @@ export function ApplicationDocumentsTab({
 
   return (
     <section className="application-form application-form--wide">
+      {jobOnly ? (
+        <p className="application-muted">
+          Skipped jobs keep job details only. Start a new application attempt to save application documents.
+        </p>
+      ) : null}
       <div className="application-doc-grid">
+        <JobPostingPane application={application} onPreviewPosting={onPreviewPosting} />
         <DocumentPane
           application={application}
           kind="resume"
           artifacts={resumeArtifacts}
           availability={resumeAvailability}
+          jobOnly={jobOnly}
           busy={busy}
           uploadRef={resumeUploadRef}
           downloadBase={downloadBase}
@@ -329,6 +391,7 @@ export function ApplicationDocumentsTab({
           kind="cover"
           artifacts={coverArtifacts}
           availability={coverAvailability}
+          jobOnly={jobOnly}
           busy={busy}
           uploadRef={coverUploadRef}
           downloadBase={downloadBase}
@@ -341,19 +404,20 @@ export function ApplicationDocumentsTab({
 
       <article className="application-doc-card" aria-label="Additional documents">
         <div className="application-doc-card__head">
-          <h4><FileText size={14} aria-hidden="true" /> Additional documents</h4>
+          <h3><FileText size={14} aria-hidden="true" /> Additional documents</h3>
           <input
             ref={attachmentUploadRef}
             type="file"
             accept={ATTACHMENT_ACCEPT}
             hidden
+            disabled={jobOnly}
             onChange={(event) => void upload("attachment", event)}
           />
           <button
             type="button"
             className="ghost-button is-compact"
             onClick={() => attachmentUploadRef.current?.click()}
-            disabled={!application || busy}
+            disabled={!application || jobOnly || busy}
           >
             <Upload size={13} aria-hidden="true" /> Upload
           </button>
@@ -375,7 +439,7 @@ export function ApplicationDocumentsTab({
                   aria-label={`Remove ${attachment.label}`}
                   title="Remove"
                   onClick={() => void removeAttachment(attachment.fileName)}
-                  disabled={busy}
+                  disabled={jobOnly || busy}
                 >
                   <Trash2 size={13} aria-hidden="true" />
                 </button>

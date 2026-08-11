@@ -56,6 +56,7 @@ try {
       ],
       rawJobDescription: "  Raw JD text here.  ",
       duplicateDismissedIds: ["other-app", "other-app", "app_valid-123", "../bad"],
+      jobPostingGroupId: "posting-group-123",
       coverLetterArtifacts: {
         hasPdf: false,
         hasSource: true,
@@ -104,8 +105,39 @@ try {
       title: "Empty AI usage",
       createdAt: "2026-07-01T00:00:00.000Z",
       updatedAt: "2026-07-29T10:00:00.000Z",
-      status: "interested",
+      status: "applied",
       aiUsage: { "9bad": { source: "ai" } }
+    },
+    {
+      id: "passed-job",
+      title: "Passed job",
+      createdAt: "2026-07-01T00:00:00.000Z",
+      updatedAt: "2026-07-29T10:00:00.000Z",
+      jobUrl: "https://example.com/passed",
+      status: "not_applying",
+      appliedAt: "2026-07-28T10:00:00.000Z",
+      notApplyingAt: "2026-07-29T10:00:00.000Z",
+      notApplyingReason: "constraints",
+      notApplyingNote: "Location requirement",
+      resumeUsed: "tailored",
+      resumeArtifacts: {
+        hasPdf: true,
+        hasSource: false,
+        fileName: "must-not-survive.pdf",
+        savedAt: "2026-07-28T10:00:00.000Z"
+      },
+      coverLetterArtifacts: {
+        hasPdf: false,
+        hasSource: true,
+        fileName: "must-not-survive.cover",
+        savedAt: "2026-07-28T10:00:00.000Z"
+      },
+      attachments: [{
+        fileName: "must-not-survive.pdf",
+        label: "Must not survive",
+        size: 100,
+        savedAt: "2026-07-28T10:00:00.000Z"
+      }]
     }
   ];
   const written = await writeApplications(workspace, sanitizeApplications(rawApplications));
@@ -114,9 +146,11 @@ try {
   const failures = [];
   const valid = read[0];
   const emptyAi = read.find((a) => a.id === "app_empty-ai");
+  const passedJob = read.find((a) => a.id === "passed-job");
 
-  if (written.length !== 2 || read.length !== 2) failures.push("invalid ids are not dropped");
+  if (written.length !== 3 || read.length !== 3) failures.push("invalid ids are not dropped");
   if (valid?.id !== "app_valid-123") failures.push("valid id did not persist");
+  if (valid?.jobPostingGroupId !== "posting-group-123") failures.push("posting relationship did not persist");
   if (valid?.fitAssessment?.result.verdict !== "REASONABLE" || valid.fitAssessment.resumeLabel !== "Backend resume") {
     failures.push("compact Fit Assessment snapshot did not roundtrip");
   }
@@ -139,6 +173,7 @@ try {
     {
       id: "legacy-flat-header",
       title: "Legacy flat header",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeData: {
@@ -150,6 +185,7 @@ try {
     {
       id: "empty-structural-header",
       title: "Empty structural header",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeData: {
@@ -226,11 +262,45 @@ try {
   // Empty aiUsage → undefined (no key persisted).
   if (emptyAi && emptyAi.aiUsage !== undefined) failures.push("empty aiUsage did not become undefined");
 
+  if (
+    passedJob?.status !== "not_applying"
+    || passedJob.notApplyingAt !== "2026-07-29T10:00:00.000Z"
+    || passedJob.notApplyingReason !== "constraints"
+    || passedJob.notApplyingNote !== "Location requirement"
+  ) {
+    failures.push("Not applying decision metadata did not roundtrip");
+  }
+
+  if (sanitizeApplications([{
+    id: "missing-skip-date",
+    title: "Missing skip date",
+    status: "not_applying",
+    createdAt: canonicalCreatedAt,
+    updatedAt: canonicalUpdatedAt
+  }]).length !== 0) {
+    failures.push("a Skipped decision without a canonical decision date was accepted");
+  }
+  if (passedJob?.appliedAt !== undefined || passedJob?.resumeUsed !== undefined) {
+    failures.push("Not applying retained application-attempt fields");
+  }
+  if (passedJob?.resumeArtifacts !== undefined || passedJob?.coverLetterArtifacts !== undefined) {
+    failures.push("Not applying retained sent-document artifacts");
+  }
+  if (passedJob?.attachments !== undefined) {
+    failures.push("Not applying retained additional application documents");
+  }
+  const storedJson = JSON.parse(await readFile(applicationsFilePath(workspace), "utf8"));
+  const storedPass = storedJson.applications.find((entry) => entry.id === "passed-job");
+  if (Object.hasOwn(storedPass ?? {}, "appliedAt")) {
+    failures.push("Not applying persisted an appliedAt field");
+  }
+
   let overflowRejected = false;
   try {
     await writeApplications(workspace, Array.from({ length: 501 }, (_, index) => ({
       id: `overflow-${index}`,
       title: `Overflow ${index}`,
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt
     })));
@@ -244,8 +314,8 @@ try {
   let duplicateWriteRejected = false;
   try {
     await writeApplications(workspace, sanitizeApplications([
-      { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
-      { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
+      { id: "duplicate", title: "First", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+      { id: "duplicate", title: "Second", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
     ]));
   } catch (error) {
     duplicateWriteRejected = error instanceof ApplicationsStorageError && error.status === 400;
@@ -259,6 +329,7 @@ try {
   const staleSummaryRecord = sanitizeApplications([{
     id: "stale-fit-assessment-summary",
     title: "Stale Fit Assessment summary",
+    status: "applied",
     createdAt: canonicalCreatedAt,
     updatedAt: canonicalUpdatedAt,
     fitAssessment: {
@@ -304,6 +375,95 @@ try {
     if (!rejected) failures.push(`a ${label} Fit Assessment summary bypassed strict tracker validation`);
   }
 
+  // Priority was presentation-only metadata. A canonical tracker from an older
+  // build upgrades once by removing the exact retired enum, while malformed
+  // values still fail closed as unknown data.
+  const legacyPriorityRecord = sanitizeApplications([{
+    id: "legacy-priority",
+    title: "Legacy priority",
+    status: "applied",
+    createdAt: canonicalCreatedAt,
+    updatedAt: canonicalUpdatedAt
+  }])[0];
+  await writeFile(filePath, JSON.stringify({
+    applications: [{ ...legacyPriorityRecord, priority: "High" }]
+  }), "utf8");
+  try {
+    const upgraded = await readApplications(workspace);
+    const upgradedFile = JSON.parse(await readFile(filePath, "utf8"));
+    if ("priority" in (upgraded[0] ?? {})) {
+      failures.push("the removed application priority survived the in-memory upgrade");
+    }
+    if ("priority" in (upgradedFile.applications?.[0] ?? {})) {
+      failures.push("the removed application priority survived the on-disk upgrade");
+    }
+  } catch {
+    failures.push("a valid legacy application priority blocked the otherwise canonical tracker");
+  }
+  await writeFile(filePath, JSON.stringify({
+    applications: [{ ...legacyPriorityRecord, priority: "Urgent" }]
+  }), "utf8");
+  let malformedPriorityRejected = false;
+  try {
+    await readApplications(workspace);
+  } catch (error) {
+    malformedPriorityRejected = error instanceof ApplicationsStorageError;
+  }
+  if (!malformedPriorityRejected) {
+    failures.push("a malformed legacy application priority bypassed strict tracker validation");
+  }
+
+  // The retired Saved stage upgrades to Skipped without dropping the record's
+  // notes or saved answers. It must not retain document metadata that would
+  // imply an employer submission.
+  const legacyInterested = {
+    ...legacyPriorityRecord,
+    status: "interested",
+    applicationAnswers: [{
+      question: "Why Acme?",
+      answer: "Product fit",
+      savedAt: canonicalUpdatedAt
+    }],
+    resumeUsed: "tailored",
+    resumeArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      sourceFingerprint: "typeset-resume-1",
+      fileName: "draft.resume",
+      savedAt: canonicalUpdatedAt
+    },
+    attachments: [{
+      fileName: "draft.pdf",
+      label: "Draft",
+      size: 100,
+      savedAt: canonicalUpdatedAt
+    }]
+  };
+  await writeFile(filePath, JSON.stringify({ applications: [legacyInterested] }), "utf8");
+  try {
+    const upgraded = await readApplications(workspace);
+    const upgradedFile = JSON.parse(await readFile(filePath, "utf8"));
+    const record = upgraded[0];
+    if (record?.status !== "not_applying" || record.notApplyingAt !== canonicalUpdatedAt) {
+      failures.push("a legacy Saved record did not upgrade to a dated Skipped decision");
+    }
+    if (record?.applicationAnswers?.[0]?.answer !== "Product fit") {
+      failures.push("a legacy Saved record lost its application answers during upgrade");
+    }
+    if (
+      record?.resumeUsed !== undefined
+      || record?.resumeArtifacts !== undefined
+      || record?.attachments !== undefined
+    ) {
+      failures.push("a legacy Saved record retained submitted-document metadata");
+    }
+    if (upgradedFile.applications?.[0]?.status !== "not_applying") {
+      failures.push("the retired Saved stage survived the on-disk upgrade");
+    }
+  } catch {
+    failures.push("a canonical legacy Saved record blocked the tracker upgrade");
+  }
+
   const retiredFitField = ["initial", "Fit"].join("");
   const currentFit = staleSummaryRecord.fitAssessment;
   const { fitAssessment: _currentFit, ...withoutCurrentFit } = staleSummaryRecord;
@@ -325,12 +485,12 @@ try {
   const revisionCNext = "2026-07-29T14:00:00.000Z";
   const revisionD = "2026-07-29T15:00:00.000Z";
   const serverSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "newer server A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", notes: "server B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
+    { id: "record-a", title: "Record A", status: "applied", notes: "newer server A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", notes: "server B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
   ]);
   const fullClientSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "stale client A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", notes: "client B", createdAt: canonicalCreatedAt, updatedAt: revisionBNext }
+    { id: "record-a", title: "Record A", status: "applied", notes: "stale client A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", notes: "client B", createdAt: canonicalCreatedAt, updatedAt: revisionBNext }
   ]);
   const sparseClientSnapshot = [fullClientSnapshot[1]];
   const reconciled = reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
@@ -360,9 +520,53 @@ try {
     failures.push("a retired full-snapshot mutation request was accepted");
   }
 
+  const forbiddenStatusRewrite = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "not_applying",
+    notApplyingAt: revisionBNext,
+    updatedAt: revisionBNext
+  }]);
+  let forbiddenStatusRewriteRejected = false;
+  try {
+    reconcileApplicationMutations(serverSnapshot, forbiddenStatusRewrite, [
+      { id: "record-a", operation: "upsert", baseUpdatedAt: revisionA }
+    ]);
+  } catch (error) {
+    forbiddenStatusRewriteRejected =
+      error instanceof ApplicationsStorageError && error.status === 400;
+  }
+  if (!forbiddenStatusRewriteRejected) {
+    failures.push("the server accepted a client-side rewrite from Applied to Skipped");
+  }
+
+  const advancedServerSnapshot = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "interviewing",
+    updatedAt: revisionBNext
+  }]);
+  const staleBackwardStatus = sanitizeApplications([{
+    ...serverSnapshot[0],
+    status: "applied",
+    updatedAt: revisionC
+  }]);
+  let staleStatusReturnedConflict = false;
+  try {
+    reconcileApplicationMutations(advancedServerSnapshot, staleBackwardStatus, [
+      { id: "record-a", operation: "upsert", baseUpdatedAt: revisionA }
+    ]);
+  } catch (error) {
+    staleStatusReturnedConflict =
+      error instanceof ApplicationsStorageError
+      && error.status === 409
+      && error.currentApplications === advancedServerSnapshot;
+  }
+  if (!staleStatusReturnedConflict) {
+    failures.push("a stale status mutation did not return the authoritative conflict snapshot");
+  }
+
   const newRecords = sanitizeApplications([
-    { id: "record-new-b", title: "New B", createdAt: revisionBNext, updatedAt: revisionBNext },
-    { id: "record-new-a", title: "New A", createdAt: revisionC, updatedAt: revisionC }
+    { id: "record-new-b", title: "New B", status: "applied", createdAt: revisionBNext, updatedAt: revisionBNext },
+    { id: "record-new-a", title: "New A", status: "applied", createdAt: revisionC, updatedAt: revisionC }
   ]);
   const withNewRecords = reconcileApplicationMutations(serverSnapshot, newRecords, [
     { id: "record-new-b", operation: "upsert", baseUpdatedAt: null },
@@ -372,14 +576,64 @@ try {
     failures.push("multiple new upserts were not prepended in incoming order");
   }
 
+  const relationshipExisting = sanitizeApplications([
+    { id: "link-a", title: "Link A", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "link-b", title: "Link B", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionB }
+  ]);
+  const relationshipIncoming = sanitizeApplications([
+    {
+      ...relationshipExisting[0],
+      jobPostingGroupId: "posting-group-atomic",
+      updatedAt: revisionBNext
+    },
+    {
+      ...relationshipExisting[1],
+      jobPostingGroupId: "posting-group-atomic",
+      updatedAt: revisionC
+    }
+  ]);
+  const relationshipLinked = reconcileApplicationMutations(
+    relationshipExisting,
+    relationshipIncoming,
+    [
+      { id: "link-a", operation: "upsert", baseUpdatedAt: revisionA },
+      { id: "link-b", operation: "upsert", baseUpdatedAt: revisionB }
+    ]
+  );
+  if (
+    relationshipLinked.some(
+      (application) => application.jobPostingGroupId !== "posting-group-atomic"
+    )
+  ) {
+    failures.push("an atomic posting relationship did not update every named record");
+  }
+
+  let relationshipConflictRejected = false;
+  try {
+    reconcileApplicationMutations(relationshipExisting, relationshipIncoming, [
+      { id: "link-a", operation: "upsert", baseUpdatedAt: revisionA },
+      { id: "link-b", operation: "upsert", baseUpdatedAt: "stale-revision" }
+    ]);
+  } catch (error) {
+    relationshipConflictRejected =
+      error instanceof ApplicationsStorageError
+      && error.status === 409
+      && error.currentApplications?.every(
+        (application) => application.jobPostingGroupId === undefined
+      );
+  }
+  if (!relationshipConflictRejected) {
+    failures.push("a posting relationship conflict could leave a partial group");
+  }
+
   const mergeSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", createdAt: canonicalCreatedAt, updatedAt: revisionB },
-    { id: "record-c", title: "Record C", createdAt: canonicalCreatedAt, updatedAt: revisionC },
-    { id: "record-d", title: "Record D", createdAt: canonicalCreatedAt, updatedAt: revisionD }
+    { id: "record-a", title: "Record A", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionB },
+    { id: "record-c", title: "Record C", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionC },
+    { id: "record-d", title: "Record D", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionD }
   ]);
   const mergedCanonical = sanitizeApplications([
-    { id: "record-c", title: "Record C", notes: "merged", createdAt: canonicalCreatedAt, updatedAt: revisionCNext }
+    { id: "record-c", title: "Record C", status: "applied", notes: "merged", createdAt: canonicalCreatedAt, updatedAt: revisionCNext }
   ]);
   const merged = reconcileApplicationMutations(mergeSnapshot, mergedCanonical, [
     { id: "record-c", operation: "upsert", baseUpdatedAt: revisionC },
@@ -421,6 +675,7 @@ try {
       {
         id: "record-b",
         title: "Record B",
+        status: "applied",
         createdAt: canonicalCreatedAt,
         updatedAt: revisionA
       }
@@ -454,14 +709,15 @@ try {
   }
 
   const invalidCurrentShapes = [
-    { id: "missing-created", title: "Missing created", updatedAt: canonicalUpdatedAt },
-    { id: "missing-updated", title: "Missing updated", createdAt: canonicalCreatedAt },
-    { id: "invalid-updated", title: "Invalid updated", createdAt: canonicalCreatedAt, updatedAt: "not-a-date" },
-    { id: "retired-resume", title: "Retired resume", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, resumeData: {} },
-    { id: "retired-text", title: "Retired text", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, polishedText: "legacy" },
+    { id: "missing-created", title: "Missing created", status: "applied", updatedAt: canonicalUpdatedAt },
+    { id: "missing-updated", title: "Missing updated", status: "applied", createdAt: canonicalCreatedAt },
+    { id: "invalid-updated", title: "Invalid updated", status: "applied", createdAt: canonicalCreatedAt, updatedAt: "not-a-date" },
+    { id: "retired-resume", title: "Retired resume", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, resumeData: {} },
+    { id: "retired-text", title: "Retired text", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, polishedText: "legacy" },
     {
       id: "retired-artifact",
       title: "Retired artifact",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeArtifacts: { hasSource: true, hasPdf: false, hasTex: false }
@@ -469,6 +725,7 @@ try {
     {
       id: "impossible-artifact",
       title: "Impossible artifact",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeArtifacts: { hasSource: true, hasPdf: true }
@@ -488,8 +745,8 @@ try {
   // [] here would let the next save overwrite the user's tracker as if it were
   // intentionally empty.
   await writeFile(filePath, JSON.stringify({ applications: [
-    { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
-    { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
+    { id: "duplicate", title: "First", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+    { id: "duplicate", title: "Second", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
   ] }), "utf8");
   let duplicateDiskRejected = false;
   try {
@@ -503,6 +760,7 @@ try {
     {
       id: "retired-on-disk",
       title: "Retired on disk",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       coverLetterText: "legacy"
@@ -510,6 +768,7 @@ try {
     {
       id: "impossible-on-disk",
       title: "Impossible on disk",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       coverLetterArtifacts: { hasPdf: true, hasSource: true }

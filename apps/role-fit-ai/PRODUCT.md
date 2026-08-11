@@ -92,15 +92,19 @@ owns a real structured editor document: without a saved or opened source it is
 a clean blank page with an editable header anchor, not an empty-state substitute.
 That blank remains valid for editing and strict `.resume` save, but does not
 qualify for PDF export, Polish, or Apply until it contains meaningful evidence.
-The product also includes application-question drafts and a lightweight application pipeline
-tracker. Prepare gives Resume and Cover Letter matching material cards, each
+The product also includes session-local application-question drafts and a
+lightweight application pipeline tracker. Generated answers remain editable and
+copyable in the current preparation, but never create or update a tracker
+record. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
 and Cover Letter starts excluded. Starting Polish for a document turns on that
 document's Include toggle without changing the sibling material; an enabled
-automatic proposal does the same when it starts. Apply creates the tracked
-application once the job is prepared and stores only included, ready materials;
-it also supports a tracker-only application with both cards excluded. On a
-later re-Apply, an excluded slot is left untouched so a
+automatic proposal does the same when it starts. A fresh Apply creates one
+tracked application; opening a stored application exposes Update application, which
+preserves its identity, original application date, and current stage. Job
+matching never chooses between those write paths. Each path stores only
+included, ready materials and supports a tracker-only commit with both cards
+excluded. On a later update, an excluded slot is left untouched so a
 previously saved artifact is never deleted or replaced implicitly. The resume
 and cover letter keep independent
 saved/unsaved states and an explicit "Update application" action in their own
@@ -108,10 +112,42 @@ Save menus that rewrites only that document. Regenerating or editing a document
 never rewrites a stored one. An application keeps one space-efficient
 representation of each document:
 editable `.resume`/`.cover` source for documents saved from RoleFit, or the PDF
-when the user explicitly uploads one. Its Documents tab previews or downloads
-either form and accepts additional PDF files the posting asked for. Tracker
+when the user explicitly uploads one. Its Documents tab groups the immutable
+job posting, resume, and cover letter as primary artifacts, previews or downloads
+the portable document forms, and accepts additional PDF files the posting asked
+for. Job-posting and PDF viewers share zoom controls and keyboard shortcuts. Tracker
 text and analytics projections never count as a saved document and cannot
 reload or overwrite the strict source.
+Duplicate matching is advisory and relational. Before AI work, an exact prior
+application or Skipped decision can be opened or continued as a new preparation;
+high/possible matches ask whether to link or keep the records separate. A Keep
+separate decision persists on both eventual records
+so the same pair is not suggested again. Continuing new work preserves every attempt and links the
+eventual new record to the matching posting group. It never overwrites or merges
+the prior application. Destructive merge remains a separate confirmed tracker
+cleanup action. The tracker keeps related decisions and attempts as independent
+rows, marks each with the posting-group size, and lists the other histories in
+the selected record inspector and Application Detail. The inspector is a
+read-only summary aligned with Application Detail: stage and governing date,
+key dates and Source provenance, categorical Fit verdict and rationale, always-
+present Job activity, and the saved job posting/resume/cover/additional-document
+packet. Field edits open Application Detail or Prepare; the row menu retains
+quick stage movement. Mark as unrelated detaches
+one record atomically without deleting either history; Merge accidental duplicate
+keeps the current record only after a destructive confirmation. A Skipped
+decision uses its decision date for tracker chronology and appears in All,
+Inactive, and Skipped filters, but it never contributes to submitted counts,
+submitted-month history, follow-up hygiene, or calendar submission events.
+Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
+work. It saves the posting as **Skipped**, with an
+optional reason and short note, without recording an application date or sent
+documents or additional application uploads. This job-only decision does not
+require a resume, cover letter, Fit
+Assessment, provider, or Apply readiness. Encountering the same posting again
+can update that decision's date, reason, note, and job snapshot while preserving
+its id and creation date. Opening the saved decision later is update-only:
+**Save job updates** refreshes job facts but preserves the original decision,
+and reconsidering the role creates a separate linked application attempt.
 Opening a stored application restores its validated posting and documents into
 the current session, lands on Prepare, and preserves the dirty-document
 replacement guard.
@@ -189,7 +225,7 @@ a case to Reasonable or Strong. Before returning,
 the provider must re-check that every finding is copied exactly from its source;
 the server still rejects the entire result when any anchor is unusable.
 
-Prepare shows the verdict, fixed summary, selected resume, last-assessed time,
+Prepare shows the verdict, fixed summary, last-assessed time,
 resolved provider/model/reasoning attribution, rubric version, and at most three
 direct matches and three not-shown gaps. Each match keeps the exact posting
 excerpt beside the exact resume or About you evidence that supports it. A Check
@@ -199,7 +235,7 @@ proof that the candidate is incapable. Strong, Reasonable, and Stretch require
 at least one direct match; unusable or internally contradictory output fails
 closed. The result has no numeric score, confidence, visible
 requirement ledger, recommendation, or analytics role, and it never silently
-derives tracker priority. Unusable provider output becomes unavailable rather
+controls tracker state or workflow. Unusable provider output becomes unavailable rather
 than a guessed result; the deterministic local job brief remains editable and
 manual Polish remains available.
 
@@ -250,7 +286,7 @@ content, About you, or assessment setup — without presenting its verdict as
 current. A successful reassessment supersedes that displayed result. Application
 records retain the latest completed assessment snapshot rather than a versioned
 assessment ledger. Apply saves that snapshot even when later input changes make
-it historical or the resume artifact is excluded; re-Apply preserves the stored
+it historical or the resume artifact is excluded; a later update preserves the stored
 snapshot when the current session has no newer completed assessment. The bundled
 starter and short stubs are not applicant resumes. A blank document becomes an
 applicant-authored resume once it has substantive dirty content.
@@ -338,18 +374,50 @@ disappears into the task. Quiet competence, not salesmanship.
    workspace as a local safety copy; every browser attached to that workspace
    adopts restored preferences on its next load.
 10. Keep application readiness singular: the masthead and Prepare page expose
-    the same Apply command and blocker model. The current job must be prepared
+    the same session-derived command and blocker model: Apply for fresh work,
+    Update application for an explicitly restored submitted
+    record, and Save job updates for an explicitly restored Skipped
+    decision. The current job must be prepared
     and preparation for selected work must be idle. Resume and Cover Letter
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. Starting
     Polish for one document, manually or through its enabled automatic proposal,
     includes that document and leaves the other Include choice unchanged. A
-    later re-Apply must preserve any previously saved artifact for an excluded
+    later update must preserve any previously saved artifact for an excluded
     slot.
+    Skip & save job is a separate quiet rail action, never a masthead action. It
+    requires only a completed prepared job and loaded tracker state; material,
+    Fit, provider, and Apply blockers do not control that explicit decision.
     Fit Assessment follows the [user contract](#fit-assessment-user-contract): one
     compact advisory in the Application rail, no hidden score or replacement
     for human review. The bundled starter is sample content and never counts as
     a ready applicant resume.
+    Application Detail uses Edit preparation for every stored record. It edits
+    tracker facts and decision metadata,
+    while prepared job data stays read-only and structured correction remains in
+    Prepare. Its Overview, Prep, and Documents tabs keep saved facts,
+    preparation notes/contacts/questions, and files distinct. Overview uses a
+    wide working pane for editable status and timing controls followed by
+    compact read-only Role & company, Job details, Compensation, and Job snapshot
+    cards. Posting source remains visible as read-only provenance in Job details;
+    structured corrections, including source, belong to Prepare. A 392px rail keeps Fit first and always shows Job activity directly below
+    it, using an explicit empty state when no other saved record exists. Fit leads with a one-word categorical verdict
+    and the fixed summary in one two-column advisory block without repeating the assessed resume; it never uses a
+    score, progress ring, confidence, or implied metric. Job snapshot is permanently expanded, shows no section count, and projects only the saved prepared brief into
+    overview, responsibility, qualification, Benefits & policies, and signal groups; the
+    immutable full source opens from Job snapshot or Documents in the same focus-managed,
+    stacked viewer pattern as saved PDFs, where a bounded document panel keeps
+    long text readable. A skipped record names its Skipped outcome,
+    keeps its decision date in Key dates, and opens its reason and short decision
+    note from the compact one-line `Skipped · reason` control in a headerless
+    non-modal decision popover;
+    general application notes remain independent data in Prep.
+    Update mode names the exact saved record persistently;
+    a candidate source that appears materially different pauses before provider
+    analysis and can proceed only as a new preparation. Status changes are
+    forward-only: submitted history cannot become Skipped or return to an
+    earlier stage. Skipped records remain job-only and cannot acquire an
+    application date or sent-document artifacts.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis and stops on Prepare; it never implicitly starts
     resume Polish. A failed analysis leaves the deterministic brief editable and

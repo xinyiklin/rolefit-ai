@@ -6,6 +6,8 @@ import {
   safeAttachmentFileName
 } from "./documents.ts";
 import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
+import { APPLICATION_STATUSES } from "../../src/lib/applicationStatusTransitions.ts";
+import { JOB_POSTING_GROUP_ID_RE } from "../../src/lib/applicationRelationships.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -16,7 +18,7 @@ const isPresent = <T>(v: T): v is NonNullable<T> => Boolean(v);
 const inList = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
 
-const APPLICATION_STATUSES = ["interested", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+const NOT_APPLYING_REASONS = ["fit", "interest", "constraints", "other"] as const;
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -62,7 +64,6 @@ export function duplicateApplicationId(applications: { id: string }[]): string |
 }
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
-const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
 // output (job-analysis / resume-polish / cover / answers). `source` is required and
@@ -338,13 +339,21 @@ function sanitizeApplication(raw: unknown) {
     return null;
   }
 
-  const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
+  if (!inList(APPLICATION_STATUSES, r.status)) return null;
+  const status = r.status;
+  const notApplyingAt = status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
+    ? r.notApplyingAt
+    : undefined;
+  // Skipped is a dated decision, not a generic holding status. Every current
+  // write supplies this timestamp, and the one legacy upgrade derives it from
+  // the row's canonical revision before the sanitizer runs.
+  if (status === "not_applying" && !notApplyingAt) return null;
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
-  const resumeArtifacts = sanitizeDocumentArtifacts(r.resumeArtifacts);
-  const coverLetterArtifacts = sanitizeDocumentArtifacts(r.coverLetterArtifacts);
+  const resumeArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
+  const coverLetterArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
   if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
 
   return {
@@ -360,14 +369,22 @@ function sanitizeApplication(raw: unknown) {
     rawJobDescription: typeof r.rawJobDescription === "string" ? r.rawJobDescription.slice(0, MAX_FIELD) : "",
     status,
     createdAt,
-    appliedAt: typeof r.appliedAt === "string" ? r.appliedAt : "",
+    appliedAt: status === "not_applying" ? undefined : typeof r.appliedAt === "string" ? r.appliedAt : "",
+    notApplyingAt,
+    notApplyingReason:
+      status === "not_applying" && inList(NOT_APPLYING_REASONS, r.notApplyingReason)
+        ? r.notApplyingReason
+        : undefined,
+    notApplyingNote:
+      status === "not_applying" && typeof r.notApplyingNote === "string"
+        ? r.notApplyingNote.slice(0, 2_000)
+        : undefined,
     updatedAt,
     followupAt: typeof r.followupAt === "string" ? r.followupAt : "",
     location: typeof r.location === "string" ? r.location.slice(0, 200) : "",
     jobType: typeof r.jobType === "string" ? r.jobType.slice(0, 60) : "",
     workAuth: typeof r.workAuth === "string" ? r.workAuth.slice(0, 80) : "",
     deadline: typeof r.deadline === "string" ? r.deadline.slice(0, 40) : "",
-    priority: inList(APPLICATION_PRIORITIES, r.priority) ? r.priority : undefined,
     salaryMin: sanitizeSalary(r.salaryMin),
     salaryMax: sanitizeSalary(r.salaryMax),
     salaryCurrency: typeof r.salaryCurrency === "string" ? r.salaryCurrency.slice(0, 8) : "",
@@ -376,13 +393,20 @@ function sanitizeApplication(raw: unknown) {
     contacts: sanitizeContacts(r.contacts),
     resumeArtifacts,
     coverLetterArtifacts,
-    attachments: sanitizeAttachments(r.attachments),
+    attachments: status === "not_applying" ? undefined : sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
-    resumeUsed: r.resumeUsed === "base" || r.resumeUsed === "tailored" ? r.resumeUsed : undefined,
+    resumeUsed:
+      status !== "not_applying" && (r.resumeUsed === "base" || r.resumeUsed === "tailored")
+        ? r.resumeUsed
+        : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
     aiUsage: sanitizeAiUsage(r.aiUsage),
-    duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id)
+    duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id),
+    jobPostingGroupId:
+      typeof r.jobPostingGroupId === "string" && JOB_POSTING_GROUP_ID_RE.test(r.jobPostingGroupId)
+        ? r.jobPostingGroupId
+        : undefined
   };
 }

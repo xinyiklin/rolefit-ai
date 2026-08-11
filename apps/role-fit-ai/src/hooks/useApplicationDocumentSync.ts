@@ -1,26 +1,9 @@
-/**
- * useApplicationDocumentSync — save the resume or the cover letter to the
- * application this session is working on, after Apply has already created it.
- *
- * Apply stores whichever documents the user included in the prepared package.
- * This hook owns the per-document saved/unsaved state and the two explicit save
- * actions, so either document can be finished or revised after applying without
- * copying it by hand.
- *
- * State ownership: the remembered application link, the per-document busy /
- * status / just-saved state are OWNED here. The applications store, the job
- * target, and the two editors' current content arrive as args and are never
- * mutated except through the atomic application-file mutation boundary.
- *
- * Saving is ALWAYS user-initiated. Nothing here runs on an effect: regenerating
- * or editing a document must never silently rewrite what the application holds.
- */
+/** Owns explicit resume and cover-letter saves to the current application. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { Application } from "./useApplications";
 import {
   applicationDocumentSyncState,
-  applicationMatchesJobTarget,
   type ApplicationDocumentKind,
   type ApplicationDocumentSyncState
 } from "../lib/applicationDocuments";
@@ -46,9 +29,7 @@ export type ApplicationDocumentSync = {
 
 type UseApplicationDocumentSyncArgs = {
   applications: Application[];
-  findForTarget: (url: string, desc: string) => Application | undefined;
-  jobUrl: string;
-  jobDescription: string;
+  applicationId: string | null;
   currentResumeText: string;
   currentResumeSource: string;
   resumeDocumentVersion: string;
@@ -66,9 +47,6 @@ type UseApplicationDocumentSyncArgs = {
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
   onResumeSaved: () => void;
   onCoverLetterSaved: () => void;
-  // Apply/restore explicitly establishes an application of record. Prepared
-  // brief edits may then change target text without meaning "new posting".
-  preserveLinkedApplication: boolean;
 };
 
 type DocumentFeedback = {
@@ -85,9 +63,7 @@ const NO_FEEDBACK: DocumentFeedback = {
 
 export function useApplicationDocumentSync({
   applications,
-  findForTarget,
-  jobUrl,
-  jobDescription,
+  applicationId,
   currentResumeText,
   currentResumeSource,
   resumeDocumentVersion,
@@ -98,13 +74,8 @@ export function useApplicationDocumentSync({
   getResumeArtifacts,
   getCoverLetterArtifacts,
   onResumeSaved,
-  onCoverLetterSaved,
-  preserveLinkedApplication
+  onCoverLetterSaved
 }: UseApplicationDocumentSyncArgs) {
-  // The application this session applied to (or restored from the tracker). It
-  // takes precedence over the job-target lookup because Apply may have merged
-  // into a record whose own primary URL is a different posting of the same role.
-  const [linkedId, setLinkedId] = useState<string | null>(null);
   const [savingKinds, setSavingKinds] = useState<Set<ApplicationDocumentKind>>(() => new Set());
   const [resumeFeedback, setResumeFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
   const [coverFeedback, setCoverFeedback] = useState<DocumentFeedback>(NO_FEEDBACK);
@@ -115,38 +86,25 @@ export function useApplicationDocumentSync({
     coverLetter: coverLetterDocumentVersion
   });
 
-  const linkApplication = useCallback((id: string | null) => {
-    setLinkedId(id);
-    setResumeFeedback(NO_FEEDBACK);
-    setCoverFeedback(NO_FEEDBACK);
-  }, []);
+  // The explicit preparation id is the only document destination. A matching
+  // URL or job description is duplicate evidence, never permission to update a
+  // historical record.
+  const application = applicationId
+    ? applications.find((candidate) => candidate.id === applicationId) ?? null
+    : null;
 
-  const targetMatch = findForTarget(jobUrl, jobDescription);
-  const linked = linkedId ? (applications.find((a) => a.id === linkedId) ?? null) : null;
-  const linkedMatchesTarget = Boolean(
-    linked && applicationMatchesJobTarget(linked, jobUrl, jobDescription)
-  );
-  // Do not wait for the cleanup effect before withholding a stale linked row:
-  // the save callback rendered in that frame must already target safely.
-  const eligibleLinked = linked && (preserveLinkedApplication || linkedMatchesTarget) ? linked : null;
-  const application = eligibleLinked ?? targetMatch ?? null;
-  latestSaveIdentityRef.current = {
-    applicationId: application?.id ?? "",
-    resume: resumeDocumentVersion,
-    coverLetter: coverLetterDocumentVersion
-  };
-
-  // Drop the link once the desk is pointed at a different posting. Without this
-  // an "Update application" after loading a new job would write this job's
-  // document onto the previous role's record.
   useEffect(() => {
-    if (!linked) return;
-    if (preserveLinkedApplication) return;
-    if (linkedMatchesTarget) return;
-    setLinkedId(null);
+    latestSaveIdentityRef.current = {
+      applicationId: application?.id ?? "",
+      resume: resumeDocumentVersion,
+      coverLetter: coverLetterDocumentVersion
+    };
+  }, [application?.id, coverLetterDocumentVersion, resumeDocumentVersion]);
+
+  useEffect(() => {
     setResumeFeedback(NO_FEEDBACK);
     setCoverFeedback(NO_FEEDBACK);
-  }, [linked, linkedMatchesTarget, preserveLinkedApplication]);
+  }, [applicationId]);
 
   // "Updated just now" has to stop being true on its own — a timer drops the
   // marker (leaving any status line intact) so the row settles back to the
@@ -172,15 +130,19 @@ export function useApplicationDocumentSync({
   const save = useCallback(
     async (kind: ApplicationDocumentKind) => {
       if (!application) return;
+      if (application.status === "not_applying") return;
       if (saveInFlight.current.has(kind)) return;
       // Never let an empty editor erase the version the application holds.
       if (!(kind === "resume" ? currentResumeText : coverLetterText).trim()) return;
       const setFeedback = kind === "resume" ? setResumeFeedback : setCoverFeedback;
+      const noun = kind === "resume" ? "Resume" : "Cover letter";
       const startedApplicationId = application.id;
       const startedVersion =
         kind === "resume"
           ? latestSaveIdentityRef.current.resume
           : latestSaveIdentityRef.current.coverLetter;
+      const sameApplication = () =>
+        latestSaveIdentityRef.current.applicationId === startedApplicationId;
       const stillCurrent = () => {
         const latest = latestSaveIdentityRef.current;
         return (
@@ -195,6 +157,7 @@ export function useApplicationDocumentSync({
       try {
         const artifacts = kind === "resume" ? await getResumeArtifacts() : await getCoverLetterArtifacts();
         if (!artifacts) {
+          if (!sameApplication()) return;
           setFeedback({
             status:
               kind === "resume"
@@ -205,6 +168,7 @@ export function useApplicationDocumentSync({
           });
           return;
         }
+        if (!sameApplication()) return;
         if (!stillCurrent()) {
           setFeedback({
             status:
@@ -216,8 +180,8 @@ export function useApplicationDocumentSync({
           });
           return;
         }
-        const noun = kind === "resume" ? "Resume" : "Cover letter";
         const result = await saveApplicationDocument(application.id, kind === "resume" ? "resume" : "cover", artifacts);
+        if (!sameApplication()) return;
         if (!result.ok) {
           setFeedback({
             status: result.error ?? `${noun} update failed. The saved application is unchanged.`,
@@ -239,6 +203,13 @@ export function useApplicationDocumentSync({
           status: `${noun} updated.`,
           statusIsError: false,
           savedAt: Date.now()
+        });
+      } catch {
+        if (!sameApplication()) return;
+        setFeedback({
+          status: `${noun} update could not be confirmed. Refresh Applications before retrying.`,
+          statusIsError: true,
+          savedAt: 0
         });
       } finally {
         saveInFlight.current.delete(kind);
@@ -294,7 +265,7 @@ export function useApplicationDocumentSync({
     [coverFeedback, coverLetterText, coverState, saveCoverLetter, savingKinds, targetLabel]
   );
 
-  return { application, linkApplication, resume, coverLetter };
+  return { application, resume, coverLetter };
 }
 
 // Row copy for one document. Kept terse: a title that names the action (or the
@@ -321,6 +292,8 @@ function describe({
   const title =
     state === "no-application"
       ? "Save to application"
+      : state === "job-only"
+        ? "Not saved with skipped job"
       : state === "unsaved"
         ? isSaving
           ? "Updating application…"
@@ -329,6 +302,8 @@ function describe({
   const description =
     state === "no-application"
       ? "Apply first to create the application."
+      : state === "job-only"
+        ? `Start a new application attempt before saving a ${noun}.`
       : state === "unsaved"
         ? hasContent
           ? `Replace the ${noun} saved to ${targetLabel}.`

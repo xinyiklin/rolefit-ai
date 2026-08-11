@@ -1,10 +1,11 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
   ACTIVITY_STATUS_GROUPS,
   BOARD_STATUSES,
   STATUS_LABEL,
+  applicationActivityDate,
   activityGroupForFilter,
   activityCount,
   displayCompany,
@@ -12,7 +13,7 @@ import {
   fitAssessmentRank,
   matchesActivityFilter,
   nextAction,
-  priorityFor,
+  safeExternalUrl,
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
@@ -22,6 +23,8 @@ import { TrackerCalendarView } from "../tracker/TrackerCalendarView";
 import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
+import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
+import { applicationStatusOptions } from "../../lib/applicationStatusTransitions";
 
 export type TrackerView = "table" | "calendar";
 
@@ -32,7 +35,6 @@ export type SortKey =
   | "role"
   | "stage"
   | "applied"
-  | "priority"
   | "nextAction"
   | "fit";
 export type SortDir = "asc" | "desc";
@@ -50,7 +52,6 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = {
   role: "asc",
   stage: "asc",
   applied: "desc",
-  priority: "asc",
   nextAction: "asc",
   fit: "desc"
 };
@@ -63,10 +64,8 @@ const STAGE_ORDER: Record<ApplicationStatus, number> = BOARD_STATUSES.reduce(
   {} as Record<ApplicationStatus, number>
 );
 
-const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
-
 function appliedKey(app: Application): string {
-  return app.appliedAt || app.createdAt || "";
+  return applicationActivityDate(app);
 }
 
 // Ascending comparator for a single column; direction + tie-break are applied by
@@ -81,8 +80,6 @@ function compareBy(key: SortKey, a: Application, b: Application): number {
       return STAGE_ORDER[a.status] - STAGE_ORDER[b.status];
     case "applied":
       return appliedKey(a).localeCompare(appliedKey(b));
-    case "priority":
-      return PRIORITY_ORDER[priorityFor(a)] - PRIORITY_ORDER[priorityFor(b)];
     case "nextAction":
       return nextAction(a).localeCompare(nextAction(b));
     case "fit": {
@@ -105,12 +102,6 @@ type TrackerTabProps = {
   trackerView: TrackerView;
   setTrackerView: (v: TrackerView) => void;
   onUpdateStatus: (id: string, status: ApplicationStatus) => void;
-  onUpdateField: (
-    id: string,
-    field: "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl",
-    value: string
-  ) => void;
-  onUpdateNotes: (id: string, notes: string) => void;
   onLoad: (app: Application) => void;
   onOpenApplication: (app: Application) => void;
   onPreviewResume: (app: Application) => void;
@@ -121,13 +112,8 @@ type TrackerTabProps = {
   // App.tsx. The clusters themselves are computed HERE (this component only
   // mounts while the Applications tab is open), not in the hook — the O(n²)
   // scan must not run app-wide on every applications change.
-  onMergeApplications: (memberIds: string[], canonicalId: string) => void;
+  onMergeApplications: (memberIds: string[], canonicalId: string) => Promise<boolean>;
   onDismissDuplicateGroup: (memberIds: string[]) => void;
-};
-
-const VIEW_LABELS: Record<TrackerView, string> = {
-  table: "Table",
-  calendar: "Calendar"
 };
 
 const ACTIVITY_GROUP_LABEL: Record<ApplicationActivityGroup, string> = {
@@ -158,8 +144,10 @@ function ActivityFilterMenu({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const menuId = useId();
-  const label = ACTIVITY_GROUP_LABEL[group];
+  const groupLabel = ACTIVITY_GROUP_LABEL[group];
   const isSelectedGroup = activityGroupForFilter(value) === group;
+  const selectedStatus = ACTIVITY_STATUS_GROUPS[group].find((status) => status === value);
+  const triggerLabel = selectedStatus ? STATUS_LABEL[selectedStatus] : groupLabel;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -225,46 +213,35 @@ function ActivityFilterMenu({
 
   return (
     <div className="pipeline-filter-menu-wrap" ref={wrapperRef}>
-      {/* Split segment: the label filters to the whole group instantly, the
-          caret is the only menu trigger for the per-status drill-down. This
-          keeps the primary click predictable instead of a segment that looks
-          like a filter but silently opens a popup. */}
-      <div className={`pipeline-filter pipeline-filter--split ${isSelectedGroup ? "is-active" : ""}`}>
-        <button
-          type="button"
-          className="pipeline-filter__main"
-          aria-pressed={isSelectedGroup}
-          onClick={() => {
-            onSelect(group);
-            onClose();
-          }}
-        >
-          {label}
-        </button>
-        <button
-          ref={triggerRef}
-          type="button"
-          className="pipeline-filter__disclosure"
-          aria-haspopup="menu"
-          aria-expanded={isOpen}
-          aria-controls={isOpen ? menuId : undefined}
-          aria-label={`${label} status options`}
-          onClick={onToggle}
-        >
-          <ChevronDown
-            className={`pipeline-filter__chevron ${isOpen ? "is-open" : ""}`}
-            size={13}
-            aria-hidden="true"
-          />
-        </button>
-      </div>
+      <button
+        ref={triggerRef}
+        type="button"
+        className={`pipeline-filter pipeline-filter--menu ${isSelectedGroup ? "is-active" : ""}`}
+        aria-haspopup="menu"
+        aria-expanded={isOpen}
+        aria-controls={isOpen ? menuId : undefined}
+        aria-label={isSelectedGroup ? `${triggerLabel} filter, selected` : `${groupLabel} filters`}
+        onClick={onToggle}
+        onKeyDown={(event) => {
+          if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+          event.preventDefault();
+          if (!isOpen) onToggle();
+        }}
+      >
+        <span className="pipeline-filter__label">{triggerLabel}</span>
+        <ChevronDown
+          className={`pipeline-filter__chevron ${isOpen ? "is-open" : ""}`}
+          size={13}
+          aria-hidden="true"
+        />
+      </button>
       {isOpen ? (
         <div
           ref={menuRef}
           id={menuId}
           className="activity-filter-menu"
           role="menu"
-          aria-label={`${label} application categories`}
+          aria-label={`${groupLabel} application categories`}
           onKeyDown={handleMenuKeyDown}
         >
           <button
@@ -303,6 +280,48 @@ function ActivityFilterMenu({
   );
 }
 
+type TrackerViewSelectorProps = {
+  value: TrackerView;
+  onChange: (view: TrackerView) => void;
+};
+
+function TrackerViewSelector({ value, onChange }: TrackerViewSelectorProps) {
+  const groupName = useId();
+
+  return (
+    <div className="view-switch" role="radiogroup" aria-label="Application view" data-view={value}>
+      <label className={`view-switch__option ${value === "table" ? "is-active" : ""}`} title="Show table view">
+        <input
+          className="view-switch__input"
+          type="radio"
+          name={groupName}
+          value="table"
+          checked={value === "table"}
+          onChange={() => onChange("table")}
+        />
+        <span className="view-switch__label">
+          <Table2 size={13} aria-hidden="true" />
+          Table
+        </span>
+      </label>
+      <label className={`view-switch__option ${value === "calendar" ? "is-active" : ""}`} title="Show calendar view">
+        <input
+          className="view-switch__input"
+          type="radio"
+          name={groupName}
+          value="calendar"
+          checked={value === "calendar"}
+          onChange={() => onChange("calendar")}
+        />
+        <span className="view-switch__label">
+          <CalendarDays size={13} aria-hidden="true" />
+          Calendar
+        </span>
+      </label>
+    </div>
+  );
+}
+
 export function TrackerTab({
   applications,
   applicationsPath,
@@ -316,8 +335,6 @@ export function TrackerTab({
   trackerView,
   setTrackerView,
   onUpdateStatus,
-  onUpdateField,
-  onUpdateNotes,
   onLoad,
   onOpenApplication,
   onPreviewResume,
@@ -335,6 +352,7 @@ export function TrackerTab({
   const [page, setPage] = useState(1);
   const [openActivityMenu, setOpenActivityMenu] =
     useState<ApplicationActivityGroup | null>(null);
+  const closeActivityMenu = useCallback(() => setOpenActivityMenu(null), []);
   // Right-click context menu: the target app + cursor anchor (viewport coords).
   const [rowMenu, setRowMenu] = useState<{ app: Application; x: number; y: number } | null>(null);
   const [isDuplicateModalOpen, setIsDuplicateModalOpen] = useState(false);
@@ -419,6 +437,19 @@ export function TrackerTab({
     () => (selectedId ? duplicateGroups.find((g) => g.applications.some((a) => a.id === selectedId)) : undefined),
     [duplicateGroups, selectedId]
   );
+  const postingGroupSizes = useMemo(
+    () => postingGroupSizeByApplicationId(applications),
+    [applications]
+  );
+  const selectedRelatedApplications = useMemo(
+    () => selected?.jobPostingGroupId
+      ? applications.filter((application) =>
+          application.id !== selected.id
+          && application.jobPostingGroupId === selected.jobPostingGroupId
+        ).sort((a, b) => applicationActivityDate(b).localeCompare(applicationActivityDate(a)))
+      : [],
+    [applications, selected?.id, selected?.jobPostingGroupId]
+  );
 
   // If the previously-selected application was merged away (it no longer
   // appears in `applications` at all), clear the stale selection so the
@@ -451,22 +482,27 @@ export function TrackerTab({
   }
 
   // Context-menu actions for the right-clicked row. Open + Delete are the core;
-  // Polish, Preview (when a PDF was saved), and the job posting (when a URL
+  // preparation, Preview (when a PDF was saved), and the job posting (when a URL
   // exists) round it out.
   const rowMenuItems: RowMenuItem[] = rowMenu
     ? (() => {
         const app = rowMenu.app;
         const items: RowMenuItem[] = [
           { kind: "action", label: "Open details", icon: SquareArrowOutUpRight, onSelect: () => onOpenApplication(app) },
-          { kind: "action", label: "Open preparation", icon: Sparkles, onSelect: () => onLoad(app) }
+          {
+            kind: "action",
+            label: "Edit preparation",
+            icon: Sparkles,
+            onSelect: () => onLoad(app)
+          }
         ];
         if (app.resumeArtifacts?.hasPdf) {
           items.push({ kind: "action", label: "Preview resume", icon: Eye, onSelect: () => onPreviewResume(app) });
         }
         // Only offer the link for a real http(s) URL — never open a stored
         // javascript:/data:/protocol-less value.
-        if (app.jobUrl && /^https?:\/\//i.test(app.jobUrl)) {
-          const jobUrl = app.jobUrl;
+        const jobUrl = safeExternalUrl(app.jobUrl);
+        if (jobUrl) {
           items.push({
             kind: "action",
             label: "Open job posting",
@@ -476,7 +512,7 @@ export function TrackerTab({
         }
         items.push({ kind: "separator" });
         items.push({ kind: "header", label: "Move to stage" });
-        for (const status of BOARD_STATUSES) {
+        for (const status of applicationStatusOptions(app.status)) {
           items.push({
             kind: "action",
             label: STATUS_LABEL[status],
@@ -592,7 +628,7 @@ export function TrackerTab({
                 isOpen={openActivityMenu === group}
                 key={group}
                 value={statusFilter}
-                onClose={() => setOpenActivityMenu(null)}
+                onClose={closeActivityMenu}
                 onSelect={setStatusFilter}
                 onToggle={() => {
                   setOpenActivityMenu((current) => (current === group ? null : group));
@@ -600,24 +636,7 @@ export function TrackerTab({
               />
             ))}
           </div>
-          <button
-            type="button"
-            className="view-switch"
-            role="switch"
-            aria-checked={trackerView === "calendar"}
-            aria-label="Calendar view"
-            title={`Switch to ${VIEW_LABELS[trackerView === "table" ? "calendar" : "table"]} view`}
-            onClick={() => setTrackerView(trackerView === "table" ? "calendar" : "table")}
-          >
-            <span className={trackerView === "table" ? "is-active" : ""}>
-              <Table2 size={13} aria-hidden="true" />
-              Table
-            </span>
-            <span className={trackerView === "calendar" ? "is-active" : ""}>
-              <CalendarDays size={13} aria-hidden="true" />
-              Calendar
-            </span>
-          </button>
+          <TrackerViewSelector value={trackerView} onChange={setTrackerView} />
         </div>
       </div>
 
@@ -647,6 +666,7 @@ export function TrackerTab({
               onDoubleClick={onOpenApplication}
               onRowContextMenu={handleRowContextMenu}
               duplicateIds={duplicateIds}
+              postingGroupSizes={postingGroupSizes}
             />
 
             {sorted.length > 0 ? (
@@ -703,14 +723,12 @@ export function TrackerTab({
           <aside className="pipeline-inspector" aria-label="Selected application">
             <TrackerInspector
               selected={selected}
-              onUpdateStatus={onUpdateStatus}
-              onUpdateField={onUpdateField}
-              onUpdateNotes={onUpdateNotes}
               onOpenApplication={onOpenApplication}
               onPreviewResume={onPreviewResume}
               onLoad={onLoad}
               onDelete={onDelete}
               duplicateGroup={selectedDuplicateGroup}
+              relatedApplications={selectedRelatedApplications}
               onReviewDuplicates={() => setIsDuplicateModalOpen(true)}
             />
           </aside>
@@ -732,7 +750,7 @@ export function TrackerTab({
           onClose={() => setIsDuplicateModalOpen(false)}
           onDismiss={onDismissDuplicateGroup}
           onMerge={(memberIds, canonicalId) => {
-            onMergeApplications(memberIds, canonicalId);
+            void onMergeApplications(memberIds, canonicalId);
             // Defensive: if the row currently pinned in the inspector was merged
             // away, clear the selection so it doesn't keep pointing at a deleted
             // id for one frame. App.tsx's own effect self-heals expandedApplicationId

@@ -691,6 +691,24 @@
   gap: var(--s3);
 }
 
+.prepare-update-banner {
+  display: grid;
+  gap: 3px;
+  padding: var(--s2) 0 var(--s3);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.prepare-update-banner strong {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+}
+
+.prepare-update-banner span {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
 .prepare-fit {
   display: grid;
   gap: var(--s2);
@@ -703,11 +721,6 @@
   align-items: center;
   gap: var(--s2);
   flex-wrap: wrap;
-}
-
-.prepare-fit__summary > span {
-  color: var(--ink-faint);
-  font-size: 0.7rem;
 }
 
 .prepare-fit > p:not(.prepare-page__eyebrow) {

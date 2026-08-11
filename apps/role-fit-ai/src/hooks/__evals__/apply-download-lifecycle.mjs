@@ -8,12 +8,15 @@ const compact = (source) =>
     .replace(/\(\s+/g, "(")
     .replace(/\s+\)/g, ")");
 const compactApplyFlow = compact(applyFlow);
+const clearCapturedApplyStart = applyFlow.indexOf("function clearCapturedApply(): void");
+const clearCapturedApplyEnd = applyFlow.indexOf("\n  }", clearCapturedApplyStart);
+const clearCapturedApply = applyFlow.slice(clearCapturedApplyStart, clearCapturedApplyEnd);
 const downloadPickStart = applyFlow.indexOf("async function handleApplyDownloadPick(");
 const downloadPickEnd = applyFlow.indexOf("\n\n  async function handleApplyOnly()", downloadPickStart);
 const downloadPick = applyFlow.slice(downloadPickStart, downloadPickEnd);
 const compactDownloadPick = compact(downloadPick);
 const commitApplyStart = applyFlow.indexOf("async function commitApply(): Promise<boolean>");
-const commitApplyEnd = applyFlow.indexOf("\n  // Apply button handler:", commitApplyStart);
+const commitApplyEnd = applyFlow.indexOf("\n  // New preparations", commitApplyStart);
 const commitApply = applyFlow.slice(commitApplyStart, commitApplyEnd);
 const handleApplyStart = applyFlow.indexOf("async function handleApply()");
 const handleApplyEnd = applyFlow.indexOf("\n  // Downloads run sequentially:", handleApplyStart);
@@ -52,6 +55,19 @@ assert.match(
   /const isApplying = isResolvingApply \|\| isCommittingApply \|\| isDownloadingApplyPdfs;/,
   "public Apply busy state covers resolution, persistence, and exports"
 );
+assert.ok(clearCapturedApplyStart >= 0, "Apply centralizes captured-state cleanup");
+for (const ref of [
+  "applyMaterialSelectionRef",
+  "applySessionRef",
+  "applyActionRef",
+  "applyUnrelatedApplicationIdRef",
+  "applyCommitIdentityRef"
+]) {
+  assert.ok(
+    clearCapturedApply.includes(`${ref}.current = null;`),
+    `captured-state cleanup clears ${ref}`
+  );
+}
 
 const resolutionGuard = compactHandleApply.indexOf(
   "if (applyResolutionInFlightRef.current || applyCommitInFlightRef.current || applyDownloadInFlightRef.current) return;"
@@ -65,14 +81,18 @@ const captureMaterials = compactHandleApply.indexOf(
   "applyMaterialSelectionRef.current = {",
   showResolutionBusy
 );
+const captureSession = compactHandleApply.indexOf("applySessionRef.current = session;", captureMaterials);
+const newSessionGuard = compactHandleApply.indexOf('if (session.mode === "new")', captureSession);
 const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate()", showResolutionBusy);
 assert.ok(resolutionGuard >= 0, "Apply rejects reentry during any active lifecycle phase");
 assert.ok(
   claimResolution > resolutionGuard &&
     showResolutionBusy > claimResolution &&
     captureMaterials > showResolutionBusy &&
-    awaitResolution > captureMaterials,
-  "Apply claims visible duplicate-resolution ownership before shared mutation or await"
+    captureSession > captureMaterials &&
+    newSessionGuard > captureSession &&
+    awaitResolution > newSessionGuard,
+  "Apply captures the explicit session before limiting duplicate review to new preparations"
 );
 
 const resolutionFinally = compactHandleApply.lastIndexOf("finally");
@@ -98,8 +118,18 @@ assert.ok(
 );
 assert.match(
   handleApply,
-  /catch \{[\s\S]{0,320}?applyMaterialSelectionRef\.current = null;[\s\S]{0,180}?applyMergeTargetRef\.current = null;[\s\S]{0,240}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
-  "an unexpected duplicate-check failure clears shared targets and reports that nothing was saved"
+  /catch \{[\s\S]{0,120}?clearCapturedApply\(\);[\s\S]{0,180}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
+  "an unexpected duplicate-check failure clears the captured session and reports that nothing was saved"
+);
+assert.doesNotMatch(
+  applyFlow,
+  /mergeTargetId|applyMergeTargetRef/,
+  "the normal Apply lifecycle carries a relationship result, never a merge target"
+);
+assert.match(
+  handleApply,
+  /pendingRelationship: resolution\.relationship/,
+  "a confirmed relationship is captured into the new preparation before commit"
 );
 
 const outerGuard = compactDownloadPick.indexOf(

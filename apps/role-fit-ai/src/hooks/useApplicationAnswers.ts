@@ -9,47 +9,32 @@ import {
 } from "../lib/aiWorkflow";
 import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { makeApplicationDraft, type Application } from "./useApplications";
-import type { ExtractedJobTracking } from "../lib/jobExtract";
 
 type UseApplicationAnswersArgs = {
   resumeText: string;
   resumeData: ResumeData | null;
   jobDescription: string;
-  applicationJobDescription: string;
-  applicationRawJobDescription: string;
-  applicationTracking: ExtractedJobTracking;
-  linkedApplication: Application | null;
   jobUrl: string;
   honestContext: string;
   customInstructions: string;
   aiRequest: StageConfig;
   providerReady: boolean;
   providerMessage: string;
-  upsertApplication: (app: Application) => Promise<boolean>;
-  findForTarget: (url: string, desc: string) => Application | undefined;
 };
 
-// Owns the Application Questions tab: drafting answers/role descriptions via the
-// AI provider seam and saving them onto a pipeline entry. Self-contained except
-// for the AI request fields, the current job target, and the applications store
-// helpers, which are passed in.
+// Owns the Application Questions tab: drafting answers/role descriptions via
+// the AI provider seam. Drafts remain session-local for editing and copying;
+// only Apply or Skip creates a tracker record.
 export function useApplicationAnswers({
   resumeText,
   resumeData,
   jobDescription,
-  applicationJobDescription,
-  applicationRawJobDescription,
-  applicationTracking,
-  linkedApplication,
   jobUrl,
   honestContext,
   customInstructions,
   aiRequest,
   providerReady,
-  providerMessage,
-  upsertApplication,
-  findForTarget
+  providerMessage
 }: UseApplicationAnswersArgs) {
   const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
   const [answersStatus, setAnswersStatus] = useState("");
@@ -230,42 +215,11 @@ export function useApplicationAnswers({
     void handleGenerateAnswers(lastRequestRef.current);
   }
 
-  async function handleSaveAnswers(items: { question: string; answer: string }[]) {
-    if (!items.length) return;
-    if (!jobUrl.trim() && !jobDescription.trim()) {
-      setAnswersStatus("Prepare a job on Prepare before saving answers to the pipeline.");
-      return;
-    }
-    const now = new Date().toISOString();
-    const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-    const existing = linkedApplication ?? findForTarget(jobUrl, applicationJobDescription);
-    if (existing) {
-      const byQuestion = new Map<string, { question: string; answer: string; savedAt: string }>();
-      for (const a of existing.applicationAnswers ?? []) byQuestion.set(a.question, a);
-      for (const a of saved) byQuestion.set(a.question, a);
-      const didSave = await upsertApplication({ ...existing, applicationAnswers: Array.from(byQuestion.values()) });
-      setAnswersStatus(didSave
-        ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${existing.title}" in the pipeline.`
-        : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entry and retry.");
-      return;
-    }
-    const app: Application = {
-      ...makeApplicationDraft(jobUrl, applicationJobDescription, applicationTracking),
-      rawJobDescription: applicationRawJobDescription.trim(),
-      applicationAnswers: saved
-    };
-    const didSave = await upsertApplication(app);
-    setAnswersStatus(didSave
-      ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline entry, "${app.title}".`
-      : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entries and retry.");
-  }
-
   return {
     answersResult,
     answersStatus,
     isGeneratingAnswers,
     handleGenerateAnswers,
-    handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
     stopAnswers,

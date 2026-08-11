@@ -28,8 +28,8 @@ new network/model eval must be added to `LIVE` so it stays out of `npm test`.
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
 fixed corpus to whatever it is today, so a refactor claiming "same results,
-less work" is reviewable. The matcher drives silent tracker merges and the
-merge path deletes rows, and its failure mode is silent — a dropped tier does
+less work" is reviewable. The matcher drives pipeline warnings, posting-link
+suggestions, and explicit manual-merge discovery, and its failure mode is silent — a dropped tier does
 not throw. When a matcher change is INTENTIONAL, regenerate the golden block
 with
 `ROLEFIT_GOLDEN_UPDATE=1 node apps/role-fit-ai/src/lib/__evals__/job-identity-golden.mjs`
@@ -170,9 +170,12 @@ Good server verification covers:
   brief editable and manual Polish available; Fit Assessment is separately
   retryable and cannot invalidate valid job fields. Resume Polish failure or
   Withheld keeps the current resume unchanged and locally retryable
-- duplicate warnings before or after Job analysis must offer Continue/Stop; Stop
-  prevents the current and every downstream AI request, while Continue is
-  acknowledged for the same job target so the pipeline does not prompt twice
+- duplicate warnings before or after Job analysis must distinguish exact saved
+  records and similar matches. Opening an
+  existing record prevents the current and every downstream AI request; new
+  work captures a posting relationship; high/possible matches require Link or
+  Keep separate; and the decision is acknowledged for that target so the
+  pipeline does not prompt twice
 - cover-letter tailoring and application-answer generation have no local
   fallback and retain their own retryable task progress. Cover-letter probes
   must prove the **one-click contract**: a template-only starter, a blank
@@ -329,11 +332,43 @@ Good frontend verification covers:
   The client probe keeps an unchanged focus adoption from consuming the user's
   next real save;
   `src/hooks/__evals__/application-persistence-guards.mjs` keeps tracker conflict,
-  Apply commit ordering, recovery clearing, and modal-save failure contracts
-  covered after the retired monolithic workflow guard was removed.
+  explicit create/update commit ordering, recovery clearing, and modal-save
+  failure contracts covered after the retired monolithic workflow guard was
+  removed. `src/lib/__evals__/preparation-application-commit.mjs` proves fresh
+  Apply creates, restored-record updates preserve the same id, later-stage updates
+  preserve identity/date/stage, missing explicit targets fail closed, and all
+  primary surfaces use the shared action descriptor.
+  `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
+  multi-choice duplicate gate, exact-record opening, confirmed linking,
+  remembered Keep separate decisions, and the create-then-atomic-link boundary;
+  it also pins destructive merge as a separate tracker operation and established
+  group unlinking as one all-member revision-checked mutation.
+  `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and
+  update-only Skipped commits; job-only AI provenance; decision-date
+  preservation; sent-artifact removal; exact dialog/receipt copy; and that the
+  quiet action remains in Prepare rather than the masthead. The storage probes
+  additionally verify decision metadata roundtrips while `appliedAt` and sent
+  document fields are omitted.
+  `src/lib/__evals__/explicit-application-write-targets.mjs` proves answer
+  generation has no tracker persistence, document-sync ID ownership, Apply/Skip
+  relationship handling, and the absence of the retired `findForTarget` and
+  ordinary `upsert` write APIs.
+  `src/lib/__evals__/application-status-transitions.mjs` pins the forward-only
+  status graph and the ban on rewriting submitted or terminal history.
+  `src/lib/__evals__/prepared-source-replacement.mjs`
+  exercises same-posting corrections, reused generic URLs, conflicting posting
+  ids, and the update-mode guard order/copy that runs before duplicate review or
+  provider analysis.
+  `src/lib/__evals__/application-analytics-eval.mjs` treats Skipped as
+  visible reviewed history while excluding it from the shared submitted-metric
+  denominator, monthly submissions, and missing-follow-up hygiene even when a
+  legacy record carries `appliedAt`. The preparation/session relationship eval
+  pins independent multi-record groups, group counts, and two-versus-many unlink
+  plans; the saved-surface probe pins linked-history presentation plus confirmed
+  destructive merge controls.
 - URL and paste intake remain enabled without an AI provider and produce the
   deterministic local brief; only provider-backed enrichment stays unavailable
-- Fit Assessment shows only verdict, selected resume, summary, up to three
+- Fit Assessment shows only verdict, summary, up to three
   compact match explanations and gaps, and a relevant eligibility warning with
   its accepted anchors. It exposes no score, confidence, broad evidence ledger,
   recommendation, saved audit, or analytics metric
@@ -342,17 +377,16 @@ Good frontend verification covers:
   independent automatic Polish switch and categorical minimum-fit threshold;
   `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
   Polish remains available for every fit state
-- Fit Assessment never derives tracker priority: explicit user priority wins,
-  Interviewing/Offer may derive High, and every other record defaults Medium;
-  `fitAssessmentRank` remains available for explicit sorting
+- Fit Assessment never changes tracker state or workflow;
+  `fitAssessmentRank` remains available only for explicit sorting
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
-- masthead Apply and Prepare Apply invoke the same handler and readiness model:
+- masthead and Prepare primary actions invoke the same handler, action copy, and readiness model:
   a matching completed preparation is required, each included material must be
   ready while its work is idle, neither material is required, and non-empty
   source alone remains blocked. Applying with both excluded records the job;
-  excluding a previously saved material on re-Apply preserves that artifact
+  excluding a previously saved material on a later update preserves that artifact
 - every prepared JD field can be corrected locally on Prepare after partial or
   failed extraction without invalidating the matching prepared source snapshot:
   tracked job facts through one role context, responsibilities, required/preferred
@@ -363,7 +397,7 @@ Good frontend verification covers:
   Resume Polish projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
-  on Prepare through the visible **Open preparation** action
+  on Prepare through **Edit preparation**
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and

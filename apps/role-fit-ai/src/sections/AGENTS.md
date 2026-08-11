@@ -31,6 +31,11 @@ and `docs/engineering/ui-principles.md`.
   companion.
 - Keep components declarative. Network, storage, cross-tab, and pipeline state
   belong in hooks; components receive values and callbacks.
+- `ApplicationModal` remains the cohesive controller for one saved record's
+  draft, save, and navigation lifecycle. Fit, document, posting-preview, and
+  Skipped-decision surfaces stay extracted; do not split the form sections if
+  doing so would only thread that shared draft state and its refs through more
+  props.
 - `PrepareTab` is the first/default and sole job-intake page. It composes the
   URL/paste fallbacks, receipt/Job analysis progress, collapsed source, editable
   full job brief and its extraction gaps, resume-variant
@@ -48,7 +53,7 @@ and `docs/engineering/ui-principles.md`.
 - After preparation, the brief leads the main column and one Application rail
   owns both material choices, compact Fit Assessment, readiness,
   saved-application summary, and Apply. Fit Assessment shows only its verdict,
-  selected resume, short summary, up to three matches and gaps, and a relevant
+  short summary, up to three matches and gaps, and a relevant
   eligibility warning. When out of date, retain those facts only as a clearly
   labeled previous assessment and add one flat Changed since assessment list
   before Reassess fit. Running, disabled, and retryable-unavailable states stay
@@ -109,8 +114,11 @@ and `docs/engineering/ui-principles.md`.
   count/working state, and its popover opens rightward within the viewport. Do
   not reintroduce an Inputs group, `jobControl`, intake control, or parallel
   Apply gate.
-- Restored applications return to Prepare through **Open preparation** after
-  the host validates their posting and document sources.
+- Stored applications and Skipped decisions use **Edit preparation** after the
+  host validates their posting and document sources. Update mode keeps a
+  persistent exact-record banner, and a
+  materially different replacement source must be detached through the
+  explicit **Start a new preparation** choice before it can commit.
 - Keep feature-specific composition near its tab/menu. Extract a shared section
   component only for demonstrated repetition or a stable interaction contract.
 - Avoid mode-heavy components. Prefer a small base primitive plus explicit

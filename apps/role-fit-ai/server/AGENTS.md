@@ -39,7 +39,9 @@ for provider, prompt, sanitizer, and review work.
   Each document slot stores either strict editable source or an explicitly
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Every byte served back is a download (narrow
-  content type, `nosniff`, no inline render).
+  content type, `nosniff`, no inline render). Skipped records are job-only:
+  every document and attachment mutation must pass the shared
+  `routeSupport.ts` guard before any file I/O.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin
@@ -106,14 +108,18 @@ for provider, prompt, sanitizer, and review work.
   race. Application writes must reject duplicate ids, preserve the latest
   server copy of unmutated rows, and require each changed row's pre-edit
   `updatedAt`; return the current snapshot on a same-row `409` conflict rather
-  than retrying or overwriting. Require canonical ISO creation/update revisions,
-  reject lossy or retired tracker shapes, and advance an existing row's
-  `updatedAt` monotonically. Preserve recoverable history/trash behavior.
+  than retrying or overwriting. Posting relationships update every affected
+  `jobPostingGroupId` in one sparse mutation batch; a conflict must reject the
+  whole relationship. Require canonical ISO creation/update revisions, reject
+  lossy or retired tracker shapes, and advance an existing row's `updatedAt`
+  monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data. The one safe tracker-read normalization is fixed Fit Assessment summary
-  copy derived from an otherwise valid verdict: older provider-era summary text
-  may differ without invalidating the tracker, while every other sanitizer
+  data. Safe tracker-read upgrades are narrow and explicit: fixed Fit Assessment
+  summary copy may derive from an otherwise valid verdict, the exact retired
+  High/Medium/Low application-priority enum may be removed, and the retired
+  `interested` stage may be rewritten to a dated Skipped decision without sent
+  document metadata. These upgrades rewrite atomically; every other sanitizer
   difference remains fail-closed.
 - Server changes require the server TypeScript gate and focused route/eval.
   Lifecycle/listener probes are explicit tests rather than auto-discovered

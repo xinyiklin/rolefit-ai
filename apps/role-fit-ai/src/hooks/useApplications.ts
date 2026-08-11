@@ -1,10 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
-import { dedupeSourceUrls, normalizeJobUrl, findDuplicateApplications } from "../lib/jobIdentity";
+import { dedupeSourceUrls, findDuplicateApplications } from "../lib/jobIdentity";
 import type { DuplicateTarget } from "../lib/jobIdentity";
 import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
-import { applicationMatchesJobTarget } from "../lib/applicationDocuments";
 import {
   applicationMutationRecords,
   reconcileApplicationWriteResponse,
@@ -12,19 +11,26 @@ import {
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
 import type { FitAssessmentSnapshot } from "../../shared/fitAssessmentContract.ts";
+import {
+  planPostingRecordLink,
+  planPostingRecordUnlink
+} from "../lib/applicationRelationships.ts";
+import type { NotApplyingReason } from "../lib/notApplying.ts";
+import {
+  APPLICATION_STATUSES,
+  applicationStatusTransitionAllowed,
+  type ApplicationStatus
+} from "../lib/applicationStatusTransitions.ts";
+
+export {
+  NOT_APPLYING_REASON_LABEL,
+  type NotApplyingReason
+} from "../lib/notApplying.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
-export type ApplicationStatus = "interested" | "applied" | "interviewing" | "offer" | "rejected" | "withdrawn";
-
-export const APPLICATION_STATUSES: ApplicationStatus[] = [
-  "interested",
-  "applied",
-  "interviewing",
-  "offer",
-  "rejected",
-  "withdrawn"
-];
+export { APPLICATION_STATUSES };
+export type { ApplicationStatus };
 
 export type ApplicationSource = "" | "LinkedIn" | "Company site" | "Referral" | "Job board" | "Recruiter" | "Other";
 
@@ -54,7 +60,6 @@ export type ApplicationContact = {
   phone?: string;
 };
 
-export type ApplicationPriority = "High" | "Medium" | "Low";
 export type SalaryPeriod = "yr" | "mo" | "hr";
 
 export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"] as const;
@@ -96,12 +101,15 @@ export type Application = {
   // change what "Prepare again" analyzes.
   rawJobDescription?: string;
   // Per-stage AI usage snapshot, captured at Apply
-  // time. Whole-map-replace on upsert — an incoming snapshot always wins, no
+  // time. Whole-map-replace on tracker write — an incoming snapshot always wins, no
   // deep per-stage merge.
   aiUsage?: ApplicationAiUsage;
   status: ApplicationStatus;
   createdAt: string;
   appliedAt?: string;
+  notApplyingAt?: string;
+  notApplyingReason?: NotApplyingReason;
+  notApplyingNote?: string;
   updatedAt: string;
   followupAt?: string;
   // Application deadline (ISO date) — distinct from followupAt (next personal step).
@@ -111,8 +119,6 @@ export type Application = {
   location?: string;
   jobType?: string;
   workAuth?: string;
-  // Explicit priority override; unset applications keep the default presentation.
-  priority?: ApplicationPriority;
   // Compensation, as advertised or negotiated. Stored as plain integers in the
   // chosen currency; min/max may be set independently.
   salaryMin?: number | null;
@@ -141,6 +147,9 @@ export type Application = {
   // Stable tracker ids the user reviewed and explicitly kept separate from this
   // application. Either side of a pair may carry the decision.
   duplicateDismissedIds?: string[];
+  // Separate decisions or attempts for the same posting share this relationship
+  // id while retaining independent application ids, dates, documents, and status.
+  jobPostingGroupId?: string;
 };
 
 // Normalize historical stage keys as records enter the client so every later
@@ -150,11 +159,9 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
   return { ...application, aiUsage: copyAiUsage(application.aiUsage) };
 }
 
-// Build the common skeleton for a new pipeline entry from the current job
-// target. Both the "Apply" and "Save answers" paths start here and
-// then add their own fields (check snapshots or saved answers), so the
-// shared shape — id, inferred title/company, trimmed job target, default
-// status, timestamps — lives in one place and cannot drift between them.
+// Build the common skeleton for a terminal Apply or Skip record from the
+// current job target. Preparing and drafting answers remain session-local and
+// never create a tracker row.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
 // over a LAN IP or plain http it is undefined and would throw, so fall back to a
 // unique-enough id for these client-side pipeline keys.
@@ -173,27 +180,28 @@ function nextApplicationRevision(previous?: string): string {
   ).toISOString();
 }
 
-function cleanDraftString(value: unknown, max = 200) {
+function cleanApplicationString(value: unknown, max = 200) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function cleanDraftSource(value: unknown): ApplicationSource {
+function cleanApplicationSource(value: unknown): ApplicationSource {
   if (typeof value !== "string" || !value.trim()) return "";
   return APPLICATION_SOURCES.includes(value as ApplicationSource)
     ? (value as ApplicationSource)
     : "Other";
 }
 
-export function makeApplicationDraft(
+export function makeApplicationRecord(
   jobUrl: string,
   jobDescription: string,
+  status: "applied" | "not_applying",
   metadata: ExtractedJobTracking = {}
 ): Application {
   const now = new Date().toISOString();
-  const role = cleanDraftString(metadata.role || metadata.title);
-  const company = cleanDraftString(metadata.company);
-  const source = cleanDraftSource(metadata.source);
-  const draft: Application = {
+  const role = cleanApplicationString(metadata.role || metadata.title);
+  const company = cleanApplicationString(metadata.company);
+  const source = cleanApplicationSource(metadata.source);
+  const application: Application = {
     id: newApplicationId(),
     title: [role, company].filter(Boolean).join(" at ") || inferApplicationTitle(jobUrl, jobDescription),
     company: company || inferCompanyFromUrl(jobUrl),
@@ -201,67 +209,27 @@ export function makeApplicationDraft(
     source,
     jobUrl: jobUrl.trim(),
     jobDescription: jobDescription.trim(),
-    status: "interested",
+    status,
     createdAt: now,
     updatedAt: now
   };
 
-  const roleDescription = cleanDraftString(metadata.roleDescription, 2_000);
-  const location = cleanDraftString(metadata.location);
-  const jobType = cleanDraftString(metadata.jobType, 60);
-  const workAuth = cleanDraftString(metadata.workAuth, 80);
-  if (roleDescription) draft.roleDescription = roleDescription;
-  if (location) draft.location = location;
-  if (jobType) draft.jobType = jobType;
-  if (workAuth) draft.workAuth = workAuth;
-  if (typeof metadata.salaryMin === "number") draft.salaryMin = metadata.salaryMin;
-  if (typeof metadata.salaryMax === "number") draft.salaryMax = metadata.salaryMax;
-  if (metadata.salaryCurrency) draft.salaryCurrency = cleanDraftString(metadata.salaryCurrency, 8);
-  if (metadata.salaryPeriod) draft.salaryPeriod = metadata.salaryPeriod;
-  return draft;
-}
-
-// EXACT-tier only: these two drive SILENT merges (Apply + Save answers), so
-// they must never widen to the fuzzy/layered matching findDuplicatesForTarget
-// below performs — only the URL-equality check itself is normalize-aware (so a
-// tracking-param variant of the same link still counts as the same target).
-function sameApplicationTarget(a: Application, incoming: Application) {
-  const incomingUrl = incoming.jobUrl.trim();
-  const aUrl = a.jobUrl.trim();
-  if (incomingUrl && aUrl && normalizeJobUrl(aUrl) === normalizeJobUrl(incomingUrl)) return true;
-
-  const incomingDescription = (incoming.jobDescription ?? "").trim();
-  return Boolean(
-    !incomingUrl &&
-    incomingDescription &&
-    !aUrl &&
-    (a.jobDescription ?? "").trim() === incomingDescription
-  );
+  const roleDescription = cleanApplicationString(metadata.roleDescription, 2_000);
+  const location = cleanApplicationString(metadata.location);
+  const jobType = cleanApplicationString(metadata.jobType, 60);
+  const workAuth = cleanApplicationString(metadata.workAuth, 80);
+  if (roleDescription) application.roleDescription = roleDescription;
+  if (location) application.location = location;
+  if (jobType) application.jobType = jobType;
+  if (workAuth) application.workAuth = workAuth;
+  if (typeof metadata.salaryMin === "number") application.salaryMin = metadata.salaryMin;
+  if (typeof metadata.salaryMax === "number") application.salaryMax = metadata.salaryMax;
+  if (metadata.salaryCurrency) application.salaryCurrency = cleanApplicationString(metadata.salaryCurrency, 8);
+  if (metadata.salaryPeriod) application.salaryPeriod = metadata.salaryPeriod;
+  return application;
 }
 
 const MAX_SOURCE_URLS = 10;
-
-// Union existing.sourceUrls + incoming.sourceUrls + whichever of the two
-// records' primary jobUrl is non-empty and is NOT the final merged primary —
-// so a URL that used to be primary (or an incoming primary that lost to the
-// existing one) is still remembered as an alternate posting location. The
-// dedup/cap/earliest-addedAt rules live in the shared dedupeSourceUrls (one
-// implementation with the group-merge path and the server sanitizer).
-function mergeSourceUrls(existing: Application, incoming: Application, now: string) {
-  const finalPrimary = (incoming.jobUrl || existing.jobUrl).trim();
-  const candidates: { url?: string; source?: string; addedAt?: string }[] = [
-    ...(existing.sourceUrls ?? []),
-    ...(incoming.sourceUrls ?? []),
-    ...[existing.jobUrl, incoming.jobUrl]
-      .map((rawUrl) => (rawUrl ?? "").trim())
-      .filter(Boolean)
-      .map((url) => ({ url, source: sourceFromUrl(url) || undefined, addedAt: now }))
-  ];
-  const result = dedupeSourceUrls(candidates, finalPrimary, now, MAX_SOURCE_URLS);
-  return result.length ? result : undefined;
-}
-
-type EditableField = "title" | "company" | "role" | "source" | "notes" | "followupAt" | "jobUrl";
 
 class ApplicationConflictError extends Error {
   applications: Application[];
@@ -412,69 +380,73 @@ export function useApplications() {
     }
   }, []);
 
-  const upsert = useCallback(
+  const createApplication = useCallback(
     (incoming: Application) => {
       const current = applicationsRef.current;
+      if (current.some((application) => application.id === incoming.id)) {
+        setError("A tracker record with this application id already exists. Nothing was saved.");
+        return Promise.resolve(false);
+      }
       const now = new Date().toISOString();
-      const idx = current.findIndex((a) => a.id === incoming.id || sameApplicationTarget(a, incoming));
-      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
-      const merged: Application = idx >= 0
-        ? {
-            ...current[idx],
-            ...incoming,
-            id: current[idx].id,
-            title: current[idx].title || incoming.title,
-            company: current[idx].company || incoming.company,
-            role: current[idx].role || incoming.role,
-            source: current[idx].source || incoming.source,
-            jobUrl: incoming.jobUrl || current[idx].jobUrl,
-            jobDescription: incoming.jobDescription || current[idx].jobDescription,
-            rawJobDescription: incoming.rawJobDescription || current[idx].rawJobDescription,
-            sourceUrls: mergeSourceUrls(current[idx], incoming, now),
-            updatedAt: revision,
-            createdAt: current[idx].createdAt
-          }
-        : { ...incoming, createdAt: now, updatedAt: revision };
-
-      const next = idx >= 0
-        ? current.map((a, i) => (i === idx ? merged : a))
-        : [merged, ...current];
+      const created: Application = {
+        ...incoming,
+        createdAt: incoming.createdAt || now,
+        updatedAt: now
+      };
+      const next = [created, ...current];
       applicationsRef.current = next;
       setApplications(next);
       return persist(next, [{
-        id: merged.id,
+        id: created.id,
         operation: "upsert",
-        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
+        baseUpdatedAt: null
       }]);
     },
     [persist]
   );
 
-  // Full overwrite of one application by id (the detail/add modal's save path).
-  // Unlike `upsert` — which deliberately preserves existing non-empty title /
-  // company / role / source for deduplicated secondary writes — this lets
-  // the user actually edit those fields. Incoming wins for every field; only id
-  // and createdAt are pinned. A new id (no match) is prepended.
-  const saveApplication = useCallback(
+  const updateApplicationById = useCallback(
     (incoming: Application) => {
       const current = applicationsRef.current;
-      const now = new Date().toISOString();
-      const idx = current.findIndex((a) => a.id === incoming.id);
-      const revision = idx >= 0 ? nextApplicationRevision(current[idx].updatedAt) : now;
-      const merged: Application =
-        idx >= 0
-          ? { ...current[idx], ...incoming, id: current[idx].id, createdAt: current[idx].createdAt, updatedAt: revision }
-          : { ...incoming, createdAt: incoming.createdAt || now, updatedAt: revision };
-      const next = idx >= 0 ? current.map((a, i) => (i === idx ? merged : a)) : [merged, ...current];
+      const idx = current.findIndex((application) => application.id === incoming.id);
+      if (idx < 0) {
+        setError("The application selected for this preparation no longer exists. Nothing was saved.");
+        return Promise.resolve(false);
+      }
+      const existing = current[idx];
+      if (!applicationStatusTransitionAllowed(existing.status, incoming.status)) {
+        setError(
+          `The saved ${existing.status.replace("_", " ")} record cannot move to ${incoming.status.replace("_", " ")}. Nothing was saved.`
+        );
+        return Promise.resolve(false);
+      }
+      const updated: Application = {
+        ...incoming,
+        id: existing.id,
+        createdAt: existing.createdAt,
+        updatedAt: nextApplicationRevision(existing.updatedAt)
+      };
+      const next = current.map((application, index) => index === idx ? updated : application);
       applicationsRef.current = next;
       setApplications(next);
       return persist(next, [{
-        id: merged.id,
+        id: existing.id,
         operation: "upsert",
-        baseUpdatedAt: idx >= 0 ? current[idx].updatedAt : null
+        baseUpdatedAt: existing.updatedAt
       }]);
     },
     [persist]
+  );
+
+  // Full overwrite of one application by id (the detail modal's save path).
+  // Incoming wins for every editable field; only id and createdAt are pinned.
+  const saveApplication = useCallback(
+    (incoming: Application) => {
+      return applicationsRef.current.some((application) => application.id === incoming.id)
+        ? updateApplicationById(incoming)
+        : createApplication(incoming);
+    },
+    [createApplication, updateApplicationById]
   );
 
   const updateStatus = useCallback(
@@ -482,6 +454,10 @@ export function useApplications() {
       const current = applicationsRef.current;
       const existing = current.find((a) => a.id === id);
       if (!existing) return;
+      if (!applicationStatusTransitionAllowed(existing.status, status)) {
+        setError("That stage change would rewrite application history. Nothing was saved.");
+        return;
+      }
       const now = nextApplicationRevision(existing.updatedAt);
       const next = current.map((a) =>
         a.id === id
@@ -492,36 +468,6 @@ export function useApplications() {
               appliedAt: status === "applied" && !a.appliedAt ? now : a.appliedAt
             }
           : a
-      );
-      applicationsRef.current = next;
-      setApplications(next);
-      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
-    },
-    [persist]
-  );
-
-  const updateNotes = useCallback(
-    (id: string, notes: string) => {
-      const current = applicationsRef.current;
-      const existing = current.find((a) => a.id === id);
-      if (!existing) return;
-      const next = current.map((a) =>
-        a.id === id ? { ...a, notes, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
-      );
-      applicationsRef.current = next;
-      setApplications(next);
-      void persist(next, [{ id, operation: "upsert", baseUpdatedAt: existing.updatedAt }]);
-    },
-    [persist]
-  );
-
-  const updateField = useCallback(
-    (id: string, field: EditableField, value: string) => {
-      const current = applicationsRef.current;
-      const existing = current.find((a) => a.id === id);
-      if (!existing) return;
-      const next = current.map((a) =>
-        a.id === id ? { ...a, [field]: value, updatedAt: nextApplicationRevision(existing.updatedAt) } : a
       );
       applicationsRef.current = next;
       setApplications(next);
@@ -545,19 +491,6 @@ export function useApplications() {
     [persist]
   );
 
-  // Find an existing application matching the current job target — by
-  // normalized URL when present, else by exact job-description text for
-  // link-less entries. Shared by the "Apply" and "Save answers" paths so both
-  // update in place rather than creating duplicate rows. EXACT-tier only — see
-  // sameApplicationTarget.
-  const findForTarget = useCallback(
-    (targetUrl: string, targetDescription: string) =>
-      applications.find((application) =>
-        applicationMatchesJobTarget(application, targetUrl, targetDescription)
-      ),
-    [applications]
-  );
-
   const getApplication = useCallback(
     (id: string) => applicationsRef.current.find((application) => application.id === id),
     []
@@ -565,12 +498,58 @@ export function useApplications() {
 
   // Layered duplicate scan (same-posting/repost/same-company-role, tiered
   // confidence) against every stored application — see src/lib/jobIdentity.ts.
-  // Unlike findForTarget, this NEVER drives a silent merge on its own; callers
-  // decide what to do with "high"/"possible" matches (e.g. App.tsx's apply-time
-  // warning dialog).
+  // This never selects a write target; callers decide how to handle
+  // exact/high/possible matches through the preparation relationship dialog.
   const findDuplicatesForTarget = useCallback(
     (target: DuplicateTarget) => findDuplicateApplications(target, applications),
     [applications]
+  );
+
+  // Assign one posting relationship to every requested record and every member
+  // of their pre-existing groups. The sparse multi-record mutation is one
+  // server-side lock/revision transaction, so a conflict cannot leave one side
+  // linked while another remains unchanged.
+  const linkPostingRecords = useCallback(
+    async (applicationIds: string[], groupId?: string) => {
+      const current = applicationsRef.current;
+      const plan = planPostingRecordLink(current, applicationIds, groupId);
+      if (!plan) return null;
+      const affectedIds = new Set(plan.applicationIds);
+      const affected = current.filter((application) => affectedIds.has(application.id));
+      const changed = affected.filter(
+        (application) => application.jobPostingGroupId !== plan.groupId
+      );
+      if (!changed.length) return plan.groupId;
+
+      const revisions = new Map(
+        changed.map((application) => [
+          application.id,
+          nextApplicationRevision(application.updatedAt)
+        ])
+      );
+      const next = current.map((application) => {
+        const revision = revisions.get(application.id);
+        return revision
+          ? {
+              ...application,
+              jobPostingGroupId: plan.groupId,
+              updatedAt: revision
+            }
+          : application;
+      });
+      applicationsRef.current = next;
+      setApplications(next);
+      const saved = await persist(
+        next,
+        changed.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        }))
+      );
+      return saved ? plan.groupId : null;
+    },
+    [persist]
   );
 
   // Merge a duplicate group into one canonical record: keep the canonical's
@@ -580,12 +559,12 @@ export function useApplications() {
   // caller confirms first. No-ops on an unknown canonicalId or a <2 member set,
   // so a stale group (already merged in another tab) can't drop data.
   const mergeApplications = useCallback(
-    (memberIds: string[], canonicalId: string) => {
+    async (memberIds: string[], canonicalId: string) => {
       const current = applicationsRef.current;
       const ids = new Set(memberIds);
       const members = current.filter((a) => ids.has(a.id));
       const canonical = members.find((a) => a.id === canonicalId);
-      if (!canonical || members.length < 2) return;
+      if (!canonical || members.length < 2) return false;
       const now = new Date().toISOString();
       const others = members.filter((a) => a.id !== canonicalId);
 
@@ -612,23 +591,62 @@ export function useApplications() {
       const inheritedDismissals = Array.from(
         new Set(members.flatMap((member) => member.duplicateDismissedIds ?? []))
       ).filter((id) => !ids.has(id));
+      const postingPlan = planPostingRecordLink(
+        current,
+        members.map((member) => member.id),
+        canonical.jobPostingGroupId
+      );
+      const survivingPostingMemberIds = new Set(
+        (postingPlan?.applicationIds ?? []).filter(
+          (id) => id === canonical.id || !ids.has(id)
+        )
+      );
+      const retainedPostingGroupId = survivingPostingMemberIds.size > 1
+        ? postingPlan?.groupId
+        : undefined;
+      const relationshipChanges = retainedPostingGroupId
+        ? current.filter(
+            (application) =>
+              application.id !== canonical.id
+              && survivingPostingMemberIds.has(application.id)
+              && application.jobPostingGroupId !== retainedPostingGroupId
+          )
+        : [];
+      const relationshipRevisions = new Map(
+        relationshipChanges.map((application) => [
+          application.id,
+          nextApplicationRevision(application.updatedAt)
+        ])
+      );
       const merged: Application = {
         ...canonical,
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
+        jobPostingGroupId: retainedPostingGroupId,
         createdAt: earliestCreatedAt,
         updatedAt: nextApplicationRevision(canonical.updatedAt)
       };
 
       const next = current
         .filter((a) => !ids.has(a.id) || a.id === canonicalId)
-        .map((a) => (a.id === canonicalId ? merged : a));
+        .map((a) => {
+          if (a.id === canonicalId) return merged;
+          const revision = relationshipRevisions.get(a.id);
+          return revision
+            ? { ...a, jobPostingGroupId: retainedPostingGroupId, updatedAt: revision }
+            : a;
+        });
       applicationsRef.current = next;
       setApplications(next);
-      void persist(next, [
+      return persist(next, [
         { id: canonical.id, operation: "upsert", baseUpdatedAt: canonical.updatedAt },
+        ...relationshipChanges.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        })),
         ...others.map((application): ApplicationMutation => ({
           id: application.id,
           operation: "delete",
@@ -639,16 +657,71 @@ export function useApplications() {
     [persist]
   );
 
-  // Persist the user's review decision for every pair in a duplicate cluster.
-  // The matcher treats a decision recorded on either record as sufficient, but
-  // writing it symmetrically keeps the decision intact if one row is later
-  // deleted or merged.
-  const dismissDuplicateGroup = useCallback(
-    (memberIds: string[]) => {
+  // Detach one record from an existing posting relationship without deleting
+  // or merging history. Every group member is revision-checked in one batch,
+  // and cross-boundary duplicate dismissals keep the reviewed separation from
+  // immediately resurfacing as a duplicate suggestion.
+  const unlinkPostingRecord = useCallback(
+    async (applicationId: string) => {
+      const current = applicationsRef.current;
+      const plan = planPostingRecordUnlink(current, applicationId);
+      if (!plan) return false;
+      const affectedIds = new Set(plan.applicationIds);
+      const clearGroupIds = new Set(plan.clearGroupApplicationIds);
+      const remainingIds = new Set(plan.remainingApplicationIds);
+      const affected = current.filter((application) => affectedIds.has(application.id));
+      const next = current.map((application) => {
+        if (!affectedIds.has(application.id)) return application;
+        const dismissed = new Set(application.duplicateDismissedIds ?? []);
+        if (application.id === plan.detachedApplicationId) {
+          for (const id of remainingIds) dismissed.add(id);
+        } else {
+          dismissed.add(plan.detachedApplicationId);
+        }
+        const updated: Application = {
+          ...application,
+          duplicateDismissedIds: [...dismissed],
+          updatedAt: nextApplicationRevision(application.updatedAt)
+        };
+        if (clearGroupIds.has(application.id)) delete updated.jobPostingGroupId;
+        return updated;
+      });
+
+      applicationsRef.current = next;
+      setApplications(next);
+      return persist(
+        next,
+        affected.map((application): ApplicationMutation => ({
+          id: application.id,
+          operation: "upsert",
+          baseUpdatedAt: application.updatedAt
+        }))
+      );
+    },
+    [persist]
+  );
+
+  // Persist the user's unrelated decision symmetrically in one revision-checked
+  // mutation. Requested members bring their existing posting groups with them,
+  // so a later match against a peer cannot resurrect the same warning.
+  const markPostingRecordsUnrelated = useCallback(
+    async (memberIds: string[]) => {
       const current = applicationsRef.current;
       const requestedIds = new Set(memberIds);
-      const members = current.filter((application) => requestedIds.has(application.id));
-      if (members.length < 2) return;
+      const requested = current.filter((application) => requestedIds.has(application.id));
+      if (requested.length !== requestedIds.size || requested.length < 2) return false;
+      const requestedGroupIds = new Set(
+        requested.flatMap((application) =>
+          application.jobPostingGroupId ? [application.jobPostingGroupId] : []
+        )
+      );
+      const members = current.filter((application) =>
+        requestedIds.has(application.id)
+        || Boolean(
+          application.jobPostingGroupId
+          && requestedGroupIds.has(application.jobPostingGroupId)
+        )
+      );
 
       const memberIdSet = new Set(members.map((application) => application.id));
       const mutations: ApplicationMutation[] = [];
@@ -672,9 +745,18 @@ export function useApplications() {
 
       applicationsRef.current = next;
       setApplications(next);
-      void persist(next, mutations);
+      return persist(next, mutations);
     },
     [persist]
+  );
+
+  // Tracker cleanup keeps its fire-and-report UI contract; preparation flows
+  // call the awaited operation directly so their receipt can report conflicts.
+  const dismissDuplicateGroup = useCallback(
+    (memberIds: string[]) => {
+      void markPostingRecordsUnrelated(memberIds);
+    },
+    [markPostingRecordsUnrelated]
   );
 
   const refresh = useCallback(async () => {
@@ -714,15 +796,16 @@ export function useApplications() {
     error,
     storagePath,
     pendingWrites,
-    upsert,
+    createApplication,
+    updateApplicationById,
     saveApplication,
     updateStatus,
-    updateNotes,
-    updateField,
     remove,
     getApplication,
-    findForTarget,
     findDuplicatesForTarget,
+    linkPostingRecords,
+    unlinkPostingRecord,
+    markPostingRecordsUnrelated,
     mergeApplications,
     dismissDuplicateGroup,
     refresh

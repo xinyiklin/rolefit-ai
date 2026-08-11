@@ -344,7 +344,7 @@
   gap: var(--s2);
 }
 
-/* -------- Pre-apply download prompt (reuses the rename-dialog shell) -------- */
+/* -------- Application commit download prompt (reuses the rename shell) ----- */
 
 .apply-download {
   position: relative;
@@ -472,4 +472,63 @@
 .apply-download .rename-dialog__actions .primary-button.is-compact {
   width: auto;
   margin-top: 0;
+}
+
+.preparation-duplicate-dialog {
+  width: min(560px, 100%);
+}
+
+.preparation-duplicate-dialog .confirm-dialog__message {
+  white-space: pre-line;
+}
+
+.preparation-duplicate-dialog__actions {
+  flex-wrap: wrap;
+}
+
+.skip-job-dialog {
+  width: min(500px, 100%);
+}
+
+.skip-job-dialog__field {
+  display: grid;
+  gap: var(--s1);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.skip-job-dialog__field small {
+  margin-left: var(--s1);
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.skip-job-dialog__field select,
+.skip-job-dialog__field textarea {
+  width: 100%;
+}
+
+.skip-job-dialog__field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
+.prepare-skip-action {
+  display: grid;
+  justify-items: center;
+  gap: var(--s1);
+}
+
+.prepare-skip {
+  color: var(--ink-muted);
+}
+
+.prepare-skip-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  line-height: 1.35;
+  text-align: center;
 }
