@@ -26,7 +26,6 @@ export {
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
 export type ApplicationStatus =
-  | "interested"
   | "not_applying"
   | "applied"
   | "interviewing"
@@ -35,7 +34,6 @@ export type ApplicationStatus =
   | "withdrawn";
 
 export const APPLICATION_STATUSES: ApplicationStatus[] = [
-  "interested",
   "not_applying",
   "applied",
   "interviewing",
@@ -72,7 +70,6 @@ export type ApplicationContact = {
   phone?: string;
 };
 
-export type ApplicationPriority = "High" | "Medium" | "Low";
 export type SalaryPeriod = "yr" | "mo" | "hr";
 
 export const JOB_TYPES = ["Full-time", "Part-time", "Contract", "Internship", "Temporary"] as const;
@@ -132,8 +129,6 @@ export type Application = {
   location?: string;
   jobType?: string;
   workAuth?: string;
-  // Explicit priority override; unset applications keep the default presentation.
-  priority?: ApplicationPriority;
   // Compensation, as advertised or negotiated. Stored as plain integers in the
   // chosen currency; min/max may be set independently.
   salaryMin?: number | null;
@@ -174,11 +169,9 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
   return { ...application, aiUsage: copyAiUsage(application.aiUsage) };
 }
 
-// Build the common skeleton for a new pipeline entry from the current job
-// target. Both the "Apply" and "Save answers" paths start here and
-// then add their own fields (check snapshots or saved answers), so the
-// shared shape — id, inferred title/company, trimmed job target, default
-// status, timestamps — lives in one place and cannot drift between them.
+// Build the common skeleton for a terminal Apply or Skip record from the
+// current job target. Preparing and drafting answers remain session-local and
+// never create a tracker row.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
 // over a LAN IP or plain http it is undefined and would throw, so fall back to a
 // unique-enough id for these client-side pipeline keys.
@@ -197,27 +190,28 @@ function nextApplicationRevision(previous?: string): string {
   ).toISOString();
 }
 
-function cleanDraftString(value: unknown, max = 200) {
+function cleanApplicationString(value: unknown, max = 200) {
   return typeof value === "string" ? value.trim().slice(0, max) : "";
 }
 
-function cleanDraftSource(value: unknown): ApplicationSource {
+function cleanApplicationSource(value: unknown): ApplicationSource {
   if (typeof value !== "string" || !value.trim()) return "";
   return APPLICATION_SOURCES.includes(value as ApplicationSource)
     ? (value as ApplicationSource)
     : "Other";
 }
 
-export function makeApplicationDraft(
+export function makeApplicationRecord(
   jobUrl: string,
   jobDescription: string,
+  status: "applied" | "not_applying",
   metadata: ExtractedJobTracking = {}
 ): Application {
   const now = new Date().toISOString();
-  const role = cleanDraftString(metadata.role || metadata.title);
-  const company = cleanDraftString(metadata.company);
-  const source = cleanDraftSource(metadata.source);
-  const draft: Application = {
+  const role = cleanApplicationString(metadata.role || metadata.title);
+  const company = cleanApplicationString(metadata.company);
+  const source = cleanApplicationSource(metadata.source);
+  const application: Application = {
     id: newApplicationId(),
     title: [role, company].filter(Boolean).join(" at ") || inferApplicationTitle(jobUrl, jobDescription),
     company: company || inferCompanyFromUrl(jobUrl),
@@ -225,24 +219,24 @@ export function makeApplicationDraft(
     source,
     jobUrl: jobUrl.trim(),
     jobDescription: jobDescription.trim(),
-    status: "interested",
+    status,
     createdAt: now,
     updatedAt: now
   };
 
-  const roleDescription = cleanDraftString(metadata.roleDescription, 2_000);
-  const location = cleanDraftString(metadata.location);
-  const jobType = cleanDraftString(metadata.jobType, 60);
-  const workAuth = cleanDraftString(metadata.workAuth, 80);
-  if (roleDescription) draft.roleDescription = roleDescription;
-  if (location) draft.location = location;
-  if (jobType) draft.jobType = jobType;
-  if (workAuth) draft.workAuth = workAuth;
-  if (typeof metadata.salaryMin === "number") draft.salaryMin = metadata.salaryMin;
-  if (typeof metadata.salaryMax === "number") draft.salaryMax = metadata.salaryMax;
-  if (metadata.salaryCurrency) draft.salaryCurrency = cleanDraftString(metadata.salaryCurrency, 8);
-  if (metadata.salaryPeriod) draft.salaryPeriod = metadata.salaryPeriod;
-  return draft;
+  const roleDescription = cleanApplicationString(metadata.roleDescription, 2_000);
+  const location = cleanApplicationString(metadata.location);
+  const jobType = cleanApplicationString(metadata.jobType, 60);
+  const workAuth = cleanApplicationString(metadata.workAuth, 80);
+  if (roleDescription) application.roleDescription = roleDescription;
+  if (location) application.location = location;
+  if (jobType) application.jobType = jobType;
+  if (workAuth) application.workAuth = workAuth;
+  if (typeof metadata.salaryMin === "number") application.salaryMin = metadata.salaryMin;
+  if (typeof metadata.salaryMax === "number") application.salaryMax = metadata.salaryMax;
+  if (metadata.salaryCurrency) application.salaryCurrency = cleanApplicationString(metadata.salaryCurrency, 8);
+  if (metadata.salaryPeriod) application.salaryPeriod = metadata.salaryPeriod;
+  return application;
 }
 
 const MAX_SOURCE_URLS = 10;

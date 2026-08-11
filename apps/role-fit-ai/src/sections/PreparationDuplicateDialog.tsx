@@ -33,22 +33,17 @@ export function PreparationDuplicateDialog({
         { choice: "open-existing", label: "Open existing application" },
         { choice: "continue-new", label: "Continue with new preparation", primary: true }
       ]
-    : prompt.kind === "existing-draft"
+    : prompt.kind === "existing-not-applying"
       ? [
           { choice: "cancel", label: "Cancel" },
-          { choice: "continue-existing", label: "Continue existing preparation", primary: true }
+          { choice: "open-existing", label: "Open saved record" },
+          { choice: "review-again", label: "Review again", primary: true }
         ]
-      : prompt.kind === "existing-not-applying"
-        ? [
-            { choice: "cancel", label: "Cancel" },
-            { choice: "open-existing", label: "Open saved record" },
-            { choice: "review-again", label: "Review again", primary: true }
-          ]
-        : [
-            { choice: "cancel", label: "Cancel" },
-            { choice: "separate", label: "No, keep separate" },
-            { choice: "link", label: "Yes, link records", primary: true }
-          ];
+      : [
+          { choice: "cancel", label: "Cancel" },
+          { choice: "separate", label: "No, keep separate" },
+          { choice: "link", label: "Yes, link records", primary: true }
+        ];
 
   return (
     <div

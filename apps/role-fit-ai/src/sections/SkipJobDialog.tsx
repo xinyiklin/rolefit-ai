@@ -5,7 +5,7 @@ import {
   type NotApplyingReason
 } from "../lib/notApplying.ts";
 
-type PassOnJobDialogProps = {
+type SkipJobDialogProps = {
   initialReason: NotApplyingReason | "";
   initialNote: string;
   busy: boolean;
@@ -14,14 +14,14 @@ type PassOnJobDialogProps = {
   onCancel: () => void;
 };
 
-export function PassOnJobDialog({
+export function SkipJobDialog({
   initialReason,
   initialNote,
   busy,
   error,
   onSave,
   onCancel
-}: PassOnJobDialogProps) {
+}: SkipJobDialogProps) {
   const [reason, setReason] = useState<NotApplyingReason | "">(initialReason);
   const [note, setNote] = useState(initialNote);
   const cardRef = useRef<HTMLFormElement>(null);
@@ -50,7 +50,7 @@ export function PassOnJobDialog({
         onMouseDown={busy ? undefined : onCancel}
       />
       <form
-        className="rename-dialog__card pass-job-dialog"
+        className="rename-dialog__card skip-job-dialog"
         ref={cardRef}
         tabIndex={-1}
         onSubmit={(event) => {
@@ -58,12 +58,12 @@ export function PassOnJobDialog({
           if (!busy) void onSave(reason, note);
         }}
       >
-        <p className="rename-dialog__head" id={titleId}>Pass on this job?</p>
+        <p className="rename-dialog__head" id={titleId}>Skip this job?</p>
         <p className="confirm-dialog__message" id={detailId}>
-          Save this posting as Not applying so RoleFit can recognize it if you encounter it again. No application will be recorded.
+          Save this posting as Skipped so RoleFit can recognize it if you encounter it again. No application is recorded.
         </p>
 
-        <label className="pass-job-dialog__field">
+        <label className="skip-job-dialog__field">
           <span>Reason <small>Optional</small></span>
           <select
             ref={reasonRef}
@@ -78,7 +78,7 @@ export function PassOnJobDialog({
           </select>
         </label>
 
-        <label className="pass-job-dialog__field">
+        <label className="skip-job-dialog__field">
           <span>Short note <small>Optional</small></span>
           <textarea
             value={note}
@@ -102,7 +102,7 @@ export function PassOnJobDialog({
             Cancel
           </button>
           <button type="submit" className="primary-button is-compact" disabled={busy}>
-            {busy ? "Saving…" : "Save as not applying"}
+            {busy ? "Saving…" : "Save as skipped"}
           </button>
         </footer>
       </form>

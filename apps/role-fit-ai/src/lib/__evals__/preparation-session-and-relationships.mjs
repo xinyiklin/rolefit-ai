@@ -20,15 +20,9 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  preparationSessionForApplication({ id: "draft-1", status: "interested" }),
-  { mode: "draft", applicationId: "draft-1", pendingRelationship: null },
-  "an interested record reopens as the same draft"
-);
-
-assert.deepEqual(
-  preparationSessionForApplication({ id: "applied-1", status: "applied" }),
+  preparationSessionForApplication({ id: "applied-1" }),
   { mode: "update", applicationId: "applied-1", pendingRelationship: null },
-  "an acted-on record reopens in update-only mode"
+  "a tracked outcome reopens in update-only mode"
 );
 
 assert.equal(
@@ -92,19 +86,19 @@ assert.equal(
 );
 
 const threeRecordHistory = [
-  { id: "passed", status: "not_applying", jobPostingGroupId: "group-history" },
+  { id: "skipped", status: "not_applying", jobPostingGroupId: "group-history" },
   { id: "rejected", status: "rejected", jobPostingGroupId: "group-history" },
   { id: "applied-again", status: "applied", jobPostingGroupId: "group-history" }
 ];
 assert.deepEqual(
-  planPostingRecordUnlink(threeRecordHistory, "passed"),
+  planPostingRecordUnlink(threeRecordHistory, "skipped"),
   {
-    detachedApplicationId: "passed",
+    detachedApplicationId: "skipped",
     remainingApplicationIds: ["rejected", "applied-again"],
-    applicationIds: ["passed", "rejected", "applied-again"],
-    clearGroupApplicationIds: ["passed"]
+    applicationIds: ["skipped", "rejected", "applied-again"],
+    clearGroupApplicationIds: ["skipped"]
   },
-  "detaching a pass decision keeps the remaining attempts linked"
+  "detaching a skip decision keeps the remaining attempts linked"
 );
 
 console.log("Preparation session and posting relationships passed");

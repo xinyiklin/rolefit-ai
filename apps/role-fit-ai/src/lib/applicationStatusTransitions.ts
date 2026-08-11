@@ -1,7 +1,6 @@
 import type { ApplicationStatus } from "../hooks/useApplications.ts";
 
 const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
-  interested: ["interested", "not_applying", "applied"],
   not_applying: ["not_applying"],
   applied: ["applied", "interviewing", "offer", "rejected", "withdrawn"],
   interviewing: ["interviewing", "offer", "rejected", "withdrawn"],

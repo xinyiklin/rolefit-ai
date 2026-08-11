@@ -486,11 +486,11 @@
   flex-wrap: wrap;
 }
 
-.pass-job-dialog {
+.skip-job-dialog {
   width: min(500px, 100%);
 }
 
-.pass-job-dialog__field {
+.skip-job-dialog__field {
   display: grid;
   gap: var(--s1);
   color: var(--ink-soft);
@@ -498,34 +498,34 @@
   font-weight: 600;
 }
 
-.pass-job-dialog__field small {
+.skip-job-dialog__field small {
   margin-left: var(--s1);
   color: var(--ink-faint);
   font-size: 0.68rem;
   font-weight: 400;
 }
 
-.pass-job-dialog__field select,
-.pass-job-dialog__field textarea {
+.skip-job-dialog__field select,
+.skip-job-dialog__field textarea {
   width: 100%;
 }
 
-.pass-job-dialog__field textarea {
+.skip-job-dialog__field textarea {
   min-height: 76px;
   resize: vertical;
 }
 
-.prepare-pass-action {
+.prepare-skip-action {
   display: grid;
   justify-items: center;
   gap: var(--s1);
 }
 
-.prepare-pass {
+.prepare-skip {
   color: var(--ink-muted);
 }
 
-.prepare-pass-hint {
+.prepare-skip-hint {
   margin: 0;
   color: var(--ink-faint);
   font-size: 0.7rem;

@@ -46,20 +46,6 @@ export function appliedApplicationForSession({
   if (!existing || existing.id !== session.applicationId) return null;
   const merged = mergeDefinedApplication(existing, prepared);
   for (const field of clearFields) delete merged[field];
-  if (session.mode === "draft") {
-    if (existing.status !== "interested") return null;
-    return {
-      operation: "update",
-      application: {
-        ...merged,
-        id: existing.id,
-        createdAt: existing.createdAt,
-        status: "applied",
-        appliedAt: existing.appliedAt ?? now
-      }
-    };
-  }
-
   return {
     operation: "update",
     application: {

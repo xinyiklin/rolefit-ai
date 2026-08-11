@@ -154,6 +154,9 @@ export function TrackerInspector({
         <section className="side-section">
           <p className="side-section__label">
             <Link2 size={11} aria-hidden="true" /> Related records · {relatedApplications.length}
+            <span className="sr-only">
+              . Each decision or application keeps its own status, dates, notes, and documents.
+            </span>
           </p>
           <ul className="inspector-duplicates">
             {relatedApplications.map((application) => (
@@ -179,9 +182,6 @@ export function TrackerInspector({
               </li>
             ))}
           </ul>
-          <p className="side-section__value">
-            Each decision or application keeps its own status, dates, notes, and documents.
-          </p>
         </section>
       ) : null}
 
@@ -362,7 +362,7 @@ export function TrackerInspector({
           Details
         </button>
         <button type="button" className="secondary-button is-compact" onClick={() => onLoad(selected)}>
-          {selected.status === "interested" ? "Continue preparation" : "Edit preparation"}
+          Edit preparation
         </button>
         {safeJobUrl ? (
           <a className="secondary-button is-compact" href={safeJobUrl} target="_blank" rel="noreferrer">

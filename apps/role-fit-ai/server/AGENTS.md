@@ -113,9 +113,11 @@ for provider, prompt, sanitizer, and review work.
   monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data. The one safe tracker-read normalization is fixed Fit Assessment summary
-  copy derived from an otherwise valid verdict: older provider-era summary text
-  may differ without invalidating the tracker, while every other sanitizer
+  data. Safe tracker-read upgrades are narrow and explicit: fixed Fit Assessment
+  summary copy may derive from an otherwise valid verdict, the exact retired
+  High/Medium/Low application-priority enum may be removed, and the retired
+  `interested` stage may be rewritten to a dated Skipped decision without sent
+  document metadata. These upgrades rewrite atomically; every other sanitizer
   difference remains fail-closed.
 - Server changes require the server TypeScript gate and focused route/eval.
   Lifecycle/listener probes are explicit tests rather than auto-discovered

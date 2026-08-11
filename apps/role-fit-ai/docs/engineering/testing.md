@@ -171,7 +171,7 @@ Good server verification covers:
   retryable and cannot invalidate valid job fields. Resume Polish failure or
   Withheld keeps the current resume unchanged and locally retryable
 - duplicate warnings before or after Job analysis must distinguish exact saved
-  applications, interested drafts, and similar matches. Opening/continuing an
+  records and similar matches. Opening an
   existing record prevents the current and every downstream AI request; new
   work captures a posting relationship; high/possible matches require Link or
   Keep separate; and the decision is acknowledged for that target so the
@@ -335,31 +335,31 @@ Good frontend verification covers:
   explicit create/update commit ordering, recovery clearing, and modal-save
   failure contracts covered after the retired monolithic workflow guard was
   removed. `src/lib/__evals__/preparation-application-commit.mjs` proves fresh
-  Apply creates, interested-draft Apply updates the same id, later-stage updates
+  Apply creates, restored-record updates preserve the same id, later-stage updates
   preserve identity/date/stage, missing explicit targets fail closed, and all
   primary surfaces use the shared action descriptor.
   `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
-  multi-choice duplicate gate, exact-draft continuation, confirmed linking,
+  multi-choice duplicate gate, exact-record opening, confirmed linking,
   remembered Keep separate decisions, and the create-then-atomic-link boundary;
   it also pins destructive merge as a separate tracker operation and established
   group unlinking as one all-member revision-checked mutation.
-  `src/lib/__evals__/not-applying-application.mjs` proves new, draft, repeated,
-  and update-only Not applying commits; job-only AI provenance; decision-date
+  `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and
+  update-only Skipped commits; job-only AI provenance; decision-date
   preservation; sent-artifact removal; exact dialog/receipt copy; and that the
   quiet action remains in Prepare rather than the masthead. The storage probes
   additionally verify decision metadata roundtrips while `appliedAt` and sent
   document fields are omitted.
-  `src/lib/__evals__/explicit-application-write-targets.mjs` proves first-answer
-  draft creation, exact-id answer updates, missing-target failure, document-sync
-  ID ownership, relationship handling, and the absence of the retired
-  `findForTarget` and ordinary `upsert` write APIs.
+  `src/lib/__evals__/explicit-application-write-targets.mjs` proves answer
+  generation has no tracker persistence, document-sync ID ownership, Apply/Skip
+  relationship handling, and the absence of the retired `findForTarget` and
+  ordinary `upsert` write APIs.
   `src/lib/__evals__/application-status-transitions.mjs` pins the forward-only
-  status graph, including the interested-to-Not-applying decision and the ban on
-  rewriting submitted or terminal history. `src/lib/__evals__/prepared-source-replacement.mjs`
+  status graph and the ban on rewriting submitted or terminal history.
+  `src/lib/__evals__/prepared-source-replacement.mjs`
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or
   provider analysis.
-  `src/lib/__evals__/application-analytics-eval.mjs` treats Not applying as
+  `src/lib/__evals__/application-analytics-eval.mjs` treats Skipped as
   visible reviewed history while excluding it from the shared submitted-metric
   denominator, monthly submissions, and missing-follow-up hygiene even when a
   legacy record carries `appliedAt`. The preparation/session relationship eval
@@ -377,9 +377,8 @@ Good frontend verification covers:
   independent automatic Polish switch and categorical minimum-fit threshold;
   `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
   Polish remains available for every fit state
-- Fit Assessment never derives tracker priority: explicit user priority wins,
-  Interviewing/Offer may derive High, and every other record defaults Medium;
-  `fitAssessmentRank` remains available for explicit sorting
+- Fit Assessment never changes tracker state or workflow;
+  `fitAssessmentRank` remains available only for explicit sorting
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
@@ -398,8 +397,7 @@ Good frontend verification covers:
   Resume Polish projection
 - opening a stored application validates its job and strict document sources,
   preserves the dirty-document confirmation, restores the session, and lands
-  on Prepare through **Continue preparation** for an interested draft or **Edit
-  preparation** for an acted-on record
+  on Prepare through **Edit preparation**
 - Applications routes its new-work action to Prepare, while its modal edits
   existing committed records and exposes no independent job-intake controls
 - a failed cover-letter request stays local to its page with safe retry copy and

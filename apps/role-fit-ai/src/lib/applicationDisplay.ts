@@ -6,8 +6,11 @@ import { parseDate } from "./applicationFacts.ts";
 export { displayCompany, parseDate } from "./applicationFacts.ts";
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
-  interested: "Saved",
-  not_applying: "Not applying",
+  // "Skipped" (not "Not applying"): every sibling label is a settled past-tense
+  // state, and "Not applying"/"Applied" differ by too little to scan apart in
+  // the Stage column. "Passed" was rejected — beside Interviewing/Offer it
+  // reads as passing a round. The stored key stays `not_applying`.
+  not_applying: "Skipped",
   applied: "Applied",
   interviewing: "Interviewing",
   offer: "Offer",
@@ -16,7 +19,6 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
 };
 
 export const BOARD_STATUSES: ApplicationStatus[] = [
-  "interested",
   "not_applying",
   "applied",
   "interviewing",
@@ -31,7 +33,7 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   ApplicationActivityGroup,
   readonly ApplicationStatus[]
 > = {
-  active: ["interested", "applied", "interviewing", "offer"],
+  active: ["applied", "interviewing", "offer"],
   inactive: ["not_applying", "rejected", "withdrawn"]
 };
 
@@ -145,14 +147,6 @@ export function nextAction(app: Application) {
   if (app.status === "applied") return "Awaiting response";
   if (app.status === "rejected" || app.status === "withdrawn") return "No action";
   return "Review job details";
-}
-
-export function priorityFor(app: Application) {
-  // Fit Assessment stays advisory and sortable; it never silently changes the
-  // user's queue priority. Only explicit priority or advanced status does.
-  if (app.priority) return app.priority;
-  if (app.status === "interviewing" || app.status === "offer") return "High";
-  return "Medium";
 }
 
 const SALARY_PERIOD_LABEL: Record<string, string> = { yr: "/yr", mo: "/mo", hr: "/hr" };

@@ -23,9 +23,9 @@ const application = (overrides = {}) => ({
   notes: "Keep me",
   ...overrides
 });
-const preparedDraft = application({
+const preparedRecord = application({
   id: "fresh-1",
-  status: "interested",
+  status: "applied",
   createdAt: now,
   appliedAt: undefined,
   updatedAt: now,
@@ -37,11 +37,6 @@ assert.deepEqual(
   preparationPrimaryAction(newPreparationSession()),
   { kind: "apply", label: "Apply", busyLabel: "Applying…", successVerb: "Applied" },
   "new preparation copy describes an application submission"
-);
-assert.deepEqual(
-  preparationPrimaryAction(preparationSessionForApplication(application({ status: "interested" }))),
-  { kind: "apply", label: "Apply", busyLabel: "Applying…", successVerb: "Applied" },
-  "an interested draft still applies"
 );
 assert.deepEqual(
   preparationPrimaryAction(preparationSessionForApplication(application())),
@@ -69,7 +64,7 @@ assert.deepEqual(
 
 const created = appliedApplicationForSession({
   session: newPreparationSession(),
-  prepared: preparedDraft,
+  prepared: preparedRecord,
   existing: null,
   now
 });
@@ -78,24 +73,10 @@ assert.equal(created?.application.id, "fresh-1");
 assert.equal(created?.application.status, "applied");
 assert.equal(created?.application.appliedAt, now);
 
-const draft = application({ status: "interested", appliedAt: undefined });
-const appliedDraft = appliedApplicationForSession({
-  session: preparationSessionForApplication(draft),
-  prepared: preparedDraft,
-  existing: draft,
-  now
-});
-assert.equal(appliedDraft?.operation, "update");
-assert.equal(appliedDraft?.application.id, draft.id);
-assert.equal(appliedDraft?.application.createdAt, createdAt);
-assert.equal(appliedDraft?.application.status, "applied");
-assert.equal(appliedDraft?.application.appliedAt, now);
-assert.equal(appliedDraft?.application.notes, "Keep me");
-
 const historical = application({ status: "rejected" });
 const updated = appliedApplicationForSession({
   session: preparationSessionForApplication(historical),
-  prepared: preparedDraft,
+  prepared: preparedRecord,
   existing: historical,
   now
 });
@@ -109,12 +90,12 @@ assert.equal(updated?.application.notes, "Keep me");
 assert.equal(
   appliedApplicationForSession({
     session: preparationSessionForApplication(historical),
-    prepared: preparedDraft,
+    prepared: preparedRecord,
     existing: null,
     now
   }),
   null,
-  "an explicit draft/update session never falls back to creating a record"
+  "an explicit update session never falls back to creating a record"
 );
 
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");

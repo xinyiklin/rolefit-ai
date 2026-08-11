@@ -342,24 +342,6 @@
   /* inherits draft-sheet; no additional overrides needed */
 }
 
-/* Save checkbox label */
-.draft-savebox {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-family: var(--font-ui);
-  font-size: 0.76rem;
-  color: var(--ink-muted);
-  cursor: pointer;
-}
-
-.draft-savebox input[type="checkbox"] {
-  width: 14px;
-  height: 14px;
-  flex: none;
-  accent-color: var(--accent);
-}
-
 /* "Needs input" dot-plus-word flag (carries forward .questions-flag) */
 .questions-flag {
   display: inline-flex;

@@ -109,9 +109,9 @@ and `docs/engineering/ui-principles.md`.
   count/working state, and its popover opens rightward within the viewport. Do
   not reintroduce an Inputs group, `jobControl`, intake control, or parallel
   Apply gate.
-- Restored interested drafts return through **Continue preparation**; acted-on
-  records use **Edit preparation** after the host validates their posting and
-  document sources. Update mode keeps a persistent exact-record banner, and a
+- Stored applications and Skipped decisions use **Edit preparation** after the
+  host validates their posting and document sources. Update mode keeps a
+  persistent exact-record banner, and a
   materially different replacement source must be detached through the
   explicit **Start a new preparation** choice before it can commit.
 - Keep feature-specific composition near its tab/menu. Extract a shared section

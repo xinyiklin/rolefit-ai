@@ -1,6 +1,6 @@
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
-  makeApplicationDraft,
+  makeApplicationRecord,
   type Application,
   type NotApplyingReason
 } from "./useApplications.ts";
@@ -11,18 +11,18 @@ import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifec
 import type { PreparationSession } from "../lib/preparationSession.ts";
 import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
 import {
-  passApplicationForSession,
+  skipApplicationForSession,
   updateNotApplyingJob
 } from "../lib/notApplyingApplication.ts";
 
-export type PassPrompt = {
+export type SkipPrompt = {
   initialReason: NotApplyingReason | "";
   initialNote: string;
 };
 
-type UsePassFlowArgs = {
-  canPass: boolean;
-  passBlocker: string;
+type UseSkipFlowArgs = {
+  canSkip: boolean;
+  skipBlocker: string;
   jobUrl: string;
   preparedJobDescription: string;
   jobRawText: string;
@@ -40,9 +40,9 @@ type UsePassFlowArgs = {
   setApplyStatus: Dispatch<SetStateAction<string>>;
 };
 
-export function usePassFlow({
-  canPass,
-  passBlocker,
+export function useSkipFlow({
+  canSkip,
+  skipBlocker,
   jobUrl,
   preparedJobDescription,
   jobRawText,
@@ -58,30 +58,30 @@ export function usePassFlow({
   markPostingRecordsUnrelated,
   linkApplication,
   setApplyStatus
-}: UsePassFlowArgs) {
-  const [passPrompt, setPassPrompt] = useState<PassPrompt | null>(null);
-  const [passError, setPassError] = useState("");
-  const [isResolvingPass, setIsResolvingPass] = useState(false);
-  const [isSavingPass, setIsSavingPass] = useState(false);
-  const passInFlightRef = useRef(false);
-  const passSessionRef = useRef<PreparationSession | null>(null);
+}: UseSkipFlowArgs) {
+  const [skipPrompt, setSkipPrompt] = useState<SkipPrompt | null>(null);
+  const [skipError, setSkipError] = useState("");
+  const [isResolvingSkip, setIsResolvingSkip] = useState(false);
+  const [isSavingSkip, setIsSavingSkip] = useState(false);
+  const skipInFlightRef = useRef(false);
+  const skipSessionRef = useRef<PreparationSession | null>(null);
   const unrelatedApplicationIdRef = useRef<string | null>(null);
-  const isPassing = isResolvingPass || isSavingPass;
+  const isSkipping = isResolvingSkip || isSavingSkip;
 
-  function clearCapturedPass(): void {
-    passSessionRef.current = null;
+  function clearCapturedSkip(): void {
+    skipSessionRef.current = null;
     unrelatedApplicationIdRef.current = null;
   }
 
-  async function handlePass(): Promise<void> {
-    if (passInFlightRef.current) return;
-    if (!canPass) {
-      setApplyStatus(passBlocker || "Prepare the posting before passing on it.");
+  async function handleSkip(): Promise<void> {
+    if (skipInFlightRef.current) return;
+    if (!canSkip) {
+      setApplyStatus(skipBlocker || "Prepare the posting before skipping it.");
       return;
     }
-    passInFlightRef.current = true;
-    setIsResolvingPass(true);
-    setPassError("");
+    skipInFlightRef.current = true;
+    setIsResolvingSkip(true);
+    setSkipError("");
     try {
       const session = preparationSession;
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
@@ -89,8 +89,8 @@ export function usePassFlow({
         try {
           resolution = await resolvePreparationDuplicate();
         } catch {
-          const message = "Duplicate checking failed, so the job was not saved. Retry Pass on this job.";
-          setPassError(message);
+          const message = "Duplicate checking failed, so the job was not saved. Retry Skip & save job.";
+          setSkipError(message);
           setApplyStatus(message);
           return;
         }
@@ -99,43 +99,45 @@ export function usePassFlow({
       const capturedSession = session.mode === "new"
         ? { ...session, pendingRelationship: resolution.relationship }
         : session;
-      passSessionRef.current = capturedSession;
+      skipSessionRef.current = capturedSession;
       unrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
       const matchedNotApplyingId = capturedSession.pendingRelationship?.matchedNotApplyingRecordId;
       const matchedNotApplying = matchedNotApplyingId
         ? applications.find((application) => application.id === matchedNotApplyingId) ?? null
         : null;
-      setPassPrompt({
+      setSkipPrompt({
         initialReason: matchedNotApplying?.notApplyingReason ?? "",
         initialNote: matchedNotApplying?.notApplyingNote ?? ""
       });
     } finally {
-      passInFlightRef.current = false;
-      setIsResolvingPass(false);
+      skipInFlightRef.current = false;
+      setIsResolvingSkip(false);
     }
   }
 
-  async function savePass(reason: NotApplyingReason | "", note: string): Promise<boolean> {
-    if (passInFlightRef.current) return false;
-    const session = passSessionRef.current ?? preparationSession;
+  async function saveSkip(reason: NotApplyingReason | "", note: string): Promise<boolean> {
+    if (skipInFlightRef.current) return false;
+    const session = skipSessionRef.current ?? preparationSession;
     if (session.mode === "update") return false;
-    passInFlightRef.current = true;
-    setIsSavingPass(true);
-    setPassError("");
+    skipInFlightRef.current = true;
+    setIsSavingSkip(true);
+    setSkipError("");
     try {
-      const existing = session.mode === "draft"
-        ? applications.find((application) => application.id === session.applicationId) ?? null
-        : null;
       const matchedNotApplyingId = session.pendingRelationship?.matchedNotApplyingRecordId;
       const matchedNotApplying = matchedNotApplyingId
         ? applications.find((application) => application.id === matchedNotApplyingId) ?? null
         : null;
       const now = new Date().toISOString();
       const tracking = currentJobTracking();
-      const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
+      const baseRecord = makeApplicationRecord(
+        jobUrl,
+        preparedJobDescription,
+        "not_applying",
+        tracking
+      );
       const prepared = preparedApplicationRecord({
-        draft,
-        existing: existing ?? matchedNotApplying,
+        base: baseRecord,
+        existing: matchedNotApplying,
         jobUrl,
         preparedJobDescription,
         jobRawText,
@@ -145,10 +147,9 @@ export function usePassFlow({
         now,
         usage: { mode: "job-only" }
       });
-      const commit = passApplicationForSession({
+      const commit = skipApplicationForSession({
         session,
         prepared: prepared.application,
-        existing,
         matchedNotApplying,
         now,
         reason,
@@ -156,8 +157,8 @@ export function usePassFlow({
         clearFields: prepared.clearFields
       });
       if (!commit) {
-        const message = "The saved draft or prior decision is no longer available. Nothing was saved; reopen the posting and try again.";
-        setPassError(message);
+        const message = "The prior decision is no longer available. Nothing was saved; reopen the posting and try again.";
+        setSkipError(message);
         setApplyStatus(message);
         return false;
       }
@@ -166,8 +167,8 @@ export function usePassFlow({
         ? await createApplication(commit.application).catch(() => false)
         : await updateApplicationById(commit.application).catch(() => false);
       if (!saved) {
-        const message = "Not applying could not be saved. The prepared job and your decision are still here; retry Save as not applying.";
-        setPassError(message);
+        const message = "This decision could not be saved. The prepared job and your reason are still here; retry Save as skipped.";
+        setSkipError(message);
         setApplyStatus(message);
         return false;
       }
@@ -194,32 +195,37 @@ export function usePassFlow({
 
       linkApplication(commit.application.id);
       setApplyStatus(
-        `Saved as Not applying. RoleFit will recognize this posting if you encounter it again.${relationshipWarning}`
+        `Saved as Skipped. RoleFit will recognize this posting if you encounter it again.${relationshipWarning}`
       );
-      setPassPrompt(null);
-      clearCapturedPass();
+      setSkipPrompt(null);
+      clearCapturedSkip();
       return true;
     } finally {
-      passInFlightRef.current = false;
-      setIsSavingPass(false);
+      skipInFlightRef.current = false;
+      setIsSavingSkip(false);
     }
   }
 
   async function saveJobUpdates(): Promise<boolean> {
-    if (passInFlightRef.current) return false;
+    if (skipInFlightRef.current) return false;
     const session = preparationSession;
     const existing = session.applicationId
       ? applications.find((application) => application.id === session.applicationId) ?? null
       : null;
-    passInFlightRef.current = true;
-    setIsSavingPass(true);
-    setPassError("");
+    skipInFlightRef.current = true;
+    setIsSavingSkip(true);
+    setSkipError("");
     try {
       const now = new Date().toISOString();
       const tracking = currentJobTracking();
-      const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
+      const baseRecord = makeApplicationRecord(
+        jobUrl,
+        preparedJobDescription,
+        "not_applying",
+        tracking
+      );
       const prepared = preparedApplicationRecord({
-        draft,
+        base: baseRecord,
         existing,
         jobUrl,
         preparedJobDescription,
@@ -238,32 +244,32 @@ export function usePassFlow({
       });
       if (!commit || !(await updateApplicationById(commit.application).catch(() => false))) {
         const message = "Job updates could not be saved. The preparation is still available; retry Save job updates.";
-        setPassError(message);
+        setSkipError(message);
         setApplyStatus(message);
         return false;
       }
       setApplyStatus(`Saved job updates for "${commit.application.title}".`);
       return true;
     } finally {
-      passInFlightRef.current = false;
-      setIsSavingPass(false);
+      skipInFlightRef.current = false;
+      setIsSavingSkip(false);
     }
   }
 
-  function cancelPass(): void {
-    if (isPassing) return;
-    setPassPrompt(null);
-    setPassError("");
-    clearCapturedPass();
+  function cancelSkip(): void {
+    if (isSkipping) return;
+    setSkipPrompt(null);
+    setSkipError("");
+    clearCapturedSkip();
   }
 
   return {
-    passPrompt,
-    passError,
-    isPassing,
-    handlePass,
-    savePass,
+    skipPrompt,
+    skipError,
+    isSkipping,
+    handleSkip,
+    saveSkip,
     saveJobUpdates,
-    cancelPass
+    cancelSkip
   };
 }

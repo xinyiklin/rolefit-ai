@@ -102,8 +102,8 @@ editable documents.
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
-  Apply together. A quiet **Pass on this job** action beneath Apply saves the
-  prepared posting as **Not applying** with an optional reason and note; it does
+  Apply together. A quiet **Skip & save job** action beneath Apply saves the
+  prepared posting as **Skipped** with an optional reason and note; it does
   not record an application or sent documents and does not depend on material,
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
@@ -240,15 +240,20 @@ editable documents.
   confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
   notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and canonical allowlisted workspace preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
-- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Fit Assessment snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting but never derives High/Low priority; the user's selection wins, Interviewing/Offer may derive High, and other records default Medium. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
-  **Continue preparation** restores an interested draft; **Edit preparation**
-  restores an acted-on record's validated posting and available strict documents,
+- **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. Tracks status / source / company / role / follow-up date / notes, compact Fit Assessment snapshots, plus saved resume, cover letter, and additional PDF documents per application. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting without controlling tracker state or workflow. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
+  **Edit preparation** restores a stored record's validated posting and
+  available strict documents,
   keeps the dirty-document replacement confirmation, and lands on Prepare with
   a persistent exact-record update banner. Application Detail owns stage, dates,
-  decision metadata, contacts, notes, and documents; its prepared job snapshot
-  is read-only because structured posting correction belongs to Prepare. Stage
+  decision metadata, contacts, notes, and documents. Details keeps editable
+  Status, Timing, and conditional Skipped-decision cards above compact read-only
+  Role & company, Job details, Compensation, and Job snapshot cards. Its desktop
+  rail keeps Fit Assessment first and related-record history directly below it;
+  the two panes scroll independently and become one stacked modal scroll on
+  narrow screens. Prepared job facts remain read-only because structured
+  posting correction belongs to Prepare. Stage
   choices move forward through the supported workflow and cannot rewrite a
-  submitted record as Not applying. A materially different replacement source
+  submitted record as Skipped. A materially different replacement source
   must explicitly start a new preparation before analysis continues; keeping the
   current posting restores its prepared snapshot. Apply saves only the
   materials included for that action; excluding a document on a later re-Apply
@@ -256,15 +261,15 @@ editable documents.
   replacing it. Applying with both material cards excluded still records the
   prepared job. The Applications page's new-work action also returns to
   Prepare; its detail modal edits committed records instead of duplicating job
-  intake. A Not applying record reopens in job-update-only mode; Save job updates
+  intake. A Skipped record reopens in job-update-only mode; Save job updates
   preserves its decision metadata, while reconsidering the role creates a
-  separate linked attempt. Saving application answers from fresh work creates
-  one interested draft and binds later answer, document, and Apply writes to its
-  exact id; job matching supplies only warnings and relationships. Linked
+  separate linked attempt. Application-answer drafts stay session-local for
+  editing and copying and never create or update a tracker record; job matching
+  supplies only warnings and relationships. Linked
   posting histories remain separate table rows with a quiet group count and a
   date-ordered related-record list. Application Detail can open a related row,
   atomically mark it unrelated without deletion, or explicitly merge an
-  accidental duplicate after destructive confirmation. Not applying uses its
+  accidental duplicate after destructive confirmation. Skipped uses its
   decision date in tracker chronology and filters but is excluded from submitted
   counts, application-sent history, follow-up hygiene, and submission calendar
   events.

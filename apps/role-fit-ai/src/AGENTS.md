@@ -35,7 +35,8 @@ owns the RoleFit React host and its integration with shared Typeset packages.
 - Keep failure, retry, stop, and downstream-stage semantics explicit. A failed
   stage never advances by inference or fallback.
 - Keep one explicit `PreparationSession` in the host. Its application id is the
-  only write target for draft/update work; job matching supplies relationship
+  only write target for restored update work; fresh preparation has no tracker
+  record. Job matching supplies relationship
   evidence and warnings, never a replacement destination.
 - Keep the complete provider/model catalog app-owned for validation, but render
   only providers returned as configured by the same-origin provider registry.

@@ -5,7 +5,7 @@ import { dedupeSourceUrls } from "./jobIdentity.ts";
 import type { FitAssessmentPersistenceDecision } from "./fitAssessmentLifecycle.ts";
 
 type PreparedApplicationRecordArgs = {
-  draft: Application;
+  base: Application;
   existing: Application | null;
   jobUrl: string;
   preparedJobDescription: string;
@@ -25,7 +25,7 @@ type PreparedApplicationRecordArgs = {
 };
 
 export function preparedApplicationRecord({
-  draft,
+  base,
   existing,
   jobUrl,
   preparedJobDescription,
@@ -68,15 +68,15 @@ export function preparedApplicationRecord({
 
   return {
     application: {
-      ...draft,
+      ...base,
       title:
         [tracking.role || tracking.title, tracking.company]
           .map((value) => String(value ?? "").trim())
           .filter(Boolean)
-          .join(" at ") || draft.title,
+          .join(" at ") || base.title,
       company: String(tracking.company ?? "").trim(),
       role: String(tracking.role || tracking.title || "").trim(),
-      source: draft.source,
+      source: base.source,
       jobUrl: nextJobUrl,
       jobDescription: preparedJobDescription.trim(),
       rawJobDescription: jobRawText.trim(),

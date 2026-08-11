@@ -94,11 +94,11 @@ one readiness model: the current job must match a completed preparation, and
 only included materials must be ready while their preparation is idle. Either
 or both cards may be excluded. Re-Apply treats exclusion as non-destructive:
 any artifact already saved for that application remains untouched.
-Pass on this job is a lower-emphasis action beneath the primary Apply command in
+Skip & save job is a lower-emphasis action beneath the primary Apply command in
 the Prepare rail only. It uses a neutral confirmation dialog with optional
 reason and note, and it is governed by prepared-job plus tracker readiness—not
 resume, cover-letter, Fit Assessment, provider, or Apply readiness. A restored
-Not applying decision replaces both application actions with Save job updates.
+Skipped decision replaces both application actions with Save job updates.
 
 Extension intake requests AI-backed Job analysis and stops on Prepare. Its local
 brief remains usable when provider work fails, and it never implicitly starts

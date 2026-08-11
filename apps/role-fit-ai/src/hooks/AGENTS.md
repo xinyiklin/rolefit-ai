@@ -115,11 +115,11 @@ browser-side effects; components render them and App composes them.
 - `useApplicationDocumentSync` owns the two explicit per-document saves that
   follow an application-of-record id established by the preparation session.
   Saving is always user initiated; no effect may write a document into an
-  application. Fresh work has no document target, while draft/update work uses
-  only its explicit id. Job URL or text matching must never infer that target.
-  `useApplicationAnswers` follows the same identity rule: a first save in new
-  mode creates and publishes one interested-draft id after relationship review;
-  later saves update only that exact draft/update record.
+  application. Fresh work has no document target, while restored update work
+  uses only its explicit id. Job URL or text matching must never infer that
+  target. `useApplicationAnswers` owns generation only: answer drafts stay in
+  the current browser session for editing and copying and never create or update
+  a tracker record.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

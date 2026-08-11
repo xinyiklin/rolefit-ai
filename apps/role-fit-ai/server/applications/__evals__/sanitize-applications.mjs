@@ -105,7 +105,7 @@ try {
       title: "Empty AI usage",
       createdAt: "2026-07-01T00:00:00.000Z",
       updatedAt: "2026-07-29T10:00:00.000Z",
-      status: "interested",
+      status: "applied",
       aiUsage: { "9bad": { source: "ai" } }
     },
     {
@@ -167,6 +167,7 @@ try {
     {
       id: "legacy-flat-header",
       title: "Legacy flat header",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeData: {
@@ -178,6 +179,7 @@ try {
     {
       id: "empty-structural-header",
       title: "Empty structural header",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeData: {
@@ -279,6 +281,7 @@ try {
     await writeApplications(workspace, Array.from({ length: 501 }, (_, index) => ({
       id: `overflow-${index}`,
       title: `Overflow ${index}`,
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt
     })));
@@ -292,8 +295,8 @@ try {
   let duplicateWriteRejected = false;
   try {
     await writeApplications(workspace, sanitizeApplications([
-      { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
-      { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
+      { id: "duplicate", title: "First", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+      { id: "duplicate", title: "Second", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
     ]));
   } catch (error) {
     duplicateWriteRejected = error instanceof ApplicationsStorageError && error.status === 400;
@@ -307,6 +310,7 @@ try {
   const staleSummaryRecord = sanitizeApplications([{
     id: "stale-fit-assessment-summary",
     title: "Stale Fit Assessment summary",
+    status: "applied",
     createdAt: canonicalCreatedAt,
     updatedAt: canonicalUpdatedAt,
     fitAssessment: {
@@ -352,6 +356,85 @@ try {
     if (!rejected) failures.push(`a ${label} Fit Assessment summary bypassed strict tracker validation`);
   }
 
+  // Priority was presentation-only metadata. A canonical tracker from an older
+  // build upgrades once by removing the exact retired enum, while malformed
+  // values still fail closed as unknown data.
+  const legacyPriorityRecord = sanitizeApplications([{
+    id: "legacy-priority",
+    title: "Legacy priority",
+    status: "applied",
+    createdAt: canonicalCreatedAt,
+    updatedAt: canonicalUpdatedAt
+  }])[0];
+  await writeFile(filePath, JSON.stringify({
+    applications: [{ ...legacyPriorityRecord, priority: "High" }]
+  }), "utf8");
+  try {
+    const upgraded = await readApplications(workspace);
+    const upgradedFile = JSON.parse(await readFile(filePath, "utf8"));
+    if ("priority" in (upgraded[0] ?? {})) {
+      failures.push("the removed application priority survived the in-memory upgrade");
+    }
+    if ("priority" in (upgradedFile.applications?.[0] ?? {})) {
+      failures.push("the removed application priority survived the on-disk upgrade");
+    }
+  } catch {
+    failures.push("a valid legacy application priority blocked the otherwise canonical tracker");
+  }
+  await writeFile(filePath, JSON.stringify({
+    applications: [{ ...legacyPriorityRecord, priority: "Urgent" }]
+  }), "utf8");
+  let malformedPriorityRejected = false;
+  try {
+    await readApplications(workspace);
+  } catch (error) {
+    malformedPriorityRejected = error instanceof ApplicationsStorageError;
+  }
+  if (!malformedPriorityRejected) {
+    failures.push("a malformed legacy application priority bypassed strict tracker validation");
+  }
+
+  // The retired Saved stage upgrades to Skipped without dropping the record's
+  // notes or saved answers. It must not retain document metadata that would
+  // imply an employer submission.
+  const legacyInterested = {
+    ...legacyPriorityRecord,
+    status: "interested",
+    applicationAnswers: [{
+      question: "Why Acme?",
+      answer: "Product fit",
+      savedAt: canonicalUpdatedAt
+    }],
+    resumeUsed: "tailored",
+    resumeArtifacts: {
+      hasPdf: false,
+      hasSource: true,
+      sourceFingerprint: "typeset-resume-1",
+      fileName: "draft.resume",
+      savedAt: canonicalUpdatedAt
+    }
+  };
+  await writeFile(filePath, JSON.stringify({ applications: [legacyInterested] }), "utf8");
+  try {
+    const upgraded = await readApplications(workspace);
+    const upgradedFile = JSON.parse(await readFile(filePath, "utf8"));
+    const record = upgraded[0];
+    if (record?.status !== "not_applying" || record.notApplyingAt !== canonicalUpdatedAt) {
+      failures.push("a legacy Saved record did not upgrade to a dated Skipped decision");
+    }
+    if (record?.applicationAnswers?.[0]?.answer !== "Product fit") {
+      failures.push("a legacy Saved record lost its application answers during upgrade");
+    }
+    if (record?.resumeUsed !== undefined || record?.resumeArtifacts !== undefined) {
+      failures.push("a legacy Saved record retained submitted-document metadata");
+    }
+    if (upgradedFile.applications?.[0]?.status !== "not_applying") {
+      failures.push("the retired Saved stage survived the on-disk upgrade");
+    }
+  } catch {
+    failures.push("a canonical legacy Saved record blocked the tracker upgrade");
+  }
+
   const retiredFitField = ["initial", "Fit"].join("");
   const currentFit = staleSummaryRecord.fitAssessment;
   const { fitAssessment: _currentFit, ...withoutCurrentFit } = staleSummaryRecord;
@@ -373,12 +456,12 @@ try {
   const revisionCNext = "2026-07-29T14:00:00.000Z";
   const revisionD = "2026-07-29T15:00:00.000Z";
   const serverSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "newer server A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", notes: "server B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
+    { id: "record-a", title: "Record A", status: "applied", notes: "newer server A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", notes: "server B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
   ]);
   const fullClientSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", notes: "stale client A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", notes: "client B", createdAt: canonicalCreatedAt, updatedAt: revisionBNext }
+    { id: "record-a", title: "Record A", status: "applied", notes: "stale client A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", notes: "client B", createdAt: canonicalCreatedAt, updatedAt: revisionBNext }
   ]);
   const sparseClientSnapshot = [fullClientSnapshot[1]];
   const reconciled = reconcileApplicationMutations(serverSnapshot, sparseClientSnapshot, [
@@ -409,8 +492,8 @@ try {
   }
 
   const newRecords = sanitizeApplications([
-    { id: "record-new-b", title: "New B", createdAt: revisionBNext, updatedAt: revisionBNext },
-    { id: "record-new-a", title: "New A", createdAt: revisionC, updatedAt: revisionC }
+    { id: "record-new-b", title: "New B", status: "applied", createdAt: revisionBNext, updatedAt: revisionBNext },
+    { id: "record-new-a", title: "New A", status: "applied", createdAt: revisionC, updatedAt: revisionC }
   ]);
   const withNewRecords = reconcileApplicationMutations(serverSnapshot, newRecords, [
     { id: "record-new-b", operation: "upsert", baseUpdatedAt: null },
@@ -421,8 +504,8 @@ try {
   }
 
   const relationshipExisting = sanitizeApplications([
-    { id: "link-a", title: "Link A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "link-b", title: "Link B", createdAt: canonicalCreatedAt, updatedAt: revisionB }
+    { id: "link-a", title: "Link A", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "link-b", title: "Link B", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionB }
   ]);
   const relationshipIncoming = sanitizeApplications([
     {
@@ -471,13 +554,13 @@ try {
   }
 
   const mergeSnapshot = sanitizeApplications([
-    { id: "record-a", title: "Record A", createdAt: canonicalCreatedAt, updatedAt: revisionA },
-    { id: "record-b", title: "Record B", createdAt: canonicalCreatedAt, updatedAt: revisionB },
-    { id: "record-c", title: "Record C", createdAt: canonicalCreatedAt, updatedAt: revisionC },
-    { id: "record-d", title: "Record D", createdAt: canonicalCreatedAt, updatedAt: revisionD }
+    { id: "record-a", title: "Record A", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionA },
+    { id: "record-b", title: "Record B", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionB },
+    { id: "record-c", title: "Record C", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionC },
+    { id: "record-d", title: "Record D", status: "applied", createdAt: canonicalCreatedAt, updatedAt: revisionD }
   ]);
   const mergedCanonical = sanitizeApplications([
-    { id: "record-c", title: "Record C", notes: "merged", createdAt: canonicalCreatedAt, updatedAt: revisionCNext }
+    { id: "record-c", title: "Record C", status: "applied", notes: "merged", createdAt: canonicalCreatedAt, updatedAt: revisionCNext }
   ]);
   const merged = reconcileApplicationMutations(mergeSnapshot, mergedCanonical, [
     { id: "record-c", operation: "upsert", baseUpdatedAt: revisionC },
@@ -519,6 +602,7 @@ try {
       {
         id: "record-b",
         title: "Record B",
+        status: "applied",
         createdAt: canonicalCreatedAt,
         updatedAt: revisionA
       }
@@ -552,14 +636,15 @@ try {
   }
 
   const invalidCurrentShapes = [
-    { id: "missing-created", title: "Missing created", updatedAt: canonicalUpdatedAt },
-    { id: "missing-updated", title: "Missing updated", createdAt: canonicalCreatedAt },
-    { id: "invalid-updated", title: "Invalid updated", createdAt: canonicalCreatedAt, updatedAt: "not-a-date" },
-    { id: "retired-resume", title: "Retired resume", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, resumeData: {} },
-    { id: "retired-text", title: "Retired text", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, polishedText: "legacy" },
+    { id: "missing-created", title: "Missing created", status: "applied", updatedAt: canonicalUpdatedAt },
+    { id: "missing-updated", title: "Missing updated", status: "applied", createdAt: canonicalCreatedAt },
+    { id: "invalid-updated", title: "Invalid updated", status: "applied", createdAt: canonicalCreatedAt, updatedAt: "not-a-date" },
+    { id: "retired-resume", title: "Retired resume", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, resumeData: {} },
+    { id: "retired-text", title: "Retired text", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt, polishedText: "legacy" },
     {
       id: "retired-artifact",
       title: "Retired artifact",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeArtifacts: { hasSource: true, hasPdf: false, hasTex: false }
@@ -567,6 +652,7 @@ try {
     {
       id: "impossible-artifact",
       title: "Impossible artifact",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       resumeArtifacts: { hasSource: true, hasPdf: true }
@@ -586,8 +672,8 @@ try {
   // [] here would let the next save overwrite the user's tracker as if it were
   // intentionally empty.
   await writeFile(filePath, JSON.stringify({ applications: [
-    { id: "duplicate", title: "First", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
-    { id: "duplicate", title: "Second", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
+    { id: "duplicate", title: "First", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt },
+    { id: "duplicate", title: "Second", status: "applied", createdAt: canonicalCreatedAt, updatedAt: canonicalUpdatedAt }
   ] }), "utf8");
   let duplicateDiskRejected = false;
   try {
@@ -601,6 +687,7 @@ try {
     {
       id: "retired-on-disk",
       title: "Retired on disk",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       coverLetterText: "legacy"
@@ -608,6 +695,7 @@ try {
     {
       id: "impossible-on-disk",
       title: "Impossible on disk",
+      status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt,
       coverLetterArtifacts: { hasPdf: true, hasSource: true }

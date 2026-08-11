@@ -13,7 +13,6 @@ import {
   fitAssessmentRank,
   matchesActivityFilter,
   nextAction,
-  priorityFor,
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
 } from "../../lib/applicationDisplay";
@@ -35,7 +34,6 @@ export type SortKey =
   | "role"
   | "stage"
   | "applied"
-  | "priority"
   | "nextAction"
   | "fit";
 export type SortDir = "asc" | "desc";
@@ -53,7 +51,6 @@ const DEFAULT_DIR: Record<SortKey, SortDir> = {
   role: "asc",
   stage: "asc",
   applied: "desc",
-  priority: "asc",
   nextAction: "asc",
   fit: "desc"
 };
@@ -65,8 +62,6 @@ const STAGE_ORDER: Record<ApplicationStatus, number> = BOARD_STATUSES.reduce(
   },
   {} as Record<ApplicationStatus, number>
 );
-
-const PRIORITY_ORDER: Record<string, number> = { High: 0, Medium: 1, Low: 2 };
 
 function appliedKey(app: Application): string {
   return applicationActivityDate(app);
@@ -84,8 +79,6 @@ function compareBy(key: SortKey, a: Application, b: Application): number {
       return STAGE_ORDER[a.status] - STAGE_ORDER[b.status];
     case "applied":
       return appliedKey(a).localeCompare(appliedKey(b));
-    case "priority":
-      return PRIORITY_ORDER[priorityFor(a)] - PRIORITY_ORDER[priorityFor(b)];
     case "nextAction":
       return nextAction(a).localeCompare(nextAction(b));
     case "fit": {
@@ -476,7 +469,7 @@ export function TrackerTab({
           { kind: "action", label: "Open details", icon: SquareArrowOutUpRight, onSelect: () => onOpenApplication(app) },
           {
             kind: "action",
-            label: app.status === "interested" ? "Continue preparation" : "Edit preparation",
+            label: "Edit preparation",
             icon: Sparkles,
             onSelect: () => onLoad(app)
           }

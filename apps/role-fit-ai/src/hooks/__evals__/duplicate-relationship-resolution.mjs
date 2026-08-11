@@ -138,22 +138,6 @@ async function pendingGate(harness) {
 }
 
 {
-  const harness = createHarness(duplicate({
-    application: application({ status: "interested", appliedAt: undefined })
-  }));
-  const { pending, prompted } = await pendingGate(harness);
-  assert.equal(prompted.duplicatePrompt.kind, "existing-draft");
-  prompted.chooseDuplicate("continue-existing");
-  assert.deepEqual(await pending, {
-    proceed: false,
-    note: "Saved · May 4: Same canonical posting URL",
-    handled: true
-  });
-  assert.deepEqual(harness.opened, ["application-1"]);
-  assert.deepEqual(harness.relationships, []);
-}
-
-{
   const harness = createHarness(duplicate({ confidence: "high" }));
   const { pending, prompted } = await pendingGate(harness);
   assert.equal(prompted.duplicatePrompt.kind, "similar");
@@ -203,7 +187,7 @@ assert.match(
 );
 assert.match(dialog, /Continue with new preparation/);
 assert.match(dialog, /Open existing application/);
-assert.match(dialog, /Continue existing preparation/);
+assert.doesNotMatch(dialog, /Continue existing preparation/);
 assert.match(dialog, /Yes, link records/);
 assert.match(dialog, /No, keep separate/);
 assert.match(

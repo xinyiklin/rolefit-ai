@@ -16,7 +16,7 @@ const isPresent = <T>(v: T): v is NonNullable<T> => Boolean(v);
 const inList = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
 
-const APPLICATION_STATUSES = ["interested", "not_applying", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+const APPLICATION_STATUSES = ["not_applying", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
 const NOT_APPLYING_REASONS = ["fit", "interest", "constraints", "other"] as const;
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
@@ -64,7 +64,6 @@ export function duplicateApplicationId(applications: { id: string }[]): string |
 }
 
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
-const APPLICATION_PRIORITIES = ["High", "Medium", "Low"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
 // output (job-analysis / resume-polish / cover / answers). `source` is required and
@@ -340,7 +339,8 @@ function sanitizeApplication(raw: unknown) {
     return null;
   }
 
-  const status = inList(APPLICATION_STATUSES, r.status) ? r.status : "interested";
+  if (!inList(APPLICATION_STATUSES, r.status)) return null;
+  const status = r.status;
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
@@ -381,7 +381,6 @@ function sanitizeApplication(raw: unknown) {
     jobType: typeof r.jobType === "string" ? r.jobType.slice(0, 60) : "",
     workAuth: typeof r.workAuth === "string" ? r.workAuth.slice(0, 80) : "",
     deadline: typeof r.deadline === "string" ? r.deadline.slice(0, 40) : "",
-    priority: inList(APPLICATION_PRIORITIES, r.priority) ? r.priority : undefined,
     salaryMin: sanitizeSalary(r.salaryMin),
     salaryMax: sanitizeSalary(r.salaryMax),
     salaryCurrency: typeof r.salaryCurrency === "string" ? r.salaryCurrency.slice(0, 8) : "",

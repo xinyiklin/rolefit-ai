@@ -116,8 +116,13 @@ assert.match(
 );
 assert.match(
   css,
-  /@container\s*\(max-width:\s*852px\)\s*\{[\s\S]{0,520}?\.applications-table__row\s*\{[\s\S]{0,360}?grid-template-columns:[\s\S]{0,360}?\.applications-table__row\s*>\s*\.applications-table__cell--next-action\s*\{[\s\S]{0,120}?display:\s*none/,
+  /@container\s*\(max-width:\s*762px\)\s*\{[\s\S]{0,520}?\.applications-table__row\s*\{[\s\S]{0,360}?grid-template-columns:[\s\S]{0,360}?\.applications-table__row\s*>\s*\.applications-table__cell--next-action\s*\{[\s\S]{0,120}?display:\s*none/,
   "a narrow split-pane drops Next action before the fixed Fit verdict can be clipped"
 );
+assert.doesNotMatch(
+  tableView,
+  /Priority|priorityFor|applications-table__cell--priority/,
+  "the Applications register does not retain the removed priority column or display path"
+);
 
-console.log("tracker inspector layout contract: 18/18 checks passed");
+console.log("tracker inspector layout contract: 19/19 checks passed");

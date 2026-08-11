@@ -14,7 +14,7 @@
  * usePolishPipeline's pattern.
  */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { makeApplicationDraft, type Application } from "./useApplications";
+import { makeApplicationRecord, type Application } from "./useApplications";
 import type { DuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
 import type { StageAiUsage } from "../lib/aiUsage";
@@ -282,9 +282,9 @@ export function useApplyFlow({
     }
     const now = new Date().toISOString();
     const tracking = currentJobTracking();
-    const draft = makeApplicationDraft(jobUrl, preparedJobDescription, tracking);
+    const baseRecord = makeApplicationRecord(jobUrl, preparedJobDescription, "applied", tracking);
     const prepared = preparedApplicationRecord({
-      draft,
+      base: baseRecord,
       existing,
       jobUrl,
       preparedJobDescription,
@@ -396,8 +396,8 @@ export function useApplyFlow({
     }
   }
 
-  // New preparations run duplicate review before commit. Draft/update sessions
-  // already carry their exact id and must never resolve another write target.
+  // New preparations run duplicate review before commit. Update sessions carry
+  // their exact id and must never resolve another write target.
   async function handleApply() {
     if (
       applyResolutionInFlightRef.current ||
@@ -458,10 +458,15 @@ export function useApplyFlow({
         await commitApply();
         return;
       }
-      const draft = makeApplicationDraft(jobUrl, preparedJobDescription, currentJobTracking());
+      const baseRecord = makeApplicationRecord(
+        jobUrl,
+        preparedJobDescription,
+        "applied",
+        currentJobTracking()
+      );
       setApplySaveError("");
       setApplyDownloadPrompt({
-        label: existing?.title || draft.title,
+        label: existing?.title || baseRecord.title,
         canDownloadResume,
         canDownloadCoverLetter,
         action

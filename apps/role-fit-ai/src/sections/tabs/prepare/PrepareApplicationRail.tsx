@@ -57,11 +57,11 @@ type PrepareApplicationRailProps = {
   isApplying: boolean;
   applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
-  showPass: boolean;
-  canPass: boolean;
-  passHint: string;
-  isPassing: boolean;
-  onPass: () => void | Promise<void>;
+  showSkip: boolean;
+  canSkip: boolean;
+  skipHint: string;
+  isSkipping: boolean;
+  onSkip: () => void | Promise<void>;
   children: ReactNode;
 };
 
@@ -78,11 +78,11 @@ export function PrepareApplicationRail({
   isApplying,
   applicationActionsBusy,
   onApply,
-  showPass,
-  canPass,
-  passHint,
-  isPassing,
-  onPass,
+  showSkip,
+  canSkip,
+  skipHint,
+  isSkipping,
+  onSkip,
   children
 }: PrepareApplicationRailProps) {
   const hasSavedResume = Boolean(
@@ -125,21 +125,19 @@ export function PrepareApplicationRail({
           </span>
         </div>
 
+        {/* A persistent banner, not an announcement — no live region, and the
+            consequence rides the identity line rather than a third explainer
+            row. */}
         {linkedApplication && primaryAction.kind !== "apply" ? (
-          <div className="prepare-update-banner" role="status">
+          <div className="prepare-update-banner">
             <strong>
               {primaryAction.kind === "update-job" ? "Editing saved job" : "Editing saved application"}
             </strong>
             <span>
               {primaryAction.kind === "update-job"
-                ? `Marked Not applying on ${formatSavedDate(linkedApplication.notApplyingAt)}`
-                : `${displayRole(linkedApplication)} at ${displayCompany(linkedApplication)} · Applied ${formatSavedDate(linkedApplication.appliedAt)}`}
+                ? `Skipped on ${formatSavedDate(linkedApplication.notApplyingAt)} · No application is created`
+                : `${displayRole(linkedApplication)} at ${displayCompany(linkedApplication)} · Applied ${formatSavedDate(linkedApplication.appliedAt)} · No new application is created`}
             </span>
-            <p>
-              {primaryAction.kind === "update-job"
-                ? "Changes will update this saved decision. No application will be created."
-                : "Updates will be saved to this application. No new application will be created."}
-            </p>
           </div>
         ) : null}
 
@@ -300,19 +298,19 @@ export function PrepareApplicationRail({
         {!primaryActionReady && primaryActionBlocker ? (
           <p className="prepare-apply-hint">{primaryActionBlocker}</p>
         ) : null}
-        {showPass ? (
-          <div className="prepare-pass-action">
+        {showSkip ? (
+          <div className="prepare-skip-action">
             <button
-              className="ghost-button is-compact prepare-pass"
+              className="ghost-button is-compact prepare-skip"
               type="button"
-              onClick={() => void onPass()}
-              disabled={!canPass || applicationActionsBusy}
-              title={canPass ? "Save this posting without recording an application" : passHint}
+              onClick={() => void onSkip()}
+              disabled={!canSkip || applicationActionsBusy}
+              title={canSkip ? "Save this posting without recording an application" : skipHint}
             >
-              {isPassing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
-              {isPassing ? "Saving…" : "Pass on this job"}
+              {isSkipping ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+              {isSkipping ? "Saving…" : "Skip & save job"}
             </button>
-            {!canPass && passHint ? <p className="prepare-pass-hint">{passHint}</p> : null}
+            {!canSkip && skipHint ? <p className="prepare-skip-hint">{skipHint}</p> : null}
           </div>
         ) : null}
       </section>

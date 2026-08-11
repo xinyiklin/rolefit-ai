@@ -10,8 +10,7 @@ import {
   displayRole,
   appFitVerdict,
   formatCompactDate,
-  nextAction,
-  priorityFor
+  nextAction
 } from "../../lib/applicationDisplay";
 
 type TrackerTableViewProps = {
@@ -35,7 +34,6 @@ const COLUMNS: Array<{ label: string; key: SortKey }> = [
   { label: "Role", key: "role" },
   { label: "Stage", key: "stage" },
   { label: "Date", key: "applied" },
-  { label: "Priority", key: "priority" },
   { label: "Next action", key: "nextAction" },
   { label: "Fit", key: "fit" }
 ];
@@ -86,15 +84,18 @@ function ApplicationRow({
   const verdict = appFitVerdict(app);
   const activityDate = applicationActivityDate(app);
   const activityLabel = activityDate ? formatCompactDate(activityDate) : "date not set";
+  // The row carries an aria-label, so badges rendered inside it are invisible to
+  // assistive tech unless their meaning is spelled out here.
   const rowLabel = [
     displayCompany(app),
     displayRole(app),
     `stage ${STATUS_LABEL[app.status]}`,
     `date ${activityLabel}`,
-    `${priorityFor(app)} priority`,
     nextAction(app),
-    verdict ? `fit ${verdict.label}` : "fit not scored"
-  ].join(", ");
+    verdict ? `fit ${verdict.label}` : "fit not scored",
+    postingGroupSize > 1 ? `${postingGroupSize} records linked to this posting` : "",
+    isDuplicate ? "possible duplicate" : ""
+  ].filter(Boolean).join(", ");
   return (
     <button
       type="button"
@@ -139,18 +140,6 @@ function ApplicationRow({
       </span>
       <span className="table-date">
         {activityDate ? formatCompactDate(activityDate) : "-"}
-      </span>
-      <span className="applications-table__cell--priority">
-        {priorityFor(app) === "Medium" ? (
-          <span className="priority-default">{priorityFor(app)}</span>
-        ) : (
-          <>
-            <span className={`priority-dot priority-dot--${priorityFor(app).toLowerCase()}`} aria-hidden="true" />
-            <span className={`priority-label priority-label--${priorityFor(app).toLowerCase()}`}>
-              {priorityFor(app)}
-            </span>
-          </>
-        )}
       </span>
       <span
         className={`applications-table__cell--next-action${
@@ -217,11 +206,7 @@ export function TrackerTableView({
                 key={col.key}
                 aria-label={`Sort by ${col.label}${isActive ? `, currently ${sort.dir === "asc" ? "ascending" : "descending"}` : ""}`}
                 className={`table-eyebrow table-sort ${isActive ? "is-active" : ""}${
-                  col.key === "priority"
-                    ? " applications-table__cell--priority"
-                    : col.key === "nextAction"
-                      ? " applications-table__cell--next-action"
-                      : ""
+                  col.key === "nextAction" ? " applications-table__cell--next-action" : ""
                 }`}
                 onClick={() => onSort(col.key)}
               >

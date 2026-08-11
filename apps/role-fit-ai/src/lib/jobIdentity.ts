@@ -438,7 +438,7 @@ function setSizeRatio(a: Set<string>, b: Set<string>): number {
   return Math.min(a.size, b.size) / Math.max(a.size, b.size);
 }
 
-// app.title is usually "Role at Company" (makeApplicationDraft); recover the
+// app.title is usually "Role at Company" (makeApplicationRecord); recover the
 // role half when the record has no explicit role field.
 function roleFromTitle(title: string | undefined | null): string {
   return String(title || "").split(/\s+at\s+/i)[0] ?? "";

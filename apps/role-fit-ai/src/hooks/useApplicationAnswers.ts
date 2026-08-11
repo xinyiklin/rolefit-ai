@@ -9,62 +9,32 @@ import {
 } from "../lib/aiWorkflow";
 import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { makeApplicationDraft, type Application } from "./useApplications";
-import type { ExtractedJobTracking } from "../lib/jobExtract";
-import type { DuplicateResolution } from "./useDuplicateGuard.ts";
-import type { PreparationSession } from "../lib/preparationSession.ts";
-import { applicationAnswerCommit } from "../lib/applicationAnswerCommit.ts";
 
 type UseApplicationAnswersArgs = {
   resumeText: string;
   resumeData: ResumeData | null;
   jobDescription: string;
-  applicationJobDescription: string;
-  applicationRawJobDescription: string;
-  applicationTracking: ExtractedJobTracking;
-  linkedApplication: Application | null;
   jobUrl: string;
   honestContext: string;
   customInstructions: string;
   aiRequest: StageConfig;
   providerReady: boolean;
   providerMessage: string;
-  preparationSession: PreparationSession;
-  hasLoadedApplications: boolean;
-  createApplication: (app: Application) => Promise<boolean>;
-  updateApplicationById: (app: Application) => Promise<boolean>;
-  linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
-  markPostingRecordsUnrelated: (applicationIds: string[]) => Promise<boolean>;
-  resolvePreparationDuplicate: () => Promise<DuplicateResolution>;
-  onDraftCreated: (applicationId: string) => void;
 };
 
-// Owns the Application Questions tab: drafting answers/role descriptions via the
-// AI provider seam and saving them onto a pipeline entry. Self-contained except
-// for the AI request fields, the current job target, and the applications store
-// helpers, which are passed in.
+// Owns the Application Questions tab: drafting answers/role descriptions via
+// the AI provider seam. Drafts remain session-local for editing and copying;
+// only Apply or Skip creates a tracker record.
 export function useApplicationAnswers({
   resumeText,
   resumeData,
   jobDescription,
-  applicationJobDescription,
-  applicationRawJobDescription,
-  applicationTracking,
-  linkedApplication,
   jobUrl,
   honestContext,
   customInstructions,
   aiRequest,
   providerReady,
-  providerMessage,
-  preparationSession,
-  hasLoadedApplications,
-  createApplication,
-  updateApplicationById,
-  linkPostingRecords,
-  markPostingRecordsUnrelated,
-  resolvePreparationDuplicate,
-  onDraftCreated
+  providerMessage
 }: UseApplicationAnswersArgs) {
   const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
   const [answersStatus, setAnswersStatus] = useState("");
@@ -97,19 +67,6 @@ export function useApplicationAnswers({
   const lastRequestRef = useRef<{ questions: string[]; includeRoleDescriptions: boolean } | null>(null);
   const requestGenerationRef = useRef(0);
   const requestAbortRef = useRef<AbortController | null>(null);
-  const answerSaveInFlightRef = useRef(false);
-  const preparationSessionRef = useRef(preparationSession);
-  preparationSessionRef.current = preparationSession;
-  const answerSaveContext = [
-    preparationSession.mode,
-    preparationSession.applicationId ?? "",
-    jobUrl.trim(),
-    applicationJobDescription,
-    applicationRawJobDescription,
-    JSON.stringify(applicationTracking)
-  ].join("\u0000");
-  const answerSaveContextRef = useRef(answerSaveContext);
-  answerSaveContextRef.current = answerSaveContext;
   const inputFingerprint = workflowInputFingerprint({
     resumeText,
     resumeData,
@@ -258,109 +215,11 @@ export function useApplicationAnswers({
     void handleGenerateAnswers(lastRequestRef.current);
   }
 
-  async function handleSaveAnswers(items: { question: string; answer: string }[]) {
-    if (!items.length || answerSaveInFlightRef.current) return;
-    if (!jobUrl.trim() && !jobDescription.trim()) {
-      setAnswersStatus("Prepare a job on Prepare before saving answers to the pipeline.");
-      return;
-    }
-    answerSaveInFlightRef.current = true;
-    try {
-      const session = preparationSession;
-      const now = new Date().toISOString();
-      const saved = items.map((it) => ({ question: it.question, answer: it.answer, savedAt: now }));
-      if (session.mode !== "new") {
-        const commit = applicationAnswerCommit({
-          session,
-          existing: linkedApplication,
-          draft: null,
-          answers: saved
-        });
-        if (!commit) {
-          setAnswersStatus(
-            "Could not save answers because the selected pipeline record is no longer available. Reopen the preparation and retry."
-          );
-          return;
-        }
-        const didSave = await updateApplicationById(commit.application).catch(() => false);
-        setAnswersStatus(didSave
-          ? `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to "${commit.application.title}" in the pipeline.`
-          : "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entry and retry.");
-        return;
-      }
-
-      if (!hasLoadedApplications) {
-        setAnswersStatus("Wait for Applications to finish loading before saving answers.");
-        return;
-      }
-      const capturedSaveContext = answerSaveContext;
-      let resolution: DuplicateResolution;
-      try {
-        resolution = await resolvePreparationDuplicate();
-      } catch {
-        setAnswersStatus("Duplicate checking failed, so the answers were not saved. Retry Save selected.");
-        return;
-      }
-      if (resolution.action !== "continue") return;
-      if (
-        preparationSessionRef.current.mode !== "new"
-        || answerSaveContextRef.current !== capturedSaveContext
-      ) {
-        setAnswersStatus("The preparation changed while duplicate review was open. Review the current job and save again.");
-        return;
-      }
-
-      const draft: Application = {
-        ...makeApplicationDraft(jobUrl, applicationJobDescription, applicationTracking),
-        rawJobDescription: applicationRawJobDescription.trim()
-      };
-      const commit = applicationAnswerCommit({
-        session,
-        existing: null,
-        draft,
-        answers: saved
-      });
-      if (!commit) return;
-      const app = commit.application;
-      const didSave = await createApplication(app).catch(() => false);
-      if (!didSave) {
-        setAnswersStatus(
-          "Could not save answers because the pipeline changed or storage was unavailable. Review the latest entries and retry."
-        );
-        return;
-      }
-
-      let relationshipWarning = "";
-      if (resolution.relationship) {
-        const linked = await linkPostingRecords(
-          [app.id, resolution.relationship.matchedApplicationId],
-          resolution.relationship.jobPostingGroupId
-        ).catch(() => null);
-        if (!linked) relationshipWarning = " The related posting could not be linked; both records remain separate.";
-      } else if (resolution.unrelatedApplicationId) {
-        const separated = await markPostingRecordsUnrelated([
-          app.id,
-          resolution.unrelatedApplicationId
-        ]).catch(() => false);
-        if (!separated) {
-          relationshipWarning = " The Keep separate decision could not be saved; the records may appear in duplicate review.";
-        }
-      }
-      onDraftCreated(app.id);
-      setAnswersStatus(
-        `Saved ${saved.length} answer${saved.length === 1 ? "" : "s"} to a new pipeline draft, "${app.title}".${relationshipWarning}`
-      );
-    } finally {
-      answerSaveInFlightRef.current = false;
-    }
-  }
-
   return {
     answersResult,
     answersStatus,
     isGeneratingAnswers,
     handleGenerateAnswers,
-    handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
     stopAnswers,

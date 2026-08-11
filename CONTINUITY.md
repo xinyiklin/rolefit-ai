@@ -3,8 +3,122 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-11
+
+- [USER+CODE+TOOL] **Application Detail now uses the approved compact fact-card
+  design.** The wide pane leads with editable Status and Timing cards plus the
+  conditional Skipped decision, then keeps every prepared-job group on the left
+  as read-only Role & company, Job details, Compensation, and collapsed Job
+  snapshot cards. The 360px rail keeps Fit Assessment at the top in a bordered
+  verdict/resume card and presents related records immediately below as a dated
+  timeline with quiet Open actions. Redundant pane headers and form-like job
+  controls remain removed; all job corrections still hand off to Prepare. The
+  desktop panes retain independent scrolling, while the modal becomes one
+  stacked scroll at <=1080px and its groups collapse to a single column at
+  <=760px. Rendered QA used the synthetic linked-record workspace at 1280x720
+  and 390x844: the final desktop proportions, compact cards, right-rail order,
+  mobile stacking, and zero horizontal overflow behaved as designed. The
+  focused saved-application surface probe, `git diff --check`, and the final
+  Impeccable layout detector pass; the unsandboxed RoleFit gate passes its
+  production, landing, and desktop builds, every desktop probe, and all 99
+  offline evaluations.
+
+- [USER+CODE+TOOL] **Application preparation no longer creates or saves a
+  pre-Apply tracker draft.** `PreparationSession` now has only fresh and
+  exact-record update modes; fresh preparation stays record-free until Apply
+  creates an Applied application or **Skip & save job** creates/refreshes a
+  Skipped job decision. Application-question drafts remain editable and
+  copyable in the browser session but have no tracker persistence controls or
+  write dependencies. The retired `interested` status, Saved stage, draft
+  duplicate path, and Continue preparation handoff are removed; stored records
+  use Edit preparation. Draft-specific construction names became neutral record
+  names, and the former Pass workflow surface is consistently named Skip in its
+  hook, dialog, props, styles, tests, and product copy. A narrow read upgrade
+  converts exact legacy `interested` rows to dated Skipped decisions, preserves
+  their notes and saved answers, strips metadata that would imply submission,
+  and atomically rewrites the tracker. Focused session, Apply, Skip, duplicate,
+  analytics, mutation, and storage probes pass; the RoleFit production,
+  landing, and desktop builds pass. The unsandboxed full gate passes 98/99
+  offline evaluations; its only failure remains the pre-existing dirty
+  Application Detail `Work details`/`Job details` expectation recorded below.
+  The Impeccable detector reports only existing type-ramp/radius advisories in
+  shared CSS. Browser QA was not run under the flag-first policy; the remaining
+  rendered risk is the secondary-action wording and removal of answer-save
+  controls. No git publication occurred.
+
+- [USER+CODE+TOOL] **Application priority is removed from the active tracker
+  contract and UI.** The optional High/Medium/Low field, stage-derived display
+  helper, detail control, table column, sort path, accessible row copy, and
+  priority-only styles are gone; the responsive register now spends that width
+  on the remaining Stage, Date, Next action, and Fit facts. A narrow storage
+  upgrade accepts only the exact formerly valid enum, removes it from memory,
+  and atomically rewrites the tracker without the field; malformed values and
+  unrelated unknown fields still fail closed. The RoleFit production, landing,
+  and desktop builds pass, as do the focused sanitizer, display, duplicate-scan,
+  tracker-layout, and whitespace checks. The unsandboxed offline suite passes
+  98/99 evaluations; its only failure is an unrelated pre-existing mismatch in
+  the already-dirty Application Detail work (`Work details` expected by the
+  saved-surface probe while the component says `Job details`). Browser QA was
+  not run under the flag-first policy; removing a table column changes rendered
+  register width and remains the visual risk. No git publication occurred.
+
 ## 2026-08-10
 
+- [USER+CODE+TOOL] **Application Detail uses three compact task tabs and a
+  two-concept Details workspace with independent desktop scrolling.** Details, Prep, and Documents
+  replace the former Overview/Interview/Documents/Questions split while
+  retaining real APG tab semantics, roving tabindex, arrow/Home/End navigation,
+  and the focus ring. Details no longer mirrors the stored field list:
+  Opportunity owns role facts, work arrangement, compensation, and the prepared
+  posting; the 360px Application record pane leads with Fit, then owns workflow,
+  timing, the explicit Skipped decision, and related history. The visual divider replaces
+  redundant pane headers, native heading margins are reset so section labels sit
+  close to their controls, and prepared data becomes one collapsed Job snapshot
+  inside Role rather than a separate reference section. Expanded, the existing
+  deterministic brief parser projects saved data into overview,
+  responsibility, qualification, Benefits & policies, tool, seniority, and domain parts;
+  the potentially long Benefits & policies group stays locally collapsed and
+  each other long list shows four items before a local remainder disclosure, while the
+  immutable full source remains a final secondary disclosure. General
+  application notes moved to Prep beside
+  interview preparation, contacts, and saved questions. At desktop widths both
+  Details panes scroll independently; at ≤1080px they stack into one natural
+  modal scroll. Delete sits apart from Cancel/Close and Save changes, and closing
+  a dirty form confirms before discarding it. The final permitted
+  `npm run check --workspace apps/role-fit-ai` passes under pinned Node 24:
+  production/landing/desktop builds, all desktop probes, and all 99 offline
+  evaluations. The focused saved-application surface eval and `git diff --check`
+  pass, and the Impeccable detector returns `[]` for both
+  `ApplicationModal.tsx` and `ApplicationJobSnapshot.tsx` (the whole shared CSS
+  sheet reports only its existing design-ramp advisories). Rendered QA reused
+  the already-running canonical app with a real saved record at 1280×720 and
+  390×844: the collapsed and expanded digest, locally collapsed Benefits &
+  policies group, native disclosure focus ring, one-panel APG mapping,
+  independent desktop pane scrolling, stacked mobile scroll, and final compact
+  layout all behaved as designed; browser logs contained no errors. No push or
+  merge occurred.
+- [USER+CODE+TOOL] **UX review of the seven-stage workflow: the stage is renamed
+  Skipped and the detail modal's destructive and structural defects are fixed.**
+  Supersedes the user-facing label in every entry below: the stored status key
+  stays `not_applying`, but the label, the rail action, the dialog, and all
+  status copy now read Skipped / Skip this job / Save as skipped. "Not applying"
+  was a present participle among past-tense siblings and collided with "Applied"
+  in the Stage column; "Passed" was rejected because it reads as passing a round
+  beside Interviewing and Offer. Fixed with it: moving a record into Skipped is
+  terminal and drops `appliedAt` plus resume/cover artifacts, so all three form-
+  flush paths in Application Detail now confirm destructively and name what they
+  clear. A later compaction superseded the intermediate decision-summary card:
+  skip metadata now lives only in the editable Decision group, while the
+  posting group remains independent of Fit. The full posting moved behind a disclosure
+  with a keyboard-focusable scroll region; related-row unlink/merge moved into
+  the shared row-menu primitive behind Open; the Prepare update banner dropped
+  its live region and its explainer line; the inspector retains its explainer
+  for assistive technology without spending another visible row; and the posting-group and duplicate badges now reach
+  assistive tech through the composed row label. `npm run check --workspace
+  apps/role-fit-ai` passes: builds plus all 99 offline evaluations under pinned
+  Node 24. That intermediate pass had not yet run browser QA; the Application
+  Detail receipt above supersedes that gap with rendered desktop/mobile
+  verification. No push or merge occurred.
 - [USER+CODE+TOOL] **The seventh Not applying workflow stage completes tracker
   history and analytics provenance.** Not applying appears in All, Inactive, and
   its own filter, sorts and groups by its decision date, and cannot emit a stale

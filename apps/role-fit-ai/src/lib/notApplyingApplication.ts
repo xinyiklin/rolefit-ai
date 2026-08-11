@@ -47,10 +47,9 @@ function withDecision(
   return next;
 }
 
-export function passApplicationForSession({
+export function skipApplicationForSession({
   session,
   prepared,
-  existing,
   matchedNotApplying,
   now,
   reason,
@@ -59,7 +58,6 @@ export function passApplicationForSession({
 }: {
   session: PreparationSession;
   prepared: Application;
-  existing: Application | null;
   matchedNotApplying: Application | null;
   now: string;
   reason: NotApplyingReason | "";
@@ -68,12 +66,7 @@ export function passApplicationForSession({
 }): NotApplyingCommit | null {
   if (session.mode === "update") return null;
 
-  const target = session.mode === "draft" ? existing : matchedNotApplying;
-  if (session.mode === "draft" && (
-    !target
-    || target.id !== session.applicationId
-    || target.status !== "interested"
-  )) return null;
+  const target = matchedNotApplying;
   if (matchedNotApplying && matchedNotApplying.status !== "not_applying") return null;
 
   if (!target) {

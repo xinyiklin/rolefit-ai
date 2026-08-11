@@ -27,14 +27,13 @@ export type DuplicateResolution =
   | { action: "cancel" };
 
 export type DuplicatePreparationPrompt = {
-  kind: "existing-application" | "existing-draft" | "existing-not-applying" | "similar";
+  kind: "existing-application" | "existing-not-applying" | "similar";
   title: string;
   message: string;
 };
 
 export type DuplicatePreparationChoice =
   | "continue-new"
-  | "continue-existing"
   | "review-again"
   | "open-existing"
   | "link"
@@ -101,13 +100,6 @@ function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationProm
       message: `This looks similar to ${roleAtCompany}.${evidence}\nIs this the same job posting?`
     };
   }
-  if (application.status === "interested") {
-    return {
-      kind: "existing-draft",
-      title: "Preparation already exists",
-      message: `You already started preparing ${roleAtCompany}.${evidence}`
-    };
-  }
   if (String(application.status) === "not_applying") {
     const notApplyingAt = application.notApplyingAt;
     const reason = application.notApplyingReason
@@ -115,8 +107,8 @@ function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationProm
       : "";
     return {
       kind: "existing-not-applying",
-      title: "You previously passed on this job",
-      message: `Marked Not applying on ${formatCompactDate(notApplyingAt || when)}.${reason}${evidence}`
+      title: "You previously skipped this job",
+      message: `Skipped on ${formatCompactDate(notApplyingAt || when)}.${reason}${evidence}`
     };
   }
   return {
@@ -227,7 +219,7 @@ export function useDuplicateGuard({
 
     const choice = await requestChoice(promptFor(match));
     if (choice === "cancel") return { action: "cancel" };
-    if (choice === "open-existing" || choice === "continue-existing") {
+    if (choice === "open-existing") {
       const opened = await onOpenExisting(match.application.id);
       return opened
         ? { action: "open-existing", applicationId: match.application.id }

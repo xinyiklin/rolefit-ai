@@ -58,7 +58,7 @@ own a second resume model, editor, layout engine, or PDF implementation.
   technical contract in `server/ai/README.md`, and the executable
   `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
   hidden requirement bookkeeping, a server-derived fallback verdict, tracker
-  priority inference, or a second assessment path.
+  application-priority fields, or a second assessment path.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
   Withheld. Mutation fields validate strictly; malformed optional feedback is
@@ -92,10 +92,10 @@ own a second resume model, editor, layout engine, or PDF implementation.
   provider can improve it; Fit Assessment remains unavailable when its own
   provider cannot run, and Polish retains its existing provider gate.
 - Duplicate checks gate the pipeline before and after Job analysis. Exact saved
-  applications offer a new linked preparation or opening the existing record;
-  exact interested drafts continue that draft; high/possible matches require an
-  explicit Link or Keep separate choice. Cancel means no downstream request,
-  and the choice is acknowledged for that job target. Normal Apply/Pass paths
+  applications or decisions offer a new linked preparation or opening the
+  existing record; high/possible matches require an explicit Link or Keep
+  separate choice. Cancel means no downstream request,
+  and the choice is acknowledged for that job target. Normal Apply/Skip paths
   never call destructive merge or use a match as their write target.
 - Posting groups are presentation and relationship metadata, never collapsed
   tracker identity. Every decision or attempt keeps its own row, status, dates,
@@ -171,10 +171,12 @@ or workspace state, keep it here and expose the smallest host seam instead.
   document, manually or through its enabled automatic proposal, turns on only
   that document's Include toggle. Do not label either card optional.
 - Masthead and Prepare primary controls share one handler, readiness model, and
-  action descriptor. Fresh and interested-draft sessions say Apply; an explicitly
-  restored submitted record says Update application. Commits branch on the
-  session's explicit id: fresh work creates, a draft updates that interested id,
-  and later-stage updates preserve the id, created/applied dates, and stage.
+  action descriptor. Fresh sessions say Apply; an explicitly restored submitted
+  record says Update application, and a restored Skipped decision says Save job
+  updates. Fresh Apply creates; restored work updates only the session's exact
+  id while preserving its created/applied dates and stage.
+  Fresh preparation's quiet secondary action is labeled Skip & save job so its
+  persistence is explicit without implying that an application was saved.
   Job matching may warn or relate records but never selects the write target.
   Require the current prepared job and readiness only for included materials,
   while allowing either or both to be excluded. A later update must not delete or

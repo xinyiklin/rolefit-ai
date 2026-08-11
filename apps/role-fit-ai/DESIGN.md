@@ -227,9 +227,9 @@ quiet semantic signals; nothing is ever pure white or pure black.
 ### Signal
 
 - **Warm amber** (`--warm`, oklch(0.52 0.1 75)): attention without alarm;
-  empty-input dots, stretch-fit scores, high priority.
+  empty-input dots and stretch-fit marks.
 - **Archival blue** (`--cool`, oklch(0.45 0.06 250)): the "applied" stage and
-  low-priority marks; filed, not active.
+  quiet archival marks; filed, not active.
 - **Brick** (`--danger`, oklch(0.45 0.12 30)): errors, rejected stage,
   weak-fit scores. Soft tints (`--warm-soft`, `--danger-soft`) back inline
   notices only.
@@ -243,7 +243,7 @@ section background, never a heading color.
 **The Tinted Neutral Rule.** Pure `#fff` and `#000` are forbidden. Every
 neutral carries the paper hue (150) or ink hue (160) at chroma 0.001–0.014.
 
-**The Dot-Plus-Word Rule.** Stage, priority, and readiness are a 5–7px dot
+**The Dot-Plus-Word Rule.** Stage and readiness are a 5–7px dot
 beside plain text. Color never carries meaning alone, and filled pill badges
 are not the default status vocabulary.
 
@@ -470,15 +470,53 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   enters with a 150ms 6px slide-fade.
 - **Applications:** its new-work action returns to Prepare. The application
   detail modal edits committed tracker records and never becomes a second job
-  intake surface. It presents the prepared job as a read-only, bounded snapshot,
-  keeps Not applying decision fields and related posting records visible, and
-  labels its handoff Continue preparation for an interested draft or Edit
-  preparation for historical records. Prepare uses one flat persistent banner
-  to state which exact application or saved decision an update will mutate.
+  intake surface. The panel remains the outer sheet, while Details uses a small
+  number of compact outlined groups to make application controls and saved job
+  facts scannable without recreating an intake form. Its head
+  carries the serif record name over one dot-led identity line (saved stage, the
+  date that stage governs, and the linked-record count), so stage never needs
+  restating inside the body. Its sections are APG tabs, not toggle buttons:
+  `tablist`/`tab`/`tabpanel`, roving tabindex, arrow/Home/End. Three task tabs
+  remain: Details, Prep, and Documents. Details is split by task rather than
+  storage fields: the wide working pane leads with compact Status and Timing
+  cards plus the conditional Skipped decision, then shows read-only Role &
+  company, Job details, Compensation, and Job snapshot cards. The 360px rail
+  leads with Fit and keeps related-record history directly below it. The conditional
+  Skipped decision states the outcome explicitly beside its reason and bounded
+  note, while general application notes remain independent data in Prep. Prep
+  also owns contacts, saved application questions, and interview preparation.
+  The vertical divider supplies enough context, so neither pane repeats a pane
+  header. The card borders stay hairline-light, use the existing small radius,
+  and group facts rather than decorate empty space. Dates and numeric values use
+  the mono data treatment. Prepared data is one full-width collapsed `Job snapshot`
+  card after the compact facts. Expanded, it uses the saved
+  brief's existing deterministic structure: Overview; Responsibilities;
+  Required and Preferred qualifications; Benefits & policies; and compact tool,
+  seniority, and domain signal rows. The potentially long Benefits & policies
+  group stays locally collapsed; other list groups show four items before
+  disclosing their remainder, so no section becomes another wall of text. The immutable source
+  posting remains available behind one final keyboard-scrollable disclosure;
+  the UI never synthesizes a replacement summary. On desktop,
+  the working pane and the 360px Fit/history rail scroll independently; at
+  and below 1080px they stack into one natural modal scroll. Fit remains a plain
+  advisory without AI-sparkle framing. Delete sits apart from Cancel/Close and Save changes, and closing
+  edited fields confirms before discarding them. It labels its handoff Edit
+  preparation for every stored record. Prepare uses one flat persistent banner
+  — not a live region — to
+  state which exact application or saved decision an update will mutate.
   Related decisions and attempts never collapse into one row: a quiet linked
   count sits beside the company, while the inspector and detail modal list each
-  dated status independently. Open and non-destructive Mark as unrelated are
-  quiet actions; destructive Merge duplicate always asks for confirmation.
+  dated status independently. Each related row exposes Open plus an overflow
+  menu; non-destructive Mark as unrelated and destructive Merge duplicate both
+  live there so neither carries Open's weight, and Merge always confirms.
+- **Stage vocabulary:** every stage label is a settled state
+  (Skipped, Applied, Interviewing, Offer, Rejected, Withdrawn). The
+  skip stage is **Skipped**, not "Not applying" — a present participle reads as
+  an intention rather than a recorded decision, and "Not applying"/"Applied"
+  are too close to tell apart in the Stage column. "Passed" is reserved: beside
+  Interviewing and Offer it reads as passing a round. The stored status key
+  remains `not_applying`. Any transition into a terminal, artifact-dropping
+  stage confirms destructively before it saves.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
   small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
   hairline-separated groups. Prepare is first and selected by default. The

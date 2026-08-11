@@ -15,7 +15,7 @@ const application = (index, overrides = {}) => ({
   role: `Role ${index}`,
   jobUrl: `https://example.com/jobs/${index}`,
   jobDescription: `Description ${index}`,
-  status: "interested",
+  status: "applied",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides

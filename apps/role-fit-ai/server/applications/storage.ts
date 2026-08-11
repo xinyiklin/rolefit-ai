@@ -50,6 +50,69 @@ function isMissingFile(error: unknown): boolean {
   );
 }
 
+const REMOVED_APPLICATION_PRIORITIES = new Set(["High", "Medium", "Low"]);
+
+// Priority was optional presentation metadata, so removing it must not strand a
+// canonical tracker written by an older build. Accept only the exact retired
+// enum, then rewrite the file immediately without the field. Any other unknown
+// or malformed value remains visible to the strict comparison and fails closed.
+function removeLegacyApplicationPriorityForComparison(applications: unknown[]): {
+  applications: unknown[];
+  removed: boolean;
+} {
+  let removed = false;
+  const normalized = applications.map((application) => {
+    if (!application || typeof application !== "object" || Array.isArray(application)) {
+      return application;
+    }
+    const raw = application as Record<string, unknown>;
+    const legacyPriority = raw.priority;
+    if (
+      !Object.hasOwn(raw, "priority") ||
+      typeof legacyPriority !== "string" ||
+      !REMOVED_APPLICATION_PRIORITIES.has(legacyPriority)
+    ) {
+      return application;
+    }
+    const { priority: _removedPriority, ...withoutPriority } = raw;
+    removed = true;
+    return withoutPriority;
+  });
+  return { applications: normalized, removed };
+}
+
+// Saved/interested was the retired pre-Apply record. Preserve those rows as
+// explicit Skipped decisions instead of deleting personal notes or making them
+// look submitted. The last tracker revision becomes the decision date, while
+// sent-document metadata is removed because no application was recorded.
+function upgradeLegacyInterestedApplications(applications: unknown[]): {
+  applications: unknown[];
+  upgraded: boolean;
+} {
+  let upgraded = false;
+  const normalized = applications.map((application) => {
+    if (!application || typeof application !== "object" || Array.isArray(application)) {
+      return application;
+    }
+    const raw = application as Record<string, unknown>;
+    if (raw.status !== "interested") return application;
+    const {
+      appliedAt: _appliedAt,
+      resumeUsed: _resumeUsed,
+      resumeArtifacts: _resumeArtifacts,
+      coverLetterArtifacts: _coverLetterArtifacts,
+      ...preserved
+    } = raw;
+    upgraded = true;
+    return {
+      ...preserved,
+      status: "not_applying",
+      notApplyingAt: raw.updatedAt
+    };
+  });
+  return { applications: normalized, upgraded };
+}
+
 // Fit Assessment summary copy is derived entirely from its verdict. Older tracker
 // rows may carry the provider-generated sentence that preceded the fixed-copy
 // contract, so ignore only that redundant leaf during the strict canonical
@@ -130,9 +193,14 @@ export async function readApplications(workspaceDir: string) {
       throw new Error("Invalid applications file shape.");
     }
     const apps = (data as { applications: unknown[] }).applications;
-    const sane = sanitizeApplications(apps);
+    const priorityUpgrade = removeLegacyApplicationPriorityForComparison(apps);
+    const interestedUpgrade = upgradeLegacyInterestedApplications(priorityUpgrade.applications);
+    const sane = sanitizeApplications(interestedUpgrade.applications);
     const canonical = JSON.parse(JSON.stringify(sane)) as unknown[];
-    const comparable = normalizeDerivedFitAssessmentSummariesForComparison(apps, canonical);
+    const comparable = normalizeDerivedFitAssessmentSummariesForComparison(
+      interestedUpgrade.applications,
+      canonical
+    );
     // Never silently erase an invalid on-disk record during the next write.
     if (
       apps.length > MAX_APPLICATIONS ||
@@ -141,6 +209,9 @@ export async function readApplications(workspaceDir: string) {
       !isDeepStrictEqual(comparable, canonical)
     ) {
       throw new Error("Invalid application record.");
+    }
+    if (priorityUpgrade.removed || interestedUpgrade.upgraded) {
+      await writeApplications(workspaceDir, sane);
     }
     return sane;
   } catch {

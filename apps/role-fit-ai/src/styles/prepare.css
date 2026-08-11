@@ -703,16 +703,10 @@
   font-size: 0.78rem;
 }
 
-.prepare-update-banner span,
-.prepare-update-banner p {
-  margin: 0;
+.prepare-update-banner span {
   color: var(--ink-soft);
   font-size: 0.72rem;
   line-height: 1.4;
-}
-
-.prepare-update-banner p {
-  color: var(--ink-muted);
 }
 
 .prepare-fit {

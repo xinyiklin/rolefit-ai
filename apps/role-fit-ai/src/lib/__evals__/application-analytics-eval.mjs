@@ -47,13 +47,13 @@ const applications = [
   },
   {
     ...base,
-    id: "saved",
+    id: "applied-without-submit-date",
     company: "Beta",
-    status: "interested"
+    status: "applied"
   },
   {
     ...base,
-    id: "passed-with-legacy-submit-date",
+    id: "skipped-with-legacy-submit-date",
     company: "Gamma",
     status: "not_applying",
     appliedAt: "2026-06-08T12:00:00.000Z",
@@ -72,22 +72,22 @@ assert.deepEqual(
   "tracking facts are exact counts over stored fields"
 );
 assert.deepEqual(topTrackedCompanies(applications)[0], ["Acme", 2], "company counts aggregate displayed company identity");
-const passed = applications.find((application) => application.status === "not_applying");
-assert.ok(passed);
-assert.equal(matchesActivityFilter(passed, "all"), true, "pass decisions remain visible in All");
-assert.equal(matchesActivityFilter(passed, "not_applying"), true, "Not applying has a dedicated filter");
-assert.equal(matchesActivityFilter(passed, "inactive"), true, "pass decisions are grouped as inactive history");
-assert.equal(matchesActivityFilter(passed, "active"), false);
+const skipped = applications.find((application) => application.status === "not_applying");
+assert.ok(skipped);
+assert.equal(matchesActivityFilter(skipped, "all"), true, "skip decisions remain visible in All");
+assert.equal(matchesActivityFilter(skipped, "not_applying"), true, "Skipped has a dedicated filter");
+assert.equal(matchesActivityFilter(skipped, "inactive"), true, "skip decisions are grouped as inactive history");
+assert.equal(matchesActivityFilter(skipped, "active"), false);
 assert.equal(activityCount(applications, "not_applying"), 1);
 assert.equal(
-  isSubmittedApplication(passed),
+  isSubmittedApplication(skipped),
   false,
   "Not applying is excluded from the shared submitted-metric denominator even with stale appliedAt"
 );
 assert.equal(
-  applicationActivityDate(passed),
-  passed.notApplyingAt,
-  "tracker chronology uses the pass decision date rather than a stale appliedAt"
+  applicationActivityDate(skipped),
+  skipped.notApplyingAt,
+  "tracker chronology uses the skip decision date rather than a stale appliedAt"
 );
 
 console.log("PASS application analytics provenance");

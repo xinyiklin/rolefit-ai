@@ -308,40 +308,13 @@
 .stage-dot--interviewing { background: var(--accent); }
 .stage-dot--offer { background: var(--accent-deep); }
 .stage-dot--rejected { background: var(--danger); }
-.stage-dot--interested { background: var(--ink-faint); }
 .stage-dot--withdrawn { background: var(--ink-faint); }
+.stage-dot--not_applying { background: var(--ink-faint); }
 
 .stage-dot-label {
   font-size: 0.74rem;
   color: var(--ink);
 }
-
-/* -------- Priority dot + plain text -------- */
-/* Medium (default) renders as plain faint text; only High/Low deviations get a dot */
-.priority-default {
-  color: var(--ink-faint);
-  font-size: 0.74rem;
-}
-
-.priority-dot {
-  display: inline-block;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  margin-right: 5px;
-  flex: none;
-  vertical-align: middle;
-}
-
-.priority-dot--high { background: var(--warm); }
-.priority-dot--low { background: var(--cool); }
-
-.priority-label {
-  font-size: 0.74rem;
-}
-
-.priority-label--high { color: var(--warm); }
-.priority-label--low { color: var(--cool); }
 
 /* -------- Default next-action muting -------- */
 .next-action-default {
@@ -712,7 +685,7 @@
   /* Flexible TEXT columns (company / role / next-action) carry low mins so they
      ellipsis-truncate and yield space when the inspector narrows the table —
      the fixed FIT verdict column must never be the one clipped. */
-  grid-template-columns: minmax(120px, 1.3fr) minmax(112px, 1fr) 104px 88px 78px minmax(120px, 1fr) 104px 18px;
+  grid-template-columns: minmax(120px, 1.3fr) minmax(112px, 1fr) 104px 88px minmax(120px, 1fr) 104px 18px;
   /* Hold the columns at their natural combined minimum; below that the table
      scrolls horizontally instead of squeezing/clipping the right-hand columns. */
   min-width: min-content;
@@ -729,15 +702,14 @@
 /* The inspector can narrow this component while the viewport stays desktop
    wide. Adapt to the register's own width: Next action remains available in
    the selected application's details, while the required Fit verdict stays in
-   the visible primary register. The full template's exact minimum is 852px. */
-@container (max-width: 852px) {
+   the visible primary register. The full template's exact minimum is 762px. */
+@container (max-width: 762px) {
   .applications-table__row {
     grid-template-columns:
       minmax(105px, 1.25fr)
       minmax(94px, 1fr)
       96px
       82px
-      70px
       104px
       18px;
   }
@@ -1335,7 +1307,6 @@ button.table-sort svg {
 .application-side-empty strong { color: var(--ink-strong); }
 
 /* -------- Calendar -------- */
-
 
 .calendar-nav {
   display: inline-flex;
@@ -1968,6 +1939,14 @@ button.table-sort svg {
   color: var(--ink-strong);
 }
 
+/* Roving tabindex leaves only one tab reachable by Tab, so the ring on
+   arrow-key focus is the only thing that shows where you are. */
+.application-modal__tabs button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--r-sm);
+}
+
 .application-modal__tabs .is-active {
   color: var(--accent-deep);
   box-shadow: inset 0 -2px 0 var(--accent);
@@ -1975,9 +1954,30 @@ button.table-sort svg {
 
 .application-modal__body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 280px;
+  grid-template-columns: minmax(0, 1fr) 360px;
+  grid-template-rows: minmax(0, 1fr);
   gap: var(--s3);
-  overflow: auto;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.application-modal__body--single {
+  display: block;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.application-modal__main {
+  min-height: 0;
+  padding: var(--s2) var(--s3) var(--s3) 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.application-modal__body--single > .application-form {
+  padding: var(--s2) var(--s2) var(--s3) 0;
 }
 
 /* -------- Review-duplicates modal -------- */
@@ -2058,14 +2058,13 @@ button.table-sort svg {
   justify-content: flex-end;
 }
 
+/* Flush. The modal panel is already the sheet; a bordered form inside it was a
+   card in a card, and the compensation fieldset made it three deep. */
 .application-form {
   display: grid;
-  gap: var(--s2);
+  gap: var(--s3);
   align-content: start;
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--card);
+  min-width: 0;
 }
 
 .application-form--wide {
@@ -2078,35 +2077,439 @@ button.table-sort svg {
   margin-top: 0;
 }
 
-.application-form__grid {
+/* Details follows the selected card-and-fact composition: application controls
+   and saved job facts share the wide working pane; Fit and related history form
+   the quieter right rail. Each pane keeps its own desktop scroll. */
+.application-details-pane {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--s2) var(--s3);
+  align-content: start;
+  gap: var(--s3);
+  min-width: 0;
 }
 
-.application-prepared-snapshot {
+.application-details-pane .field {
+  margin-top: 0;
+}
+
+.application-details-section {
+  display: grid;
+  align-content: start;
+  gap: var(--s2);
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+
+.application-details-section > h4,
+.application-details-decision__head h4 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.application-details-grid {
   display: grid;
   gap: var(--s2);
-  padding-top: var(--s3);
+  min-width: 0;
+}
+
+.application-details-grid--2,
+.application-details-grid--record {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.application-details-grid--timing {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.application-details-grid .field--span {
+  grid-column: 1 / -1;
+}
+
+.application-workflow-grid,
+.application-job-facts {
+  display: grid;
+  gap: var(--s3);
+  min-width: 0;
+}
+
+.application-workflow-grid {
+  grid-template-columns: minmax(240px, 0.8fr) minmax(0, 1.2fr);
+}
+
+.application-job-facts {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.application-workflow-grid .application-details-decision,
+.application-job-card--wide {
+  grid-column: 1 / -1;
+}
+
+.application-job-card {
+  min-width: 0;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card);
+}
+
+.application-job-card > h4 {
+  margin: 0 0 var(--s2);
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.application-fact-list,
+.application-compensation-facts {
+  display: grid;
+  gap: var(--s2);
+  margin: 0;
+}
+
+.application-fact-list > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.application-fact-list--identity > div {
+  grid-template-columns: 26px minmax(0, 1fr);
+}
+
+.application-fact-list dt,
+.application-compensation-facts dt {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.application-fact-list--identity dt {
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.application-fact-list dd,
+.application-compensation-facts dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.75rem;
+  font-weight: 560;
+  overflow-wrap: anywhere;
+}
+
+.application-fact-list dd a {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+
+.application-fact-list dd a span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.application-fact-list dd a:hover {
+  color: var(--accent-deep);
+  text-decoration: underline;
+}
+
+.application-compensation-facts {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0;
+}
+
+.application-compensation-facts > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding-inline: var(--s3);
+  border-left: 1px solid var(--hairline-soft);
+}
+
+.application-compensation-facts > div:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+
+.application-compensation-facts > div:last-child {
+  padding-right: 0;
+}
+
+.application-compensation-facts > div:not(:last-child) dd {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.application-details-decision__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.application-details-decision__head strong {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+  color: var(--ink-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+/* Field groups. Each carries its own column count; the legend is the house
+   eyebrow, sitting on the group's top hairline the way a ledger section head
+   sits on its rule. No box, no fill — grouping is rhythm plus one rule. */
+.application-fieldset {
+  min-width: 0;
+  margin: 0;
+  padding: var(--s2) 0 0;
+  border: 0;
   border-top: 1px solid var(--hairline-soft);
 }
 
-.application-prepared-snapshot__head h4,
-.application-related-records > strong {
+/* The house eyebrow token (shell.css .eyebrow), at the tracking reserved for
+   everything that is not the masthead. */
+.application-fieldset legend {
+  padding: 0;
+  color: var(--ink-soft);
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+/* The grid lives on an inner row, never on the fieldset: a <legend> is not a
+   grid item and Firefox and Chrome disagree about where it lands when the
+   fieldset itself is the grid container. */
+.application-fieldset__row {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+  margin-top: var(--s1);
+}
+
+.application-fieldset__row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.application-fieldset__row--3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.application-fieldset__row--comp { grid-template-columns: repeat(2, minmax(0, 1fr)) 88px 1fr; }
+
+.application-fieldset__row .field--span {
+  grid-column: 1 / -1;
+}
+
+/* Below the modal's two-column breakpoint the 3- and 4-up rows would crush
+   their controls; fall back to two. */
+@media (max-width: 900px) {
+  .application-fieldset__row--3,
+  .application-fieldset__row--comp {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* The Mono Means Data Rule inside inputs: dates, money, and currency codes. */
+.text-input.is-data,
+.application-modal .is-data {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 0.78rem;
+}
+
+/* Record identity: one dot-led meta line under the serif title. Type and color
+   come from the head's own <p> rule. */
+.application-modal__head .application-modal__identity {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.application-modal__identity-sep {
+  margin-right: 5px;
+  color: var(--hairline-strong);
+}
+
+.application-side-card h4,
+.application-match-card__title {
+  margin: 0;
   color: var(--ink-strong);
   font-size: 0.78rem;
 }
 
-.application-prepared-snapshot__head p,
-.application-prepared-snapshot__summary {
-  margin: 2px 0 0;
+.application-job-snapshot {
+  margin: 0;
+}
+
+.application-job-snapshot > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  width: 100%;
+  padding: 0;
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.application-job-snapshot > summary span {
+  font-weight: 650;
+}
+
+.application-job-snapshot > summary small {
+  margin-left: auto;
+  color: var(--ink-muted);
+  font-size: 0.67rem;
+  font-weight: 400;
+}
+
+.application-job-snapshot > summary:hover {
+  color: var(--ink);
+}
+
+.application-job-snapshot summary:focus-visible {
+  border-radius: var(--r-sm);
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.application-job-snapshot[open] > summary {
+  margin-bottom: var(--s2);
+}
+
+.application-job-snapshot__content {
+  display: grid;
+  gap: var(--s3);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.application-job-snapshot h5 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.7rem;
+  font-weight: 650;
+}
+
+.application-job-snapshot__overview {
+  display: grid;
+  gap: var(--s1);
+}
+
+.application-job-snapshot__overview p {
+  max-width: 75ch;
   color: var(--ink-soft);
   font-size: 0.72rem;
   line-height: 1.45;
 }
 
-.application-prepared-snapshot pre {
-  max-height: 180px;
+.application-job-snapshot__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--s4);
+  row-gap: var(--s3);
+}
+
+.application-job-snapshot__part {
+  display: grid;
+  align-content: start;
+  gap: var(--s1);
+  min-width: 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.application-job-snapshot__part ul {
+  display: grid;
+  gap: 3px;
+  margin: 0;
+  padding-left: 15px;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.application-job-snapshot__part li::marker {
+  color: var(--ink-faint);
+}
+
+.application-job-snapshot__more {
+  margin-top: 2px;
+}
+
+.application-job-snapshot__more summary,
+.application-job-snapshot__source summary {
+  width: fit-content;
+  padding-block: 3px;
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.application-job-snapshot__more[open] > summary {
+  margin-bottom: var(--s1);
+}
+
+.application-job-snapshot__signals {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.application-job-snapshot__signals > div {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: var(--s2);
+}
+
+.application-job-snapshot__signals dt {
+  color: var(--ink-strong);
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.application-job-snapshot__signals dd {
+  min-width: 0;
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.68rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.application-job-snapshot__source {
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.application-job-snapshot__source[open] > summary {
+  margin-bottom: var(--s2);
+}
+
+.application-job-snapshot__source pre,
+.application-job-snapshot--source-only > pre {
+  max-height: 240px;
   margin: 0;
   padding: var(--s2) 0;
   overflow: auto;
@@ -2118,26 +2521,100 @@ button.table-sort svg {
   white-space: pre-wrap;
 }
 
-.application-match-card {
+.application-job-snapshot--source-only[open] > summary {
+  margin-bottom: var(--s2);
+}
+
+/* Each desktop concept owns its height and scroll. The application record does
+   not inherit the opportunity pane's scroll distance. */
+.application-modal__side {
+  display: grid;
+  align-content: start;
+  gap: var(--s3);
+  min-height: 0;
+  padding: var(--s2) var(--s2) var(--s3) var(--s4);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  border-left: 1px solid var(--hairline);
+  scrollbar-gutter: stable;
+}
+
+.application-match-card,
+.application-side-card {
   display: grid;
   justify-items: start;
   align-content: start;
   gap: var(--s3);
-  padding: var(--s3) var(--s4);
-  border: 0;
-  border-left: 1px solid var(--hairline);
-  border-radius: 0;
-  background: transparent;
+  width: 100%;
+  padding: var(--s3);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-md);
+  background: var(--card);
   text-align: left;
 }
 
-.application-match-card__eyebrow {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s1);
-  color: var(--accent-deep);
-  font-size: 0.74rem;
+.application-side-card {
+  gap: var(--s2);
+}
+
+.application-side-card p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.application-match-card__title {
+  margin: 0;
+  font-size: 0.82rem;
   font-weight: 650;
+}
+
+.application-fit-summary {
+  display: grid;
+  grid-template-columns: 88px minmax(0, 1fr);
+  align-items: center;
+  gap: var(--s3);
+  width: 100%;
+  padding: var(--s3);
+  border: 1px solid var(--accent-veil);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+
+.application-fit.application-fit--ring {
+  display: grid;
+  place-items: center;
+  width: 76px;
+  height: 76px;
+  padding: var(--s2);
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
+}
+
+.application-fit-summary__resume {
+  display: grid;
+  gap: var(--s1);
+  min-width: 0;
+  padding-left: var(--s3);
+  border-left: 1px solid var(--accent-veil);
+}
+
+.application-fit-summary__resume span {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+}
+
+.application-fit-summary__resume strong {
+  min-width: 0;
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
 .application-match-card p {
@@ -2152,61 +2629,81 @@ button.table-sort svg {
   font-size: 0.7rem;
 }
 
-.application-checks {
-  display: grid;
-  gap: var(--s2);
-  width: 100%;
-  padding: 0;
-  list-style: none;
-  text-align: left;
-}
-
-.application-checks li {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--s2);
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-
-.application-checks svg { color: var(--accent); }
-
 .application-related-records {
   display: grid;
-  gap: var(--s2);
+  gap: 0;
   width: 100%;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.application-related-records p {
-  margin: 0;
-}
-
-.application-related-records ul {
-  display: grid;
-  gap: var(--s1);
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
 .application-related-records li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: start;
   gap: var(--s2);
-  padding-top: var(--s1);
-  border-top: 1px solid var(--hairline-soft);
+  padding: 0 0 var(--s3);
   color: var(--ink-soft);
   font-size: 0.72rem;
 }
 
+.application-related-records li:last-child {
+  padding-bottom: 0;
+}
+
+.application-related-records li:not(:last-child)::after {
+  position: absolute;
+  top: 13px;
+  bottom: 0;
+  left: 7px;
+  width: 1px;
+  background: var(--hairline-strong);
+  content: "";
+}
+
+.application-related-records__marker {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  background: var(--card);
+}
+
+.application-related-records__label {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.application-related-records__label strong {
+  color: var(--ink-strong);
+  font-size: 0.74rem;
+  font-weight: 600;
+}
+
+.application-related-records__label > span {
+  color: var(--ink-muted);
+  font-size: 0.68rem;
+  line-height: 1.4;
+}
+
 .application-related-records__actions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex: none;
+  align-items: center;
   gap: var(--s1);
+}
+
+.application-related-records__open.secondary-button {
+  min-height: 28px;
+  padding-inline: var(--s3);
+  border-color: transparent;
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .application-muted {
@@ -2215,40 +2712,31 @@ button.table-sort svg {
   line-height: 1.5;
 }
 
-/* Compensation fieldset inside Overview */
-.application-comp {
-  margin: 0;
-  padding: var(--s3);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
-}
-
-.application-comp legend {
-  padding: 0 var(--s1);
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-weight: 650;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.application-comp__row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr)) 88px 1fr;
-  gap: var(--s3);
-}
-
 .application-match-card__gaps {
   display: grid;
   gap: var(--s2);
   width: 100%;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
   text-align: left;
 }
 
 .application-match-card__gaps strong {
   color: var(--ink-strong);
   font-size: 0.74rem;
+}
+
+/* Prep consolidates notes, people, questions, and interview work without
+   introducing another set of nested tabs. */
+.application-form--prep {
+  gap: var(--s3);
+}
+
+.application-prep-section {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
 }
 
 /* Contacts + questions editors */
@@ -2264,7 +2752,7 @@ button.table-sort svg {
   gap: var(--s2);
 }
 
-.application-contacts__head h4,
+.application-contacts__head h3,
 .application-doc-card__head h4,
 .application-review h4 {
   display: inline-flex;
@@ -2575,18 +3063,37 @@ button.table-sort svg {
     grid-template-columns: 1fr;
   }
 
+  .application-modal__body--details {
+    display: block;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  .application-modal__main,
+  .application-modal__side {
+    overflow: visible;
+    scrollbar-gutter: auto;
+  }
+
+  .application-modal__main {
+    padding-right: var(--s2);
+  }
+
+  /* Stacked, the side column is below the form, not beside it — its rule has
+     to move with it. */
+  .application-modal__side {
+    padding: var(--s3) 0 0;
+    border-top: 1px solid var(--hairline);
+    border-left: 0;
+  }
+
   .workspace-toolbar__controls {
     justify-self: stretch;
   }
 
   .workspace-toolbar__controls > .pipeline-filters {
     min-width: 200px;
-  }
-
-  .application-match-card {
-    padding-inline: var(--s3);
-    border-left: 0;
-    border-top: 1px solid var(--hairline);
   }
 
   /* Drop the sticky behavior but stay a containing block so the corner open
@@ -2599,7 +3106,7 @@ button.table-sort svg {
   /* Base rule already scrolls the table horizontally; on small viewports hold a
      slightly wider row minimum so the columns stay touch-comfortable. */
   .applications-table__row {
-    min-width: 920px;
+    min-width: 830px;
   }
 
   .calendar-grid {
@@ -2634,10 +3141,9 @@ button.table-sort svg {
       minmax(94px, 1fr)
       82px
       70px
-      64px
       minmax(86px, 96px)
       16px;
-    min-width: 620px;
+    min-width: 544px;
   }
 
   .applications-table__row > .applications-table__cell--next-action {
@@ -2646,6 +3152,12 @@ button.table-sort svg {
 }
 
 @media (max-width: 760px) {
+  .application-job-snapshot > summary,
+  .application-job-snapshot__more summary,
+  .application-job-snapshot__source summary {
+    padding-block: 10px;
+  }
+
   .workspace-toolbar__controls {
     flex-wrap: wrap;
   }
@@ -2677,7 +3189,33 @@ button.table-sort svg {
   .analytics-panel--flat,
   .analytics-panel--half { grid-column: 1 / -1; }
 
-  .application-form__grid { grid-template-columns: 1fr; }
+  .application-fieldset__row--2,
+  .application-fieldset__row--3,
+  .application-fieldset__row--comp,
+  .application-details-grid--2,
+  .application-details-grid--record,
+  .application-details-grid--timing,
+  .application-workflow-grid,
+  .application-job-facts,
+  .application-job-snapshot__grid {
+    grid-template-columns: 1fr;
+  }
+
+  .application-compensation-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    row-gap: var(--s3);
+  }
+
+  .application-compensation-facts > div:nth-child(odd) {
+    padding-left: 0;
+    border-left: 0;
+  }
+
+  .application-job-snapshot__signals > div {
+    grid-template-columns: 1fr;
+    gap: 2px;
+  }
+
   .application-contact-row {
     grid-template-columns: 1fr;
     padding-top: var(--s3);

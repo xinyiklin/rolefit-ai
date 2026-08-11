@@ -20,7 +20,6 @@ const STATUS_RANK: Record<ApplicationStatus, number> = {
   rejected: 0,
   withdrawn: 0,
   not_applying: 0,
-  interested: 1,
   applied: 2,
   interviewing: 3,
   offer: 4

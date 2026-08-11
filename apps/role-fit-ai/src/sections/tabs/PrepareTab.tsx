@@ -144,11 +144,11 @@ export type PrepareTabProps = {
   isApplying: boolean;
   applicationActionsBusy: boolean;
   onApply: () => void | Promise<void>;
-  showPass: boolean;
-  canPass: boolean;
-  passHint: string;
-  isPassing: boolean;
-  onPass: () => void | Promise<void>;
+  showSkip: boolean;
+  canSkip: boolean;
+  skipHint: string;
+  isSkipping: boolean;
+  onSkip: () => void | Promise<void>;
 };
 
 export function PrepareTab({
@@ -216,11 +216,11 @@ export function PrepareTab({
   isApplying,
   applicationActionsBusy,
   onApply,
-  showPass,
-  canPass,
-  passHint,
-  isPassing,
-  onPass
+  showSkip,
+  canSkip,
+  skipHint,
+  isSkipping,
+  onSkip
 }: PrepareTabProps) {
   const [sourceMode, setSourceMode] = useState<"collapsed" | "view" | "replace">(jobPrepared ? "collapsed" : "replace");
   const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
@@ -768,11 +768,11 @@ export function PrepareTab({
             isApplying={isApplying}
             applicationActionsBusy={applicationActionsBusy}
             onApply={onApply}
-            showPass={showPass}
-            canPass={canPass}
-            passHint={passHint}
-            isPassing={isPassing}
-            onPass={onPass}
+            showSkip={showSkip}
+            canSkip={canSkip}
+            skipHint={skipHint}
+            isSkipping={isSkipping}
+            onSkip={onSkip}
           >
             <PreparedMaterialCard
               id="prepare-resume"

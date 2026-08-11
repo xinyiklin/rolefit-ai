@@ -9,8 +9,8 @@ const DEFAULT_QUESTIONS = [
   "Describe a project or accomplishment relevant to this role."
 ];
 
-type AnswerDraft = { question: string; answer: string; needsInput: boolean; save: boolean };
-type RoleDraft = { role: string; description: string; needsInput: boolean; save: boolean };
+type AnswerDraft = { question: string; answer: string; needsInput: boolean };
+type RoleDraft = { role: string; description: string; needsInput: boolean };
 
 export type MaterialsTabProps = {
   answersResult: ApplicationAnswersResult;
@@ -20,9 +20,7 @@ export type MaterialsTabProps = {
   jobReady: boolean;
   aiProviderReady: boolean;
   aiProviderMessage: string;
-  canSave: boolean;
   onGenerate: (opts: { questions: string[]; includeRoleDescriptions: boolean }) => void;
-  onSaveAnswers: (items: { question: string; answer: string }[]) => void;
   jobTarget?: { role?: string; company?: string };
 };
 
@@ -34,9 +32,7 @@ export function MaterialsTab({
   jobReady,
   aiProviderReady,
   aiProviderMessage,
-  canSave,
   onGenerate,
-  onSaveAnswers,
   jobTarget
 }: MaterialsTabProps) {
   // ---- Plan state ----
@@ -54,8 +50,8 @@ export function MaterialsTab({
 
   // Reset when a fresh generation arrives
   useEffect(() => {
-    setDrafts((answersResult?.answers ?? []).map((a) => ({ ...a, save: false })));
-    setRoleDrafts((answersResult?.roleDescriptions ?? []).map((r) => ({ ...r, save: false })));
+    setDrafts(answersResult?.answers ?? []);
+    setRoleDrafts(answersResult?.roleDescriptions ?? []);
   }, [answersResult]);
 
   // ---- Helpers ----
@@ -90,18 +86,6 @@ export function MaterialsTab({
     }
   }
 
-  function handleSaveAnswers() {
-    const items = [
-      ...drafts
-        .filter((d) => d.save && d.answer.trim())
-        .map((d) => ({ question: d.question, answer: d.answer.trim() })),
-      ...roleDrafts
-        .filter((r) => r.save && r.description.trim())
-        .map((r) => ({ question: `Role description: ${r.role}`, answer: r.description.trim() }))
-    ];
-    if (items.length) onSaveAnswers(items);
-  }
-
   // ---- Derived ----
   const canGenerate = resumeReady && jobReady && aiProviderReady;
   const gateHint = canGenerate
@@ -115,8 +99,6 @@ export function MaterialsTab({
     : aiProviderMessage;
   const nothingChosen = buildQuestionList().length === 0 && !includeRoles;
   const hasAnswerDrafts = drafts.length > 0 || roleDrafts.length > 0;
-  const selectedToSave =
-    drafts.filter((d) => d.save).length + roleDrafts.filter((r) => r.save).length;
 
   // Target meta line
   const targetLine =
@@ -144,22 +126,9 @@ export function MaterialsTab({
         <div className="materials-drafts">
           {hasAnswerDrafts ? (
             <>
-              {hasAnswerDrafts ? (
-                <div className="drafts-head">
-                  <span className="drafts-head__label">Drafts</span>
-                  <button
-                    className="secondary-button is-compact"
-                    type="button"
-                    onClick={handleSaveAnswers}
-                    disabled={!canSave || selectedToSave === 0}
-                    title={canSave ? undefined : "Prepare this job on Prepare first."}
-                  >
-                    {selectedToSave
-                      ? `Save ${selectedToSave} to application`
-                      : "Select to save"}
-                  </button>
-                </div>
-              ) : null}
+              <div className="drafts-head">
+                <span className="drafts-head__label">Drafts</span>
+              </div>
 
               {/* Answer draft sheets */}
               {drafts.map((d, i) => {
@@ -175,18 +144,6 @@ export function MaterialsTab({
                         {d.needsInput ? (
                           <em className="questions-flag">Needs your input</em>
                         ) : null}
-                        <label className="draft-savebox">
-                          <input
-                            type="checkbox"
-                            checked={d.save}
-                            onChange={() =>
-                              setDrafts((arr) =>
-                                arr.map((x, idx) => (idx === i ? { ...x, save: !x.save } : x))
-                              )
-                            }
-                          />
-                          <span>Save</span>
-                        </label>
                         <button
                           className="ghost-button is-compact"
                           type="button"
@@ -229,20 +186,6 @@ export function MaterialsTab({
                         {r.needsInput ? (
                           <em className="questions-flag">Needs your input</em>
                         ) : null}
-                        <label className="draft-savebox">
-                          <input
-                            type="checkbox"
-                            checked={r.save}
-                            onChange={() =>
-                              setRoleDrafts((arr) =>
-                                arr.map((x, idx) =>
-                                  idx === i ? { ...x, save: !x.save } : x
-                                )
-                              )
-                            }
-                          />
-                          <span>Save</span>
-                        </label>
                         <button
                           className="ghost-button is-compact"
                           type="button"

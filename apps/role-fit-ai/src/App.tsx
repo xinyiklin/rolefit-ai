@@ -81,7 +81,7 @@ import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipel
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
-import { usePassFlow } from "./hooks/usePassFlow";
+import { useSkipFlow } from "./hooks/useSkipFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
 import { getPreparationReadiness } from "./lib/preparationReadiness";
@@ -128,7 +128,7 @@ import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
-import { PassOnJobDialog } from "./sections/PassOnJobDialog";
+import { SkipJobDialog } from "./sections/SkipJobDialog";
 import { PreparationDuplicateDialog } from "./sections/PreparationDuplicateDialog";
 import {
   PreparedSourceReplacementDialog,
@@ -287,9 +287,9 @@ function App() {
       message: "Replace the current cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
-  const confirmReplaceApplicationDraft = () =>
+  const confirmReplacePreparedMaterials = () =>
     confirm({
-      title: "Replace application draft?",
+      title: "Replace prepared materials?",
       message: "Replace the current resume and cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
@@ -1018,7 +1018,6 @@ function App() {
     answersStatus,
     isGeneratingAnswers,
     handleGenerateAnswers,
-    handleSaveAnswers,
     answersProgress,
     dismissAnswersProgress,
     stopAnswers,
@@ -1027,33 +1026,12 @@ function App() {
     resumeText: currentResumeText || resumeText,
     resumeData: editedResume,
     jobDescription,
-    applicationJobDescription: preparedApplicationJobDescription,
-    applicationRawJobDescription: jobRawText,
-    applicationTracking: jobTracking,
-    linkedApplication:
-      applicationOfRecordId !== null
-        ? (applications.find((application) => application.id === applicationOfRecordId) ?? null)
-        : null,
     jobUrl,
     honestContext: requestHonestContext,
     customInstructions: customInstructionsFor("answers"),
     aiRequest: stages.answers,
     providerReady: answersProviderReady,
-    providerMessage: answersProviderMessage,
-    preparationSession,
-    hasLoadedApplications,
-    createApplication,
-    updateApplicationById,
-    linkPostingRecords,
-    markPostingRecordsUnrelated,
-    resolvePreparationDuplicate: duplicateGuard.resolveApplyDuplicate,
-    onDraftCreated: (applicationId) => {
-      setPreparationSession({
-        mode: "draft",
-        applicationId,
-        pendingRelationship: null
-      });
-    }
+    providerMessage: answersProviderMessage
   });
 
   // Cover Polish stages a whole-document proposal. The dedicated editor
@@ -2032,27 +2010,27 @@ function App() {
     setExpandedApplicationId
   });
 
-  const passModeAvailable = preparationSession.mode !== "update";
-  const passBlocker = !hasLoadedApplications
+  const skipModeAvailable = preparationSession.mode === "new";
+  const skipBlocker = !hasLoadedApplications
     ? "Wait for Applications to finish loading."
     : !jobPrepared
       ? "Prepare the posting first."
       : preparationSession.mode === "update"
-        ? "Pass is unavailable while editing a saved record."
+        ? "Skip is unavailable while editing a saved record."
         : pendingApplicationWrites > 0 || isApplying
           ? "Wait for the current application save to finish."
           : "";
   const {
-    passPrompt,
-    passError,
-    isPassing,
-    handlePass,
-    savePass,
+    skipPrompt,
+    skipError,
+    isSkipping,
+    handleSkip,
+    saveSkip,
     saveJobUpdates,
-    cancelPass
-  } = usePassFlow({
-    canPass: !passBlocker,
-    passBlocker,
+    cancelSkip
+  } = useSkipFlow({
+    canSkip: !skipBlocker,
+    skipBlocker,
     jobUrl,
     preparedJobDescription: preparedApplicationJobDescription,
     jobRawText,
@@ -2069,9 +2047,9 @@ function App() {
     linkApplication: linkPreparedApplication,
     setApplyStatus
   });
-  const applicationActionsBusy = isApplying || isPassing;
+  const applicationActionsBusy = isApplying || isSkipping;
   const primaryActionBusy = isApplying || (
-    primaryPreparationAction.kind === "update-job" && isPassing
+    primaryPreparationAction.kind === "update-job" && isSkipping
   );
   const primaryActionReady = primaryPreparationAction.kind === "update-job"
     ? jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
@@ -2116,7 +2094,7 @@ function App() {
     applicationOpenInFlightRef.current = true;
     try {
       if (resumeReplacementStateRef.current.dirty || coverReplacementStateRef.current.dirty) {
-        if (!(await confirmReplaceApplicationDraft())) return false;
+        if (!(await confirmReplacePreparedMaterials())) return false;
       }
       const approvedResumeVersion = resumeReplacementStateRef.current.version;
       const approvedCoverVersion = coverReplacementStateRef.current.version;
@@ -2643,11 +2621,11 @@ function App() {
               isApplying={primaryActionBusy}
               applicationActionsBusy={applicationActionsBusy}
               onApply={handlePrimaryPreparationAction}
-              showPass={passModeAvailable}
-              canPass={!passBlocker}
-              passHint={passBlocker}
-              isPassing={isPassing}
-              onPass={handlePass}
+              showSkip={skipModeAvailable}
+              canSkip={!skipBlocker}
+              skipHint={skipBlocker}
+              isSkipping={isSkipping}
+              onSkip={handleSkip}
             />
           ) : null}
 
@@ -3088,9 +3066,7 @@ function App() {
               jobReady={jobReady}
               aiProviderReady={resumePolishProviderReady}
               aiProviderMessage={resumePolishProviderMessage}
-              canSave={Boolean(jobUrl.trim() || jobDescription.trim())}
               onGenerate={handleGenerateAnswers}
-              onSaveAnswers={handleSaveAnswers}
               jobTarget={materialsJobTarget}
             />
           </div>
@@ -3209,16 +3185,16 @@ function App() {
         />
       ) : null}
 
-      {passPrompt ? (
-        <PassOnJobDialog
-          initialReason={passPrompt.initialReason}
-          initialNote={passPrompt.initialNote}
-          busy={isPassing}
-          error={passError}
+      {skipPrompt ? (
+        <SkipJobDialog
+          initialReason={skipPrompt.initialReason}
+          initialNote={skipPrompt.initialNote}
+          busy={isSkipping}
+          error={skipError}
           onSave={(reason, note) => {
-            void savePass(reason, note);
+            void saveSkip(reason, note);
           }}
-          onCancel={cancelPass}
+          onCancel={cancelSkip}
         />
       ) : null}
 
