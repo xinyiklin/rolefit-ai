@@ -108,7 +108,13 @@ import {
 } from "./lib/fitAssessmentLifecycle";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
-import { applicationUnloadGuardActive } from "./lib/applicationUnloadGuard";
+import { extensionImportClaimTokenFromHref } from "./lib/extensionImportClaim";
+import {
+  applicationDocumentNeedsUnloadGuard,
+  applicationPersistenceReceiptAfterDocumentSave,
+  applicationUnloadGuardActive,
+  type ApplicationPersistenceReceipt
+} from "./lib/applicationUnloadGuard";
 import {
   preparedSourceAppearsDifferent,
   type PreparedSourceCandidate
@@ -1048,13 +1054,14 @@ function App() {
   // ----- Effects -----
   useEffect(() => {
     void loadWorkspace(true);
-    // Check for a recoverable autosaved draft on mount. We surface it AFTER the
-    // workspace load so we know whether the user already has a base resume seeded.
-    // The draft prompt is shown in ResumeTab; the user clicks to restore or dismiss.
+    const suppressRecoveryPrompt = Boolean(
+      extensionImportClaimTokenFromHref(window.location.href)
+    );
+    // Extension imports start fresh without deleting this tab's recovery data.
     const draft = recoverAutosaveDraft();
-    if (draft) setPendingAutosaveDraft(draft);
+    if (draft && !suppressRecoveryPrompt) setPendingAutosaveDraft(draft);
     const coverDraft = recoverCoverLetterAutosaveDraft();
-    if (coverDraft) setPendingCoverDraft(coverDraft);
+    if (coverDraft && !suppressRecoveryPrompt) setPendingCoverDraft(coverDraft);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1355,6 +1362,11 @@ function App() {
   // src/hooks/useJobIntake.ts. isExtractingLink/jobAnalysisProgress/
   // jobAnalysisProgressVisible/jobAnalysisRetry are owned by the hook; App only reads
   // them below for render + the presence phase + the before-unload guard.
+  function handleExtensionNewPreparation() {
+    setPendingAutosaveDraft(null);
+    setPendingCoverDraft(null);
+    setActiveOutputTab("prepare");
+  }
   const {
     currentPreparationId,
     isExtractingLink,
@@ -1390,8 +1402,8 @@ function App() {
     setJobRawText,
     setPolishStatus,
     setLinkStatus,
-    onExtensionPrepareStarted: () => setActiveOutputTab("prepare"),
-    onExtensionJobReceived: () => setActiveOutputTab("prepare"),
+    onExtensionPrepareStarted: handleExtensionNewPreparation,
+    onExtensionJobReceived: handleExtensionNewPreparation,
     confirmDuplicateBeforeJobAnalysis: duplicateGuard.confirmDuplicateBeforeJobAnalysis,
     confirmDuplicateAfterJobAnalysis: duplicateGuard.confirmDuplicateAfterJobAnalysis,
     confirmPreparedSourceReplacement,
@@ -1813,6 +1825,32 @@ function App() {
     return jobTracking;
   }
 
+  const [applicationPersistenceReceipt, setApplicationPersistenceReceipt] =
+    useState<ApplicationPersistenceReceipt | null>(null);
+  useEffect(() => {
+    setApplicationPersistenceReceipt((current) =>
+      current && current.applicationId !== preparationSession.applicationId ? null : current
+    );
+  }, [preparationSession.applicationId]);
+  const handleResumeApplicationDocumentSaved = useCallback(
+    (applicationId: string, version: string) => {
+      markResumeApplicationSaved();
+      setApplicationPersistenceReceipt((current) =>
+        applicationPersistenceReceiptAfterDocumentSave(current, "resume", applicationId, version)
+      );
+    },
+    [markResumeApplicationSaved]
+  );
+  const handleCoverApplicationDocumentSaved = useCallback(
+    (applicationId: string, version: string) => {
+      coverLetterEditor.markApplicationSaved();
+      setApplicationPersistenceReceipt((current) =>
+        applicationPersistenceReceiptAfterDocumentSave(current, "coverLetter", applicationId, version)
+      );
+    },
+    [coverLetterEditor.markApplicationSaved]
+  );
+
   // Per-document application saves. Apply snapshots only the selected package;
   // afterwards each editor keeps its own saved/unsaved state and explicit
   // "Update application" action in its Save menu.
@@ -1832,8 +1870,8 @@ function App() {
     saveApplicationDocument: applicationFiles.saveDocument,
     getResumeArtifacts,
     getCoverLetterArtifacts: coverLetterEditor.getArtifacts,
-    onResumeSaved: markResumeApplicationSaved,
-    onCoverLetterSaved: coverLetterEditor.markApplicationSaved
+    onResumeSaved: handleResumeApplicationDocumentSaved,
+    onCoverLetterSaved: handleCoverApplicationDocumentSaved
   });
   const linkPreparedApplication = useCallback(
     (id: string | null) => {
@@ -1853,6 +1891,7 @@ function App() {
   const {
     applyDownloadPrompt,
     isApplying,
+    applicationSavePending,
     applySaveError,
     handleApply,
     handleApplyDownloadPick,
@@ -1892,6 +1931,7 @@ function App() {
     coverLetterDocumentVersion: coverReplacementStateRef.current.version,
     onResumeSaved: markResumeApplicationSaved,
     onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
+    setApplicationPersistenceReceipt,
     setApplyStatus,
     setActiveOutputTab,
     setExpandedApplicationId
@@ -1958,13 +1998,32 @@ function App() {
     await handleApply();
   };
 
-  // Apply keeps isApplying true through tracker confirmation and every included
-  // strict source upload. Declare the guard below that owner so a clean editor
-  // cannot make the post-tracker fetch phase interruptible.
+  const applicationPersistencePending =
+    applicationSavePending ||
+    resumeApplicationSync.isSaving ||
+    coverLetterApplicationSync.isSaving;
+
+  // PDF exports are recoverable; tracker and editable-source writes are not.
+  const resumeNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard({
+    kind: "resume",
+    dirty: resumeDocumentDirty,
+    currentVersion: resumeReplacementStateRef.current.version,
+    recoveryDraftSaved: draftAutosaveState === "saved",
+    applicationId: preparationSession.applicationId,
+    receipt: applicationPersistenceReceipt
+  });
+  const coverLetterNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard({
+    kind: "coverLetter",
+    dirty: coverLetterEditor.recoveryDirty,
+    currentVersion: coverReplacementStateRef.current.version,
+    recoveryDraftSaved: coverDraftAutosaveState === "saved",
+    applicationId: preparationSession.applicationId,
+    receipt: applicationPersistenceReceipt
+  });
   useBeforeUnloadGuard(
     applicationUnloadGuardActive({
-      resumeDocumentDirty,
-      coverLetterRecoveryDirty: coverLetterEditor.recoveryDirty,
+      resumeNeedsUnloadGuard,
+      coverLetterNeedsUnloadGuard,
       isGeneratingCover,
       isPolishStarting,
       isPolishing,
@@ -1972,7 +2031,8 @@ function App() {
       fitAssessmentRequestActive,
       preparationAutomationPending,
       pendingApplicationWrites,
-      isApplying: applicationActionsBusy
+      applicationSavePending: applicationPersistencePending,
+      isSkipping
     })
   );
 
@@ -2186,13 +2246,8 @@ function App() {
     }
   }
 
-  // Restore the autosaved draft into the editor and clear the prompt. The
-  // stored copy deliberately survives: the editor seeds CLEAN (dirty=false), so
-  // autosave will not re-write the draft until the next edit — clearing here
-  // would leave a window where closing the tab permanently loses content that
-  // was durably recoverable a moment earlier. The draft already lives under
-  // THIS tab's key (recovery migrates orphans), and Apply / base-resume save /
-  // explicit replace / dismiss all clear it once the content is safe elsewhere.
+  // Restore seeds a clean editor, so retain the stored copy until the document
+  // becomes durable or the user dismisses it.
   async function handleRestoreAutosaveDraft(draft: AutosavedDraft) {
     if (resumeDocumentDirty) {
       if (!(await confirmReplaceEditor())) return;

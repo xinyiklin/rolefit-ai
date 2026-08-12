@@ -230,7 +230,7 @@ export function ResumeTab({
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft && onRestoreAutosaveDraft && onDismissAutosaveDraft ? (
           <DraftRestoreBar
-            label="Unsaved draft found"
+            label="Recovery draft available"
             jobLabel={pendingAutosaveDraft.jobLabel}
             savedAt={pendingAutosaveDraft.savedAt}
             onRestore={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}

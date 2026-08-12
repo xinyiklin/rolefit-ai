@@ -1,11 +1,16 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
-import { applicationUnloadGuardActive } from "../../lib/applicationUnloadGuard.ts";
+import {
+  applicationDocumentNeedsUnloadGuard,
+  applicationPersistenceReceiptAfterDocumentSave,
+  applicationUnloadGuardActive
+} from "../../lib/applicationUnloadGuard.ts";
 
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
+const applicationDocumentSync = readHook("useApplicationDocumentSync.ts");
 const preparedApplicationRecord = readFileSync(
   new URL("../../lib/preparedApplicationRecord.ts", import.meta.url),
   "utf8"
@@ -86,9 +91,25 @@ const documentVersionCapture = applyFlow.indexOf("const expectedDocumentVersions
 const awaitedSave = applyFlow.indexOf('? await createApplication(app)');
 const awaitedUpdate = applyFlow.indexOf(": await updateApplicationById(app)", awaitedSave);
 const failedSave = applyFlow.indexOf("if (!saved)", awaitedSave);
+const commitApplyStart = applyFlow.indexOf("async function commitApply()");
+const receiptInvalidation = applyFlow.indexOf("setApplicationPersistenceReceipt(null)", commitApplyStart);
 const artifactSave = applyFlow.indexOf("const savedDocuments = await saveAppliedDocumentArtifacts(", failedSave);
+const persistenceReceipt = applyFlow.indexOf("setApplicationPersistenceReceipt({", artifactSave);
 const resumeRecoveryClear = applyFlow.indexOf("if (savedDocuments.resumeSaved) onResumeSaved();", artifactSave);
 const coverRecoveryClear = applyFlow.indexOf("if (savedDocuments.coverSaved) onCoverLetterSaved();", artifactSave);
+const storedResume = applyFlow.indexOf("const storedResume =", applyFlow.indexOf("async function saveAppliedDocumentArtifacts("));
+const storedCover = applyFlow.indexOf("const storedCover =", storedResume);
+const finalResumeValidation = applyFlow.indexOf("const currentStoredResume =", storedResume);
+const finalCoverValidation = applyFlow.indexOf("const currentStoredCover =", storedCover);
+const materialSelectionRef = applyFlow.indexOf("const currentMaterialSelectionRef = useRef(");
+const materialSelectionRefUpdate = applyFlow.indexOf("currentMaterialSelectionRef.current =", materialSelectionRef);
+const materialSelectionEffect = applyFlow.indexOf("useEffect(", materialSelectionRef);
+const documentVersionsRef = applyFlow.indexOf("const latestDocumentVersionsRef = useRef(");
+const documentVersionsRefUpdate = applyFlow.indexOf("latestDocumentVersionsRef.current =", documentVersionsRef);
+const documentVersionsEffect = applyFlow.indexOf("useEffect(", documentVersionsRef);
+const saveIdentityRef = applicationDocumentSync.indexOf("const latestSaveIdentityRef = useRef(");
+const saveIdentityRefUpdate = applicationDocumentSync.indexOf("latestSaveIdentityRef.current =", saveIdentityRef);
+const saveIdentityEffect = applicationDocumentSync.indexOf("useEffect(", saveIdentityRef);
 
 assert.ok(documentVersionCapture >= 0 && documentVersionCapture < awaitedSave, "Apply captures document versions before persistence yields");
 assert.ok(
@@ -106,6 +127,54 @@ assert.match(
   "unexpected pre-commit failures release Apply's busy state and keep the recovery draft"
 );
 assert.ok(artifactSave > failedSave, "document artifacts start only after tracker confirmation");
+assert.ok(
+  materialSelectionRef >= 0 &&
+    materialSelectionRefUpdate > materialSelectionRef &&
+    (materialSelectionEffect < 0 || materialSelectionRefUpdate < materialSelectionEffect),
+  "Apply reads the current render's material selection before any passive effect"
+);
+assert.ok(
+  documentVersionsRef >= 0 &&
+    documentVersionsRefUpdate > documentVersionsRef &&
+    (documentVersionsEffect < 0 || documentVersionsRefUpdate < documentVersionsEffect),
+  "Apply reads the current render's document versions before any passive effect"
+);
+assert.ok(
+  saveIdentityRef >= 0 &&
+    saveIdentityRefUpdate > saveIdentityRef &&
+    saveIdentityRefUpdate < saveIdentityEffect,
+  "explicit document saves read the current render's target and versions"
+);
+assert.ok(
+  storedResume >= 0 &&
+    storedCover > storedResume &&
+    finalResumeValidation > storedCover &&
+    finalCoverValidation > finalResumeValidation,
+  "both document versions are validated after the sequential uploads settle"
+);
+assert.ok(
+  receiptInvalidation > commitApplyStart && receiptInvalidation < awaitedSave,
+  "a commit attempt invalidates any earlier receipt before tracker persistence begins"
+);
+assert.ok(
+  persistenceReceipt > artifactSave && persistenceReceipt < resumeRecoveryClear,
+  "Apply records exact saved, excluded, and failed document outcomes before clearing recovery"
+);
+assert.match(
+  applicationDocumentSync,
+  /onResumeSaved: \(applicationId: string, version: string\) => void;[\s\S]{0,100}?onCoverLetterSaved: \(applicationId: string, version: string\) => void;/,
+  "explicit document saves report their application and exact saved version"
+);
+assert.match(
+  applicationDocumentSync,
+  /\(kind === "resume" \? onResumeSaved : onCoverLetterSaved\)\(startedApplicationId, startedVersion\)/,
+  "an explicit save advances the shared persistence receipt only after exact-version success"
+);
+assert.match(
+  app,
+  /current && current\.applicationId !== preparationSession\.applicationId \? null : current/,
+  "changing preparations discards receipts that could later match stale application state"
+);
 assert.ok(
   resumeRecoveryClear > artifactSave && coverRecoveryClear > resumeRecoveryClear,
   "each recovery draft clears only after its strict editable source is saved"
@@ -129,7 +198,7 @@ assert.match(
 assert.match(app, /const saved = await saveApplication\(application\)/, "App awaits modal persistence");
 assert.match(
   app,
-  /applicationUnloadGuardActive\(\{[\s\S]{0,500}?pendingApplicationWrites,[\s\S]{0,80}?isApplying/,
+  /applicationUnloadGuardActive\(\{[\s\S]{0,500}?pendingApplicationWrites,[\s\S]{0,120}?applicationSavePending/,
   "before-unload protection includes tracker writes and Apply's document phase"
 );
 const applyHookCall = app.indexOf("} = useApplyFlow({");
@@ -140,8 +209,18 @@ assert.ok(
 );
 assert.match(
   app.slice(unloadGuardCall, unloadGuardCall + 900),
-  /isApplying/,
+  /applicationSavePending/,
   "before-unload protection includes Apply's tracker-plus-document lifecycle"
+);
+assert.match(
+  app,
+  /const applicationPersistencePending\s*=\s*applicationSavePending\s*\|\|\s*resumeApplicationSync\.isSaving\s*\|\|\s*coverLetterApplicationSync\.isSaving/,
+  "explicit resume and cover-letter application uploads join the persistence guard"
+);
+assert.match(
+  app.slice(unloadGuardCall, unloadGuardCall + 900),
+  /applicationSavePending: applicationPersistencePending/,
+  "the unload predicate receives the complete application persistence phase"
 );
 assert.match(
   app,
@@ -163,8 +242,93 @@ function deferred() {
 }
 
 {
+  const receipt = {
+    applicationId: "application-1",
+    resume: { version: "resume-v1", outcome: "saved" },
+    coverLetter: { version: "cover-v1", outcome: "excluded" }
+  };
+  const baseState = {
+    kind: "resume",
+    dirty: true,
+    currentVersion: "resume-v1",
+    recoveryDraftSaved: false,
+    applicationId: "application-1",
+    receipt
+  };
+  const cases = [
+    ["a clean document never needs an unload warning", false, { dirty: false }],
+    ["the exact application-saved revision no longer warns", false, {}],
+    ["a later included-document edit warns until it is saved to the application", true, {
+      currentVersion: "resume-v2",
+      recoveryDraftSaved: true
+    }],
+    ["a receipt from another application cannot release the warning", true, {
+      applicationId: "application-2",
+      recoveryDraftSaved: true
+    }],
+    ["an excluded edited cover letter stops warning after Apply confirms recovery", false, {
+      kind: "coverLetter",
+      currentVersion: "cover-v1",
+      recoveryDraftSaved: true
+    }],
+    ["an excluded cover letter warns until recovery is confirmed", true, {
+      kind: "coverLetter",
+      currentVersion: "cover-v1"
+    }],
+    ["a later excluded cover-letter revision releases after its recovery write", false, {
+      kind: "coverLetter",
+      currentVersion: "cover-v2",
+      recoveryDraftSaved: true
+    }],
+    ["a later excluded cover-letter revision warns while recovery is pending", true, {
+      kind: "coverLetter",
+      currentVersion: "cover-v2"
+    }],
+    ["an included cover-letter save failure keeps warning after recovery", true, {
+      kind: "coverLetter",
+      currentVersion: "cover-v1",
+      recoveryDraftSaved: true,
+      receipt: {
+        ...receipt,
+        coverLetter: { version: "cover-v1", outcome: "failed" }
+      }
+    }]
+  ];
+  for (const [message, expected, state] of cases) {
+    assert.equal(
+      applicationDocumentNeedsUnloadGuard({ ...baseState, ...state }),
+      expected,
+      message
+    );
+  }
+  assert.deepEqual(
+    applicationPersistenceReceiptAfterDocumentSave(
+      receipt,
+      "coverLetter",
+      "application-1",
+      "cover-v2"
+    ),
+    {
+      ...receipt,
+      coverLetter: { version: "cover-v2", outcome: "saved" }
+    },
+    "an explicit save replaces an excluded outcome with its exact saved version"
+  );
+  assert.equal(
+    applicationPersistenceReceiptAfterDocumentSave(
+      receipt,
+      "coverLetter",
+      "another-application",
+      "cover-v2"
+    ),
+    receipt,
+    "an explicit save never mutates another application's receipt"
+  );
+}
+
+{
   let pendingApplicationWrites = 1;
-  let isApplying = true;
+  let applicationSavePending = true;
   const saveResumeDocument = deferred();
   const saveCoverDocument = deferred();
   const applicationPersistence = (async () => {
@@ -173,13 +337,13 @@ function deferred() {
     pendingApplicationWrites = 0;
     await saveResumeDocument.promise;
     await saveCoverDocument.promise;
-    isApplying = false;
+    applicationSavePending = false;
   })();
   await Promise.resolve();
 
   const state = () => ({
-    resumeDocumentDirty: false,
-    coverLetterRecoveryDirty: false,
+    resumeNeedsUnloadGuard: false,
+    coverLetterNeedsUnloadGuard: false,
     isGeneratingCover: false,
     isPolishStarting: false,
     isPolishing: false,
@@ -187,7 +351,8 @@ function deferred() {
     fitAssessmentRequestActive: false,
     preparationAutomationPending: false,
     pendingApplicationWrites,
-    isApplying
+    applicationSavePending,
+    isSkipping: false
   });
   assert.equal(
     applicationUnloadGuardActive(state()),
@@ -209,6 +374,17 @@ function deferred() {
     applicationUnloadGuardActive(state()),
     false,
     "the guard releases only after every included source save settles"
+  );
+
+  assert.equal(
+    applicationUnloadGuardActive({
+      ...state(),
+      // Apply remains visibly busy while the already-saved PDFs export, but no
+      // draft or application write is left for beforeunload to protect.
+      applicationSavePending: false
+    }),
+    false,
+    "post-Apply PDF export does not keep the saved draft unload-guarded"
   );
 }
 

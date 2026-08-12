@@ -79,10 +79,15 @@ which experience to lead with, and tone are never questions: an authored
 greeting supplies a recipient and the company hiring team is always a correct
 fallback. Both editors share
 deterministic typesetting and PDF export, and the same recovery and naming
-behavior: unsaved edits go to a per-tab recovery draft either page can restore,
-including a cover letter changed only by title or style. Workspace adoption
-never deletes a live sibling tab's draft and notifies that tab that the saved
-workspace changed. A document is named
+behavior: meaningful unsaved edits go to a 24-hour, per-tab recovery entry,
+including a cover letter changed only by title or style. Only a reload or
+restored instance of that same tab may offer **Recovery draft available**; a
+fresh tab never adopts another session's entry, and a browser-extension import
+starts a new preparation without showing the prior prompt or deleting its
+recovery entry. Expiry and dismissal remove only RoleFit recovery keys, never
+the rest of browser storage. Workspace adoption never deletes a live sibling
+tab's draft and notifies that tab that the saved workspace changed. A document
+is named
 `Name_Company_Resume` / `Name_Company_Cover_Letter` so
 one role's materials read as one application. Selecting a saved variant changes
 the document content, not that application output name, and both editor
@@ -118,6 +123,14 @@ the portable document forms, and accepts additional PDF files the posting asked
 for. Job-posting and PDF viewers share zoom controls and keyboard shortcuts. Tracker
 text and analytics projections never count as a saved document and cannot
 reload or overwrite the strict source.
+Once Apply confirms the strict editable source for an included document, that
+exact editor revision is durable and no longer triggers a close-tab warning.
+Later edits reactivate protection, and a failed or still-pending source save
+keeps it active. Post-save PDF export is recoverable from the document menu and
+does not keep an already-saved application unload-guarded. A dirty document the
+user excluded from Apply also releases after the application commits and its
+exact recovery write succeeds; a later edit warns only until its replacement
+recovery write succeeds.
 Duplicate matching is advisory and relational. Before AI work, an exact prior
 application or Skipped decision can be opened or continued as a new preparation;
 high/possible matches ask whether to link or keep the records separate. A Keep

@@ -1,4 +1,8 @@
 import { useEffect, useRef } from "react";
+import {
+  EXTENSION_IMPORT_PARAM,
+  extensionImportClaimTokenFromHref
+} from "../lib/extensionImportClaim";
 import { getTabId } from "../lib/tabPresence";
 
 /**
@@ -11,20 +15,7 @@ export type ExtensionImport = {
   url: string;
 };
 
-const EXTENSION_IMPORT_PARAM = "extensionImport";
-
-function readExtensionImportClaimToken(): string {
-  try {
-    const url = new URL(window.location.href);
-    return url.searchParams.get(EXTENSION_IMPORT_PARAM)?.trim() ?? "";
-  } catch {
-    return "";
-  }
-}
-
-// Strip the one-shot claim token from the address bar once its import has been
-// delivered. Otherwise a reload of this tab would re-present the (now drained)
-// token and try to claim again, and the lingering param is just noise in the URL.
+// Strip the one-shot claim once its import is delivered or definitively gone.
 function clearExtensionImportParam(): void {
   try {
     const url = new URL(window.location.href);
@@ -32,7 +23,7 @@ function clearExtensionImportParam(): void {
     url.searchParams.delete(EXTENSION_IMPORT_PARAM);
     window.history.replaceState(window.history.state, "", url.toString());
   } catch {
-    // Best-effort: a stale token is harmless once the entry is gone server-side.
+    // URL cleanup is best-effort; inbox routing remains server-authoritative.
   }
 }
 
@@ -65,7 +56,7 @@ export function useExtensionInbox(
     // must not run against useApplications' mount-time empty array.
     if (!enabled) return;
 
-    const claimToken = readExtensionImportClaimToken();
+    const claimToken = extensionImportClaimTokenFromHref(window.location.href);
     let timer: ReturnType<typeof setTimeout> | null = null;
     let preparing = false;
     // A fresh extension tab (one carrying a claim token) owns an in-flight import
@@ -135,15 +126,10 @@ export function useExtensionInbox(
         transientRetries = 0;
         if (data === null || typeof data !== "object") {
           preparing = false;
-          // A poll that carried a claim token but got back null/no-entry means
-          // the reserved import no longer exists server-side (e.g. TTL-pruned
-          // while still "preparing"). This tab no longer owns an in-flight
-          // import, so drop back to the hidden-tab hands-off rule — otherwise
-          // claimActive would stay true forever and a later hidden poll could
-          // be handed an unrelated tokenless import via the server's oldest-
-          // unclaimed fallback. Do NOT clear the URL param here: delivery-once
-          // semantics only clear it on successful delivery, unchanged below.
-          if (claimToken) claimActive = false;
+          if (claimToken) {
+            claimActive = false;
+            clearExtensionImportParam();
+          }
           return;
         }
         const obj = data as {

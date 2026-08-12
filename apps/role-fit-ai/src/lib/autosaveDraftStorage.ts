@@ -1,18 +1,19 @@
-// The per-tab recovery-draft lifecycle both editors share: write this tab's
-// draft, clear it, and resolve which draft to offer at mount. Only the payload
-// shape differs between the resume and the cover letter, so each hook supplies
-// its own parser and this module owns the storage rules — tab scoping, live
-// siblings, orphan migration, and expiry.
+// Shared same-tab recovery storage for resume and cover-letter drafts. Each
+// hook supplies its parser; this module owns isolation and expiry.
 
-import { getTabId, liveTabIds } from "./tabPresence";
+import { getTabId, liveTabIds } from "./tabPresence.ts";
 import { keyForTab, tabIdFromKey, type AutosaveDraftKind } from "./autosaveDraftRegistry.ts";
 
-// A recovered draft from a CLOSED tab is offered for at most this long. Older
-// orphans are garbage-collected rather than resurfaced.
+// localStorage has no native TTL, so recovery enforces one on read.
 const RECOVERY_TTL_MS = 24 * 60 * 60 * 1000;
 
-/** Every draft carries when it was written; recovery ranks orphans by it. */
 export type StoredDraft = { savedAt: string };
+
+function draftIsFresh(draft: StoredDraft | null, now: number): boolean {
+  if (!draft) return false;
+  const savedAt = Date.parse(draft.savedAt);
+  return Number.isFinite(savedAt) && now - savedAt < RECOVERY_TTL_MS;
+}
 
 export function saveTabDraft<T extends StoredDraft>(kind: AutosaveDraftKind, draft: T): boolean {
   try {
@@ -35,16 +36,8 @@ export function clearTabDraft(kind: AutosaveDraftKind): void {
   }
 }
 
-// Mount recovery. Resolves the single draft (if any) to offer the user across
-// all three loss modes, then garbage-collects dead-tab orphans:
-//
-//   - Reload (same tab): this tab's own key still holds its draft.
-//   - Close + reopen / crash: a DIFFERENT, now-dead tab's draft is the most
-//     recent orphan. We migrate it into this tab's own key (so the existing
-//     restore/dismiss path, which clears this tab's key, cleans it up) and
-//     return it.
-//   - A LIVE sibling tab's active draft is never offered or deleted — liveness
-//     comes from the presence registry's heartbeats.
+// Offer only this tab's fresh entry. Reclaim invalid or expired dead-tab data;
+// leave fresh and live-sibling entries untouched.
 export function recoverTabDraft<T extends StoredDraft>(
   kind: AutosaveDraftKind,
   parse: (raw: string | null) => T | null
@@ -53,57 +46,33 @@ export function recoverTabDraft<T extends StoredDraft>(
     const myId = getTabId();
     const myKey = keyForTab(kind, myId);
     const own = parse(localStorage.getItem(myKey));
-
     const now = Date.now();
     const live = liveTabIds(now);
 
-    // Scan every draft key of this kind, classifying each as own / live-sibling
-    // / orphan. The other kind's keys are invisible here by construction.
-    const orphanKeys: string[] = [];
-    let best: { key: string; draft: T } | null = null;
+    // The other document kind and all non-recovery localStorage are invisible
+    // here by construction. Collect before removing so iteration stays stable.
+    const expiredKeys: string[] = [];
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
       if (!key) continue;
       const ownerId = tabIdFromKey(kind, key);
       if (ownerId === null || key === myKey) continue;
-      // A live sibling owns this current-schema draft — leave it strictly alone.
-      if (ownerId !== myId && live.has(ownerId)) continue;
+      if (live.has(ownerId)) continue;
 
       const draft = parse(localStorage.getItem(key));
-      const ageMs = draft ? now - new Date(draft.savedAt).getTime() : Infinity;
-      if (!draft || !(ageMs < RECOVERY_TTL_MS)) {
-        orphanKeys.push(key); // invalid or expired → reclaim
-        continue;
-      }
-      if (!best || new Date(draft.savedAt).getTime() > new Date(best.draft.savedAt).getTime()) {
-        best = { key, draft };
-      }
+      if (!draftIsFresh(draft, now)) expiredKeys.push(key);
     }
-
-    // GC expired / invalid orphans regardless of which branch we return from.
-    for (const key of orphanKeys) {
+    for (const key of expiredKeys) {
       try { localStorage.removeItem(key); } catch { /* ignore */ }
     }
 
-    // Reload recovery wins: keep good sibling orphans in place for a future fresh
-    // tab rather than claiming them on top of our own draft.
-    if (own) return own;
-
-    if (best) {
-      // Migrate the orphan into our own key so restore/dismiss (which clears our
-      // key) cleans it up, and a reload of THIS tab re-offers it. (best.key is
-      // always a different tab's key — the scan loop skips our own.)
-      try {
-        localStorage.setItem(myKey, JSON.stringify(best.draft));
-        localStorage.removeItem(best.key);
-      } catch {
-        // If the migrate write fails we still return the draft from memory; the
-        // orphan stays put and may be offered again later. Acceptable.
-      }
-      return best.draft;
+    if (!draftIsFresh(own, now)) {
+      // Invalid/expired current-tab data is one exact recovery key, not a
+      // localStorage-wide wipe.
+      if (localStorage.getItem(myKey) !== null) localStorage.removeItem(myKey);
+      return null;
     }
-
-    return null;
+    return own;
   } catch {
     return null;
   }
