@@ -45,6 +45,7 @@ type CoverLetterTabProps = {
   inlineFormat: InlineFormatState;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onTailor: () => void;
+  onDocumentChoice: () => void;
   applicationSync: ApplicationDocumentSync;
   draftAutosaveState: DraftAutosaveState;
   // Autosave recovery: non-null when a draft from a previous session was found.
@@ -84,6 +85,7 @@ export function CoverLetterTab({
   inlineFormat,
   onInlineFormatStateChange,
   onTailor,
+  onDocumentChoice,
   applicationSync,
   draftAutosaveState,
   pendingAutosaveDraft,
@@ -141,6 +143,7 @@ export function CoverLetterTab({
         hasLetter={hasLetter}
         targetLine={targetLine}
         applicationSync={applicationSync}
+        onDocumentChoice={onDocumentChoice}
         draftAutosaveState={draftAutosaveState}
       />
 

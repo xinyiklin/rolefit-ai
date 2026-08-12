@@ -5,6 +5,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-11
 
+- [USER+CODE+TOOL] Resume and Cover Letter now consistently open saved variants.
+  Automatic output-title changes no longer cancel Cover Letter startup or
+  Prepare selection; body/style edits and explicit user opens still win. A
+  dedicated Prepare resolver waits for workspace startup, then adopts the sole
+  or uniquely ranked letter. Focused race probes and the full RoleFit gate pass.
 - [USER+CODE] Application preparation now has two explicit identities: fresh work creates a tracker row only on Apply or Skip & save job, while opening a saved record updates that exact id. Generated application answers remain session-local. Forward-only stages prevent submitted history from becoming Skipped or moving backward.
 - [CODE] Skipped records are dated job-only decisions and reject saved application documents. A narrow migration converts legacy Saved rows, removes retired priority metadata, and preserves strict fail-closed tracker validation. Duplicate handling links independent attempts by posting group or records a reviewed separation; destructive merge remains a separate confirmed cleanup.
 - [USER+CODE] Application Detail and the Applications inspector share the saved-record presentation: categorical Fit verdict and rationale, read-only posting snapshot, always-present job activity, and explicit document availability. The tracker toolbar keeps lifecycle filters and its native Table/Calendar selector aligned above the inspector rail.

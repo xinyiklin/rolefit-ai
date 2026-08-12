@@ -41,6 +41,7 @@ type CoverLetterToolbarProps = {
   // Explicit save of THIS letter into the tracked application; the resume keeps
   // its own independent state in its own Save menu.
   applicationSync: ApplicationDocumentSync;
+  onDocumentChoice: () => void;
   // Owned by CoverLetterTab so the editor's right-click menu and link card can
   // open this popover too; a toolbar-private state left those commands dead.
   linkEditorOpen: boolean;
@@ -75,6 +76,7 @@ export function CoverLetterToolbar({
   targetLine,
   draftAutosaveState,
   applicationSync,
+  onDocumentChoice,
   linkEditorOpen,
   onLinkEditorOpenChange
 }: CoverLetterToolbarProps) {
@@ -102,22 +104,32 @@ export function CoverLetterToolbar({
   }
 
   async function startBlank() {
-    if (await confirmReplace()) editor.startBlank();
+    if (await confirmReplace()) {
+      onDocumentChoice();
+      editor.startBlank();
+    }
   }
 
   async function startStarter() {
-    if (await confirmReplace()) editor.startStarter();
+    if (await confirmReplace()) {
+      onDocumentChoice();
+      editor.startStarter();
+    }
   }
 
   // Opening a saved letter replaces the document just as much as Blank or a file
   // upload does, so it asks first. Without this the Open menu's saved list threw
   // away unsaved edits silently — the resume's equivalents both confirm.
   async function openSaved(fileName: string) {
-    await editor.openWorkspaceCoverLetter(fileName, { confirmReplace });
+    if (!(await confirmReplace())) return;
+    onDocumentChoice();
+    await editor.openWorkspaceCoverLetter(fileName);
   }
 
   async function restoreSaved(key: string) {
-    await editor.restoreWorkspaceCoverLetter(key, confirmReplace);
+    if (!(await confirmReplace())) return;
+    onDocumentChoice();
+    await editor.restoreWorkspaceCoverLetter(key);
   }
 
   return (
@@ -133,7 +145,10 @@ export function CoverLetterToolbar({
         accept=".cover,.txt,.md,application/json,text/plain,text/markdown"
         onChange={(event) => {
           const file = event.target.files?.[0];
-          if (file) void editor.openFile(file);
+          if (file) {
+            onDocumentChoice();
+            void editor.openFile(file);
+          }
           event.currentTarget.value = "";
         }}
       />

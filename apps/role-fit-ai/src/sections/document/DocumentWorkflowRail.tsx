@@ -40,9 +40,9 @@ type DocumentWorkflowRailProps = {
   failure?: DocumentWorkflowFailure | null;
   children?: ReactNode;
   footer?: ReactNode;
-  // The live announcement line. Named apart from `status` because that now
-  // carries the workflow state, and one component cannot own two "status".
+  // Visible status and hidden-only announcements share one live region.
   statusLine?: string;
+  statusAnnouncement?: string;
 };
 
 export function DocumentWorkflowRail({
@@ -54,8 +54,11 @@ export function DocumentWorkflowRail({
   failure,
   children,
   footer,
-  statusLine
+  statusLine,
+  statusAnnouncement
 }: DocumentWorkflowRailProps) {
+  const liveStatus = statusLine || statusAnnouncement;
+
   return (
     <aside
       className={`workflow-rail workflow-rail--${workflow.state} is-${TONES[workflow.state]}`}
@@ -93,9 +96,16 @@ export function DocumentWorkflowRail({
 
       {children ? <div className="workflow-rail__body">{children}</div> : null}
       {footer ? <footer className="workflow-rail__footer">{footer}</footer> : null}
-      <p className="workflow-rail__status" role="status" aria-live="polite" aria-atomic="true">
-        {statusLine}
-      </p>
+      {liveStatus ? (
+        <p
+          className={statusLine ? "workflow-rail__status" : "sr-only"}
+          role="status"
+          aria-live="polite"
+          aria-atomic="true"
+        >
+          {liveStatus}
+        </p>
+      ) : null}
     </aside>
   );
 }

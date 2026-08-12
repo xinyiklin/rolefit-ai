@@ -39,6 +39,7 @@ import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
 import { useCoverLetterEditor } from "./hooks/useCoverLetterEditor";
+import { usePreparedCoverLetter } from "./hooks/usePreparedCoverLetter";
 import { useDialog } from "./hooks/useDialog";
 import {
   useAutosaveDraft,
@@ -94,7 +95,6 @@ import {
   removePreparedJobRoleSummary,
   type PreparedJobBriefField
 } from "./lib/preparedJobBrief";
-import { recommendVariant, type VariantRecommendation } from "./lib/variantRecommendation";
 import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
@@ -354,13 +354,6 @@ function App() {
     coverStarted: false
   });
   const [autoProposalSettlementRevision, setAutoProposalSettlementRevision] = useState(0);
-  // Both document kinds use the same recommendation and safe auto-selection
-  // contract; dirty editors and restored applications are never replaced.
-  const [coverLetterVariantRecommendation, setCoverLetterVariantRecommendation] =
-    useState<VariantRecommendation | null>(null);
-  const [isRankingCoverLetterVariants, setIsRankingCoverLetterVariants] = useState(false);
-  const coverLetterVariantRecommendationKeyRef = useRef("");
-  const coverLetterVariantRecommendationGenerationRef = useRef(0);
   // Export and Apply report to their own local action surfaces instead of a
   // shared global toast.
   const [exportStatus, setExportStatus] = useState("");
@@ -620,9 +613,7 @@ function App() {
       coverLetterEditorRef.current?.focusDocumentStart();
     }, [])
   });
-  // Aliased next to the editor so every naming path below can use it; the
-  // setter itself is a plain useState setter and stable.
-  const setCoverLetterTitle = coverLetterEditor.setDocumentTitle;
+  const setCoverLetterTitle = coverLetterEditor.setOutputDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const currentResumeText = serializedResume || result?.proposalBaselineText || "";
@@ -634,34 +625,6 @@ function App() {
     dirty: coverLetterEditor.recoveryDirty,
     version: coverLetterEditor.documentVersion
   };
-
-  const handleSelectPreparedCoverLetter = useCallback(
-    async (fileName: string) => {
-      if (
-        !fileName ||
-        fileName === coverLetterEditor.activeCoverFileName ||
-        coverManualVariantSelectionInFlightRef.current
-      ) {
-        return;
-      }
-      coverManualVariantSelectionInFlightRef.current = true;
-      setIsSelectingCoverVariant(true);
-      try {
-        await coverLetterEditor.openWorkspaceCoverLetter(fileName, {
-          confirmReplace: async () =>
-            !coverReplacementStateRef.current.dirty || confirmReplaceCoverLetter()
-        });
-      } finally {
-        coverManualVariantSelectionInFlightRef.current = false;
-        setIsSelectingCoverVariant(false);
-      }
-    },
-    [
-      confirmReplaceCoverLetter,
-      coverLetterEditor.activeCoverFileName,
-      coverLetterEditor.openWorkspaceCoverLetter
-    ]
-  );
 
   useEffect(() => {
     try {
@@ -696,7 +659,6 @@ function App() {
         );
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         clearPreparedResumeRecommendationRef.current();
-        setCoverLetterVariantRecommendation(null);
       }
       const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
       setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
@@ -1394,6 +1356,7 @@ function App() {
   // jobAnalysisProgressVisible/jobAnalysisRetry are owned by the hook; App only reads
   // them below for render + the presence phase + the before-unload guard.
   const {
+    currentPreparationId,
     isExtractingLink,
     extensionImportPhase,
     jobAnalysisProgress,
@@ -1572,132 +1535,62 @@ function App() {
 
   const rankingJobDescription = debouncedPreparedJobDescription.trim();
 
-  // Cover letters follow the same rule as resumes: select a meaningful unique
-  // winner, but only while the current editor is clean and not application-owned.
-  const coverLetterVariantRecommendationInputKey =
-    jobPrepared &&
-    rankingJobDescription === jobDescription.trim() &&
-    coverLetterEditor.coverLetterOptions.length > 1
-      ? JSON.stringify({
-          job: rankingJobDescription,
-          variants: coverLetterEditor.coverLetterOptions.map((option) => option.fileName),
-          candidatesRevision: coverLetterEditor.coverLetterCandidatesRevision
-        })
-      : "";
-  const coverLetterVariantOptionsRef = useRef(coverLetterEditor.coverLetterOptions);
-  coverLetterVariantOptionsRef.current = coverLetterEditor.coverLetterOptions;
-  const coverVariantResolutionPending = Boolean(
-    coverLetterEditor.isWorkspaceBootstrapping
-    || coverLetterEditor.isWorkspaceReplacing
-    || isSelectingCoverVariant
-    || (
-      jobPrepared
-      && coverLetterEditor.coverLetterOptions.length > 1
-      && (
-        rankingJobDescription !== jobDescription.trim()
-        || !coverLetterVariantRecommendationInputKey
-        || coverLetterVariantRecommendationKeyRef.current
-          !== coverLetterVariantRecommendationInputKey
-        || isRankingCoverLetterVariants
-      )
-    )
-  );
-  const readCoverLetterVariantCandidates = coverLetterEditor.readCoverLetterVariantCandidates;
-  const openWorkspaceCoverLetter = coverLetterEditor.openWorkspaceCoverLetter;
-  const coverLetterVariantSelectionStateRef = useRef({
+  const preparedCoverLetterState = {
     activeFileName: coverLetterEditor.activeCoverFileName,
-    dirty: coverReplacementStateRef.current.dirty,
-    documentVersion: coverReplacementStateRef.current.version,
-    isSelecting: isSelectingCoverVariant,
-    applicationOfRecordId,
-    jobPrepared,
-    preparedJobDescription: jobDescription.trim(),
-    openWorkspaceCoverLetter
-  });
-  coverLetterVariantSelectionStateRef.current = {
-    activeFileName: coverLetterEditor.activeCoverFileName,
-    dirty: coverReplacementStateRef.current.dirty,
-    documentVersion: coverReplacementStateRef.current.version,
-    isSelecting: isSelectingCoverVariant,
-    applicationOfRecordId,
-    jobPrepared,
-    preparedJobDescription: jobDescription.trim(),
-    openWorkspaceCoverLetter
+    options: coverLetterEditor.coverLetterOptions,
+    applicationOwned: applicationOfRecordId !== null,
+    documentDirty: coverLetterEditor.dirty,
+    documentFingerprint: coverLetterEditor.draftPayload ?? "",
+    workspaceSaving: coverLetterEditor.isWorkspaceSaving,
+    candidateRevision: coverLetterEditor.coverLetterCandidatesRevision
   };
-
-  useEffect(() => {
-    if (!coverLetterVariantRecommendationInputKey) {
-      coverLetterVariantRecommendationKeyRef.current = "";
-      coverLetterVariantRecommendationGenerationRef.current += 1;
-      setCoverLetterVariantRecommendation(null);
-      setIsRankingCoverLetterVariants(false);
-      return;
-    }
-    if (coverLetterVariantRecommendationKeyRef.current === coverLetterVariantRecommendationInputKey) {
-      return;
-    }
-
-    coverLetterVariantRecommendationKeyRef.current = coverLetterVariantRecommendationInputKey;
-    const generation = coverLetterVariantRecommendationGenerationRef.current + 1;
-    coverLetterVariantRecommendationGenerationRef.current = generation;
-    const startingFileName = coverLetterVariantSelectionStateRef.current.activeFileName;
-    const startingDocumentVersion = coverLetterVariantSelectionStateRef.current.documentVersion;
-    const options = coverLetterVariantOptionsRef.current;
-    setIsRankingCoverLetterVariants(true);
-    setCoverLetterVariantRecommendation(null);
-
-    void (async () => {
-      const candidates = await readCoverLetterVariantCandidates(options);
-      if (generation !== coverLetterVariantRecommendationGenerationRef.current) return;
-      // A cover letter's usable floor is its own: a real one-paragraph letter is
-      // shorter than the stub length that disqualifies a resume.
-      const recommendation = recommendVariant(rankingJobDescription, candidates, options.length, 40);
-      setCoverLetterVariantRecommendation(recommendation);
-
-      const current = coverLetterVariantSelectionStateRef.current;
-      const canAdoptRecommendation =
-        recommendation !== null &&
-        current.preparedJobDescription === rankingJobDescription &&
-        recommendation.fileName !== current.activeFileName &&
-        current.activeFileName === startingFileName &&
-        current.documentVersion === startingDocumentVersion &&
-        current.applicationOfRecordId === null &&
-        !current.dirty &&
-        !coverManualVariantSelectionInFlightRef.current &&
-        !current.isSelecting;
-      if (canAdoptRecommendation) {
-        await current.openWorkspaceCoverLetter(recommendation.fileName, {
-          background: true,
-          shouldCancel: () => {
-            const latest = coverLetterVariantSelectionStateRef.current;
-            return (
-              generation !== coverLetterVariantRecommendationGenerationRef.current ||
-              !latest.jobPrepared ||
-              latest.preparedJobDescription !== rankingJobDescription ||
-              latest.applicationOfRecordId !== null ||
-              latest.dirty ||
-              latest.activeFileName !== startingFileName ||
-              latest.documentVersion !== startingDocumentVersion ||
-              coverManualVariantSelectionInFlightRef.current
-            );
-          }
+  const {
+    coverLetterVariantRecommendation,
+    isResolvingPreparedCoverLetter: isRankingCoverLetterVariants,
+    preparedCoverLetterResolutionPending: coverVariantResolutionPending,
+    preemptPreparedCoverLetterResolution
+  } = usePreparedCoverLetter({
+    preparationId: currentPreparationId,
+    jobPrepared,
+    jobText: jobDescription,
+    rankingJobText: rankingJobDescription,
+    state: preparedCoverLetterState,
+    isWorkspaceBootstrapping: coverLetterEditor.isWorkspaceBootstrapping,
+    isWorkspaceReplacing: coverLetterEditor.isWorkspaceReplacing,
+    readCandidates: coverLetterEditor.readCoverLetterVariantCandidates,
+    openWorkspaceCoverLetter: coverLetterEditor.openWorkspaceCoverLetter
+  });
+  const coverLetterSelectionPending =
+    isSelectingCoverVariant || coverVariantResolutionPending;
+  const handleSelectPreparedCoverLetter = useCallback(
+    async (fileName: string) => {
+      if (
+        !fileName ||
+        fileName === coverLetterEditor.activeCoverFileName ||
+        coverManualVariantSelectionInFlightRef.current
+      ) {
+        return;
+      }
+      coverManualVariantSelectionInFlightRef.current = true;
+      preemptPreparedCoverLetterResolution();
+      setIsSelectingCoverVariant(true);
+      try {
+        await coverLetterEditor.openWorkspaceCoverLetter(fileName, {
+          confirmReplace: async () =>
+            !coverReplacementStateRef.current.dirty || confirmReplaceCoverLetter()
         });
+      } finally {
+        coverManualVariantSelectionInFlightRef.current = false;
+        setIsSelectingCoverVariant(false);
       }
-      if (generation === coverLetterVariantRecommendationGenerationRef.current) {
-        setIsRankingCoverLetterVariants(false);
-      }
-    })();
-
-    return () => {
-      if (generation === coverLetterVariantRecommendationGenerationRef.current) {
-        coverLetterVariantRecommendationGenerationRef.current += 1;
-      }
-    };
-  }, [
-    coverLetterVariantRecommendationInputKey,
-    rankingJobDescription,
-    readCoverLetterVariantCandidates
-  ]);
+    },
+    [
+      confirmReplaceCoverLetter,
+      coverLetterEditor.activeCoverFileName,
+      coverLetterEditor.openWorkspaceCoverLetter,
+      preemptPreparedCoverLetterResolution
+    ]
+  );
 
   // Starting Polish — directly or through the user's enabled automatic proposal
   // setting — is a decision to work on that document for this application.
@@ -1727,8 +1620,7 @@ function App() {
   function handleCoverLetterPolish(): boolean {
     if (
       isGeneratingCover
-      || isSelectingCoverVariant
-      || coverVariantResolutionPending
+      || coverLetterSelectionPending
     ) return false;
     includeMaterialForPolish("coverLetter");
     void handleTailorCoverLetter();
@@ -1745,7 +1637,7 @@ function App() {
         isManuallySelectingResumeVariant ||
         isWorkspaceBootstrapping)) ||
     (materialSelection.coverLetter &&
-      (isGeneratingCover || coverVariantResolutionPending));
+      (isGeneratingCover || coverLetterSelectionPending));
   const preparationReadiness = getPreparationReadiness({
     jobPrepared,
     includeResume: materialSelection.resume,
@@ -1831,8 +1723,7 @@ function App() {
       jobPrepared &&
       coverProviderReady &&
       !isGeneratingCover &&
-      !isSelectingCoverVariant &&
-      !coverVariantResolutionPending;
+      !coverLetterSelectionPending;
     const coverDecision = automaticPolishActionDecision({
       enabled: autoPolishCoverLetter,
       thresholdMet: fitAssessmentMeetsThreshold(
@@ -1840,7 +1731,7 @@ function App() {
         coverLetterAutoPolishThreshold
       ),
       automationBlocked,
-      prerequisitePending: coverVariantResolutionPending,
+      prerequisitePending: coverLetterSelectionPending,
       canStart: coverPolishCanStart
     });
     if (!receipt.coverStarted && coverDecision === "start") {
@@ -1863,7 +1754,7 @@ function App() {
     coverLetterPreflight.canTailor,
     coverLetterAutoPolishThreshold,
     coverProviderReady,
-    coverVariantResolutionPending,
+    coverLetterSelectionPending,
     currentResumeText,
     handlePolish,
     handleTailorCoverLetter,
@@ -1872,10 +1763,8 @@ function App() {
     isManuallySelectingResumeVariant,
     isPolishStarting,
     isPolishing,
-    isRankingCoverLetterVariants,
     isResolvingPreparedResume,
     isSavingBaseResume,
-    isSelectingCoverVariant,
     jobDescription,
     jobPrepared,
     jobRawText,
@@ -2094,6 +1983,7 @@ function App() {
       if (resumeReplacementStateRef.current.dirty || coverReplacementStateRef.current.dirty) {
         if (!(await confirmReplacePreparedMaterials())) return false;
       }
+      preemptPreparedCoverLetterResolution();
       const approvedResumeVersion = resumeReplacementStateRef.current.version;
       const approvedCoverVersion = coverReplacementStateRef.current.version;
 
@@ -2346,6 +2236,7 @@ function App() {
   // crash immediately after restoring still has something to recover.
   async function handleRestoreCoverDraft(draft: CoverLetterAutosavedDraft) {
     if (coverLetterEditor.recoveryDirty && !(await confirmReplaceCoverLetter())) return;
+    preemptPreparedCoverLetterResolution();
     if (coverLetterEditor.openRecoveryDraft(draft.coverPayload, draft.documentTitle)) {
       setPendingCoverDraft(null);
     }
@@ -2587,7 +2478,7 @@ function App() {
               coverLetterOptions={coverLetterEditor.coverLetterOptions}
               coverLetterVariantRecommendation={coverLetterVariantRecommendation}
               isRankingCoverLetterVariants={isRankingCoverLetterVariants}
-              isSelectingCoverLetter={isSelectingCoverVariant}
+              coverLetterSelectionPending={coverLetterSelectionPending}
               onSelectCoverLetter={handleSelectPreparedCoverLetter}
               canTailorCoverLetter={
                 coverLetterPreflight.canTailor &&
@@ -2595,8 +2486,7 @@ function App() {
                 jobReady &&
                 coverProviderReady &&
                 !isGeneratingCover &&
-                !isSelectingCoverVariant &&
-                !isRankingCoverLetterVariants
+                !coverLetterSelectionPending
               }
               coverLetterTailorHint={
                 !resumeReady && !jobReady
@@ -2605,7 +2495,7 @@ function App() {
                     ? "Add your resume first."
                     : !jobReady
                       ? "Prepare the job first."
-                      : isSelectingCoverVariant || isRankingCoverLetterVariants
+                      : coverLetterSelectionPending
                         ? "Wait for the cover-letter variant selection to finish."
                       : !coverProviderReady
                         ? coverProviderMessage
@@ -2998,6 +2888,7 @@ function App() {
               onTailor={() => {
                 handleCoverLetterPolish();
               }}
+              onDocumentChoice={preemptPreparedCoverLetterResolution}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
               pendingAutosaveDraft={pendingCoverDraft}
@@ -3020,6 +2911,7 @@ function App() {
               onDiscardProposal={discardCoverLetterProposal}
               onAddHonestContext={handleAddHonestContext}
               onRestorePreTailor={() => {
+                preemptPreparedCoverLetterResolution();
                 coverLetterEditor.restorePreTailor();
               }}
             />

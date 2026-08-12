@@ -152,8 +152,8 @@ export function CoverLetterReview({
   });
   const description = isTailoring
     ? "Creating a grounded cover-letter proposal from your evidence."
-    : failure
-        ? "No changes were applied. Your current letter is unchanged."
+    : failure || proposal?.stale
+        ? ""
         : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
           ? "The letter's inputs changed after this proposal was created. Polish again before using it."
           : workflow.state === "proposal"
@@ -227,7 +227,7 @@ export function CoverLetterReview({
       status={workflow}
       target={target}
       description={description}
-      checks={proposal || appliedResult ? [] : checks}
+      checks={proposal || appliedResult || failure || isTailoring ? [] : checks}
       failure={failure ? {
         title: blockedFailure ? "Evidence check failed" : (errorFailure?.headline ?? "Polish failed"),
         message: blockedFailure
@@ -238,7 +238,8 @@ export function CoverLetterReview({
           : { items: [errorFailure?.detail ?? "Try Polish again."] })
       } : null}
       footer={footer}
-      statusLine={status}
+      statusLine={proposal || failure || isTailoring ? undefined : status}
+      statusAnnouncement={(proposal && !proposal.stale) || isTailoring ? status : undefined}
     >
       {proposal ? (
         <section className="cover-letter-proposal" aria-label="Proposed replacement">

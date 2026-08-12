@@ -353,6 +353,10 @@ assert.equal(
 const intakeSource = readFileSync(new URL("../useJobIntake.ts", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const polishSource = readFileSync(new URL("../usePolishPipeline.ts", import.meta.url), "utf8");
+const preparedCoverSource = readFileSync(
+  new URL("../usePreparedCoverLetter.ts", import.meta.url),
+  "utf8"
+);
 const preparedBriefChangeSource = appSource.slice(
   appSource.indexOf("const handlePreparedJobBriefChange"),
   appSource.indexOf("// Per-section Polish choice")
@@ -412,13 +416,13 @@ assert.match(
   "a stale or previous Prepare result consumes its token as a declined automation decision"
 );
 assert.match(
-  appSource,
-  /const coverVariantResolutionPending = Boolean\([\s\S]{0,500}?rankingJobDescription !== jobDescription\.trim\(\)[\s\S]{0,300}?coverLetterVariantRecommendationKeyRef\.current[\s\S]{0,200}?isRankingCoverLetterVariants/,
+  preparedCoverSource,
+  /const preparedCoverLetterResolutionPending = Boolean\([\s\S]{0,500}?rankingJobText !== jobText\.trim\(\)[\s\S]{0,300}?resolvedKeyRef\.current !== inputKey[\s\S]{0,120}?isResolvingPreparedCoverLetter/,
   "Cover Letter automation sees pending variant resolution synchronously, including the pre-effect input-key mismatch"
 );
 assert.match(
   appSource,
-  /const coverDecision = automaticPolishActionDecision\(\{[\s\S]{0,350}?prerequisitePending: coverVariantResolutionPending[\s\S]{0,650}?const coverSettled = receipt\.coverStarted \|\| coverDecision === "decline";[\s\S]{0,180}?if \(resumeSettled && coverSettled\)/,
+  /const coverDecision = automaticPolishActionDecision\(\{[\s\S]{0,350}?prerequisitePending: coverLetterSelectionPending[\s\S]{0,650}?const coverSettled = receipt\.coverStarted \|\| coverDecision === "decline";[\s\S]{0,180}?if \(resumeSettled && coverSettled\)/,
   "the Fit token stays pending while a qualified Cover Letter action waits and settles only after start or permanent decline"
 );
 assert.match(

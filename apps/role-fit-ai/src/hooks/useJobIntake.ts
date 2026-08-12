@@ -1453,6 +1453,7 @@ export function useJobIntake({
           : undefined;
 
   return {
+    currentPreparationId: currentPrepared?.id ?? "",
     isExtractingLink,
     extensionImportPhase,
     jobAnalysisProgress,
