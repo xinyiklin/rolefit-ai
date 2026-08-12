@@ -1,5 +1,5 @@
 /** Owns Apply confirmation, tracker commit, document snapshots, and optional PDF export. */
-import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationRecord, type Application } from "./useApplications";
 import type { DuplicateResolution } from "./useDuplicateGuard";
 import type { ExtractedJobTracking } from "../lib/jobExtract";
@@ -18,6 +18,7 @@ import {
 } from "../lib/preparationSession.ts";
 import { appliedApplicationForSession } from "../lib/preparationApplication.ts";
 import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
+import type { ApplicationPersistenceReceipt } from "../lib/applicationUnloadGuard.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -71,6 +72,9 @@ type UseApplyFlowArgs = {
   coverLetterDocumentVersion: string;
   onResumeSaved: () => void;
   onCoverLetterSaved: () => void;
+  setApplicationPersistenceReceipt: Dispatch<
+    SetStateAction<ApplicationPersistenceReceipt | null>
+  >;
   // Accepts an updater so a late failure can APPEND to the status commitApply
   // already set, instead of erasing an artifact-save warning the user needs.
   setApplyStatus: Dispatch<SetStateAction<string>>;
@@ -110,6 +114,7 @@ export function useApplyFlow({
   coverLetterDocumentVersion,
   onResumeSaved,
   onCoverLetterSaved,
+  setApplicationPersistenceReceipt,
   setApplyStatus,
   setActiveOutputTab,
   setExpandedApplicationId
@@ -126,12 +131,10 @@ export function useApplyFlow({
     resume: includeResume,
     coverLetter: includeCoverLetter
   });
-  useEffect(() => {
-    currentMaterialSelectionRef.current = {
-      resume: includeResume,
-      coverLetter: includeCoverLetter
-    };
-  }, [includeCoverLetter, includeResume]);
+  currentMaterialSelectionRef.current = {
+    resume: includeResume,
+    coverLetter: includeCoverLetter
+  };
   // Post-Apply download prompt: holds the just-applied role's label and which
   // included materials this Apply can actually export, so the dialog offers a
   // cover-letter PDF whenever the letter is part of the application.
@@ -153,12 +156,10 @@ export function useApplyFlow({
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
   });
-  useEffect(() => {
-    latestDocumentVersionsRef.current = {
-      resume: resumeDocumentVersion,
-      coverLetter: coverLetterDocumentVersion
-    };
-  }, [coverLetterDocumentVersion, resumeDocumentVersion]);
+  latestDocumentVersionsRef.current = {
+    resume: resumeDocumentVersion,
+    coverLetter: coverLetterDocumentVersion
+  };
 
   function clearCapturedApply(): void {
     applyMaterialSelectionRef.current = null;
@@ -186,6 +187,14 @@ export function useApplyFlow({
           : { ok: false, error: "changed before it could be saved; save the current draft again" }
         : { ok: false, error: "No editable resume source is available." }
       : null;
+    const storedCover = selection.coverLetter
+      ? cover
+        ? latestDocumentVersionsRef.current.coverLetter ===
+          expectedVersions.coverLetter
+          ? await saveApplicationDocument(id, "cover", cover)
+          : { ok: false, error: "changed before it could be saved; save the current draft again" }
+        : { ok: false, error: "No editable cover-letter source is available." }
+      : null;
     const currentStoredResume =
       storedResume?.ok &&
       latestDocumentVersionsRef.current.resume !== expectedVersions.resume
@@ -195,14 +204,6 @@ export function useApplyFlow({
               "changed while saving; the application has the earlier version, so save the current draft again"
           }
         : storedResume;
-    const storedCover = selection.coverLetter
-      ? cover
-        ? latestDocumentVersionsRef.current.coverLetter ===
-          expectedVersions.coverLetter
-          ? await saveApplicationDocument(id, "cover", cover)
-          : { ok: false, error: "changed before it could be saved; save the current draft again" }
-        : { ok: false, error: "No editable cover-letter source is available." }
-      : null;
     const currentStoredCover =
       storedCover?.ok &&
       latestDocumentVersionsRef.current.coverLetter !==
@@ -225,7 +226,13 @@ export function useApplyFlow({
       setApplyStatus(`${action.successVerb} "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.${relationshipWarning}`);
       return {
         resumeSaved: Boolean(currentStoredResume?.ok),
-        coverSaved: Boolean(currentStoredCover?.ok)
+        coverSaved: Boolean(currentStoredCover?.ok),
+        resumeOutcome: selection.resume
+          ? currentStoredResume?.ok ? "saved" as const : "failed" as const
+          : "excluded" as const,
+        coverOutcome: selection.coverLetter
+          ? currentStoredCover?.ok ? "saved" as const : "failed" as const
+          : "excluded" as const
       };
     }
     const savedLabels = [
@@ -239,7 +246,9 @@ export function useApplyFlow({
     );
     return {
       resumeSaved: Boolean(currentStoredResume?.ok),
-      coverSaved: Boolean(currentStoredCover?.ok)
+      coverSaved: Boolean(currentStoredCover?.ok),
+      resumeOutcome: selection.resume ? "saved" as const : "excluded" as const,
+      coverOutcome: selection.coverLetter ? "saved" as const : "excluded" as const
     };
   }
 
@@ -275,10 +284,8 @@ export function useApplyFlow({
     }
     if (applyCommitInFlightRef.current) return false;
     applyCommitInFlightRef.current = true;
-    // The document sources and versions belong to the user's final confirmation.
-    // If either editor changes while the tracker write is in
-    // flight, the older artifact must not be saved or mark the newer draft
-    // clean.
+    setApplicationPersistenceReceipt(null);
+    // Later edits must not let an older artifact mark the live document clean.
     const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
     setIsCommittingApply(true);
     setApplySaveError("");
@@ -397,6 +404,17 @@ export function useApplyFlow({
         action,
         relationshipWarning
       );
+      setApplicationPersistenceReceipt({
+        applicationId: app.id,
+        resume: {
+          version: expectedDocumentVersions.resume,
+          outcome: savedDocuments.resumeOutcome
+        },
+        coverLetter: {
+          version: expectedDocumentVersions.coverLetter,
+          outcome: savedDocuments.coverOutcome
+        }
+      });
       // Tracker text is not a reloadable document. Preserve recovery until the
       // corresponding strict editable source has also been committed.
       if (savedDocuments.resumeSaved) onResumeSaved();
@@ -560,6 +578,8 @@ export function useApplyFlow({
   return {
     applyDownloadPrompt,
     isApplying,
+    // PDF exports remain part of isApplying but not the persistence phase.
+    applicationSavePending: isCommittingApply,
     applySaveError,
     handleApply,
     handleApplyDownloadPick,

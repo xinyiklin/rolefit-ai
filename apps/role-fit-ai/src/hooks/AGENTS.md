@@ -115,11 +115,17 @@ browser-side effects; components render them and App composes them.
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,
   a later update preserves the existing application snapshot instead of clearing it.
-  Its `isApplying` lifetime spans tracker confirmation and every included strict
-  source save; App must include that entire phase in unload protection even when
-  both editors began clean.
+  Its `isApplying` lifetime spans duplicate resolution, tracker confirmation,
+  every included strict source save, and post-commit PDF exports. The narrower
+  `applicationSavePending` lifetime ends after strict sources settle; App must
+  use that narrower phase for unload protection so clean editors stay guarded
+  during persistence but a saved application does not warn during recoverable
+  PDF exports. Explicit per-document application uploads join that same guard
+  until their request settles.
 - `useApplicationDocumentSync` owns the two explicit per-document saves that
   follow an application-of-record id established by the preparation session.
+  App owns the shared persistence receipt because Apply and these explicit saves
+  both advance it; a new commit invalidates earlier evidence before writing.
   Saving is always user initiated; no effect may write a document into an
   application. Fresh work has no document target, while restored update work
   uses only its explicit id. A restored Skipped job remains job-only history
@@ -169,10 +175,13 @@ browser-side effects; components render them and App composes them.
   cannot advertise an undo the editor can no longer perform.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
-  the shared per-tab rules in `lib/autosaveDraftStorage.ts` (tab scoping, live
-  siblings, orphan migration, expiry). A draft is cleared only where its own
-  document becomes durable, and a restore seeds CLEAN so a crash right after it
-  still has something to recover. Accepting a cover-letter proposal also keeps
+  the shared rules in `lib/autosaveDraftStorage.ts` (same-tab recovery, live
+  sibling isolation, 24-hour expiry). A fresh tab never adopts a closed tab's
+  draft, and an extension import suppresses the receiving tab's old recovery
+  prompt without deleting its entry. Otherwise a draft is cleared only where
+  its own document becomes durable, and a restore seeds CLEAN so a crash right
+  after it still has something to recover. Accepting a cover-letter proposal
+  also keeps
   one exact in-memory pre-tailor `.cover` snapshot because the AI reseed clears editor
   history; its Restore expires on the next edit, open, or Polish and does not
   replace crash recovery or workspace variants/history.

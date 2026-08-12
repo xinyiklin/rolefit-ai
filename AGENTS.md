@@ -71,6 +71,10 @@ similar.
 
 ## Modularity, Reuse, And Maintainability
 
+- Choose the simplest design that fully satisfies the current requirement. Do
+  not add indirection, configuration, abstractions, compatibility layers, or
+  speculative flexibility without a demonstrated need. Keep a change local
+  until a real ownership or reuse boundary justifies extraction.
 - Find the current owner before adding a type, transform, option list, state
   field, component, or CSS rule. Extend one source of truth rather than creating
   a parallel representation.
@@ -81,8 +85,10 @@ similar.
   side effects, volatile provider/platform behavior, or a focused test surface.
   Avoid pass-through wrappers, speculative utilities, broad barrels, and
   components that grow unrelated modes and boolean props.
-- Comment why, not what: a constraint, a bug it prevents, or a contract the
-  code cannot show — one or two lines. Durable rationale belongs in the scoped
+- Comment only when the code cannot express an important constraint, bug
+  prevention, or contract. Keep it to one or two lines; do not narrate
+  self-evident code, restate types, or leave process notes. Remove redundant or
+  stale comments in touched code. Durable rationale belongs in the scoped
   `AGENTS.md`; a paragraph-long comment is filed in the wrong place.
 - Keep domain logic independent of React and the DOM where practical.
   Components adapt deterministic helpers to state and events; hooks own
@@ -163,6 +169,9 @@ While working:
 - Keep changes tied to the request and its necessary cleanup.
 - Make one responsibility-level extraction at a time and verify before stacking
   another structural change.
+- At the end of each coherent stage, review that stage's diff before continuing.
+  Check scope, correctness, ownership, naming, duplication, error paths, test
+  evidence, and maintainability; fix issues before stacking the next stage.
 - Surface actionable failures; do not add silent fallbacks or empty catches.
 - Ask before adding a dependency or changing schemas, provider defaults,
   deployment shape, public runtime exposure, or paid services.
@@ -185,6 +194,10 @@ While working:
   than an unnecessary runtime build.
 - Update affected docs and continuity when behavior, ownership, or a durable
   decision changes.
+- Before declaring completion, review the complete diff and affected surrounding
+  code as one change. Remove accidental complexity, redundant comments, dead
+  paths, duplication, and temporary scaffolding; confirm the result remains
+  readable and maintainable, then run the proportionate final checks.
 
 A task is complete only when the requested outcome works, affected contracts
 agree, checks are reported honestly, and residual risks are explicit.

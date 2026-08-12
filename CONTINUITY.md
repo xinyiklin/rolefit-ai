@@ -3,6 +3,23 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-12
+
+- [USER+CODE+TOOL] Recovery is now an interruption-only safety net: a fresh tab
+  never adopts a closed tab's draft, an extension import hides the receiving
+  tab's prior prompt without deleting recovery data, same-tab entries expire
+  after 24 hours, definitive no-entry responses remove stale extension claim
+  tokens, and visible copy says **Recovery draft available**. Apply and explicit
+  document saves share saved, excluded, and failed outcomes: every commit attempt
+  invalidates stale evidence, included strict-source writes stay unload-protected,
+  and an excluded dirty document releases after its exact recovery write succeeds.
+  Sequential document uploads are both revalidated before either editor is marked
+  clean, and retired debounce timers cannot recreate cleared recovery data. Saved
+  applications do not warn during recoverable PDF export. The full RoleFit gate
+  passes both builds, desktop contracts, and all 103 offline evaluations after the
+  sandbox-only loopback rerun. No browser session was started under the flag-first
+  interaction-QA policy.
+
 ## 2026-08-11
 
 - [USER+CODE+TOOL] Resume and Cover Letter now consistently open saved variants.
@@ -1423,11 +1440,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   restore brings back style as well as text) with the resume's Recovery
   draft saved / Saving / failed vocabulary and its own restore bar, replacing
   the bare "Unsaved cover letter" warning. Tab scoping, live-sibling
-  protection, orphan migration, and expiry moved to one owner
+  protection, tab isolation, and expiry moved to one owner
   (`lib/autosaveDraftStorage.ts`) that both drafts share under separate storage
-  keys; a workspace restore still clears every draft of both kinds. The letter's
-  draft is cleared only where the letter itself becomes durable (workspace
-  save, `.cover` download, or a successful application-document save). Apply
+  keys; workspace adoption clears current/dead entries and preserves notified
+  live siblings. The letter's draft is cleared only where the letter itself
+  becomes durable (workspace save, `.cover` download, or a successful application-document save). Apply
   settles the resume and cover-letter recovery state independently, so a failed
   source save cannot clear the other document's protection. Document titles now
   share one rule,

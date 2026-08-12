@@ -55,6 +55,11 @@ assert.match(
   /const isApplying = isResolvingApply \|\| isCommittingApply \|\| isDownloadingApplyPdfs;/,
   "public Apply busy state covers resolution, persistence, and exports"
 );
+assert.match(
+  applyFlow,
+  /applicationSavePending: isCommittingApply/,
+  "Apply exposes its save-only phase separately from post-commit PDF exports"
+);
 assert.ok(clearCapturedApplyStart >= 0, "Apply centralizes captured-state cleanup");
 for (const ref of [
   "applyMaterialSelectionRef",

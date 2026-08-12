@@ -17,16 +17,10 @@ import {
 export { parseResumeAutosaveDraft };
 export type { AutosavedDraft };
 
-// The RESUME recovery draft. Tab scoping, live-sibling protection, orphan
-// migration, and expiry live in lib/autosaveDraftStorage.ts, which the cover
-// letter's draft shares; only the payload below is resume-specific.
-// Stores strict editable resume source, its applicant-ownership origin, a
-// timestamp, a light job-target label, and optional recovery-only raw job text /
-// AI-usage snapshot. API keys and provider credentials are never stored here.
+// Resume-specific payload over the shared same-tab recovery lifecycle. It never
+// stores API keys or provider credentials.
 
-// Clear THIS tab's resume draft (call on Apply / base-resume Save so a
-// recovered draft doesn't reappear after the edits are safely persisted
-// elsewhere).
+// Clear this tab's recovery entry once the same resume is durable elsewhere.
 export function clearAutosaveDraft(): void {
   clearTabDraft("resume");
 }
@@ -54,9 +48,7 @@ type UseAutosaveDraftArgs = {
   getJobKeyHash?: () => string;
 };
 
-// Debounced autosave: whenever the editor has unsaved edits, write the
-// serialized resume to localStorage so a reload / crash / close can recover.
-// 1200 ms debounce balances responsiveness against write frequency.
+// The 1200 ms debounce balances recovery latency against write frequency.
 export type { DraftAutosaveState };
 
 export function useAutosaveDraft({ editedResume, docStyle, dirty, resumeOrigin, jobLabel, pipelineAiUsage, jobRawText, getJobKeyHash }: UseAutosaveDraftArgs): DraftAutosaveState {
@@ -98,7 +90,7 @@ export function useAutosaveDraft({ editedResume, docStyle, dirty, resumeOrigin, 
 // be re-registered on every dirty change.
 export function useBeforeUnloadGuard(dirty: boolean): void {
   const dirtyRef = useRef(dirty);
-  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  dirtyRef.current = dirty;
 
   useEffect(() => {
     function handleBeforeUnload(e: BeforeUnloadEvent) {

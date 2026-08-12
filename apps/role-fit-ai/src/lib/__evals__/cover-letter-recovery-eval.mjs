@@ -71,8 +71,13 @@ assert.match(
 );
 assert.match(
   app,
-  /if \(coverLetterEditor\.recoveryDirty\) setPendingCoverDraft\(null\)[\s\S]*useBeforeUnloadGuard\([\s\S]{0,180}?coverLetterEditor\.recoveryDirty/,
-  "title-only edits dismiss stale recovery offers and activate unload protection"
+  /if \(coverLetterEditor\.recoveryDirty\) setPendingCoverDraft\(null\)/,
+  "title-only edits dismiss stale recovery offers"
+);
+assert.match(
+  app,
+  /const coverLetterNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard\(\{[\s\S]{0,180}?dirty: coverLetterEditor\.recoveryDirty,[\s\S]{0,350}?useBeforeUnloadGuard\([\s\S]{0,180}?coverLetterNeedsUnloadGuard/,
+  "title-only edits feed the persistence-aware unload guard"
 );
 assert.match(
   app,

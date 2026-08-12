@@ -152,7 +152,7 @@ export function CoverLetterTab({
         layoutRef={layoutScrollerRef}
         notice={pendingAutosaveDraft ? (
           <DraftRestoreBar
-            label="Unsaved cover letter found"
+            label="Recovery draft available"
             jobLabel={pendingAutosaveDraft.jobLabel}
             savedAt={pendingAutosaveDraft.savedAt}
             onRestore={() => onRestoreAutosaveDraft(pendingAutosaveDraft)}

@@ -45,8 +45,8 @@ type UseApplicationDocumentSyncArgs = {
   // keeps. Both kinds are stored the same way.
   getResumeArtifacts: () => Promise<DocumentUpload | null>;
   getCoverLetterArtifacts: () => Promise<DocumentUpload | null>;
-  onResumeSaved: () => void;
-  onCoverLetterSaved: () => void;
+  onResumeSaved: (applicationId: string, version: string) => void;
+  onCoverLetterSaved: (applicationId: string, version: string) => void;
 };
 
 type DocumentFeedback = {
@@ -93,13 +93,11 @@ export function useApplicationDocumentSync({
     ? applications.find((candidate) => candidate.id === applicationId) ?? null
     : null;
 
-  useEffect(() => {
-    latestSaveIdentityRef.current = {
-      applicationId: application?.id ?? "",
-      resume: resumeDocumentVersion,
-      coverLetter: coverLetterDocumentVersion
-    };
-  }, [application?.id, coverLetterDocumentVersion, resumeDocumentVersion]);
+  latestSaveIdentityRef.current = {
+    applicationId: application?.id ?? "",
+    resume: resumeDocumentVersion,
+    coverLetter: coverLetterDocumentVersion
+  };
 
   useEffect(() => {
     setResumeFeedback(NO_FEEDBACK);
@@ -198,7 +196,7 @@ export function useApplicationDocumentSync({
           });
           return;
         }
-        (kind === "resume" ? onResumeSaved : onCoverLetterSaved)();
+        (kind === "resume" ? onResumeSaved : onCoverLetterSaved)(startedApplicationId, startedVersion);
         setFeedback({
           status: `${noun} updated.`,
           statusIsError: false,

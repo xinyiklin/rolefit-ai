@@ -236,10 +236,12 @@ editable documents.
   remain unavailable until the document has meaningful content.
   Each editor automatically reopens its last active saved variant on that
   browser origin, falling back to Default when no remembered variant remains.
-  Recovery includes title-only and style-only cover-letter edits. Drafts are
-  tab-owned: adopting a restored workspace clears this tab's stale draft and
-  confirmed-dead orphans, preserves drafts owned by live sibling tabs, and
-  notifies those siblings that the saved workspace changed.
+  Recovery includes title-only and style-only cover-letter edits. A recovery
+  entry lasts up to 24 hours and is offered only when that same tab reloads; a
+  fresh tab never adopts it, and an extension import hides an earlier prompt
+  without deleting the entry. Adopting a restored workspace clears this tab's
+  stale draft and confirmed-dead entries, preserves drafts owned by live sibling
+  tabs, and notifies those siblings that the saved workspace changed.
 - **Portable workspace backup + restore** — the companion's Workspace section saves one versioned `.rolefit-backup` containing validated base resumes, resume history, tracker records, each application's saved `.resume`, `.cover`, or PDF document, PDF attachments, and canonical allowlisted workspace preferences. Restore validates every checksum and domain file in a staging workspace before replacing the active saved workspace, then keeps the previous workspace as a local safety copy. The JSON backup is not encrypted and never contains standalone cover-letter variants, provider keys, CLI sessions, arbitrary workspace files, or unsaved recovery drafts.
 - **On-disk pipeline tracker** — a sortable, paginated applications table (right-click any row for quick actions: open details, change stage, preview the saved resume as a PDF, or delete) alongside a calendar view of submissions and upcoming follow-ups. The selected-record inspector is now a read-only counterpart to Application Detail: status and governing date, key dates and Source, categorical Fit verdict and rationale, always-present Job activity, and the job posting/resume/cover/additional-document packet. Edits open Application Detail or Prepare instead of repeating a second form in the rail. It does not retain numeric fit scores or full provider review payloads. Fit Assessment remains available for explicit sorting without controlling tracker state or workflow. A document is shown as saved only when its strict `.resume`/`.cover` source or explicit PDF exists; tracker text is never a reloadable document or an artifact claim.
   **Edit preparation** restores a stored record's validated posting and

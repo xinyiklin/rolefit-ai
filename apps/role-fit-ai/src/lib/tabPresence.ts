@@ -11,8 +11,8 @@
 //   2. A liveness + activity signal shared across tabs. Tabs publish a heartbeat
 //      carrying { jobLabel, phase } to a shared localStorage registry and a
 //      BroadcastChannel. Other tabs read it to (a) render a shared in-progress
-//      view and (b) tell a dead tab's orphaned draft (recoverable) apart from a
-//      live tab's active draft (hands off).
+//      view and (b) keep live-tab recovery entries out of expiry and workspace-
+//      restore cleanup performed by another tab.
 //
 // PRIVACY: the registry stores ONLY a short role · company label and a coarse
 // phase — never the JD body, resume text, or any secret. Same contract as the
@@ -31,8 +31,8 @@ const WORKSPACE_RESTORE_EVENT_KEY = "rolefit:workspaceRestoreAdoption";
 // HIDDEN tabs get a much longer budget: Firefox budget-throttles background-tab
 // timers, so a hidden tab's 4s heartbeat can legally stretch far past 12s. With
 // a flat budget that tab flickers in/out of siblings' live sets (a full App
-// re-render per flicker) and — worse — briefly looks dead to the autosave GC,
-// which reclaims "orphaned" drafts by liveness (liveTabIds). Each heartbeat
+// re-render per flicker) and — worse — briefly looks dead to recovery cleanup,
+// which may reclaim an expired draft. Each heartbeat
 // self-reports visibility, so readers grant hidden publishers the longer window
 // while visible tabs keep the crisp 12s one.
 export const HEARTBEAT_MS = 4000;
@@ -222,8 +222,8 @@ export function activeSessionsSignature(sessions: PresenceEntry[]): string {
     .join("|");
 }
 
-// Ids of tabs whose heartbeat is fresh. The autosave GC uses this to leave a
-// live tab's draft alone while reclaiming a dead tab's orphan.
+// Ids of tabs whose heartbeat is fresh. Recovery expiry and workspace adoption
+// use this to leave a live tab's draft alone while cleaning dead-tab data.
 export function liveTabIds(now: number): Set<string> {
   return new Set(Object.keys(prune(readRegistry(), now)));
 }

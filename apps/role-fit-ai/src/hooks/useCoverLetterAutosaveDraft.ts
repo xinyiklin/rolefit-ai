@@ -1,14 +1,5 @@
-/**
- * The COVER LETTER recovery draft — the resume's `useAutosaveDraft` behavior for
- * the other editor, so both pages recover the same way after a reload, crash, or
- * accidental close instead of one of them merely warning that it is unsaved.
- *
- * The payload is the serialized `.cover` file the editor already computes for
- * its dirty check, so a restore brings back the document AND its style rather
- * than flattened text. Tab scoping, live-sibling protection, orphan migration,
- * and expiry are shared with the resume draft (lib/autosaveDraftStorage.ts).
- * No job description body, API key, or provider credential is ever stored.
- */
+// Cover-letter payload over the shared same-tab recovery lifecycle. The strict
+// `.cover` payload restores structure and style without storing provider data.
 import { useMemo } from "react";
 
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
