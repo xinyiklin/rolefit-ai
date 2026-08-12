@@ -435,7 +435,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   Resume Polish started from Prepare also completes there. Rank the actual
   contents of saved resume and cover-letter variants against weighted
   prepared-job sections. Either material may auto-select a meaningful unique
-  winner while its editor is clean and not application-owned. A tie or
+  winner while its editor has no unsaved document changes and is not
+  application-owned; a sole saved variant is selected without ranking. The
+  cover-letter resolver waits for its workspace snapshot and preserves the
+  application-output title that Prepare assigns, so that title-only change does
+  not masquerade as an edited letter body. A tie or
   incomplete read keeps the current selection and shows no recommendation.
   The selector is the normal receipt; show one compact recommendation line only
   when unsaved work blocks replacement. Neither comparison needs persisted

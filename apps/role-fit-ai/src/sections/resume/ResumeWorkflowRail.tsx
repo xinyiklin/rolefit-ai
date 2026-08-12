@@ -56,8 +56,10 @@ export function ResumeWorkflowRail({
   const proposalResult = result?.polishOutcome ? result : null;
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
   const ready = resumeReady && jobReady && resumePolishProviderReady && polishSectionCount > 0;
-  const failed = progress.polish.status === "failed" || progress.polish.status === "stopped";
+  const stopped = progress.polish.status === "stopped";
+  const failed = progress.polish.status === "failed" || stopped;
   const withheld = proposalResult?.polishOutcome === "WITHHELD";
+  const settledWithoutEdits = Boolean(proposalResult && decisions.total === 0);
 
   // A proposal is only "outstanding" while edits still need a decision.
   const workflow = resolveDocumentWorkflowStatus({
@@ -73,19 +75,17 @@ export function ResumeWorkflowRail({
   // accepting means rather than repeating the same numbers one line above it.
   const description = isPolishing
     ? "Creating evidence-grounded resume edits. Your current resume remains unchanged."
-    : workflow.state === "proposal" || workflow.state === "reviewing"
+    : settledWithoutEdits
+      ? ""
+      : workflow.state === "proposal" || workflow.state === "reviewing"
         ? "Your resume changes only for the edits you accept."
-        : withheld
-            ? "The generated edits could not be verified. Your resume is unchanged."
-            : failed
-              ? "No proposal replaced your resume. Retry when ready."
-              : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
-                ? "The resume or prepared job changed. Polish again for a current proposal."
-                : workflow.state === "ready-to-polish"
-                  ? "Polish creates one evidence-grounded proposal for you to review."
-                  : workflow.state === "blocked"
-                    ? "Complete the blocked rows before polishing."
-                    : "";
+        : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
+          ? "The resume or prepared job changed. Polish again for a current proposal."
+          : workflow.state === "ready-to-polish"
+            ? "Polish creates one evidence-grounded proposal for you to review."
+            : workflow.state === "blocked"
+              ? "Complete the blocked rows before polishing."
+              : "";
 
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
@@ -101,9 +101,12 @@ export function ResumeWorkflowRail({
   ];
   const failure = failed && !withheld ? {
     title: progress.polish.errorHeadline || "Polish failed",
-    message: "No proposal was created. Your resume was not changed.",
-    items: progress.polish.error ? [progress.polish.error] : undefined
+    message: stopped
+      ? progress.polish.error || "Polish stopped. Your resume is unchanged."
+      : "No proposal was created. Your resume was not changed.",
+    items: !stopped && progress.polish.error ? [progress.polish.error] : undefined
   } : null;
+  const resultOwnsVisibleStatus = Boolean(proposalResult || failure);
   // Both documents commit from the same place with the same verbs; only the
   // unit differs — the resume decides N edits, the letter decides one letter.
   const footer = isPolishing ? (
@@ -141,11 +144,12 @@ export function ResumeWorkflowRail({
       ariaLabel="Resume workflow"
       status={workflow}
       target={target}
-      description={description}
-      checks={proposalResult ? [] : checks}
+      description={failure ? "" : description}
+      checks={proposalResult || failure || isPolishing ? [] : checks}
       failure={failure}
       footer={footer}
-      statusLine={status}
+      statusLine={resultOwnsVisibleStatus ? undefined : status}
+      statusAnnouncement={proposalResult && !settledWithoutEdits ? status : undefined}
     >
       {proposalResult ? (
         <ResumeProposalReview

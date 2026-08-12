@@ -59,10 +59,10 @@ export function ResumeProposalReview({
   }
 
   if (result.polishOutcome === "NO_CHANGES") {
-    return <><p className="resume-proposal__empty">No safe material changes were suggested.</p>{omittedNote}</>;
+    return <><p className="resume-proposal__empty" role="status">No safe material changes were suggested.</p>{omittedNote}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
-    return <><p className="resume-proposal__empty is-warn">The generated edits could not be verified. Your resume is unchanged.</p>{omittedNote}</>;
+    return <><p className="resume-proposal__empty is-warn" role="status">The generated edits could not be verified. Your resume is unchanged.</p>{omittedNote}</>;
   }
 
   return (

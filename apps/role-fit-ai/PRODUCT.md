@@ -432,7 +432,12 @@ disappears into the task. Quiet competence, not salesmanship.
     overwriting a saved variant under the same filename forces a fresh read. Do
     not add persisted variant metadata or another document schema for this
     decision. Stop, source replacement, application restore, and unmount cancel
-    that resolution before it can adopt a document or start Fit Assessment.
+    that resume resolution before it can adopt a document or start Fit
+    Assessment. Cover Letter resolves once after the prepared brief is current:
+    it waits for workspace startup, adopts the sole saved letter or a meaningful
+    unique winner, and preserves Prepare's output title. Body/style edits,
+    application ownership, saves, manual selection, source replacement, and
+    unmount cancel or preempt replacement.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

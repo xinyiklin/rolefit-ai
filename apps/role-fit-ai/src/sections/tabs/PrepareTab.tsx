@@ -125,7 +125,7 @@ export type PrepareTabProps = {
   coverLetterOptions: CoverLetterOption[];
   coverLetterVariantRecommendation: VariantRecommendation | null;
   isRankingCoverLetterVariants: boolean;
-  isSelectingCoverLetter: boolean;
+  coverLetterSelectionPending: boolean;
   onSelectCoverLetter: (fileName: string) => void | Promise<unknown>;
   canTailorCoverLetter: boolean;
   coverLetterTailorHint: string;
@@ -197,7 +197,7 @@ export function PrepareTab({
   coverLetterOptions,
   coverLetterVariantRecommendation,
   isRankingCoverLetterVariants,
-  isSelectingCoverLetter,
+  coverLetterSelectionPending,
   onSelectCoverLetter,
   canTailorCoverLetter,
   coverLetterTailorHint,
@@ -282,7 +282,7 @@ export function PrepareTab({
   // like [Company]. Reporting that as "No draft" hid a document the user could
   // see in the selector, so the state names the actual reason it is not ready.
   const coverState =
-    isRankingCoverLetterVariants || isSelectingCoverLetter
+    coverLetterSelectionPending
       ? "Selecting best match…"
       : isTailoringCoverLetter
         ? "Polishing…"
@@ -333,17 +333,21 @@ export function PrepareTab({
   const resumeWorkflowNeedsAttention =
     (polishProgress.polish.status === "failed" && polishOutcome !== "WITHHELD") ||
     polishProgress.polish.status === "stopped";
-  // Success receipts duplicate the state line. Keep only blockers and failures.
-  const resumeNote = !canStartPolishResume && polishResumeHint
-    ? polishResumeHint
-    : resumeWorkflowNeedsAttention
-      ? polishStatus
-      : "";
-  const coverNote = !canTailorCoverLetter && coverLetterTailorHint
-    ? coverLetterTailorHint
-    : coverLetterStatus === "Inputs changed. Polish the letter again for this context."
-      ? "Inputs changed · polish again."
-      : coverLetterStatus;
+  // The state line owns in-flight progress; notes keep blockers and recovery.
+  const resumeNote = isResolvingPreparedResume || isSelectingResume || isPolishing
+    ? ""
+    : !canStartPolishResume && polishResumeHint
+      ? polishResumeHint
+      : resumeWorkflowNeedsAttention
+        ? polishStatus
+        : "";
+  const coverNote = coverLetterSelectionPending || isTailoringCoverLetter
+    ? ""
+    : !canTailorCoverLetter && coverLetterTailorHint
+      ? coverLetterTailorHint
+      : coverLetterStatus === "Inputs changed. Polish the letter again for this context."
+        ? "Inputs changed · polish again."
+        : coverLetterStatus;
   const sourceValue = APPLICATION_SOURCES.includes(tracking.source as (typeof APPLICATION_SOURCES)[number])
     ? (tracking.source ?? "")
     : tracking.source
@@ -795,7 +799,7 @@ export function PrepareTab({
                     type="button"
                     onClick={() => void onPolishPreparedResume()}
                     disabled={!canStartPolishResume}
-                    aria-describedby={!canStartPolishResume && polishResumeHint ? "prepare-resume-note" : undefined}
+                    aria-describedby={!canStartPolishResume && resumeNote ? "prepare-resume-note" : undefined}
                   >
                     {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
                     {isPolishing ? "Polishing…" : "Polish"}
@@ -830,11 +834,16 @@ export function PrepareTab({
               variantLabel="Cover-letter variant"
               variantValue={coverLetterFileName}
               variantOptions={coverLetterOptions}
-              emptyVariantLabel={coverLetterReady ? "Current draft" : "No saved variants"}
+              emptyVariantLabel={
+                coverLetterReady
+                  ? "Current draft"
+                  : coverLetterOptions.length > 0
+                    ? "Select saved variant"
+                    : "No saved variants"
+              }
               variantDisabled={
-                isSelectingCoverLetter ||
+                coverLetterSelectionPending ||
                 isTailoringCoverLetter ||
-                isRankingCoverLetterVariants ||
                 coverLetterOptions.length === 0
               }
               onVariantChange={(fileName) => void onSelectCoverLetter(fileName)}
@@ -845,7 +854,7 @@ export function PrepareTab({
                     type="button"
                     onClick={() => void onTailorCoverLetter()}
                     disabled={!canTailorCoverLetter}
-                    aria-describedby={!canTailorCoverLetter && coverLetterTailorHint ? "prepare-cover-note" : undefined}
+                    aria-describedby={!canTailorCoverLetter && coverNote ? "prepare-cover-note" : undefined}
                   >
                     {isTailoringCoverLetter ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
                     {isTailoringCoverLetter ? "Polishing…" : "Polish"}

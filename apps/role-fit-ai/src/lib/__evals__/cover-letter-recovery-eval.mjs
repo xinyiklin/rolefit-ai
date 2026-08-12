@@ -79,10 +79,4 @@ assert.match(
   /handleRestoreCoverDraft[\s\S]{0,300}?coverLetterEditor\.recoveryDirty && !\(await confirmReplaceCoverLetter\(\)\)/,
   "restoring recovery asks before replacing a title-only edit"
 );
-assert.doesNotMatch(
-  app,
-  /coverLetterEditor\.dirty/,
-  "App loss-protection paths no longer bypass title-only dirtiness"
-);
-
 console.log("cover-letter recovery decisions: PASS");

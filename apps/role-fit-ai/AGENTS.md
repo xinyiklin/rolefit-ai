@@ -224,9 +224,11 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Fit `running` can publish. Every terminal preparation path that entered Fit
   `running` must settle it to ready, unavailable, or disabled. A
   tie or incomplete comparison returns no recommendation and keeps the current
-  selection. Cover letters keep their own ranking effect and the same safety
-  rules. Do not add persisted variant metadata or another schema for either
-  choice.
+  selection. Cover letters resolve independently after Prepare: wait for
+  workspace startup, adopt the sole saved letter or a meaningful
+  unique winner, and preserve Prepare's output title. Body/style edits,
+  application ownership, saves, and manual selection still block replacement.
+  Do not add persisted variant metadata or another schema for either choice.
 - Proposal decisions are keyed by outcome plus each target's id, original text,
   proposed text, and reason. A mismatched key derives an empty decision map
   without setting state during render; the first decision initializes the new

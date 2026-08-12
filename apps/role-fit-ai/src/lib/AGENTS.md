@@ -38,6 +38,9 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
   letter variants and history. `coverLetterExport.ts` owns pure source/PDF
   artifact construction; neither helper owns React state or document history.
+- `preparedCoverLetter.ts` owns the deterministic Prepare decision and async
+  resolution sequence for saved cover-letter variants. It compares one snapshot
+  and delegates adoption to the editor's guarded loader; React and HTTP stay out.
 - `jobIdentity.ts` owns both duplicate matching and the dependency-free
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe

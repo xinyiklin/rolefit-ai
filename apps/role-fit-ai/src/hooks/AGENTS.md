@@ -98,6 +98,12 @@ browser-side effects; components render them and App composes them.
   retain current. The guarded loader returns the exact committed
   document receipt, failed adoption clears the recommendation, and cancellation
   clears both the recommendation and visible resolving flag.
+- `usePreparedCoverLetter` owns Prepare's ONE saved-letter resolution after the
+  prepared brief is current. It waits for workspace startup to finish, then
+  adopts the sole saved letter or ranks one option/candidate snapshot. Adoption
+  preserves Prepare's output title and uses the editor's guarded loader; edits,
+  application ownership, saves, manual intent, ties, and incomplete reads keep
+  the current document. Its pending signal gates Cover Letter Polish and Apply.
 - `useApplications` sends only mutation-named records, keeps optimistic updates
   serial, and reconciles successful own-write snapshots by id/revision so
   unchanged objects retain identity. Ordinary saves match by application id
@@ -210,14 +216,16 @@ browser-side effects; components render them and App composes them.
   mount-time empty applications array. Provider readiness is a preflight
   signal, not semantic request input, so background readiness polls must not
   invalidate an already-running AI request.
-- Automatic variant selection remains on Prepare. It may not replace a dirty
-  editor without an explicit user action. When multiple saved resume or
-  cover-letter variants exist, compare their actual strict document contents
+- Automatic variant selection remains on Prepare. It may not replace unsaved
+  document changes without an explicit user action. When multiple saved resume
+  or cover-letter variants exist, compare their actual strict document contents
   with weighted prepared-job sections and auto-select a meaningful unique
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
-  recommendation. An explicitly uploaded resume is authoritative even while
-  clean and is never an automatic-adoption target. A successful automatic proposal run must not force the Resume tab;
+  recommendation. A sole saved variant is adopted without ranking. Cover-letter
+  output-title changes remain recoverable but do not block saved-body adoption.
+  An explicitly uploaded resume is authoritative even while clean and is never
+  an automatic-adoption target. A successful automatic proposal run must not force the Resume tab;
   user-initiated Resume Polish retains its normal reveal behavior.
 - Job analysis stale-input guards cover the job source, Fit Assessment setting,
   and both stages' AI settings. The selected resume is captured immediately

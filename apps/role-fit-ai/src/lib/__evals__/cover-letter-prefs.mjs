@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
+import { coverLetterDocumentVersion } from "../coverLetterWorkspaceOwnership.ts";
 
 const values = new Map();
 globalThis.localStorage = {
@@ -31,6 +32,23 @@ assert.equal(
   coverLetterStartupIsCurrent("initial", "initial", true),
   false,
   "an explicitly cancelled startup cannot replace the current document"
+);
+assert.equal(
+  coverLetterStartupIsCurrent(
+    "unchanged cover payload",
+    "unchanged cover payload",
+    false
+  ),
+  true,
+  "automatic title enrichment does not cancel startup when cover content is unchanged"
+);
+assert.notEqual(
+  coverLetterDocumentVersion("unchanged cover payload", "Cover letter"),
+  coverLetterDocumentVersion(
+    "unchanged cover payload",
+    "Candidate_Company_Cover_Letter"
+  ),
+  "ordinary replacement identity still notices title changes"
 );
 
 assert.equal(loadLastCoverLetterName(), "", "a fresh browser has no remembered cover letter");
@@ -95,8 +113,8 @@ assert.match(
 );
 assert.match(
   hook,
-  /const initialDocumentVersion = documentVersionRef\.current[\s\S]*coverLetterStartupIsCurrent/,
-  "startup snapshots the exact current document and title before loading the workspace"
+  /const initialContentFingerprint = currentFingerprintRef\.current \?\? ""[\s\S]*coverLetterStartupIsCurrent/,
+  "startup snapshots document content without treating automatic title enrichment as an edit"
 );
 assert.match(
   hook,
@@ -107,6 +125,16 @@ assert.match(
   identityHook,
   /const documentVersion = coverLetterDocumentVersion\(currentFingerprint, documentTitle\)[\s\S]*documentVersionRef\.current = documentVersion/,
   "the replacement version contains the serialized document and its live title"
+);
+assert.match(
+  hook,
+  /const setDocumentTitle = useCallback[\s\S]{0,350}?cancelStartupOpenRef\.current = true[\s\S]{0,350}?setOutputDocumentTitle/,
+  "manual title edits preempt startup while automatic title enrichment remains non-destructive"
+);
+assert.match(
+  app,
+  /const setCoverLetterTitle = coverLetterEditor\.setOutputDocumentTitle/,
+  "application-output naming uses the automatic title path"
 );
 assert.match(
   hook,
@@ -169,19 +197,19 @@ assert.match(
   "the editor exposes startup readiness beside the workspace options it qualifies"
 );
 assert.match(
-  app,
-  /const coverVariantResolutionPending = Boolean\(\s*coverLetterEditor\.isWorkspaceBootstrapping\s*\|\|\s*coverLetterEditor\.isWorkspaceReplacing\s*\|\|\s*isSelectingCoverVariant/,
-  "automatic Cover Letter Polish waits through startup and every editor-owned replacement transaction"
-);
-assert.match(
-  app,
-  /materialSelection\.coverLetter[\s\S]{0,120}?isGeneratingCover \|\| coverVariantResolutionPending/,
-  "Apply readiness remains pending while the included cover letter is being replaced"
+  hook,
+  /const currentReplacementVersion = \(\) =>[\s\S]{0,80}?options\.background[\s\S]{0,100}?currentFingerprintRef\.current \?\? ""[\s\S]{0,80}?: documentVersionRef\.current[\s\S]{0,120}?ownership\.claim\(currentReplacementVersion\(\)\)[\s\S]{0,700}?ownership\.evaluate\(claim, currentReplacementVersion\(\)\)/,
+  "automatic replacements preserve output-title changes while manual opens keep exact identity"
 );
 assert.match(
   hook,
-  /replaceWorkspaceCoverLetter = useCallback\([\s\S]{0,1000}?confirmReplace[\s\S]{0,900}?ownership\.claim\(documentVersionRef\.current\)[\s\S]{0,700}?ownership\.evaluate\(claim, documentVersionRef\.current\)/,
-  "saved and historical replacements claim one exact post-confirmation document version"
+  /options\.background &&[\s\S]{0,100}?!options\.startup &&[\s\S]{0,100}?workspaceReplacementCountRef\.current > 0/,
+  "an automatic Prepare open cannot overtake an in-flight manual replacement"
+);
+assert.match(
+  hook,
+  /selectCoverLetterWorkspaceDocument\(fileName\)[\s\S]{0,180}?"Cover letter load failed\.",[\s\S]{0,40}?options\.background === true/,
+  "automatic opens recheck saved candidates while manual reads do not"
 );
 assert.match(
   hook,

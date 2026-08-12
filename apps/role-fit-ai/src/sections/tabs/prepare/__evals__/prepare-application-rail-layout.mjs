@@ -44,5 +44,20 @@ assert.match(
   /Local brief ready\. Connect an AI provider to improve it\./,
   "Prepare explains the deterministic fallback without disabling the source action"
 );
+assert.match(
+  prepareSource,
+  /const resumeNote = isResolvingPreparedResume \|\| isSelectingResume \|\| isPolishing[\s\S]{0,80}?\? ""/,
+  "the Resume material state owns selection and polishing progress without a second wait note"
+);
+assert.match(
+  prepareSource,
+  /const coverNote = coverLetterSelectionPending \|\| isTailoringCoverLetter[\s\S]{0,80}?\? ""/,
+  "the Cover Letter material state owns selection and polishing progress without a second wait note"
+);
+assert.match(
+  prepareSource,
+  /coverLetterOptions\.length > 0[\s\S]{0,80}?"Select saved variant"[\s\S]{0,80}?"No saved variants"/,
+  "saved cover letters are not labeled as an empty workspace"
+);
 
-console.log("Prepare application rail layout eval: 6/6 checks passed");
+console.log("Prepare application rail layout eval: 9/9 checks passed");
