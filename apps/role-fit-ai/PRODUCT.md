@@ -390,8 +390,10 @@ disappears into the task. Quiet competence, not salesmanship.
     the same session-derived command and blocker model: Apply for fresh work,
     Update application for an explicitly restored submitted
     record, and Save job updates for an explicitly restored Skipped
-    decision. The current job must be prepared
-    and preparation for selected work must be idle. Resume and Cover Letter
+    decision. The current job must be prepared and preparation for selected
+    work must be idle. The tracker must finish its authoritative load, and new
+    Apply or Skip actions refresh it before their final duplicate decision.
+    Resume and Cover Letter
     each have an Include toggle; only included material must be ready, and both
     may be excluded. Resume defaults on and Cover Letter defaults off. Starting
     Polish for one document, manually or through its enabled automatic proposal,
@@ -424,7 +426,9 @@ disappears into the task. Quiet competence, not salesmanship.
     keeps its decision date in Key dates, and opens its reason and short decision
     note from the compact one-line `Skipped · reason` control in a headerless
     non-modal decision popover;
-    general application notes remain independent data in Prep.
+    general application notes remain independent data in Prep. Application
+    Detail adopts newer tracker facts when its form is clean and pauses with an
+    explicit reload choice when local and external field edits conflict.
     Update mode names the exact saved record persistently;
     a candidate source that appears materially different pauses before provider
     analysis and can proceed only as a new preparation. Status changes are

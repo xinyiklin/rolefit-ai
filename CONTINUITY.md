@@ -5,6 +5,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-08-12
 
+- [USER+CODE+TOOL] The final ultra review hardened application ownership,
+  authoritative duplicate-refresh ordering, modal cross-tab and document
+  recovery, and status/focus lifecycles without new schemas or dependencies.
+  Same-tab writes are drained before tracker reads, stale preparation work
+  cannot relink a replacement, concurrent Application Detail edits fail closed,
+  and document operations join the unload boundary. A behavioral refresh-race
+  probe and the full app/package gates pass; the RoleFit suite now contains 106
+  offline evaluations. Browser QA was not started under the flag-first policy.
 - [USER+CODE+TOOL] Recovery is now an interruption-only safety net: a fresh tab
   never adopts a closed tab's draft, an extension import hides the receiving
   tab's prior prompt without deleting recovery data, same-tab entries expire

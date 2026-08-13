@@ -19,6 +19,10 @@ import {
 import { appliedApplicationForSession } from "../lib/preparationApplication.ts";
 import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
 import type { ApplicationPersistenceReceipt } from "../lib/applicationUnloadGuard.ts";
+import {
+  statusDetail,
+  type ApplicationActionStatus
+} from "../lib/applicationActionStatus.ts";
 
 // Which of the offered PDFs the user kept checked in the download dialog, and
 // the base name (extension excluded) each one carries. Owned here with the rest
@@ -40,8 +44,12 @@ type UseApplyFlowArgs = {
   currentResumeText: string;
   fitAssessmentPersistence: FitAssessmentPersistenceDecision;
   pipelineAiUsage: Record<string, StageAiUsage>;
-  applications: Application[];
   preparationSession: PreparationSession;
+  currentPreparationId: string;
+  getCurrentPreparationId: () => string;
+  getPreparationGeneration: () => number;
+  getApplication: (id: string) => Application | undefined;
+  refreshApplications: () => Promise<boolean>;
   createApplication: (app: Application) => Promise<boolean>;
   updateApplicationById: (app: Application) => Promise<boolean>;
   linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
@@ -56,7 +64,7 @@ type UseApplyFlowArgs = {
   // a second record.
   linkApplication: (id: string | null) => void;
   currentJobTracking: () => ExtractedJobTracking;
-  resolveApplyDuplicate: () => Promise<DuplicateResolution>;
+  resolveApplyDuplicate: (isCurrent: () => boolean) => Promise<DuplicateResolution>;
   // Whether each PDF can actually be TYPESET, which is stricter than the export
   // rail's enabled-state: the engine needs the structured model, so a text-only
   // polish result must not put a resume checkbox in the download prompt.
@@ -77,7 +85,7 @@ type UseApplyFlowArgs = {
   >;
   // Accepts an updater so a late failure can APPEND to the status commitApply
   // already set, instead of erasing an artifact-save warning the user needs.
-  setApplyStatus: Dispatch<SetStateAction<string>>;
+  setApplicationActionStatus: Dispatch<SetStateAction<ApplicationActionStatus | null>>;
   setActiveOutputTab: (tab: OutputTab) => void;
   setExpandedApplicationId: (id: string | null) => void;
 };
@@ -94,8 +102,12 @@ export function useApplyFlow({
   currentResumeText,
   fitAssessmentPersistence,
   pipelineAiUsage,
-  applications,
   preparationSession,
+  currentPreparationId,
+  getCurrentPreparationId,
+  getPreparationGeneration,
+  getApplication,
+  refreshApplications,
   createApplication,
   updateApplicationById,
   linkPostingRecords,
@@ -115,7 +127,7 @@ export function useApplyFlow({
   onResumeSaved,
   onCoverLetterSaved,
   setApplicationPersistenceReceipt,
-  setApplyStatus,
+  setApplicationActionStatus,
   setActiveOutputTab,
   setExpandedApplicationId
 }: UseApplyFlowArgs) {
@@ -123,6 +135,8 @@ export function useApplyFlow({
   const applyActionRef = useRef<PreparationPrimaryAction | null>(null);
   const applyUnrelatedApplicationIdRef = useRef<string | null>(null);
   const applyCommitIdentityRef = useRef<string | null>(null);
+  const applyPreparationIdRef = useRef<string | null>(null);
+  const applyPreparationGenerationRef = useRef<number | null>(null);
   const applyMaterialSelectionRef = useRef<{
     resume: boolean;
     coverLetter: boolean;
@@ -135,6 +149,10 @@ export function useApplyFlow({
     resume: includeResume,
     coverLetter: includeCoverLetter
   };
+  const applyDocumentVersionsRef = useRef<{
+    resume: string;
+    coverLetter: string;
+  } | null>(null);
   // Post-Apply download prompt: holds the just-applied role's label and which
   // included materials this Apply can actually export, so the dialog offers a
   // cover-letter PDF whenever the letter is part of the application.
@@ -152,6 +170,14 @@ export function useApplyFlow({
   const applyCommitInFlightRef = useRef(false);
   const applyDownloadInFlightRef = useRef(false);
   const isApplying = isResolvingApply || isCommittingApply || isDownloadingApplyPdfs;
+  const currentPreparationIdentityRef = useRef("");
+  currentPreparationIdentityRef.current = preparationCommitIdentity({
+    session: preparationSession,
+    preparationId: currentPreparationId,
+    jobUrl,
+    preparedJobDescription,
+    jobRawText
+  });
   const latestDocumentVersionsRef = useRef({
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
@@ -160,13 +186,46 @@ export function useApplyFlow({
     resume: resumeDocumentVersion,
     coverLetter: coverLetterDocumentVersion
   };
+  const canApplyRef = useRef(canApply);
+  const applyBlockerRef = useRef(applyBlocker);
+  canApplyRef.current = canApply;
+  applyBlockerRef.current = applyBlocker;
 
   function clearCapturedApply(): void {
     applyMaterialSelectionRef.current = null;
+    applyDocumentVersionsRef.current = null;
+    applyPreparationIdRef.current = null;
+    applyPreparationGenerationRef.current = null;
     applySessionRef.current = null;
     applyActionRef.current = null;
     applyUnrelatedApplicationIdRef.current = null;
     applyCommitIdentityRef.current = null;
+  }
+
+  function capturedPreparationIsCurrent(): boolean {
+    return applyCommitIdentityRef.current !== null
+      && applyPreparationIdRef.current === getCurrentPreparationId()
+      && applyPreparationGenerationRef.current === getPreparationGeneration()
+      && applyCommitIdentityRef.current === currentPreparationIdentityRef.current;
+  }
+
+  function ownsCurrentPreparation(applicationId: string): boolean {
+    return capturedPreparationIsCurrent()
+      && Boolean(getApplication(applicationId));
+  }
+
+  function capturedApplyPacketIsCurrent(): boolean {
+    const selection = applyMaterialSelectionRef.current;
+    const expectedVersions = applyDocumentVersionsRef.current;
+    if (!selection || !expectedVersions) return false;
+    const currentSelection = currentMaterialSelectionRef.current;
+    return selection.resume === currentSelection.resume
+      && selection.coverLetter === currentSelection.coverLetter
+      && (!selection.resume || expectedVersions.resume === latestDocumentVersionsRef.current.resume)
+      && (
+        !selection.coverLetter
+        || expectedVersions.coverLetter === latestDocumentVersionsRef.current.coverLetter
+      );
   }
 
   // Persist the package captured when Apply began; excluded documents remain untouched.
@@ -184,7 +243,7 @@ export function useApplyFlow({
       ? resume
         ? latestDocumentVersionsRef.current.resume === expectedVersions.resume
           ? await saveApplicationDocument(id, "resume", resume)
-          : { ok: false, error: "changed before it could be saved; save the current draft again" }
+          : { ok: false, error: "The resume changed before it could be saved." }
         : { ok: false, error: "No editable resume source is available." }
       : null;
     const storedCover = selection.coverLetter
@@ -192,7 +251,7 @@ export function useApplyFlow({
         ? latestDocumentVersionsRef.current.coverLetter ===
           expectedVersions.coverLetter
           ? await saveApplicationDocument(id, "cover", cover)
-          : { ok: false, error: "changed before it could be saved; save the current draft again" }
+          : { ok: false, error: "The cover letter changed before it could be saved." }
         : { ok: false, error: "No editable cover-letter source is available." }
       : null;
     const currentStoredResume =
@@ -201,7 +260,7 @@ export function useApplyFlow({
         ? {
             ok: false,
             error:
-              "changed while saving; the application has the earlier version, so save the current draft again"
+              "The resume changed while saving, so the application has the earlier version."
           }
         : storedResume;
     const currentStoredCover =
@@ -211,19 +270,31 @@ export function useApplyFlow({
         ? {
             ok: false,
             error:
-              "changed while saving; the application has the earlier version, so save the current draft again"
+              "The cover letter changed while saving, so the application has the earlier version."
           }
         : storedCover;
     const failures = [
       ...(selection.resume && !currentStoredResume?.ok
-        ? [`resume: ${currentStoredResume?.error ?? "save failed"}`]
+        ? [{ name: "resume", message: currentStoredResume?.error ?? "The resume could not be saved." }]
         : []),
       ...(selection.coverLetter && !currentStoredCover?.ok
-        ? [`cover letter: ${currentStoredCover?.error ?? "save failed"}`]
+        ? [{
+            name: "cover letter",
+            message: currentStoredCover?.error ?? "The cover letter could not be saved."
+          }]
         : [])
     ];
     if (failures.length) {
-      setApplyStatus(`${action.successVerb} "${label}", but ${failures.join("; ")}. Retry from the document's Save menu.${relationshipWarning}`);
+      setApplicationActionStatus({
+        tone: "error",
+        headline: `${action.receipt} — ${failures.map((failure) => failure.name).join(" and ")} not saved`,
+        detail: statusDetail(
+          `${label} ·`,
+          failures.map((failure) => failure.message).join(" "),
+          "Retry from the document's Save menu.",
+          relationshipWarning
+        )
+      });
       return {
         resumeSaved: Boolean(currentStoredResume?.ok),
         coverSaved: Boolean(currentStoredCover?.ok),
@@ -239,11 +310,19 @@ export function useApplyFlow({
       ...(currentStoredResume?.ok ? ["resume"] : []),
       ...(currentStoredCover?.ok ? ["cover letter"] : [])
     ];
-    setApplyStatus(
-      savedLabels.length
-        ? `${action.successVerb} "${label}". Saved ${savedLabels.join(" and ")}.${relationshipWarning}`
-        : `${action.successVerb} "${label}". No documents were included.${relationshipWarning}`
-    );
+    // A record saved without its posting link is partial: sticky, not expiring.
+    setApplicationActionStatus({
+      tone: relationshipWarning ? "error" : "success",
+      headline: relationshipWarning
+        ? `${action.receipt} — relationship update failed`
+        : action.receipt,
+      detail: statusDetail(
+        savedLabels.length
+          ? `${label} · Saved ${savedLabels.join(" and ")}.`
+          : `${label} · No documents were included.`,
+        relationshipWarning
+      )
+    });
     return {
       resumeSaved: Boolean(currentStoredResume?.ok),
       coverSaved: Boolean(currentStoredCover?.ok),
@@ -259,43 +338,51 @@ export function useApplyFlow({
   async function commitApply(): Promise<boolean> {
     const session = applySessionRef.current ?? preparationSession;
     const existing = session.applicationId
-      ? applications.find((application) => application.id === session.applicationId) ?? null
+      ? getApplication(session.applicationId) ?? null
       : null;
     const action = applyActionRef.current
       ?? preparationPrimaryAction(session, existing?.status);
-    if (
-      applyCommitIdentityRef.current !== preparationCommitIdentity({
-        session: preparationSession,
-        jobUrl,
-        preparedJobDescription,
-        jobRawText
-      })
-    ) {
-      const message = `The prepared job changed before ${action.label} could be saved. Nothing was saved; retry ${action.label}.`;
+    if (!capturedPreparationIsCurrent()) {
+      const message = `The prepared job changed before ${action.label} could be saved. Retry ${action.label}.`;
       setApplySaveError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       clearCapturedApply();
       setApplyDownloadPrompt(null);
       return false;
     }
-    if (!canApply) {
-      setApplyStatus(applyBlocker || "Finish preparation before continuing.");
+    if (!capturedApplyPacketIsCurrent()) {
+      const message = `Included materials changed before ${action.label} could be saved. Retry ${action.label}.`;
+      setApplySaveError(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
+      clearCapturedApply();
+      setApplyDownloadPrompt(null);
+      return false;
+    }
+    if (!canApplyRef.current) {
+      const message = applyBlockerRef.current || "Finish preparation before continuing.";
+      setApplySaveError(message);
+      setApplicationActionStatus({
+        tone: "error",
+        headline: `Can't ${action.label.toLowerCase()} yet`,
+        detail: message
+      });
       return false;
     }
     if (applyCommitInFlightRef.current) return false;
+    setApplicationActionStatus(null);
     applyCommitInFlightRef.current = true;
     setApplicationPersistenceReceipt(null);
     // Later edits must not let an older artifact mark the live document clean.
-    const expectedDocumentVersions = { ...latestDocumentVersionsRef.current };
+    const expectedDocumentVersions = { ...applyDocumentVersionsRef.current! };
     setIsCommittingApply(true);
     setApplySaveError("");
     const resumeUsed = resumeUsedForApplication(currentResumeText, result?.proposalBaselineText);
     const usedBase = resumeUsed === "base";
     const materialSelection = applyMaterialSelectionRef.current ?? currentMaterialSelectionRef.current;
     if (session.mode !== "new" && !existing) {
-      const message = "The saved record for this preparation is no longer available. Nothing was saved; return to Applications and open it again.";
+      const message = "The saved record for this preparation is no longer available. Return to Applications and open it again.";
       setApplySaveError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
       return false;
@@ -332,15 +419,15 @@ export function useApplyFlow({
     } catch {
       const message = `${action.label} could not be prepared for saving. Your recovery draft is still available; retry ${action.label}.`;
       setApplySaveError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
       return false;
     }
     if (!commit) {
-      const message = "The saved record no longer matches this preparation mode. Nothing was saved; reopen it from Applications and try again.";
+      const message = "The saved record no longer matches this preparation mode. Reopen it from Applications and try again.";
       setApplySaveError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
       return false;
@@ -358,7 +445,7 @@ export function useApplyFlow({
     if (!saved) {
       const message = `${action.label} could not be saved. Your recovery draft is still available; retry ${action.label}.`;
       setApplySaveError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
       return false;
@@ -371,7 +458,7 @@ export function useApplyFlow({
         relationship.jobPostingGroupId
       ).catch(() => null);
       if (!linkedGroupId) {
-        relationshipWarning = " The related posting could not be linked; both records remain separate.";
+        relationshipWarning = "The related posting could not be linked; both records remain separate.";
       }
     } else if (commit.operation === "create" && applyUnrelatedApplicationIdRef.current) {
       const savedSeparation = await markPostingRecordsUnrelated([
@@ -379,24 +466,14 @@ export function useApplyFlow({
         applyUnrelatedApplicationIdRef.current
       ]).catch(() => false);
       if (!savedSeparation) {
-        relationshipWarning = " The Keep separate decision could not be saved; the records may appear in duplicate review.";
+        relationshipWarning = "The Keep separate decision could not be saved; the records may appear in duplicate review.";
       }
     }
     try {
-      // From here the session has one application of record: later document
-      // saves update this row rather than creating another one.
-      linkApplication(app.id);
-      const selectedMaterials = [
-        ...(materialSelection.resume ? [usedBase ? "original resume" : "tailored resume"] : []),
-        ...(materialSelection.coverLetter ? ["cover letter"] : [])
-      ];
-      setApplyStatus(
-        `${action.successVerb}. Saved "${app.title}" to Applications${
-          selectedMaterials.length ? ` with ${selectedMaterials.join(" and ")}` : ""
-        }.${relationshipWarning}`
-      );
-      setActiveOutputTab("applications");
-      setExpandedApplicationId(app.id);
+      if (ownsCurrentPreparation(app.id)) {
+        setActiveOutputTab("applications");
+        setExpandedApplicationId(app.id);
+      }
       const savedDocuments = await saveAppliedDocumentArtifacts(
         app.id,
         app.title,
@@ -404,31 +481,41 @@ export function useApplyFlow({
         action,
         relationshipWarning
       );
-      setApplicationPersistenceReceipt({
-        applicationId: app.id,
-        resume: {
-          version: expectedDocumentVersions.resume,
-          outcome: savedDocuments.resumeOutcome
-        },
-        coverLetter: {
-          version: expectedDocumentVersions.coverLetter,
-          outcome: savedDocuments.coverOutcome
-        }
-      });
-      // Tracker text is not a reloadable document. Preserve recovery until the
-      // corresponding strict editable source has also been committed.
-      if (savedDocuments.resumeSaved) onResumeSaved();
-      if (savedDocuments.coverSaved) onCoverLetterSaved();
+      if (ownsCurrentPreparation(app.id)) {
+        setApplicationPersistenceReceipt({
+          applicationId: app.id,
+          resume: {
+            version: expectedDocumentVersions.resume,
+            outcome: savedDocuments.resumeOutcome
+          },
+          coverLetter: {
+            version: expectedDocumentVersions.coverLetter,
+            outcome: savedDocuments.coverOutcome
+          }
+        });
+        // Tracker text is not a reloadable document. Preserve recovery until the
+        // corresponding strict editable source has also been committed.
+        if (savedDocuments.resumeSaved) onResumeSaved();
+        if (savedDocuments.coverSaved) onCoverLetterSaved();
+      }
       return true;
     } catch {
-      setApplyStatus(
-        `${action.successVerb} "${app.title}", but post-save updates could not be confirmed. Review Applications before retrying document saves.${relationshipWarning}`
-      );
+      setApplicationActionStatus({
+        tone: "error",
+        headline: `${action.receipt} — follow-up unconfirmed`,
+        detail: statusDetail(
+          `${app.title} ·`,
+          "Post-save updates could not be confirmed. Review Applications before retrying document saves.",
+          relationshipWarning
+        )
+      });
       return true;
     } finally {
+      const shouldLinkApplication = ownsCurrentPreparation(app.id);
       clearCapturedApply();
       applyCommitInFlightRef.current = false;
       setIsCommittingApply(false);
+      if (shouldLinkApplication) linkApplication(app.id);
     }
   }
 
@@ -442,36 +529,64 @@ export function useApplyFlow({
     ) return;
     const session = preparationSession;
     const existing = session.applicationId
-      ? applications.find((application) => application.id === session.applicationId) ?? null
+      ? getApplication(session.applicationId) ?? null
       : null;
     const action = preparationPrimaryAction(session, existing?.status);
     if (!canApply) {
-      setApplyStatus(applyBlocker || "Finish preparation before continuing.");
+      setApplicationActionStatus({
+        tone: "error",
+        headline: `Can't ${action.label.toLowerCase()} yet`,
+        detail: applyBlocker || "Finish preparation before continuing."
+      });
       return;
     }
     applyResolutionInFlightRef.current = true;
     setIsResolvingApply(true);
     try {
-      setApplyStatus("");
+      setApplicationActionStatus(null);
       applyMaterialSelectionRef.current = {
         ...currentMaterialSelectionRef.current
+      };
+      applyDocumentVersionsRef.current = {
+        ...latestDocumentVersionsRef.current
       };
       applySessionRef.current = session;
       applyActionRef.current = action;
       applyUnrelatedApplicationIdRef.current = null;
       applyCommitIdentityRef.current = preparationCommitIdentity({
         session,
+        preparationId: currentPreparationId,
         jobUrl,
         preparedJobDescription,
         jobRawText
       });
+      applyPreparationIdRef.current = currentPreparationId;
+      applyPreparationGenerationRef.current = getPreparationGeneration();
+      const isCurrent = () => capturedPreparationIsCurrent();
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
+        if (!(await refreshApplications())) {
+          clearCapturedApply();
+          setApplicationActionStatus({
+            tone: "error",
+            headline: "Nothing was saved",
+            detail: `Applications could not be refreshed. Retry ${action.label}.`
+          });
+          return;
+        }
+        if (!isCurrent()) {
+          clearCapturedApply();
+          return;
+        }
         try {
-          resolution = await resolveApplyDuplicate();
+          resolution = await resolveApplyDuplicate(isCurrent);
         } catch {
           clearCapturedApply();
-          setApplyStatus("Duplicate checking failed, so the application was not saved. Retry Apply.");
+          setApplicationActionStatus({
+            tone: "error",
+            headline: "Nothing was saved",
+            detail: "Duplicate checking failed. Retry Apply."
+          });
           return;
         }
       }
@@ -526,7 +641,6 @@ export function useApplyFlow({
     ) return;
     applyDownloadInFlightRef.current = true;
     setIsDownloadingApplyPdfs(true);
-    const label = applyDownloadPrompt?.label ?? "";
     const action = applyDownloadPrompt?.action
       ?? applyActionRef.current
       ?? preparationPrimaryAction(preparationSession);
@@ -540,14 +654,16 @@ export function useApplyFlow({
         coverLetter: picks.coverLetter ? exportCoverLetter : undefined
       });
       if (failed.length) {
-        const detail =
+        const reason =
           `The ${failed.join(" and ")} PDF${failed.length > 1 ? "s" : ""} could not be exported.` +
           ` Retry from ${failed.length > 1 ? "each" : "that"} document's own export menu.`;
         // commitApply has already reported the commit and any artifact-save
-        // problem; keep that and add this rather than replacing it.
-        setApplyStatus((current) =>
-          current ? `${current} ${detail}` : `${action.successVerb}${label ? ` "${label}"` : ""}. ${detail}`
-        );
+        // problem; add to its detail rather than replacing it.
+        setApplicationActionStatus((current) => ({
+          tone: "error",
+          headline: `${action.receipt} — PDF export failed`,
+          detail: statusDetail(current?.detail, reason)
+        }));
       }
       // Keep the modal mounted and busy until every selected attempt settles.
       // It is the lock that prevents edits between the saved artifact snapshot

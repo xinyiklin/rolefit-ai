@@ -11,7 +11,7 @@
   "scripts": {
     "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
     "eval:clipboard": "node --experimental-strip-types src/sections/editor/__evals__/clipboard-html-metadata.mjs",
-    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs",
+    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs && node src/hooks/__evals__/modal-focus-contract.mjs",
     "eval:components": "node src/components/__evals__/style-range.mjs",
     "eval": "npm run eval:fonts && npm run eval:editor && npm run eval:clipboard && npm run eval:hooks && npm run eval:components",
     "test": "npm run eval",

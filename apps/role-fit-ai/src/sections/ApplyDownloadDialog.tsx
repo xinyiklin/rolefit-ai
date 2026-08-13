@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type RefObject } from "react";
 import { Download, X } from "lucide-react";
 import { EXPORT_META } from "./ExportRail";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
@@ -16,6 +16,7 @@ type ApplyDownloadDialogProps = {
   canDownloadCoverLetter: boolean;
   busy: boolean;
   error?: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
   onDownload: (names: ApplyDownloadNames, picks: ApplyDownloadPicks) => void | Promise<void>;
   onSkip: () => void;
   onApplyOnly: () => void | Promise<void>;
@@ -29,6 +30,7 @@ export function ApplyDownloadDialog({
   canDownloadCoverLetter,
   busy,
   error,
+  returnFocusRef,
   onDownload,
   onSkip,
   onApplyOnly
@@ -52,6 +54,7 @@ export function ApplyDownloadDialog({
     active: true,
     containerRef: formRef,
     initialFocusRef: firstInputRef,
+    returnFocusRef,
     onClose: busy ? () => undefined : onSkip,
     selectInitialText: true
   });

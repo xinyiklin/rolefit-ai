@@ -21,7 +21,7 @@ export type PreparationPrimaryAction = {
   kind: "apply" | "update-application" | "update-job";
   label: string;
   busyLabel: string;
-  successVerb: string;
+  receipt: string;
 };
 
 export function newPreparationSession(
@@ -42,11 +42,13 @@ export function preparationSessionForApplication(application: {
 
 export function preparationCommitIdentity({
   session,
+  preparationId,
   jobUrl,
   preparedJobDescription,
   jobRawText
 }: {
   session: PreparationSession;
+  preparationId: string;
   jobUrl: string;
   preparedJobDescription: string;
   jobRawText: string;
@@ -54,6 +56,7 @@ export function preparationCommitIdentity({
   return [
     session.mode,
     session.applicationId ?? "",
+    preparationId,
     jobUrl.trim(),
     preparedJobDescription.trim(),
     jobRawText.trim()
@@ -69,7 +72,7 @@ export function preparationPrimaryAction(
       kind: "apply",
       label: "Apply",
       busyLabel: "Applying…",
-      successVerb: "Applied"
+      receipt: "Application saved"
     };
   }
   if (recordStatus === "not_applying") {
@@ -77,13 +80,13 @@ export function preparationPrimaryAction(
       kind: "update-job",
       label: "Save job updates",
       busyLabel: "Saving…",
-      successVerb: "Saved"
+      receipt: "Job updates saved"
     };
   }
   return {
     kind: "update-application",
     label: "Update application",
     busyLabel: "Updating…",
-    successVerb: "Updated"
+    receipt: "Application updated"
   };
 }

@@ -35,7 +35,9 @@ and `docs/engineering/ui-principles.md`.
   draft, save, and navigation lifecycle. Fit, document, posting-preview, and
   Skipped-decision surfaces stay extracted; do not split the form sections if
   doing so would only thread that shared draft state and its refs through more
-  props.
+  props. Clean drafts rebase to fresh tracker data; concurrent remote and local
+  field edits lock until the user adopts the latest version. Document work
+  locks modal navigation and reports its busy state from the header.
 - `PrepareTab` is the first/default and sole job-intake page. It composes the
   URL/paste fallbacks, receipt/Job analysis progress, collapsed source, editable
   full job brief and its extraction gaps, resume-variant
@@ -107,7 +109,15 @@ and `docs/engineering/ui-principles.md`.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.
-- The masthead contains the RoleFit identity and shared Apply command only.
+- The masthead contains the RoleFit identity and shared Apply command only. Its
+  outcome is reported by `ActionStatus`, which leads the shared `.progress-dock`
+  column, not by a card anchored under the action: Apply opens the record it
+  just wrote in the right inspector, and the receipt starts clear of it. Keep
+  it in that one column — a second floating region either collides with a task
+  card or, in a corner, is not seen at all. It takes an explicit
+  `ApplicationActionStatus` tone from the flow; do not restore a keyword test
+  over the message text, do not let a partial save report as a success, and do
+  not start success expiry during active work or direct interaction.
   Read-only Sessions is ambient awareness immediately above Settings in the
   bottom studio-rail utilities group, outside `OUTPUT_TABS` and the APG tablist.
   Expanded it shows Sessions + count; collapsed it becomes an icon + compact

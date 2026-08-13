@@ -18,6 +18,9 @@ const compactDownloadPick = compact(downloadPick);
 const commitApplyStart = applyFlow.indexOf("async function commitApply(): Promise<boolean>");
 const commitApplyEnd = applyFlow.indexOf("\n  // New preparations", commitApplyStart);
 const commitApply = applyFlow.slice(commitApplyStart, commitApplyEnd);
+const blockedCommitStart = commitApply.indexOf("if (!canApplyRef.current)");
+const blockedCommitEnd = commitApply.indexOf("if (applyCommitInFlightRef.current)", blockedCommitStart);
+const blockedCommit = commitApply.slice(blockedCommitStart, blockedCommitEnd);
 const handleApplyStart = applyFlow.indexOf("async function handleApply()");
 const handleApplyEnd = applyFlow.indexOf("\n  // Downloads run sequentially:", handleApplyStart);
 const handleApply = applyFlow.slice(handleApplyStart, handleApplyEnd);
@@ -25,6 +28,12 @@ const compactHandleApply = compact(handleApply);
 
 assert.ok(downloadPickStart >= 0, "Apply exposes the post-commit download flow");
 assert.ok(downloadPickEnd > downloadPickStart, "the download-flow source probe is bounded to its function");
+assert.ok(commitApplyStart >= 0, "the commit probe finds commitApply");
+assert.ok(commitApplyEnd > commitApplyStart, "the commit probe is bounded to commitApply");
+assert.ok(
+  blockedCommitStart >= 0 && blockedCommitEnd > blockedCommitStart,
+  "the readiness probe stays bounded before the commit reentry guard"
+);
 assert.match(
   applyFlow,
   /const \[isResolvingApply, setIsResolvingApply\] = useState\(false\);/,
@@ -88,7 +97,7 @@ const captureMaterials = compactHandleApply.indexOf(
 );
 const captureSession = compactHandleApply.indexOf("applySessionRef.current = session;", captureMaterials);
 const newSessionGuard = compactHandleApply.indexOf('if (session.mode === "new")', captureSession);
-const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate()", showResolutionBusy);
+const awaitResolution = compactHandleApply.indexOf("await resolveApplyDuplicate(isCurrent)", showResolutionBusy);
 assert.ok(resolutionGuard >= 0, "Apply rejects reentry during any active lifecycle phase");
 assert.ok(
   claimResolution > resolutionGuard &&
@@ -123,7 +132,7 @@ assert.ok(
 );
 assert.match(
   handleApply,
-  /catch \{[\s\S]{0,120}?clearCapturedApply\(\);[\s\S]{0,180}?setApplyStatus\("Duplicate checking failed, so the application was not saved\. Retry Apply\."\);[\s\S]{0,80}?return;/,
+  /catch \{[\s\S]{0,120}?clearCapturedApply\(\);[\s\S]{0,240}?headline: "Nothing was saved",[\s\S]{0,120}?detail: "Duplicate checking failed\. Retry Apply\."[\s\S]{0,120}?return;/,
   "an unexpected duplicate-check failure clears the captured session and reports that nothing was saved"
 );
 assert.doesNotMatch(
@@ -175,6 +184,17 @@ assert.ok(
 
 assert.doesNotMatch(commitApply, /setIsApplying\(/, "commitApply does not clear the combined public busy state");
 assert.match(commitApply, /setIsCommittingApply\(false\);/, "commit persistence still clears its own phase");
+const commitFinally = commitApply.slice(commitApply.lastIndexOf("finally"));
+assert.match(
+  commitFinally,
+  /finally \{[\s\S]{0,420}?if \(shouldLinkApplication\) linkApplication\(app\.id\);[\s\S]{0,80}?\n\s*\}/,
+  "the original Apply links only its still-owned preparation from finally cleanup"
+);
+assert.match(
+  blockedCommit,
+  /const message = applyBlockerRef\.current \|\| "Finish preparation before continuing\.";[\s\S]*setApplySaveError\(message\);[\s\S]*detail: message/,
+  "a readiness change while the download dialog is open remains visible in that dialog"
+);
 assert.match(
   compactApplyFlow,
   /if \(applyResolutionInFlightRef\.current \|\| applyCommitInFlightRef\.current \|\| applyDownloadInFlightRef\.current\) return;/,

@@ -50,7 +50,8 @@ type UseDuplicateGuardArgs = {
   jobRawText: string;
   tracking: () => TrackingFacts;
   findDuplicatesForTarget: (target: DuplicateTarget) => DuplicateMatch<Application>[];
-  onOpenExisting: (applicationId: string) => Promise<boolean>;
+  refreshApplications: () => Promise<boolean>;
+  onOpenExisting: (applicationId: string, isCurrent: () => boolean) => Promise<boolean>;
   onRelationshipResolved: (relationship: JobPostingRelationship | null) => void;
 };
 
@@ -116,6 +117,7 @@ export function useDuplicateGuard({
   jobRawText,
   tracking,
   findDuplicatesForTarget,
+  refreshApplications,
   onOpenExisting,
   onRelationshipResolved
 }: UseDuplicateGuardArgs) {
@@ -188,8 +190,10 @@ export function useDuplicateGuard({
 
   async function resolveMatch(
     match: DuplicateMatch<Application>,
-    target: DuplicateTarget
+    target: DuplicateTarget,
+    isCurrent: () => boolean
   ): Promise<DuplicateResolution> {
+    if (!isCurrent()) return { action: "cancel" };
     const priorDecision = acknowledgedDecision(match.application.id, target);
     if (priorDecision) {
       return {
@@ -202,9 +206,10 @@ export function useDuplicateGuard({
     }
 
     const choice = await requestChoice(promptFor(match));
+    if (!isCurrent()) return { action: "cancel" };
     if (choice === "cancel") return { action: "cancel" };
     if (choice === "open-existing") {
-      const opened = await onOpenExisting(match.application.id);
+      const opened = await onOpenExisting(match.application.id, isCurrent);
       return opened
         ? { action: "open-existing", applicationId: match.application.id }
         : { action: "cancel" };
@@ -225,18 +230,29 @@ export function useDuplicateGuard({
     return { action: "continue", relationship };
   }
 
-  async function confirmDuplicateGate(target: DuplicateTarget): Promise<DuplicateGateResult> {
+  async function confirmDuplicateGate(
+    target: DuplicateTarget,
+    isCurrent: () => boolean
+  ): Promise<DuplicateGateResult> {
+    if (!(await refreshApplications())) {
+      throw new Error("Applications could not be refreshed. Retry the action.");
+    }
+    if (!isCurrent()) return { proceed: false, note: null };
     const match = findDuplicatesForTarget(target)[0];
     if (!match) return { proceed: true, note: null };
 
-    const resolution = await resolveMatch(match, target);
+    const resolution = await resolveMatch(match, target, isCurrent);
+    if (resolution.action === "open-existing") {
+      return { proceed: false, note: duplicateNote(match), handled: true };
+    }
+    if (!isCurrent()) return { proceed: false, note: null };
     if (resolution.action === "continue") {
       return { proceed: true, note: duplicateNote(match) };
     }
     return {
       proceed: false,
       note: duplicateNote(match),
-      handled: resolution.action === "open-existing"
+      handled: false
     };
   }
 
@@ -256,7 +272,8 @@ export function useDuplicateGuard({
   async function confirmDuplicateForJobAnalysis(
     url: string,
     text: string,
-    facts: TrackingFacts
+    facts: TrackingFacts,
+    isCurrent: () => boolean
   ): Promise<DuplicateGateResult> {
     return confirmDuplicateGate({
       jobUrl: url,
@@ -264,17 +281,19 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    });
+    }, isCurrent);
   }
 
-  async function confirmDuplicateBeforePolish(): Promise<boolean> {
-    return (await confirmDuplicateGate(currentTarget())).proceed;
+  async function confirmDuplicateBeforePolish(isCurrent: () => boolean): Promise<boolean> {
+    return (await confirmDuplicateGate(currentTarget(), isCurrent)).proceed;
   }
 
-  async function resolveApplyDuplicate(): Promise<DuplicateResolution> {
+  async function resolveApplyDuplicate(isCurrent: () => boolean): Promise<DuplicateResolution> {
     const target = currentTarget();
     const match = findDuplicatesForTarget(target)[0];
-    return match ? resolveMatch(match, target) : { action: "continue", relationship: null };
+    return match
+      ? resolveMatch(match, target, isCurrent)
+      : { action: "continue", relationship: null };
   }
 
   return {

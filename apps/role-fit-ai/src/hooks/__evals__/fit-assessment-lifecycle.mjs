@@ -442,8 +442,18 @@ assert.match(
 );
 assert.match(
   polishSource,
-  /const duplicateConfirmed = await confirmDuplicateBeforePolish\(\);\s*if \(!startIsCurrent\(\)\) return;\s*if \(!duplicateConfirmed\)/,
+  /const duplicateConfirmed = await confirmDuplicateBeforePolish\(startIsCurrent\);\s*if \(!startIsCurrent\(\)\) return;\s*if \(!duplicateConfirmed\)/,
   "a stale duplicate preflight cannot act on a newer claim's shared run lock"
+);
+assert.match(
+  polishSource,
+  /if \(!runLockRef\.current && !abortRef\.current\)[\s\S]{0,500}?runLockRef\.current = false;[\s\S]{0,300}?setIsPolishStarting\(false\);[\s\S]{0,360}?status: "stopped"[\s\S]{0,160}?errorHeadline: "Inputs changed"/,
+  "an input change during Polish preflight publishes a stopped recovery card"
+);
+assert.equal(
+  appSource.match(/isPolishStarting=\{isPolishStarting\}/g)?.length,
+  2,
+  "Prepare and Resume both expose the Polish preflight phase"
 );
 assert.match(
   polishSource,

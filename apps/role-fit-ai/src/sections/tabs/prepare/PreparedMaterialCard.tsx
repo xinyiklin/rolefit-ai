@@ -11,6 +11,7 @@ type PreparedMaterialCardProps = {
   variantOptions: Array<{ fileName: string; label: string }>;
   emptyVariantLabel: string;
   variantDisabled: boolean;
+  controlsDisabled: boolean;
   onVariantChange: (fileName: string) => void;
   actions: ReactNode;
   children?: ReactNode;
@@ -31,6 +32,7 @@ export function PreparedMaterialCard({
   variantOptions,
   emptyVariantLabel,
   variantDisabled,
+  controlsDisabled,
   onVariantChange,
   actions,
   children
@@ -48,6 +50,7 @@ export function PreparedMaterialCard({
             aria-label={`Include ${title.toLowerCase()}`}
             checked={included}
             onChange={(event) => onIncludedChange(event.target.checked)}
+            disabled={controlsDisabled}
           />
           <span className="prepare-include-toggle__track" aria-hidden="true">
             <span />
@@ -59,7 +62,7 @@ export function PreparedMaterialCard({
           className="prepare-material__variant"
           value={variantValue}
           onChange={(event) => onVariantChange(event.target.value)}
-          disabled={variantDisabled}
+          disabled={controlsDisabled || variantDisabled}
         >
           {!variantValue ? <option value="">{emptyVariantLabel}</option> : null}
           {variantOptions.map((option) => (

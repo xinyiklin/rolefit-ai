@@ -62,6 +62,9 @@ function createHarness(match, initialTargetText = targetText) {
   let stateCursor = 0;
   let refCursor = 0;
   let activeTargetText = initialTargetText;
+  let current = true;
+  let refreshResult = true;
+  let refreshCalls = 0;
 
   globalThis.__duplicateHarness = {
     useState(initial) {
@@ -81,6 +84,16 @@ function createHarness(match, initialTargetText = targetText) {
   return {
     opened,
     relationships,
+    isCurrent: () => current,
+    get refreshCalls() {
+      return refreshCalls;
+    },
+    setCurrent(next) {
+      current = next;
+    },
+    setRefreshResult(next) {
+      refreshResult = next;
+    },
     setTargetText(next) {
       activeTargetText = next;
     },
@@ -92,7 +105,11 @@ function createHarness(match, initialTargetText = targetText) {
         jobDescription: activeTargetText,
         jobRawText: activeTargetText,
         tracking: () => ({ company: "Acme", role: "Software Engineer" }),
-        findDuplicatesForTarget: () => [match],
+        findDuplicatesForTarget: () => match ? [match] : [],
+        refreshApplications: async () => {
+          refreshCalls += 1;
+          return refreshResult;
+        },
         onOpenExisting: async (id) => {
           opened.push(id);
           return true;
@@ -108,8 +125,10 @@ async function pendingGate(harness) {
   const pending = first.confirmDuplicateBeforeJobAnalysis(
     targetUrl,
     targetText,
-    { company: "Acme", role: "Software Engineer" }
+    { company: "Acme", role: "Software Engineer" },
+    harness.isCurrent
   );
+  await Promise.resolve();
   const prompted = harness.render();
   assert.ok(prompted.duplicatePrompt, "a duplicate choice pauses the gate");
   return { pending, prompted };
@@ -132,7 +151,7 @@ async function pendingGate(harness) {
     jobPostingGroupId: "posting-existing",
     confidence: "exact"
   }]);
-  const acknowledged = await harness.render().resolveApplyDuplicate();
+  const acknowledged = await harness.render().resolveApplyDuplicate(harness.isCurrent);
   assert.deepEqual(acknowledged, {
     action: "continue",
     relationship: harness.relationships[0]
@@ -147,7 +166,7 @@ async function pendingGate(harness) {
   assert.equal((await pending).proceed, true);
   assert.deepEqual(harness.relationships, [null]);
   assert.deepEqual(
-    await harness.render().resolveApplyDuplicate(),
+    await harness.render().resolveApplyDuplicate(harness.isCurrent),
     {
       action: "continue",
       relationship: null,
@@ -175,12 +194,12 @@ async function pendingGate(harness) {
     duplicate(),
     `${commonPrefix}First posting body`
   );
-  const firstPending = harness.render().resolveApplyDuplicate();
+  const firstPending = harness.render().resolveApplyDuplicate(harness.isCurrent);
   harness.render().chooseDuplicate("continue-new");
   assert.equal((await firstPending).action, "continue");
 
   harness.setTargetText(`${commonPrefix}Materially different posting body`);
-  const secondPending = harness.render().resolveApplyDuplicate();
+  const secondPending = harness.render().resolveApplyDuplicate(harness.isCurrent);
   const secondPrompt = harness.render();
   assert.ok(
     secondPrompt.duplicatePrompt,
@@ -188,6 +207,27 @@ async function pendingGate(harness) {
   );
   secondPrompt.chooseDuplicate("cancel");
   assert.deepEqual(await secondPending, { action: "cancel" });
+}
+
+{
+  const harness = createHarness(duplicate());
+  const { pending, prompted } = await pendingGate(harness);
+  harness.setCurrent(false);
+  prompted.chooseDuplicate("link");
+  assert.deepEqual(await pending, { proceed: false, note: null });
+  assert.deepEqual(harness.relationships, [], "a stale duplicate choice cannot mutate a replacement preparation");
+}
+
+{
+  const harness = createHarness(null);
+  assert.equal(await harness.render().confirmDuplicateBeforePolish(harness.isCurrent), true);
+  assert.equal(harness.refreshCalls, 1, "the pre-AI duplicate gate refreshes its tracker snapshot");
+  harness.setRefreshResult(false);
+  await assert.rejects(
+    harness.render().confirmDuplicateBeforePolish(harness.isCurrent),
+    /Applications could not be refreshed/,
+    "pre-AI work fails closed when the tracker cannot be refreshed"
+  );
 }
 
 {

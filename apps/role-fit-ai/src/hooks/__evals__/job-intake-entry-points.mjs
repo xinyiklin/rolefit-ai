@@ -93,6 +93,7 @@ function createHarness({
   beforeHandled = false,
   afterProceed = true,
   sourceReplacementChoice = "continue",
+  sourceReplacementCurrent = true,
   providerStatus = 200,
   fitProvider = "codex-cli",
   fitModel = "synthetic-model",
@@ -161,7 +162,7 @@ function createHarness({
     setLinkStatus: record("setLinkStatus"),
     confirmPreparedSourceReplacement: async () => {
       log.push({ event: "source:replacement" });
-      return sourceReplacementChoice;
+      return { choice: sourceReplacementChoice, isCurrent: () => sourceReplacementCurrent };
     },
     confirmDuplicateBeforeJobAnalysis: async () => {
       log.push({ event: "duplicate:before" });
@@ -388,6 +389,26 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assertOrder(harness.log, sharedCommitOrder, "paste intake order");
   assert.equal(harness.requests.some(({ url }) => url === "/api/import-job"), false);
+}
+
+{
+  const harness = createHarness({ sourceReplacementCurrent: false });
+  await runPaste(harness);
+  assert.equal(
+    harness.log.some(({ event }) => event === "duplicate:before"),
+    false,
+    "a preparation superseded during source replacement stops before duplicate review"
+  );
+  assert.equal(
+    harness.log.some(({ event }) => event === "fetch:/api/job-analysis"),
+    false,
+    "a superseded source replacement cannot start provider work"
+  );
+  assert.equal(
+    harness.log.some(({ event }) => event === "setImportedJob"),
+    false,
+    "a superseded source replacement cannot commit its prepared job"
+  );
 }
 
 {

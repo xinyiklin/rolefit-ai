@@ -12,9 +12,11 @@ AI-safety probes; the root `npm test` additionally runs package-owned evals.
 `npm test --workspace apps/role-fit-ai` runs the app's
 `offline-evals.test.mjs`. It recursively discovers every `.mjs` under an
 `__evals__` directory in RoleFit and runs each as a child process (bounded by a
-60s timeout), asserting exit 0. There are no model calls, network requests, or
-provider keys. A new offline eval is gated automatically unless it is explicitly
-classified as live.
+60s timeout), asserting exit 0. There are no external network or model calls and
+no provider keys. `server/__evals__/cover-letter-workspace-probes.mjs` is the
+one auto-discovered route probe that binds an ephemeral loopback listener. A
+new offline eval is gated automatically unless it is explicitly classified as
+live.
 
 Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
 `node apps/role-fit-ai/server/ai/__evals__/resume-proposal-probes.mjs`. On a failed case the runner
@@ -23,7 +25,7 @@ case broke without re-running.
 
 The live cover-letter and Resume Proposal quality evals are excluded via the
 runner's `LIVE` denylist: they drive a real provider, cost tokens, and need a configured provider. Any
-new network/model eval must be added to `LIVE` so it stays out of `npm test`.
+new external-network or model eval must be added to `LIVE` so it stays out of `npm test`.
 
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
@@ -44,8 +46,7 @@ small sizes. For the full 50/100/300/500 sweep when changing the matcher or the
 scan cache, run it standalone with
 `ROLEFIT_DUPLICATE_BENCH=full node apps/role-fit-ai/src/lib/__evals__/duplicate-scan-eval.mjs`.
 
-Listener/companion-process integration tests are also explicit rather than
-auto-discovered.
+Full server-lifecycle and companion-process integration tests are explicit.
 `server/__evals__/server-lifecycle-probes.test.mjs` intentionally uses the
 `.test.mjs` suffix, which the offline child-process runner excludes. Run it with
 `npm run test:server-lifecycle --workspace apps/role-fit-ai`; it binds an
@@ -338,6 +339,13 @@ Good frontend verification covers:
   Apply creates, restored-record updates preserve the same id, later-stage updates
   preserve identity/date/stage, missing explicit targets fail closed, and all
   primary surfaces use the shared action descriptor.
+  `src/hooks/__evals__/application-action-integrity.mjs` pins authoritative
+  tracker readiness, fresh same-handler duplicate lookup, late Apply/Skip
+  preparation ownership and record existence, and the application-persistence
+  edit lock over the captured job and material package.
+  `src/hooks/__evals__/applications-refresh-ordering.mjs` executes concurrent
+  refresh coalescing, queue-tail draining, and retry when a tracker write starts
+  during an authoritative GET.
   `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
   multi-choice duplicate gate, exact-record opening, confirmed linking,
   remembered Keep separate decisions, and the create-then-atomic-link boundary;
@@ -443,9 +451,9 @@ Good frontend verification covers:
   under `packages/engine/`
 - editor changes keep the shared
   `packages/editor/src/sections/editor/__evals__/typeset-editing.mjs` and
-  `packages/editor/src/hooks/__evals__/resume-editor-structure.mjs` checks green
-  so display/value mapping, history coalescing, and summary split/merge remain
-  atomic
+  `packages/editor/src/hooks/__evals__/{resume-editor-structure,modal-focus-contract}.mjs`
+  checks green so display/value mapping, history coalescing, summary split/merge,
+  and modal focus placement/restoration remain atomic
 - `npm run test:editor:browser` uses headless Chrome through the DevTools
   protocol to exercise header mark preservation and undo, disabled open
   controls, popover focus return, one-block rich document paste, the Typeset

@@ -142,8 +142,13 @@ assert.match(railSource, /"Skip & save job"/, "the quiet action lives in the Pre
 assert.doesNotMatch(mastheadSource, /Skip & save job/, "the masthead does not expose the skip action");
 assert.match(dialogSource, /No application is recorded\./);
 assert.match(dialogSource, /"Save as skipped"/);
-assert.match(skipFlowSource, /Saved as Skipped\. RoleFit will recognize this posting if you encounter it again\./);
+assert.match(skipFlowSource, /"Saved as skipped"/);
+assert.match(skipFlowSource, /RoleFit will recognize this posting if you encounter it again\./);
 assert.doesNotMatch(skipFlowSource, /getResumeArtifacts|saveApplicationDocument|coverLetterArtifacts/);
-assert.match(appSource, /const skipBlocker = !hasLoadedApplications[\s\S]{0,420}?pendingApplicationWrites/);
+assert.match(
+  appSource,
+  /const skipBlocker = trackerReadinessBlocker[\s\S]{0,420}?pendingApplicationWrites/,
+  "Skip uses the shared tracker readiness recovery copy before pending-write checks"
+);
 
 console.log("Skipped decision paths passed");

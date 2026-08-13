@@ -31,8 +31,30 @@ export type UseModalFocusOptions = {
 
 function visibleFocusable(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
-    (element) => element.getClientRects().length > 0 && element.getAttribute("aria-hidden") !== "true"
+    isUsableFocusTarget
   );
+}
+
+function isUsableFocusTarget(element: HTMLElement | null | undefined): element is HTMLElement {
+  return Boolean(
+    element?.isConnected
+    && element.matches(FOCUSABLE_SELECTOR)
+    && element.tabIndex >= 0
+    && !element.matches(":disabled")
+    && element.getClientRects().length > 0
+    && !element.closest('[inert], [aria-hidden="true"]')
+  );
+}
+
+function restoreFocus(target: HTMLElement | null | undefined): void {
+  (isUsableFocusTarget(target) ? target : visibleFocusable(document.body)[0])?.focus();
+}
+
+function preferredReturnFocus(
+  previouslyFocused: HTMLElement | null,
+  fallback: HTMLElement | null | undefined
+): HTMLElement | null | undefined {
+  return isUsableFocusTarget(previouslyFocused) ? previouslyFocused : fallback;
 }
 
 /**
@@ -71,7 +93,10 @@ export function useModalFocus({
     const selected = initialFocusSelector
       ? container.querySelector<HTMLElement>(initialFocusSelector)
       : null;
-    const target = initialFocusRef?.current ?? selected ?? visibleFocusable(container)[0] ?? container;
+    const preferred = initialFocusRef?.current ?? selected;
+    const target = isUsableFocusTarget(preferred)
+      ? preferred
+      : visibleFocusable(container)[0] ?? container;
     target.focus();
     if (selectInitialText && target instanceof HTMLInputElement) target.select();
   }, [containerRef, initialFocusRef, initialFocusSelector, selectInitialText]);
@@ -102,20 +127,37 @@ export function useModalFocus({
       if (modalStack.length === 0) {
         document.body.style.overflow = bodyOverflowBeforeFirstModal ?? "";
         bodyOverflowBeforeFirstModal = null;
-        (returnFocusRef?.current ?? previouslyFocused)?.focus();
+        restoreFocus(preferredReturnFocus(previouslyFocused, returnFocusRef?.current));
       } else {
         // A lower modal may unmount while another surface remains open. Keep
         // the global scroll lock, and only move focus when the closed surface
         // was the topmost one.
         document.body.style.overflow = "hidden";
         if (wasTopmost) {
-          const returnTarget = returnFocusRef?.current ?? previouslyFocused;
-          if (returnTarget?.isConnected) returnTarget.focus();
-          else modalStack[modalStack.length - 1]?.focusFirst();
+          const returnTarget = preferredReturnFocus(previouslyFocused, returnFocusRef?.current);
+          if (isUsableFocusTarget(returnTarget)) {
+            restoreFocus(returnTarget);
+          } else {
+            modalStack[modalStack.length - 1]?.focusFirst();
+          }
         }
       }
     };
   }, [active, containerRef, focusFirst, isTopmost, returnFocusRef]);
+
+  useEffect(() => {
+    if (!active || !isTopmost()) return;
+    const container = containerRef.current;
+    const current = document.activeElement;
+    if (
+      !container
+      || current === container
+      || (current instanceof HTMLElement
+        && container.contains(current)
+        && isUsableFocusTarget(current))
+    ) return;
+    focusFirst();
+  });
 
   return useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
