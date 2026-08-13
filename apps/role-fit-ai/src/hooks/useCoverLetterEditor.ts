@@ -12,8 +12,6 @@ import { useResumeEditor as useTypesetResumeEditor } from "@typeset/editor/hooks
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
-  CoverLetterFileError,
-  MAX_COVER_LETTER_FILE_BYTES,
   coverLetterFileName,
   coverLetterParagraphs,
   coverLetterPlainText,
@@ -29,6 +27,7 @@ import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
+import { prepareCoverLetterUpload } from "../lib/documentOpenFiles.ts";
 import {
   coverLetterStartupIsCurrent,
   loadLastCoverLetterName,
@@ -492,51 +491,37 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const openFile = useCallback(
     async (file: File) => {
       try {
-        if (file.size > MAX_COVER_LETTER_FILE_BYTES) {
-          throw new CoverLetterFileError(
-            "too-large",
-            "This cover-letter file is larger than the 2 MB limit."
-          );
-        }
-        const bytes = await file.arrayBuffer();
-        const fileBase = file.name.replace(/\.(?:cover|txt|md)$/i, "").trim();
-        if (/\.cover$/i.test(file.name)) {
-          const parsed = parseCoverLetterFile(bytes);
-          openDocument(parsed.data);
-          editor.markClean();
-          setStyle((current) => ({
-            ...coverLetterStyleToDocumentStyle(parsed.style),
-            zoom: current.zoom,
-            spellCheck: current.spellCheck
-          }));
-          const nextTitle = fileBase || "Cover letter";
-          commitPersistenceBaseline(
-            serializeCoverLetterFile(parsed.data, parsed.style),
-            nextTitle
-          );
-          // An uploaded file is not the workspace copy, so Save must not offer to
-          // overwrite whichever saved letter happened to be open before.
-          setActiveCoverFileName("");
-          saveLastCoverLetterName("");
-          setDocumentTitleValue(fileBase || "Cover letter");
-          setStatus(`Opened ${file.name}.`);
-          return;
-        }
-        const source = new TextDecoder("utf-8", { fatal: true }).decode(bytes);
-        loadSourceText(source, fileBase || "Cover letter");
+        const parsed = await prepareCoverLetterUpload(file);
+        const fileBase = file.name.replace(/\.cover$/i, "").trim();
+        openDocument(parsed.data);
+        editor.markClean();
+        setStyle((current) => ({
+          ...coverLetterStyleToDocumentStyle(parsed.style),
+          zoom: current.zoom,
+          spellCheck: current.spellCheck
+        }));
+        const nextTitle = fileBase || "Cover letter";
+        commitPersistenceBaseline(
+          serializeCoverLetterFile(parsed.data, parsed.style),
+          nextTitle
+        );
+        // An uploaded file is not the workspace copy, so Save must not offer to
+        // overwrite whichever saved letter happened to be open before.
+        setActiveCoverFileName("");
+        saveLastCoverLetterName("");
+        setDocumentTitleValue(fileBase || "Cover letter");
         setStatus(`Opened ${file.name}.`);
       } catch (error) {
         setStatus(
-          error instanceof CoverLetterFileError
+          error instanceof Error
             ? error.message
-            : "Could not open that cover letter. Use a valid .cover, .txt, or .md file."
+            : "Could not open that cover letter. Use a valid .cover file."
         );
       }
     },
     [
       commitPersistenceBaseline,
       editor.markClean,
-      loadSourceText,
       openDocument,
       setDocumentTitleValue
     ]

@@ -304,6 +304,7 @@ type TypesetEditorProps = {
   structureCapabilities?: {
     header: boolean;
     sections: boolean;
+    nameRemovable?: boolean;
   };
   onPageCount?: (count: number) => void;
   // Where the caret was when this editor last unmounted, so a host that swaps
@@ -341,7 +342,8 @@ const EMPTY_FORMAT_STATE: InlineFormatState = {
 
 const DEFAULT_STRUCTURE_CAPABILITIES = {
   header: true,
-  sections: true
+  sections: true,
+  nameRemovable: false
 } as const;
 
 function selectionClipboardParts(payload: string): {
@@ -2939,7 +2941,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         return false;
       }
       if (selection.src.kind === "name") {
-        headerCommands.removeName();
+        if (structureCapabilities.nameRemovable) headerCommands.removeName();
+        // For resume/Typeset hosts the name field is required structure; an
+        // empty name remains editable but cannot remove the header field.
         return true;
       }
       if (selection.src.kind === "contact") {
@@ -2951,7 +2955,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
       return false;
     },
-    [headerCommands]
+    [headerCommands, structureCapabilities.nameRemovable]
   );
 
   // Enter grows header contacts and non-empty list rows; prose always permits

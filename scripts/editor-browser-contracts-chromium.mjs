@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { access, mkdtemp, rm } from "node:fs/promises";
+import { access, mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const baseUrl = process.env.ROLEFIT_EDITOR_BROWSER_CONTRACT_URL;
 if (!baseUrl) throw new Error("Missing browser contract URL.");
+const strictResumeText = await readFile(
+  new URL("../apps/role-fit-ai/server/starter.resume", import.meta.url),
+  "utf8"
+);
 
 const windows = new Set();
 const pageErrors = [];
@@ -452,7 +456,7 @@ async function runTypesetSaveContract() {
   await win.loadURL(`${baseUrl}#typeset`);
   await waitFor(
     win,
-    'document.querySelector(\'button[aria-label="Save resume file"]\')',
+    'document.querySelector(\'button[aria-label="Save"]\')',
     "Typeset app"
   );
   await waitFor(
@@ -490,7 +494,22 @@ async function runTypesetSaveContract() {
     "style-only Typeset changes must arm beforeunload"
   );
 
-  await click(win, 'button[aria-label="Save resume file"]');
+  await click(win, 'button[aria-label="Save"]');
+  await waitFor(
+    win,
+    'document.querySelector(\'[role="dialog"][aria-label="Save options"]\')',
+    "Typeset save menu"
+  );
+  const savedResume = await win.webContents.executeJavaScript(`(() => {
+    const button = [...document.querySelectorAll(
+      '[role="dialog"][aria-label="Save options"] button'
+    )].find((candidate) =>
+      candidate.querySelector("strong")?.textContent?.trim() === "Save .resume"
+    );
+    button?.click();
+    return Boolean(button);
+  })()`);
+  assert.equal(savedResume, true, "expected the editable resume save action");
   await waitFor(
     win,
     'document.querySelector(\'[role="status"]\')?.textContent?.includes("Saved")',
@@ -563,14 +582,14 @@ async function runRecoveryContracts() {
   await adopter.destroy();
 }
 
-function workspacePayload(fileName, text = "Candidate resume") {
+function workspacePayload(fileName) {
   return {
     path: `/workspace/${fileName}`,
     baseResume: {
       exists: true,
       fileName,
-      kind: "text",
-      text
+      kind: "resume",
+      text: strictResumeText
     },
     baseResumeOptions: [],
     baseResumeHistory: [],
@@ -609,9 +628,9 @@ async function runWorkspaceResumeContracts() {
         ...workspacePayload("default.resume"),
         starterResume: {
           exists: true,
-          fileName: "starter.txt",
-          kind: "text",
-          text: "Starter resume"
+          fileName: "starter.resume",
+          kind: "resume",
+          text: strictResumeText
         }
       })}
     )`
@@ -646,7 +665,7 @@ async function runWorkspaceResumeContracts() {
     "window.__workspaceResumeContract.resetStats()"
   );
   const upload = await win.webContents.executeJavaScript(
-    "window.__workspaceResumeContract.startTextUpload()"
+    "window.__workspaceResumeContract.startResumeUpload()"
   );
   await win.webContents.executeJavaScript(
     `window.__workspaceResumeContract.waitTask(${upload.taskId})`
@@ -683,7 +702,7 @@ async function runWorkspaceResumeContracts() {
   await win.webContents.executeJavaScript(
     `window.__workspaceResumeContract.resolveRequest(
       ${delayed.requestId},
-      ${JSON.stringify(workspacePayload("delayed.resume", "Delayed response"))}
+      ${JSON.stringify(workspacePayload("delayed.resume"))}
     )`
   );
   await win.webContents.executeJavaScript(

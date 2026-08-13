@@ -20,7 +20,10 @@ for provider, prompt, sanitizer, and review work.
 - `jobImport.ts` owns ATS/public job-text resolution.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
-  cover-letter storage separate from resume import and starter fallbacks.
+  cover-letter storage separate from strict `.resume` storage and starter
+  fallbacks. Workspace open, save, selection, and history restore accept only
+  `.resume`; legacy text artifacts may remain recoverable on disk/backups but
+  never become editor documents.
   Each kind exposes a bounded `/candidates` batch read beside its `/select`
   route: ranking saved variants needs several documents at once, and `/select`
   answers with a whole workspace snapshot under the workspace lock, so per-file

@@ -2865,3 +2865,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
   and both client/server TypeScript checks passed. The Impeccable detector found
   only advisory type-ramp matches already present in `prepare.css`. Live-provider
   and real-browser visual QA were not run.
+- [USER+CODE] 2026-08-13: Resume Open now accepts only strict `.resume` files and
+  Cover Letter Open only strict `.cover` files. The picker filters, client
+  preflight, resume workspace save/open/history routes, menu copy, and current
+  product/engineering guidance agree. The two hosts share the action-menu
+  disclosure and common row styles while keeping file lifecycle app-owned.
+  Resume hosts keep the header name field required; Cover Letter explicitly
+  opts into its optional name. Legacy text resume artifacts remain untouched on
+  disk and in portable backups but are no longer opened or offered as restorable
+  editor history.
+- [TOOL] 2026-08-13: The focused client and server document-open probes passed,
+  and the full repository gate passed: RoleFit browser/server and landing builds,
+  desktop contracts, 106/106 offline evaluations, Typeset, editor, engine, PDF
+  parity, and generated-font checks. The Impeccable detector reported only
+  advisory palette/type-ramp literals already present outside this change.
+  Real-browser QA was not run; the remaining risk is menu and notice interaction/layout.

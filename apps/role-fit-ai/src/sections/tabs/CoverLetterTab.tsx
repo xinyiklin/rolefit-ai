@@ -31,7 +31,8 @@ import {
 
 const COVER_LETTER_STRUCTURE_CAPABILITIES = {
   header: true,
-  sections: false
+  sections: false,
+  nameRemovable: true
 } as const;
 
 type CoverLetterTabProps = {

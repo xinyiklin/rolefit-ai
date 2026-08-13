@@ -1,9 +1,4 @@
-import {
-  FileDown,
-  FilePlus2,
-  FolderOpen,
-  Save
-} from "lucide-react";
+import type { ReactNode } from "react";
 
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import type { BodyAlign } from "@typeset/engine/lib/documentStyle.ts";
@@ -16,7 +11,6 @@ import {
   type ToolbarSaveStatus
 } from "./DocumentToolbar";
 import { FormattingToolbar, type InlineFormattingControls } from "./FormattingToolbar";
-import { ToolbarButton } from "./ToolbarButton";
 
 // The formatting-row types live with FormattingToolbar; re-export them so
 // TopToolbar consumers keep their import path.
@@ -27,15 +21,8 @@ export type TopToolbarProps = {
   documentTitle: string;
   onDocumentTitleChange?: (title: string) => void;
   saveStatus: ToolbarSaveStatus;
-  onNew: () => void;
-  onOpen: () => void;
-  onSave: () => void;
-  onExport: () => void;
+  fileActions: ReactNode;
   documentStructure?: DocumentStructureToolbarControls;
-  saveDisabled?: boolean;
-  exportDisabled?: boolean;
-  isSaving?: boolean;
-  isExporting?: boolean;
   onUndo: () => void;
   onRedo: () => void;
   canUndo: boolean;
@@ -59,15 +46,8 @@ export function TopToolbar({
   documentTitle,
   onDocumentTitleChange,
   saveStatus,
-  onNew,
-  onOpen,
-  onSave,
-  onExport,
+  fileActions,
   documentStructure,
-  saveDisabled = false,
-  exportDisabled = false,
-  isSaving = false,
-  isExporting = false,
   onUndo,
   onRedo,
   canUndo,
@@ -97,41 +77,7 @@ export function TopToolbar({
         docStyle={docStyle}
         actions={(
           <div className="top-toolbar__file-actions" role="toolbar" aria-label="File actions">
-            <ToolbarButton
-              label="New"
-              tooltip="New resume"
-              icon={<FilePlus2 size={16} />}
-              showLabel
-              onClick={onNew}
-            />
-            <ToolbarButton
-              label="Open"
-              tooltip="Open a .resume file"
-              icon={<FolderOpen size={16} />}
-              showLabel
-              onClick={onOpen}
-            />
-            <ToolbarButton
-              label={isSaving ? "Saving…" : "Save"}
-              tooltip="Save a .resume file"
-              icon={<Save size={16} />}
-              showLabel
-              onClick={onSave}
-              disabled={saveDisabled || isSaving}
-              aria-busy={isSaving}
-              aria-label="Save resume file"
-            />
-            <ToolbarButton
-              label={isExporting ? "Exporting…" : "Export PDF"}
-              tooltip="Export PDF"
-              icon={<FileDown size={16} />}
-              showLabel
-              tone="primary"
-              onClick={onExport}
-              disabled={exportDisabled || isExporting}
-              aria-busy={isExporting}
-              aria-label="Export PDF"
-            />
+            {fileActions}
           </div>
         )}
       />

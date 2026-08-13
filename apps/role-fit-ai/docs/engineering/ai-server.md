@@ -185,10 +185,10 @@ owns:
   with explicit or implied candidate experience or comparison cues remain inside
   every grounding gate. It and `/api/application-answers` echo the resolved
   `provider` / `model` / `reasoningEffort`.
-- resume import into the structured editor: a `.txt` / `.md` / `.csv` (or pasted)
-  resume is parsed once into `ResumeData`, the source of truth thereafter (no DOCX
-  or LaTeX import — the original is converted a single time into the editor
-  format); a previously saved `.resume` file loads its `ResumeData` directly
+- resume input into the structured editor: pasted resume text is parsed once into
+  `ResumeData`, the source of truth thereafter; a previously saved `.resume` file
+  loads its `ResumeData` directly. The file picker accepts only `.resume` (no DOCX,
+  LaTeX, PDF, or plain-text file import).
 - job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
   `/job/` and `/details/` links), Ashby's public posting API for direct board
@@ -635,15 +635,16 @@ In the response:
 ## Document Workflow
 
 - The structured `ResumeData` model, edited through the owned typeset page, is
-  the source of truth. `.txt` / `.md` / `.csv` (or pasted) resumes are parsed once
-  into that model; PDF-only sources must be pasted as extracted text. There is no
-  DOCX or LaTeX import/export.
+  the source of truth. Pasted resume text is parsed once into that model; PDF-only
+  sources must be pasted as extracted text. Resume File Open accepts only `.resume`;
+  there is no DOCX, LaTeX, or plain-text Resume file import/export.
 - `.resume` is the portable save format for resume data: the sole strict shared
   Typeset v1 envelope
-  (`{ format: "typeset-resume", schemaVersion: 1, document, style }`) written and
-  read entirely client-side (like PDF export — no server route). Runtime
-  boundaries reject retired wire shapes; private pre-release data must already
-  be rewritten before the current app reads it. The
+  (`{ format: "typeset-resume", schemaVersion: 1, document, style }`). Portable
+  file downloads and uploads stay client-side; workspace variants use the local
+  loopback routes and the same strict codec. Runtime boundaries reject retired
+  wire shapes; private pre-release data must already be rewritten before the
+  current app reads it. The
   `@typeset/engine` codec owns exact-key validation, strips session ids at the
   file boundary, restores fresh ids on load, and includes persistent document
   style while excluding view-only zoom and spell-check preferences.
@@ -674,9 +675,10 @@ In the response:
   silently replace them with an empty store or guessed document.
 - On startup, the server discovers `resumes/<variant>.resume`, loading
   `resumes/default.resume` first when present, then named variants. It migrates
-  recognized legacy root-level documents without overwriting a destination,
-  and falls back to the bundled `server/starter.resume` when no base exists.
-  Legacy `.txt`, `.md`, and `.csv` base resumes remain readable as plain text.
+  no retired root-level document layouts and falls back to the bundled
+  `server/starter.resume` when no base exists.
+  Legacy `.txt`, `.md`, and `.csv` base resumes remain untouched on disk and in
+  backups, but are not opened or offered as restorable editor history.
 
 ## Deployment And Infrastructure
 

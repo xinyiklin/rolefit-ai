@@ -650,7 +650,10 @@ skeleton rather than inventing a new arrangement. Resume and Cover letter share
 the same two-row editor chrome:
 the first row is the document/file bar, and the second is the formatting
 toolbar. Primary Polish actions live in the workflow rail; file menus reuse one anchored action-menu component; document-specific
-content stays with its owning workflow. Resume Header and Section controls sit
+content stays with its owning workflow. The Resume file picker accepts only
+`.resume`, and the Cover Letter picker accepts only `.cover`; client preflight
+enforces the same boundary if a picker filter is bypassed. Resume Header and
+Section controls sit
 immediately before Spacing in the formatting row. Every menu in that row is
 icon-only at every width — the row shares its container with the action bar and
 has no width for labels — and paragraph alignment is one trigger with a menu

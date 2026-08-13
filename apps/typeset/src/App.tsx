@@ -48,10 +48,13 @@ import {
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
 import { commitDocumentSaveBaseline } from "./documentSaveBaseline.ts";
+import { DocumentFileMenus } from "./DocumentFileMenus.tsx";
 
 const AUTOSAVE_KEY = "typeset-resume.autosave.v2";
 const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
 const AUTOSAVE_DELAY_MS = 450;
+const NOTICE_DISMISS_MS = 4000;
+const NOTICE_EXIT_MS = 180;
 const UNTITLED_RESUME_TITLE = "Untitled resume";
 
 type Notice = {
@@ -110,16 +113,45 @@ export default function App() {
   const initializedRef = useRef(false);
   const autoFitRef = useRef(false);
   const dragDepthRef = useRef(0);
+  const noticeExitTimerRef = useRef<number | null>(null);
 
   const [documentTitle, setDocumentTitle] = useState(UNTITLED_RESUME_TITLE);
   const [saveStatus, setSaveStatus] = useState<ToolbarSaveStatus>("saving");
   const [notice, setNotice] = useState<Notice | null>(null);
+  const [isNoticeDismissing, setIsNoticeDismissing] = useState(false);
   const [pendingReplacement, setPendingReplacement] = useState<Replacement | null>(null);
   const [inlineFormat, setInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const [isSavingFile, setIsSavingFile] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+  const dismissNotice = useCallback(() => {
+    if (!notice || noticeExitTimerRef.current !== null) return;
+    const dismissedNotice = notice;
+    setIsNoticeDismissing(true);
+    noticeExitTimerRef.current = window.setTimeout(() => {
+      noticeExitTimerRef.current = null;
+      setNotice((current) => current === dismissedNotice ? null : current);
+      setIsNoticeDismissing(false);
+    }, NOTICE_EXIT_MS);
+  }, [notice]);
+
+  useEffect(() => {
+    const clearExitTimer = () => {
+      if (noticeExitTimerRef.current === null) return;
+      window.clearTimeout(noticeExitTimerRef.current);
+      noticeExitTimerRef.current = null;
+    };
+    clearExitTimer();
+    setIsNoticeDismissing(false);
+    if (!notice || notice.tone === "error") return clearExitTimer;
+    const timer = window.setTimeout(dismissNotice, NOTICE_DISMISS_MS);
+    return () => {
+      window.clearTimeout(timer);
+      clearExitTimer();
+    };
+  }, [dismissNotice, notice]);
 
   const resume = editor.editedResume;
   const documentStyleSignature = useMemo(
@@ -415,10 +447,18 @@ export default function App() {
         documentTitle={documentTitle}
         onDocumentTitleChange={setDocumentTitle}
         saveStatus={saveStatus}
-        onNew={newResume}
-        onOpen={() => fileInputRef.current?.click()}
-        onSave={saveResumeFile}
-        onExport={() => void exportPdf()}
+        fileActions={(
+          <DocumentFileMenus
+            fileInputRef={fileInputRef}
+            onNew={newResume}
+            onSave={saveResumeFile}
+            onExport={() => void exportPdf()}
+            saveDisabled={!resume}
+            exportDisabled={!resume}
+            isSaving={isSavingFile}
+            isExporting={isExporting}
+          />
+        )}
         documentStructure={{
           header: resume?.header ?? null,
           disabled: !resume,
@@ -431,7 +471,6 @@ export default function App() {
             if (editorRef.current) editorRef.current.replaceHeaderNameText(nextText);
             else editor.actions.setHeaderName(nextText);
           },
-          onRemoveHeaderName: editor.actions.removeHeaderName,
           onUpdateContact: (index, nextText) => {
             if (editorRef.current) editorRef.current.replaceHeaderContactText(index, nextText);
             else editor.actions.updateContact(index, nextText);
@@ -440,10 +479,6 @@ export default function App() {
           onRemoveContact: editor.actions.removeContact,
           onAddSection: (type, position) => editorRef.current?.addSection(type, position)
         }}
-        saveDisabled={!resume}
-        exportDisabled={!resume}
-        isSaving={isSavingFile}
-        isExporting={isExporting}
         onUndo={undo}
         onRedo={redo}
         canUndo={editor.canUndo || docStyle.canUndo}
@@ -553,14 +588,17 @@ export default function App() {
       />
 
       {notice ? (
-        <div className={`app-notice app-notice--${notice.tone}`} role={notice.tone === "error" ? "alert" : "status"}>
+        <div
+          className={`app-notice app-notice--${notice.tone}${isNoticeDismissing ? " is-dismissing" : ""}`}
+          role={notice.tone === "error" ? "alert" : "status"}
+        >
           {notice.tone === "error" ? (
             <TriangleAlert size={16} aria-hidden="true" />
           ) : (
             <Info size={16} aria-hidden="true" />
           )}
           <span>{notice.message}</span>
-          <button type="button" onClick={() => setNotice(null)} aria-label="Dismiss message">
+          <button type="button" onClick={dismissNotice} aria-label="Dismiss message">
             <X size={15} aria-hidden="true" />
           </button>
         </div>

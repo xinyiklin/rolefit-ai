@@ -92,7 +92,10 @@ is named
 one role's materials read as one application. Selecting a saved variant changes
 the document content, not that application output name, and both editor
 sublabels show the same `Role at Company` target.
-`.resume` and `.cover` are their separate reloadable formats. Resume always
+`.resume` and `.cover` are their separate reloadable formats. Resume Open accepts
+only `.resume`; Cover Letter Open accepts only `.cover`. Other source formats may
+be typed or pasted into a blank document, but are never treated as reloadable
+files. Resume always
 owns a real structured editor document: without a saved or opened source it is
 a clean blank page with an editable header anchor, not an empty-state substitute.
 That blank remains valid for editing and strict `.resume` save, but does not

@@ -242,8 +242,9 @@ filename field. The field reserves only its content width, so short filenames do
 not leave an invisible gap before status. Responsive disclosure may remove
 adjacent labels, but it does not impose a narrower filename cap; the field
 shrinks only when the remaining row width truly requires it. A blank filename resolves to
-`Untitled resume` on blur. The
-second row owns document commands, formatting, and zoom.
+`Untitled resume` on blur. New and Open share one visible Open menu, while Save
+and Export PDF share one visible Save menu; the menu rows carry the detailed
+file actions. The second row owns document commands, formatting, and zoom.
 Typeset does not hard-gate compact viewports. At 400px and below the file-action
 cluster is hidden, the document remains editable, and the initial view auto-fits
 the page within the scrollable workspace.
@@ -255,8 +256,8 @@ anchored More overlay, then selected-text typography, then paragraph alignment,
 and finally clear-formatting and spell check — leaving history, zoom, and the
 four emphasis commands. Every stage's threshold is the measured intrinsic width
 of the set still inline above it, so no width leaves a control half-visible. The
-overlay floats above the page without changing toolbar or canvas geometry. Open,
-Save, and Export labels remain visible until the middle of that ladder.
+overlay floats above the page without changing toolbar or canvas geometry. Open
+and Save labels remain visible until the middle of that ladder.
 Selected-text family and a minus / editable preset-custom size / plus control
 stay directly available at wider widths. With a caret, these controls report and
 change the next-typing style.
@@ -292,7 +293,9 @@ The centered engine-rendered page is the signature component. It remains white,
 selectable, directly editable, and surrounded by enough neutral space to reveal
 page boundaries. Reorder grips appear only for the active or hovered
 reorderable block. Header structure stays in toolbar, keyboard, and right-click
-commands and never floats over the document.
+commands and never floats over the document. The Header menu keeps the name
+field required and uses visibility as the only header-level toggle; contact
+items remain optional and individually removable.
 
 ## 6. Do's and Don'ts
 
@@ -303,7 +306,8 @@ commands and never floats over the document.
 - **Do** reveal detailed spacing controls in an anchored, non-modal popover.
 - **Do** provide literal autosave and file-error status with text.
 - **Do** maintain visible keyboard focus and reduced-motion behavior.
-- **Do** keep Open, Save `.resume`, and Export PDF available on supported tablet widths.
+- **Do** keep the visible Open and Save menus available on supported tablet widths;
+  their rows expose New, Open `.resume`, Save `.resume`, and Export PDF.
 
 ### Don't:
 
@@ -312,4 +316,4 @@ commands and never floats over the document.
 - **Don't** use oversized import surfaces, nested cards, or ornamental branding.
 - **Don't** expose implementation, server, or conversion terminology.
 - **Don't** use glassmorphism, gradient text, decorative motion, or colored side stripes.
-- **Don't** hide primary file actions inside an overflow menu.
+- **Don't** hide the primary Open and Save menu triggers inside an overflow menu.

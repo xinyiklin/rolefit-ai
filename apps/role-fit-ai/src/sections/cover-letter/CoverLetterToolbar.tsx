@@ -142,7 +142,7 @@ export function CoverLetterToolbar({
         ref={inputRef}
         className="sr-only"
         type="file"
-        accept=".cover,.txt,.md,application/json,text/plain,text/markdown"
+        accept=".cover"
         onChange={(event) => {
           const file = event.target.files?.[0];
           if (file) {
@@ -205,7 +205,7 @@ export function CoverLetterToolbar({
                   key: "file",
                   icon: <FolderOpen size={15} aria-hidden="true" />,
                   title: "Choose a file",
-                  description: ".cover, .txt, or .md",
+                  description: ".cover only",
                   onSelect: chooseFile
                 }
               ]}
@@ -370,6 +370,7 @@ export function CoverLetterToolbar({
             header={editor.data.header}
             contactDivider={editor.docStyle.style.contactDivider}
             disabled={!hasLetter}
+            allowNameRemoval
             // A cover letter has no document-spacing popover: paragraph spacing
             // covers its body, so the header's own gaps live in the Header menu.
             headerSpacing={{

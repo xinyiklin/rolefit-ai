@@ -100,8 +100,53 @@ try {
     "corrupt saved .resume fails closed instead of falling through to starter"
   );
 
+  const invalidUtf8Resume = Buffer.from(starter);
+  const starterName = Buffer.from(JSON.parse(starter).document.header.name);
+  invalidUtf8Resume[invalidUtf8Resume.indexOf(starterName)] = 0xff;
+  await writeFile(join(resumeDir, "default.resume"), invalidUtf8Resume);
+  await assert.rejects(
+    () => readWorkspaceBaseResume(undefined, locations),
+    (error) => error instanceof WorkspaceStorageError,
+    "invalid UTF-8 saved .resume bytes fail closed"
+  );
+
   await writeFile(join(resumeDir, "default.resume"), starter, "utf8");
   assert.equal((await readWorkspaceBaseResume(undefined, locations)).exists, true, "valid strict .resume loads");
+
+  const legacyLocations = {
+    appRoot: repoAppRoot,
+    workspaceDir: join(isolatedRoot, "legacy-text-workspace")
+  };
+  await ensureJobWorkspace(legacyLocations.workspaceDir);
+  await writeFile(
+    join(legacyLocations.workspaceDir, "resumes", "default.txt"),
+    "Legacy plain-text resume ".repeat(5),
+    "utf8"
+  );
+  await mkdir(join(legacyLocations.workspaceDir, "resumes", ".trash"), { recursive: true });
+  await writeFile(
+    join(
+      legacyLocations.workspaceDir,
+      "resumes",
+      ".trash",
+      "2026-07-21T09-08-07-000Z__default.txt"
+    ),
+    "Older legacy plain-text resume ".repeat(5),
+    "utf8"
+  );
+  const legacySnapshot = await readWorkspaceBaseResume(undefined, legacyLocations);
+  assert.equal(legacySnapshot.exists, false, "legacy text files are not opened as resume documents");
+  assert.equal(legacySnapshot.fileName, "starter.resume", "legacy text falls back to the strict starter");
+  {
+    const res = new FakeResponse();
+    await handleWorkspace(request("GET", {}), res, legacyLocations);
+    assert.equal(res.status, 200);
+    assert.deepEqual(
+      JSON.parse(res.body).baseResumeHistory,
+      [],
+      "legacy text history is not offered as an openable resume version"
+    );
+  }
 
   const first = JSON.parse(starter);
   first.document.header.name = "First Concurrent Save";
@@ -212,26 +257,42 @@ try {
   );
   await writeFile(join(resumeDir, "default.txt"), "Legacy plain-text resume ".repeat(5), "utf8");
   {
+    const strictDefaultBefore = await readFile(join(resumeDir, "default.resume"), "utf8");
     const res = await invoke(handleWorkspaceBaseResume, "DELETE", { fileName: "default.txt" });
     assert.equal(res.status, 200, "the active legacy default format can still be removed");
     assert.equal(
-      (await readdir(resumeDir)).some((name) => /^default\.(resume|txt|md|csv)$/.test(name)),
+      (await readdir(resumeDir)).includes("default.txt"),
       false,
-      "removing a default format clears every competing default representation"
+      "removing a legacy default clears that legacy file"
+    );
+    assert.equal(
+      await readFile(join(resumeDir, "default.resume"), "utf8"),
+      strictDefaultBefore,
+      "removing a legacy default leaves the strict default untouched"
     );
   }
 
-  // --- Oversize save is rejected with 413 before anything is written ---
-  {
+  for (const fileName of ["default.txt", "resume.md", "resume.csv", "resume", ""]) {
     const res = await invoke(handleWorkspaceBaseResume, "POST", {
-      fileName: "default.txt",
+      fileName,
+      text: "Plain text resume ".repeat(10)
+    });
+    assert.equal(res.status, 400, `base-resume saves require a .resume name: ${JSON.stringify(fileName)}`);
+    assert.match(JSON.parse(res.body).error, /valid.*\.resume/i);
+  }
+
+  // --- Oversize strict save is rejected with 413 before anything is written ---
+  {
+    const strictDefaultBefore = await readFile(join(resumeDir, "default.resume"), "utf8");
+    const res = await invoke(handleWorkspaceBaseResume, "POST", {
+      fileName: "default.resume",
       text: "x".repeat(200_001)
     });
     assert.equal(res.status, 413, "an over-cap base-resume save is rejected with 413");
     assert.equal(
-      (await readdir(resumeDir)).includes("default.txt"),
-      false,
-      "the rejected oversize save wrote nothing"
+      await readFile(join(resumeDir, "default.resume"), "utf8"),
+      strictDefaultBefore,
+      "the rejected oversize save leaves the current strict default untouched"
     );
   }
 
@@ -244,7 +305,14 @@ try {
   }
   const beforeDir = (await readdir(locations.workspaceDir)).sort();
   const beforeTrash = (await readdir(join(resumeDir, ".trash"))).sort();
-  for (const badKey of ["../evil", "foo/bar", "", "not-a-matching-key", "2026__unrelated.resume"]) {
+  for (const badKey of [
+    "../evil",
+    "foo/bar",
+    "",
+    "not-a-matching-key",
+    "2026__unrelated.resume",
+    "2026-07-21T09-08-07-000Z__default.txt"
+  ]) {
     assert.equal(
       (await invoke(handleRestoreBaseResume, "POST", { key: badKey })).status,
       400,

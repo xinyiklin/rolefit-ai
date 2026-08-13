@@ -58,9 +58,11 @@ editable documents.
 
 ## Highlights
 
-- **Resume input** — ingest a `.txt`, `.md`, or `.csv` resume (or paste text) into the typeset editor as a one-time conversion into the structured model, or load a previously saved `.resume` file directly; paste extracted PDF text when the original is only available as PDF.
-- **Cover-letter workflow** — open a `.cover`, `.txt`, or `.md` letter (or your
-  own base variant full of bracketed prompts) and press **Polish** once. RoleFit
+- **Resume input** — open a strict `.resume` document, or start with a blank
+  document and type or paste resume content directly into the editor. The file
+  picker does not import text, word-processing, or PDF files.
+- **Cover-letter workflow** — open a strict `.cover` document, or start with a
+  blank/starter letter and type or paste your own prose. Press **Polish** once. RoleFit
   resolves the date, your name, the role, the company, the greeting, and the
   sign-off itself, and the model picks which of your experiences and personal
   notes this posting actually warrants. Bracketed text is treated as an
@@ -229,8 +231,10 @@ editable documents.
   named variants (a Backend SDE letter beside a Growth one) and version history.
   Every save archives the version it replaces, so nothing is overwritten
   destructively. Both editors use the same Open and Save menus: Open lists the
-  starter, a blank, a file picker, and everything already saved; Save updates the
-  active copy, adds a variant, or takes a `.resume`/`.cover`/`.txt`/PDF away.
+  starter, a blank, a format-specific file picker, and everything already saved;
+  the Resume picker accepts only `.resume` and Cover Letter accepts only `.cover`.
+  Save updates the active copy, adds a variant, or takes a
+  `.resume`/`.cover`/`.txt`/PDF away.
   Resume always keeps a real editable page mounted: when no saved source exists,
   it starts as a clean blank `.resume` document, while PDF, Polish, and Apply
   remain unavailable until the document has meaningful content.

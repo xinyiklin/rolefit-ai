@@ -35,6 +35,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
   Apply's post-tracker document persistence. `workspaceLoadOwnership.ts` owns
   the one-shot resume-bootstrap barrier and load generations; metadata refreshes
   may claim a generation only after startup has committed.
+- `documentOpenFiles.ts` owns browser-file preflight for the two editor document
+  kinds. Resume accepts only `.resume` and Cover Letter accepts only `.cover`;
+  validate the extension before reading bytes, then delegate to the strict
+  engine codec before any hook may replace document state.
 - `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
   letter variants and history. `coverLetterExport.ts` owns pure source/PDF
   artifact construction; neither helper owns React state or document history.

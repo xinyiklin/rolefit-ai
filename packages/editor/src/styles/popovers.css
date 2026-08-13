@@ -67,6 +67,87 @@
   padding: 14px;
 }
 
+.document-action-menu > .popover__surface {
+  width: min(360px, calc(100vw - 24px));
+  max-height: min(620px, var(--popover-space, 72vh));
+  overflow: auto;
+}
+
+.document-action-panel {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s3);
+  background: var(--card-elev);
+}
+
+.document-action-panel__head {
+  display: grid;
+  gap: 2px;
+  padding: 2px var(--s1) var(--s2);
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.document-action-panel__head strong {
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 680;
+}
+
+.document-action-panel__head span,
+.document-action-row small {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.document-action-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: var(--s2);
+  align-items: start;
+  width: 100%;
+  padding: 9px var(--s2);
+  border: 1px solid transparent;
+  border-radius: var(--r-md);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+
+.document-action-row:hover:not(:disabled) {
+  border-color: var(--hairline);
+  background: var(--card-hover);
+}
+
+.document-action-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.document-action-row:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.document-action-row > svg {
+  margin-top: 2px;
+  color: var(--accent-deep);
+}
+
+.document-action-row > span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.document-action-row strong {
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 630;
+}
+
 /* Selected-paragraph alignment: a labelled vertical menu rather than the
    Paragraph popover's compact icon row, because this is the primary alignment
    control and the four choices need naming, not just glyphs. */
@@ -177,6 +258,8 @@
 .structure-popover__head {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
 }
 
 .structure-popover__head strong {
@@ -231,15 +314,11 @@
   outline: none;
 }
 
-.structure-popover__notice {
-  margin: 0;
-  padding: 7px 8px;
-  color: var(--ink-muted);
-  background: var(--card-soft);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-md);
-  font-size: 0.71rem;
-  line-height: 1.4;
+.structure-popover__visibility {
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  padding: 0;
 }
 
 .structure-popover__empty-state {

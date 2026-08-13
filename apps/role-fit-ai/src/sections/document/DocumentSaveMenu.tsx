@@ -1,7 +1,7 @@
 import { useState, type FormEvent, type ReactNode } from "react";
 import { BriefcaseBusiness, SaveAll } from "lucide-react";
 
-import { DocumentActionMenu } from "./DocumentActionMenu";
+import { DocumentActionMenu } from "@typeset/editor/components/toolbar/DocumentActionMenu.tsx";
 import type { ApplicationDocumentSync } from "../../hooks/useApplicationDocumentSync";
 
 /** A download or export row: the same shape as an Open-menu action. */

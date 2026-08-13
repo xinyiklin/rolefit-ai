@@ -229,10 +229,11 @@ Good server verification covers:
   and target-specific ownership. It reads no workspace resume, prints only status/count summaries, writes full
   synthetic receipts under gitignored `workspace/resume-proposal-eval/`, and is
   never part of `npm test`.
-- resume import (`.txt` / `.md` / `.csv`, or paste) reaches the structured editor
-  as a one-time conversion into `ResumeData`; a `.resume` file loads its
-  `ResumeData` directly, and export offers PDF + `.resume`
-- cover-letter import accepts `.cover`, `.txt`, and `.md`; `.cover` round trips
+- pasted resume text reaches the structured editor as a one-time conversion into
+  `ResumeData`; a `.resume` file loads its `ResumeData` directly, and export offers
+  PDF + `.resume`. The Resume file picker rejects plain-text, word-processing, and
+  PDF files before reading them.
+- cover-letter import accepts only `.cover`; `.cover` round trips
   its optional shared header, ordered paragraphs, and cover-specific print style
   without session ids, accepts only the current schema v1 shape, rejects
   malformed/unknown data and every other version, and editor/PDF output uses the

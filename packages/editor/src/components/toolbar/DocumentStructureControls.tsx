@@ -1,5 +1,3 @@
-import { Eye, EyeOff, UserRoundPlus } from "lucide-react";
-
 import type {
   DocumentHeader,
   ResumeSectionType
@@ -8,12 +6,12 @@ import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { HeaderSpacingKey } from "./styleOptions";
 import { AddSectionPopover } from "./AddSectionPopover";
 import { HeaderStructurePopover } from "./HeaderStructurePopover";
-import { ToolbarButton } from "./ToolbarButton";
 
 export type DocumentStructureControlsProps = {
   header: DocumentHeader | null;
   contactDivider: string;
   disabled?: boolean;
+  allowNameRemoval?: boolean;
   // Supplied by a host whose document has no document-spacing popover of its
   // own: the header's gaps are then adjustable from the header itself.
   headerSpacing?: {
@@ -23,7 +21,7 @@ export type DocumentStructureControlsProps = {
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
-  onRemoveHeaderName: () => void;
+  onRemoveHeaderName?: () => void;
   onUpdateContact: (index: number, value: string) => void;
   onInsertContact: (index: number) => void;
   onRemoveContact: (index: number) => void;
@@ -39,6 +37,7 @@ export function DocumentStructureControls({
   header,
   contactDivider,
   disabled = false,
+  allowNameRemoval = false,
   headerSpacing,
   onCreateHeader,
   onSetHeaderVisible,
@@ -51,12 +50,6 @@ export function DocumentStructureControls({
   onAddSection,
   showSections = true
 }: DocumentStructureControlsProps) {
-  const toggleLabel = header
-    ? header.visible
-      ? "Hide header"
-      : "Show header"
-    : "Create header";
-
   return (
     <div
       className="top-toolbar__group top-toolbar__document-structure"
@@ -67,33 +60,16 @@ export function DocumentStructureControls({
         header={header}
         contactDivider={contactDivider}
         disabled={disabled}
+        allowNameRemoval={allowNameRemoval}
         headerSpacing={headerSpacing}
         onCreateHeader={onCreateHeader}
+        onSetHeaderVisible={onSetHeaderVisible}
         onSetHeaderName={onSetHeaderName}
         onRemoveHeaderName={onRemoveHeaderName}
         onUpdateContact={onUpdateContact}
         onInsertContact={onInsertContact}
         onRemoveContact={onRemoveContact}
         onContactDividerChange={onContactDividerChange}
-      />
-      <ToolbarButton
-        className="structure-control__header-toggle"
-        label={toggleLabel}
-        tooltip={toggleLabel}
-        icon={
-          header
-            ? header.visible
-              ? <Eye size={15} />
-              : <EyeOff size={15} />
-            : <UserRoundPlus size={15} />
-        }
-        aria-label={toggleLabel}
-        aria-pressed={header ? header.visible : undefined}
-        disabled={disabled}
-        onClick={() => {
-          if (!header) onCreateHeader();
-          else onSetHeaderVisible(!header.visible);
-        }}
       />
       {showSections && onAddSection ? (
         <AddSectionPopover disabled={disabled} onAddSection={onAddSection} />

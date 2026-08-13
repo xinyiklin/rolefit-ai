@@ -15,7 +15,8 @@ static assets, and your resume content never leaves your device.
 
 - **Direct page editing** — select text and type on the rendered resume instead
   of filling out a separate form.
-- **Familiar document toolbar** — New, Open, Save, Export PDF, undo, redo,
+- **Familiar document toolbar** — Open and Save menus group New, `.resume`, and
+  PDF actions beside undo, redo,
   selection formatting, a spell-check toggle, compact text/page panels, and
   zoom stay close at hand.
 - **Structured editing** — add, remove, and reorder sections, entries, bullets,

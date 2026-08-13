@@ -22,10 +22,11 @@ export type ToolbarSaveStatus =
 export type DocumentStructureToolbarControls = {
   header: DocumentHeader | null;
   disabled?: boolean;
+  allowNameRemoval?: boolean;
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
-  onRemoveHeaderName: () => void;
+  onRemoveHeaderName?: () => void;
   onUpdateContact: (index: number, value: string) => void;
   onInsertContact: (index: number) => void;
   onRemoveContact: (index: number) => void;
@@ -130,6 +131,7 @@ export function DocumentToolbar({
           header={documentStructure.header}
           contactDivider={docStyle.style.contactDivider}
           disabled={documentStructure.disabled}
+          allowNameRemoval={documentStructure.allowNameRemoval}
           onCreateHeader={documentStructure.onCreateHeader}
           onSetHeaderVisible={documentStructure.onSetHeaderVisible}
           onSetHeaderName={documentStructure.onSetHeaderName}

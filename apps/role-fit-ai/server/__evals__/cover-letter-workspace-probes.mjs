@@ -81,6 +81,13 @@ assert.throws(
 );
 const valid = coverPayload("Dear hiring manager,\n\nI am writing about the role.");
 assert.equal(validateCoverLetterText(valid), valid, "a real .cover round-trips through the validator unchanged");
+const invalidUtf8Cover = Buffer.from(valid);
+invalidUtf8Cover[invalidUtf8Cover.indexOf(Buffer.from("Dear hiring manager"))] = 0xff;
+assert.throws(
+  () => validateCoverLetterText(invalidUtf8Cover),
+  /invalid/i,
+  "invalid UTF-8 saved .cover bytes fail closed"
+);
 
 // ── Listing ─────────────────────────────────────────────────────────────────
 assert.deepEqual(await readCoverLetterOptions(locations), [], "a fresh workspace lists nothing");
