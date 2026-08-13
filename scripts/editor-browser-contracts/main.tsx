@@ -24,7 +24,13 @@ import {
   type TypesetEditorCommands
 } from "../../packages/editor/src/sections/editor/TypesetEditor.tsx";
 import { coverLetterResumeData } from "../../packages/engine/src/lib/coverLetter.ts";
+import {
+  DOC_STYLE_DEFAULTS,
+  toDocumentStyle
+} from "../../packages/engine/src/lib/documentStyle.ts";
 import type { ResumeData } from "../../packages/engine/src/lib/resumeData.ts";
+import { serializeResumeFile } from "../../packages/engine/src/lib/resumeFile.ts";
+import { buildStarterResume } from "../../packages/engine/src/sampleResume.ts";
 import {
   adoptWorkspaceRestoreDrafts,
   keyForTab
@@ -41,7 +47,11 @@ import {
   DocumentWorkbench,
   DocumentWorkbenchEditorPane
 } from "../../apps/role-fit-ai/src/sections/document/DocumentWorkbench.tsx";
-import { toDocumentStyle } from "../../packages/engine/src/lib/documentStyle.ts";
+
+const STRICT_RESUME_FILE = serializeResumeFile(
+  buildStarterResume(),
+  DOC_STYLE_DEFAULTS
+);
 
 type EditorContract = {
   data: ResumeData | null;
@@ -77,7 +87,7 @@ declare global {
         requestId: number;
       }>;
       startLoadStarter(): Promise<{ taskId: number; requestId: number }>;
-      startTextUpload(): { taskId: number };
+      startResumeUpload(): { taskId: number };
       resolveRequest(requestId: number, payload: unknown, ok?: boolean): void;
       waitTask(taskId: number): Promise<void>;
       snapshot(): {
@@ -342,17 +352,16 @@ function WorkspaceResumeContractApp() {
       startLoadWorkspace: (applyBaseResume) =>
         startTask(() => workspace.loadWorkspace(applyBaseResume)),
       startLoadStarter: () => startTask(() => workspace.loadStarterTemplate()),
-      startTextUpload: () => {
+      startResumeUpload: () => {
         const taskId = nextTaskIdRef.current;
         nextTaskIdRef.current += 1;
         const input = {
           files: [
-            {
-              name: "candidate.txt",
-              text: async () => "Uploaded candidate"
-            }
+            new File([STRICT_RESUME_FILE], "candidate.resume", {
+              type: "application/json"
+            })
           ],
-          value: "candidate.txt"
+          value: "candidate.resume"
         };
         const task = workspace.handleFileUpload({
           target: input
