@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type RefObject } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type RefObject } from "react";
 import { Download, ExternalLink, Eye, FileText, ScrollText, Trash2, Upload } from "lucide-react";
 import { parseCoverLetterFile } from "@typeset/engine/lib/coverLetter.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
@@ -39,6 +39,7 @@ type ApplicationDocumentsTabProps = {
   onDownloadDocument?: (application: Application, kind: ApplicationDocumentKind) => void;
   onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
   onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
+  onBusyChange?: (busy: boolean) => void;
 };
 
 type UploadKind = ApplicationDocumentKind | "attachment";
@@ -230,7 +231,8 @@ export function ApplicationDocumentsTab({
   onPreviewPosting,
   onDownloadDocument,
   onSaveAttachment,
-  onRemoveAttachment
+  onRemoveAttachment,
+  onBusyChange
 }: ApplicationDocumentsTabProps) {
   const resumeUploadRef = useRef<HTMLInputElement>(null);
   const coverUploadRef = useRef<HTMLInputElement>(null);
@@ -242,6 +244,13 @@ export function ApplicationDocumentsTab({
   const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
   const coverAvailability = applicationDocumentAvailability(coverArtifacts);
   const jobOnly = application?.status === "not_applying";
+
+  function setOperationBusy(next: boolean) {
+    setBusy(next);
+    onBusyChange?.(next);
+  }
+
+  useEffect(() => () => onBusyChange?.(false), [onBusyChange]);
 
   async function upload(kind: UploadKind, event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -275,7 +284,7 @@ export function ApplicationDocumentsTab({
       return;
     }
 
-    setBusy(true);
+    setOperationBusy(true);
     try {
       if (extension === "resume") {
         const sourceText = await file.text();
@@ -312,7 +321,7 @@ export function ApplicationDocumentsTab({
         message: error instanceof Error ? error.message : "Could not upload that file."
       });
     } finally {
-      setBusy(false);
+      setOperationBusy(false);
     }
   }
 
@@ -326,7 +335,7 @@ export function ApplicationDocumentsTab({
       tone: "danger"
     }))) return;
 
-    setBusy(true);
+    setOperationBusy(true);
     try {
       const result = await onRemoveDocument(application.id, kind);
       if (!result.ok) throw new Error(result.error);
@@ -336,7 +345,7 @@ export function ApplicationDocumentsTab({
         message: error instanceof Error ? error.message : `Could not remove the ${label}.`
       });
     } finally {
-      setBusy(false);
+      setOperationBusy(false);
     }
   }
 
@@ -349,7 +358,7 @@ export function ApplicationDocumentsTab({
       tone: "danger"
     }))) return;
 
-    setBusy(true);
+    setOperationBusy(true);
     try {
       const result = await onRemoveAttachment(application.id, fileName);
       if (!result.ok) throw new Error(result.error);
@@ -359,7 +368,7 @@ export function ApplicationDocumentsTab({
         message: error instanceof Error ? error.message : "Could not remove that document."
       });
     } finally {
-      setBusy(false);
+      setOperationBusy(false);
     }
   }
 

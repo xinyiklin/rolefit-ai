@@ -10,6 +10,7 @@ import type { StageAiUsage } from "../lib/aiUsage.ts";
 import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
 import {
   preparationCommitIdentity,
+  preparationPrimaryAction,
   type PreparationSession
 } from "../lib/preparationSession.ts";
 import { preparedApplicationRecord } from "../lib/preparedApplicationRecord.ts";
@@ -17,6 +18,10 @@ import {
   skipApplicationForSession,
   updateNotApplyingJob
 } from "../lib/notApplyingApplication.ts";
+import {
+  statusDetail,
+  type ApplicationActionStatus
+} from "../lib/applicationActionStatus.ts";
 
 export type SkipPrompt = {
   initialReason: NotApplyingReason | "";
@@ -31,16 +36,20 @@ type UseSkipFlowArgs = {
   jobRawText: string;
   pipelineAiUsage: Record<string, StageAiUsage>;
   fitAssessmentPersistence: FitAssessmentPersistenceDecision;
-  applications: Application[];
   preparationSession: PreparationSession;
+  currentPreparationId: string;
+  getCurrentPreparationId: () => string;
+  getPreparationGeneration: () => number;
+  getApplication: (id: string) => Application | undefined;
+  refreshApplications: () => Promise<boolean>;
   currentJobTracking: () => ExtractedJobTracking;
-  resolvePreparationDuplicate: () => Promise<DuplicateResolution>;
+  resolvePreparationDuplicate: (isCurrent: () => boolean) => Promise<DuplicateResolution>;
   createApplication: (application: Application) => Promise<boolean>;
   updateApplicationById: (application: Application) => Promise<boolean>;
   linkPostingRecords: (applicationIds: string[], groupId?: string) => Promise<string | null>;
   markPostingRecordsUnrelated: (applicationIds: string[]) => Promise<boolean>;
   linkApplication: (id: string | null) => void;
-  setApplyStatus: Dispatch<SetStateAction<string>>;
+  setApplicationActionStatus: Dispatch<SetStateAction<ApplicationActionStatus | null>>;
 };
 
 export function useSkipFlow({
@@ -51,8 +60,12 @@ export function useSkipFlow({
   jobRawText,
   pipelineAiUsage,
   fitAssessmentPersistence,
-  applications,
   preparationSession,
+  currentPreparationId,
+  getCurrentPreparationId,
+  getPreparationGeneration,
+  getApplication,
+  refreshApplications,
   currentJobTracking,
   resolvePreparationDuplicate,
   createApplication,
@@ -60,7 +73,7 @@ export function useSkipFlow({
   linkPostingRecords,
   markPostingRecordsUnrelated,
   linkApplication,
-  setApplyStatus
+  setApplicationActionStatus
 }: UseSkipFlowArgs) {
   const [skipPrompt, setSkipPrompt] = useState<SkipPrompt | null>(null);
   const [skipError, setSkipError] = useState("");
@@ -70,20 +83,49 @@ export function useSkipFlow({
   const skipSessionRef = useRef<PreparationSession | null>(null);
   const unrelatedApplicationIdRef = useRef<string | null>(null);
   const skipCommitIdentityRef = useRef<string | null>(null);
+  const skipPreparationIdRef = useRef<string | null>(null);
+  const skipPreparationGenerationRef = useRef<number | null>(null);
   const isSkipping = isResolvingSkip || isSavingSkip;
+  const currentPreparationIdentityRef = useRef("");
+  currentPreparationIdentityRef.current = preparationCommitIdentity({
+    session: preparationSession,
+    preparationId: currentPreparationId,
+    jobUrl,
+    preparedJobDescription,
+    jobRawText
+  });
 
   function clearCapturedSkip(): void {
     skipSessionRef.current = null;
     unrelatedApplicationIdRef.current = null;
     skipCommitIdentityRef.current = null;
+    skipPreparationIdRef.current = null;
+    skipPreparationGenerationRef.current = null;
+  }
+
+  function capturedPreparationIsCurrent(): boolean {
+    return skipCommitIdentityRef.current !== null
+      && skipPreparationIdRef.current === getCurrentPreparationId()
+      && skipPreparationGenerationRef.current === getPreparationGeneration()
+      && skipCommitIdentityRef.current === currentPreparationIdentityRef.current;
+  }
+
+  function ownsCurrentPreparation(applicationId: string): boolean {
+    return capturedPreparationIsCurrent()
+      && Boolean(getApplication(applicationId));
   }
 
   async function handleSkip(): Promise<void> {
     if (skipInFlightRef.current) return;
     if (!canSkip) {
-      setApplyStatus(skipBlocker || "Prepare the posting before skipping it.");
+      setApplicationActionStatus({
+        tone: "error",
+        headline: "Can't skip yet",
+        detail: skipBlocker || "Prepare the posting before skipping it."
+      });
       return;
     }
+    setApplicationActionStatus(null);
     skipInFlightRef.current = true;
     setIsResolvingSkip(true);
     setSkipError("");
@@ -91,18 +133,33 @@ export function useSkipFlow({
       const session = preparationSession;
       skipCommitIdentityRef.current = preparationCommitIdentity({
         session,
+        preparationId: currentPreparationId,
         jobUrl,
         preparedJobDescription,
         jobRawText
       });
+      skipPreparationIdRef.current = currentPreparationId;
+      skipPreparationGenerationRef.current = getPreparationGeneration();
+      const isCurrent = () => capturedPreparationIsCurrent();
       let resolution: DuplicateResolution = { action: "continue", relationship: null };
       if (session.mode === "new") {
-        try {
-          resolution = await resolvePreparationDuplicate();
-        } catch {
-          const message = "Duplicate checking failed, so the job was not saved. Retry Skip & save job.";
+        if (!(await refreshApplications())) {
+          const message = "Applications could not be refreshed. Retry Skip & save job.";
           setSkipError(message);
-          setApplyStatus(message);
+          setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
+          clearCapturedSkip();
+          return;
+        }
+        if (!isCurrent()) {
+          clearCapturedSkip();
+          return;
+        }
+        try {
+          resolution = await resolvePreparationDuplicate(isCurrent);
+        } catch {
+          const message = "Duplicate checking failed. Retry Skip & save job.";
+          setSkipError(message);
+          setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
           clearCapturedSkip();
           return;
         }
@@ -118,7 +175,7 @@ export function useSkipFlow({
       unrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
       const matchedNotApplyingId = capturedSession.pendingRelationship?.matchedNotApplyingRecordId;
       const matchedNotApplying = matchedNotApplyingId
-        ? applications.find((application) => application.id === matchedNotApplyingId) ?? null
+        ? getApplication(matchedNotApplyingId) ?? null
         : null;
       setSkipPrompt({
         initialReason: matchedNotApplying?.notApplyingReason ?? "",
@@ -134,26 +191,20 @@ export function useSkipFlow({
     if (skipInFlightRef.current) return false;
     const session = skipSessionRef.current ?? preparationSession;
     if (session.mode === "update") return false;
-    if (
-      skipCommitIdentityRef.current !== preparationCommitIdentity({
-        session: preparationSession,
-        jobUrl,
-        preparedJobDescription,
-        jobRawText
-      })
-    ) {
-      const message = "The prepared job changed while this decision was open. Nothing was saved; cancel and choose Skip again.";
+    if (!capturedPreparationIsCurrent()) {
+      const message = "The prepared job changed while this decision was open. Cancel and choose Skip again.";
       setSkipError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       return false;
     }
+    setApplicationActionStatus(null);
     skipInFlightRef.current = true;
     setIsSavingSkip(true);
     setSkipError("");
     try {
       const matchedNotApplyingId = session.pendingRelationship?.matchedNotApplyingRecordId;
       const matchedNotApplying = matchedNotApplyingId
-        ? applications.find((application) => application.id === matchedNotApplyingId) ?? null
+        ? getApplication(matchedNotApplyingId) ?? null
         : null;
       const now = new Date().toISOString();
       const tracking = currentJobTracking();
@@ -185,9 +236,9 @@ export function useSkipFlow({
         clearFields: prepared.clearFields
       });
       if (!commit) {
-        const message = "The prior decision is no longer available. Nothing was saved; reopen the posting and try again.";
+        const message = "The prior decision is no longer available. Reopen the posting and try again.";
         setSkipError(message);
-        setApplyStatus(message);
+        setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
         return false;
       }
 
@@ -197,7 +248,11 @@ export function useSkipFlow({
       if (!saved) {
         const message = "This decision could not be saved. The prepared job and your reason are still here; retry Save as skipped.";
         setSkipError(message);
-        setApplyStatus(message);
+        setApplicationActionStatus({
+          tone: "error",
+          headline: "Nothing was saved",
+          detail: "The job is still prepared. Choose Skip & save job again, then retry the decision."
+        });
         return false;
       }
 
@@ -209,7 +264,7 @@ export function useSkipFlow({
           relationship.jobPostingGroupId
         ).catch(() => null);
         if (!linked) {
-          relationshipWarning = " The related posting could not be linked; both records remain separate.";
+          relationshipWarning = "The related posting could not be linked; both records remain separate.";
         }
       } else if (commit.operation === "create" && unrelatedApplicationIdRef.current) {
         const separated = await markPostingRecordsUnrelated([
@@ -217,21 +272,32 @@ export function useSkipFlow({
           unrelatedApplicationIdRef.current
         ]).catch(() => false);
         if (!separated) {
-          relationshipWarning = " The Keep separate decision could not be saved; the records may appear in duplicate review.";
+          relationshipWarning = "The Keep separate decision could not be saved; the records may appear in duplicate review.";
         }
       }
 
-      linkApplication(commit.application.id);
-      setApplyStatus(
-        `Saved as Skipped. RoleFit will recognize this posting if you encounter it again.${relationshipWarning}`
-      );
+      if (ownsCurrentPreparation(commit.application.id)) linkApplication(commit.application.id);
+      setApplicationActionStatus({
+        tone: relationshipWarning ? "error" : "success",
+        headline: relationshipWarning
+          ? "Saved as skipped — relationship update failed"
+          : "Saved as skipped",
+        detail: statusDetail(
+          `${commit.application.title} · RoleFit will recognize this posting if you encounter it again.`,
+          relationshipWarning
+        )
+      });
       setSkipPrompt(null);
       clearCapturedSkip();
       return true;
     } catch {
       const message = "This decision could not be prepared or saved. The job and your reason are still here; retry Save as skipped.";
       setSkipError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({
+        tone: "error",
+        headline: "Nothing was saved",
+        detail: "The job is still prepared. Choose Skip & save job again, then retry the decision."
+      });
       return false;
     } finally {
       skipInFlightRef.current = false;
@@ -243,8 +309,10 @@ export function useSkipFlow({
     if (skipInFlightRef.current) return false;
     const session = preparationSession;
     const existing = session.applicationId
-      ? applications.find((application) => application.id === session.applicationId) ?? null
+      ? getApplication(session.applicationId) ?? null
       : null;
+    const action = preparationPrimaryAction(session, existing?.status);
+    setApplicationActionStatus(null);
     skipInFlightRef.current = true;
     setIsSavingSkip(true);
     setSkipError("");
@@ -278,15 +346,19 @@ export function useSkipFlow({
       if (!commit || !(await updateApplicationById(commit.application).catch(() => false))) {
         const message = "Job updates could not be saved. The preparation is still available; retry Save job updates.";
         setSkipError(message);
-        setApplyStatus(message);
+        setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
         return false;
       }
-      setApplyStatus(`Saved job updates for "${commit.application.title}".`);
+      setApplicationActionStatus({
+        tone: "success",
+        headline: action.receipt,
+        detail: commit.application.title
+      });
       return true;
     } catch {
       const message = "Job updates could not be prepared or saved. The preparation is still available; retry Save job updates.";
       setSkipError(message);
-      setApplyStatus(message);
+      setApplicationActionStatus({ tone: "error", headline: "Nothing was saved", detail: message });
       return false;
     } finally {
       skipInFlightRef.current = false;

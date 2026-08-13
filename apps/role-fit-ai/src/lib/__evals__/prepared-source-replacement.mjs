@@ -94,8 +94,18 @@ assert.match(
 );
 assert.match(
   appSource,
-  /choice === "start-new"[\s\S]{0,180}?setPreparationSession\(newPreparationSession\(\)\)/,
+  /const currentSession = preparationSessionRef\.current;[\s\S]{0,180}?getApplication\(currentSession\.applicationId\)[\s\S]{0,260}?preparedSourceAppearsDifferent\(currentApplication, candidate\)/,
+  "source replacement reads the synchronous live owner rather than a render-time session"
+);
+assert.match(
+  appSource,
+  /choice === "start-new"[\s\S]{0,180}?publishPreparationSession\(newPreparationSession\(\), true\)/,
   "only the explicit Start a new preparation choice clears the saved-record target"
+);
+assert.match(
+  intakeSource,
+  /const runIsCurrent = \(\) => request\.isCurrent\(\) && replacement\.isCurrent\(\)[\s\S]{0,360}?confirmDuplicateBeforeJobAnalysis\([\s\S]{0,180}?runIsCurrent/,
+  "source preparation retains its synchronous owner through duplicate review and provider work"
 );
 for (const text of [
   "This appears to be a different job.",

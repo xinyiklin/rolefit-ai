@@ -37,7 +37,7 @@
 }
 
 .workspace-page__saving {
-  color: var(--accent-strong);
+  color: var(--accent-deep);
   font-family: var(--font-mono);
   font-size: 0.66rem;
   font-weight: 700;
@@ -3452,6 +3452,11 @@ button.table-sort svg {
   .application-modal__foot {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .application-detail-modal > .application-modal__head .application-modal__actions {
+    width: 100%;
+    flex-wrap: wrap;
   }
 
   .figures-strip {

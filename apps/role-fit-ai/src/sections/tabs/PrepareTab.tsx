@@ -109,6 +109,7 @@ export type PrepareTabProps = {
   // The loaded document is the bundled sample, not the applicant's resume.
   resumeIsStarterSample: boolean;
   canPolishResume: boolean;
+  isPolishStarting: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishOutputCurrent: boolean;
@@ -181,6 +182,7 @@ export function PrepareTab({
   isResolvingPreparedResume,
   resumeIsStarterSample,
   canPolishResume,
+  isPolishStarting,
   isPolishing,
   polishProgress,
   polishOutputCurrent,
@@ -265,19 +267,21 @@ export function PrepareTab({
   const resumeState =
     isResolvingPreparedResume || isSelectingResume
       ? "Selecting best match…"
-      : isPolishing
-        ? "Polishing…"
-        : polishSettled
-          ? polishOutcome === "PROPOSAL"
-            ? "Proposal ready"
-            : polishOutcome === "NO_CHANGES"
-              ? "No changes needed"
-              : "Suggestions withheld"
-          : resumeReady
-            ? "Ready"
-            : resumeIsStarterSample
-              ? "Starter template"
-              : "No document";
+      : isPolishStarting
+        ? "Starting Polish…"
+        : isPolishing
+          ? "Polishing…"
+          : polishSettled
+            ? polishOutcome === "PROPOSAL"
+              ? "Proposal ready"
+              : polishOutcome === "NO_CHANGES"
+                ? "No changes needed"
+                : "Suggestions withheld"
+            : resumeReady
+              ? "Ready"
+              : resumeIsStarterSample
+                ? "Starter template"
+                : "No document";
   // A saved base letter is a template: it holds real prose and unresolved slots
   // like [Company]. Reporting that as "No draft" hid a document the user could
   // see in the selector, so the state names the actual reason it is not ready.
@@ -293,23 +297,28 @@ export function PrepareTab({
             : coverLetterWordCount > 0
               ? "Draft too short"
               : "No draft";
-  const canFetch = Boolean(jobUrl.trim()) && !isPreparing;
+  const jobEditingDisabled = isPreparing || applicationActionsBusy;
+  const canFetch = Boolean(jobUrl.trim()) && !jobEditingDisabled;
   // URL edits invalidate readiness but must not swap the controlled replacement
   // textarea from the captured posting back to the compact tailoring scaffold.
   // Direct textarea edits clear jobRawText in useJobIntake, so this still hands
   // control to the user's replacement on the first keystroke.
   const preparationSourceText = jobRawText || jobDescription;
-  const canPreparePaste = preparationSourceText.trim().length >= 80 && !isPreparing;
+  const canPreparePaste = preparationSourceText.trim().length >= 80 && !jobEditingDisabled;
   const fetchHint = !jobUrl.trim()
     ? "Enter a job URL first."
-    : isPreparing
-      ? "Wait for the current preparation to finish."
+    : jobEditingDisabled
+      ? applicationActionsBusy
+        ? "Wait for the current application action to finish."
+        : "Wait for the current preparation to finish."
       : "";
   const prepareHint =
     preparationSourceText.trim().length < 80
       ? "Paste at least 80 characters from the job posting."
-      : isPreparing
-        ? "Wait for the current preparation to finish."
+      : jobEditingDisabled
+        ? applicationActionsBusy
+          ? "Wait for the current application action to finish."
+          : "Wait for the current preparation to finish."
         : "";
   const localFallbackHint = !jobAnalysisProviderReady
     ? jobPrepared || hasPreparedPreview
@@ -324,17 +333,19 @@ export function PrepareTab({
         : "Add your resume first."
       : isSelectingResume || isResolvingPreparedResume
         ? "Wait for the resume variant selection to finish."
-        : isPolishing
-          ? "Wait for the current polish to finish."
-          : !canPolishResume
-            ? polishStatus || "Finish the resume and AI setup before polishing."
-            : "";
-  const canStartPolishResume = canPolishResume && !isPolishing && jobPrepared;
+        : isPolishStarting
+          ? "Wait for Polish to start."
+          : isPolishing
+            ? "Wait for the current polish to finish."
+            : !canPolishResume
+              ? polishStatus || "Finish the resume and AI setup before polishing."
+              : "";
+  const canStartPolishResume = canPolishResume && !isPolishStarting && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
     (polishProgress.polish.status === "failed" && polishOutcome !== "WITHHELD") ||
     polishProgress.polish.status === "stopped";
   // The state line owns in-flight progress; notes keep blockers and recovery.
-  const resumeNote = isResolvingPreparedResume || isSelectingResume || isPolishing
+  const resumeNote = isResolvingPreparedResume || isSelectingResume || isPolishStarting || isPolishing
     ? ""
     : !canStartPolishResume && polishResumeHint
       ? polishResumeHint
@@ -437,6 +448,7 @@ export function PrepareTab({
                       setSourceMethod(jobUrl.trim() ? "url" : "paste");
                       setSourceMode("replace");
                     }}
+                    disabled={jobEditingDisabled}
                   >
                     Replace
                   </button>
@@ -500,7 +512,7 @@ export function PrepareTab({
                         value={jobUrl}
                         onChange={(event) => onJobUrlChange(event.target.value)}
                         placeholder="https://company.example/jobs/role"
-                        disabled={isPreparing}
+                        disabled={jobEditingDisabled}
                       />
                       <button
                         className="primary-button is-compact"
@@ -535,7 +547,7 @@ export function PrepareTab({
                       value={preparationSourceText}
                       onChange={(event) => onJobDescriptionChange(event.target.value)}
                       placeholder="Paste the role description, qualifications, location, compensation, and benefits."
-                      disabled={isPreparing}
+                      disabled={jobEditingDisabled}
                     />
                   </label>
                   <div className="prepare-source-submit">
@@ -596,7 +608,7 @@ export function PrepareTab({
 
             {hasPreparedPreview && brief ? (
               <>
-                <fieldset className="prepare-brief-fields" disabled={isPreparing}>
+                <fieldset className="prepare-brief-fields" disabled={jobEditingDisabled}>
                   <div className="prepare-detail-grid">
                     <label className="field">
                       <span>Role title</span>
@@ -788,6 +800,7 @@ export function PrepareTab({
               variantValue={baseResumeName}
               variantOptions={baseResumeOptions}
               emptyVariantLabel={resumeReady ? "Current draft" : "No saved variants"}
+              controlsDisabled={applicationActionsBusy}
               variantDisabled={
                 isSelectingResume || isPolishing || isResolvingPreparedResume || baseResumeOptions.length === 0
               }
@@ -798,11 +811,11 @@ export function PrepareTab({
                     className="secondary-button is-compact"
                     type="button"
                     onClick={() => void onPolishPreparedResume()}
-                    disabled={!canStartPolishResume}
+                    disabled={applicationActionsBusy || !canStartPolishResume}
                     aria-describedby={!canStartPolishResume && resumeNote ? "prepare-resume-note" : undefined}
                   >
-                    {isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
-                    {isPolishing ? "Polishing…" : "Polish"}
+                    {isPolishStarting || isPolishing ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
+                    {isPolishStarting ? "Starting…" : isPolishing ? "Polishing…" : "Polish"}
                   </button>
                   <button className="ghost-button is-compact" type="button" onClick={onReviewResume}>
                     Open
@@ -820,6 +833,7 @@ export function PrepareTab({
                   isRanking={isResolvingPreparedResume}
                   recommendation={resumeVariantRecommendation}
                   selectedFileName={baseResumeName}
+                  disabled={applicationActionsBusy}
                   onUse={(fileName) => void onSelectBaseResume(fileName)}
                 />
               )}
@@ -841,6 +855,7 @@ export function PrepareTab({
                     ? "Select saved variant"
                     : "No saved variants"
               }
+              controlsDisabled={applicationActionsBusy}
               variantDisabled={
                 coverLetterSelectionPending ||
                 isTailoringCoverLetter ||
@@ -853,7 +868,7 @@ export function PrepareTab({
                     className="secondary-button is-compact"
                     type="button"
                     onClick={() => void onTailorCoverLetter()}
-                    disabled={!canTailorCoverLetter}
+                    disabled={applicationActionsBusy || !canTailorCoverLetter}
                     aria-describedby={!canTailorCoverLetter && coverNote ? "prepare-cover-note" : undefined}
                   >
                     {isTailoringCoverLetter ? <LoaderCircle className="spin" size={13} aria-hidden="true" /> : null}
@@ -875,6 +890,7 @@ export function PrepareTab({
                   isRanking={isRankingCoverLetterVariants}
                   recommendation={coverLetterVariantRecommendation}
                   selectedFileName={coverLetterFileName}
+                  disabled={applicationActionsBusy}
                   onUse={(fileName) => void onSelectCoverLetter(fileName)}
                 />
               )}

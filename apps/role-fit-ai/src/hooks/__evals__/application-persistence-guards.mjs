@@ -10,6 +10,7 @@ import {
 const readHook = (name) => readFileSync(new URL(`../${name}`, import.meta.url), "utf8");
 const applications = readHook("useApplications.ts");
 const applyFlow = readHook("useApplyFlow.ts");
+const applicationFiles = readHook("useApplicationFiles.ts");
 const applicationDocumentSync = readHook("useApplicationDocumentSync.ts");
 const preparedApplicationRecord = readFileSync(
   new URL("../../lib/preparedApplicationRecord.ts", import.meta.url),
@@ -43,8 +44,13 @@ assert.match(
 );
 assert.match(
   applications,
-  /refreshVersion !== persistVersion\.current/,
-  "a manual refresh cannot overwrite a concurrent mutation"
+  /readId !== readVersion\.current \|\| loadVersion !== persistVersion\.current/,
+  "the mount read cannot overwrite a newer authoritative read"
+);
+assert.equal(
+  applications.match(/readId === readVersion\.current\)[\s\S]{0,100}?setError/g)?.length,
+  2,
+  "stale mount and refresh failures cannot replace a newer read's success state"
 );
 assert.match(
   applications,
@@ -214,8 +220,13 @@ assert.match(
 );
 assert.match(
   app,
-  /const applicationPersistencePending\s*=\s*applicationSavePending\s*\|\|\s*resumeApplicationSync\.isSaving\s*\|\|\s*coverLetterApplicationSync\.isSaving/,
+  /const applicationPersistencePending\s*=\s*applicationSavePending\s*\|\|\s*resumeApplicationSync\.isSaving\s*\|\|\s*coverLetterApplicationSync\.isSaving\s*\|\|\s*applicationFiles\.isBusy\s*\|\|\s*applicationDocumentActionBusy/,
   "explicit resume and cover-letter application uploads join the persistence guard"
+);
+assert.match(
+  applicationFiles,
+  /setPendingOperations\(\(count\) => count \+ 1\)[\s\S]{0,500}?finally\(\(\) => setPendingOperations\(\(count\) => count - 1\)\)/,
+  "the application file queue exposes its complete pending lifetime"
 );
 assert.match(
   app.slice(unloadGuardCall, unloadGuardCall + 900),

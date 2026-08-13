@@ -465,7 +465,13 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   initial beside the serif wordmark (the one place the accent is identity,
   not action), then the global Apply action separated by a hairline. Apply
   carries the shared readiness state; no job input or Inputs group lives in
-  this bar.
+  this bar. Its outcome is not reported here: Apply, Update application, and
+  Skip share one receipt that leads the top-center task dock, in the eye's
+  return path from the action and initially clear of the right inspector where
+  the committed record opens. Outcome-first headline, secondary detail line
+  for the record and any recovery step; a success expires after active work
+  and direct interaction end, while an error, including any partial save,
+  waits to be dismissed.
 - **Studio utilities:** at the foot of the vertical rail, a bottom utilities
   group places read-only Sessions immediately above Settings, outside
   `OUTPUT_TABS` and the APG tablist. Expanded Sessions shows its label and

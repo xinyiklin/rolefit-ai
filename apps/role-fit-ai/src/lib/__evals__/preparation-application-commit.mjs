@@ -35,7 +35,7 @@ const preparedRecord = application({
 
 assert.deepEqual(
   preparationPrimaryAction(newPreparationSession()),
-  { kind: "apply", label: "Apply", busyLabel: "Applying…", successVerb: "Applied" },
+  { kind: "apply", label: "Apply", busyLabel: "Applying…", receipt: "Application saved" },
   "new preparation copy describes an application submission"
 );
 assert.deepEqual(
@@ -44,7 +44,7 @@ assert.deepEqual(
     kind: "update-application",
     label: "Update application",
     busyLabel: "Updating…",
-    successVerb: "Updated"
+    receipt: "Application updated"
   },
   "an existing submitted application uses update language"
 );
@@ -57,7 +57,7 @@ assert.deepEqual(
     kind: "update-job",
     label: "Save job updates",
     busyLabel: "Saving…",
-    successVerb: "Saved"
+    receipt: "Job updates saved"
   },
   "a saved Not applying record uses job-update language"
 );

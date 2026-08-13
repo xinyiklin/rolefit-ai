@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type RefObject
+} from "react";
 import {
   Download,
   FileDown,
@@ -65,6 +74,7 @@ import {
 } from "./lib/downloads";
 import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
+import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
@@ -77,7 +87,11 @@ import {
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
 import { copyAiUsage, type StageAiUsage } from "./lib/aiUsage";
 import { useDuplicateGuard } from "./hooks/useDuplicateGuard";
-import { useJobIntake, type ImportedJobSnapshot } from "./hooks/useJobIntake";
+import {
+  useJobIntake,
+  type ImportedJobSnapshot,
+  type PreparedSourceReplacementResolution
+} from "./hooks/useJobIntake";
 import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipeline";
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
@@ -122,10 +136,13 @@ import {
 import {
   newPreparationSession,
   preparationPrimaryAction,
-  preparationSessionForApplication
+  preparationSessionForApplication,
+  type PreparationSession
 } from "./lib/preparationSession";
+import type { ApplicationActionStatus } from "./lib/applicationActionStatus.ts";
 
 import { Masthead } from "./sections/Masthead";
+import { ActionStatus } from "./sections/ActionStatus";
 import { TaskProgress } from "./sections/AiWorkflowProgress";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
@@ -188,14 +205,42 @@ function prefetchOutputTab(tab: OutputTab): void {
   void TAB_PREFETCH[tab]?.().catch(() => undefined);
 }
 
-function ApplicationModalLoading() {
+function ApplicationModalLoading({
+  onClose,
+  returnFocusRef
+}: {
+  onClose: () => void;
+  returnFocusRef: RefObject<HTMLButtonElement | null>;
+}) {
+  const panelRef = useRef<HTMLElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
+  const handleKeyDown = useModalFocus({
+    active: true,
+    containerRef: panelRef,
+    initialFocusRef: closeRef,
+    returnFocusRef,
+    onClose
+  });
+
   return (
     <div className="application-modal">
-      <div className="application-modal__scrim" aria-hidden="true" />
-      <section className="application-modal__panel" aria-busy="true">
+      <div className="application-modal__scrim" aria-hidden="true" onMouseDown={onClose} />
+      <section
+        ref={panelRef}
+        className="application-modal__panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Application details"
+        aria-busy="true"
+        tabIndex={-1}
+        onKeyDown={handleKeyDown}
+      >
         <p className="pipeline-note" role="status" aria-live="polite">
           Loading application…
         </p>
+        <button ref={closeRef} type="button" className="secondary-button is-compact" onClick={onClose}>
+          Cancel
+        </button>
       </section>
     </div>
   );
@@ -274,10 +319,9 @@ function App() {
   // ----- Dialog system -----
   const { alert, confirm } = useDialog();
 
-  // Draggable progress dock for active AI task cards —
-  // lets the user drag the fixed-position stack out of the way of whatever
-  // studio content it would otherwise sit over.
+  // Shared status dock can be dragged clear of the workspace below it.
   const dock = useDraggableDock();
+  const primaryActionRef = useRef<HTMLButtonElement>(null);
 
   // Shared helper for the 6 identical "replace editor" confirms.
   const confirmReplaceEditor = () =>
@@ -360,12 +404,20 @@ function App() {
     coverStarted: false
   });
   const [autoProposalSettlementRevision, setAutoProposalSettlementRevision] = useState(0);
-  // Export and Apply report to their own local action surfaces instead of a
-  // shared global toast.
+  // Export stays local; application actions share the task-dock receipt.
   const [exportStatus, setExportStatus] = useState("");
   const exportStatusIsError = /failed|could not|couldn't|unavailable|load a resume/i.test(exportStatus);
-  const [applyStatus, setApplyStatus] = useState("");
-  const applyStatusIsError = /failed|could not|couldn't/i.test(applyStatus);
+  const [applicationActionStatus, setApplicationActionStatus] = useState<ApplicationActionStatus | null>(null);
+  // Stable, or the receipt's expiry timer restarts every render.
+  const dismissApplicationActionStatus = useCallback(() => setApplicationActionStatus(null), []);
+  const dismissApplicationActionStatusFromButton = useCallback(() => {
+    setApplicationActionStatus(null);
+    primaryActionRef.current?.focus();
+  }, []);
+  const dismissTaskProgressFromButton = useCallback((dismiss: () => void) => {
+    dismiss();
+    primaryActionRef.current?.focus();
+  }, []);
   // Per-stage provider settings and automation preferences, plus the debounced
   // localStorage write, live in useAiSettings. Credentials are owned by the
   // local companion and have no browser state.
@@ -491,21 +543,40 @@ function App() {
   } | null>(null);
   const applicationPreviewRequestRef = useRef(0);
   const [isApplicationModalOpen, setIsApplicationModalOpen] = useState(false);
-  // null → the modal is in "add" mode; an id → it edits that application.
+  const [applicationDocumentActionBusy, setApplicationDocumentActionBusy] = useState(false);
+  // The id stays available while an open record is removed elsewhere.
   const [modalApplicationId, setModalApplicationId] = useState<string | null>(null);
+  const modalApplicationSnapshotRef = useRef<Application | null>(null);
   const applicationOpenInFlightRef = useRef(false);
   // One explicit session state owns whether writes create, continue a draft,
   // or update an exact saved record. Matching job text never supplies this id.
   const [preparationSession, setPreparationSession] = useState(newPreparationSession);
+  const preparationSessionRef = useRef(preparationSession);
+  const preparationGenerationRef = useRef(0);
+  const publishPreparationSession = useCallback((next: PreparationSession, replacesPreparation = false) => {
+    if (replacesPreparation) preparationGenerationRef.current += 1;
+    preparationSessionRef.current = next;
+    setPreparationSession(next);
+  }, []);
+  const getPreparationOwner = useCallback(() => {
+    const current = preparationSessionRef.current;
+    return [
+      preparationGenerationRef.current,
+      current.mode,
+      current.applicationId ?? ""
+    ].join("\u0000");
+  }, []);
   const [sourceReplacementPromptOpen, setSourceReplacementPromptOpen] = useState(false);
   const sourceReplacementResolverRef = useRef<((
-    choice: "continue" | "keep-current" | "cancel"
+    result: PreparedSourceReplacementResolution
   ) => void) | null>(null);
+  const sourceReplacementOwnerRef = useRef("");
   const applicationOfRecordId = preparationSession.applicationId;
 
   useEffect(() => () => {
-    sourceReplacementResolverRef.current?.("cancel");
+    sourceReplacementResolverRef.current?.({ choice: "cancel", isCurrent: () => false });
     sourceReplacementResolverRef.current = null;
+    sourceReplacementOwnerRef.current = "";
   }, []);
 
   useEffect(() => {
@@ -656,12 +727,14 @@ function App() {
       // update retains its exact id; choosing Start a new preparation clears it
       // before this setter receives the replacement snapshot.
       if (!continuesPreparedSource) {
-        setPreparationSession((current) =>
+        const current = preparationSessionRef.current;
+        publishPreparationSession(
           current.mode === "update"
             ? current
             : current.mode === "new" && current.pendingRelationship
             ? current
-            : newPreparationSession()
+            : newPreparationSession(),
+          true
         );
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         clearPreparedResumeRecommendationRef.current();
@@ -672,7 +745,14 @@ function App() {
       // previous company in the letter's name and in every file exported from it.
       setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
     },
-    [currentResumeText, editedResume?.header?.name, importedJob, resumeText, setCoverLetterTitle]
+    [
+      currentResumeText,
+      editedResume?.header?.name,
+      importedJob,
+      publishPreparationSession,
+      resumeText,
+      setCoverLetterTitle
+    ]
   );
   const handlePreparedJobTrackingChange = useCallback(
     (field: keyof ExtractedJobTracking, value: string | number | null) => {
@@ -939,6 +1019,9 @@ function App() {
   const modalApplication = modalApplicationId
     ? applications.find((application) => application.id === modalApplicationId) ?? null
     : null;
+  if (isApplicationModalOpen && modalApplication) {
+    modalApplicationSnapshotRef.current = modalApplication;
+  }
   const modalRelatedApplications = modalApplication?.jobPostingGroupId
     ? applications.filter((application) =>
         application.id !== modalApplication.id
@@ -964,15 +1047,17 @@ function App() {
     jobDescription,
     jobRawText,
     tracking: () => currentJobTracking(),
+    refreshApplications,
     findDuplicatesForTarget,
-    onOpenExisting: async (applicationId) => {
-      const application = applications.find((candidate) => candidate.id === applicationId);
-      return application ? handleLoadApplication(application) : false;
+    onOpenExisting: async (applicationId, isCurrent) => {
+      const application = getApplication(applicationId);
+      return application ? handleLoadApplication(application, isCurrent) : false;
     },
     onRelationshipResolved: (relationship) => {
-      setPreparationSession((current) =>
-        current.mode === "new" ? newPreparationSession(relationship) : current
-      );
+      const current = preparationSessionRef.current;
+      if (current.mode === "new") {
+        publishPreparationSession(newPreparationSession(relationship));
+      }
     }
   });
   const preparedSnapshotMatchesInputs = Boolean(
@@ -1306,24 +1391,33 @@ function App() {
   }, [importedJob, jobDescription, jobRawText, jobUrl, pipelineAiUsage, preparationSession.mode]);
 
   const confirmPreparedSourceReplacement = useCallback(
-    (candidate: PreparedSourceCandidate): Promise<"continue" | "keep-current" | "cancel"> => {
+    (candidate: PreparedSourceCandidate): Promise<PreparedSourceReplacementResolution> => {
+      const owner = getPreparationOwner();
+      const currentSession = preparationSessionRef.current;
+      const currentApplication = currentSession.applicationId
+        ? getApplication(currentSession.applicationId) ?? null
+        : null;
       if (
-        preparationSession.mode !== "update"
-        || !preparationApplication
-        || !preparedSourceAppearsDifferent(preparationApplication, candidate)
+        currentSession.mode !== "update"
+        || !currentApplication
+        || !preparedSourceAppearsDifferent(currentApplication, candidate)
       ) {
-        return Promise.resolve("continue");
+        return Promise.resolve({
+          choice: "continue",
+          isCurrent: () => getPreparationOwner() === owner
+        });
       }
       return new Promise((resolve) => {
         if (sourceReplacementResolverRef.current) {
-          resolve("cancel");
+          resolve({ choice: "cancel", isCurrent: () => false });
           return;
         }
+        sourceReplacementOwnerRef.current = owner;
         sourceReplacementResolverRef.current = resolve;
         setSourceReplacementPromptOpen(true);
       });
     },
-    [preparationApplication, preparationSession.mode]
+    [getApplication, getPreparationOwner]
   );
 
   const choosePreparedSourceReplacement = useCallback(
@@ -1332,6 +1426,12 @@ function App() {
       if (!resolve) return;
       sourceReplacementResolverRef.current = null;
       setSourceReplacementPromptOpen(false);
+      if (sourceReplacementOwnerRef.current !== getPreparationOwner()) {
+        sourceReplacementOwnerRef.current = "";
+        resolve({ choice: "cancel", isCurrent: () => false });
+        return;
+      }
+      sourceReplacementOwnerRef.current = "";
       if (choice === "keep-current") {
         const saved = lastPreparedSourceRef.current;
         if (saved) {
@@ -1343,17 +1443,29 @@ function App() {
         }
         setLinkStatus("Kept the posting attached to the saved record.");
         setPolishStatus("Kept the posting attached to the saved record.");
-        resolve("keep-current");
+        const owner = getPreparationOwner();
+        resolve({
+          choice: "keep-current",
+          isCurrent: () => getPreparationOwner() === owner
+        });
         return;
       }
       if (choice === "start-new") {
-        setPreparationSession(newPreparationSession());
-        resolve("continue");
+        publishPreparationSession(newPreparationSession(), true);
+        const owner = getPreparationOwner();
+        resolve({
+          choice: "continue",
+          isCurrent: () => getPreparationOwner() === owner
+        });
         return;
       }
-      resolve("cancel");
+      const owner = getPreparationOwner();
+      resolve({
+        choice: "cancel",
+        isCurrent: () => getPreparationOwner() === owner
+      });
     },
-    []
+    [getPreparationOwner, publishPreparationSession]
   );
 
   // ----- Job intake (job analysis/import flows) -----
@@ -1369,6 +1481,7 @@ function App() {
   }
   const {
     currentPreparationId,
+    getCurrentPreparationId,
     isExtractingLink,
     extensionImportPhase,
     jobAnalysisProgress,
@@ -1658,6 +1771,13 @@ function App() {
     coverLetterReady,
     isPreparing: applicationPreparationActive
   });
+  const trackerReadinessBlocker = !hasLoadedApplications
+    ? isApplicationsLoading
+      ? "Wait for Applications to finish loading."
+      : "Open Applications and choose Refresh before continuing."
+    : "";
+  const applyReady = hasLoadedApplications && preparationReadiness.canApply;
+  const applyBlocker = trackerReadinessBlocker || preparationReadiness.primaryBlocker;
   function handlePolishPreparedResume() {
     if (
       !jobPrepared ||
@@ -1875,13 +1995,13 @@ function App() {
   });
   const linkPreparedApplication = useCallback(
     (id: string | null) => {
-      setPreparationSession(
+      publishPreparationSession(
         id
           ? { mode: "update", applicationId: id, pendingRelationship: null }
           : newPreparationSession()
       );
     },
-    []
+    [publishPreparationSession]
   );
   // A one-pass proposal stays usable after per-field decisions: each edit card
   // validates its own original target against the live document. Only a changed
@@ -1898,8 +2018,8 @@ function App() {
     handleApplyOnly,
     cancelApply
   } = useApplyFlow({
-    canApply: preparationReadiness.canApply,
-    applyBlocker: preparationReadiness.primaryBlocker,
+    canApply: applyReady,
+    applyBlocker,
     includeResume: materialSelection.resume,
     includeCoverLetter: materialSelection.coverLetter,
     jobUrl,
@@ -1909,8 +2029,12 @@ function App() {
     currentResumeText,
     fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
     pipelineAiUsage,
-    applications,
     preparationSession,
+    currentPreparationId,
+    getCurrentPreparationId,
+    getPreparationGeneration: () => preparationGenerationRef.current,
+    getApplication,
+    refreshApplications,
     createApplication,
     updateApplicationById,
     linkPostingRecords,
@@ -1932,14 +2056,14 @@ function App() {
     onResumeSaved: markResumeApplicationSaved,
     onCoverLetterSaved: coverLetterEditor.markApplicationSaved,
     setApplicationPersistenceReceipt,
-    setApplyStatus,
+    setApplicationActionStatus,
     setActiveOutputTab,
     setExpandedApplicationId
   });
 
   const skipModeAvailable = preparationSession.mode === "new";
-  const skipBlocker = !hasLoadedApplications
-    ? "Wait for Applications to finish loading."
+  const skipBlocker = trackerReadinessBlocker
+    ? trackerReadinessBlocker
     : !jobPrepared
       ? "Prepare the posting first."
       : preparationSession.mode === "update"
@@ -1963,8 +2087,12 @@ function App() {
     jobRawText,
     pipelineAiUsage,
     fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
-    applications,
     preparationSession,
+    currentPreparationId,
+    getCurrentPreparationId,
+    getPreparationGeneration: () => preparationGenerationRef.current,
+    getApplication,
+    refreshApplications,
     currentJobTracking,
     resolvePreparationDuplicate: duplicateGuard.resolveApplyDuplicate,
     createApplication,
@@ -1972,24 +2100,37 @@ function App() {
     linkPostingRecords,
     markPostingRecordsUnrelated,
     linkApplication: linkPreparedApplication,
-    setApplyStatus
+    setApplicationActionStatus
   });
   const applicationActionsBusy = isApplying || isSkipping;
+  const visibleApplicationActionStatus = applyDownloadPrompt || skipPrompt ? null : applicationActionStatus;
+  const progressDockVisible = Boolean(
+    visibleApplicationActionStatus
+    || polishProgressVisible
+    || jobAnalysisProgressVisible
+    || coverProgress.status !== "idle"
+    || answersProgress.status !== "idle"
+  );
   const primaryActionBusy = isApplying || (
     primaryPreparationAction.kind === "update-job" && isSkipping
   );
   const primaryActionReady = primaryPreparationAction.kind === "update-job"
-    ? jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
-    : preparationReadiness.canApply;
+    ? hasLoadedApplications && jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
+    : applyReady;
   const primaryActionBlocker = primaryPreparationAction.kind === "update-job"
-    ? !jobPrepared
+    ? trackerReadinessBlocker
+      ? trackerReadinessBlocker
+      : !jobPrepared
       ? "Prepare the posting first."
       : jobPreparationActive
         ? "Wait for job preparation to finish."
         : pendingApplicationWrites > 0
           ? "Wait for the current save to finish."
           : ""
-    : preparationReadiness.primaryBlocker;
+    : trackerReadinessBlocker || applyBlocker;
+  const primaryActionDisabledHint = applicationActionsBusy
+    ? "Wait for the current application action to finish."
+    : primaryActionBlocker;
   const handlePrimaryPreparationAction = async (): Promise<void> => {
     if (primaryPreparationAction.kind === "update-job") {
       await saveJobUpdates();
@@ -2001,7 +2142,9 @@ function App() {
   const applicationPersistencePending =
     applicationSavePending ||
     resumeApplicationSync.isSaving ||
-    coverLetterApplicationSync.isSaving;
+    coverLetterApplicationSync.isSaving ||
+    applicationFiles.isBusy ||
+    applicationDocumentActionBusy;
 
   // PDF exports are recoverable; tracker and editable-source writes are not.
   const resumeNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard({
@@ -2036,7 +2179,10 @@ function App() {
     })
   );
 
-  async function handleLoadApplication(app: Application): Promise<boolean> {
+  async function handleLoadApplication(
+    app: Application,
+    isCurrent: () => boolean = () => true
+  ): Promise<boolean> {
     if (applicationOpenInFlightRef.current) return false;
     applicationOpenInFlightRef.current = true;
     try {
@@ -2080,6 +2226,7 @@ function App() {
         });
         return false;
       }
+      if (!isCurrent()) return false;
 
       const restoredResumeData = savedResumeSource?.data ?? null;
       const restoredResume = restoredResumeData ? serializeResumeData(restoredResumeData) : "";
@@ -2135,6 +2282,7 @@ function App() {
       const restoredTailoringText = assemblePreparedJobTailoringText(restoredTracking, restoredBrief);
       const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
       const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
+      preparationGenerationRef.current += 1;
       if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
         await alert({
           title: "Open failed",
@@ -2197,7 +2345,7 @@ function App() {
       duplicateGuard.ackApplication(app);
       // Work continues against THIS record: later document saves update it rather
       // than creating a second row for the same posting.
-      setPreparationSession(preparationSessionForApplication(app));
+      publishPreparationSession(preparationSessionForApplication(app));
       detachBaseResumeIdentity();
       setFileName("");
       // The only origin transition useWorkspaceResume cannot see: a restored
@@ -2313,11 +2461,12 @@ function App() {
     )
       return;
     removeApplication(id);
-    if (modalApplicationId === id) setIsApplicationModalOpen(false);
+    if (modalApplicationId === id) closeApplicationModal();
   }
 
   // Double-click in any tracker view opens the full detail modal for that role.
   function handleOpenApplicationDetail(application: Application) {
+    modalApplicationSnapshotRef.current = application;
     setModalApplicationId(application.id);
     setExpandedApplicationId(application.id);
     setIsApplicationModalOpen(true);
@@ -2348,6 +2497,12 @@ function App() {
   function closeApplicationPreview() {
     applicationPreviewRequestRef.current += 1;
     setDocumentPreview(null);
+  }
+
+  function closeApplicationModal() {
+    applicationPreviewRequestRef.current += 1;
+    modalApplicationSnapshotRef.current = null;
+    setIsApplicationModalOpen(false);
   }
 
   async function handleDownloadApplicationDocument(application: Application, kind: ApplicationDocumentKind) {
@@ -2388,22 +2543,23 @@ function App() {
         primaryAction={primaryPreparationAction}
         busy={primaryActionBusy}
         applyDisabled={!primaryActionReady || applicationActionsBusy}
-        applyHint={primaryActionBusy ? primaryPreparationAction.busyLabel : primaryActionBlocker}
-        applyStatus={applyStatus}
-        applyStatusIsError={applyStatusIsError}
-        onDismissApplyStatus={() => setApplyStatus("")}
+        applyHint={primaryActionBusy ? primaryPreparationAction.busyLabel : primaryActionDisabledHint}
+        actionRef={primaryActionRef}
       />
 
-      {polishProgressVisible ||
-      jobAnalysisProgressVisible ||
-      coverProgress.status !== "idle" ||
-      answersProgress.status !== "idle" ? (
+      {progressDockVisible ? (
         <div
+          ref={dock.ref}
           className={`progress-dock${dock.dragging ? " is-dragging" : ""}`}
           style={dock.style}
           onPointerDown={dock.onPointerDown}
-          aria-label="Task progress"
         >
+          <ActionStatus
+            status={visibleApplicationActionStatus}
+            suspendExpiry={applicationActionsBusy || dock.dragging}
+            onDismiss={dismissApplicationActionStatus}
+            onDismissButton={dismissApplicationActionStatusFromButton}
+          />
           {jobAnalysisProgressVisible ? (
             <TaskProgress
               stageKey="job-analysis"
@@ -2411,6 +2567,8 @@ function App() {
               onRetry={jobAnalysisRetry}
               onStop={isExtractingLink ? stopJobAnalysis : undefined}
               onDismiss={dismissJobAnalysisProgress}
+              onDismissButton={() => dismissTaskProgressFromButton(dismissJobAnalysisProgress)}
+              suspendExpiry={dock.dragging}
             />
           ) : null}
           {polishProgressVisible ? (
@@ -2420,6 +2578,8 @@ function App() {
               onRetry={() => void retryStage()}
               onStop={stopPolish}
               onDismiss={() => setPolishProgressVisible(false)}
+              onDismissButton={() => dismissTaskProgressFromButton(() => setPolishProgressVisible(false))}
+              suspendExpiry={dock.dragging}
             />
           ) : null}
           <TaskProgress
@@ -2428,6 +2588,8 @@ function App() {
             onRetry={handleTailorCoverLetter}
             onStop={stopCoverPolish}
             onDismiss={dismissCoverProgress}
+            onDismissButton={() => dismissTaskProgressFromButton(dismissCoverProgress)}
+            suspendExpiry={dock.dragging}
           />
           <TaskProgress
             stageKey="answers"
@@ -2435,6 +2597,8 @@ function App() {
             onRetry={retryAnswers}
             onStop={stopAnswers}
             onDismiss={dismissAnswersProgress}
+            onDismissButton={() => dismissTaskProgressFromButton(dismissAnswersProgress)}
+            suspendExpiry={dock.dragging}
           />
         </div>
       ) : null}
@@ -2515,6 +2679,7 @@ function App() {
                 !isManuallySelectingResumeVariant &&
                 !isResolvingPreparedResume
               }
+              isPolishStarting={isPolishStarting}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}
@@ -2569,7 +2734,7 @@ function App() {
               readiness={preparationReadiness}
               primaryAction={primaryPreparationAction}
               primaryActionReady={primaryActionReady}
-              primaryActionBlocker={primaryActionBlocker}
+              primaryActionBlocker={primaryActionDisabledHint}
               isApplying={primaryActionBusy}
               applicationActionsBusy={applicationActionsBusy}
               onApply={handlePrimaryPreparationAction}
@@ -2762,6 +2927,7 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               resumePolishProviderReady={resumePolishProviderReady}
+              isPolishStarting={isPolishStarting}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishStatus={polishStatus}
@@ -3091,13 +3257,23 @@ function App() {
       ) : null}
 
       {isApplicationModalOpen ? (
-        <Suspense fallback={<ApplicationModalLoading />}>
+        <Suspense
+          fallback={(
+            <ApplicationModalLoading
+              onClose={closeApplicationModal}
+              returnFocusRef={primaryActionRef}
+            />
+          )}
+        >
           <ApplicationModal
             open
             application={modalApplication}
+            retainedApplication={modalApplicationSnapshotRef.current}
             stackedViewerOpen={Boolean(documentPreview)}
             relatedApplications={modalRelatedApplications}
             onOpenRelated={(application) => {
+              applicationPreviewRequestRef.current += 1;
+              modalApplicationSnapshotRef.current = application;
               setModalApplicationId(application.id);
               setExpandedApplicationId(application.id);
             }}
@@ -3109,7 +3285,7 @@ function App() {
                 modalApplication.id
               );
             }}
-            onClose={() => setIsApplicationModalOpen(false)}
+            onClose={closeApplicationModal}
             onSave={handleSaveApplicationFromModal}
             onDelete={handleDeleteApplication}
             onLoad={handleLoadApplication}
@@ -3119,6 +3295,7 @@ function App() {
             onRemoveDocument={applicationFiles.removeDocument}
             onSaveAttachment={applicationFiles.saveAttachment}
             onRemoveAttachment={applicationFiles.removeAttachment}
+            onDocumentsBusyChange={setApplicationDocumentActionBusy}
           />
         </Suspense>
       ) : null}
@@ -3132,6 +3309,7 @@ function App() {
           canDownloadCoverLetter={applyDownloadPrompt.canDownloadCoverLetter}
           busy={isApplying}
           error={applySaveError}
+          returnFocusRef={primaryActionRef}
           onDownload={handleApplyDownloadPick}
           onSkip={cancelApply}
           onApplyOnly={handleApplyOnly}
@@ -3144,6 +3322,7 @@ function App() {
           initialNote={skipPrompt.initialNote}
           busy={isSkipping}
           error={skipError}
+          returnFocusRef={primaryActionRef}
           onSave={(reason, note) => {
             void saveSkip(reason, note);
           }}

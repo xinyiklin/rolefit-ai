@@ -126,7 +126,6 @@
 }
 
 .masthead__actions {
-  position: relative;
   display: flex;
   align-items: center;
   gap: var(--s2);
@@ -188,17 +187,13 @@
   }
 }
 
-.masthead-feedback-stack {
-  position: absolute;
-  top: calc(100% + 10px);
-  right: 0;
-  z-index: 60;
-  display: grid;
-  gap: var(--s1);
-  width: min(380px, calc(100vw - var(--s5) * 2));
-}
+/* -------- Application action receipt -------- */
 
-.masthead-feedback {
+/* Rides the shared `.progress-dock` column to stack with task cards and start
+   clear of the inspector record Apply just opened. */
+.action-status {
+  width: 100%;
+  pointer-events: auto;
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
@@ -208,27 +203,60 @@
   background: var(--card);
   box-shadow: var(--shadow-lift);
   color: var(--ink);
-  font-size: 0.76rem;
-  line-height: 1.4;
+  cursor: grab;
+  touch-action: pan-y;
+  animation: action-status-in 160ms var(--ease) backwards;
+  transition: opacity 300ms var(--ease), transform 300ms var(--ease);
 }
 
-.masthead-feedback--error {
+@keyframes action-status-in {
+  from { opacity: 0.01; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.action-status.is-leaving {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.action-status--error {
   border-color: var(--danger-line);
   background: var(--danger-soft);
   color: var(--danger);
 }
 
-.masthead-feedback > span {
+.action-status__text {
   flex: 1 1 auto;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
-.masthead-feedback > button {
+.action-status__headline {
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 600;
+  line-height: 1.35;
+  color: var(--ink-strong);
+}
+
+.action-status__detail {
+  margin: 2px 0 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-muted);
+}
+
+.action-status--error .action-status__headline,
+.action-status--error .action-status__detail {
+  color: var(--danger);
+}
+
+.action-status__dismiss {
   flex: 0 0 auto;
   display: inline-grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border: 0;
   border-radius: var(--r-sm);
@@ -237,13 +265,25 @@
   cursor: pointer;
 }
 
-.masthead-feedback > button:hover {
+.action-status__dismiss:hover {
   background: var(--card-hover);
 }
 
-.masthead-feedback > button:focus-visible {
+/* card-hover is a paper tint and reads as a wrong-hue patch on the red card. */
+.action-status--error .action-status__dismiss:hover {
+  background: var(--danger-line);
+}
+
+.action-status__dismiss:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .action-status__dismiss {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .eyebrow {
@@ -446,9 +486,9 @@
    top-centered column and stack vertically instead of overlapping when both are
    on screen at once. pointer-events pass through the gaps.
    Draggable via useDraggableDock (src/hooks/useDraggableDock.ts): that hook
-   adds an inline `transform` offset on top of this base centering once the
-   user drags, so the dock never permanently blocks the editor/preview below
-   it. This base rule stays authoritative until the first drag. */
+   adds an inline `transform` offset on top of this base centering after drag,
+   so the dock never permanently blocks the editor/preview below it. This base
+   rule stays authoritative until the first drag. */
 .progress-dock {
   position: fixed;
   top: calc(var(--s5) + 2.5rem);
@@ -459,6 +499,9 @@
   flex-direction: column;
   gap: var(--s2);
   width: min(360px, calc(100vw - var(--s5) * 2));
+  max-height: calc(100dvh - var(--s5) - 2.5rem - var(--s2));
+  overflow-y: auto;
+  overscroll-behavior: contain;
   pointer-events: none;
 }
 
@@ -470,18 +513,19 @@
   overflow: hidden;
   pointer-events: auto;
   border: 1px solid var(--hairline-strong);
-  border-radius: 10px;
+  border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: 0 10px 34px -14px rgba(0, 0, 0, 0.34);
+  box-shadow: var(--shadow-lift);
   color: var(--ink);
   cursor: grab;
-  touch-action: none;
+  touch-action: pan-y;
   animation: ai-workflow-in 180ms var(--ease) backwards;
   transition: opacity 300ms var(--ease), transform 300ms var(--ease);
 }
 
 .progress-dock.is-dragging { user-select: none; }
-.progress-dock.is-dragging .ai-workflow { cursor: grabbing; }
+.progress-dock.is-dragging .ai-workflow,
+.progress-dock.is-dragging .action-status { cursor: grabbing; }
 
 @keyframes ai-workflow-in {
   from { opacity: 0.01; transform: translateY(-5px); }
@@ -491,7 +535,6 @@
 .ai-workflow.is-leaving {
   opacity: 0;
   transform: translateY(-8px);
-  pointer-events: none;
 }
 
 .ai-workflow__head {
@@ -534,6 +577,18 @@
 .ai-workflow__dismiss:hover {
   color: var(--ink-strong);
   background: var(--card);
+}
+
+.ai-workflow__dismiss:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (pointer: coarse) {
+  .ai-workflow__dismiss {
+    width: 44px;
+    height: 44px;
+  }
 }
 
 .ai-workflow__stage {
@@ -605,7 +660,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ai-workflow,
-  .ai-workflow.is-leaving { animation: none; transition: opacity 120ms linear; }
+  .ai-workflow.is-leaving,
+  .action-status,
+  .action-status.is-leaving { animation: none; transition: opacity 120ms linear; }
+  .ai-workflow.is-leaving,
+  .action-status.is-leaving { transform: none; }
   .ai-workflow__spinner { animation: none; }
 }
 

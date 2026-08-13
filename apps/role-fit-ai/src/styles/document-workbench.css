@@ -259,7 +259,7 @@
   padding: 0 3px;
   background: var(--danger);
   color: var(--card-elev);
-  font: 600 0.6rem/1 var(--font-data);
+  font: 600 0.6rem/1 var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
 

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import type { Application } from "./useApplications";
 import {
@@ -28,10 +28,13 @@ export function useApplicationFiles({
   // actions so a rapid Resume + Cover letter save uses the first mutation's
   // confirmed revision instead of manufacturing an avoidable 409 conflict.
   const mutationQueue = useRef<Promise<void>>(Promise.resolve());
+  const [pendingOperations, setPendingOperations] = useState(0);
   const enqueue = useCallback(<T,>(mutation: () => Promise<T>): Promise<T> => {
+    setPendingOperations((count) => count + 1);
     const run = mutationQueue.current.then(mutation, mutation);
-    mutationQueue.current = run.then(() => undefined, () => undefined);
-    return run;
+    const tracked = run.finally(() => setPendingOperations((count) => count - 1));
+    mutationQueue.current = tracked.then(() => undefined, () => undefined);
+    return tracked;
   }, []);
 
   const saveDocument = useCallback(
@@ -105,5 +108,11 @@ export function useApplicationFiles({
     [enqueue, getApplication, refreshApplications]
   );
 
-  return { saveDocument, removeDocument, saveAttachment, removeAttachment };
+  return {
+    saveDocument,
+    removeDocument,
+    saveAttachment,
+    removeAttachment,
+    isBusy: pendingOperations > 0
+  };
 }

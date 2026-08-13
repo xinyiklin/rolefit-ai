@@ -138,16 +138,18 @@ type UseJobIntakeArgs = {
   confirmDuplicateBeforeJobAnalysis: (
     url: string,
     text: string,
-    facts: ExtractedJobTracking
+    facts: ExtractedJobTracking,
+    isCurrent: () => boolean
   ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
   confirmDuplicateAfterJobAnalysis: (
     url: string,
     text: string,
-    facts: ExtractedJobTracking
+    facts: ExtractedJobTracking,
+    isCurrent: () => boolean
   ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
   confirmPreparedSourceReplacement: (
     candidate: PreparedSourceCandidate
-  ) => Promise<"continue" | "keep-current" | "cancel">;
+  ) => Promise<PreparedSourceReplacementResolution>;
   jobAnalysisRequestFields: () => AiRequestFields;
   fitAssessmentRequestFields: () => AiRequestFields;
   ensureProviderReady: (request: AiRequestFields) => Promise<ProviderReadiness>;
@@ -167,6 +169,11 @@ type UseJobIntakeArgs = {
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
   onExtensionJobReceived: () => void;
+};
+
+export type PreparedSourceReplacementResolution = {
+  choice: "continue" | "keep-current" | "cancel";
+  isCurrent: () => boolean;
 };
 
 type PreparedJobAnalysisSource = "link" | "paste" | "extension" | "retry";
@@ -877,21 +884,23 @@ export function useJobIntake({
     request: PreparedJobAnalysisRequest;
   }): Promise<PreparedJobAnalysisOutcome> {
     const localExtracted = extractJobPosting(localSourceText, { url: url || undefined });
-    const replacementChoice = await confirmPreparedSourceReplacement({
+    const replacement = await confirmPreparedSourceReplacement({
       url,
       sourceText: localSourceText,
       tracking: localExtracted.tracking
     });
-    if (!request.isCurrent()) return { status: "stale" };
-    if (replacementChoice !== "continue") {
-      return { status: "source-replacement-stopped", choice: replacementChoice };
+    const runIsCurrent = () => request.isCurrent() && replacement.isCurrent();
+    if (!runIsCurrent()) return { status: "stale" };
+    if (replacement.choice !== "continue") {
+      return { status: "source-replacement-stopped", choice: replacement.choice };
     }
     const duplicateBefore = await confirmDuplicateBeforeJobAnalysis(
       url,
       localSourceText,
-      localExtracted.tracking
+      localExtracted.tracking,
+      runIsCurrent
     );
-    if (!request.isCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return { status: "stale" };
     if (!duplicateBefore.proceed) {
       if (duplicateBefore.handled) return { status: "duplicate-handled" };
       // Extension delivery can contain a short intermediate payload. The URL
@@ -919,7 +928,7 @@ export function useJobIntake({
       request,
       prepareIdentity
     );
-    if (!request.isCurrent() || !preparedResume) return { status: "stale" };
+    if (!runIsCurrent() || !preparedResume) return { status: "stale" };
     const { selection, fitRequest, fitRunId } = preparedResume;
     // Preserve Prepare's one-call fast path only when the two independently
     // configured stages resolve to the exact same provider request. A distinct
@@ -942,7 +951,7 @@ export function useJobIntake({
           fitAssessmentRequested: combineFitAssessment,
           failure: classifyFailure(new ApiError(execution.readiness.message, 503))
         });
-    if (!request.isCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return { status: "stale" };
 
     const relevant = result.extracted.tailoringText;
     if (relevant.trim().length < 40) {
@@ -955,9 +964,10 @@ export function useJobIntake({
       : await confirmDuplicateAfterJobAnalysis(
           url,
           screeningJobText,
-          result.extracted.tracking
+          result.extracted.tracking,
+          runIsCurrent
         );
-    if (!request.isCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return { status: "stale" };
 
     // Extension payloads are not already bound to the live URL input.
     if (source === "extension" || source === "retry") setJobUrl(url);
@@ -1454,6 +1464,7 @@ export function useJobIntake({
 
   return {
     currentPreparationId: currentPrepared?.id ?? "",
+    getCurrentPreparationId: () => committedPreparationRef.current?.id ?? "",
     isExtractingLink,
     extensionImportPhase,
     jobAnalysisProgress,

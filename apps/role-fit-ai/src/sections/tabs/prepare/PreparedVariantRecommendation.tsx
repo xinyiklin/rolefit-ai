@@ -4,6 +4,7 @@ type PreparedVariantRecommendationProps = {
   isRanking: boolean;
   recommendation: VariantRecommendation | null;
   selectedFileName: string;
+  disabled: boolean;
   onUse: (fileName: string) => void;
 };
 
@@ -14,6 +15,7 @@ export function PreparedVariantRecommendation({
   isRanking,
   recommendation,
   selectedFileName,
+  disabled,
   onUse
 }: PreparedVariantRecommendationProps) {
   if (isRanking || !recommendation) return null;
@@ -26,6 +28,7 @@ export function PreparedVariantRecommendation({
         className="ghost-button is-compact prepare-note__action"
         type="button"
         onClick={() => onUse(recommendation.fileName)}
+        disabled={disabled}
       >
         Select
       </button>

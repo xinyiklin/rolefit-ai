@@ -99,6 +99,64 @@ assert.ok(!modal.includes("confirmSkipDowngrade"));
 
 assert.ok(!modal.includes("if (!open || !application) return null"));
 assert.ok(modal.includes("application ?? lastAvailableApplicationRef.current"));
+assert.match(
+  app,
+  /modalApplicationSnapshotRef\.current = application;[\s\S]{0,180}?setModalApplicationId\(application\.id\)/,
+  "opening Application Detail retains the selected record across its lazy boundary"
+);
+assert.ok(
+  app.includes("retainedApplication={modalApplicationSnapshotRef.current}"),
+  "the lazy dialog receives the selected record if it disappears before mount"
+);
+assert.ok(modal.includes("const seedApplication = application ?? retainedApplication;"));
+assert.ok(modal.includes("formFromApplication(seedApplication)"));
+assert.ok(modal.includes("useRef<string | null>(seedApplication?.id ?? null)"));
+assert.match(
+  modal,
+  /formBaselineRef[\s\S]{0,1200}?formsMatch\(formRef\.current, baseline\)[\s\S]{0,500}?setHasConcurrentEdit\(true\)/,
+  "Application Detail distinguishes a clean rebase from conflicting local and tracker edits"
+);
+assert.match(
+  modal,
+  /formsMatch\(incoming, baseline\)[\s\S]{0,180}?setHasConcurrentEdit\(false\)[\s\S]{0,220}?submittedFormRef\.current[\s\S]{0,120}?formsMatch\(incoming, submittedFormRef\.current\)/,
+  "a failed optimistic save can roll back to baseline without becoming a concurrent-edit conflict"
+);
+assert.match(
+  modal,
+  /applicationId === null && lastSeededId\.current !== null[\s\S]{0,180}?setHasConcurrentEdit\(false\)/,
+  "a concurrent delete supersedes a field conflict and unlocks the retained recovery form"
+);
+assert.match(
+  modal,
+  /applicationId === null && lastSeededId\.current !== null[\s\S]{0,260}?setTab\(\(current\) => current === "documents" \? "details" : current\)/,
+  "a concurrent delete leaves the unavailable Documents surface"
+);
+assert.ok(
+  modal.includes('APPLICATION_MODAL_TABS.filter(({ id }) => id !== "documents")'),
+  "a concurrently removed record omits its stale Documents tab"
+);
+assert.ok(
+  modal.includes("const order = visibleTabs.map((entry) => entry.id)"),
+  "keyboard tab navigation excludes surfaces omitted after concurrent deletion"
+);
+assert.ok(
+  modal.includes("onDelete && !recordWasRemoved"),
+  "a concurrently removed record does not retain a stale Delete action"
+);
+assert.match(
+  modal,
+  /async function persistForm[\s\S]{0,500}?formBaselineRef\.current = submitted[\s\S]{0,100}?replaceForm\(submitted\)[\s\S]{0,180}?submittedFormRef\.current = null/,
+  "a confirmed modal-owned save adopts its normalized form and editable baseline"
+);
+assert.ok(modal.includes("async function reloadLatestApplication()"));
+assert.match(modal, /hasConcurrentEdit \? \([\s\S]{0,300}?Use latest version/,
+  "a concurrent edit has an explicit recovery action");
+assert.match(modal, /inert=\{controlsLocked\}/, "conflicting or pending edits lock stale form controls");
+assert.match(
+  modal,
+  /if \(!controlsLocked\) return;[\s\S]{0,120}?setSkipDecisionOpen\(false\)[\s\S]{0,120}?setRelatedMenu\(null\)/,
+  "locking the modal also closes controls rendered outside its inert body"
+);
 for (const artifact of ["resumeArtifacts", "coverLetterArtifacts", "attachments"]) {
   assert.ok(modal.includes(`delete persisted.${artifact}`), `recovery drops stale ${artifact}`);
 }
@@ -136,6 +194,16 @@ assert.ok(
   "stacked posting and document previews disable the underlying detail dialog"
 );
 assert.ok(app.includes("stackedViewerOpen={Boolean(documentPreview)}"));
+assert.match(
+  app,
+  /function ApplicationModalLoading[\s\S]{0,900}?useModalFocus\([\s\S]{0,500}?role="dialog"[\s\S]{0,120}?aria-modal="true"[\s\S]{0,300}?onKeyDown=\{handleKeyDown\}/,
+  "the lazy Application Detail fallback has the same modal keyboard boundary as the loaded dialog"
+);
+assert.match(
+  app,
+  /function ApplicationModalLoading[\s\S]{0,1300}?ref=\{closeRef\}[\s\S]{0,180}?onClick=\{onClose\}/,
+  "the lazy Application Detail fallback stays dismissible while its chunk loads"
+);
 assert.ok(postingOverlay.includes('className="preview-overlay application-posting-overlay"'));
 assert.ok(postingOverlay.includes('role="dialog"'));
 assert.ok(postingOverlay.includes('aria-modal="true"'));
@@ -148,6 +216,11 @@ assert.ok(documentsTab.includes("<JobPostingPane"));
 assert.ok(documentsTab.includes('application?.status === "not_applying"'));
 assert.ok(documentsTab.includes("Skipped jobs keep job details only"));
 assert.match(documentsTab, /disabled=\{!application \|\| jobOnly \|\| busy\}/);
+assert.match(
+  documentsTab,
+  /setOperationBusy\(true\)[\s\S]{0,900}?file\.text\(\)[\s\S]{0,1500}?setOperationBusy\(false\)/,
+  "the modal busy boundary covers local file reading and the complete upload"
+);
 assert.ok(previewOverlay.includes("<PreviewZoomControls"));
 assert.ok(previewOverlay.includes("usePreviewZoom"));
 assert.ok(previewOverlay.includes("Saved document PDF preview:"));
@@ -163,6 +236,21 @@ assert.match(
   "closing a preview invalidates any slower request still in flight"
 );
 assert.ok(app.includes("onClose={closeApplicationPreview}"));
+assert.match(
+  app,
+  /function closeApplicationModal\(\)[\s\S]{0,160}?applicationPreviewRequestRef\.current \+= 1;[\s\S]{0,120}?setIsApplicationModalOpen\(false\)/,
+  "closing Application Detail invalidates a document preview still loading"
+);
+assert.match(
+  app,
+  /if \(modalApplicationId === id\) closeApplicationModal\(\)/,
+  "deleting the open record also invalidates a document preview still loading"
+);
+assert.match(
+  app,
+  /onOpenRelated=\{\(application\) => \{[\s\S]{0,120}?applicationPreviewRequestRef\.current \+= 1;[\s\S]{0,120}?setModalApplicationId\(application\.id\)/,
+  "switching related records invalidates a document preview still loading"
+);
 assert.ok(previewZoomControls.includes("PREVIEW_ZOOM_STEPS"));
 assert.ok(previewZoomControls.includes('aria-live="polite"'));
 for (const key of ['event.key === "="', 'event.key === "+"', 'event.key === "-"', 'event.key === "0"']) {

@@ -109,8 +109,9 @@ browser-side effects; components render them and App composes them.
   unchanged objects retain identity. Ordinary saves match by application id
   only. Same-posting records keep independent ids and use one atomic multi-row
   `jobPostingGroupId` mutation; manual destructive merge remains a separate
-  operation. Manual refreshes and conflict snapshots remain fresh authoritative
-  objects.
+  operation. Concurrent refresh callers share one transaction and result; it
+  drains the stable same-tab write tail and retries if a write starts during
+  its read. Conflict snapshots remain fresh authoritative objects.
 - `useApplyFlow` persists the latest completed Fit Assessment as an application
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,
@@ -138,7 +139,9 @@ browser-side effects; components render them and App composes them.
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison
   includes the complete source fingerprint, so style-only edits remain
-  retryable and updating one document never rewrites the other.
+  retryable and updating one document never rewrites the other. Its pending
+  state covers the complete file operation so modal close and browser unload
+  cannot interrupt a document commit silently.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
   reusable history/reducer behavior in `@typeset/editor`.
 - `useCoverLetterEditor` composes RoleFit's separate letter lifecycle while

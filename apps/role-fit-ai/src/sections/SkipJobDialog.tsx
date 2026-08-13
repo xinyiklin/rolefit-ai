@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useId, useRef, useState, type RefObject } from "react";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 import {
   NOT_APPLYING_REASON_LABEL,
@@ -10,6 +10,7 @@ type SkipJobDialogProps = {
   initialNote: string;
   busy: boolean;
   error: string;
+  returnFocusRef: RefObject<HTMLElement | null>;
   onSave: (reason: NotApplyingReason | "", note: string) => void | Promise<void>;
   onCancel: () => void;
 };
@@ -19,6 +20,7 @@ export function SkipJobDialog({
   initialNote,
   busy,
   error,
+  returnFocusRef,
   onSave,
   onCancel
 }: SkipJobDialogProps) {
@@ -32,6 +34,7 @@ export function SkipJobDialog({
     active: true,
     containerRef: cardRef,
     initialFocusRef: reasonRef,
+    returnFocusRef,
     onClose: busy ? () => undefined : onCancel
   });
 

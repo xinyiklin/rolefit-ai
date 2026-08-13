@@ -89,11 +89,14 @@ then the named-variant selector and actions in matching DOM and visual order. It
 shows at most one note underneath: the blocker while its action is unavailable,
 its live status otherwise. Resume starts included and Cover Letter starts
 excluded. Do not add “optional” labels, badges, or card-specific visual
-hierarchy. The Prepare and masthead Apply buttons invoke one handler and
-one readiness model: the current job must match a completed preparation, and
-only included materials must be ready while their preparation is idle. Either
-or both cards may be excluded. A later update treats exclusion as non-destructive:
-any artifact already saved for that application remains untouched.
+hierarchy. The Prepare and masthead Apply buttons invoke one handler and one
+readiness model: the current job must match a completed preparation, the tracker
+must finish its authoritative load, and only included materials must be ready
+while their preparation is idle. Either or both cards may be excluded. A later
+update treats exclusion as non-destructive: any artifact already saved for that
+application remains untouched. New Apply and Skip actions refresh the tracker
+before their final duplicate decision so another tab's newer record is not
+missed.
 Skip & save job is a lower-emphasis action beneath the primary Apply command in
 the Prepare rail only. It uses a neutral confirmation dialog with optional
 reason and note, and it is governed by prepared-job plus tracker readiness—not
@@ -497,6 +500,31 @@ Never show:
 - The Sessions studio-rail popover opens to the right of its trigger and clamps
   to the viewport. It scrolls internally rather than extending or shifting the
   studio shell's scroll area.
+- Apply, Update application, and Skip share one receipt (`ActionStatus`) — a
+  single element, not a toast system. Its **tone is set by the flow that wrote
+  it**, never inferred from the wording: a keyword test can misread a partial
+  artifact failure as calm success. A **success expires** only after its
+  application action and any drag, hover, or focus interaction end, because it
+  repeats a record the shell has already opened; an **error stays**, because it
+  holds the only copy of its recovery step. A partial result
+  — a saved record whose posting link, document, or PDF failed — is an error,
+  not a success with an appended sentence.
+- While the Apply/download or Skip dialog is open, its local alert owns save
+  failures. Keep the dock receipt dormant until the dialog closes so one error
+  is not announced twice across a modal focus boundary.
+- It rides the shared `.progress-dock` column, so it cannot collide with a task
+  card and starts clear of the inspector record Apply just opened. A bottom
+  corner was tried and rejected: outside the reading path it went unnoticed,
+  which is the one thing a receipt for a failed save cannot do.
+- The dock stays inside the viewport, scrolls when concurrent cards exceed its
+  available height, and re-clamps after viewport or content-size changes.
+- Expiry fades before it unmounts, and the fade is reversible — a pointer or
+  focus arriving mid-fade restores the card, so nothing vanishes out from under
+  someone reaching for it. Receipt and task cards keep pointer events while
+  leaving.
+- Status copy leads with the outcome. The headline is the result in a few words;
+  the record, the reason, and the recovery step belong on the secondary detail
+  line. Do not quote record titles or open with one.
 - Keep keyboard access for changed controls.
 - Prefer existing select / segmented / toggle patterns over hand-rolled
   inline alternatives.

@@ -26,6 +26,7 @@ assert.deepEqual(
 
 const commitIdentity = preparationCommitIdentity({
   session: fresh,
+  preparationId: "prepare-1",
   jobUrl: " https://jobs.example.com/123 ",
   preparedJobDescription: " Prepared role ",
   jobRawText: " Original posting "
@@ -34,6 +35,7 @@ assert.equal(
   commitIdentity,
   preparationCommitIdentity({
     session: fresh,
+    preparationId: "prepare-1",
     jobUrl: "https://jobs.example.com/123",
     preparedJobDescription: "Prepared role",
     jobRawText: "Original posting"
@@ -44,6 +46,7 @@ assert.notEqual(
   commitIdentity,
   preparationCommitIdentity({
     session: fresh,
+    preparationId: "prepare-1",
     jobUrl: "https://jobs.example.com/456",
     preparedJobDescription: "Prepared role",
     jobRawText: "Original posting"
@@ -54,11 +57,23 @@ assert.notEqual(
   commitIdentity,
   preparationCommitIdentity({
     session: preparationSessionForApplication({ id: "applied-1" }),
+    preparationId: "prepare-1",
     jobUrl: "https://jobs.example.com/123",
     preparedJobDescription: "Prepared role",
     jobRawText: "Original posting"
   }),
   "a changed preparation session cannot reuse an earlier confirmation"
+);
+assert.notEqual(
+  commitIdentity,
+  preparationCommitIdentity({
+    session: fresh,
+    preparationId: "prepare-2",
+    jobUrl: "https://jobs.example.com/123",
+    preparedJobDescription: "Prepared role",
+    jobRawText: "Original posting"
+  }),
+  "a later preparation run cannot reuse an earlier Apply or Skip confirmation"
 );
 
 const records = [

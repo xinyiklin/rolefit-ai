@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
   BriefcaseBusiness,
@@ -54,6 +54,7 @@ type ApplicationModalProps = {
   // Null is only a vanished-record safety state. New job intake belongs to
   // Prepare; this modal edits applications that already exist.
   application: Application | null;
+  retainedApplication?: Application | null;
   stackedViewerOpen?: boolean;
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
@@ -80,6 +81,7 @@ type ApplicationModalProps = {
   ) => Promise<{ ok: boolean; error?: string }>;
   onSaveAttachment: (id: string, file: File) => Promise<{ ok: boolean; error?: string }>;
   onRemoveAttachment: (id: string, fileName: string) => Promise<{ ok: boolean; error?: string }>;
+  onDocumentsBusyChange?: (busy: boolean) => void;
 };
 
 type ModalTab = "details" | "prep" | "documents";
@@ -207,9 +209,14 @@ function formFromApplication(application: Application | null): FormState {
   };
 }
 
+function formsMatch(left: FormState, right: FormState): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
 export function ApplicationModal({
   open,
   application,
+  retainedApplication = null,
   stackedViewerOpen = false,
   onClose,
   onSave,
@@ -224,17 +231,24 @@ export function ApplicationModal({
   onSaveDocument,
   onRemoveDocument,
   onSaveAttachment,
-  onRemoveAttachment
+  onRemoveAttachment,
+  onDocumentsBusyChange
 }: ApplicationModalProps) {
   const { confirm } = useDialog();
+  const seedApplication = application ?? retainedApplication;
   const applicationId = application?.id ?? null;
-  const lastAvailableApplicationRef = useRef<Application | null>(application);
+  const lastAvailableApplicationRef = useRef<Application | null>(seedApplication);
   const activeApplication = application ?? lastAvailableApplicationRef.current;
   const recordWasRemoved = open && !application && Boolean(activeApplication);
   const [tab, setTab] = useState<ModalTab>("details");
-  const [form, setForm] = useState<FormState>(() => formFromApplication(application));
+  const [form, setForm] = useState<FormState>(() => formFromApplication(seedApplication));
+  const formRef = useRef(form);
+  const formBaselineRef = useRef(form);
+  const submittedFormRef = useRef<FormState | null>(null);
+  const [hasConcurrentEdit, setHasConcurrentEdit] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isOpeningPreparation, setIsOpeningPreparation] = useState(false);
+  const [documentsBusy, setDocumentsBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [skipDecisionOpen, setSkipDecisionOpen] = useState(false);
   const [postingOverlayOpen, setPostingOverlayOpen] = useState(false);
@@ -242,7 +256,23 @@ export function ApplicationModal({
   const panelRef = useRef<HTMLElement>(null);
   const tablistRef = useRef<HTMLDivElement>(null);
   const primaryInputRef = useRef<HTMLElement>(null);
-  const lastSeededId = useRef<string | null>(null);
+  const lastSeededId = useRef<string | null>(seedApplication?.id ?? null);
+
+  const replaceForm = useCallback((next: FormState) => {
+    formRef.current = next;
+    setForm(next);
+  }, []);
+
+  const changeForm = useCallback((change: (current: FormState) => FormState) => {
+    const next = change(formRef.current);
+    formRef.current = next;
+    setForm(next);
+  }, []);
+
+  const handleDocumentsBusyChange = useCallback((busy: boolean) => {
+    setDocumentsBusy(busy);
+    onDocumentsBusyChange?.(busy);
+  }, [onDocumentsBusyChange]);
 
   useEffect(() => {
     if (!open) {
@@ -252,31 +282,53 @@ export function ApplicationModal({
     if (application) lastAvailableApplicationRef.current = application;
   }, [application, open]);
 
-  // Re-seed whenever the modal opens or targets a different application. Use
-  // the stable id, not the whole application object, so async tracker refreshes
-  // do not wipe unsaved form edits while the modal is open.
   useEffect(() => {
     if (!open) {
       lastSeededId.current = null;
+      submittedFormRef.current = null;
+      setHasConcurrentEdit(false);
       return;
     }
     // Keep unsaved edits when a concurrent delete removes the backing record.
     if (applicationId === null && lastSeededId.current !== null) {
+      submittedFormRef.current = null;
+      setHasConcurrentEdit(false);
+      setTab((current) => current === "documents" ? "details" : current);
       setSaveError(
         "This application was removed elsewhere. Saving will re-create its tracker details without the removed files."
       );
       return;
     }
-    lastSeededId.current = applicationId;
-    setForm(formFromApplication(application));
-    setTab("details");
-    setSaveError("");
-    setIsSaving(false);
-    setIsOpeningPreparation(false);
-    setSkipDecisionOpen(false);
-    setPostingOverlayOpen(false);
-    setRelatedMenu(null);
-  }, [open, applicationId]);
+    const incoming = formFromApplication(application);
+    if (lastSeededId.current !== applicationId) {
+      lastSeededId.current = applicationId;
+      formBaselineRef.current = incoming;
+      replaceForm(incoming);
+      setTab("details");
+      setSaveError("");
+      setHasConcurrentEdit(false);
+      setIsSaving(false);
+      setIsOpeningPreparation(false);
+      setSkipDecisionOpen(false);
+      setPostingOverlayOpen(false);
+      setRelatedMenu(null);
+      return;
+    }
+    const baseline = formBaselineRef.current;
+    if (formsMatch(incoming, baseline)) {
+      setHasConcurrentEdit(false);
+      return;
+    }
+    if (submittedFormRef.current && formsMatch(incoming, submittedFormRef.current)) return;
+    if (formsMatch(formRef.current, baseline)) {
+      formBaselineRef.current = incoming;
+      replaceForm(incoming);
+      setSaveError("");
+      setHasConcurrentEdit(false);
+      return;
+    }
+    setHasConcurrentEdit(true);
+  }, [application, applicationId, open, replaceForm]);
 
   const closeSkipDecision = useCallback((restoreFocus = false) => {
     setSkipDecisionOpen(false);
@@ -294,13 +346,15 @@ export function ApplicationModal({
     setPostingOverlayOpen(true);
   }, []);
 
-  const isBusy = isSaving || isOpeningPreparation;
-  const formHasUnsavedChanges = useMemo(
-    () =>
-      Boolean(activeApplication) &&
-      JSON.stringify(form) !== JSON.stringify(formFromApplication(activeApplication)),
-    [activeApplication, form]
-  );
+  const isBusy = isSaving || isOpeningPreparation || documentsBusy;
+  const controlsLocked = isBusy || hasConcurrentEdit;
+  const formHasUnsavedChanges = Boolean(activeApplication) && !formsMatch(form, formBaselineRef.current);
+
+  useEffect(() => {
+    if (!controlsLocked) return;
+    setSkipDecisionOpen(false);
+    setRelatedMenu(null);
+  }, [controlsLocked]);
 
   const requestClose = () => {
     if (isBusy) return;
@@ -328,40 +382,55 @@ export function ApplicationModal({
   if (!open || !activeApplication) return null;
 
   function update<K extends keyof FormState>(key: K, value: FormState[K]) {
-    setForm((current) => ({ ...current, [key]: value }));
+    changeForm((current) => ({ ...current, [key]: value }));
   }
 
   function updateContact(index: number, key: keyof ApplicationContact, value: string) {
-    setForm((current) => ({
+    changeForm((current) => ({
       ...current,
       contacts: current.contacts.map((c, i) => (i === index ? { ...c, [key]: value } : c))
     }));
   }
 
   function addContact() {
-    setForm((current) => ({ ...current, contacts: [...current.contacts, { name: "", title: "", email: "", phone: "" }] }));
+    changeForm((current) => ({ ...current, contacts: [...current.contacts, { name: "", title: "", email: "", phone: "" }] }));
   }
 
   function removeContact(index: number) {
-    setForm((current) => ({ ...current, contacts: current.contacts.filter((_, i) => i !== index) }));
+    changeForm((current) => ({ ...current, contacts: current.contacts.filter((_, i) => i !== index) }));
   }
 
   function updateAnswer(index: number, key: "question" | "answer", value: string) {
-    setForm((current) => ({
+    changeForm((current) => ({
       ...current,
       answers: current.answers.map((a, i) => (i === index ? { ...a, [key]: value } : a))
     }));
   }
 
   function addAnswer() {
-    setForm((current) => ({
+    changeForm((current) => ({
       ...current,
       answers: [...current.answers, { question: "", answer: "", savedAt: new Date().toISOString() }]
     }));
   }
 
   function removeAnswer(index: number) {
-    setForm((current) => ({ ...current, answers: current.answers.filter((_, i) => i !== index) }));
+    changeForm((current) => ({ ...current, answers: current.answers.filter((_, i) => i !== index) }));
+  }
+
+  async function reloadLatestApplication() {
+    if (!(await confirm({
+      title: "Use latest tracker version?",
+      message: "This discards edits made in this window so you can continue from the latest saved details.",
+      confirmLabel: "Use latest version"
+    }))) return;
+    const latest = lastAvailableApplicationRef.current;
+    if (!latest || latest.id !== applicationId) return;
+    const next = formFromApplication(latest);
+    formBaselineRef.current = next;
+    replaceForm(next);
+    setSaveError("");
+    setHasConcurrentEdit(false);
   }
 
   function buildApplication(statusOverride: ApplicationStatus): Application | null {
@@ -427,14 +496,30 @@ export function ApplicationModal({
     return persisted;
   }
 
+  async function persistForm(applicationToSave: Application): Promise<boolean> {
+    const submitted = formFromApplication(applicationToSave);
+    submittedFormRef.current = submitted;
+    try {
+      const saved = await onSave(applicationToSave);
+      if (saved) {
+        formBaselineRef.current = submitted;
+        replaceForm(submitted);
+        setHasConcurrentEdit(false);
+      }
+      return saved;
+    } finally {
+      submittedFormRef.current = null;
+    }
+  }
+
   async function save(statusOverride: ApplicationStatus = form.status) {
-    if (isBusy) return;
+    if (controlsLocked) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
     try {
       const next = buildApplication(statusOverride);
-      if (next) saved = await onSave(next);
+      if (next) saved = await persistForm(next);
     } catch {
       // Keep the form recoverable if a future persistence adapter rejects.
     }
@@ -448,7 +533,7 @@ export function ApplicationModal({
   }
 
   async function openPreparation() {
-    if (!onLoad || isBusy) return;
+    if (!onLoad || controlsLocked) return;
     const mustPersistFirst = formHasUnsavedChanges || recordWasRemoved;
     if (mustPersistFirst && !canSave) {
       setSaveError(
@@ -466,7 +551,7 @@ export function ApplicationModal({
         setSaveError("This application is no longer available. Your edits are still here.");
         return;
       }
-      if (mustPersistFirst && !(await onSave(applicationToOpen))) {
+      if (mustPersistFirst && !(await persistForm(applicationToOpen))) {
         setSaveError(
           "Could not save your edits before opening this preparation. Your edits are still here; review and retry."
         );
@@ -482,7 +567,7 @@ export function ApplicationModal({
   }
 
   async function openRelatedApplication(related: Application) {
-    if (!onOpenRelated || isBusy) return;
+    if (!onOpenRelated || controlsLocked) return;
     if (!formHasUnsavedChanges) {
       onOpenRelated(related);
       return;
@@ -495,7 +580,7 @@ export function ApplicationModal({
     setSaveError("");
     try {
       const edited = buildApplication(form.status);
-      if (!edited || !(await onSave(edited))) {
+      if (!edited || !(await persistForm(edited))) {
         setSaveError(
           "Could not save your edits before opening the related record. Your edits are still here; review and retry."
         );
@@ -514,7 +599,7 @@ export function ApplicationModal({
     action: "unlink" | "merge"
   ) {
     const callback = action === "unlink" ? onMarkRelatedUnrelated : onMergeRelated;
-    if (!callback || isBusy) return;
+    if (!callback || controlsLocked) return;
     const relatedLabel = relatedRecordLabel(related);
     const removesFiles = Boolean(
       related.resumeArtifacts
@@ -549,7 +634,7 @@ export function ApplicationModal({
     try {
       if (formHasUnsavedChanges) {
         const edited = buildApplication(form.status);
-        if (!edited || !(await onSave(edited))) {
+        if (!edited || !(await persistForm(edited))) {
           setSaveError("Could not save your edits before changing related records. Your edits are still here; review and retry.");
           return;
         }
@@ -581,11 +666,17 @@ export function ApplicationModal({
   const preparationActionLabel = "Edit preparation";
   // Only one of the two head messages renders at a time, so describedby has to
   // point at whichever exists — otherwise it dangles when both conditions hold.
-  const openHintId = saveError
+  const visibleSaveError = hasConcurrentEdit
+    ? "This application changed elsewhere. Use the latest tracker version before editing or saving."
+    : saveError;
+  const openHintId = visibleSaveError
     ? "application-modal-save-error"
     : openPreparationBlocked
       ? "application-open-requirements"
       : undefined;
+  const visibleTabs = recordWasRemoved
+    ? APPLICATION_MODAL_TABS.filter(({ id }) => id !== "documents")
+    : APPLICATION_MODAL_TABS;
   const relatedMenuItems: RowMenuItem[] = relatedMenu
     ? [
         ...(onMarkRelatedUnrelated
@@ -609,7 +700,7 @@ export function ApplicationModal({
   // APG tabs: arrow/Home/End move selection AND focus. stopPropagation keeps
   // these off the dialog's own key handler.
   function handleTabsKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
-    const order = APPLICATION_MODAL_TABS.map((entry) => entry.id);
+    const order = visibleTabs.map((entry) => entry.id);
     const current = order.indexOf(tab);
     const next =
       event.key === "ArrowRight" ? (current + 1) % order.length
@@ -666,9 +757,10 @@ export function ApplicationModal({
                 </span>
               ))}
             </p>
-            {saveError ? (
+            {documentsBusy ? <p role="status">Updating documents…</p> : null}
+            {visibleSaveError ? (
               <p className="application-modal__save-error" id="application-modal-save-error" role="alert">
-                {saveError}
+                {visibleSaveError}
               </p>
             ) : openPreparationBlocked ? (
               <p className="application-modal__save-error" id="application-open-requirements">
@@ -677,12 +769,17 @@ export function ApplicationModal({
             ) : null}
           </div>
           <div className="application-modal__actions">
+            {hasConcurrentEdit ? (
+              <button type="button" className="secondary-button is-compact" onClick={() => void reloadLatestApplication()}>
+                Use latest version
+              </button>
+            ) : null}
             {onLoad ? (
               <button
                 type="button"
                 className="secondary-button is-compact"
                 onClick={() => void openPreparation()}
-                disabled={isBusy || openPreparationBlocked}
+                disabled={controlsLocked || openPreparationBlocked}
                 aria-describedby={openHintId}
               >
                 <PencilLine size={14} aria-hidden="true" /> {isOpeningPreparation ? "Opening…" : preparationActionLabel}
@@ -700,9 +797,9 @@ export function ApplicationModal({
           ref={tablistRef}
           aria-label="Application sections"
           onKeyDown={handleTabsKeyDown}
-          inert={isBusy}
+          inert={controlsLocked}
         >
-          {APPLICATION_MODAL_TABS.map(({ id, label, icon: Icon }) => (
+          {visibleTabs.map(({ id, label, icon: Icon }) => (
             <button
               type="button"
               key={id}
@@ -724,7 +821,7 @@ export function ApplicationModal({
           role="tabpanel"
           id="application-tabpanel"
           aria-labelledby={`application-tab-${tab}`}
-          inert={isBusy}
+          inert={controlsLocked}
         >
           {tab === "details" ? (
             <>
@@ -893,7 +990,7 @@ export function ApplicationModal({
                           </span>
                           <span className="application-related-records__actions">
                             {onOpenRelated ? (
-                              <button type="button" className="secondary-button is-compact application-related-records__open" onClick={() => void openRelatedApplication(related)} disabled={isBusy}>
+                              <button type="button" className="secondary-button is-compact application-related-records__open" onClick={() => void openRelatedApplication(related)} disabled={controlsLocked}>
                                 {isSaving ? "Saving…" : "Open"}
                               </button>
                             ) : null}
@@ -904,7 +1001,7 @@ export function ApplicationModal({
                                 aria-label={`More actions for ${relatedRecordLabel(related)}`}
                                 aria-haspopup="menu"
                                 aria-expanded={relatedMenu?.related.id === related.id}
-                                disabled={isBusy}
+                                disabled={controlsLocked}
                                 onClick={(event) => {
                                   const rect = event.currentTarget.getBoundingClientRect();
                                   setRelatedMenu({ related, x: rect.left, y: rect.bottom + 4 });
@@ -993,7 +1090,7 @@ export function ApplicationModal({
             </section>
           ) : null}
 
-          {tab === "documents" ? (
+          {tab === "documents" && !recordWasRemoved ? (
             <ApplicationDocumentsTab
               application={activeApplication}
               downloadBase={downloadBase}
@@ -1004,6 +1101,7 @@ export function ApplicationModal({
               onDownloadDocument={onDownloadDocument}
               onSaveAttachment={onSaveAttachment}
               onRemoveAttachment={onRemoveAttachment}
+              onBusyChange={handleDocumentsBusyChange}
             />
           ) : null}
 
@@ -1022,8 +1120,8 @@ export function ApplicationModal({
         ) : null}
 
         <footer className="application-modal__foot">
-          {onDelete ? (
-            <button type="button" className="secondary-button is-compact danger-button" disabled={isBusy} onClick={() => onDelete(activeApplication.id, activeApplication.title)}>
+          {onDelete && !recordWasRemoved ? (
+            <button type="button" className="secondary-button is-compact danger-button" disabled={controlsLocked} onClick={() => onDelete(activeApplication.id, activeApplication.title)}>
               <Trash2 size={14} aria-hidden="true" /> Delete
             </button>
           ) : null}
@@ -1031,7 +1129,7 @@ export function ApplicationModal({
             <button type="button" className="secondary-button is-compact" onClick={requestClose} disabled={isBusy}>
               {formHasUnsavedChanges ? "Cancel" : "Close"}
             </button>
-            <button type="button" className="primary-button is-compact" disabled={!canSave || isBusy} onClick={() => void save()}>
+            <button type="button" className="primary-button is-compact" disabled={!canSave || controlsLocked} onClick={() => void save()}>
               {isSaving ? "Saving…" : "Save changes"}
             </button>
           </div>

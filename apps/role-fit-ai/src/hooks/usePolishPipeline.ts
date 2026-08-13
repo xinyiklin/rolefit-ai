@@ -54,7 +54,7 @@ type UsePolishPipelineArgs = {
   setPolishStatus: (value: string) => void;
   resetExportStatuses: () => void;
   setExportStatus: (value: string) => void;
-  confirmDuplicateBeforePolish: () => Promise<boolean>;
+  confirmDuplicateBeforePolish: (isCurrent: () => boolean) => Promise<boolean>;
 };
 
 async function readProposalResponse(response: Response): Promise<Record<string, unknown>> {
@@ -157,9 +157,11 @@ export function usePolishPipeline({
     setIsPolishing(false);
     setPolishProgress((current) => ({
       ...current,
-      polish: current.polish.status === "running"
-        ? { status: "stopped", errorHeadline: "Inputs changed", error: "Polish was cancelled before it could replace the current proposal." }
-        : current.polish
+      polish: {
+        status: "stopped",
+        errorHeadline: "Inputs changed",
+        error: "Polish was cancelled before it could replace the current proposal."
+      }
     }));
     setPolishProgressVisible(true);
     setPolishStatus("Resume, job, or AI settings changed. Polish again for the current inputs.");
@@ -308,7 +310,7 @@ export function usePolishPipeline({
         setPolishProgressVisible(true);
         return;
       }
-      const duplicateConfirmed = await confirmDuplicateBeforePolish();
+      const duplicateConfirmed = await confirmDuplicateBeforePolish(startIsCurrent);
       if (!startIsCurrent()) return;
       if (!duplicateConfirmed) {
         runLockRef.current = false;

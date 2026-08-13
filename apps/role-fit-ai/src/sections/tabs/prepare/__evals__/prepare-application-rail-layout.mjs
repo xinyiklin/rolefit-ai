@@ -46,8 +46,8 @@ assert.match(
 );
 assert.match(
   prepareSource,
-  /const resumeNote = isResolvingPreparedResume \|\| isSelectingResume \|\| isPolishing[\s\S]{0,80}?\? ""/,
-  "the Resume material state owns selection and polishing progress without a second wait note"
+  /const resumeNote = isResolvingPreparedResume \|\| isSelectingResume \|\| isPolishStarting \|\| isPolishing[\s\S]{0,80}?\? ""/,
+  "the Resume material state owns selection and both Polish phases without a second wait note"
 );
 assert.match(
   prepareSource,

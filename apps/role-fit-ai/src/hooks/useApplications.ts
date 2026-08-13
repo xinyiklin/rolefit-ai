@@ -256,6 +256,8 @@ export function useApplications() {
   // Mode and lets callers await the exact write they initiated.
   const applicationsRef = useRef<Application[]>([]);
   const persistVersion = useRef(0);
+  const readVersion = useRef(0);
+  const refreshInFlight = useRef<Promise<boolean> | null>(null);
   const persistQueue = useRef<Promise<void>>(Promise.resolve());
   // Last server-confirmed snapshot, updated after every successful queued
   // write (even when a newer optimistic write is already pending). Rolling a
@@ -273,6 +275,8 @@ export function useApplications() {
   useEffect(() => {
     let cancelled = false;
     (async () => {
+      const readId = readVersion.current + 1;
+      readVersion.current = readId;
       const loadVersion = persistVersion.current;
       try {
         const res = await fetch("/api/applications");
@@ -282,7 +286,7 @@ export function useApplications() {
         // A mutation started while the initial GET was in flight. Its queued
         // write/rollback is now authoritative; never replace it with this older
         // read snapshot.
-        if (loadVersion !== persistVersion.current) return;
+        if (readId !== readVersion.current || loadVersion !== persistVersion.current) return;
         const loaded = Array.isArray(data.applications)
           ? data.applications.map(canonicalizeApplicationAiUsage)
           : [];
@@ -294,7 +298,9 @@ export function useApplications() {
         conflictMessage.current = "";
         setError("");
       } catch (err) {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load applications.");
+        if (!cancelled && readId === readVersion.current) {
+          setError(err instanceof Error ? err.message : "Failed to load applications.");
+        }
       } finally {
         if (!cancelled) setIsLoading(false);
       }
@@ -501,8 +507,8 @@ export function useApplications() {
   // This never selects a write target; callers decide how to handle
   // exact/high/possible matches through the preparation relationship dialog.
   const findDuplicatesForTarget = useCallback(
-    (target: DuplicateTarget) => findDuplicateApplications(target, applications),
-    [applications]
+    (target: DuplicateTarget) => findDuplicateApplications(target, applicationsRef.current),
+    []
   );
 
   // Assign one posting relationship to every requested record and every member
@@ -759,34 +765,54 @@ export function useApplications() {
     [markPostingRecordsUnrelated]
   );
 
-  const refresh = useCallback(async () => {
-    try {
-      // A GET racing an older queued PUT can finish last with the pre-write
-      // snapshot and make a successful local edit appear to vanish. Read only
-      // after this tab's queued mutations have settled.
-      await persistQueue.current.catch(() => undefined);
-      const refreshVersion = persistVersion.current;
-      const res = await fetch("/api/applications");
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
-      // A new mutation began after the queue wait. Its persist response (or
-      // rollback) owns state; this GET may have observed the pre-mutation disk
-      // snapshot and must not overwrite it.
-      if (refreshVersion !== persistVersion.current) return false;
-      const loaded = Array.isArray(data.applications)
-        ? data.applications.map(canonicalizeApplicationAiUsage)
-        : [];
-      confirmedApplications.current = loaded;
-      applicationsRef.current = loaded;
-      setApplications(loaded);
-      setHasLoadedApplications(true);
-      conflictMessage.current = "";
-      setError("");
-      return true;
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load applications.");
-      return false;
-    }
+  const refresh = useCallback(() => {
+    if (refreshInFlight.current) return refreshInFlight.current;
+
+    const request = (async () => {
+      const readId = readVersion.current + 1;
+      readVersion.current = readId;
+      try {
+        // A GET racing an older queued PUT can finish last with the pre-write
+        // snapshot and make a successful local edit appear to vanish. Drain
+        // writes added while an earlier tail settles, then retry if a write
+        // begins during GET.
+        while (readId === readVersion.current) {
+          let queue: Promise<void>;
+          do {
+            queue = persistQueue.current;
+            await queue.catch(() => undefined);
+          } while (queue !== persistQueue.current);
+          const refreshVersion = persistVersion.current;
+          const res = await fetch("/api/applications");
+          const data = await res.json();
+          if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
+          if (refreshVersion !== persistVersion.current) continue;
+          const loaded = Array.isArray(data.applications)
+            ? data.applications.map(canonicalizeApplicationAiUsage)
+            : [];
+          confirmedApplications.current = loaded;
+          applicationsRef.current = loaded;
+          setApplications(loaded);
+          setHasLoadedApplications(true);
+          setStoragePath(typeof data.path === "string" ? data.path : "");
+          conflictMessage.current = "";
+          setError("");
+          return true;
+        }
+        return false;
+      } catch (err) {
+        if (readId === readVersion.current) {
+          setError(err instanceof Error ? err.message : "Failed to load applications.");
+        }
+        return false;
+      }
+    })();
+
+    refreshInFlight.current = request;
+    void request.finally(() => {
+      if (refreshInFlight.current === request) refreshInFlight.current = null;
+    });
+    return request;
   }, []);
 
   return {

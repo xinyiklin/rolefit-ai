@@ -372,8 +372,8 @@ for (const [name, source] of [["Resume", resumeRail], ["Cover Letter", coverRail
 // same way. Stage words survive only where they report which half is running.
 assert.match(
   prepareTab,
-  /\{isPolishing \? "Polishing…" : "Polish"\}/,
-  "Prepare's resume card starts Polish under the name the editor uses"
+  /\{isPolishStarting \? "Starting…" : isPolishing \? "Polishing…" : "Polish"\}/,
+  "Prepare's resume card names both Polish preflight and active work"
 );
 assert.match(
   prepareTab,

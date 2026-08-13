@@ -209,7 +209,7 @@ export function PrepareApplicationRail({
                 <p className="prepare-note is-info">Fit Assessment is off. The completed result is retained.</p>
               ) : null}
               {canAssessFit && !fitAssessment.activeRun ? (
-                <button className="ghost-button is-compact" type="button" onClick={onAssessFit}>
+                <button className="ghost-button is-compact" type="button" onClick={onAssessFit} disabled={applicationActionsBusy}>
                   Reassess fit
                 </button>
               ) : null}
@@ -226,7 +226,7 @@ export function PrepareApplicationRail({
               <strong className="prepare-fit__empty">Assessment unavailable</strong>
               <p>{fitAssessmentMessage}</p>
               {canAssessFit ? (
-                <button className="ghost-button is-compact" type="button" onClick={onAssessFit}>
+                <button className="ghost-button is-compact" type="button" onClick={onAssessFit} disabled={applicationActionsBusy}>
                   Retry assessment
                 </button>
               ) : null}
@@ -282,12 +282,12 @@ export function PrepareApplicationRail({
           type="button"
           onClick={() => void onApply()}
           disabled={!primaryActionReady || applicationActionsBusy}
-          title={primaryActionReady ? primaryAction.label : primaryActionBlocker}
+          title={primaryActionReady && !applicationActionsBusy ? primaryAction.label : primaryActionBlocker}
         >
           {isApplying ? <LoaderCircle className="spin" size={15} aria-hidden="true" /> : null}
           {isApplying ? primaryAction.busyLabel : primaryAction.label}
         </button>
-        {!primaryActionReady && primaryActionBlocker ? (
+        {(!primaryActionReady || applicationActionsBusy) && primaryActionBlocker ? (
           <p className="prepare-apply-hint">{primaryActionBlocker}</p>
         ) : null}
         {showSkip ? (

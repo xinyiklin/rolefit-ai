@@ -70,6 +70,7 @@ type ResumeTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   resumePolishProviderReady: boolean;
+  isPolishStarting: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
   polishStatus?: string;
@@ -116,6 +117,7 @@ export function ResumeTab({
   resumeReady,
   jobReady,
   resumePolishProviderReady,
+  isPolishStarting,
   isPolishing,
   polishProgress,
   polishStatus,
@@ -188,11 +190,11 @@ export function ResumeTab({
     <button
       type="button"
       className="primary-button is-compact"
-      disabled={!canPolish || isPolishing}
-      aria-busy={isPolishing}
+      disabled={!canPolish || isPolishStarting || isPolishing}
+      aria-busy={isPolishStarting || isPolishing}
       onClick={onPolish}
     >
-      {isPolishing ? "Polishing…" : result ? "Polish again" : "Polish"}
+      {isPolishStarting ? "Starting…" : isPolishing ? "Polishing…" : result ? "Polish again" : "Polish"}
     </button>
   );
   return (

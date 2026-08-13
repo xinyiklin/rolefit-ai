@@ -96,20 +96,28 @@ function StageRow({
 export function AiWorkflowProgress({
   stages,
   onDismiss,
+  onDismissButton = onDismiss,
+  suspendExpiry = false,
   busy,
   title = "AI workflow"
 }: {
   stages: AiWorkflowStage[];
   onDismiss: () => void;
+  onDismissButton?: () => void;
+  suspendExpiry?: boolean;
   busy: boolean;
   title?: string;
 }) {
   const [leaving, setLeaving] = useState(false);
-  const [gone, setGone] = useState(false);
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
   const hasStarted = stages.some((stage) => stage.state.status !== "idle");
   const hasFailure = stages.some((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
   const allDone = stages.length > 0 && stages.every((stage) => stage.state.status === "done");
   const anyRunning = stages.some((stage) => stage.state.status === "running");
+  const expires = allDone && !busy && !hasFailure && !suspendExpiry && !hovered && !focused;
   const failedStage = stages.find((stage) => stage.state.status === "failed" || stage.state.status === "stopped");
   const currentStage = stages.find((stage) => stage.state.status === "running")
     ?? stages.find((stage) => stage.state.status === "idle")
@@ -125,24 +133,31 @@ export function AiWorkflowProgress({
   useEffect(() => {
     if (anyRunning) {
       setLeaving(false);
-      setGone(false);
     }
   }, [anyRunning]);
 
   useEffect(() => {
-    if (!allDone || busy || hasFailure) return;
+    setLeaving(false);
+    if (!expires) return;
     const leaveTimer = window.setTimeout(() => setLeaving(true), DONE_HOLD_MS);
-    const goneTimer = window.setTimeout(() => setGone(true), DONE_HOLD_MS + FADE_MS);
+    const goneTimer = window.setTimeout(() => onDismissRef.current(), DONE_HOLD_MS + FADE_MS);
     return () => {
       window.clearTimeout(leaveTimer);
       window.clearTimeout(goneTimer);
     };
-  }, [allDone, busy, hasFailure]);
+  }, [expires]);
 
-  if (!stages.length || !hasStarted || gone) return null;
+  if (!stages.length || !hasStarted) return null;
 
   return (
-    <section className={`ai-workflow${leaving ? " is-leaving" : ""}`} aria-label={`${title} progress`}>
+    <section
+      className={`ai-workflow${leaving ? " is-leaving" : ""}`}
+      aria-label={`${title} progress`}
+      onPointerEnter={() => setHovered(true)}
+      onPointerLeave={() => setHovered(false)}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+    >
       {/* Announce stage transitions, not the visible elapsed timer that updates
           every second inside StageRow. */}
       <span className="sr-only" role="status" aria-live="polite" aria-atomic="true">{liveSummary}</span>
@@ -151,7 +166,7 @@ export function AiWorkflowProgress({
         <button
           type="button"
           className="ai-workflow__dismiss"
-          onClick={onDismiss}
+          onClick={onDismissButton}
           aria-label={busy ? "Hide progress; the current stage keeps running" : "Dismiss progress"}
         >
           <X size={13} aria-hidden="true" />
@@ -169,18 +184,24 @@ export function TaskProgress({
   state,
   onRetry,
   onStop,
-  onDismiss
+  onDismiss,
+  onDismissButton,
+  suspendExpiry
 }: {
   stageKey: AiStageKey;
   state: AiStageState;
   onRetry?: () => void;
   onStop?: () => void;
   onDismiss: () => void;
+  onDismissButton?: () => void;
+  suspendExpiry?: boolean;
 }) {
   return (
     <AiWorkflowProgress
       stages={[{ key: stageKey, state, onRetry, onStop }]}
       onDismiss={onDismiss}
+      onDismissButton={onDismissButton}
+      suspendExpiry={suspendExpiry}
       busy={state.status === "running"}
       title={AI_WORKFLOW_TITLE[stageKey]}
     />
