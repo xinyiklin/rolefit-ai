@@ -297,9 +297,10 @@ typesetting guide when a change affects painted output or layout provenance.
 - Cross-field deletion follows the word processor for list content and protects
   structure. Prose paragraphs and bullet rows the selection emptied are removed,
   and remainders join into the first row when the selection began and ended in
-  the same list; each covered list keeps at least one row. A name, contact,
-  heading, entry head, or skills slot only loses its covered text — those are
-  removed through the structure controls, never by typing.
+  the same list; each covered list keeps at least one row. Resume hosts keep the
+  name field as required structure; cover-letter hosts may opt into their
+  optional header name. Fields only lose their covered text; optional contacts
+  are removed through the structure controls, never by typing.
 - Every clipboard and link command works across fields. A cross-field selection
   links each covered range IN PLACE (its text is not rewritable from the link
   popover — one string cannot describe multi-paragraph text, so the control

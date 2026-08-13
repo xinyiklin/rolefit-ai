@@ -32,6 +32,7 @@ import { fetchBaseResumeCandidates } from "../lib/baseResumeWorkspaceRepository.
 import type { PreparedResumeAdoption, ResumeOrigin } from "../lib/preparedResume.ts";
 export type { ResumeOrigin };
 import { createBlankResumeData } from "../lib/blankResume.ts";
+import { prepareResumeUpload } from "../lib/documentOpenFiles.ts";
 import { createWorkspaceLoadOwnership } from "../lib/workspaceLoadOwnership.ts";
 
 export type WorkspaceBaseResume = {
@@ -73,21 +74,6 @@ export type JobWorkspace = {
   files: string[];
 };
 
-type PreparedResumeCandidate =
-  | {
-      kind: "resume";
-      parsed: ReturnType<typeof parseResumeFile>;
-    }
-  | {
-      kind: "text";
-      text: string;
-    };
-
-type UploadFileLike = {
-  name: string;
-  text: () => Promise<string>;
-};
-
 export type DocumentReplacementGuard = {
   isDirtyNow: () => boolean;
   currentVersion: () => string;
@@ -95,35 +81,9 @@ export type DocumentReplacementGuard = {
   onReplacementCommitted: () => void;
 };
 
-function prepareResumeText(text: string, structured: boolean): PreparedResumeCandidate {
-  return structured ? { kind: "resume", parsed: parseResumeFile(text) } : { kind: "text", text };
-}
-
-/** Validate the extension and fully read/parse an upload without mutating UI state. */
-export async function prepareResumeUpload(file: UploadFileLike): Promise<PreparedResumeCandidate> {
-  if (/\.pdf$/i.test(file.name)) {
-    throw new Error(
-      "PDF uploads are text-only and cannot preserve layout. Upload a .resume file for format-preserving edits, or paste extracted PDF text."
-    );
-  }
-  const structured = /\.resume$/i.test(file.name);
-  if (!structured && !/\.(txt|md|csv)$/i.test(file.name)) {
-    throw new Error("Upload a .resume file to restore a saved editor state, or TXT, MD, or CSV for text-only polishing.");
-  }
-
-  let text: string;
-  try {
-    text = await file.text();
-  } catch {
-    throw new Error("The file could not be read. Try pasting the resume text instead.");
-  }
-  return prepareResumeText(text, structured);
-}
-
 type UseWorkspaceResumeArgs = {
   confirm: (opts: ConfirmOptions) => Promise<boolean>;
   replacementGuard: DocumentReplacementGuard;
-  seedResumeEditor: (text: string, sourceText?: string) => void;
   fileName: string;
   setResumeText: (text: string) => void;
   setFileName: (name: string) => void;
@@ -135,16 +95,13 @@ type UseWorkspaceResumeArgs = {
   setPolishStatus: (value: string) => void;
   resetExportStatuses: () => void;
   setExportStatus: (value: string) => void;
-  // Seeds the structured editor directly from a ResumeData object (bypasses
-  // the plain-text parser) — used when loading a `.resume` file, whose
-  // content is already the structured model.
+  // Seeds the structured editor directly from a ResumeData object after the
+  // strict `.resume` codec has validated the document.
   seedResumeData: (data: ResumeData) => void;
   // What the document in the editor actually is. App owns it because the one
   // transition this hook cannot see — restoring a tracked application — seeds
   // the editor directly; every workspace path below reports its own origin.
   setResumeOrigin: (origin: ResumeOrigin) => void;
-  currentResumeText: string;
-  resumeText: string;
   editedResume: ResumeData;
   docStyle: DocStyleControls;
 };
@@ -152,7 +109,6 @@ type UseWorkspaceResumeArgs = {
 export function useWorkspaceResume({
   confirm,
   replacementGuard,
-  seedResumeEditor,
   fileName,
   setResumeText,
   setFileName,
@@ -166,8 +122,6 @@ export function useWorkspaceResume({
   setExportStatus,
   seedResumeData,
   setResumeOrigin,
-  currentResumeText,
-  resumeText,
   editedResume,
   docStyle
 }: UseWorkspaceResumeArgs) {
@@ -243,9 +197,12 @@ export function useWorkspaceResume({
   ): Promise<{ text: string } | null> {
     if (!baseResume.exists || !baseResume.text) return null;
 
-    let candidate: PreparedResumeCandidate;
+    let candidate: ReturnType<typeof parseResumeFile>;
     try {
-      candidate = prepareResumeText(baseResume.text, baseResume.kind === "resume");
+      if (!/\.resume$/i.test(baseResume.fileName ?? "")) {
+        throw new Error("Only .resume files can be opened in the resume editor.");
+      }
+      candidate = parseResumeFile(baseResume.text);
     } catch (error) {
       setFileStatus(error instanceof Error ? error.message : "This .resume file could not be read.");
       return null;
@@ -291,18 +248,12 @@ export function useWorkspaceResume({
     // A `.resume` base is a lossless structured save. It was parsed above,
     // before this commit began, so malformed content cannot partially replace
     // file identity, editor state, AI output, or recovery state.
-    if (candidate.kind === "resume") {
-      setResumeText(serializeResumeData(candidate.parsed.data));
-      seedResumeData(candidate.parsed.data);
-      docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
-    } else {
-      // Make the loaded base resume editable straight away (pre-polish).
-      setResumeText(candidate.text);
-      seedResumeEditor(candidate.text, "");
-    }
+    setResumeText(serializeResumeData(candidate.data));
+    seedResumeData(candidate.data);
+    docStyle.replaceDocumentStyle(candidate.documentStyle);
     setFileStatus(status);
     return {
-      text: candidate.kind === "resume" ? serializeResumeData(candidate.parsed.data) : candidate.text
+      text: serializeResumeData(candidate.data)
     };
   }
 
@@ -364,19 +315,19 @@ export function useWorkspaceResume({
         setWorkspaceStatus("");
         if (applyBaseResume && workspace.baseResume?.text) {
           // The bundled starter is a `.resume` envelope (kind "resume"); parse
-          // it structurally, exactly like a saved base resume. Falling through to
-          // the plain-text seeder would render the raw JSON as resume content.
+          // it structurally, exactly like a saved base resume.
           const starterText = workspace.baseResume.text;
           try {
-            if (workspace.baseResume.kind === "resume") {
-              const parsed = parseResumeFile(starterText);
-              setResumeText(serializeResumeData(parsed.data));
-              seedResumeData(parsed.data);
-              docStyle.replaceDocumentStyle(parsed.documentStyle);
-            } else {
-              setResumeText(starterText);
-              seedResumeEditor(starterText, "");
+            if (
+              workspace.baseResume.kind !== "resume" ||
+              !/\.resume$/i.test(workspace.baseResume.fileName ?? "")
+            ) {
+              throw new Error("The bundled starter is not a .resume file.");
             }
+            const parsed = parseResumeFile(starterText);
+            setResumeText(serializeResumeData(parsed.data));
+            seedResumeData(parsed.data);
+            docStyle.replaceDocumentStyle(parsed.documentStyle);
             setResumeOrigin("starter");
             setFileStatus("Loaded the starter template. Replace it with your own resume to get started.");
           } catch {
@@ -603,12 +554,11 @@ export function useWorkspaceResume({
 
   async function saveCurrentAsBaseResume(targetFileName?: string) {
     if (isWorkspaceBootstrapping) return;
-    const targetName = targetFileName || baseResumeName || fileName || "default.resume";
-    // RoleFit always has a structured model, so a detached document defaults to
-    // the strict editable format. Explicit text-file identities stay text.
-    const text = /\.resume$/i.test(targetName)
-      ? serializeResumeFile(editedResume, docStyle.style)
-      : currentResumeText || resumeText;
+    const currentStrictName = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/i.test(fileName)
+      ? fileName.replace(/\.resume$/i, ".resume")
+      : "";
+    const targetName = targetFileName || baseResumeName || currentStrictName || "default.resume";
+    const text = serializeResumeFile(editedResume, docStyle.style);
 
     await saveBaseResume({ fileName: targetName, text });
   }
@@ -707,13 +657,13 @@ export function useWorkspaceResume({
     // be chosen again after the file is repaired.
     const input = event.target;
 
-    let candidate: PreparedResumeCandidate;
+    let candidate: Awaited<ReturnType<typeof prepareResumeUpload>>;
     try {
       // Preflight extension, read bytes, and strictly parse `.resume` content
       // before confirmation or any state-clearing commit work begins.
       candidate = await prepareResumeUpload(file);
     } catch (error) {
-      setFileError(error instanceof Error ? error.message : "The file could not be read. Try pasting the resume text instead.");
+      setFileError(error instanceof Error ? error.message : "The .resume file could not be read. Try choosing it again.");
       input.value = "";
       return;
     }
@@ -743,18 +693,12 @@ export function useWorkspaceResume({
     setResult(null);
     resetCoverWorkflow();
 
-    if (candidate.kind === "resume") {
-      // The strict codec already validated and restored fresh session ids at
-      // the preflight boundary; this branch is commit-only.
-      setResumeText(serializeResumeData(candidate.parsed.data));
-      seedResumeData(candidate.parsed.data);
-      docStyle.replaceDocumentStyle(candidate.parsed.documentStyle);
-      setFileStatus(".resume file loaded into the editor.");
-    } else {
-      setResumeText(candidate.text);
-      seedResumeEditor(candidate.text, "");
-      setFileStatus("Text file loaded. Export as PDF, or save as .resume to keep editing it later.");
-    }
+    // The strict codec already validated and restored fresh session ids at
+    // the preflight boundary; this branch is commit-only.
+    setResumeText(serializeResumeData(candidate.data));
+    seedResumeData(candidate.data);
+    docStyle.replaceDocumentStyle(candidate.documentStyle);
+    setFileStatus(".resume file loaded into the editor.");
   }
 
   return {

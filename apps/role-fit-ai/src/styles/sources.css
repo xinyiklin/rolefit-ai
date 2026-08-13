@@ -141,94 +141,6 @@ select,
 
 .workspace-actions { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s2); }
 
-/* -------- Document action menus -------- */
-
-.document-action-menu > .popover__surface {
-  width: min(360px, calc(100vw - 24px));
-  /* `--popover-space` is the room Popover measured under the trigger; the 72vh
-     guess stays as the fallback. This surface is its own scroller. */
-  max-height: min(620px, var(--popover-space, 72vh));
-  overflow: auto;
-}
-
-.document-action-panel {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s3);
-  background: var(--card-elev);
-}
-
-.document-action-panel__head {
-  display: grid;
-  gap: 2px;
-  padding: 2px var(--s1) var(--s2);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.document-action-panel__head strong {
-  color: var(--ink-strong);
-  font-size: 0.82rem;
-  font-weight: 680;
-}
-
-.document-action-panel__head span,
-.document-action-row small,
-.document-action-form__hint {
-  color: var(--ink-soft);
-  font-size: 0.7rem;
-  line-height: 1.35;
-}
-
-.document-action-row {
-  display: grid;
-  grid-template-columns: 18px minmax(0, 1fr);
-  gap: var(--s2);
-  align-items: start;
-  width: 100%;
-  padding: 9px var(--s2);
-  border: 1px solid transparent;
-  border-radius: var(--r-md);
-  background: transparent;
-  color: var(--ink);
-  text-align: left;
-  cursor: pointer;
-}
-
-.document-action-row:hover:not(:disabled) {
-  border-color: var(--hairline);
-  background: var(--card-hover);
-}
-
-.document-action-row:focus-visible,
-.document-action-form input:focus-visible,
-.document-action-form__submit:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
-.document-action-row:disabled {
-  color: var(--ink-faint);
-  cursor: not-allowed;
-  opacity: 0.62;
-}
-
-.document-action-row > svg {
-  margin-top: 2px;
-  color: var(--accent-deep);
-}
-
-.document-action-row > span {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.document-action-row strong {
-  color: var(--ink-strong);
-  font-size: 0.76rem;
-  font-weight: 630;
-}
-
 /* -------- Open menu (shared by resume and cover letter) -------- */
 
 /* The saved-documents list sits under the start actions, divided from them by a
@@ -455,6 +367,15 @@ select,
 
 .document-action-form__hint {
   grid-column: 1 / -1;
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.35;
+}
+
+.document-action-form input:focus-visible,
+.document-action-form__submit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .document-action-panel__status {

@@ -1,5 +1,5 @@
-// Resume imports and starter fallback stay separate from strict cover-letter
-// storage; embedded runtimes pass explicit app and workspace roots.
+// Strict resume storage and starter fallback stay separate from strict
+// cover-letter storage; embedded runtimes pass explicit app and workspace roots.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { access, mkdir, readFile, readdir, rename, rm, writeFile } from "node:fs/promises";
@@ -31,7 +31,9 @@ const defaultWorkspaceLocations: WorkspaceLocations = {
   appRoot: defaultAppRoot,
   workspaceDir: jobWorkspaceDir
 };
-const baseResumeCandidates = [
+// Legacy defaults remain known only so an explicit removal or replacement can
+// archive them without data loss. They are never opened or restored by RoleFit.
+const managedDefaultResumeFiles = [
   "default.resume",
   "default.txt",
   "default.md",
@@ -94,7 +96,7 @@ export function validateBaseResumeText(fileName: string, data: Buffer): string {
   if (text.trim().length < 80) throw new WorkspaceStorageError("The base resume is empty or too short to load.");
   if (extname(fileName).toLowerCase() === ".resume") {
     try {
-      parseResumeFile(text);
+      parseResumeFile(data);
     } catch {
       throw new WorkspaceStorageError("The saved .resume file is invalid. Restore a valid version from history before continuing.");
     }
@@ -149,7 +151,7 @@ function assertBaseResumeFileName(fileName: unknown): string {
 
 function assertRemovableBaseResumeFileName(fileName: unknown): string {
   const name = String(fileName ?? "").trim();
-  return baseResumeCandidates.includes(name)
+  return managedDefaultResumeFiles.includes(name)
     ? name
     : assertBaseResumeFileName(name);
 }
@@ -181,10 +183,7 @@ export async function readWorkspaceBaseResume(
 ): Promise<BaseResumeResult> {
   const candidates = requestedFileName
     ? [assertBaseResumeFileName(requestedFileName)]
-    : [
-        ...(await readBaseResumeOptions(locations)).map((option) => option.fileName),
-        ...baseResumeCandidates.filter((name) => !baseResumeVariantPattern.test(name))
-      ];
+    : (await readBaseResumeOptions(locations)).map((option) => option.fileName);
 
   const uniqueCandidates = [...new Set(candidates)];
   for (const fileName of uniqueCandidates) {
@@ -256,7 +255,7 @@ async function clearBaseResumeFiles(locations: WorkspaceLocations): Promise<void
   await mkdir(trashDir, { recursive: true });
   const stamp = nextTrashStamp();
   await Promise.all(
-    baseResumeCandidates.map(async (name) => {
+    managedDefaultResumeFiles.map(async (name) => {
       try {
         await rename(join(resumeWorkspaceDir(locations), name), join(trashDir, `${stamp}__${name}`));
       } catch (error) {
@@ -288,9 +287,8 @@ type HistoryGroup = { variant: string; label: string; entries: HistoryEntry[] };
 // the UI can show one expandable group per variant. Each group keeps only the
 // `perVariant` most recent entries (default 3); older backups stay in .trash and
 // remain restorable by hand — this is a display cap, not a destructive prune.
-// The variant identity is the file stem (extension-agnostic) so a Default whose
-// history spans default.resume and default.txt consolidates into one group.
-// Matches both default.resume and named variants such as fullstack.resume.
+// Only strict `.resume` history is openable. Older text artifacts stay on disk
+// and in portable backups, but never appear as editor document choices.
 async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant = 3): Promise<HistoryGroup[]> {
   const trashDir = join(resumeWorkspaceDir(locations), ".trash");
   let entries: string[];
@@ -300,8 +298,8 @@ async function readBaseResumeHistory(locations: WorkspaceLocations, perVariant =
     if (isMissingFile(error)) return [];
     throw new WorkspaceStorageError();
   }
-  // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].(resume|txt|md|csv)
-  const baseResumePattern = /^(.+?)__([A-Za-z0-9][A-Za-z0-9_-]*)\.(resume|txt|md|csv)$/;
+  // Matches: 2026-06-10T16-30-45-123Z__base-resume[-variant].resume
+  const baseResumePattern = /^(.+?)__([A-Za-z0-9][A-Za-z0-9_-]*)\.(resume)$/;
   const matched = (entries
     .map((name): HistoryMatch | null => {
       const m = name.match(baseResumePattern);
@@ -495,7 +493,7 @@ export async function handleWorkspaceBaseResume(
           if (isMissingFile(error)) return null;
           throw error;
         }
-        if (baseResumeCandidates.includes(fileName)) await clearBaseResumeFiles(locations);
+        if (fileName === "default.resume") await clearBaseResumeFiles(locations);
         else await trashBaseFile(fileName, locations);
         return workspaceSnapshot(locations);
       });
@@ -526,16 +524,13 @@ export async function handleWorkspaceBaseResume(
   try {
     const body = JSON.parse(await readBody(req));
     const fileName = String(body.fileName ?? "").trim();
-    const extension = extname(fileName).toLowerCase();
-
-    if (![".txt", ".md", ".csv", ".resume", ""].includes(extension)) {
-      sendJson(res, 400, { error: "Save a RESUME, TXT, MD, or CSV resume as the base resume." });
+    if (!baseResumeVariantPattern.test(fileName)) {
+      sendJson(res, 400, { error: "Save a valid .resume file as the base resume." });
       return;
     }
 
     // Never silently slice a user's resume. Reject an oversized payload before
     // archiving the current version, and validate strict .resume JSON likewise.
-    const isResume = extension === ".resume";
     const rawText = String(body.text ?? "");
     if (Buffer.byteLength(rawText, "utf8") > MAX_BASE_RESUME_BYTES) {
       sendJson(res, 413, { error: "Resume file is too large to save." });
@@ -547,21 +542,16 @@ export async function handleWorkspaceBaseResume(
       return;
     }
 
-    // Preserve managed workspace .resume variant names. Uploaded .resume names
-    // that fail the guard normalize to default.resume.
-    let targetName = "default.txt";
-    if (isResume) {
-      targetName = baseResumeVariantPattern.test(fileName) ? assertBaseResumeFileName(fileName) : "default.resume";
-      try {
-        parseResumeFile(text);
-      } catch {
-        sendJson(res, 400, { error: "Save a valid Typeset .resume file." });
-        return;
-      }
+    const targetName = assertBaseResumeFileName(fileName);
+    try {
+      parseResumeFile(text);
+    } catch {
+      sendJson(res, 400, { error: "Save a valid Typeset .resume file." });
+      return;
     }
     const snapshot = await withWorkspaceLock(async () => {
       await ensureJobWorkspace(locations.workspaceDir);
-      if (targetName === "default.resume" || !isResume) {
+      if (targetName === "default.resume") {
         await clearBaseResumeFiles(locations);
       } else {
         // Named variant: back it up before overwriting so it appears in version history.
@@ -572,7 +562,7 @@ export async function handleWorkspaceBaseResume(
         exists: true,
         fileName: targetName,
         label: baseResumeLabel(targetName),
-        kind: isResume ? "resume" : "txt",
+        kind: "resume",
         text
       });
     });
@@ -608,7 +598,7 @@ export async function handleRestoreBaseResume(
     const sourcePath = join(trashDir, key);
 
     // Extract the original filename from the key (after the stamp prefix).
-    const keyMatch = key.match(/^.+?__([A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv))$/);
+    const keyMatch = key.match(/^.+?__([A-Za-z0-9][A-Za-z0-9_-]*\.resume)$/);
     if (!keyMatch) {
       sendJson(res, 400, { error: "Invalid history key." });
       return;

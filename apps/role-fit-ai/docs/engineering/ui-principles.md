@@ -133,7 +133,10 @@ Resume and cover letter share ONE Open menu (`DocumentOpenMenu`): the same
 component renders each page's start actions (bundled starter, blank, choose a
 file) above the documents already saved in the workspace. Starting a document and
 reopening a saved one are the same decision, so they are not split across a
-separate Starter button. Save is likewise ONE component (`DocumentSaveMenu`):
+separate Starter button. Choose a file is strict by document kind: Resume
+accepts and validates only `.resume`, while Cover Letter accepts and validates
+only `.cover`. Picker filters are convenience; client preflight and workspace
+routes enforce the same rule. Save is likewise ONE component (`DocumentSaveMenu`):
 update the active workspace copy, save a named variant beside it, then the
 downloads. PDF is a download, so it lives there too rather than as its own
 toolbar button — both bars are Open/Save, with Polish owned by the workflow
@@ -253,7 +256,9 @@ variants and local `.trash/` history, and each save archives the version it
 replaces. The filename stem is the variant identity; the extension is the
 document kind. `server/coverLetterWorkspace.ts` is a sibling of `server/workspace.ts`,
 sharing its storage primitives (lock, atomic write, trash stamping) without
-inheriting the base resume's multi-extension import paths.
+combining the two strict document codecs. Legacy text resume artifacts remain
+untouched on disk and in portable backups, but are not offered as openable
+documents or restorable history.
 Each editor remembers its last active saved variant in origin-scoped browser
 storage and reopens it on startup; a missing or cleared preference falls back
 to the server's first option (Default when present). Detached starters, blank

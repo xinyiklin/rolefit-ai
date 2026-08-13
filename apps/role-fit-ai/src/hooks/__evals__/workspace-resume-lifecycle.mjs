@@ -1,45 +1,57 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import {
+  COVER_LETTER_STYLE_DEFAULTS,
+  parseCoverLetterText,
+  serializeCoverLetterFile
+} from "../../../../../packages/engine/src/lib/coverLetter.ts";
 import { DOC_STYLE_DEFAULTS } from "../../../../../packages/engine/src/lib/documentStyle.ts";
 import { serializeResumeFile } from "../../../../../packages/engine/src/lib/resumeFile.ts";
 import { buildStarterResume } from "../../../../../packages/engine/src/sampleResume.ts";
+import {
+  prepareCoverLetterUpload,
+  prepareResumeUpload
+} from "../../lib/documentOpenFiles.ts";
 import { createWorkspaceLoadOwnership } from "../../lib/workspaceLoadOwnership.ts";
-import { prepareResumeUpload } from "../useWorkspaceResume.ts";
 
 let reads = 0;
 const unread = (name) => ({
   name,
-  text: async () => {
+  size: 100,
+  arrayBuffer: async () => {
     reads += 1;
-    return "should not be read";
+    return new TextEncoder().encode("should not be read").buffer;
   }
 });
 
 await assert.rejects(
   prepareResumeUpload(unread("resume.pdf")),
-  /PDF uploads are text-only/,
+  /Choose a \.resume file/,
   "PDF is rejected before reading"
 );
-await assert.rejects(
-  prepareResumeUpload(unread("resume.docx")),
-  /Upload a \.resume file/,
-  "unsupported extensions are rejected before reading"
-);
+for (const name of ["resume.docx", "resume.txt", "resume.md", "resume.csv", "resume.cover", "resume"]) {
+  await assert.rejects(
+    prepareResumeUpload(unread(name)),
+    /Choose a \.resume file/,
+    `unsupported resume extension is rejected before reading: ${name}`
+  );
+}
 assert.equal(reads, 0, "extension preflight must not consume rejected files");
 
 await assert.rejects(
-  prepareResumeUpload({ name: "broken.txt", text: async () => { throw new Error("private browser error"); } }),
-  /The file could not be read/,
+  prepareResumeUpload({ name: "broken.resume", size: 100, arrayBuffer: async () => { throw new Error("private browser error"); } }),
+  /could not be read/,
   "read failures use a stable user-safe error"
 );
 await assert.rejects(
-  prepareResumeUpload({ name: "broken.resume", text: async () => "{not valid json" }),
+  prepareResumeUpload({
+    name: "broken.resume",
+    size: 100,
+    arrayBuffer: async () => new TextEncoder().encode("{not valid json").buffer
+  }),
   /valid JSON|could not be parsed/i,
   "malformed .resume input fails strict preflight"
 );
-
-const textCandidate = await prepareResumeUpload({ name: "resume.md", text: async () => "# Resume" });
-assert.deepEqual(textCandidate, { kind: "text", text: "# Resume" }, "text input is prepared without mutation");
 
 const starter = readFileSync(new URL("../../../server/starter.resume", import.meta.url), "utf8");
 assert.deepEqual(
@@ -47,12 +59,79 @@ assert.deepEqual(
   JSON.parse(serializeResumeFile(buildStarterResume(), DOC_STYLE_DEFAULTS)),
   "bundled starter matches the canonical starter content and reset formatting"
 );
-const structuredCandidate = await prepareResumeUpload({ name: "resume.resume", text: async () => starter });
-assert.equal(structuredCandidate.kind, "resume", "valid .resume input becomes a structured candidate");
-assert.ok(structuredCandidate.parsed.data.sections.length > 0, "structured candidate carries parsed resume data");
+const structuredCandidate = await prepareResumeUpload({
+  name: "resume.resume",
+  size: starter.length,
+  arrayBuffer: async () => new TextEncoder().encode(starter).buffer
+});
+assert.ok(structuredCandidate.data.sections.length > 0, "valid .resume input becomes a structured candidate");
+const invalidUtf8Resume = new TextEncoder().encode(starter);
+invalidUtf8Resume[invalidUtf8Resume.indexOf("t".charCodeAt(0))] = 0xff;
+await assert.rejects(
+  prepareResumeUpload({
+    name: "invalid-utf8.resume",
+    size: invalidUtf8Resume.byteLength,
+    arrayBuffer: async () => invalidUtf8Resume.buffer
+  }),
+  /UTF-8/i,
+  "invalid UTF-8 bytes fail the strict resume codec"
+);
+await assert.rejects(
+  prepareResumeUpload({ ...unread("oversized.resume"), size: 2_097_153 }),
+  /larger than the 2 MB limit/,
+  "oversized .resume input is rejected before reading"
+);
+assert.equal(reads, 0, "resume size preflight must not consume oversized files");
+
+let coverReads = 0;
+const unreadCover = (name, size = 100) => ({
+  name,
+  size,
+  arrayBuffer: async () => {
+    coverReads += 1;
+    return new TextEncoder().encode("should not be read").buffer;
+  }
+});
+for (const name of ["letter.txt", "letter.md", "letter.resume", "letter.pdf", "letter"]) {
+  await assert.rejects(
+    prepareCoverLetterUpload(unreadCover(name)),
+    /Choose a \.cover file/,
+    `unsupported cover-letter extension is rejected before reading: ${name}`
+  );
+}
+assert.equal(coverReads, 0, "cover-letter extension preflight must not consume rejected files");
+await assert.rejects(
+  prepareCoverLetterUpload(unreadCover("oversized.cover", 2_097_153)),
+  /larger than the 2 MB limit/,
+  "oversized .cover input is rejected before reading"
+);
+assert.equal(coverReads, 0, "cover-letter size preflight must not consume oversized files");
+await assert.rejects(
+  prepareCoverLetterUpload({
+    name: "broken.cover",
+    size: 100,
+    arrayBuffer: async () => new TextEncoder().encode("{not valid json").buffer
+  }),
+  /valid JSON/i,
+  "malformed .cover input fails strict preflight"
+);
+const coverText = serializeCoverLetterFile(
+  parseCoverLetterText("Dear Hiring Team,\n\nA valid cover letter."),
+  COVER_LETTER_STYLE_DEFAULTS
+);
+const coverCandidate = await prepareCoverLetterUpload({
+  name: "letter.COVER",
+  size: coverText.length,
+  arrayBuffer: async () => new TextEncoder().encode(coverText).buffer
+});
+assert.equal(coverCandidate.data.sections.length, 1, "valid .cover input becomes a structured candidate");
 
 const source = readFileSync(new URL("../useWorkspaceResume.ts", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+const coverToolbarSource = readFileSync(
+  new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url),
+  "utf8"
+);
 const functionSlice = (name, nextName) => {
   const start = source.indexOf(`  async function ${name}`);
   const end = source.indexOf(`  async function ${nextName}`, start + 1);
@@ -61,11 +140,13 @@ const functionSlice = (name, nextName) => {
 };
 
 const applyWorkspace = functionSlice("applyWorkspaceBaseResume", "loadWorkspace");
-const prepared = applyWorkspace.indexOf("candidate = prepareResumeText");
+const extensionChecked = applyWorkspace.indexOf("if (!/\\.resume$/i.test");
+const prepared = applyWorkspace.indexOf("parseResumeFile(baseResume.text)");
 const confirmed = applyWorkspace.indexOf("await approveCurrentReplacement(", prepared);
 const liveVersionCheck = applyWorkspace.indexOf("replacementGuard.currentVersion()", confirmed);
 const recoveryCleared = applyWorkspace.indexOf("replacementGuard.onReplacementCommitted()", liveVersionCheck);
 const identityCommitted = applyWorkspace.indexOf("setFileName(", recoveryCleared);
+assert.ok(extensionChecked >= 0 && prepared > extensionChecked, "workspace files require the .resume extension before parsing");
 assert.ok(prepared >= 0 && confirmed > prepared, "workspace files validate before replacement confirmation");
 assert.ok(liveVersionCheck > confirmed, "workspace replacement re-checks the live document version at its commit boundary");
 assert.ok(recoveryCleared > liveVersionCheck, "workspace recovery clears only after validation and current-state confirmation");
@@ -152,6 +233,14 @@ const starterAction = appSource.indexOf('key: "starter"');
 const blankAction = appSource.indexOf('key: "blank"', starterAction);
 const fileAction = appSource.indexOf('key: "file"', blankAction);
 assert.ok(starterAction >= 0 && blankAction > starterAction && fileAction > blankAction, "Open orders Starter, Blank, then File");
+assert.match(appSource, /accept="\.resume"/, "Resume picker advertises only the strict .resume format");
+assert.doesNotMatch(appSource, /accept="[^"]*\.(?:txt|md|csv)/, "Resume picker does not advertise text imports");
+assert.match(coverToolbarSource, /accept="\.cover"/, "Cover Letter picker advertises only the strict .cover format");
+assert.doesNotMatch(
+  coverToolbarSource,
+  /accept="[^"]*\.(?:txt|md|resume)/,
+  "Cover Letter picker does not advertise non-cover imports"
+);
 assert.match(appSource, /const resumeHasContent = Boolean\([\s\S]{0,120}?\.trim\(\)\.length > 0\)/, "blank document existence is separate from content readiness");
 assert.match(appSource, /const canExportResume = resumeHasContent/, "blank Resume content does not enable PDF export");
 assert.match(

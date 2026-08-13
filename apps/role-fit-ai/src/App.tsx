@@ -1313,7 +1313,6 @@ function App() {
   } = useWorkspaceResume({
     confirm,
     replacementGuard: resumeReplacementGuard,
-    seedResumeEditor,
     fileName,
     setResumeText,
     setFileName,
@@ -1327,8 +1326,6 @@ function App() {
     setExportStatus,
     seedResumeData,
     setResumeOrigin,
-    currentResumeText,
-    resumeText,
     editedResume,
     docStyle
   });
@@ -2890,7 +2887,6 @@ function App() {
                           resumeEditorActions.setHeaderName(nextText);
                         }
                       }}
-                      onRemoveHeaderName={resumeEditorActions.removeHeaderName}
                       onUpdateContact={(index, nextText) => {
                         if (typesetEditorRef.current) {
                           typesetEditorRef.current.replaceHeaderContactText(index, nextText);
@@ -2945,7 +2941,7 @@ function App() {
                     ref={resumeFileInputRef}
                     className="sr-only"
                     type="file"
-                    accept=".txt,.md,.csv,.resume"
+                    accept=".resume"
                     onChange={handleFileUpload}
                   />
                   <DocumentOpenMenu
@@ -2977,7 +2973,7 @@ function App() {
                         key: "file",
                         icon: <Upload size={15} aria-hidden="true" />,
                         title: "Choose a file",
-                        description: ".resume, .txt, .md, or .csv",
+                        description: ".resume only",
                         onSelect: () => resumeFileInputRef.current?.click()
                       }
                     ]}

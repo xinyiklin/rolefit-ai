@@ -20,7 +20,7 @@ export async function fetchBaseResumeCandidates(
   const fileNames = [...new Set(options.map((option) => option.fileName).filter(Boolean))];
   if (!fileNames.length) return [];
 
-  let read: { fileName?: unknown; label?: unknown; kind?: unknown; text?: unknown }[];
+  let read: { fileName?: unknown; label?: unknown; text?: unknown }[];
   try {
     const response = await fetch("/api/workspace/base-resume/candidates", {
       method: "POST",
@@ -48,7 +48,7 @@ export async function fetchBaseResumeCandidates(
         label: labels.get(fileName) ?? (typeof entry.label === "string" ? entry.label : fileName),
         // Rank the same serialization the editor would hold, so a variant's
         // score describes the document a user would actually get.
-        text: entry.kind === "resume" ? serializeResumeData(parseResumeFile(text).data) : text
+        text: serializeResumeData(parseResumeFile(text).data)
       });
     } catch {
       // A variant that no longer parses is skipped, never ranked empty: the

@@ -84,7 +84,7 @@ export function validateCoverLetterText(data: Buffer | string): string {
   }
   const text = buffer.toString("utf8");
   try {
-    parseCoverLetterFile(text);
+    parseCoverLetterFile(buffer);
   } catch {
     throw new WorkspaceStorageError("The saved .cover file is invalid. Restore a valid version from history before continuing.");
   }

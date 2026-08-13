@@ -1,7 +1,7 @@
 import { type ReactNode } from "react";
 import { ChevronRight } from "lucide-react";
 
-import { DocumentActionMenu } from "./DocumentActionMenu";
+import { DocumentActionMenu } from "@typeset/editor/components/toolbar/DocumentActionMenu.tsx";
 
 /** A way to start a document: the bundled starter, a blank one, a file picker. */
 export type DocumentOpenAction = {
