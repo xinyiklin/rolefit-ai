@@ -3,7 +3,7 @@ import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/f
 import { describeProviderModel } from "../config/aiOptions.ts";
 import { parseDate } from "./applicationFacts.ts";
 import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
-import { ATS_LABELS, atsPostingKey, requisitionIdFromText } from "./jobIdentity.ts";
+import { ATS_LABELS, atsPostingKey, postingIdentityFromText } from "./jobIdentity.ts";
 
 export { displayCompany, parseDate } from "./applicationFacts.ts";
 
@@ -238,8 +238,8 @@ const OPAQUE_POSTING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9
 export function postingIdentity(
   app: Pick<Application, "jobUrl" | "sourceUrls" | "jobDescription" | "rawJobDescription">
 ): PostingIdentity | null {
-  const requisitionId = requisitionIdFromText(app.rawJobDescription?.trim() || app.jobDescription);
-  if (requisitionId) return { id: requisitionId, label: "Requisition ID" };
+  const textIdentity = postingIdentityFromText(app.rawJobDescription?.trim() || app.jobDescription);
+  if (textIdentity) return textIdentity;
   for (const url of [app.jobUrl, ...(app.sourceUrls ?? []).map((source) => source.url)]) {
     const key = atsPostingKey(safeExternalUrl(url));
     if (key && !OPAQUE_POSTING_ID.test(key.jobId)) {

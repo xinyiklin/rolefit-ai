@@ -485,7 +485,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   number of compact outlined groups to make application controls and saved job
   facts scannable without recreating an intake form. Its head
   carries the prominent sans record name over one dot-led identity line (saved stage, the
-  date that stage governs, and the linked-record count), so stage never needs
+  date that stage governs, an available posting ID with its source label, and the
+  linked-record count), so stage never needs
   restating inside the body. Its sections are APG tabs, not toggle buttons:
   `tablist`/`tab`/`tabpanel`, roving tabindex, arrow/Home/End. Three task tabs
   remain: Overview, Prep, and Documents. Overview is split by task rather than
@@ -586,8 +587,8 @@ live inside the drill-down menu; the page does not grow a second summary or
 under month dividers and keeps the selected application in the right inspector.
 Calendar mode reuses the same query and lifecycle filter state.
 The inspector mirrors Application Detail's information ownership without
-repeating its form: stage and governing date sit in the identity line; key dates
-and Source are read-only; Fit reuses the same two-column verdict-and-rationale
+repeating its form: stage and governing date sit in the identity line; key dates,
+an available posting ID with its source label, and Source are read-only; Fit reuses the same two-column verdict-and-rationale
 advisory without repeating the assessed resume, and keeps Top gaps close;
 Job activity always renders, including its no-other-records state; and Documents
 always summarizes posting, resume, cover letter, and additional uploads. Open

@@ -103,6 +103,17 @@ assert.equal(
   "Requisition ID",
   "an employer requisition number is labeled as one rather than as a generic posting id"
 );
+for (const [text, expectedId, expectedLabel] of [
+  ["Job ID: 2024-1180", "2024-1180", "Job ID"],
+  ["Posting Number: 998877", "998877", "Posting number"],
+  ["Position No. 445566", "445566", "Position number"]
+]) {
+  assert.deepEqual(
+    postingIdentity(application({ rawJobDescription: text })),
+    { id: expectedId, label: expectedLabel },
+    `${text} preserves its identifier type for display`
+  );
+}
 const linkOnlyPosting = postingIdentity(application({
   jobDescription: "Build reliable services.",
   jobUrl: "https://careers.example.com/role",
