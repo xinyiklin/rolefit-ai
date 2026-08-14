@@ -13,6 +13,7 @@ import {
   fitAssessmentRank,
   matchesActivityFilter,
   nextAction,
+  postingIdIndex,
   safeExternalUrl,
   type ApplicationActivityFilter,
   type ApplicationActivityGroup
@@ -367,6 +368,8 @@ export function TrackerTab({
     isScanning: isScanningDuplicates
   } = useDuplicateScan(applications);
 
+  const postingIds = useMemo(() => postingIdIndex(applications), [applications]);
+
   // Filtered + sorted list used by the Table view (Calendar filters internally).
   const sorted = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -381,7 +384,8 @@ export function TrackerTab({
           app.title,
           app.roleDescription,
           app.notes,
-          app.jobDescription
+          app.jobDescription,
+          postingIds.get(app.id)
         ]
           .filter(Boolean)
           .some((value) => String(value).toLowerCase().includes(needle));
@@ -393,7 +397,7 @@ export function TrackerTab({
         // Stable tie-break: newest application first, regardless of column.
         return appliedKey(b).localeCompare(appliedKey(a));
       });
-  }, [applications, statusFilter, query, sort]);
+  }, [applications, postingIds, statusFilter, query, sort]);
 
   // Reset to the first page whenever the result set or its ordering changes, so
   // the user is never stranded on a now-empty trailing page.
@@ -604,7 +608,7 @@ export function TrackerTab({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search applications, companies, roles..."
+            placeholder="Search companies, roles, posting IDs..."
             aria-label="Search applications"
           />
         </label>

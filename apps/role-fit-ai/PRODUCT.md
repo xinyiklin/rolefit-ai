@@ -145,7 +145,8 @@ cleanup action. The tracker keeps related decisions and attempts as independent
 rows, marks each with the posting-group size, and lists the other histories in
 the selected record inspector and Application Detail. The inspector is a
 read-only summary aligned with Application Detail: stage and governing date,
-key dates and Source provenance, categorical Fit verdict and rationale, always-
+key dates, the posting's own ID read from the saved posting text or a saved
+link, Source provenance, categorical Fit verdict and rationale, always-
 present Job activity, and the saved job posting/resume/cover/additional-document
 packet. Field edits open Application Detail or Prepare; the row menu retains
 quick stage movement. Mark as unrelated detaches

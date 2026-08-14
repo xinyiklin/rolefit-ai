@@ -13,6 +13,7 @@ import {
   formatCompactDate,
   hostLabel,
   nextAction,
+  postingIdentity,
   safeExternalUrls
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
@@ -63,6 +64,7 @@ export function TrackerInspector({
     selected.jobUrl,
     ...(selected.sourceUrls ?? []).map((source) => source.url)
   ]);
+  const posting = postingIdentity(selected);
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
   const statusDateLabel = selected.status === "not_applying" ? "Decision date" : "Application date";
   const statusDate = selected.status === "not_applying" ? selected.notApplyingAt : selected.appliedAt;
@@ -123,6 +125,11 @@ export function TrackerInspector({
           <dt>Next step</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
           <dd>{selected.followupAt ? formatCompactDate(selected.followupAt) : "Not recorded"}</dd>
+        </div>
+        <div className="ledger-row">
+          <dt>{posting?.label ?? "Posting ID"}</dt>
+          <span className="ledger-row__leader" aria-hidden="true" />
+          <dd>{posting?.id ?? "Not recorded"}</dd>
         </div>
         <div className="ledger-row">
           <dt>Source</dt>

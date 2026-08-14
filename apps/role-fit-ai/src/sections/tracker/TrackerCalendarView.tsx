@@ -5,6 +5,7 @@ import {
   displayCompany,
   displayRole,
   matchesActivityFilter,
+  postingIdIndex,
   type ApplicationActivityFilter,
   parseDate
 } from "../../lib/applicationDisplay";
@@ -96,17 +97,22 @@ export function TrackerCalendarView({
   const [month, setMonth] = useState(startOfMonth(today));
   const [selectedDate, setSelectedDate] = useState(todayKey);
 
+  const postingIds = useMemo(() => postingIdIndex(applications), [applications]);
+
   const events = useMemo(() => {
     const needle = query.trim().toLowerCase();
     return applicationEvents(applications).filter((event) => {
       if (!matchesActivityFilter(event.app, statusFilter)) return false;
       // Apply search
       if (!needle) return true;
-      return [displayCompany(event.app), displayRole(event.app), event.label].some((value) =>
-        value.toLowerCase().includes(needle)
-      );
+      return [
+        displayCompany(event.app),
+        displayRole(event.app),
+        event.label,
+        postingIds.get(event.app.id) ?? ""
+      ].some((value) => value.toLowerCase().includes(needle));
     });
-  }, [applications, query, statusFilter]);
+  }, [applications, postingIds, query, statusFilter]);
 
   const eventsByDate = useMemo(() => {
     const grouped = new Map<string, CalendarEvent[]>();

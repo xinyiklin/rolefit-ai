@@ -2477,6 +2477,24 @@ button.table-sort svg {
   color: var(--hairline-strong);
 }
 
+/* Posting ID sits beside the stage line as a named value: the kind of id stays
+   prose, the id itself reads as data. */
+.application-modal__head .application-modal__identity .application-modal__posting-id {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  padding: 1px 6px;
+  border-radius: var(--r-pill);
+  background: var(--paper-deep);
+  font-size: 0.68rem;
+}
+
+.application-modal__head .application-modal__posting-id .is-data {
+  color: var(--ink-strong);
+  font-size: 0.68rem;
+  overflow-wrap: anywhere;
+}
+
 .application-side-card h4,
 .application-match-card__title {
   margin: 0;

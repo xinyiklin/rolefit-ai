@@ -188,7 +188,9 @@ export function dedupeSourceUrls(
   return [...byNorm.values()].slice(0, Math.max(0, max));
 }
 
-const ATS_LABELS: Record<string, string> = {
+// Also used by the tracker's posting-id display, so one board never reads as
+// two different names.
+export const ATS_LABELS: Record<string, string> = {
   greenhouse: "Greenhouse",
   lever: "Lever",
   ashby: "Ashby",
@@ -293,16 +295,31 @@ export function atsPostingKey(url: string | undefined | null): AtsPostingKey | n
 // boards even when the URLs share nothing. Conservative: requires an explicit
 // id-ish label, a digit-bearing value, and rejects bare years.
 const REQ_ID_RE =
-  /\b(?:req(?:uisition)?|job|posting|position)\s*(?:id|number|no\.?|#)\s*[:\-#]?\s*([A-Za-z]{0,6}[-_ ]?\d[\dA-Za-z-]{2,18})/i;
+  /\b(req(?:uisition)?|job|posting|position)\s*(id|number|no\.?|#)\s*[:\-#]?\s*([A-Za-z]{0,6}[-_ ]?\d[\dA-Za-z-]{2,18})/i;
 
-export function requisitionIdFromText(text: string | undefined | null): string {
+export type TextPostingIdentity = {
+  id: string;
+  label: string;
+};
+
+export function postingIdentityFromText(text: string | undefined | null): TextPostingIdentity | null {
   const head = String(text || "").slice(0, 6000);
   const m = head.match(REQ_ID_RE);
-  if (!m) return "";
-  const id = m[1].replace(/[\s_]+/g, "-").toUpperCase().replace(/-+$/, "");
+  if (!m) return null;
+  const id = m[3].replace(/[\s_]+/g, "-").toUpperCase().replace(/-+$/, "");
   const digits = id.replace(/[^0-9]/g, "");
-  if (/^(19|20)\d{2}$/.test(digits)) return ""; // a bare year is not an id
-  return digits.length >= 4 || /^[A-Z]+-?\d{3,}$/.test(id) ? id : "";
+  if (/^(19|20)\d{2}$/.test(digits)) return null; // a bare year is not an id
+  if (digits.length < 4 && !/^[A-Z]+-?\d{3,}$/.test(id)) return null;
+
+  const noun = /^req/i.test(m[1])
+    ? "Requisition"
+    : `${m[1][0].toUpperCase()}${m[1].slice(1).toLowerCase()}`;
+  const kind = /^id$/i.test(m[2]) ? "ID" : "number";
+  return { id, label: `${noun} ${kind}` };
+}
+
+export function requisitionIdFromText(text: string | undefined | null): string {
+  return postingIdentityFromText(text)?.id ?? "";
 }
 
 // "Acme, Inc." / "ACME Corp" / "acme" all compare equal. Only legal suffixes

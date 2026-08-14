@@ -3,6 +3,13 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-14
+
+- [USER+CODE+TOOL] Application Detail and the tracker now display and search a
+  readable posting ID derived from immutable posting text before safe ATS links;
+  opaque UUIDs and unsafe URL schemes are ignored. The RoleFit gate passes all
+  106 offline evaluations; browser QA was not run.
+
 ## 2026-08-12
 
 - [USER+CODE+TOOL] The final ultra review hardened application ownership,
