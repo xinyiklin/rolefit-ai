@@ -7,6 +7,8 @@ import {
   fitAssessmentRunLabel,
   fitAssessmentVerdictLabel,
   hostLabel,
+  postingIdIndex,
+  postingIdentity,
   safeExternalUrl,
   safeExternalUrls
 } from "../applicationDisplay.ts";
@@ -89,6 +91,53 @@ assert.equal(
   })),
   "2026-08-10T12:00:00.000Z",
   "skipped records display their decision date instead of an obsolete application date"
+);
+
+const requisitionPosting = postingIdentity(application({
+  rawJobDescription: "Requisition ID: JR-90210\nBuild reliable services.",
+  jobUrl: "https://boards.greenhouse.io/acme/jobs/4012345"
+}));
+assert.equal(requisitionPosting?.id, "JR-90210", "the posting's own requisition id outranks an ATS id parsed from a link");
+assert.equal(
+  requisitionPosting?.label,
+  "Requisition ID",
+  "an employer requisition number is labeled as one rather than as a generic posting id"
+);
+const linkOnlyPosting = postingIdentity(application({
+  jobDescription: "Build reliable services.",
+  jobUrl: "https://careers.example.com/role",
+  sourceUrls: [{ url: "https://boards.greenhouse.io/acme/jobs/4012345", addedAt: "2026-08-08T12:00:00.000Z" }]
+}));
+assert.equal(linkOnlyPosting?.id, "4012345", "a posting id is recovered from any saved link, not just the primary one");
+assert.equal(linkOnlyPosting?.label, "Greenhouse ID", "a board's internal id is displayed under that board's name");
+assert.equal(
+  postingIdentity(application({
+    jobDescription: "Build reliable services.",
+    jobUrl: "https://jobs.lever.co/acme/d290f1ee-6c54-4b01-90e6-d701748f0851"
+  })),
+  null,
+  "an opaque UUID posting key is not presented as a readable posting id"
+);
+assert.equal(
+  postingIdentity(application({ jobDescription: "Build reliable services.", jobUrl: "https://careers.example.com/role" })),
+  null,
+  "a record with no requisition id and no identifiable link shows no invented id"
+);
+assert.equal(
+  postingIdentity(application({
+    jobDescription: "Build reliable services.",
+    jobUrl: "javascript://boards.greenhouse.io/acme/jobs/4012345"
+  })),
+  null,
+  "an unsafe stored URL cannot contribute a posting id"
+);
+assert.deepEqual(
+  [...postingIdIndex([
+    application({ id: "app-req", rawJobDescription: "Job ID: 2024-1180" }),
+    application({ id: "app-none", jobUrl: "https://careers.example.com/role" })
+  ]).entries()],
+  [["app-req", "2024-1180"], ["app-none", ""]],
+  "search reads one derived id per application, including an explicit empty for records without one"
 );
 
 console.log("application display probes: passed");

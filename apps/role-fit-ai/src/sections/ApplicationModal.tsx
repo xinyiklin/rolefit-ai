@@ -42,6 +42,7 @@ import {
   appFitVerdict,
   applicationActivityDate,
   fitAssessmentRunLabel,
+  postingIdentity,
   safeExternalUrl
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
@@ -726,6 +727,9 @@ export function ApplicationModal({
       ? `${relatedApplications.length} related ${relatedApplications.length === 1 ? "record" : "records"}`
       : ""
   ].filter(Boolean);
+  // Derived from the saved posting text and links, so it follows the record the
+  // same way headerMeta does.
+  const headerPosting = postingIdentity(activeApplication);
 
   return (
     <div
@@ -756,6 +760,12 @@ export function ApplicationModal({
                   {part}
                 </span>
               ))}
+              {headerPosting ? (
+                <span className="application-modal__posting-id">
+                  {headerPosting.label}
+                  <span className="is-data">{headerPosting.id}</span>
+                </span>
+              ) : null}
             </p>
             {documentsBusy ? <p role="status">Updating documents…</p> : null}
             {visibleSaveError ? (

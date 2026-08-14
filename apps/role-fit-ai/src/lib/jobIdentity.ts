@@ -188,7 +188,9 @@ export function dedupeSourceUrls(
   return [...byNorm.values()].slice(0, Math.max(0, max));
 }
 
-const ATS_LABELS: Record<string, string> = {
+// Also used by the tracker's posting-id display, so one board never reads as
+// two different names.
+export const ATS_LABELS: Record<string, string> = {
   greenhouse: "Greenhouse",
   lever: "Lever",
   ashby: "Ashby",

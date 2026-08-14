@@ -3,6 +3,7 @@ import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/f
 import { describeProviderModel } from "../config/aiOptions.ts";
 import { parseDate } from "./applicationFacts.ts";
 import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
+import { ATS_LABELS, atsPostingKey, requisitionIdFromText } from "./jobIdentity.ts";
 
 export { displayCompany, parseDate } from "./applicationFacts.ts";
 
@@ -215,4 +216,41 @@ export function safeExternalUrls(urls: readonly string[]): string[] {
 export function hostLabel(url: string): string {
   const safeUrl = safeExternalUrl(url);
   return safeUrl ? new URL(safeUrl).hostname.replace(/^www\./, "") : "";
+}
+
+export type PostingIdentity = {
+  /** The posting's own identifier, e.g. "JR-90210" or "4012345". */
+  id: string;
+  /** What kind of id it is — displayed with the value, since a board's internal
+   *  id and the employer's requisition number mean different things. */
+  label: string;
+};
+
+// Lever and Ashby identify a posting by UUID. Those are not ids a person reads
+// off a page, quotes to a recruiter, or recognizes later, and a 36-character
+// value only wraps across the display surfaces, so they count as no id.
+const OPAQUE_POSTING_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// The identifier the employer or board gives this posting, derived from the
+// same evidence duplicate matching already reads: a requisition id printed in
+// the saved posting text first, then an ATS posting id parsed from a saved
+// link. Nothing is stored or invented — a record with neither has no id to show.
+export function postingIdentity(
+  app: Pick<Application, "jobUrl" | "sourceUrls" | "jobDescription" | "rawJobDescription">
+): PostingIdentity | null {
+  const requisitionId = requisitionIdFromText(app.rawJobDescription?.trim() || app.jobDescription);
+  if (requisitionId) return { id: requisitionId, label: "Requisition ID" };
+  for (const url of [app.jobUrl, ...(app.sourceUrls ?? []).map((source) => source.url)]) {
+    const key = atsPostingKey(safeExternalUrl(url));
+    if (key && !OPAQUE_POSTING_ID.test(key.jobId)) {
+      return { id: key.jobId, label: `${ATS_LABELS[key.ats] ?? key.ats} ID` };
+    }
+  }
+  return null;
+}
+
+// One posting id per application, derived once per tracker list. Search reads
+// this instead of re-deriving every record's id on each keystroke.
+export function postingIdIndex(applications: readonly Application[]): Map<string, string> {
+  return new Map(applications.map((app) => [app.id, postingIdentity(app)?.id ?? ""]));
 }
