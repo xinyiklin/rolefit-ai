@@ -1,9 +1,9 @@
 import { useMemo, useState } from "react";
 import type { Application } from "../../hooks/useApplications";
 import {
+  applicationSearchRank,
   dateKey,
   displayCompany,
-  displayRole,
   matchesActivityFilter,
   postingIdIndex,
   type ApplicationActivityFilter,
@@ -103,14 +103,12 @@ export function TrackerCalendarView({
     const needle = query.trim().toLowerCase();
     return applicationEvents(applications).filter((event) => {
       if (!matchesActivityFilter(event.app, statusFilter)) return false;
-      // Apply search
       if (!needle) return true;
-      return [
-        displayCompany(event.app),
-        displayRole(event.app),
-        event.label,
+      return applicationSearchRank(
+        event.app,
+        needle,
         postingIds.get(event.app.id) ?? ""
-      ].some((value) => value.toLowerCase().includes(needle));
+      ) !== null;
     });
   }, [applications, postingIds, query, statusFilter]);
 

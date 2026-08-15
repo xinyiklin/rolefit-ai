@@ -6,6 +6,7 @@ import {
   BOARD_STATUSES,
   STATUS_LABEL,
   applicationActivityDate,
+  applicationSearchRank,
   activityGroupForFilter,
   activityCount,
   displayCompany,
@@ -374,24 +375,22 @@ export function TrackerTab({
   const sorted = useMemo(() => {
     const needle = query.trim().toLowerCase();
     const dirMul = sort.dir === "asc" ? 1 : -1;
+    const relevanceRanks = new Map<string, number>();
+    if (needle) {
+      for (const app of applications) {
+        const rank = applicationSearchRank(app, needle, postingIds.get(app.id) ?? "");
+        if (rank !== null) relevanceRanks.set(app.id, rank);
+      }
+    }
     return applications
       .filter((app) => matchesActivityFilter(app, statusFilter))
-      .filter((app) => {
-        if (!needle) return true;
-        return [
-          displayCompany(app),
-          displayRole(app),
-          app.title,
-          app.roleDescription,
-          app.notes,
-          app.jobDescription,
-          postingIds.get(app.id)
-        ]
-          .filter(Boolean)
-          .some((value) => String(value).toLowerCase().includes(needle));
-      })
+      .filter((app) => !needle || relevanceRanks.has(app.id))
       .slice()
       .sort((a, b) => {
+        if (needle) {
+          const relevance = (relevanceRanks.get(b.id) ?? 0) - (relevanceRanks.get(a.id) ?? 0);
+          if (relevance !== 0) return relevance;
+        }
         const primary = compareBy(sort.key, a, b) * dirMul;
         if (primary !== 0) return primary;
         // Stable tie-break: newest application first, regardless of column.
@@ -427,7 +426,7 @@ export function TrackerTab({
   const visible = sorted.slice(pageStart, pageStart + pageSize);
 
   // Month dividers only make sense on the chronological default sort.
-  const grouped = sort.key === "applied";
+  const grouped = sort.key === "applied" && !query.trim();
 
   const visibleSelected = expandedApplicationId
     ? visible.find((app) => app.id === expandedApplicationId) ?? null
@@ -673,55 +672,53 @@ export function TrackerTab({
               postingGroupSizes={postingGroupSizes}
             />
 
-            {sorted.length > 0 ? (
-              <div className="applications-pagination" role="group" aria-label="Pagination">
-                <span className="applications-pagination__count">
-                  <strong>
-                    {rangeStart}–{rangeEnd}
-                  </strong>{" "}
-                  of {sorted.length}
-                </span>
-                <div className="applications-pagination__controls">
-                  <label className="applications-pagination__size">
-                    <span>Rows</span>
-                    <select
-                      value={pageSize}
-                      onChange={(event) => setPageSize(Number(event.target.value))}
-                      aria-label="Applications per page"
-                    >
-                      {PAGE_SIZES.map((size) => (
-                        <option key={size} value={size}>
-                          {size}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="applications-pagination__pager">
-                    <button
-                      type="button"
-                      className="applications-pagination__step"
-                      onClick={() => setPage(Math.max(1, safePage - 1))}
-                      disabled={safePage <= 1}
-                      aria-label="Previous page"
-                    >
-                      <ChevronLeft size={15} aria-hidden="true" />
-                    </button>
-                    <span className="applications-pagination__page" aria-live="polite">
-                      {safePage} / {totalPages}
-                    </span>
-                    <button
-                      type="button"
-                      className="applications-pagination__step"
-                      onClick={() => setPage(Math.min(totalPages, safePage + 1))}
-                      disabled={safePage >= totalPages}
-                      aria-label="Next page"
-                    >
-                      <ChevronRight size={15} aria-hidden="true" />
-                    </button>
-                  </div>
+            <div className="applications-pagination" role="group" aria-label="Pagination">
+              <span className="applications-pagination__count">
+                <strong>
+                  {rangeStart}–{rangeEnd}
+                </strong>{" "}
+                of {sorted.length}
+              </span>
+              <div className="applications-pagination__controls">
+                <label className="applications-pagination__size">
+                  <span>Rows</span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) => setPageSize(Number(event.target.value))}
+                    aria-label="Applications per page"
+                  >
+                    {PAGE_SIZES.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <div className="applications-pagination__pager">
+                  <button
+                    type="button"
+                    className="applications-pagination__step"
+                    onClick={() => setPage(Math.max(1, safePage - 1))}
+                    disabled={safePage <= 1}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeft size={15} aria-hidden="true" />
+                  </button>
+                  <span className="applications-pagination__page" aria-live="polite">
+                    {safePage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    className="applications-pagination__step"
+                    onClick={() => setPage(Math.min(totalPages, safePage + 1))}
+                    disabled={safePage >= totalPages}
+                    aria-label="Next page"
+                  >
+                    <ChevronRight size={15} aria-hidden="true" />
+                  </button>
                 </div>
               </div>
-            ) : null}
+            </div>
           </div>
 
           <aside className="pipeline-inspector" aria-label="Selected application">

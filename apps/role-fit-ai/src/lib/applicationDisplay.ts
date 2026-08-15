@@ -1,11 +1,11 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
 import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
 import { describeProviderModel } from "../config/aiOptions.ts";
-import { parseDate } from "./applicationFacts.ts";
+import { displayCompany, parseDate } from "./applicationFacts.ts";
 import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
 import { ATS_LABELS, atsPostingKey, postingIdentityFromText } from "./jobIdentity.ts";
 
-export { displayCompany, parseDate } from "./applicationFacts.ts";
+export { displayCompany, parseDate };
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   // Use a settled decision label while retaining the stored `not_applying` key.
@@ -253,4 +253,27 @@ export function postingIdentity(
 // this instead of re-deriving every record's id on each keystroke.
 export function postingIdIndex(applications: readonly Application[]): Map<string, string> {
   return new Map(applications.map((app) => [app.id, postingIdentity(app)?.id ?? ""]));
+}
+
+// Higher ranks lead table results while a query is active. Identity fields are
+// the search contract so hidden posting prose cannot flood a company lookup.
+export function applicationSearchRank(
+  app: Application,
+  query: string,
+  postingId: string
+): number | null {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return null;
+
+  const company = displayCompany(app).toLowerCase();
+  const role = displayRole(app).toLowerCase();
+  const title = String(app.title ?? "").toLowerCase();
+  const normalizedPostingId = postingId.toLowerCase();
+
+  if (company === needle) return 6;
+  if (company.startsWith(needle)) return 5;
+  if (normalizedPostingId.includes(needle)) return 4;
+  if (company.includes(needle)) return 3;
+  if (role.includes(needle) || title.includes(needle)) return 2;
+  return null;
 }

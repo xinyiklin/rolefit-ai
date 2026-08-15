@@ -3,8 +3,31 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-08-15
+
+- [USER+CODE+TOOL] The Applications table now uses the same scrollbar mechanics
+  as its inspector rail. Removing the table-only WebKit width/thumb styling lets
+  Chromium-based browsers retain scrolling while following platform overlay and
+  auto-hide preferences; Firefox keeps platform visibility behavior. Both
+  scrollports still inherit the studio surface's shared scrollbar color. The
+  live physical-gutter measurement keeps the detached header aligned when
+  needed.
+
 ## 2026-08-14
 
+- [USER+CODE+TOOL] Application search now uses only company, role/title, and
+  posting ID, with exact and prefix company matches ranked first; descriptions
+  and notes are excluded in both Table and Calendar. A privacy-safe aggregate
+  probe reduced `docu` from 115 broad content matches to 3 identity matches. The
+  desktop tracker controls now share one height and top edge, and pagination
+  remains visible for empty results to stabilize the table and inspector rail.
+  The table no longer forces Firefox's thin, custom-colored scrollbar, which
+  made the scrollbar permanently visible and consumed an end gutter. Firefox
+  now follows native overlay/auto-hide behavior; measured-width header alignment
+  remains as a fallback when a platform preference supplies a physical
+  scrollbar.
+  The RoleFit gate passes all 106 offline evaluations and dependency contracts;
+  browser QA was not run.
 - [USER+CODE+TOOL] Application Detail and the tracker now display and search a
   readable posting ID derived from immutable posting text before safe ATS links;
   opaque UUIDs and unsafe URL schemes are ignored. The RoleFit gate passes all

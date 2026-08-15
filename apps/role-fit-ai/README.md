@@ -34,7 +34,9 @@ variants, proposal review, and final export page together:
 ![RoleFit AI cover-letter workspace](docs/cover-letter.png)
 
 The on-disk **application tracker** includes a sortable, paginated table,
-right-click actions, and a calendar for submissions and follow-ups:
+right-click actions, and a calendar for submissions and follow-ups. Search
+uses company, role/title, and posting ID with relevance-first results while
+excluding descriptions and notes:
 
 <table>
 <tr>

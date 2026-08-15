@@ -63,6 +63,16 @@ const tableHeadRule = css.match(/\.applications-table__head\s*\{([^}]*)\}/)?.[1]
 const tableBodyRule = css.match(/\.applications-table__body\s*\{([^}]*)\}/)?.[1] ?? "";
 assert.doesNotMatch(tableHeadRule, /scrollbar-gutter:\s*stable/, "the table header does not reserve an empty scrollbar strip");
 assert.doesNotMatch(tableBodyRule, /scrollbar-gutter:\s*stable/, "the table body does not reserve an empty scrollbar strip");
+assert.doesNotMatch(
+  tableBodyRule,
+  /scrollbar-(?:width|color):/,
+  "the table does not force Firefox into a permanently visible physical scrollbar"
+);
+assert.doesNotMatch(
+  css,
+  /\.applications-table__body::-(?:webkit-)?scrollbar/,
+  "the table adds no vendor-specific scrollbar chrome beyond the inspector rail"
+);
 assert.match(
   tableHeadRule,
   /padding-right:\s*var\(--applications-scrollbar-width,\s*0px\)/,
