@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   appFitVerdict,
   applicationActivityDate,
+  applicationSearchRank,
   fitAssessmentRank,
   fitAssessmentRunLabel,
   fitAssessmentVerdictLabel,
@@ -149,6 +150,51 @@ assert.deepEqual(
   ]).entries()],
   [["app-req", "2024-1180"], ["app-none", ""]],
   "search reads one derived id per application, including an explicit empty for records without one"
+);
+
+const exactCompanyRank = applicationSearchRank(application({
+  company: "Docusign",
+  role: "Software Engineer"
+}), "docusign", "");
+const companyPrefixRank = applicationSearchRank(application({
+  company: "Docusign",
+  role: "Software Engineer"
+}), "docu", "");
+const postingIdRank = applicationSearchRank(application({
+  company: "Example Corp",
+  role: "Software Engineer"
+}), "4452", "4452092520");
+const companySubstringRank = applicationSearchRank(application({
+  company: "Acme Docusign Services",
+  role: "Software Engineer"
+}), "docu", "");
+const roleRank = applicationSearchRank(application({
+  company: "Example Corp",
+  role: "Document Systems Engineer"
+}), "docu", "");
+assert.ok(
+  exactCompanyRank !== null
+    && companyPrefixRank !== null
+    && postingIdRank !== null
+    && companySubstringRank !== null
+    && roleRank !== null
+    && exactCompanyRank > companyPrefixRank
+    && companyPrefixRank > postingIdRank
+    && postingIdRank > companySubstringRank
+    && companySubstringRank > roleRank,
+  "identity search orders exact company, company prefix, posting id, company substring, then role/title matches"
+);
+const hiddenContentApplication = application({
+  company: "Example Corp",
+  role: "Software Engineer",
+  roleDescription: "Maintain document workflows.",
+  notes: "Ask about documentation ownership.",
+  jobDescription: "Document technical processes and code changes."
+});
+assert.equal(
+  applicationSearchRank(hiddenContentApplication, "docu", ""),
+  null,
+  "identity search excludes descriptions and notes"
 );
 
 console.log("application display probes: passed");

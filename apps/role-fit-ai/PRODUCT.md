@@ -150,7 +150,15 @@ link, Source provenance, categorical Fit verdict and rationale, always-
 present Job activity, and the saved job posting/resume/cover/additional-document
 packet. Field edits open Application Detail or Prepare; the row menu retains
 quick stage movement. Mark as unrelated detaches
-one record atomically without deleting either history; Merge accidental duplicate
+one record atomically without deleting either history. Tracker search defaults
+to visible application identity — company, role/title, and posting ID — and
+orders active-query table results by exact company, company prefix, posting ID,
+company substring, then role/title relevance before the selected column sort.
+Descriptions and notes are excluded; Table and Calendar share the same field
+contract. The desktop search, lifecycle filter, and Table/Calendar controls
+share one height and top alignment. Table pagination remains present for empty
+result sets so the table workspace and inspector rail retain stable vertical
+bounds. Merge accidental duplicate
 keeps the current record only after a destructive confirmation. A Skipped
 decision uses its decision date for tracker chronology and appears in All,
 Inactive, and Skipped filters, but it never contributes to submitted counts,

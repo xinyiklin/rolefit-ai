@@ -61,15 +61,29 @@
 }
 
 .workspace-toolbar--tracker {
+  --tracker-control-height: 34px;
+
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
+  align-items: stretch;
   gap: var(--s4);
   overflow: visible;
+}
+
+.workspace-toolbar--tracker .workspace-search,
+.workspace-toolbar--tracker .pipeline-filters,
+.workspace-toolbar--tracker .view-switch {
+  height: var(--tracker-control-height);
 }
 
 .workspace-toolbar--tracker .workspace-search {
   width: 100%;
   min-width: 0;
+}
+
+.workspace-toolbar--tracker .pipeline-filter-menu-wrap,
+.workspace-toolbar--tracker .pipeline-filter {
+  height: 100%;
 }
 
 .workspace-toolbar__controls {
@@ -626,6 +640,8 @@
 .applications-table__head {
   overflow: hidden;
   padding-right: var(--applications-scrollbar-width, 0px);
+  background: var(--card-soft);
+  box-shadow: inset 0 -1px 0 var(--hairline);
 }
 
 .applications-table__body {
@@ -635,8 +651,6 @@
   overflow: auto;
   min-height: 0;
   overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
 }
 
 /* When a scrollbar is present, paint its track under the sticky month band so
@@ -647,16 +661,6 @@
     var(--paper-deep) 0 var(--applications-month-divider-height),
     var(--card-elev) var(--applications-month-divider-height) 100%
   );
-}
-
-.applications-table__body::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-.applications-table__body::-webkit-scrollbar-thumb {
-  background: var(--hairline-strong);
-  border-radius: var(--r-pill);
 }
 
 .applications-table__row {
@@ -703,7 +707,9 @@ button.applications-table__row {
   cursor: pointer;
 }
 
-.applications-table__row:first-child { border-top: 0; }
+.applications-table__row:first-child {
+  border-top: 0;
+}
 
 /* Frozen by structure rather than by `position: sticky` — it lives outside the
    scroller now. The columns it labels are sortable, which is exactly what a
@@ -711,7 +717,6 @@ button.applications-table__row {
 .applications-table__row--head {
   min-height: 36px;
   background: var(--card-soft);
-  border-bottom: 1px solid var(--hairline);
 }
 
 /* Eyebrow: small uppercase, faint, tracked — shared by table headers, column heads, weekday row */
@@ -3608,6 +3613,15 @@ button.table-sort svg {
 }
 
 @media (pointer: coarse) {
+  .workspace-toolbar--tracker {
+    /* The filter frame consumes 2px, leaving each segment a 44px hit target. */
+    --tracker-control-height: 46px;
+  }
+
+  .workspace-toolbar--tracker .view-switch {
+    padding-block: 0;
+  }
+
   .activity-filter-menu__item,
   .view-switch {
     min-height: 44px;

@@ -585,7 +585,15 @@ controls, and one Table / Calendar switch. Filter labels stay plain and counts
 live inside the drill-down menu; the page does not grow a second summary or
 "Up next" surface above the work. Table mode groups the chronological default
 under month dividers and keeps the selected application in the right inspector.
-Calendar mode reuses the same query and lifecycle filter state.
+Search defaults to visible identity fields — company, role/title, and posting
+ID — and ranks active-query table results by exact company, company prefix,
+posting ID, company substring, then role/title before the selected column sort.
+Descriptions and notes are excluded. Active searches use a flat
+relevance-ordered list; clearing the query restores chronological month groups.
+Calendar reuses the same query and lifecycle filter state. On desktop, search,
+lifecycle filters, and the view switch share one control height and top edge.
+The table pagination footer stays visible for empty results, preserving the
+table-and-inspector height register.
 The inspector mirrors Application Detail's information ownership without
 repeating its form: stage and governing date sit in the identity line; key dates,
 an available posting ID with its source label, and Source are read-only; Fit reuses the same two-column verdict-and-rationale
@@ -666,8 +674,12 @@ rather than four buttons. Nothing in the row scrolls or crops; see
 Long chronological tables group rows under month dividers: a
 `.table-eyebrow` month label pinned to the visible left edge while the data
 columns scroll horizontally and to the top of the row viewport while the
-current month's rows scroll vertically. Its surface continues through the
-reserved scrollbar gutter, plus one hairline rule. The table reads as a logbook
+current month's rows scroll vertically. The table adds no local scrollbar width
+or vendor-specific thumb treatment beyond the inspector rail, allowing native
+overlay and auto-hide preferences in Firefox and Chromium-based browsers; both
+scrollports retain the enclosing studio surface's shared scrollbar color;
+when the platform supplies a physical scrollbar, the header reserves only its
+measured width so labels and rows remain aligned. The table reads as a logbook
 register, not a CRM grid.
 
 ## 6. Do's and Don'ts

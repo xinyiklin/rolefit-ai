@@ -39,6 +39,35 @@ update the owning guide and documentation in the same change.
 - `CONTINUITY.md` — monorepo decisions and handoff state. RoleFit's scoped
   ledger may hold app-only operational detail; never duplicate a fact in both.
 
+## Delivery Workflow
+
+Non-trivial work runs through the portable `product-delivery` workflow
+(Product Partner → Delivery Lead → Verifier) installed at
+`~/.agents/workflows/product-delivery/`. That package owns the process: the two
+exact user-approval gates, Change Request escalation, and honest verification
+reporting. Do not copy it here. This repo may strengthen it, never weaken it.
+
+- **Independent review:** after the implementer's own verification, one fresh
+  reviewer by default. Only the user may waive it for a specific change. If the
+  user asks for more reviewers, give a firm risk-based recommendation first,
+  then honor the request.
+- **Expect a second reviewer** for changes to `packages/engine` or
+  `packages/editor` that both apps consume, `.resume`/`.cover` schema or codec
+  behavior, AI prompt/sanitizer/provider defaults, and any version bump that
+  triggers a release workflow.
+- **Extra Change Request triggers** beyond the portable list: moving app code
+  into a package, changing the dependency direction, or any change that could
+  weaken evidence-grounded AI output or the local-only data posture.
+- **Task artifacts** live under `.agent-work/tasks/<task-id>/`; keep them local
+  while a task is active. Because this repo tracks its agent guidance *and*
+  `CONTINUITY.md`, commit the completed task folders that continuity references
+  with `[TASK <task-id>]`, so the ledger never points at missing local files.
+
+The seven workflow templates are building blocks, not mandatory files. A normal
+task uses Product Brief, Delivery Plan, Alignment Review, Implementation
+Report, and Verification Report; create a Decision Log or Change Request only
+when its trigger occurs.
+
 ## Workspace Ownership
 
 The dependency direction is:
@@ -167,6 +196,9 @@ Before changing code or project files:
 While working:
 
 - Keep changes tied to the request and its necessary cleanup.
+- Keep implementation scope literal. An improvement you notice but the request
+  does not require gets presented to the user and waits for approval, even in a
+  file you are already editing.
 - Make one responsibility-level extraction at a time and verify before stacking
   another structural change.
 - At the end of each coherent stage, review that stage's diff before continuing.
@@ -175,6 +207,14 @@ While working:
 - Surface actionable failures; do not add silent fallbacks or empty catches.
 - Ask before adding a dependency or changing schemas, provider defaults,
   deployment shape, public runtime exposure, or paid services.
+- Once a dependency change is approved, read the root `package.json`,
+  `package-lock.json`, and the affected workspace manifest for the runtime and
+  range policy already in force, then verify the current stable release from
+  npm or the maintainer's release notes — never choose a version from memory.
+  Prefer the latest compatible stable release, keep npm workspaces and the
+  existing range style, update the lockfile, and explain any deliberate pin to
+  an older or prerelease version. Engine changes must stay React-free on the
+  subpaths the Node server imports.
 
 ## Verification And Definition Of Done
 
