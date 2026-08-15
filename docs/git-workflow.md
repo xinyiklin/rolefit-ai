@@ -37,6 +37,15 @@ updates belong together when splitting them would leave the branch broken.
 - Keep unrelated agent-guide or documentation changes out of a code PR unless
   they describe the behavior or ownership changed by that PR.
 
+## Review and exact-head merge gate
+
+Complete implementer self-review and the fresh independent review required by
+`AGENTS.md` as separate checks. Before merge, record the PR head SHA and confirm
+it is the exact reviewed commit, required CI is green, GitHub reports the PR
+mergeable and conflict-free, and requested changes or unresolved threads are
+handled. Any new commit or conflict resolution requires fresh affected checks
+and a new exact-head review.
+
 ## Staging and safety
 
 - Inspect `git status --short` before staging; this repository often has
@@ -48,6 +57,10 @@ updates belong together when splitting them would leave the branch broken.
   as normal tracked files when they are part of the requested change.
 - Never force-push, amend, rebase, switch branches, or rewrite history without
   explicit authorization.
+
+After an authorized squash merge, verify the resulting base-branch commit and
+tree, update the local base branch with `git pull --ff-only`, and remove feature
+branches only when that cleanup was authorized and is safe for other work.
 
 ## Documentation, continuity, and releases
 
