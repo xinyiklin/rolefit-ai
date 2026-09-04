@@ -43,6 +43,17 @@ prioritize material, job-relevant fields and disclose the fields outside that
 pass. It does not automatically run a second assessment over edits the user may
 never accept.
 
+Settings > Guidance owns **Bold keywords in bullets**, on by default. Turned
+off, a bullet Resume Polish rewrites arrives unbolded: the prompt forbids
+bolding a bullet and the sanitizer strips `<b>` from the proposal regardless.
+Only bold is affected — italic and underline are untouched — and a difference
+that is only bold is then not an edit at all. On the default setting that same
+difference is an ordinary proposal, because removing bold is a real change when
+bold is allowed. Either way the preference governs only what Polish writes: a
+bullet Polish does not rewrite keeps its marks. Summary text is a bullet target
+and follows the same rule; skill lists are outside the preference, and entry
+titles are never Polish targets at all.
+
 **Accepting a proposal works the same way for both documents.** What is being
 decided differs and stays different — the resume proposes individual edits, the
 letter proposes one replacement — but the act does not. Each document's rail

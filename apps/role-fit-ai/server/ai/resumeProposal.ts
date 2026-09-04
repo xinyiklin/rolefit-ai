@@ -35,6 +35,10 @@ function text(value: unknown, max: number): string {
 }
 
 const PROMPT_TARGET_BUDGET = 42_000;
+// Only the first items in this window are eligible for examination. A longer
+// response records its tail as malformed, so truncation can never settle as
+// NO_CHANGES.
+const MAX_EXAMINED_CHANGES = 40;
 const JOB_TERM_STOP_WORDS = new Set([
   "and", "are", "for", "from", "have", "role", "that", "the", "this", "with", "you", "your"
 ]);
@@ -101,6 +105,7 @@ export function buildResumeProposalPrompts({
   scopeText,
   honestContext,
   customInstructions,
+  boldBulletKeywords = true,
   reasoningEffort
 }: {
   jobText: string;
@@ -108,6 +113,7 @@ export function buildResumeProposalPrompts({
   scopeText: string;
   honestContext: string;
   customInstructions: string;
+  boldBulletKeywords?: boolean;
   reasoningEffort?: unknown;
 }) {
   const targetSelection = selectPromptTargets(targets, jobText);
@@ -142,7 +148,9 @@ ${fenceUntrusted(clipForPrompt(customInstructions, 3_000, "user guidance")) || "
 Rules:
 - Return only targetId values from editable_targets.
 - replacement must be a complete replacement for currentText, not instructions or commentary.
-- Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines.
+${boldBulletKeywords
+  ? "- Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines."
+  : "- Preserve supported inline <b>, <i>, and <u> marks when relevant, except never use <b> in a bullet replacement; return no other markup or newlines."}
 - skill-list contains actual skills only. It may reorder, deduplicate, or surface skills already supported by the resume or candidate context.
 - Skill category labels are locked and never appear in editable_targets. Never replace a skill list with a category label.
 - A new skill may come only from the resume or candidate context, never merely from the job description.
@@ -169,6 +177,10 @@ function increment(counts: DropCounts, reason: ResumePolishWithheldReason): void
 
 function stripInlineMarks(value: string): string {
   return value.replace(/<\/?(?:b|i|u)>/gi, "").trim();
+}
+
+function stripBoldMarks(value: string): string {
+  return value.replace(/<\/?b>/gi, "").replace(/\s+/g, " ").trim();
 }
 
 function normalizedSkillText(value: string): string {
@@ -261,7 +273,8 @@ export function sanitizeResumeProposal(
   jobText: string,
   scopeText: string,
   honestContext: string,
-  omittedTargetCount = 0
+  omittedTargetCount = 0,
+  boldBulletKeywords = true
 ): ResumePolishWireResult {
   const source = raw && typeof raw === "object" && !Array.isArray(raw)
     ? raw as Record<string, unknown>
@@ -270,10 +283,13 @@ export function sanitizeResumeProposal(
   const rawChanges = Array.isArray(source.changes) ? source.changes : [];
   const counts: DropCounts = { UNSUPPORTED: 0, INVALID_TARGET: 0, UNCHANGED: 0, MALFORMED: 0 };
   if (!Array.isArray(source.changes)) counts.MALFORMED += 1;
+  if (rawChanges.length > MAX_EXAMINED_CHANGES) {
+    counts.MALFORMED += rawChanges.length - MAX_EXAMINED_CHANGES;
+  }
   const seenTargets = new Set<string>();
   const changes: ResumePolishWireChange[] = [];
 
-  for (const rawChange of rawChanges.slice(0, 40)) {
+  for (const rawChange of rawChanges.slice(0, MAX_EXAMINED_CHANGES)) {
     if (!rawChange || typeof rawChange !== "object" || Array.isArray(rawChange)) {
       increment(counts, "MALFORMED");
       continue;
@@ -290,12 +306,23 @@ export function sanitizeResumeProposal(
       continue;
     }
     const replacementRaw = change.replacement;
-    const replacement = text(replacementRaw, 1400);
-    if (!replacement || String(replacementRaw ?? "").length > 1400 || containsStructuredMarkup(replacementRaw)) {
+    const normalized = text(replacementRaw, 1400);
+    // A replacement carrying only inline marks ("<b></b>") passes the markup
+    // gate and would blank the field, so it is malformed for every target kind.
+    if (
+      !normalized
+      || !stripInlineMarks(normalized)
+      || String(replacementRaw ?? "").length > 1400
+      || containsStructuredMarkup(replacementRaw)
+    ) {
       increment(counts, "MALFORMED");
       continue;
     }
-    if (replacement === target.currentText) {
+    // Comparing both sides unbolded keeps a bold-only delta UNCHANGED, so turning
+    // the preference off never proposes a formatting-only edit.
+    const plainBullet = !boldBulletKeywords && target.kind === "bullet";
+    const replacement = plainBullet ? stripBoldMarks(normalized) : normalized;
+    if (replacement === (plainBullet ? stripBoldMarks(target.currentText) : target.currentText)) {
       increment(counts, "UNCHANGED");
       continue;
     }
@@ -315,11 +342,24 @@ export function sanitizeResumeProposal(
   const withheldReasons = (Object.entries(counts) as Array<[ResumePolishWithheldReason, number]>)
     .filter(([, count]) => count > 0)
     .map(([reason]) => reason);
-  const withheldCount = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  const droppedCount = Object.values(counts).reduce((sum, count) => sum + count, 0);
+  // UNCHANGED is a no-op, not a withholding, so it stays out of the count every
+  // surface renders as "withheld because it could not be verified". It remains in
+  // `reasons`, which is the diagnostic channel.
+  const withheldCount = droppedCount - counts.UNCHANGED;
   const requestedStatus = text(source.status, 20).toUpperCase();
+  const requestedStatusIsValid = VALID_STATUSES.has(requestedStatus);
+  // An all-UNCHANGED settle is not a withholding: the model returned the text
+  // already on the resume, so nothing was suppressed and nothing failed a check.
+  // A drop for any safety reason still reports WITHHELD.
+  const onlyUnchanged = counts.UNCHANGED > 0
+    && withheldCount === 0
+    && rawChanges.length <= MAX_EXAMINED_CHANGES
+    && requestedStatusIsValid;
   let status: ResumePolishStatus;
   if (changes.length) status = "PROPOSAL";
-  else if (rawChanges.length > 0 || withheldCount > 0 || requestedStatus === "WITHHELD") status = "WITHHELD";
+  else if (onlyUnchanged && requestedStatus !== "WITHHELD") status = "NO_CHANGES";
+  else if (rawChanges.length > 0 || droppedCount > 0 || requestedStatus === "WITHHELD") status = "WITHHELD";
   else status = VALID_STATUSES.has(requestedStatus) && requestedStatus === "NO_CHANGES" ? "NO_CHANGES" : "WITHHELD";
 
   const resultingGrounding = `${scopeText}\n${changes.map((change) => change.replacement).join("\n")}`;
@@ -348,6 +388,7 @@ export async function generateResumeProposal({
   jobText,
   honestContext,
   customInstructions,
+  boldBulletKeywords = true,
   signal
 }: {
   body: Record<string, unknown>;
@@ -356,6 +397,7 @@ export async function generateResumeProposal({
   jobText: string;
   honestContext: string;
   customInstructions: string;
+  boldBulletKeywords?: boolean;
   signal?: AbortSignal;
 }) {
   const targets = flattenResumeTargets(resumeScope as Parameters<typeof flattenResumeTargets>[0]);
@@ -369,6 +411,7 @@ export async function generateResumeProposal({
     scopeText,
     honestContext,
     customInstructions,
+    boldBulletKeywords,
     reasoningEffort
   });
   const stats: AttemptStats = {};
@@ -388,7 +431,8 @@ export async function generateResumeProposal({
       jobText,
       scopeText,
       honestContext,
-      prompts.omittedCount
+      prompts.omittedCount,
+      boldBulletKeywords
     ),
     provider,
     model,

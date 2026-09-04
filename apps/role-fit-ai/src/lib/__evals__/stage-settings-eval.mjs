@@ -247,4 +247,28 @@ assert.deepEqual(
   "empty enum values fail closed instead of surviving as undeclared candidate facts"
 );
 
+// Bold-in-bullets is default-on and must stay allowlisted: dropping it from
+// PERSISTED_SETTING_KEYS or from the boolean scrub is invisible to the server
+// probes, and the user's checkbox would simply stop surviving a reload.
+assert.equal(
+  materializeAiSettings({}).boldBulletKeywords,
+  true,
+  "an unset bold preference defaults to on"
+);
+assert.equal(
+  materializeAiSettings({ boldBulletKeywords: false }).boldBulletKeywords,
+  false,
+  "an explicit off preference is preserved through materialization"
+);
+assert.deepEqual(
+  normalizeSettings({ boldBulletKeywords: true }),
+  { boldBulletKeywords: true },
+  "the bold preference is allowlisted for persistence"
+);
+assert.deepEqual(
+  normalizeSettings({ boldBulletKeywords: "no" }),
+  {},
+  "a non-boolean bold preference fails closed rather than persisting"
+);
+
 console.log("stage-settings probes passed");

@@ -48,6 +48,9 @@ export type PersistedSettings = {
   customInstructions?: string;
   // Per-drafting-stage overrides. A missing or blank entry inherits customInstructions.
   stageCustomInstructions?: Partial<Record<AiStageId, string>>;
+  // Whether Resume Polish may bold keywords inside a bullet it rewrites. The
+  // prompt asks and the server sanitizer enforces.
+  boldBulletKeywords?: boolean;
   // Current persisted name; preview data is rewritten explicitly when this
   // contract changes rather than accepted through runtime aliases.
   runFitAssessment?: boolean;
@@ -88,6 +91,7 @@ const PERSISTED_SETTING_KEYS = [
   "honestContext",
   "customInstructions",
   "stageCustomInstructions",
+  "boldBulletKeywords",
   "runFitAssessment",
   "autoPolishResume",
   "resumeAutoPolishThreshold",
@@ -152,7 +156,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["runFitAssessment", "autoPolishResume", "autoPolishCoverLetter"] as const) {
+  for (const key of ["boldBulletKeywords", "runFitAssessment", "autoPolishResume", "autoPolishCoverLetter"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);

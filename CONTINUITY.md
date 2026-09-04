@@ -3,6 +3,22 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-03
+
+- [USER+CODE+TOOL] Resume Polish now has a default-on **Bold keywords in
+  bullets** preference under Settings > Guidance. The persisted boolean travels
+  with the proposal request and its freshness fingerprint; when disabled, the
+  prompt forbids bullet bold and the server strips `<b>` from rewritten bullets
+  while preserving italic, underline, and Skills-list formatting. The sanitizer
+  rejects non-boolean request values and mark-only replacements, treats a fully
+  examined all-UNCHANGED response as No changes only when the provider status is
+  valid and not Withheld, excludes echoes from the verification-failure count,
+  and records changes beyond the 40-item examination window as malformed safety
+  drops. Focused settings and direct sanitizer regressions plus application,
+  landing, and desktop builds pass under Node 24.18.0. The managed shell blocks
+  listener-backed checks with `listen EPERM`; exact-head GitHub CI remains the
+  publication gate. Browser visual QA and live-provider evaluation were not run.
+
 ## 2026-08-15
 
 - [USER+CODE+TOOL] The Applications table now uses the same scrollbar mechanics

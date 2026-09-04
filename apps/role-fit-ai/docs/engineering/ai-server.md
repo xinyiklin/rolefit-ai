@@ -357,7 +357,32 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   (`<b>`/`<i>`/`<u>`, no attributes) because formatted bullets carry those
   tokens in `currentText` and a faithful suggestion echoes them; all other
   tags, LaTeX commands, and newlines still reject. Resume-specific proposal
-  sanitization lives beside its wire contract in `resumeProposal.ts`.
+  sanitization lives beside its wire contract in `resumeProposal.ts`, which also
+  rejects a replacement whose entire body is inline marks (`<b></b>`) — balanced,
+  so the shared tag gate passes it, but accepting it would blank the field. It
+  owns the `boldBulletKeywords` preference: when it is off the prompt keeps `<b>` in
+  the preserve list but forbids it in a bullet replacement, and the sanitizer
+  strips `<b>` from every `bullet` replacement, so a model that bolds anyway
+  still yields an unbolded bullet. Only bold is affected; `<i>` and `<u>` pass
+  through untouched. Scoping matters in both layers — a rule that dropped
+  `<b>` from the preserve list outright would invite the model to strip a skill
+  list's existing bold, which nothing downstream would catch. An absent flag
+  means an older client and keeps the marks; a present non-boolean is rejected
+  with 400 rather than coerced, because either coercion would silently decide a
+  preference the user owns. Both sides of the unchanged comparison are stripped
+  the same way, so turning the preference off never proposes a bold-only edit.
+  Those drops settle as `NO_CHANGES`, not `WITHHELD`, when the provider supplied
+  a valid non-Withheld status: UNCHANGED means the model returned text the resume
+  already has. An explicit `WITHHELD` status remains withheld, and one safety
+  drop beside an echo also raises the withheld card. `withheld.count` carries
+  only the safety drops, so the rail's "could not be verified" line never counts
+  an echo; `withheld.reasons` still lists UNCHANGED as the diagnostic record. A
+  response longer than the examined window can never settle as `NO_CHANGES`,
+  because its tail was never read; each beyond-window change is recorded as a
+  malformed safety drop. Eligible items are examined in order until 12 safe
+  edits fill the wire cap. `stripBoldMarks` is
+  case-insensitive and re-collapses whitespace on purpose: the markup gate
+  accepts `<B>`, and removing a tag can join the spaces around it.
   Hit-keyword grounding: a suggestion whose claimed JD
   keyword appears in `proposedText` but whose significant words exist
   nowhere in the scope text or honest context is dropped

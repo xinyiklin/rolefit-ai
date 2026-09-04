@@ -40,6 +40,7 @@ export function useAiSettings() {
   const [stageCustomInstructions, setStageCustomInstructions] = useState<Partial<Record<StageId, string>>>(
     () => saved.stageCustomInstructions ?? {}
   );
+  const [boldBulletKeywords, setBoldBulletKeywords] = useState(saved.boldBulletKeywords ?? true);
   const [runFitAssessment, setRunFitAssessment] = useState(saved.runFitAssessment ?? true);
   const [autoPolishResume, setAutoPolishResume] = useState(saved.autoPolishResume ?? false);
   const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
@@ -79,6 +80,7 @@ export function useAiSettings() {
       setHonestContext(next.honestContext ?? "");
       setCustomInstructions(next.customInstructions ?? "");
       setStageCustomInstructions(next.stageCustomInstructions ?? {});
+      setBoldBulletKeywords(next.boldBulletKeywords ?? true);
       setRunFitAssessment(next.runFitAssessment ?? true);
       setAutoPolishResume(next.autoPolishResume ?? false);
       setResumeAutoPolishThreshold(next.resumeAutoPolishThreshold ?? "REASONABLE");
@@ -125,6 +127,7 @@ export function useAiSettings() {
       honestContext,
       customInstructions,
       stageCustomInstructions,
+      boldBulletKeywords,
       runFitAssessment: runFitAssessment,
       autoPolishResume,
       resumeAutoPolishThreshold,
@@ -155,6 +158,7 @@ export function useAiSettings() {
     honestContext,
     customInstructions,
     stageCustomInstructions,
+    boldBulletKeywords,
     runFitAssessment,
     autoPolishResume,
     resumeAutoPolishThreshold,
@@ -251,6 +255,7 @@ export function useAiSettings() {
     setHonestContext("");
     setCustomInstructions("");
     setStageCustomInstructions({});
+    setBoldBulletKeywords(true);
     setRunFitAssessment(true);
     setAutoPolishResume(false);
     setResumeAutoPolishThreshold("REASONABLE");
@@ -274,6 +279,8 @@ export function useAiSettings() {
     copyStage,
     honestContext,
     setHonestContext,
+    boldBulletKeywords,
+    setBoldBulletKeywords,
     runFitAssessment,
     setRunFitAssessment,
     autoPolishResume,

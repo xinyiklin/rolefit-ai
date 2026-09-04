@@ -84,6 +84,8 @@ type SettingsDialogProps = {
   workspacePreferencesStatus: WorkspacePreferencesStatus;
 
   // ----- Guidance -----
+  boldBulletKeywords: boolean;
+  onBoldBulletKeywordsChange: (value: boolean) => void;
   honestContext: string;
   onHonestContextChange: (value: string) => void;
   honestContextRef?: Ref<HTMLTextAreaElement>;
@@ -141,6 +143,8 @@ export function SettingsDialog({
   experienceProfile,
   onExperienceProfileChange,
   workspacePreferencesStatus,
+  boldBulletKeywords,
+  onBoldBulletKeywordsChange,
   honestContext,
   onHonestContextChange,
   honestContextRef,
@@ -358,7 +362,7 @@ export function SettingsDialog({
                 </label>
 
                 <label className="field field--inline">
-                  <span><strong>Authorized to work in the U.S.</strong></span>
+                  <span><strong>U.S. work authorization</strong></span>
                   <select
                     className="select--compact"
                     value={legallyAuthorizedToWork}
@@ -521,6 +525,23 @@ export function SettingsDialog({
                     placeholder="e.g., aim for one page; lead each bullet with a metric; use British spelling; don't add a summary section."
                     rows={8}
                   />
+                </label>
+
+                {/* Resume Polish only, so it sits below the guidance the intro
+                    describes and under its own heading rather than that intro. */}
+                <div className="menu-subhead">
+                  <span className="menu-subhead__title">Resume Polish</span>
+                </div>
+                <label className="check-row">
+                  <input
+                    type="checkbox"
+                    checked={boldBulletKeywords}
+                    onChange={(event) => onBoldBulletKeywordsChange(event.target.checked)}
+                  />
+                  <span>
+                    <strong>Bold keywords in bullets</strong>
+                    <small>Off keeps bullets Resume Polish rewrites unbolded.</small>
+                  </span>
                 </label>
               </>
             ) : null}

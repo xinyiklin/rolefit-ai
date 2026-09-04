@@ -80,8 +80,17 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
   independently. A category phrase or unsupported new list item is dropped
   without erasing safe siblings.
-  Optional summary/gap failures never erase safe siblings, while an all-drop
-  returns Withheld rather than a successful empty proposal.
+  Optional summary/gap failures never erase safe siblings, while an all-drop for
+  any safety reason returns Withheld rather than a successful empty proposal.
+  UNCHANGED is the one exception, because it is not a withholding: the model
+  returned text the resume already has, so an all-UNCHANGED settle with a valid
+  non-Withheld provider status reports No changes and the wire payload still
+  records the reason. An explicit Withheld status remains Withheld. A single
+  safety drop alongside an echo is enough to return Withheld, and
+  `withheld.count` carries only those safety drops so a rendered "could not be
+  verified" count never includes an echo. Changes beyond the examined response
+  window count as malformed safety drops rather than disappearing from the
+  diagnostic payload.
 - Polish failures fail plainly without changing the document.
   Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
