@@ -546,8 +546,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   an intention rather than a recorded decision, and "Not applying"/"Applied"
   are too close to tell apart in the Stage column. "Passed" is reserved: beside
   Interviewing and Offer it reads as passing a round. The stored status key
-  remains `not_applying`. Stage changes are forward-only; a submitted record
-  cannot be changed into Skipped or moved back to an earlier stage.
+  remains `not_applying`. The row context menu separates Active
+  (Applied, Interviewing, Offer) from Inactive (Skipped, Rejected, Withdrawn),
+  and allows movement in either direction. The checked current stage is
+  disabled. A later-Skipped application retains its historical materials, while
+  a Skipped record without an application date remains job-only.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
   small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
   hairline-separated groups. Prepare is first and selected by default. The

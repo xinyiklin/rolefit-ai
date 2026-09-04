@@ -6,8 +6,8 @@ function monthBucket(date: Date) {
 }
 
 export function isSubmittedApplication(application: Application) {
-  // Status is authoritative if a legacy Skipped record still carries appliedAt.
-  return application.status !== "not_applying" && Boolean(parseDate(application.appliedAt));
+  // A later decision to skip does not erase a prior employer submission.
+  return Boolean(parseDate(application.appliedAt));
 }
 
 export function monthlyApplicationsSent(applications: Application[]) {

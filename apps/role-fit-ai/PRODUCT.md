@@ -454,10 +454,13 @@ disappears into the task. Quiet competence, not salesmanship.
     explicit reload choice when local and external field edits conflict.
     Update mode names the exact saved record persistently;
     a candidate source that appears materially different pauses before provider
-    analysis and can proceed only as a new preparation. Status changes are
-    forward-only: submitted history cannot become Skipped or return to an
-    earlier stage. Skipped records remain job-only and cannot acquire an
-    application date or sent-document artifacts.
+    analysis and can proceed only as a new preparation. The Applications row
+    menu groups Applied, Interviewing, and Offer as Active, and Skipped,
+    Rejected, and Withdrawn as Inactive; users may move the same record between
+    any of those stages. Moving an applied record to Skipped preserves its
+    application date and saved materials. A Skipped record without an
+    application date remains job-only and gains one only when moved to an
+    active stage; stage changes never invent documents.
 11. Preserve safe extension intake: a claimed extension posting requests
     AI-backed Job analysis and stops on Prepare; it never implicitly starts
     resume Polish. A failed analysis leaves the deterministic brief editable and

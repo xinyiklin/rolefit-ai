@@ -11,6 +11,7 @@ export type RowMenuItem =
       icon?: LucideIcon;
       dotClass?: string;
       active?: boolean;
+      disabled?: boolean;
       onSelect: () => void;
       danger?: boolean;
     }
@@ -49,7 +50,7 @@ export function TrackerRowMenu({ x, y, items, onClose }: TrackerRowMenuProps) {
   // came from clicking another control (focus already moved somewhere real).
   useEffect(() => {
     const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-    menuRef.current?.querySelector<HTMLButtonElement>("button")?.focus();
+    menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
     return () => {
       const active = document.activeElement;
       if (opener && opener.isConnected && (active === null || active === document.body)) {
@@ -70,7 +71,7 @@ export function TrackerRowMenu({ x, y, items, onClose }: TrackerRowMenuProps) {
         return;
       }
       if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-      const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []);
+      const buttons = Array.from(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? []);
       if (!buttons.length) return;
       event.preventDefault();
       const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
@@ -115,6 +116,7 @@ export function TrackerRowMenu({ x, y, items, onClose }: TrackerRowMenuProps) {
             role="menuitem"
             key={index}
             className={`row-menu__item ${item.danger ? "row-menu__item--danger" : ""} ${item.active ? "is-active" : ""}`}
+            disabled={item.disabled}
             onClick={() => {
               item.onSelect();
               onClose();

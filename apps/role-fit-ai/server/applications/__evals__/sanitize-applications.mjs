@@ -280,19 +280,19 @@ try {
   }]).length !== 0) {
     failures.push("a Skipped decision without a canonical decision date was accepted");
   }
-  if (passedJob?.appliedAt !== undefined || passedJob?.resumeUsed !== undefined) {
-    failures.push("Not applying retained application-attempt fields");
+  if (passedJob?.appliedAt !== "2026-07-28T10:00:00.000Z" || passedJob?.resumeUsed !== "tailored") {
+    failures.push("a later Skipped application lost application-attempt fields");
   }
-  if (passedJob?.resumeArtifacts !== undefined || passedJob?.coverLetterArtifacts !== undefined) {
-    failures.push("Not applying retained sent-document artifacts");
+  if (!passedJob?.resumeArtifacts || !passedJob?.coverLetterArtifacts) {
+    failures.push("a later Skipped application lost sent-document artifacts");
   }
-  if (passedJob?.attachments !== undefined) {
-    failures.push("Not applying retained additional application documents");
+  if (!passedJob?.attachments?.length) {
+    failures.push("a later Skipped application lost additional application documents");
   }
   const storedJson = JSON.parse(await readFile(applicationsFilePath(workspace), "utf8"));
   const storedPass = storedJson.applications.find((entry) => entry.id === "passed-job");
-  if (Object.hasOwn(storedPass ?? {}, "appliedAt")) {
-    failures.push("Not applying persisted an appliedAt field");
+  if (storedPass?.appliedAt !== "2026-07-28T10:00:00.000Z") {
+    failures.push("a later Skipped application did not persist its application date");
   }
 
   let overflowRejected = false;
@@ -520,23 +520,26 @@ try {
     failures.push("a retired full-snapshot mutation request was accepted");
   }
 
-  const forbiddenStatusRewrite = sanitizeApplications([{
+  const skippedApplication = sanitizeApplications([{
     ...serverSnapshot[0],
     status: "not_applying",
+    appliedAt: revisionA,
     notApplyingAt: revisionBNext,
     updatedAt: revisionBNext
   }]);
-  let forbiddenStatusRewriteRejected = false;
+  let skippedApplicationAccepted = false;
   try {
-    reconcileApplicationMutations(serverSnapshot, forbiddenStatusRewrite, [
+    const reconciledSkippedApplication = reconcileApplicationMutations(serverSnapshot, skippedApplication, [
       { id: "record-a", operation: "upsert", baseUpdatedAt: revisionA }
     ]);
-  } catch (error) {
-    forbiddenStatusRewriteRejected =
-      error instanceof ApplicationsStorageError && error.status === 400;
+    skippedApplicationAccepted =
+      reconciledSkippedApplication[0]?.status === "not_applying"
+      && reconciledSkippedApplication[0]?.appliedAt === revisionA;
+  } catch {
+    skippedApplicationAccepted = false;
   }
-  if (!forbiddenStatusRewriteRejected) {
-    failures.push("the server accepted a client-side rewrite from Applied to Skipped");
+  if (!skippedApplicationAccepted) {
+    failures.push("the server did not preserve an applied record when it moved to Skipped");
   }
 
   const advancedServerSnapshot = sanitizeApplications([{

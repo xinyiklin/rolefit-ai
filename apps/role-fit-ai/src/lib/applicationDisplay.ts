@@ -29,6 +29,15 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   inactive: ["not_applying", "rejected", "withdrawn"]
 };
 
+export const TRACKER_STAGE_MENU_GROUPS: readonly {
+  id: ApplicationActivityGroup;
+  label: string;
+  statuses: readonly ApplicationStatus[];
+}[] = [
+  { id: "active", label: "Active", statuses: ACTIVITY_STATUS_GROUPS.active },
+  { id: "inactive", label: "Inactive", statuses: ACTIVITY_STATUS_GROUPS.inactive }
+];
+
 export type ApplicationActivityFilter =
   | "all"
   | ApplicationActivityGroup
@@ -44,6 +53,14 @@ export function activityGroupForFilter(
 
 export function isInactiveApplication(app: Pick<Application, "status">): boolean {
   return app.status === "not_applying" || app.status === "rejected" || app.status === "withdrawn";
+}
+
+// Skipped is both the job-only decision made before applying and a later
+// inactive stage. An application date is the durable boundary between them.
+export function isJobOnlySkippedApplication(
+  app: Pick<Application, "status" | "appliedAt">
+): boolean {
+  return app.status === "not_applying" && !app.appliedAt;
 }
 
 export function matchesActivityFilter(

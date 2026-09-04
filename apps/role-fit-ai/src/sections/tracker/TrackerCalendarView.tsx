@@ -45,7 +45,7 @@ function applicationEvents(applications: Application[]): CalendarEvent[] {
     const events: CalendarEvent[] = [];
     const applied = parseDate(app.appliedAt);
     const followup = parseDate(app.followupAt);
-    if (app.status !== "not_applying" && applied && !Number.isNaN(applied.getTime())) {
+    if (applied && !Number.isNaN(applied.getTime())) {
       events.push({
         id: `${app.id}-applied`,
         app,
