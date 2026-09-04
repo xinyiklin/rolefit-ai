@@ -42,6 +42,7 @@ import {
   appFitVerdict,
   applicationActivityDate,
   fitAssessmentRunLabel,
+  isJobOnlySkippedApplication,
   postingIdentity,
   safeExternalUrl
 } from "../lib/applicationDisplay";
@@ -463,9 +464,7 @@ export function ApplicationModal({
       workAuth: form.workAuth.trim(),
       jobUrl: form.jobUrl.trim(),
       appliedAt:
-        statusOverride === "not_applying"
-          ? undefined
-          : toIso(form.appliedAt) || base.appliedAt || (statusOverride === "applied" ? now : undefined),
+        toIso(form.appliedAt) || base.appliedAt || (statusOverride !== "not_applying" ? now : undefined),
       notApplyingAt:
         statusOverride === "not_applying"
           ? toIso(form.notApplyingAt) || base.notApplyingAt || now
@@ -486,7 +485,7 @@ export function ApplicationModal({
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
       updatedAt: now
     };
-    const persisted = statusOverride === "not_applying"
+    const persisted = isJobOnlySkippedApplication(next)
       ? withoutSubmittedApplicationArtifacts(next)
       : next;
     if (recordWasRemoved) {

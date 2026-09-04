@@ -5,6 +5,7 @@ import {
   ACTIVITY_STATUS_GROUPS,
   BOARD_STATUSES,
   STATUS_LABEL,
+  TRACKER_STAGE_MENU_GROUPS,
   applicationActivityDate,
   applicationSearchRank,
   activityGroupForFilter,
@@ -26,7 +27,6 @@ import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
 import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
-import { applicationStatusOptions } from "../../lib/applicationStatusTransitions";
 
 export type TrackerView = "table" | "calendar";
 
@@ -514,15 +514,18 @@ export function TrackerTab({
           });
         }
         items.push({ kind: "separator" });
-        items.push({ kind: "header", label: "Move to stage" });
-        for (const status of applicationStatusOptions(app.status)) {
-          items.push({
-            kind: "action",
-            label: STATUS_LABEL[status],
-            dotClass: `stage-dot stage-dot--${status}`,
-            active: app.status === status,
-            onSelect: () => onUpdateStatus(app.id, status)
-          });
+        for (const group of TRACKER_STAGE_MENU_GROUPS) {
+          items.push({ kind: "header", label: group.label });
+          for (const status of group.statuses) {
+            items.push({
+              kind: "action",
+              label: STATUS_LABEL[status],
+              dotClass: `stage-dot stage-dot--${status}`,
+              active: app.status === status,
+              disabled: app.status === status,
+              onSelect: () => onUpdateStatus(app.id, status)
+            });
+          }
         }
         items.push({ kind: "separator" });
         items.push({

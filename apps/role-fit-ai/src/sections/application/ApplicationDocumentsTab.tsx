@@ -19,7 +19,7 @@ import {
   applicationDocumentAvailability,
   type ApplicationDocumentAvailability
 } from "../../../shared/applicationDocumentContract.ts";
-import { safeExternalUrl } from "../../lib/applicationDisplay";
+import { isJobOnlySkippedApplication, safeExternalUrl } from "../../lib/applicationDisplay";
 
 type ApplicationDocumentsTabProps = {
   application: Application | null;
@@ -109,7 +109,7 @@ function DocumentPane({
   kind,
   artifacts,
   availability,
-  jobOnly,
+  documentsLocked,
   busy,
   uploadRef,
   downloadBase,
@@ -122,7 +122,7 @@ function DocumentPane({
   kind: ApplicationDocumentKind;
   artifacts?: DocumentArtifacts;
   availability: ApplicationDocumentAvailability;
-  jobOnly: boolean;
+  documentsLocked: boolean;
   busy: boolean;
   uploadRef: RefObject<HTMLInputElement | null>;
   downloadBase: string;
@@ -155,7 +155,7 @@ function DocumentPane({
             aria-label={`Upload ${title.toLowerCase()}`}
             title="Upload"
             onClick={() => uploadRef.current?.click()}
-            disabled={!application || jobOnly || busy}
+            disabled={!application || documentsLocked || busy}
           >
             <Upload size={13} aria-hidden="true" />
           </button>
@@ -166,7 +166,7 @@ function DocumentPane({
               aria-label={`Remove ${title.toLowerCase()}`}
               title="Remove"
               onClick={() => onRemove(kind)}
-              disabled={jobOnly || busy}
+              disabled={documentsLocked || busy}
             >
               <Trash2 size={13} aria-hidden="true" />
             </button>
@@ -243,7 +243,8 @@ export function ApplicationDocumentsTab({
   const coverArtifacts = application?.coverLetterArtifacts;
   const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
   const coverAvailability = applicationDocumentAvailability(coverArtifacts);
-  const jobOnly = application?.status === "not_applying";
+  const jobOnly = application ? isJobOnlySkippedApplication(application) : false;
+  const documentsLocked = application?.status === "not_applying";
 
   function setOperationBusy(next: boolean) {
     setBusy(next);
@@ -260,10 +261,12 @@ export function ApplicationDocumentsTab({
       await alert({ title: "Save application first", message: "Save the application before uploading a document." });
       return;
     }
-    if (jobOnly) {
+    if (documentsLocked) {
       await alert({
-        title: "Skipped job",
-        message: "Start a new application attempt before saving application documents."
+        title: "Skipped application",
+        message: jobOnly
+          ? "Move this job to an active stage before saving application documents."
+          : "Move this application to an active stage before changing its saved documents."
       });
       return;
     }
@@ -376,7 +379,11 @@ export function ApplicationDocumentsTab({
     <section className="application-form application-form--wide">
       {jobOnly ? (
         <p className="application-muted">
-          Skipped jobs keep job details only. Start a new application attempt to save application documents.
+          Skipped jobs keep job details only. Move this job to an active stage to save application documents.
+        </p>
+      ) : documentsLocked ? (
+        <p className="application-muted">
+          Saved materials remain available while this application is skipped. Move it to an active stage to change them.
         </p>
       ) : null}
       <div className="application-doc-grid">
@@ -386,7 +393,7 @@ export function ApplicationDocumentsTab({
           kind="resume"
           artifacts={resumeArtifacts}
           availability={resumeAvailability}
-          jobOnly={jobOnly}
+          documentsLocked={documentsLocked}
           busy={busy}
           uploadRef={resumeUploadRef}
           downloadBase={downloadBase}
@@ -400,7 +407,7 @@ export function ApplicationDocumentsTab({
           kind="cover"
           artifacts={coverArtifacts}
           availability={coverAvailability}
-          jobOnly={jobOnly}
+          documentsLocked={documentsLocked}
           busy={busy}
           uploadRef={coverUploadRef}
           downloadBase={downloadBase}
@@ -419,14 +426,14 @@ export function ApplicationDocumentsTab({
             type="file"
             accept={ATTACHMENT_ACCEPT}
             hidden
-            disabled={jobOnly}
+            disabled={documentsLocked}
             onChange={(event) => void upload("attachment", event)}
           />
           <button
             type="button"
             className="ghost-button is-compact"
             onClick={() => attachmentUploadRef.current?.click()}
-            disabled={!application || jobOnly || busy}
+            disabled={!application || documentsLocked || busy}
           >
             <Upload size={13} aria-hidden="true" /> Upload
           </button>
@@ -448,7 +455,7 @@ export function ApplicationDocumentsTab({
                   aria-label={`Remove ${attachment.label}`}
                   title="Remove"
                   onClick={() => void removeAttachment(attachment.fileName)}
-                  disabled={jobOnly || busy}
+                  disabled={documentsLocked || busy}
                 >
                   <Trash2 size={13} aria-hidden="true" />
                 </button>

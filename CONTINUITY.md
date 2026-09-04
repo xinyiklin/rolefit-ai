@@ -3,6 +3,19 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-04
+
+- [USER+CODE+TOOL] [TASK tracker-stage-menu-groups-20260904] The Applications row context menu now groups stages into
+  Active (Applied, Interviewing, Offer) and Inactive (Skipped, Rejected,
+  Withdrawn), and permits movement in either direction on the same record. A
+  formerly applied record retains its application date, saved documents, and
+  attachments when later marked Skipped; a Skipped record without an application
+  date remains job-only until reactivated. The full RoleFit gate passed all
+  builds, desktop probes, and 106 offline evaluations; the UI detector was
+  clear. An isolated browser pass verified visible grouping, disabled-current
+  behavior, enabled-only Arrow navigation, and Applied → Skipped → Applied
+  persistence while retaining the original application date.
+
 ## 2026-09-03
 
 - [USER+CODE+TOOL] Resume Polish now has a default-on **Bold keywords in

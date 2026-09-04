@@ -129,9 +129,10 @@ browser-side effects; components render them and App composes them.
   both advance it; a new commit invalidates earlier evidence before writing.
   Saving is always user initiated; no effect may write a document into an
   application. Fresh work has no document target, while restored update work
-  uses only its explicit id. A restored Skipped job remains job-only history
-  and cannot accept resume, cover-letter, or additional application-document
-  artifacts. Job URL or text matching
+  uses only its explicit id. A restored Skipped record without an application
+  date remains job-only history and cannot accept resume, cover-letter, or
+  additional application-document artifacts. A later-skipped application keeps
+  its historical material but cannot change it until reactivated. Job URL or text matching
   must never infer that target. `useApplicationAnswers` owns generation only: answer drafts stay in
   the current browser session for editing and copying and never create or update
   a tracker record.

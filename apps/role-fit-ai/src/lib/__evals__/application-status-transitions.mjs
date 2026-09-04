@@ -22,5 +22,6 @@ assert.deepEqual(
 assert.deepEqual(applicationStatusOptions("not_applying"), ["not_applying"]);
 assert.deepEqual(applicationStatusOptions("rejected"), ["rejected"]);
 assert.deepEqual(applicationStatusOptions("withdrawn"), ["withdrawn"]);
-assert.equal(applicationStatusTransitionAllowed("applied", "not_applying"), false);
-assert.equal(applicationStatusTransitionAllowed("rejected", "applied"), false);
+assert.equal(applicationStatusTransitionAllowed("applied", "not_applying"), true);
+assert.equal(applicationStatusTransitionAllowed("rejected", "applied"), true);
+assert.equal(applicationStatusTransitionAllowed("not_applying", "offer"), true);

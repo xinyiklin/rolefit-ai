@@ -471,7 +471,10 @@ export function useApplications() {
               ...a,
               status,
               updatedAt: now,
-              appliedAt: status === "applied" && !a.appliedAt ? now : a.appliedAt
+              appliedAt: status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
+              notApplyingAt: status === "not_applying" ? now : undefined,
+              notApplyingReason: status === "not_applying" ? a.notApplyingReason : undefined,
+              notApplyingNote: status === "not_applying" ? a.notApplyingNote : undefined
             }
           : a
       );

@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   appFitVerdict,
   applicationActivityDate,
+  isJobOnlySkippedApplication,
   applicationSearchRank,
   fitAssessmentRank,
   fitAssessmentRunLabel,
@@ -92,6 +93,20 @@ assert.equal(
   })),
   "2026-08-10T12:00:00.000Z",
   "skipped records display their decision date instead of an obsolete application date"
+);
+assert.equal(
+  isJobOnlySkippedApplication(application({ status: "not_applying", notApplyingAt: "2026-08-10T12:00:00.000Z" })),
+  true,
+  "a skipped record without an application date remains job-only"
+);
+assert.equal(
+  isJobOnlySkippedApplication(application({
+    status: "not_applying",
+    appliedAt: "2026-08-09T12:00:00.000Z",
+    notApplyingAt: "2026-08-10T12:00:00.000Z"
+  })),
+  false,
+  "a later-skipped application retains its application history"
 );
 
 const requisitionPosting = postingIdentity(application({

@@ -213,9 +213,11 @@ assert.match(postingOverlay, /<pre[^>]*tabIndex=\{0\}/);
 
 assert.ok(documentsTab.includes('aria-label="Job posting"'));
 assert.ok(documentsTab.includes("<JobPostingPane"));
-assert.ok(documentsTab.includes('application?.status === "not_applying"'));
+assert.ok(documentsTab.includes("isJobOnlySkippedApplication(application)"));
 assert.ok(documentsTab.includes("Skipped jobs keep job details only"));
-assert.match(documentsTab, /disabled=\{!application \|\| jobOnly \|\| busy\}/);
+assert.match(documentsTab, /disabled=\{!application \|\| documentsLocked \|\| busy\}/);
+assert.ok(tracker.includes("TRACKER_STAGE_MENU_GROUPS"));
+assert.ok(tracker.includes("disabled: app.status === status"));
 assert.match(
   documentsTab,
   /setOperationBusy\(true\)[\s\S]{0,900}?file\.text\(\)[\s\S]{0,1500}?setOperationBusy\(false\)/,

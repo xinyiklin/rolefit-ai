@@ -341,6 +341,8 @@ function sanitizeApplication(raw: unknown) {
 
   if (!inList(APPLICATION_STATUSES, r.status)) return null;
   const status = r.status;
+  const appliedAt = typeof r.appliedAt === "string" ? r.appliedAt : "";
+  const jobOnlySkipped = status === "not_applying" && !appliedAt;
   const notApplyingAt = status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
     ? r.notApplyingAt
     : undefined;
@@ -352,8 +354,8 @@ function sanitizeApplication(raw: unknown) {
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
   const jobUrl = typeof r.jobUrl === "string" ? r.jobUrl.slice(0, 2_000) : "";
-  const resumeArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
-  const coverLetterArtifacts = status === "not_applying" ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
+  const resumeArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
+  const coverLetterArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
   if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
 
   return {
@@ -369,7 +371,7 @@ function sanitizeApplication(raw: unknown) {
     rawJobDescription: typeof r.rawJobDescription === "string" ? r.rawJobDescription.slice(0, MAX_FIELD) : "",
     status,
     createdAt,
-    appliedAt: status === "not_applying" ? undefined : typeof r.appliedAt === "string" ? r.appliedAt : "",
+    appliedAt: appliedAt || undefined,
     notApplyingAt,
     notApplyingReason:
       status === "not_applying" && inList(NOT_APPLYING_REASONS, r.notApplyingReason)
@@ -393,12 +395,12 @@ function sanitizeApplication(raw: unknown) {
     contacts: sanitizeContacts(r.contacts),
     resumeArtifacts,
     coverLetterArtifacts,
-    attachments: status === "not_applying" ? undefined : sanitizeAttachments(r.attachments),
+    attachments: jobOnlySkipped ? undefined : sanitizeAttachments(r.attachments),
     notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
     fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     resumeUsed:
-      status !== "not_applying" && (r.resumeUsed === "base" || r.resumeUsed === "tailored")
+      !jobOnlySkipped && (r.resumeUsed === "base" || r.resumeUsed === "tailored")
         ? r.resumeUsed
         : undefined,
     applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),

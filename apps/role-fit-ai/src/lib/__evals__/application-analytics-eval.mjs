@@ -62,13 +62,13 @@ const applications = [
 ];
 
 const months = monthlyApplicationsSent(applications);
-assert.equal(months.length, 1, "only explicit submission dates create activity buckets");
-assert.equal(months[0][1].applications, 1, "generic updates and withdrawn drafts are not employer events");
+assert.equal(months.length, 2, "every explicit submission date creates an activity bucket");
+assert.equal(months.at(-1)?.[1].applications, 1, "a later skipped application keeps its original submission event");
 
 const hygiene = trackingHygiene(applications);
 assert.deepEqual(
   hygiene,
-  { missingFollowup: 1, closed: 1, submitted: 1 },
+  { missingFollowup: 1, closed: 1, submitted: 2 },
   "tracking facts are exact counts over stored fields"
 );
 assert.deepEqual(topTrackedCompanies(applications)[0], ["Acme", 2], "company counts aggregate displayed company identity");
@@ -81,8 +81,8 @@ assert.equal(matchesActivityFilter(skipped, "active"), false);
 assert.equal(activityCount(applications, "not_applying"), 1);
 assert.equal(
   isSubmittedApplication(skipped),
-  false,
-  "Not applying is excluded from the shared submitted-metric denominator even with stale appliedAt"
+  true,
+  "a later skipped application remains in the submitted-metric denominator"
 );
 assert.equal(
   applicationActivityDate(skipped),

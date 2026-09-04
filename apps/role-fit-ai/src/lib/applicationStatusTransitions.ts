@@ -26,5 +26,5 @@ export function applicationStatusTransitionAllowed(
   current: ApplicationStatus,
   next: ApplicationStatus
 ): boolean {
-  return STATUS_TRANSITIONS[current].includes(next);
+  return APPLICATION_STATUSES.includes(current) && APPLICATION_STATUSES.includes(next);
 }
