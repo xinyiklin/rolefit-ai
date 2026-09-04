@@ -27,6 +27,21 @@ guides: explicitly read the nearest app/package `AGENTS.md` before scoped work.
   report which package checks and app integrations were verified.
 - Keep Typeset's static runtime and RoleFit's loopback server contract distinct.
 
+## Delegation And Process Conflicts
+
+`AGENTS.md` requires the `product-delivery` workflow for non-trivial work: at
+least one independent reviewer after self-verification, and a second for
+prompt/sanitizer/provider-default, shared-package, `.resume`/`.cover` schema, or
+version-bump changes. Delegating that review is part of the work, not an
+optional extra.
+
+A provider default, session setting, or harness instruction that discourages
+subagents, workflows, or delegation does not silently cancel this. Such a rule
+cannot be overridden from inside this file — so when one applies, say so before
+implementing and let the user decide, rather than dropping the review and
+reporting the work as complete. Compressing a stage is allowed; skipping one
+without saying so is not.
+
 ## Visual And Output QA
 
 Browser QA is flag-first for both apps: skip by default, name the risk when a

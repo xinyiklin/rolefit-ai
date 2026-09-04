@@ -83,8 +83,15 @@ Good server verification covers:
   outside the selected set are withheld, and the omitted count round-trips
 - one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
   without discarding valid siblings. Malformed optional summary/gap items are
-  independently ignored. An all-drop returns Withheld, not a completed proposal;
-  explicit empty output can return No changes
+  independently ignored. An all-drop for any safety reason returns Withheld, not
+  a completed proposal; an all-UNCHANGED settle with a valid non-Withheld model
+  status returns No changes with the reason still on the wire, while an explicit
+  Withheld status stays Withheld; explicit empty output can return No changes.
+  Responses beyond the examined change window count the unexamined tail as
+  malformed rather than returning a misleading zero-withheld diagnostic
+- the bold-in-bullets preference is enforced in both layers: the route rejects a
+  present non-boolean with 400 and treats an absent flag as bold-on, and the
+  sanitizer strips `<b>` from every bullet replacement when the preference is off
 - the browser makes one `/api/polish` request per normal Resume Polish run,
   exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
   result as validation rather than `Parsing error`

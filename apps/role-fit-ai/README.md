@@ -180,6 +180,9 @@ editable documents.
   tied to the target's own work; leadership in an unrelated sibling bullet or
   broad context cannot authorize it. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
+  **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
+  preference; when disabled, every bullet Polish rewrites arrives without bold
+  while italic, underline, and Skills-list formatting remain untouched.
 - **Optional Fit Assessment automation** — Fit Assessment defaults on, while Resume
   and Cover Letter automatic Polish remain separate, default-off decisions.
   Manual Polish stays available for every outcome; see the

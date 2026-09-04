@@ -11,6 +11,7 @@ export function materializeAiSettings(settings: PersistedSettings): PersistedSet
     honestContext: settings.honestContext ?? "",
     customInstructions: settings.customInstructions ?? "",
     stageCustomInstructions: settings.stageCustomInstructions ?? {},
+    boldBulletKeywords: settings.boldBulletKeywords ?? true,
     runFitAssessment: settings.runFitAssessment ?? true,
     autoPolishResume: settings.autoPolishResume ?? false,
     resumeAutoPolishThreshold: settings.resumeAutoPolishThreshold ?? "REASONABLE",

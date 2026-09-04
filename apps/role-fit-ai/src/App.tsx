@@ -431,6 +431,8 @@ function App() {
     copyStage,
     honestContext,
     setHonestContext,
+    boldBulletKeywords,
+    setBoldBulletKeywords,
     runFitAssessment,
     setRunFitAssessment,
     autoPolishResume,
@@ -1556,6 +1558,7 @@ function App() {
     jobDescription,
     requestHonestContext,
     customInstructionsFor,
+    boldBulletKeywords,
     resumePolish: resumePolishStage,
     ensureResumePolishProviderReady: ensureResumePolishProvider,
     setResult,
@@ -3241,6 +3244,8 @@ function App() {
           experienceProfile={experienceProfile}
           onExperienceProfileChange={setExperienceProfile}
           workspacePreferencesStatus={workspacePreferencesStatus}
+          boldBulletKeywords={boldBulletKeywords}
+          onBoldBulletKeywordsChange={setBoldBulletKeywords}
           honestContext={honestContext}
           onHonestContextChange={setHonestContext}
           honestContextRef={honestContextTextareaRef}

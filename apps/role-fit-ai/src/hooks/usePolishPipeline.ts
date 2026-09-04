@@ -46,6 +46,7 @@ type UsePolishPipelineArgs = {
   jobDescription: string;
   requestHonestContext: string;
   customInstructionsFor: (stage: StageId) => string;
+  boldBulletKeywords: boolean;
   resumePolish: StageConfig;
   ensureResumePolishProviderReady: () => Promise<ProviderReadiness>;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
@@ -91,6 +92,7 @@ export function usePolishPipeline({
   jobDescription,
   requestHonestContext,
   customInstructionsFor,
+  boldBulletKeywords,
   resumePolish,
   ensureResumePolishProviderReady,
   setResult,
@@ -116,6 +118,7 @@ export function usePolishPipeline({
     jobDescription,
     requestHonestContext,
     customInstructions: customInstructionsFor("resume-polish"),
+    boldBulletKeywords,
     resumePolish: buildStageRequestFields(resumePolish)
   });
   const inputFingerprintRef = useRef(inputFingerprint);
@@ -212,7 +215,8 @@ export function usePolishPipeline({
           resumeScope: context.resumeScope,
           jobText: jobDescription,
           honestContext: requestHonestContext,
-          customInstructions: customInstructionsFor("resume-polish")
+          customInstructions: customInstructionsFor("resume-polish"),
+          boldBulletKeywords
         }),
         signal
       });

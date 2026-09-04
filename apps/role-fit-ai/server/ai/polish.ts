@@ -12,6 +12,15 @@ import { providerLabel } from "./providers.ts";
 import { generateResumeProposal } from "./resumeProposal.ts";
 import { normalizeResumeScope, resumeScopeToText } from "./resumeScope.ts";
 
+// Absent means the client predates the preference and keeps the original
+// behavior; a present non-boolean is a client bug, and coercing it either way
+// would silently decide a preference the user owns. Exported so the default is
+// assertable without driving a whole proposal.
+export function resolveBoldBulletKeywords(value: unknown): boolean | null {
+  if (value === undefined) return true;
+  return typeof value === "boolean" ? value : null;
+}
+
 export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -33,6 +42,13 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
+    const boldBulletKeywords = resolveBoldBulletKeywords(body.boldBulletKeywords);
+    if (boldBulletKeywords === null) {
+      sendJson(res, 400, {
+        error: "Resume Polish received an invalid bold-keywords preference. Reload the page and try again."
+      });
+      return;
+    }
     if (!resumeScope.sections.length || editableText.length < 40 || jobText.trim().length < 40) {
       sendJson(res, 400, {
         error: "Select at least one editable resume section and add a job description before polishing."
@@ -47,6 +63,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       jobText,
       honestContext,
       customInstructions,
+      boldBulletKeywords,
       signal: request.signal
     });
     provider = proposal.provider;

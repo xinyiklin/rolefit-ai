@@ -196,7 +196,7 @@
   min-inline-size: 152px;
 }
 
-.settings-panel[data-section="about"] .menu-subhead {
+.settings-panel .menu-subhead {
   margin-top: var(--s2);
 }
 
