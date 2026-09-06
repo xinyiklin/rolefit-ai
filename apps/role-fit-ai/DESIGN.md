@@ -135,6 +135,18 @@ shimmer, decorative motion, and nested card-in-card containers. Status is
 stated quietly (a small dot beside a word), never shouted (filled pills,
 banners, badges everywhere).
 
+Applications and Analytics use layout-shaped placeholders during real initial
+page-code or saved-data loading. A restrained opacity pulse communicates that
+pending state; reduced motion leaves the shapes static. Keep the page title,
+loading status, masthead, and navigation available. Resolve immediately to
+content, empty guidance, or failure feedback, and keep populated content visible
+during refresh. These app-local placeholders do not introduce shimmer or
+artificial loading delays.
+The Applications placeholder preserves the detached table-header band and uses
+the real table's column grid and compact-column rules. Its side rail retains
+the full inspector frame, identity block, facts, Fit, documents, and action
+regions, including the desktop height and stacked layout.
+
 Layout is structural and predictable: a masthead with the brand plus the global
 Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
 TRACK, a bottom utility group with read-only Sessions immediately above Settings

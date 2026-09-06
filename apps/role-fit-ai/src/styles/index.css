@@ -21,6 +21,7 @@
 @import "./questions.css";
 @import "./pipeline.css";
 @import "./application-pages.css";
+@import "./page-loading.css";
 @import "./export-rail.css";
 @import "./preview-overlay.css";
 /* After studio.css (it extends .studio-sidebar) and after export-rail.css, whose

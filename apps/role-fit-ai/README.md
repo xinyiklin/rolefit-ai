@@ -36,7 +36,9 @@ variants, proposal review, and final export page together:
 The on-disk **application tracker** includes a sortable, paginated table,
 right-click actions, and a calendar for submissions and follow-ups. Search
 uses company, role/title, and posting ID with relevance-first results while
-excluding descriptions and notes:
+excluding descriptions and notes. Applications and Analytics show structured
+loading placeholders while opening, respect reduced motion, and keep existing
+content visible during refresh:
 
 <table>
 <tr>
