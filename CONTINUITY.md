@@ -3,7 +3,24 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-05
+
+- [USER+CODE+TOOL] [TASK loading-skeleton-20260904] Refined the Applications
+  skeleton within its approved scope: a separate header uses the real table's
+  column grid, and the full-height inspector frame now reserves identity,
+  facts, Fit, documents, and actions. The full RoleFit gate passed again with
+  107 offline evaluations. Browser layout and interaction remain unverified.
+
 ## 2026-09-04
+
+- [USER+CODE+TOOL] [TASK loading-skeleton-20260904] Applications and Analytics
+  now show layout-shaped skeletons for initial page-code and saved-data loading,
+  with a quiet opacity pulse and static reduced-motion fallback. Applications
+  follows the selected table/calendar view; populated refreshes keep content
+  visible. Initial Analytics load failures expose recovery instead of zero
+  totals. The full RoleFit gate passed with loopback access, including builds,
+  desktop probes, and 107 offline evaluations; the sandboxed attempt was blocked
+  at a loopback listener. Browser QA was not opted into and remains unverified.
 
 - [USER+CODE+TOOL] [TASK tracker-stage-menu-groups-20260904] The Applications row context menu now groups stages into
   Active (Applied, Interviewing, Offer) and Inactive (Skipped, Rejected,

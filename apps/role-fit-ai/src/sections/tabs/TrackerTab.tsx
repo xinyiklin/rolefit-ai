@@ -96,7 +96,6 @@ type TrackerTabProps = {
   applicationsPath: string;
   applicationsError: string;
   pendingApplicationWrites: number;
-  isApplicationsLoading: boolean;
   statusFilter: ApplicationActivityFilter;
   setStatusFilter: (v: ApplicationActivityFilter) => void;
   expandedApplicationId: string | null;
@@ -329,7 +328,6 @@ export function TrackerTab({
   applicationsPath,
   applicationsError,
   pendingApplicationWrites,
-  isApplicationsLoading,
   statusFilter,
   setStatusFilter,
   expandedApplicationId,
@@ -592,10 +590,6 @@ export function TrackerTab({
         </div>
       </header>
 
-      {/* Loading + error feedback */}
-      {isApplicationsLoading ? (
-        <p className="pipeline-note">Loading saved applications...</p>
-      ) : null}
       {applicationsError ? (
         <div className="pipeline-alert" role="status">
           <AlertCircle size={14} aria-hidden="true" />

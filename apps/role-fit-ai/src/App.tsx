@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 
 import { analyzeResumeText, type PolishedResume } from "./resumeEngine";
+import { ApplicationsLoadingSkeleton, AnalyticsLoadingSkeleton } from "./sections/PageLoadingSkeleton";
 
 import { useDebouncedValue } from "./hooks/useDebouncedValue";
 import { useDocStyle } from "@typeset/editor/hooks/useDocStyle.ts";
@@ -3139,34 +3140,33 @@ function App() {
 
           {activeOutputTab === "applications" ? (
             <Suspense
-              fallback={
-                <p className="pipeline-note" role="status">
-                  Loading applications…
-                </p>
-              }
+              fallback={<ApplicationsLoadingSkeleton view={trackerView} />}
             >
-              <TrackerTab
-                applications={applications}
-                applicationsPath={applicationsPath}
-                applicationsError={applicationsError}
-                pendingApplicationWrites={pendingApplicationWrites}
-                isApplicationsLoading={isApplicationsLoading}
-                statusFilter={statusFilter}
-                setStatusFilter={setStatusFilter}
-                expandedApplicationId={expandedApplicationId}
-                setExpandedApplicationId={setExpandedApplicationId}
-                trackerView={trackerView}
-                setTrackerView={setTrackerView}
-                onUpdateStatus={updateApplicationStatus}
-                onLoad={handleLoadApplication}
-                onOpenApplication={handleOpenApplicationDetail}
-                onPreviewResume={(app) => handlePreviewApplicationDocument(app, "resume")}
-                onDelete={handleDeleteApplication}
-                onPrepareApplication={handlePrepareApplication}
-                onRefresh={refreshApplications}
-                onMergeApplications={mergeApplications}
-                onDismissDuplicateGroup={dismissDuplicateGroup}
-              />
+              {isApplicationsLoading && applications.length === 0 ? (
+                <ApplicationsLoadingSkeleton view={trackerView} />
+              ) : (
+                <TrackerTab
+                  applications={applications}
+                  applicationsPath={applicationsPath}
+                  applicationsError={applicationsError}
+                  pendingApplicationWrites={pendingApplicationWrites}
+                  statusFilter={statusFilter}
+                  setStatusFilter={setStatusFilter}
+                  expandedApplicationId={expandedApplicationId}
+                  setExpandedApplicationId={setExpandedApplicationId}
+                  trackerView={trackerView}
+                  setTrackerView={setTrackerView}
+                  onUpdateStatus={updateApplicationStatus}
+                  onLoad={handleLoadApplication}
+                  onOpenApplication={handleOpenApplicationDetail}
+                  onPreviewResume={(app) => handlePreviewApplicationDocument(app, "resume")}
+                  onDelete={handleDeleteApplication}
+                  onPrepareApplication={handlePrepareApplication}
+                  onRefresh={refreshApplications}
+                  onMergeApplications={mergeApplications}
+                  onDismissDuplicateGroup={dismissDuplicateGroup}
+                />
+              )}
             </Suspense>
           ) : null}
 
@@ -3190,13 +3190,17 @@ function App() {
 
           {activeOutputTab === "analytics" ? (
             <Suspense
-              fallback={
-                <p className="pipeline-note" role="status">
-                  Loading analytics…
-                </p>
-              }
+              fallback={<AnalyticsLoadingSkeleton />}
             >
-              <AnalyticsTab applications={applications} onOpenApplications={() => setActiveOutputTab("applications")} />
+              {isApplicationsLoading && applications.length === 0 ? (
+                <AnalyticsLoadingSkeleton />
+              ) : (
+                <AnalyticsTab
+                  applications={applications}
+                  loadError={!hasLoadedApplications ? applicationsError : ""}
+                  onOpenApplications={() => setActiveOutputTab("applications")}
+                />
+              )}
             </Suspense>
           ) : null}
         </StudioPane>

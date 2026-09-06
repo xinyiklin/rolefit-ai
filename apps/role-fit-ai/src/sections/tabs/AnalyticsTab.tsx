@@ -12,10 +12,27 @@ import {
 
 type AnalyticsTabProps = {
   applications: Application[];
+  loadError: string;
   onOpenApplications: () => void;
 };
 
-export function AnalyticsTab({ applications, onOpenApplications }: AnalyticsTabProps) {
+export function AnalyticsTab({ applications, loadError, onOpenApplications }: AnalyticsTabProps) {
+  if (loadError) {
+    return (
+      <section className="workspace-page analytics-page">
+        <header className="workspace-page__head">
+          <h2 className="page-serif">Analytics</h2>
+        </header>
+        <p className="pipeline-alert" role="status">Could not load applications: {loadError}</p>
+        <div className="workspace-page__actions">
+          <button type="button" className="secondary-button is-compact" onClick={onOpenApplications}>
+            Open Applications to retry
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   const total = applications.length;
   const interviews = statusCount(applications, "interviewing");
   const offers = statusCount(applications, "offer");

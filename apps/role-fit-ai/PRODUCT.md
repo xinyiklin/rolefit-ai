@@ -29,6 +29,13 @@ never a hosted copy of the workbench.
 
 ## Product Purpose
 
+Applications and Analytics show structured loading placeholders while their
+page code or initial saved-application data is pending. The placeholders pulse
+quietly, remain static for reduced motion, and disappear as soon as loading
+settles. Navigation stays available; refreshes preserve existing content. Empty
+states appear only after loading settles, and an initial load failure exposes
+recovery instead of leaving an indefinite placeholder or zero-data analytics.
+
 RoleFit AI can turn a prepared job posting, a base resume, and a
 candidate-authored cover letter or base variant into honest, tailored
 application materials. Prepare is the first/default page and the sole job-intake
