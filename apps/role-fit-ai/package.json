@@ -55,7 +55,7 @@
     "pdfjs-dist": "5.4.296",
     "react": "19.2.8",
     "react-dom": "19.2.8",
-    "react-pdf": "^10.4.1"
+    "react-pdf": "^10.5.0"
   },
   "devDependencies": {
     "@electron-forge/core": "7.11.2",
