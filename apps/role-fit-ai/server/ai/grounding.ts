@@ -91,6 +91,7 @@ const LOWERCASE_TECH_CONCEPTS = [
 // platform in this domain. "powerbi" only matches the solid-cased form ("power
 // bi" tokenizes as two words) — harmless, kept for the solid form.
 const LOWERCASE_TOOL_NAMES = new Set([
+  "python", "javascript", "typescript",
   "terraform", "ansible", "jenkins", "gitlab", "argocd", "istio", "kafka",
   "rabbitmq", "redis", "memcached", "elasticsearch", "opensearch", "mongodb",
   "cassandra", "dynamodb", "mariadb", "sqlite", "snowflake", "databricks",
@@ -114,7 +115,8 @@ const LOWERCASE_TOOL_NAMES = new Set([
 // and the "go-to-market" compound, and single letters "r"/"c" appear constantly
 // in ordinary prose; including them would false-positive and risk dropping honest
 // content. "#"/"+" survive the token regex so "c#"/"c++" match token-anchored.
-const SHORT_TECH_TOKENS = new Set(["c#", "c++", "ml", "nlp"]);
+const SHORT_TOOL_TOKENS = new Set(["c#", "c++"]);
+const SHORT_TECH_TOKENS = new Set([...SHORT_TOOL_TOKENS, "ml", "nlp"]);
 
 const LEADING_ACTION_VERBS = new Set([
   "built", "led", "designed", "implemented", "created", "developed",
@@ -379,19 +381,31 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
 // narrower class: if one appears in model-authored extraction prose, it must be
 // present in the source posting. Keeping this helper beside the owning lexicons
 // avoids a second, inevitably drifting technology list in jobAnalysis.ts.
+export function curatedClaimTerms(value: unknown): string[] {
+  const text = String(value ?? "").replace(/<\/?(?:b|i|u)>/gi, " ").toLowerCase();
+  const tokens = new Set(stripBoundaryDots(text).match(/[a-z0-9.#+]+/g) ?? []);
+  return [...new Set([
+    ...LOWERCASE_TECH_CONCEPTS.filter((concept) => text.includes(concept)),
+    ...[...SHORT_TECH_TOKENS, ...LOWERCASE_TOOL_NAMES, ...SHORT_TOOL_TOKENS].filter((term) => tokens.has(term))
+  ])];
+}
+
 export function findUngroundedCuratedClaimTerm(proposedText: unknown, grounding: unknown): string | null {
+  const groundingLower = String(grounding ?? "").toLowerCase();
+  const groundingTokens = tokenize(groundingLower);
+  return curatedClaimTerms(proposedText).find((term) => !isGrounded(groundingLower, groundingTokens, term)) ?? null;
+}
+
+// Fit uses named tools without requiring literal wording for broader concepts.
+export function findUngroundedToolClaimTerm(proposedText: unknown, grounding: unknown): string | null {
   const groundingLower = String(grounding ?? "").toLowerCase();
   const groundingTokens = tokenize(groundingLower);
   const proposedLower = String(proposedText ?? "").replace(/<\/?(?:b|i|u)>/gi, " ").toLowerCase();
   const proposedTokens = new Set(stripBoundaryDots(proposedLower).match(/[a-z0-9.#+]+/g) ?? []);
-
-  for (const concept of LOWERCASE_TECH_CONCEPTS) {
-    if (proposedLower.includes(concept) && !isGrounded(groundingLower, groundingTokens, concept)) return concept;
-  }
   for (const name of LOWERCASE_TOOL_NAMES) {
     if (proposedTokens.has(name) && !isGrounded(groundingLower, groundingTokens, name)) return name;
   }
-  for (const token of SHORT_TECH_TOKENS) {
+  for (const token of SHORT_TOOL_TOKENS) {
     if (proposedTokens.has(token) && !isGrounded(groundingLower, groundingTokens, token)) return token;
   }
   return null;

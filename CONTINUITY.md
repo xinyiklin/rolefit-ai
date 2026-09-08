@@ -3,6 +3,43 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-08
+
+- [USER+CODE] Authorized review, browser QA, and merge of the accumulated RoleFit
+  evidence-grounded drafting work. RoleFit retains app ownership: paragraph-cited
+  cover-letter evidence, bounded Resume targets and advisory suggestions, compact
+  Fit v5 with a neutral insufficient-information outcome, and optional session-only
+  final review of included materials. Legacy Fit/date representations remain
+  readable without rewriting tracker data. Shared packages and portable formats
+  are unchanged; provider judgment remains advisory and Apply stays independent.
+- [CODE] Merge review corrected stale sentence-binding prompting, numeric version
+  and multiplier handling, contradictory-evidence disclosures, first-person
+  wrong-target findings, and the final-review progress dismissal control.
+  Synthetic provider calibration remains limited: the prior combined evaluation
+  had one adjacent-verdict mismatch (17/18 expected); no accuracy improvement or
+  universal factual correctness is claimed. New live-provider calls were not run.
+
+- [TOOL] Final RoleFit app/server/landing/desktop gate passed with 117/117 offline
+  probe files after review corrections. Two fresh independent reviewers cleared
+  their scopes. Isolated browser QA mounted the production review hook and rail:
+  completion, Stop, late/stale results, failure/previous receipt, source disclosure,
+  keyboard access, progress dismissal, Apply independence, and desktop/390px layout
+  passed. Browser inputs/responses were synthetic; the personal App workspace and
+  live-provider generation were not exercised. Task artifacts remain local.
+
+- [USER+CODE+TOOL] Aligned root ignore rules with Machine Bootstrap's GitHub main
+  `3c95056f3d7902932f33c2bdabcd0d0e87cf58f2`: machine facts, local skill/npm
+  state, caches, coverage, setup backups, and editor files stay local. Root
+  `.npmrc` remains the shared install policy and agent guidance stays tracked.
+  App privacy rules are unchanged. Forty ignore probes and independent review
+  passed for that alignment; the subsequent task-artifact decision below supersedes
+  its exception for `.agent-work/`.
+- [USER+CODE+TOOL] `.agent-work/` now stays local, including completed task artifacts.
+  Removed the 12 previously tracked task files from the index; all 25 local task
+  files were verified byte-for-byte unchanged. Root guidance and Git workflow now require self-contained durable
+  summaries instead of links to ignored artifacts; task IDs remain valid labels.
+  Ignore/link checks and independent preservation review passed.
+
 ## 2026-09-05
 
 - [USER+CODE+TOOL] [TASK loading-skeleton-20260904] Refined the Applications

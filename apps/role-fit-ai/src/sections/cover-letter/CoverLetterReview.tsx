@@ -78,7 +78,7 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
     ])
   );
   return evidenceIds
-    .map((id) => id === "source_letter" ? "Current letter" : (labels.get(id) ?? "Verified evidence"))
+    .map((id) => id === "source_letter" ? "Current letter" : (labels.get(id) ?? "Supplied evidence"))
     .filter((label, index, values) => values.indexOf(label) === index)
     .join(" · ");
 }

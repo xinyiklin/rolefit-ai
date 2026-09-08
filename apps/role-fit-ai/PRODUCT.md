@@ -249,8 +249,9 @@ user's judgment. Its four verdicts mean:
   or two material core gaps and a credible path to perform the role.
 - **Stretch:** relevant overlap exists, but several important gaps remain or
   the core experience is mainly transferable rather than direct.
-- **Limited:** the supplied resume shows little direct evidence for the role's
-  main responsibilities and core qualifications.
+- **Limited:** the supplied evidence shows little relevant foundation for the
+  role's main work and core qualifications, directly or through meaningful
+  transferable experience. Generic skills or interest alone are insufficient.
 
 Before choosing a verdict, Fit Assessment separates main responsibilities and
 core qualifications from preferred items, logistics, benefits, and application-
@@ -258,15 +259,17 @@ form or administrative text. The verdict and bounded findings prioritize the
 most decision-critical evidence rather than whichever excerpt appears first.
 Evidence-source boundaries remain explicit: academic, personal, volunteer, or
 open-source work does not satisfy an explicitly professional, paid, commercial,
-or production requirement unless the posting accepts that source. Experience
+requirement unless the posting accepts that source. Production describes deployment,
+so a real personal production deployment can satisfy a source-neutral deployment requirement. Experience
 categories are never summed, and role or project counts never imply duration.
-A posting with no substantive responsibilities or qualifications yields Limited
+A posting with no substantive responsibilities or qualifications yields Insufficient job information
 instead of a fit inferred from its title or application form. At the Limited/
 Stretch boundary only, meaningful direct evidence for supporting core work stays
-Stretch when the role-defining specialization is unshown; that rule never raises
-a case to Reasonable or Strong. Before returning,
+Stretch when the role-defining specialization is unshown. Meaningful transferable
+core experience can also support Stretch; lacking a direct match alone does not
+make it Limited. Neither allowance raises a case to Reasonable or Strong. Before returning,
 the provider must re-check that every finding is copied exactly from its source;
-the server still rejects the entire result when any anchor is unusable.
+the server still rejects the entire result when a required anchor is unusable.
 
 Prepare shows the verdict, fixed summary, last-assessed time,
 resolved provider/model/reasoning attribution, rubric version, and at most three
@@ -274,9 +277,11 @@ direct matches and three not-shown gaps. Each match keeps the exact posting
 excerpt beside the exact resume or About you evidence that supports it. A Check
 or Blocked eligibility result keeps its exact posting condition, and Blocked
 also keeps the exact conflicting About you fact. Missing evidence is a gap, not
-proof that the candidate is incapable. Strong, Reasonable, and Stretch require
-at least one direct match; unusable or internally contradictory output fails
-closed. The result has no numeric score, confidence, visible
+proof that the candidate is incapable. Strong and Reasonable require at least one direct match. Stretch may instead
+show relevant transferable evidence beside a gap. The model judges fit; source
+checks protect exact excerpts and clear factual conflicts without a hidden
+requirement ledger or deterministic verdict scoring. Unusable required evidence
+fails closed. The result has no numeric score, confidence, visible
 requirement ledger, recommendation, or analytics role, and it never silently
 controls tracker state or workflow. Unusable provider output becomes unavailable rather
 than a guessed result; the deterministic local job brief remains editable and
@@ -296,7 +301,7 @@ scope. These are global facts, not user-authored fit labels: Fit Assessment
 decides relevance per posting, does not sum overlapping categories, and never
 treats a project count as elapsed time.
 When a posting explicitly requires professional, industry, commercial,
-production, or paid experience, other sources do not satisfy that requirement
+or paid experience, other sources do not satisfy that requirement
 unless the posting says they may.
 
 Eligibility is separate from fit and never changes the verdict. **Clear** means
@@ -519,3 +524,32 @@ Desktop is primary; content wraps rather than clips at narrow widths. At 720px
 and below, precise Resume authoring yields to a focused width notice, but
 Prepare, navigation, Cover letter, Materials, Applications, and Analytics remain
 available.
+
+## Review final application
+
+Prepare offers an optional **Review final application** action after readiness.
+It reviews current included materials; pending proposals must be accepted first
+to enter the review. Resume-only and cover-only applications are supported.
+Excluded loaded resume evidence may support a letter, clearly labeled as evidence.
+Missing source provenance is uncertainty, not verified support.
+
+The action shows its independently configurable provider/model in Settings. It
+copies Fit settings once at initialization and never runs automatically. Results
+are bounded, source-linked, and session-only. Changes to materials, target, or
+evidence mark relevant findings out of date; formatting preferences do not.
+Failure and Stop retain incomplete/local findings and previous results. Findings
+never change documents or block Apply. “No issues found in this review” is not a
+guarantee of factual accuracy or application success.
+
+Resume Polish retains Academic Projects as editable work while protecting degrees,
+credential metadata, dates, and identity. All bounded targets compete for the prompt
+budget; each selected entry is sent once with its target references, and omitted
+counts are explicit. Legitimate role/project names such as Scrum Master or Degree
+audit app remain editable. Optional Suggestions cite existing content
+and the job and never reorder or remove content. Job-condition disclosures retain
+original conditions when shortened wording would change meaning. Classification
+concerns are advisory; modal verbs and domain nouns do not erase valid duties. Cover-letter citations identify supplied
+sources; they do not independently verify those sources. Ordinary paraphrases
+never require hidden sentence records or literal wording checks. Editorial advice
+may mention missing skills or suggest a bullet count without asserting those as
+candidate facts. Actual edits retain factual safeguards.

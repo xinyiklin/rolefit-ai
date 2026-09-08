@@ -142,6 +142,7 @@ export function usePolishPipeline({
   }
 
   useEffect(() => {
+    setResult((current) => current?.advice?.length ? { ...current, adviceStale: true } : current);
     const jobChanged = previousJobDescriptionRef.current !== jobDescription;
     previousJobDescriptionRef.current = jobDescription;
     if (!runLockRef.current && !abortRef.current) {
@@ -224,7 +225,7 @@ export function usePolishPipeline({
       if (!requestIsCurrent(generation, context, signal)) return false;
       if (!response.ok) throw new ApiError((raw.error as string) ?? "Resume Polish failed.", response.status);
       const data = sanitizeResumePolishWireResult(raw);
-      if (!data) {
+      if (!data || data.omittedTargetCount > flattenResumeTargets(context.resumeScope).length) {
         throw new ApiError("Resume Polish returned an invalid outcome", 422);
       }
       const suggestions = proposalSuggestions(data, context.resumeScope);
@@ -237,6 +238,8 @@ export function usePolishPipeline({
         proposalBaselineText: currentResumeText || context.scopedResumeText,
         source: "ai",
         polishOutcome: data.status,
+        advice: data.advice,
+        adviceStale: false,
         changeSummary: Array.isArray(data.summary) ? data.summary : [],
         omittedTargetCount: data.omittedTargetCount,
         suggestedChanges: suggestions,

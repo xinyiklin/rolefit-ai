@@ -101,7 +101,7 @@ assert.match(prompts.userPrompt, /"kind":"skill-list"/);
 assert.match(prompts.userPrompt, /Skill category labels are locked/i);
 assert.match(prompts.userPrompt, /deep self-audit/i, "high effort requests a deeper internal Polish audit");
 assert.match(prompts.userPrompt, /Do not include audit notes or scratch work/i);
-assert.doesNotMatch(prompts.userPrompt, /sectionId|entryId|bulletId|evidenceType|risk|hits/);
+assert.doesNotMatch(prompts.userPrompt, /evidenceType|risk|hits/);
 for (const tag of ["editable_targets", "resume_context"]) {
   assert.match(
     prompts.systemPrompt,

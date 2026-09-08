@@ -2,6 +2,9 @@ export type CoverLetterIssueCode =
   | "unsupported_job_term"
   | "unsupported_number"
   | "unsupported_outcome"
+  | "unsupported_claim"
+  | "unsupported_ownership"
+  | "unsupported_employer_claim"
   | "unknown_evidence_reference"
   | "missing_evidence_reference"
   | "unresolved_template"
@@ -38,6 +41,9 @@ const ISSUE_SHAPES: Record<
   unsupported_job_term: { category: "evidence", recovery: "add_evidence" },
   unsupported_number: { category: "evidence", recovery: "add_evidence" },
   unsupported_outcome: { category: "evidence", recovery: "add_evidence" },
+  unsupported_claim: { category: "evidence", recovery: "add_evidence" },
+  unsupported_ownership: { category: "evidence", recovery: "add_evidence" },
+  unsupported_employer_claim: { category: "evidence", recovery: "retry" },
   unknown_evidence_reference: { category: "evidence", recovery: "retry" },
   missing_evidence_reference: { category: "evidence", recovery: "retry" },
   unresolved_template: { category: "template", recovery: "edit_source" },

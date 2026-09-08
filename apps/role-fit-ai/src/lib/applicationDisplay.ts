@@ -115,8 +115,8 @@ const FIT_ASSESSMENT_DISPLAY: Record<FitAssessmentVerdict, {
   LIMITED: { label: "Limited", tone: "weak", rank: 1 }
 };
 
-export function fitAssessmentVerdictLabel(verdict: FitAssessmentVerdict): string {
-  return FIT_ASSESSMENT_DISPLAY[verdict].label;
+export function fitAssessmentVerdictLabel(verdict: FitAssessmentVerdict | undefined): string {
+  return verdict ? FIT_ASSESSMENT_DISPLAY[verdict].label : "Insufficient job information";
 }
 
 // Tracker fit is the compact Fit Assessment verdict captured for the exact resume

@@ -110,6 +110,7 @@ try {
   process.exit(2);
 }
 
+const outcome = (result) => result?.status === "INSUFFICIENT_JOB_INFORMATION" ? "INSUFFICIENT_JOB_INFORMATION" : result?.verdict;
 const FIT_RANK = { LIMITED: 0, STRETCH: 1, REASONABLE: 2, STRONG: 3 };
 const safeSlug = (value) => String(value || "default").replace(/[^a-z0-9-]/gi, "_");
 const configId = (config) => [config.provider, config.model, config.reasoningEffort || "default"].join("/");
@@ -170,6 +171,10 @@ async function dispatchPath({ config, fixture, path, run }) {
       config,
       path,
       run,
+      labelProvenance: "Repository-authored synthetic expectations; human review not recorded",
+      humanReviewed: false,
+      relationshipAccuracy: null,
+      requirementCoverageAccuracy: null,
       providerAttempts: stats.attempts ?? 1,
       parsed,
       sanitized: result,
@@ -268,7 +273,7 @@ for (const config of matrix.map(configId)) {
       record.config === config && record.fixture === fixture.id && record.result
     );
     const expectedCount = valid.filter((record) =>
-      fixture.expectedVerdicts.includes(record.result.verdict)
+      (fixture.expectedOutcomes ?? fixture.expectedVerdicts).includes(outcome(record.result))
     ).length;
     if (fixture.stable) {
       const required = Math.max(1, Math.ceil(valid.length * 0.8));
@@ -289,9 +294,9 @@ for (const config of matrix.map(configId)) {
         record.config === config && record.fixture === fixture.id && record.path === path
       );
       const group = attempted.filter((record) => record.result);
-      const verdicts = group.map((record) => record.result.verdict);
+      const verdicts = group.map((record) => outcome(record.result));
       const eligibility = group.map((record) => record.result.eligibility?.status ?? "OMITTED");
-      const ranks = verdicts.map((verdict) => FIT_RANK[verdict]);
+      const ranks = verdicts.map((verdict) => FIT_RANK[verdict]).filter(Number.isFinite);
       const spread = ranks.length ? Math.max(...ranks) - Math.min(...ranks) : null;
       if (group.length !== RUNS) {
         failures.push(`${config} ${fixture.id} ${path}: completed ${group.length}/${RUNS} required runs`);
@@ -330,7 +335,7 @@ for (const config of matrix.map(configId)) {
       );
       if (!combined?.result || !standalone?.result) continue;
       const verdictDistance = Math.abs(
-        FIT_RANK[combined.result.verdict] - FIT_RANK[standalone.result.verdict]
+        outcome(combined.result) === outcome(standalone.result) ? 0 : (combined.result.status === "INSUFFICIENT_JOB_INFORMATION" || standalone.result.status === "INSUFFICIENT_JOB_INFORMATION" ? Infinity : FIT_RANK[combined.result.verdict] - FIT_RANK[standalone.result.verdict])
       );
       const overlap = themeOverlap(combined.themes, standalone.themes);
       if (verdictDistance > 1) {

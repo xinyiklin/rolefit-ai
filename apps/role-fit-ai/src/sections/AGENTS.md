@@ -219,3 +219,5 @@ and `docs/engineering/ui-principles.md`.
 - Preserve keyboard access, focus visibility, reduced motion, and non-color
   status cues.
 - Follow flag-first browser QA for material layout/interaction changes.
+
+- Prepare composes optional final application review after readiness. Keep Apply independent; use native source disclosures, previous/incomplete status, and document navigation. Resume structural Suggestions remain separate from edit decisions.

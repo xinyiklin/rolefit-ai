@@ -1,3 +1,4 @@
+import { isEducationHeading } from "../src/resume/sections.ts";
 export const RESUME_POLISH_STATUSES = ["PROPOSAL", "NO_CHANGES", "WITHHELD"] as const;
 export const RESUME_POLISH_WITHHELD_REASONS = [
   "UNSUPPORTED",
@@ -15,7 +16,37 @@ export type ResumePolishWireChange = {
   reason?: string;
 };
 
+export type ResumePolishAdvice = {
+  kind: "emphasis" | "order" | "space" | "missing-evidence";
+  sectionId: string;
+  entryId: string;
+  jobExcerpt: string;
+  candidateExcerpt: string;
+  rationale: string;
+};
+
+export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.slice(0, 3).flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const value = item as Record<string, unknown>;
+    if (!["emphasis", "order", "space", "missing-evidence"].includes(String(value.kind))) return [];
+    for (const key of ["sectionId", "entryId", "jobExcerpt", "candidateExcerpt", "rationale"]) {
+      if (typeof value[key] !== "string" || !value[key].trim() || value[key].length > 500) return [];
+    }
+    return [{
+      kind: value.kind as ResumePolishAdvice["kind"],
+      sectionId: value.sectionId as string,
+      entryId: value.entryId as string,
+      jobExcerpt: value.jobExcerpt as string,
+      candidateExcerpt: value.candidateExcerpt as string,
+      rationale: value.rationale as string
+    }];
+  });
+}
+
 export type ResumePolishWireResult = {
+  advice?: ResumePolishAdvice[];
   status: ResumePolishStatus;
   changes: ResumePolishWireChange[];
   summary: string[];
@@ -55,7 +86,7 @@ type ScopeEntry = {
 type ScopeSection = { id?: unknown; heading?: unknown; type?: unknown; entries?: unknown };
 type ScopeLike = { sections?: unknown; contextSections?: unknown } | null | undefined;
 
-function clean(value: unknown, max = 1200): string {
+function clean(value: unknown, max = 20_000): string {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
@@ -76,8 +107,13 @@ function entryText(entry: ScopeEntry): string {
 
 export function resumePolishSectionIsLocked(heading: string): boolean {
   const normalized = clean(heading, 120).toLowerCase();
-  return /\b(?:education|academic)\b/.test(normalized)
+  return isEducationHeading(normalized)
     || ["contact", "contact information", "personal information", "personal details"].includes(normalized);
+}
+
+function credentialTitle(entry: ScopeEntry): boolean {
+  const degree = /^(?:(?:bachelor|master|associate)(?:[’']s)?\s+(?:of|in)\b|(?:doctoral|undergraduate|graduate|bachelor[’']?s?|master[’']?s?|associate[’']?s?)\s+degree\b|doctor\s+of\b|doctorate\b|ph\.?d\.?(?:\s|$)|[bm]\.?[as]\.?(?:c\.?)?(?:\s|$)|mba(?:\s|$))/i;
+  return [entry.titleLeft, entry.subtitleLeft].some((value) => degree.test(clean(value)));
 }
 
 export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
@@ -92,7 +128,7 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
     if (!sectionId || !heading || resumePolishSectionIsLocked(heading)) continue;
     for (const entry of entries) {
       const entryId = clean(entry?.id, 120);
-      if (!entryId) continue;
+      if (!entryId || (type === "standard" && credentialTitle(entry))) continue;
       const grounding = entryText(entry);
       if (type === "skills") {
         const text = clean(entry.subtitleLeft);
@@ -123,7 +159,7 @@ export function flattenResumeTargets(scope: ScopeLike): FlatResumeTarget[] {
       }
     }
   }
-  return targets.slice(0, 160).map((target, index) => ({
+  return targets.map((target, index) => ({
     targetId: `target-${index + 1}`,
     ...target
   }));
@@ -168,10 +204,11 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     : [];
   const omittedTargetCount = typeof source.omittedTargetCount === "number"
     && Number.isInteger(source.omittedTargetCount)
-    ? Math.max(0, Math.min(160, source.omittedTargetCount))
+    ? Math.max(0, Math.min(1_000_000, source.omittedTargetCount))
     : 0;
 
   return {
+    advice: sanitizeResumePolishAdvice(source.advice),
     status: status as ResumePolishStatus,
     changes,
     summary: list(source.summary, 260),

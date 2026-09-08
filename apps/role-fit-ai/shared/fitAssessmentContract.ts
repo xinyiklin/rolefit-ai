@@ -2,7 +2,7 @@ export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMI
 export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
 export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
 export const FIT_ASSESSMENT_INPUT_CHANGES = ["job", "resume", "candidate-context", "settings"] as const;
-export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v3";
+export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v5";
 
 export type FitAssessmentVerdict = (typeof FIT_ASSESSMENT_VERDICTS)[number];
 export type FitAssessmentEligibilityStatus = (typeof FIT_ASSESSMENT_ELIGIBILITY)[number];
@@ -13,6 +13,7 @@ export type FitAssessmentMatch = {
   jobExcerpt: string;
   candidateSource: FitAssessmentEvidenceSource;
   candidateExcerpt: string;
+  relationship?: "direct" | "transferable";
 };
 
 export const FIT_ASSESSMENT_SUMMARY: Record<FitAssessmentVerdict, string> = {
@@ -29,17 +30,31 @@ export function normalizeFitAssessmentInput(value: unknown): string {
   return String(value ?? "").normalize("NFKC").replace(/\r\n?/g, "\n").trim();
 }
 
+export type FitAssessmentGapDetail = {jobExcerpt:string;relationship:"transferable"|"contradictory";candidateSource:FitAssessmentEvidenceSource;candidateExcerpt:string};
+
+export const INSUFFICIENT_JOB_SUMMARY = "Add substantive role responsibilities or qualifications to assess fit.";
+
 export type FitAssessmentResult = {
+  status: "ASSESSED";
   verdict: FitAssessmentVerdict;
   summary: string;
   matches: FitAssessmentMatch[];
   gaps: string[];
+  gapDetails?: FitAssessmentGapDetail[];
   eligibility?: {
     status: FitAssessmentEligibilityStatus;
     jobExcerpt?: string;
     candidateExcerpt?: string;
     note?: string;
   };
+} | {
+  status: "INSUFFICIENT_JOB_INFORMATION";
+  summary: string;
+  verdict?: never;
+  matches: [];
+  gaps: [];
+  gapDetails?: never;
+  eligibility?: never;
 };
 
 export type FitAssessmentSnapshot = {
@@ -144,7 +159,8 @@ function matchList(value: unknown): FitAssessmentMatch[] | null {
     matches.push({
       jobExcerpt,
       candidateSource: candidateSource as FitAssessmentEvidenceSource,
-      candidateExcerpt
+      candidateExcerpt,
+      ...(source.relationship === "direct" || source.relationship === "transferable" ? { relationship: source.relationship } : {})
     });
   }
   return matches;
@@ -153,12 +169,16 @@ function matchList(value: unknown): FitAssessmentMatch[] | null {
 export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
+  if (source.status === "INSUFFICIENT_JOB_INFORMATION") {
+    if (source.verdict !== undefined || source.eligibility !== undefined || (Array.isArray(source.matches) && source.matches.length) || (Array.isArray(source.gaps) && source.gaps.length)) return null;
+    return { status: "INSUFFICIENT_JOB_INFORMATION", summary: INSUFFICIENT_JOB_SUMMARY, matches: [], gaps: [] };
+  }
+  if (source.status !== undefined && source.status !== "ASSESSED") return null;
   const verdict = text(source.verdict, 24).toUpperCase();
   if (!verdicts.has(verdict)) return null;
   const matches = matchList(source.matches);
   const gaps = excerptList(source.gaps);
   if (!matches || !gaps) return null;
-  if (verdict !== "LIMITED" && matches.length === 0) return null;
 
   const rawEligibility = source.eligibility;
   let eligibility: FitAssessmentResult["eligibility"];
@@ -180,12 +200,25 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
     };
   }
 
+  const gapDetails: FitAssessmentGapDetail[] = [];
+  if (source.gapDetails !== undefined) {
+    if (!Array.isArray(source.gapDetails) || source.gapDetails.length > 3) return null;
+    for (const rawDetail of source.gapDetails) {
+      const detail = rawDetail as FitAssessmentGapDetail;
+      if (!detail || !gaps.includes(detail.jobExcerpt) || !["transferable","contradictory"].includes(detail.relationship) || !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(detail.candidateSource) || !excerpt(detail.candidateExcerpt)) return null;
+      gapDetails.push(detail);
+    }
+  }
   const typedVerdict = verdict as FitAssessmentVerdict;
+  if (verdict !== "LIMITED" && matches.length === 0 &&
+    !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) return null;
   return {
+    status: "ASSESSED",
     verdict: typedVerdict,
     summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
     matches,
     gaps,
+    ...(gapDetails.length ? {gapDetails} : {}),
     ...(eligibility ? { eligibility } : {})
   };
 }

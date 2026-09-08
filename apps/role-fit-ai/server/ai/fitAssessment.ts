@@ -1,4 +1,6 @@
+import { explicitEligibilityConflict, hasFitEvidenceConflict, isAffirmativeFitEvidence } from "./fitEvidence.ts";
 import {
+  INSUFFICIENT_JOB_SUMMARY,
   FIT_ASSESSMENT_ELIGIBILITY,
   FIT_ASSESSMENT_EVIDENCE_SOURCES,
   FIT_ASSESSMENT_SUMMARY,
@@ -6,6 +8,7 @@ import {
   normalizeFitAssessmentInput,
   type FitAssessmentEligibilityStatus,
   type FitAssessmentMatch,
+  type FitAssessmentGapDetail,
   type FitAssessmentResult,
   type FitAssessmentVerdict
 } from "../../shared/fitAssessmentContract.ts";
@@ -24,7 +27,16 @@ const eligibilityStatuses = new Set<string>(FIT_ASSESSMENT_ELIGIBILITY);
 const evidenceSources = new Set<string>(FIT_ASSESSMENT_EVIDENCE_SOURCES);
 type AttemptStats = { attempts?: number };
 
+const FIT_FAILURE_MESSAGES = {
+  "input-limit": "Fit could not review all supplied text because it exceeds the assessment limit. Shorten the posting or candidate context, or select a shorter resume.",
+  "invalid-response": "The AI returned an assessment in an unsupported format. Retry the assessment or choose another model in Fit settings.",
+  "unverified-evidence": "Fit could not verify the cited excerpts, or they contain an explicit evidence conflict. Review the selected resume and candidate context, or retry; you can continue to Polish.",
+  "unverified-conclusion": "The assessment did not include candidate evidence for its verdict. Retry the assessment; you can continue to Polish."
+} as const;
+type FitFailureReason = keyof typeof FIT_FAILURE_MESSAGES;
+
 export const FIT_ASSESSMENT_RESPONSE_SCHEMA = `{
+  "status": "ASSESSED",
   "verdict": "STRONG | REASONABLE | STRETCH | LIMITED",
   "matches": [
     {
@@ -37,7 +49,10 @@ export const FIT_ASSESSMENT_RESPONSE_SCHEMA = `{
     {
       "jobExcerpt": "exact contiguous excerpt from the job posting",
       "status": "NOT_SHOWN",
-      "note": "optional short factual note"
+      "note": "optional short factual note",
+      "relationship": "transferable",
+      "candidateSource": "RESUME | CANDIDATE_CONTEXT",
+      "candidateExcerpt": "exact candidate excerpt supporting the transferable relationship"
     }
   ],
   "eligibility": {
@@ -55,23 +70,25 @@ Apply this rubric directly:
 - STRONG: The candidate explicitly demonstrates most main responsibilities and core qualifications, with no major material gap.
 - REASONABLE: The candidate explicitly demonstrates most main responsibilities, with only one or two material core gaps and a credible path to perform the role.
 - STRETCH: There is meaningful relevant overlap, but several important gaps remain or the core experience is mostly transferable rather than direct.
-- LIMITED: The candidate shows little direct evidence for the role's main responsibilities and core qualifications.
+- LIMITED: The supplied evidence shows little relevant foundation for the role's main work and core qualifications, either directly or through meaningful transferable experience. Generic skills or interest alone do not establish that foundation.
 - First classify posting text into main responsibilities, core qualifications, preferred qualifications, logistics, and administrative or form content. Determine the verdict from the main responsibilities and core qualifications. Missing preferred items alone must not lower an otherwise STRONG or REASONABLE result. Logistics, benefits, equal-opportunity text, and administrative or application-form questions are not fit evidence.
-- If the posting lacks substantive role responsibilities or qualifications after that classification, return LIMITED. Do not infer requirements from a title, employer description, or application form.
-- For LIMITED versus STRETCH only, when a substantive posting has meaningful direct evidence for supporting core work but the role-defining specialization is unshown, choose STRETCH. Reserve LIMITED for a content-poor posting or when direct evidence is sparse across both the role's main work and core qualifications. This boundary never promotes a candidate to REASONABLE or STRONG.
+- If the posting lacks substantive role responsibilities or qualifications after that classification, use exactly {"status":"INSUFFICIENT_JOB_INFORMATION"} as the Fit Assessment result, with no verdict, matches, gaps, or eligibility. In a combined Job analysis response, this object is the fitAssessment value. Do not infer requirements from a title, employer description, or application form.
+- For LIMITED versus STRETCH only, when a substantive posting has meaningful direct evidence for supporting core work but the role-defining specialization is unshown, choose STRETCH. Meaningful transferable evidence for core work can also support STRETCH; do not choose LIMITED solely because that evidence is not a direct match. Reserve LIMITED for substantive postings with little relevant core foundation. This boundary never promotes a candidate to REASONABLE or STRONG.
 
 Evidence rules:
 - Missing evidence is a gap, not proof that the candidate is incapable.
 - Return at most three matches and three gaps. Select the most decision-relevant findings: the central evidence and limiting gaps that best explain the verdict. Use posting order only as a tie-breaker between equally material findings.
-- Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT.
+- Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT. Every excerpt in matches, gaps, and eligibility must be at most ${MAX_EXCERPT_LENGTH} characters; choose a shorter contiguous source passage without dropping a condition that changes its meaning. Optional notes must be at most ${MAX_NOTE_LENGTH} characters.
 - A match requires direct candidate evidence for the cited job item. Transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement.
-- Respect the posting's experience source. A requirement for professional, industry, commercial, production, or paid experience is not satisfied by academic, personal, volunteer, or open-source work unless the posting explicitly accepts that source. When the posting does not constrain the source, judge each declared source by its direct relevance.
+- Respect the posting's experience source. A requirement for professional, industry, commercial, or paid experience is not satisfied by academic, personal, volunteer, or open-source work unless the posting explicitly accepts that source. When the posting does not constrain the source, judge each declared source by its direct relevance.
 - Candidate-context experience categories may overlap. Never add their years or counts together. A role/project count does not imply duration, and a duration in one category does not transfer to another.
-- Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction.
+- Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction. For affirmative transferable evidence, include relationship "transferable", candidateSource, and an exact candidateExcerpt together; otherwise omit all three fields. STRONG and REASONABLE require at least one direct match. When STRETCH has no direct matches, at least one gap must include this affirmative transferable citation.
 - A job excerpt may appear only once and must never appear in both matches and gaps.
 - Return one gap per underlying missing need; do not count the same missing qualification twice through overlapping posting excerpts.
-- Do not infer years, degree equivalence, skill adjacency, alternatives, scores, percentages, or hidden requirement bookkeeping.
-- If the evidence genuinely falls between adjacent categories, choose the lower category unless direct candidate evidence supports the higher one.
+- Separate experience source, deployment environment, duration, and responsibility. Production deployments in a personal project may satisfy a source-neutral production requirement; they cannot satisfy professional duration.
+- Judge requirements and transferable experience semantically. Preserve stated conditions and alternatives; do not require matching wording or produce hidden requirement bookkeeping.
+- Do not add overlapping durations or invent years, degree equivalence, tools, scores, or percentages. Report uncertain or transferable support as a gap rather than a direct match.
+- If the evidence genuinely falls between adjacent categories, choose the lower category unless the supplied candidate evidence meets the higher category's definition; STRETCH may rely on meaningful transferable core evidence.
 - Determine the verdict without considering eligibility, then assess employment eligibility separately. Work authorization never counts as a match or gap and never lowers the verdict.
 - Eligibility covers only work authorization, visa or sponsorship, security clearance, or legal ability to take the role; education, skills, and experience are fit evidence, not eligibility. CLEAR means no stated eligibility condition needs attention. CHECK means the posting states an eligibility condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
 - Location, onsite or hybrid schedule, relocation, and application-form questions are neither fit gaps nor eligibility conditions unless they state a legal-work restriction. When explicit candidate facts satisfy a stated eligibility condition, return CLEAR.
@@ -136,7 +153,8 @@ function sanitizeMatches(raw: unknown, sources: PromptSources): FitAssessmentMat
       candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext
     );
     const key = dedupeKey(jobExcerpt);
-    if (!candidateExcerpt || seen.has(key)) return null;
+    if (!candidateExcerpt || seen.has(key) || hasFitEvidenceConflict(jobExcerpt, candidateExcerpt,
+      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return null;
     seen.add(key);
     matches.push({
       jobExcerpt,
@@ -165,6 +183,23 @@ function sanitizeGaps(raw: unknown, sources: PromptSources, occupied: ReadonlySe
   return gaps;
 }
 
+function sanitizeGapDetails(raw: unknown, sources: PromptSources): FitAssessmentGapDetail[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.flatMap((item) => {
+    if (!item || typeof item !== "object" ||
+      item.relationship !== "transferable") return [];
+    const jobExcerpt = exactExcerpt(item.jobExcerpt, sources.jobText);
+    const candidateSource = compactText(item.candidateSource, 32).toUpperCase();
+    if (!jobExcerpt || !evidenceSources.has(candidateSource)) return [];
+    const candidateExcerpt = exactExcerpt(item.candidateExcerpt,
+      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext);
+    if (!candidateExcerpt || !isAffirmativeFitEvidence(candidateExcerpt,
+      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return [];
+    return [{ jobExcerpt, relationship: item.relationship as FitAssessmentGapDetail["relationship"],
+      candidateSource: candidateSource as FitAssessmentMatch["candidateSource"], candidateExcerpt }];
+  });
+}
+
 function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmentResult["eligibility"] | null | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -183,6 +218,11 @@ function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmen
     if (source.candidateExcerpt.trim() && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
   }
 
+  if (status === "BLOCKED" && !explicitEligibilityConflict(
+    String(source.jobExcerpt ?? ""), String(source.candidateExcerpt ?? "")
+  )) return { status: "CHECK", jobExcerpt: exactExcerpt(source.jobExcerpt, sources.jobText) as string,
+    note: "Confirm this eligibility condition; the supplied context does not establish a clear conflict." };
+
   return {
     status: status as FitAssessmentEligibilityStatus,
     ...((status === "CHECK" || status === "BLOCKED")
@@ -197,29 +237,52 @@ function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmen
 
 export function sanitizeFitAssessmentResponse(
   raw: unknown,
-  input: { jobText: unknown; resumeText: unknown; candidateContext?: unknown }
+  input: { jobText: unknown; resumeText: unknown; candidateContext?: unknown },
+  reportFailure?: (reason: FitFailureReason) => void
 ): FitAssessmentResult | null {
-  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const reject = (reason: FitFailureReason): null => { reportFailure?.(reason); return null; };
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return reject("invalid-response");
   const source = raw as Record<string, unknown>;
-  const verdict = compactText(source.verdict, 24).toUpperCase();
-  if (!verdicts.has(verdict)) return null;
+  if (normalizeFitAssessmentInput(input.jobText).length > JOB_CHAR_LIMIT || normalizeFitAssessmentInput(input.resumeText).length > RESUME_CHAR_LIMIT || normalizeFitAssessmentInput(input.candidateContext ?? "").length > CANDIDATE_CONTEXT_CHAR_LIMIT) return reject("input-limit");
   const sources = promptSources(input);
+  if (source.status === "INSUFFICIENT_JOB_INFORMATION") {
+    if (source.verdict !== undefined || source.eligibility !== undefined ||
+      (source.matches !== undefined && (!Array.isArray(source.matches) || source.matches.length)) ||
+      (source.gaps !== undefined && (!Array.isArray(source.gaps) || source.gaps.length))) return reject("invalid-response");
+    return { status: "INSUFFICIENT_JOB_INFORMATION", summary: INSUFFICIENT_JOB_SUMMARY, matches: [], gaps: [] };
+  }
+  if (source.status !== undefined && source.status !== "ASSESSED") return reject("invalid-response");
+  const verdict = compactText(source.verdict, 24).toUpperCase();
+  if (!verdicts.has(verdict)) return reject("invalid-response");
   const matches = sanitizeMatches(source.matches, sources);
-  if (!matches) return null;
+  if (!matches) return reject("unverified-evidence");
   const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))));
-  if (!gaps) return null;
-  if (verdict !== "LIMITED" && matches.length === 0) return null;
+  if (!gaps) return reject("unverified-evidence");
+  const gapDetails = sanitizeGapDetails(source.gaps, sources);
+  if (verdict !== "LIMITED" && matches.length === 0 &&
+    !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) return reject("unverified-conclusion");
   const eligibility = sanitizeEligibility(source.eligibility, sources);
-  if (eligibility === null) return null;
+  if (eligibility === null) return reject("unverified-evidence");
 
   const typedVerdict = verdict as FitAssessmentVerdict;
   return {
+    status: "ASSESSED",
     verdict: typedVerdict,
     summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
     matches,
     gaps,
+    ...(gapDetails.length ? { gapDetails } : {}),
     ...(eligibility ? { eligibility } : {})
   };
+}
+
+export function evaluateFitAssessmentResponse(
+  raw: unknown,
+  input: { jobText: unknown; resumeText: unknown; candidateContext?: unknown }
+): { fitAssessment: FitAssessmentResult | null; fitAssessmentError?: string } {
+  let failure: FitFailureReason | undefined;
+  const fitAssessment = sanitizeFitAssessmentResponse(raw, input, (reason) => { failure = reason; });
+  return { fitAssessment, ...(failure ? { fitAssessmentError: FIT_FAILURE_MESSAGES[failure] } : {}) };
 }
 
 export function fitAssessmentPromptSection({
@@ -266,7 +329,7 @@ ${fenceUntrusted(sources.jobText) || "Not provided."}
 
 ${fitAssessmentPromptSection({ resumeText: sources.resumeText, candidateContext: sources.candidateContext })}
 
-Return the Fit Assessment result itself, without an outer key, in this shape:
+Return the Fit Assessment result itself, without an outer key. For insufficient job information, use only the compact object in the rules. An assessed result uses this shape:
 ${FIT_ASSESSMENT_RESPONSE_SCHEMA}`;
   return { systemPrompt, userPrompt };
 }
@@ -292,7 +355,7 @@ export async function analyzeFitAssessment({
     stats
   );
   return {
-    fitAssessment: sanitizeFitAssessmentResponse(parsed, { jobText, resumeText, candidateContext }),
+    ...evaluateFitAssessmentResponse(parsed, { jobText, resumeText, candidateContext }),
     provider,
     model,
     reasoningEffort,

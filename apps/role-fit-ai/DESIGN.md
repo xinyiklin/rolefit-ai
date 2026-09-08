@@ -744,3 +744,13 @@ register, not a CRM grid.
 One-sentence audit test: if a screen would look at home in a SaaS template
 gallery (filled pills, stat cards, banner CTAs), it has left the drafting
 desk; rebuild it from hairlines, paper tones, and ledger vocabulary.
+
+### Final application review and evidence disclosures
+
+Keep final review flat in the Application rail after readiness and before Apply.
+Its secondary action shows the selected provider and a Settings link. Findings
+show a concise action, document navigation, and native source disclosures. Preserve
+visible keyboard focus, cancellable progress, incomplete/previous-input labels,
+and Apply as the primary action. Optional Resume Suggestions and extracted-condition
+details use existing disclosures and tokens. Insufficient Fit information uses a
+neutral label. Do not use “Verified” for supplied evidence or a clean review.

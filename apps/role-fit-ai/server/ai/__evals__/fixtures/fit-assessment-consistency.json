@@ -242,8 +242,9 @@
     "id": "content-poor-application-form",
     "scenario": "A content-poor posting made of administrative and application-form text cannot support an inferred fit.",
     "stable": true,
-    "expectedVerdicts": ["LIMITED"],
-    "allowedEligibility": ["CLEAR", "OMITTED"],
+    "expectedVerdicts": [],
+    "expectedOutcomes": ["INSUFFICIENT_JOB_INFORMATION"],
+    "allowedEligibility": ["OMITTED"],
     "materialThemes": [
       { "id": "administrative", "terms": ["Upload your resume", "application form"] },
       { "id": "logistics", "terms": ["Location", "hybrid schedule"] }

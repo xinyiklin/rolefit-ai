@@ -1,0 +1,119 @@
+{
+  "labelProvenance": "Agent-authored synthetic expectations; first14-case run found1 unsafe acceptance and1 valid rejection, then retained for regression after fixes; no human review recorded",
+  "humanReviewed": false,
+  "scope": "Deterministic helper behavior, not provider generation quality or general semantic accuracy",
+  "cases": [
+    {
+      "id": "rate-hour-minute",
+      "check": "number",
+      "claim": "Handled 72 tickets per minute.",
+      "evidence": "Handled 72 tickets per hour.",
+      "expected": "reject",
+      "dimension": "measurement"
+    },
+    {
+      "id": "typed-counts",
+      "check": "number",
+      "claim": "Served 18 customers.",
+      "evidence": "Supported 18 developers.",
+      "expected": "reject",
+      "dimension": "measurement"
+    },
+    {
+      "id": "rate-equivalent",
+      "check": "number",
+      "claim": "Handled 72 tickets per hour.",
+      "evidence": "Handled 72 tickets per hour.",
+      "expected": "accept",
+      "dimension": "measurement"
+    },
+    {
+      "id": "percentage-metric",
+      "check": "number",
+      "claim": "Reduced revenue by 12%.",
+      "evidence": "Reduced latency by 12%.",
+      "expected": "reject",
+      "dimension": "measurement"
+    },
+    {
+      "id": "duration-equivalent",
+      "check": "number",
+      "claim": "Two years of personal projects.",
+      "evidence": "2 years of personal projects.",
+      "expected": "accept",
+      "dimension": "attribution"
+    },
+    {
+      "id": "duration-source",
+      "check": "number",
+      "claim": "Two years of professional employment.",
+      "evidence": "2 years of personal projects.",
+      "expected": "reject",
+      "dimension": "attribution"
+    },
+    {
+      "id": "conditional-rust",
+      "check": "skill",
+      "claim": "Rust",
+      "evidence": "I would use Rust if given the opportunity.",
+      "expected": "reject",
+      "dimension": "polarity"
+    },
+    {
+      "id": "learning-go",
+      "check": "skill",
+      "claim": "Go",
+      "evidence": "I am currently learning Go.",
+      "expected": "reject",
+      "dimension": "polarity"
+    },
+    {
+      "id": "affirmative-postgres",
+      "check": "skill",
+      "claim": "PostgreSQL",
+      "evidence": "I used Postgres for reporting.",
+      "expected": "accept",
+      "dimension": "polarity"
+    },
+    {
+      "id": "not-only-python",
+      "check": "skill",
+      "claim": "Python",
+      "evidence": "I not only used Python but also maintained scripts.",
+      "expected": "accept",
+      "dimension": "polarity"
+    },
+    {
+      "id": "implementation-vs-documentation",
+      "check": "fit",
+      "claim": "Build TypeScript applications.",
+      "evidence": "Documented TypeScript applications.",
+      "expected": "reject",
+      "dimension": "relationship"
+    },
+    {
+      "id": "implementation-supported",
+      "check": "fit",
+      "claim": "Build TypeScript applications.",
+      "evidence": "Built TypeScript applications.",
+      "expected": "accept",
+      "dimension": "relationship"
+    },
+    {
+      "id": "alternative-rust-go",
+      "check": "fit",
+      "claim": "Rust or Go experience.",
+      "evidence": "Rust experience.",
+      "expected": "accept",
+      "dimension": "condition"
+    },
+    {
+      "id": "unsupported-python",
+      "check": "fit",
+      "claim": "Build Python services.",
+      "evidence": "Built Go services.",
+      "expected": "reject",
+      "dimension": "relationship"
+    }
+  ]
+}

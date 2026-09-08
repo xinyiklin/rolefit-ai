@@ -180,7 +180,7 @@ assert.deepEqual(
 assert.deepEqual(
   fabList.responsibilities,
   ["Operate distributed services in Python."],
-  "grounded paraphrased duty kept; ungrounded 'SOC 2 compliance' duty dropped"
+  "ordinary grounded duty stays concise; unsupported duty is dropped"
 );
 assert.deepEqual(fabList.preferredQualifications, [], "fabricated 'Rust and blockchain' preferred-qual dropped");
 
@@ -216,8 +216,8 @@ assert.equal(
 const AUTH_SOURCE = SOURCE + "\nMust be authorized to work in the US; no visa sponsorship available.";
 assert.equal(
   sanitizeJobAnalysis({ workAuth: "Must be authorized to work in the US without visa sponsorship." }, AUTH_SOURCE).workAuth,
-  "Must be authorized to work in the US without visa sponsorship.",
-  "a real work-authorization requirement grounded in the posting is kept"
+  "Must be authorized to work in the US; no visa sponsorship available.",
+  "a real work-authorization requirement retains its complete source wording"
 );
 assert.equal(
   sanitizeJobAnalysis({ workAuth: "Active security clearance required" }, AUTH_SOURCE).workAuth,
@@ -238,8 +238,8 @@ assert.equal(
 );
 assert.equal(
   sanitizeJobAnalysis({ workAuth: "Valid EAD required" }, "Must hold a valid EAD to work here.").workAuth,
-  "Valid EAD required",
-  "a REAL EAD requirement (word-boundary match in source) is kept"
+  "Must hold a valid EAD to work here.",
+  "a real EAD requirement retains its source wording"
 );
 
 // --- salary forms: $120k / 120,000 grounding ---
@@ -262,7 +262,7 @@ const messy = sanitizeJobAnalysis(
   "We build things in Python on AWS."
 );
 assert.equal(messy.title, "", "non-string title -> empty");
-assert.deepEqual(messy.responsibilities, ["Build things."], "dedupe + drop empty/short/glyph-only");
+assert.deepEqual(messy.responsibilities, ["Build things."], "dedupe and preserve concise grounded wording");
 assert.deepEqual(messy.requiredQualifications, [], "non-array list -> []");
 assert.deepEqual(messy.techKeywords, ["Python", "AWS"], "tech deduped case-insensitively + trimmed");
 assert.equal(messy.salaryMin, null, "string salaryMin -> null");

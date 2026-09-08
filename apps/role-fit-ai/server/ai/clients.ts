@@ -23,6 +23,7 @@ type ProviderCallArgs = {
   systemPrompt: string;
   userPrompt: string;
   signal?: AbortSignal;
+  retryUnreadableOutput?: boolean;
 };
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
@@ -288,7 +289,7 @@ export async function callConfiguredProvider(args: ProviderCallArgs, stats?: Att
   } catch (error) {
     const unreadableOutput =
       error instanceof UserSafeAiError && error.status === 502 && /^AI returned/.test(error.message);
-    if (!unreadableOutput) throw error;
+    if (!unreadableOutput || args.retryUnreadableOutput === false) throw error;
     bump();
     return dispatchProvider({
       ...args,

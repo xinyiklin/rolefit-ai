@@ -36,6 +36,7 @@ export function fitAssessmentMayTriggerAutoPolish(
 ): FitAssessmentCompleted & { provenance: FitAssessmentProvenance; automationToken: string } | null {
   const completed = state.latestCompleted;
   return state.enabled
+    && completed?.snapshot.result.status !== "INSUFFICIENT_JOB_INFORMATION"
     && completed?.origin === "current"
     && !completed.previousPreparation
     && completed.changes.length === 0

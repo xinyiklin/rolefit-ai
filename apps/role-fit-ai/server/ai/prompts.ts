@@ -277,12 +277,12 @@ export function honestTailoringRules() {
 // The bullet-shape, metric-discipline, and vocabulary rules follow published
 // recruiter guidance (Google's XYZ bullet formula; Stanford's AI-tell word
 // study; hiring-manager surveys on generic AI-written resumes).
-export function accomplishmentStyleRules() {
+export function accomplishmentStyleRules(finishedDocument = false) {
   return `Write every bullet as an engineering accomplishment, not a product description:
 - Lead with what the candidate built, changed, or decided; then how (architecture, technique, or scale); then the result.
 - One claim per bullet. Never chain capabilities into an inventory ("with A, B, and C") or reduce a project to a tour of what the app does (e.g. "app with scheduling, billing, charting, and refills") — state the engineering behind the one feature that matters for this job.
 - Write claims a screener outside the project can evaluate in seconds. Replace project-internal vocabulary with plain engineering terms, and cut teaching parentheticals that explain a term rather than make a claim.
-- A number earns its place only when a recruiter can parse it at a glance (users, requests, latency, time or cost saved, endpoints, tests). Keep at most one or two figures per bullet; codebase-size counts (files, modules, internal checks) are not impact, and a plain statement of the achievement beats a stacked or vanity count. Keep real outcome metrics the candidate already wrote; never invent one — use the bracketed [add metric: ...] prompt instead.
+- A number earns its place only when a recruiter can parse it at a glance (users, requests, latency, time or cost saved, endpoints, tests). Keep at most one or two figures per bullet; codebase-size counts (files, modules, internal checks) are not impact, and a plain statement of the achievement beats a stacked or vanity count. Keep real outcome metrics the candidate already wrote; never invent one${finishedDocument ? ". Return finished text without placeholders; put missing evidence in separate advice." : " — use the bracketed [add metric: ...] prompt instead."}
 - Shorter is often the improvement: cutting a redundant clause, a stacked count, or a filler phrase is a legitimate edit on its own. Never grow a bullet just to hit more keywords.
 - Keep tech and tool mentions minimal: cite only the few technologies the work centered on; do not append long stacks or restate the skills section inside project bullets.
 - Use plain, specific verbs (built, designed, implemented, migrated, reduced, automated, debugged). Never use brochure or AI-tell vocabulary: seamless, robust, cutting-edge, innovative, dynamic, passionate, powerful, world-class, state-of-the-art, spearheaded, revolutionized, leveraged, utilized, showcasing, pivotal, intricate, results-driven, "proven track record", "in the realm of", "leveraging synergies".
@@ -400,6 +400,8 @@ Writing:
 - A restrained factual connection between the employer's stated work and verified candidate experience is allowed. Invented motivation, admiration, or personal history is not.
 - Do not make every paragraph end by restating how the experience applies.
 - Never return a placeholder. Missing information is a contract failure, not bracketed output.
+
+Preserve employer/project attribution when using the sources cited by a paragraph. A negated statement or a learning interest is not affirmative experience. Do not join real facts from unrelated experiences into one claim.
 
 Every paragraph must cite at least one evidence id it actually used, and every id must appear in the supplied corpus${hasAuthoredVoice ? " (or be source_letter)" : ""}.
 

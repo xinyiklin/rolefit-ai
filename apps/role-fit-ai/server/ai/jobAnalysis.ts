@@ -23,7 +23,8 @@ import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
-import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
+import { groundedJobCondition } from "./jobConditionEvidence.ts";
+import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 import {
   LIST_STOPWORDS,
   distinctiveTokenKeys,
@@ -34,7 +35,7 @@ import {
   FIT_ASSESSMENT_RESPONSE_SCHEMA,
   analyzeFitAssessment,
   fitAssessmentPromptSection,
-  sanitizeFitAssessmentResponse
+  evaluateFitAssessmentResponse
 } from "./fitAssessment.ts";
 import {
   normalizeFitAssessmentInput,
@@ -95,7 +96,7 @@ ${FIT_ASSESSMENT_RULES}` : ""}`;
   "domainSignals": ["e.g. \\"fintech\\", \\"healthcare\\", \\"AI\\", \\"infrastructure\\""]
 }`;
   const responseSchema = fitAssessment
-    ? `Return this JSON shape. The job and fitAssessment subsections are independent; always return the best job object even if Fit Assessment is unavailable:
+    ? `Return this JSON shape. The job and fitAssessment subsections are independent; always return the best job object even if Fit Assessment is unavailable. For insufficient job information, replace the assessed fitAssessment example below with the compact object in the Fit Assessment rules:
 {
   "job": ${schema.slice(schema.indexOf("{"))},
   "fitAssessment": ${FIT_ASSESSMENT_RESPONSE_SCHEMA}
@@ -261,23 +262,6 @@ function groundedTech(tech: unknown, sourceText: string): boolean {
   return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
 }
 
-// workAuth is a tracked prepared-job fact that feeds a separate advisory
-// eligibility interpretation; it does not control Fit Assessment. Give it the same
-// anti-fabrication discipline as every other analyzed field: keep it only when
-// the specific authorization class the model named (clearance / citizenship /
-// visa / sponsorship / work authorization / …) actually appears in the posting.
-// AUTH_STEMS and its boundary-aware matcher live in the shared eligibility
-// lexicon so every advisory path uses the same vocabulary.
-function groundedWorkAuth(value: unknown, sourceLower: string): string {
-  const wa = str(value, 240);
-  if (!wa) return "";
-  const waLower = wa.toLowerCase();
-  const named = AUTH_STEMS.filter((stem) => mentionsAuthStem(waLower, stem));
-  if (!named.length) return "";                                          // not an auth statement
-  if (!named.some((stem) => mentionsAuthStem(sourceLower, stem))) return ""; // invented auth requirement
-  return wa;
-}
-
 function salaryContextFromSource(sourceText: string): string {
   return sourceText
     .split(/\r?\n|(?<=[.!?])\s+/)
@@ -389,6 +373,7 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
   // Model output: read fields defensively off a record view (never validated).
   const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
   const sourceNorm = norm(sourceText);
+  const conditionIssues: JobConditionIssue[] = [];
   // Token set for list grounding (distinctive words actually present in the posting).
   const sourceTokens = new Set(sourceNorm.split(" ").filter(Boolean));
 
@@ -422,22 +407,29 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
     company,
     location,
     jobType: groundedJobType(obj.jobType, sourceText),
-    workAuth: groundedWorkAuth(obj.workAuth, sourceLower),
+    workAuth: groundedJobCondition(str(obj.workAuth, 1000), "workAuth", sourceText, conditionIssues),
     salaryMin,
     salaryMax,
     salaryCurrency: hasSalary ? currencyFromSalaryContext(salaryContext) : "",
     salaryPeriod: hasSalary ? periodFromSalaryContext(salaryContext) : "",
     roleDescription: groundedRoleDescription(obj.roleDescription, sourceText),
     // Content lists are grounded against the posting (anti-fabrication), like scalars/tech.
-    responsibilities: groundedList(obj.responsibilities, { maxItems: 12 }, sourceTokens, sourceText),
-    requiredQualifications: groundedList(obj.requiredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
-    preferredQualifications: groundedList(obj.preferredQualifications, { maxItems: 12 }, sourceTokens, sourceText),
+    responsibilities: strList(obj.responsibilities, { maxItems: 12, maxLen: 1000 })
+      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
+      .map((item) => groundedJobCondition(item, "responsibilities", sourceText, conditionIssues)).filter(Boolean),
+    requiredQualifications: strList(obj.requiredQualifications, { maxItems: 12, maxLen: 1000 })
+      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
+      .map((item) => groundedJobCondition(item, "requiredQualifications", sourceText, conditionIssues)).filter(Boolean),
+    preferredQualifications: strList(obj.preferredQualifications, { maxItems: 12, maxLen: 1000 })
+      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
+      .map((item) => groundedJobCondition(item, "preferredQualifications", sourceText, conditionIssues)).filter(Boolean),
     techKeywords,
     // senioritySignals/domainSignals feed the visible job brief and later checks,
     // so they get the same source-grounding as the content lists —
     // an invented "fintech" domain or "staff-level" seniority signal is dropped.
     senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),
-    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText)
+    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText),
+    conditionIssues
   };
 }
 
@@ -448,7 +440,7 @@ export function sanitizePrepareAnalysisResponse(
   // subsections are sanitized independently on purpose: a weak job half must
   // not discard a valid screening, and vice versa.
   fitInput: FitAssessmentInput | null
-): { fields: ReturnType<typeof sanitizeJobAnalysis>; fitAssessment?: FitAssessmentResult | null } {
+): { fields: ReturnType<typeof sanitizeJobAnalysis>; fitAssessment?: FitAssessmentResult | null; fitAssessmentError?: string } {
   const source = parsed && typeof parsed === "object" && !Array.isArray(parsed)
     ? parsed as Record<string, unknown>
     : {};
@@ -459,7 +451,7 @@ export function sanitizePrepareAnalysisResponse(
     fields: sanitizeJobAnalysis(rawJob, jobText),
     ...(fitInput
       ? {
-          fitAssessment: sanitizeFitAssessmentResponse(source.fitAssessment, {
+          ...evaluateFitAssessmentResponse(source.fitAssessment, {
             jobText,
             resumeText: fitInput.resumeText,
             candidateContext: fitInput.candidateContext
@@ -539,6 +531,7 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
         source: "ai",
         fitAssessment: fit.fitAssessment,
         fitAssessmentStatus: fit.fitAssessment ? "ready" : "unavailable",
+        ...(fit.fitAssessmentError ? { fitAssessmentError: fit.fitAssessmentError } : {}),
         provider: fit.provider,
         model: fit.model,
         reasoningEffort: fit.reasoningEffort,
@@ -560,7 +553,8 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
       ...(result.fitAssessmentRequested
         ? {
             fitAssessment: result.fitAssessment,
-            fitAssessmentStatus: result.fitAssessment ? "ready" : "unavailable"
+            fitAssessmentStatus: result.fitAssessment ? "ready" : "unavailable",
+            ...(result.fitAssessmentError ? { fitAssessmentError: result.fitAssessmentError } : {})
           }
         : {})
     });

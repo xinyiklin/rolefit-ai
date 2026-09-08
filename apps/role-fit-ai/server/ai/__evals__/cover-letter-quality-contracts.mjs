@@ -134,7 +134,7 @@ for (const fixture of fixtures) {
     onePage: true
   });
   assert.equal(report.passed, true, `${fixture.id} can satisfy every quality dimension`);
-  assert.equal(report.score, 100);
+  assert.equal(report.structuralScore, 100);
 
   assert.equal(
     gradeCoverLetterResult({
@@ -174,7 +174,7 @@ assert.equal(
     sourceText: firstPreflight.template.authoredProse,
     resolved: firstPreflight.resolved,
     onePage: true
-  }).checks.naturalLanguage.passed,
+  }).checks.genericPhraseScreen.passed,
   false
 );
 
@@ -187,7 +187,7 @@ assert.equal(
     sourceText: firstPreflight.template.authoredProse,
     resolved: firstPreflight.resolved,
     onePage: true
-  }).checks.evidenceGrounding.passed,
+  }).checks.citationValidity.passed,
   false
 );
 
@@ -204,7 +204,7 @@ assert.equal(
     sourceText: firstPreflight.template.authoredProse,
     resolved: firstPreflight.resolved,
     onePage: true
-  }).checks.noResumeDump.passed,
+  }).checks.verbatimBulletReuse.passed,
   false,
   "a pasted resume bullet is a resume dump, not elaboration"
 );

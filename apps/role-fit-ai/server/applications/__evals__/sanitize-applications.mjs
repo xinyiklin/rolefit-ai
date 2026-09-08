@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -373,6 +374,50 @@ try {
       rejected = error instanceof ApplicationsStorageError;
     }
     if (!rejected) failures.push(`a ${label} Fit Assessment summary bypassed strict tracker validation`);
+  }
+
+  const legacyFit = JSON.parse(JSON.stringify(staleSummaryRecord));
+  delete legacyFit.fitAssessment.result.status;
+  legacyFit.fitAssessment.promptVersion = "fit-assessment-direct-rubric-v3";
+  legacyFit.fitAssessment.assessedAt = canonicalCreatedAt;
+  legacyFit.resumeArtifacts = {
+    hasPdf: true, hasSource: false, fileName: "resume.pdf", templateId: "",
+    savedAt: canonicalCreatedAt
+  };
+  for (const record of [legacyFit, { ...legacyFit, appliedAt: "" }, {
+    ...legacyFit, appliedAt: canonicalCreatedAt
+  }, { ...legacyFit, fitAssessment: undefined, appliedAt: "" }]) {
+    const before = JSON.stringify({ applications: [record] });
+    await writeFile(filePath, before, "utf8");
+    const [loaded] = await readApplications(workspace);
+    assert.deepEqual(JSON.parse(JSON.stringify(loaded)), JSON.parse(JSON.stringify(sanitizeApplications([record])[0])));
+    assert.equal(loaded.appliedAt, record.appliedAt || undefined, "reading must never invent an application date");
+    assert.deepEqual(JSON.parse(JSON.stringify(loaded.resumeArtifacts)), record.resumeArtifacts, "sent document metadata survives");
+    if (record.fitAssessment) {
+      assert.equal(loaded.fitAssessment.result.status, "ASSESSED");
+      assert.equal(loaded.fitAssessment.promptVersion, record.fitAssessment.promptVersion);
+      assert.equal(loaded.fitAssessment.assessedAt, record.fitAssessment.assessedAt);
+    }
+    assert.equal(await readFile(filePath, "utf8"), before, "compatibility reads do not rewrite the tracker");
+  }
+  for (const mutate of [
+    (r) => { r.fitAssessment.result.status = "UNKNOWN"; },
+    (r) => { r.fitAssessment.result.status = null; },
+    (r) => { r.fitAssessment.result.summary = ""; },
+    (r) => { r.fitAssessment.result.verdict = "UNKNOWN"; },
+    (r) => { r.fitAssessment.result.extra = true; },
+    (r) => { r.fitAssessment.extra = true; },
+    (r) => { r.appliedAt = null; },
+    (r) => { r.appliedAt = 42; },
+    (r) => { r.resumeArtifacts.hasSource = true; },
+    (r) => { r.extra = true; }
+  ]) {
+    const invalid = structuredClone(legacyFit);
+    mutate(invalid);
+    const before = JSON.stringify({ applications: [invalid] });
+    await writeFile(filePath, before, "utf8");
+    await assert.rejects(readApplications(workspace), ApplicationsStorageError);
+    assert.equal(await readFile(filePath, "utf8"), before);
   }
 
   // Priority was presentation-only metadata. A canonical tracker from an older

@@ -89,13 +89,16 @@ async function runFixture(fixture, run) {
   });
   writeFileSync(
     join(OUT_DIR, `${fixture.id}-${PROVIDER.replace(/[^a-z0-9-]/gi, "_")}-run-${run}.json`),
-    JSON.stringify({ fixture, result, pageCount, report }, null, 2)
+    JSON.stringify({ fixture, result, pageCount, report, labelProvenance: "Repository-authored synthetic cases; human factual/writing-quality review not recorded", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null }, null, 2)
   );
   return {
     fixture: fixture.id,
     run,
-    score: report.score,
-    passed: report.passed,
+    structuralScore: report.structuralScore,
+    structuralChecksPassed: report.passed,
+    factualAccuracy: null,
+    coverageAccuracy: null,
+    humanReviewed: false,
     // The whole point of the rework: the model picks these, and drift across
     // identical runs is worth seeing.
     evidenceUsed: result.evidenceUsed.map((item) => item.id),
@@ -145,6 +148,6 @@ for (const [fixture, choices] of selectionSpread) {
 const repairs = results.filter((result) => result.repaired).length;
 if (repairs > 0) console.log(`NOTE: ${repairs}/${results.length} runs needed the repair pass.`);
 
-const failures = results.filter((result) => result.error || result.passed !== true);
-console.log(`Result: ${results.length - failures.length}/${results.length} clean.`);
+const failures = results.filter((result) => result.error || result.structuralChecksPassed !== true);
+console.log(`Result: ${results.length - failures.length}/${results.length} structural checks passed; factual accuracy and persuasiveness unmeasured.`);
 process.exit(failures.length ? 1 : 0);

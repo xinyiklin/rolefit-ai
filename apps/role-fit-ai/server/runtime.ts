@@ -1,3 +1,4 @@
+import { handleApplicationReview } from "./ai/applicationReview.ts";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
@@ -416,6 +417,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
 
     if (pathname === "/api/job-analysis") {
       void handleJobAnalysis(req, res);
+      return;
+    }
+
+    if (pathname === "/api/application-review") {
+      void handleApplicationReview(req, res);
       return;
     }
 

@@ -1,3 +1,4 @@
+import { sanitizeJobConditionIssues } from "../../shared/jobConditionContract.ts";
 // Client-side Job analysis orchestrator. Tries the AI analyzer (POST /api/job-analysis,
 // keys stay server-side) and falls back to the deterministic engine on ANY
 // failure — no key, timeout, network error, or an unusable model reply — so
@@ -50,6 +51,8 @@ export type AiJobAnalysisFields = {
   attempts?: number;
   fitAssessment?: unknown;
   fitAssessmentStatus?: unknown;
+  fitAssessmentError?: unknown;
+  conditionIssues?: unknown;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -103,6 +106,7 @@ function buildExtractedFromAi(fields: Partial<AiJobAnalysisFields>, sourceText: 
     roleDescription,
     tracking,
     manualReviewFields: [],
+    conditionIssues: sanitizeJobConditionIssues(fields.conditionIssues, sourceText),
     sourceTextLength: sourceText.length
   };
   result.manualReviewFields = manualReviewFields(result);
@@ -116,6 +120,7 @@ export type JobAnalysisResult = {
   failure?: ClassifiedFailure;
   fitAssessmentRequested: boolean;
   fitAssessment: FitAssessmentResult | null;
+  fitAssessmentError?: string;
 };
 
 export type FitAssessmentRequest = {
@@ -252,7 +257,7 @@ async function postJobAnalysisRequest(
           }
         }
       : {
-          failure: classifyFailure(new ApiError("Fit Assessment returned no usable screening", 502))
+          failure: classifyFailure(new ApiError(str(fitBody?.fitAssessmentError).trim().slice(0, 600) || "Fit Assessment returned no usable screening", 502))
         };
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") throw error;
@@ -338,12 +343,16 @@ export function extractedFromAiOrLocal(
   // combined request and invited a second assessment-only call; the two sources stay
   // independent here for the same reason.
   const fitAssessment = fitAssessmentRequested ? sanitizeFitAssessment(fields?.fitAssessment) : null;
+  const fitAssessmentError = fitAssessmentRequested && !fitAssessment
+    ? str(fields?.fitAssessmentError).trim().slice(0, 600)
+    : "";
   if (fields && hasUsableAiContent(fields)) {
     return {
       extracted: buildExtractedFromAi(fields, text, url),
       source: "ai",
       usage: aiUsageFromFields(fields),
       fitAssessmentRequested,
+      ...(fitAssessmentError ? { fitAssessmentError } : {}),
       fitAssessment
     };
   }
@@ -353,6 +362,7 @@ export function extractedFromAiOrLocal(
     usage: localFallbackUsage(aiRequest),
     failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502)),
     fitAssessmentRequested,
+    ...(fitAssessmentError ? { fitAssessmentError } : {}),
     fitAssessment
   };
 }

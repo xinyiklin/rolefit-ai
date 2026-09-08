@@ -307,15 +307,9 @@ export function validateCoverLetterTailorOutput({
       repairMessage: `Name the company "${resolved.company}" in the body.`
     });
   }
-  if (GENERIC_DRAFT_LANGUAGE.test(bodyText)) {
-    issues.push({
-      code: "quality_contract",
-      category: "quality",
-      detail: "The draft relied on generic brochure language instead of specific evidence.",
-      recovery: "retry",
-      repairMessage: "Remove generic brochure phrasing and filler enthusiasm."
-    });
-  }
+  const styleWarnings = GENERIC_DRAFT_LANGUAGE.test(bodyText)
+    ? ["Consider replacing generic phrasing with a specific, supported connection."]
+    : [];
 
   const coverLetterText = assembleCoverLetterText(bodyParagraphs, resolved);
   if (hasUnresolvedCoverLetterTokens(coverLetterText)) {
@@ -352,7 +346,7 @@ export function validateCoverLetterTailorOutput({
   return {
     output: {
       bodyParagraphs,
-      warnings: stringArray(parsed.warnings, 6, 300)
+      warnings: [...stringArray(parsed.warnings, 6, 300), ...styleWarnings]
     },
     coverLetterText,
     issues

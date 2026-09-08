@@ -1,5 +1,8 @@
+import { templateHasUnresolvedSlots } from "../../src/lib/coverLetterTemplate.ts";
+import { affirmativeEvidenceForTerm, candidateClaimIssue, explicitAdviceClaims } from "./claimEvidence.ts";
 import {
   RESUME_POLISH_STATUSES,
+  sanitizeResumePolishAdvice,
   type FlatResumeTarget,
   type ResumePolishStatus,
   type ResumePolishWithheldReason,
@@ -12,10 +15,11 @@ import {
   findUngroundedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
-  hasUnsupportedOwnershipIncrease,
+  findUngroundedProseProperClaimTerm,
   proseHasUngroundedTerm
 } from "./grounding.ts";
 import {
+  accomplishmentStyleRules,
   clipForPrompt,
   fenceUntrusted,
   inputFirewallRule,
@@ -23,6 +27,7 @@ import {
 } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
 import { containsStructuredMarkup, hasUngroundedNumericClaim } from "./sanitize.ts";
+import type { NormalizedResumeScope } from "./resumeScope.ts";
 import { UserSafeAiError } from "./errors.ts";
 
 type AttemptStats = { attempts?: number };
@@ -43,7 +48,7 @@ const JOB_TERM_STOP_WORDS = new Set([
   "and", "are", "for", "from", "have", "role", "that", "the", "this", "with", "you", "your"
 ]);
 
-type PromptTarget = Pick<FlatResumeTarget, "targetId" | "kind" | "section" | "currentText">;
+type PromptTarget = Pick<FlatResumeTarget, "targetId" | "kind" | "section" | "currentText" | "target">;
 
 function matchingJobTermCount(target: FlatResumeTarget, jobTerms: Set<string>): number {
   const targetTerms = new Set(`${target.section} ${target.currentText}`
@@ -82,16 +87,23 @@ export function selectPromptTargets(targets: FlatResumeTarget[], jobText: string
     );
   const selectedTargets: FlatResumeTarget[] = [];
   const promptTargets: PromptTarget[] = [];
-  let serialized = "[]";
+  const entries: { sectionId: string; entryId: string; text: string }[] = [];
+  let serialized = JSON.stringify({ entries, targets: promptTargets });
   for (const { target } of ranked) {
     const candidate: PromptTarget = {
       targetId: target.targetId,
       kind: target.kind,
       section: target.section,
-      currentText: target.currentText.slice(0, 900)
+      currentText: target.currentText,
+      target: target.target
     };
-    const nextSerialized = JSON.stringify([...promptTargets, candidate]);
+    const entry = { sectionId: target.target.sectionId, entryId: target.target.entryId, text: target.entryText };
+    const nextEntries = entries.some((item) => item.sectionId === entry.sectionId && item.entryId === entry.entryId)
+      ? entries
+      : [...entries, entry];
+    const nextSerialized = JSON.stringify({ entries: nextEntries, targets: [...promptTargets, candidate] });
     if (nextSerialized.length > PROMPT_TARGET_BUDGET) continue;
+    if (nextEntries !== entries) entries.push(entry);
     promptTargets.push(candidate);
     selectedTargets.push(target);
     serialized = nextSerialized;
@@ -106,7 +118,8 @@ export function buildResumeProposalPrompts({
   honestContext,
   customInstructions,
   boldBulletKeywords = true,
-  reasoningEffort
+  reasoningEffort,
+  adviceSources = ""
 }: {
   jobText: string;
   targets: FlatResumeTarget[];
@@ -115,6 +128,7 @@ export function buildResumeProposalPrompts({
   customInstructions: string;
   boldBulletKeywords?: boolean;
   reasoningEffort?: unknown;
+  adviceSources?: string;
 }) {
   const targetSelection = selectPromptTargets(targets, jobText);
   const auditInstructions = polishSelfAuditInstructions(reasoningEffort);
@@ -137,6 +151,10 @@ ${fenceUntrusted(targetSelection.serialized)}
 ${fenceUntrusted(clipForPrompt(scopeText, 28_000, "resume context"))}
 </resume_context>
 
+<evidence_items>
+${fenceUntrusted(clipForPrompt(adviceSources, 12_000, "optional advice source references"))}
+</evidence_items>
+
 <candidate_context>
 ${fenceUntrusted(clipForPrompt(honestContext, 6_000, "candidate context")) || "Not provided."}
 </candidate_context>
@@ -146,7 +164,7 @@ ${fenceUntrusted(clipForPrompt(customInstructions, 3_000, "user guidance")) || "
 </user_guidance>
 
 Rules:
-- Return only targetId values from editable_targets.
+- Return only targetId values from editable_targets.targets. Entry evidence is listed once in editable_targets.entries and joined by sectionId and entryId.
 - replacement must be a complete replacement for currentText, not instructions or commentary.
 ${boldBulletKeywords
   ? "- Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines."
@@ -155,8 +173,12 @@ ${boldBulletKeywords
 - Skill category labels are locked and never appear in editable_targets. Never replace a skill list with a category label.
 - A new skill may come only from the resume or candidate context, never merely from the job description.
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
+- Preserve same-entry attribution; negative or aspirational text is not evidence.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 - summary is optional concise feedback, maximum 3 items.
+- advice is optional editorial guidance about emphasis, order, space, or missing evidence. Cite exact job and entry excerpts. Advice never supplies replacement text or asserts new candidate facts.
+
+${accomplishmentStyleRules(true)}
 
 ${auditInstructions}
 
@@ -166,7 +188,8 @@ Return this shape:
   "changes": [
     { "targetId": "target-1", "replacement": "complete replacement", "reason": "short optional reason" }
   ],
-  "summary": ["up to 3 material improvements"]
+  "summary": ["up to 3 material improvements"],
+  "advice": [{"kind":"emphasis | order | space | missing-evidence", "sectionId":"existing id", "entryId":"existing id", "jobExcerpt":"exact posting excerpt", "candidateExcerpt":"exact same-entry evidence", "rationale":"short optional structural suggestion; never an edit or invented fact"}]
 }`;
   return { systemPrompt, userPrompt, ...targetSelection };
 }
@@ -205,14 +228,6 @@ function splitSkillList(value: string): string[] {
     .filter(Boolean);
 }
 
-function corpusContainsSkill(corpus: string, skill: string): boolean {
-  const normalizedCorpus = normalizedSkillText(corpus);
-  const normalizedSkill = normalizedSkillText(skill);
-  if (!normalizedSkill) return false;
-  const escaped = normalizedSkill.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return new RegExp(`(?:^|[^a-z0-9+#.])${escaped}(?=$|[^a-z0-9+#.])`, "i").test(normalizedCorpus);
-}
-
 function validSkillList(replacement: string, target: FlatResumeTarget, grounding: string): boolean {
   const items = splitSkillList(replacement);
   if (!items.length || items.length > 30 || (items.length === 1 && isSkillCategoryLabel(items[0]))) return false;
@@ -222,7 +237,7 @@ function validSkillList(replacement: string, target: FlatResumeTarget, grounding
     const key = normalizedSkillText(item);
     const words = item.match(/[A-Za-z0-9+#.-]+/g) ?? [];
     if (!key || seen.has(key) || words.length > 8 || /[.!?]$/.test(item) || isSkillCategoryLabel(item)) return false;
-    if (!currentItems.has(key) && !corpusContainsSkill(grounding, item)) return false;
+    if (!currentItems.has(key) && !affirmativeEvidenceForTerm(item, grounding)) return false;
     seen.add(key);
   }
   return true;
@@ -240,11 +255,7 @@ function replacementIsSupported(
   const grounding = target.sectionType === "standard"
     ? target.entryText
     : wholeResumeGrounding;
-  if (hasUnsupportedOwnershipIncrease(
-    replacement,
-    target.currentText,
-    `${target.entryText}\n${honestContext}`
-  )) return false;
+  if (candidateClaimIssue(replacement, grounding, target.currentText, `${target.entryText}\n${honestContext}`)) return false;
   const lowerGrounding = grounding.toLowerCase();
   return !findUngroundedJdTerm(replacement, jobText.toLowerCase(), lowerGrounding)
     && !hasUngroundedNumericClaim(replacement, grounding)
@@ -314,6 +325,7 @@ export function sanitizeResumeProposal(
       || !stripInlineMarks(normalized)
       || String(replacementRaw ?? "").length > 1400
       || containsStructuredMarkup(replacementRaw)
+      || templateHasUnresolvedSlots(normalized)
     ) {
       increment(counts, "MALFORMED");
       continue;
@@ -381,6 +393,17 @@ export function sanitizeResumeProposal(
   };
 }
 
+export function sanitizeResumeAdvice(raw: unknown, scope: NormalizedResumeScope, jobText: string) {
+  return sanitizeResumePolishAdvice(raw).filter((item) => {
+    const section = [...scope.sections, ...scope.contextSections].find((section) => section.id === item.sectionId);
+    const entry = section?.entries.find((entry) => entry.id === item.entryId);
+    const evidence = entry ? [entry.titleLeft, entry.subtitleLeft, ...entry.bullets.map((bullet) => bullet.text)].join("\n") : "";
+    return Boolean(entry && jobText.includes(item.jobExcerpt) && evidence.includes(item.candidateExcerpt)
+      && !explicitAdviceClaims(item.rationale).some((claim) => candidateClaimIssue(claim, evidence)
+        || findUngroundedProseProperClaimTerm(claim, evidence, "")));
+  });
+}
+
 export async function generateResumeProposal({
   body,
   resumeScope,
@@ -404,6 +427,16 @@ export async function generateResumeProposal({
   if (!targets.length) {
     throw new UserSafeAiError("Set at least one editable resume section to Polish.", 400);
   }
+  const scope = resumeScope as NormalizedResumeScope;
+  const adviceSources = [...scope.sections, ...scope.contextSections].map((section) => ({
+    sectionId: section.id,
+    heading: section.heading,
+    entries: section.entries.map((entry) => ({
+      entryId: entry.id,
+      title: entry.titleLeft,
+      subtitle: entry.subtitleLeft
+    }))
+  }));
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
   const prompts = buildResumeProposalPrompts({
     jobText,
@@ -412,7 +445,8 @@ export async function generateResumeProposal({
     honestContext,
     customInstructions,
     boldBulletKeywords,
-    reasoningEffort
+    reasoningEffort,
+    adviceSources: JSON.stringify(adviceSources)
   });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider({
@@ -434,6 +468,7 @@ export async function generateResumeProposal({
       prompts.omittedCount,
       boldBulletKeywords
     ),
+    advice: sanitizeResumeAdvice((parsed as Record<string, unknown>)?.advice, scope, jobText),
     provider,
     model,
     reasoningEffort,

@@ -49,6 +49,17 @@ export function ResumeProposalReview({
     </p>
   ) : null;
 
+  const advice = result.advice?.length ? (
+    <details className="prepare-note">
+      <summary>Suggestions{proposalStale || result.adviceStale ? " · Previous inputs" : ""}</summary>
+      <ul>{result.advice.map((item, index) => {
+        const section = resume.sections.find((section) => section.id === item.sectionId);
+        const entry = section?.items.find((entry) => entry.id === item.entryId);
+        return <li key={index}><strong>{section?.heading} · {stripInlineMarks(entry?.titleLeft ?? "")}</strong><p>{item.rationale}</p><blockquote>{item.jobExcerpt}</blockquote><blockquote>{item.candidateExcerpt}</blockquote></li>;
+      })}</ul>
+    </details>
+  ) : null;
+
   function acceptEdit(suggestionId: string, value: string): void {
     if (proposalStale) return;
     const suggestion = suggestions.find((entry) => entry.id === suggestionId);
@@ -59,10 +70,10 @@ export function ResumeProposalReview({
   }
 
   if (result.polishOutcome === "NO_CHANGES") {
-    return <><p className="resume-proposal__empty" role="status">No safe material changes were suggested.</p>{omittedNote}</>;
+    return <><p className="resume-proposal__empty" role="status">No safe material changes were suggested.</p>{advice}{omittedNote}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
-    return <><p className="resume-proposal__empty is-warn" role="status">The generated edits could not be verified. Your resume is unchanged.</p>{omittedNote}</>;
+    return <><p className="resume-proposal__empty is-warn" role="status">The generated edits could not be verified. Your resume is unchanged.</p>{advice}{omittedNote}</>;
   }
 
   return (
@@ -169,6 +180,7 @@ export function ResumeProposalReview({
           {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be verified.
         </p>
       ) : null}
+      {advice}
       {omittedNote}
     </div>
   );

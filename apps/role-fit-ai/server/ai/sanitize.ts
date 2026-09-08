@@ -1,3 +1,5 @@
+import { findUngroundedToolClaimTerm } from "./grounding.ts";
+
 // Shared deterministic guards used by the current document workflows.
 
 export function containsStructuredMarkup(value: unknown): boolean {
@@ -61,7 +63,7 @@ const DURATION_CLAIM_PATTERN = new RegExp(
   "gi"
 );
 
-type NumericClaim = { key: string; display: string };
+export type NumericClaim = { key: string; display: string; context: string; subject: string };
 
 function normalizedDigit(value: string): string {
   return value.replace(/[, _]/g, "").replace(/^0+(?=\d)/, "");
@@ -86,34 +88,97 @@ function normalizedNumber(value: string): string | null {
   return /^\d/.test(value) ? normalizedDigit(value) : normalizedWordNumber(value);
 }
 
-function numericClaims(value: unknown): NumericClaim[] {
-  const text = String(value ?? "");
+function scaledMeasurementNumber(value: string, unit: string): string | null {
+  const number = normalizedNumber(value);
+  const multiplier = unit.match(/\b(thousand|million|billion)\b/i)?.[1].toLowerCase();
+  if (!number || !multiplier) return number;
+  const places = { thousand: 3, million: 6, billion: 9 }[multiplier]!;
+  const [whole, fraction = ""] = number.split(".");
+  const digits = whole + fraction.padEnd(places, "0");
+  const split = whole.length + places;
+  return (digits.slice(0, split) + (digits.length > split ? "." + digits.slice(split) : "")).replace(/^0+(?=\d)/, "");
+}
+
+function measurementSubject(before: string, after: string, unit: string): string {
+  if (unit.includes("percent")) {
+    const metrics = /\b(latency|turnaround|conversion|costs?|revenue|throughput|accuracy|errors?)\b/gi;
+    const preceding = [...before.matchAll(metrics)].at(-1)?.[0];
+    const following = [...after.matchAll(metrics)][0]?.[0];
+    return (preceding ?? following ?? "").toLowerCase().replace(/s$/, "");
+  }
+  if (unit.startsWith("duration")) {
+    const scope = `${before} ${after}`;
+    if (/\b(personal|academic|volunteer|open.source)\b/i.test(scope)) return "non-employment";
+    if (/\b(professional|paid|employment|industry|commercial)\b/i.test(scope)) return "employment";
+  }
+  return "";
+}
+
+export function numericClaims(value: unknown): NumericClaim[] {
+  const text = String(value ?? "").replace(/<\/?(?:b|i|u)>/gi, "");
   const claims: NumericClaim[] = [];
-  const seen = new Set<string>();
-  const push = (key: string, display: string) => {
-    if (!key || seen.has(key)) return;
-    seen.add(key);
-    claims.push({ key, display });
+  const occupied: Array<[number, number]> = [];
+  const push = (key: string, display: string, index: number, length: number) => {
+    // A quantity cannot borrow the metric from a neighboring coordinated clause.
+    const boundary = /[\n;,!?]|\.(?:\s|$)|\b(?:and|but|while|whereas)\b/i;
+    const before = text.slice(0, index).split(boundary).at(-1) ?? "";
+    const after = text.slice(index + length).split(boundary)[0];
+    claims.push({ key, display, context: `${before}${display}${after}`, subject: measurementSubject(before, after, key) });
+    occupied.push([index, index + length]);
   };
 
+  // Named software versions stay versions when followed by a noun such as scripts.
+  for (const match of text.matchAll(/\b([A-Za-z][\w+#.]*)\s+v?(\d+\.\d+(?:\.\d+)*)/g)) {
+    if (!findUngroundedToolClaimTerm(match[1], "")) continue;
+    const after = text.slice(match.index! + match[0].length);
+    if (/^\s*(?:%|percent(?:age)?\b|thousand\b|million\b|billion\b|years?\b|months?\b|weeks?\b|days?\b|hours?\b)/i.test(after)) continue;
+    const index = match.index! + match[0].length - match[2].length;
+    push(`version:${match[1].toLowerCase()}:${match[2]}`, match[2], index, match[2].length);
+  }
   for (const match of text.matchAll(DURATION_CLAIM_PATTERN)) {
     const number = normalizedNumber(match[1]);
     if (!number) continue;
     const unit = match[2].toLowerCase().replace(/s$/, "");
-    push(`duration:${unit}:${number}`, match[0]);
-    push(`number:${number}`, match[1]);
+    push(`duration:${unit}:${number}`, match[0], match.index!, match[0].length);
   }
 
+  const countUnits = "invoices?|users?|requests?|tests?|endpoints?|customers?|developers?|tickets?|services?";
+  const countPhrase = String.raw`(?:(?!(?:and|or|but|for|of|to|with|from|by|in|on|at|per)\b)[A-Za-z][A-Za-z-]*\s+){0,3}?(?:${countUnits})\b`;
+  const measurement = new RegExp(
+    String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(%|percentage\s+points?|percent\b|${countPhrase}|thousand\b|million\b|billion\b|[A-Za-z][A-Za-z-]*\b)`, "gi"
+  );
+  for (const match of text.matchAll(measurement)) {
+    if (occupied.some(([start, end]) => match.index! >= start && match.index! < end)) continue;
+    if (/^(?:and|or|of|to|in|on|at|for|by|from|with|is|was|were|as|a|an|the|i)$/i.test(match[2]) || /^(?:19|20)\d{2}$/.test(match[1])) continue;
+    const currency = text.slice(Math.max(0, match.index! - 12),match.index!).match(/(?:\b(?:USD|CAD|EUR|GBP)|[$€£])\s*$/i)?.[0].trim().toUpperCase();
+    const suffix = text.slice(match.index! + match[0].length).match(/^\s*(?:\/|per\s+)(second|minute|hour|day|month|year)s?\b/i);
+    const unit = /^(?:%|percent)$/i.test(match[2]) ? "percent"
+      : /^percentage/i.test(match[2]) ? "percentage-point"
+        : `count:${match[2].trim().split(/\s+/).at(-1)!.toLowerCase().replace(/s$/, "")}`;
+    push(`${currency ? `currency:${currency}:` : ""}${unit}${suffix ? `/${suffix[1].toLowerCase()}` : ""}:${scaledMeasurementNumber(match[1], match[2])}`, match[0] + (suffix?.[0] ?? ""), match.index!, match[0].length + (suffix?.[0].length ?? 0));
+  }
   for (const match of text.matchAll(/\d[\d,_]*(?:\.\d+)?/g)) {
-    const number = normalizedDigit(match[0]);
-    if (number) push(`number:${number}`, match[0]);
+    const index = match.index!;
+    if (occupied.some(([start, end]) => index >= start && index < end)) continue;
+    const before = text.slice(Math.max(0, index - 30), index);
+    const after = text.slice(index + match[0].length, index + match[0].length + 20);
+    const currency = before.match(/(?:\b(USD|CAD|EUR|GBP)|([$€£]))\s*$/i)?.[0].trim();
+    const version = before.match(/\b([A-Za-z][\w+#.]*)\s+v?$/)?.[1];
+    const unit = currency ? `currency:${currency.toUpperCase()}`
+      : /\.\d/.test(match[0]) && version ? `version:${version.toLowerCase()}`
+        : /^(?:19|20)\d{2}$/.test(match[0]) ? "year"
+          : "number";
+    const rate = after.match(/^\s*(?:\/|per\s+)(second|minute|hour|day|month|year)s?\b/i)?.[1];
+    push(`${unit}${rate ? `/${rate.toLowerCase()}` : ""}:${normalizedDigit(match[0])}`, match[0], index, match[0].length);
   }
   return claims;
 }
 
 export function findUngroundedNumericClaim(value: unknown, grounding: unknown): string | null {
-  const grounded = new Set(numericClaims(grounding).map((claim) => claim.key));
-  return numericClaims(value).find((claim) => !grounded.has(claim.key))?.display ?? null;
+  const grounded = numericClaims(grounding);
+  return numericClaims(value).find((claim) => !grounded.some((source) =>
+    claim.key === source.key && (!claim.subject || claim.subject === source.subject)
+  ))?.display ?? null;
 }
 
 export function hasUngroundedNumericClaim(value: unknown, grounding: unknown): boolean {

@@ -13,6 +13,7 @@ const fresh = seedStages({});
 assert.deepEqual(
   Object.fromEntries(AI_STAGES.map(({ id, label, title, blurb }) => [id, { label, title, blurb }])),
   {
+    "final-review": {label:"Final application review",title:"Final application review",blurb:"Reviews the current included materials when you request it; never changes or submits them."},
     "job-analysis": {
       label: "Job analysis",
       title: "Job analysis",
@@ -272,3 +273,7 @@ assert.deepEqual(
 );
 
 console.log("stage-settings probes passed");
+
+assert.deepEqual(seeded["final-review"], seeded["fit-assessment"], "new review stage copies Fit once");
+const persistedReview = stageFieldsToPersist(seeded);
+assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic"})["final-review"],seeded["final-review"],"persisted review does not follow later Fit changes");

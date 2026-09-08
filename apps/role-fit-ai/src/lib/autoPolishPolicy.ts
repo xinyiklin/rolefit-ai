@@ -20,10 +20,10 @@ const FIT_RANK: Record<FitAssessmentVerdict, number> = {
 };
 
 export function fitAssessmentMeetsThreshold(
-  verdict: FitAssessmentVerdict,
+  verdict: FitAssessmentVerdict | undefined,
   threshold: AutoPolishThreshold
 ): boolean {
-  return FIT_RANK[verdict] >= FIT_RANK[threshold];
+  return verdict !== undefined && FIT_RANK[verdict] >= FIT_RANK[threshold];
 }
 
 export type AutomaticPolishActionDecision = "start" | "wait" | "decline";

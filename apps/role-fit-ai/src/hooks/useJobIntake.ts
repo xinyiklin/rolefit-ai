@@ -1,3 +1,4 @@
+import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 /**
  * useJobIntake — the job-analysis/import flows, extracted from App.tsx:
  * It owns link analysis, pasted-posting analysis, the browser-extension inbox
@@ -78,6 +79,7 @@ export type ImportedJobSnapshot = {
   tracking: ExtractedJobTracking;
   brief: PreparedJobBrief;
   manualReviewFields: string[];
+  conditionIssues?: JobConditionIssue[];
 };
 
 function importedJobSnapshot(
@@ -93,6 +95,7 @@ function importedJobSnapshot(
     tailoringText: tailoringText.trim(),
     tracking: extracted.tracking,
     brief,
+    conditionIssues: extracted.conditionIssues ?? [],
     manualReviewFields: reconcilePreparedJobManualReviewFields(
       extracted.tracking,
       brief,
@@ -648,7 +651,8 @@ export function useJobIntake({
         fitRequest,
         screeningJobText,
         aiRequest,
-        executionUsage: outcome.usage
+        executionUsage: outcome.usage,
+        unavailableMessage: outcome.failure?.detail
       });
     } catch (error) {
       if (error instanceof DOMException && error.name === "AbortError") return;
@@ -657,7 +661,8 @@ export function useJobIntake({
         outcome: null,
         fitRequest,
         screeningJobText,
-        aiRequest
+        aiRequest,
+        unavailableMessage: classifyFailure(error).detail
       });
     } finally {
       if (fitAssessmentAbortRef.current === controller) fitAssessmentAbortRef.current = null;
@@ -1004,7 +1009,7 @@ export function useJobIntake({
         executionUsage: result.usage,
         automationEligible: duplicateAfter.proceed,
         unavailableMessage: duplicateAfter.proceed
-          ? undefined
+          ? result.fitAssessmentError ?? result.failure?.detail
           : "Fit Assessment completed after duplicate review stopped Prepare."
       });
     } else if (fitRequest) {

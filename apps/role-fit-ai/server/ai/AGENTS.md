@@ -29,8 +29,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   follow the canonical
   [`server/ai/README.md`](README.md#fit-assessment-technical-contract)
   contract: both paths render one exported rules block, every finding uses exact
-  current-source excerpts, and server acceptance stays mechanical rather than
-  becoming a second classifier or guessed fallback.
+  current-source excerpts, and focused explicit-conflict guards protect evidence.
+  The model owns semantic judgment; no requirement ledger, completeness gate,
+  deterministic verdict calculation, or guessed fallback is permitted.
   Cover-letter tailoring is **one call**. It requires the candidate's source
   letter and the evidence corpus derived from their own resume, notes, and
   answers; it never generates from resume/job inputs alone. The route shares
@@ -132,3 +133,28 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   evals named in the app guide.
 - Live provider evals cost tokens and may expose private inputs; run them only
   with explicit authorization and synthetic or approved fixtures.
+
+## Evidence-grounding ownership
+
+- `claimEvidence.ts` and `jobConditionEvidence.ts` own claim polarity and job
+  condition safeguards. `fitEvidence.ts` catches focused explicit conflicts;
+  do not expand it into a lexical proof of semantic support or a second classifier.
+- Resume replacements reject unfinished tokens and unsupported atoms. Complete
+  target enumeration precedes budgeting. Optional structural advice is separately
+  validated and never changes the document. Education uses the shared RoleFit
+  classifier; credential-shaped titles stay locked even under mixed headings.
+  Each selected entry is serialized once; targets reference its stable identity.
+  Do not require auxiliary claim records or literal paraphrase proof after actual
+  replacement checks pass. Advice is editorial guidance, not replacement text.
+- `coverLetterParagraphEvidence.ts` checks explicit factual conflicts against
+  paragraph-cited sources, narrowing to explicitly named work when identifiable.
+  Employer claims use employer evidence. Run one typed factual pass per claim;
+  explicit affiliations need candidate evidence, but generic capitalization is
+  not proof of an invented name. Do not require sentence bindings or literal
+  wording for paraphrases; ambiguous attribution is advisory, not repair.
+- Job headings and category concerns inform source-linked advice, never a second
+  semantic classifier. Preserve explicit conditions and negation; ordinary duties
+  may remain concise even when they contain must or bonus.
+- `applicationReview.ts` permits exactly one dispatch, local findings on failure,
+  and no persistence. Posting-only evidence cannot authorize candidate revisions;
+  current-document references expose conflicts, not independent factual support.
