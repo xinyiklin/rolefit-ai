@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 
 import {
   FIT_ASSESSMENT_RULES,
+  FIT_ASSESSMENT_RESPONSE_SCHEMA,
   buildFitAssessmentPrompts,
   sanitizeFitAssessmentResponse
 } from "../fitAssessment.ts";
 import { buildJobAnalysisPrompts } from "../jobAnalysis.ts";
 import {
   FIT_ASSESSMENT_SUMMARY,
+  FIT_ASSESSMENT_PROMPT_VERSION,
   sanitizeFitAssessment
 } from "../../../shared/fitAssessmentContract.ts";
 
@@ -24,6 +26,7 @@ Shipped TypeScript applications and partnered with product designers.`;
 const candidateContext = "I require employment sponsorship.";
 
 const validRaw = {
+  status: "ASSESSED",
   verdict: "REASONABLE",
   summary: "Provider text must not become public copy.",
   matches: [
@@ -80,6 +83,7 @@ const multilineJobExcerpt = "Build accessible React workflows\nfor healthcare te
 const multilineCandidateExcerpt = "Built accessible React workflows\nused by clinical operations teams.";
 const multiline = sanitizeFitAssessmentResponse(
   {
+    status: "ASSESSED",
     verdict: "STRONG",
     matches: [{
       jobExcerpt: multilineJobExcerpt,
@@ -116,7 +120,8 @@ assert.equal(
 assert.deepEqual(
   sanitizeFitAssessmentResponse(
     {
-      verdict: "STRONG",
+      ...validRaw,
+      verdict: "REASONABLE",
       matches: validRaw.matches,
       gaps: [],
       eligibility: {
@@ -213,7 +218,7 @@ assert.match(FIT_ASSESSMENT_RULES, /STRONG: The candidate explicitly demonstrate
 assert.match(FIT_ASSESSMENT_RULES, /judge only the evidence currently supplied/i);
 assert.match(FIT_ASSESSMENT_RULES, /Missing evidence is a gap, not proof that the candidate is incapable/i);
 assert.match(FIT_ASSESSMENT_RULES, /transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement/i);
-assert.match(FIT_ASSESSMENT_RULES, /professional, industry, commercial, production, or paid experience is not satisfied by academic, personal, volunteer, or open-source work/i);
+assert.match(FIT_ASSESSMENT_RULES, /professional, industry, commercial, or paid experience is not satisfied by academic, personal, volunteer, or open-source work/i);
 assert.match(FIT_ASSESSMENT_RULES, /experience categories may overlap\. Never add their years or counts together/i);
 assert.match(FIT_ASSESSMENT_RULES, /role\/project count does not imply duration/i);
 assert.match(
@@ -223,14 +228,18 @@ assert.match(
 );
 assert.match(
   FIT_ASSESSMENT_RULES,
-  /lacks substantive role responsibilities or qualifications.*LIMITED/i,
+  /lacks substantive role responsibilities or qualifications.*INSUFFICIENT_JOB_INFORMATION/i,
   "the rubric fails conservatively on a content-poor posting"
 );
 assert.match(
   FIT_ASSESSMENT_RULES,
-  /LIMITED versus STRETCH only.*substantive posting.*supporting core work.*role-defining specialization.*STRETCH.*Reserve LIMITED.*direct evidence.*sparse/i,
+  /LIMITED versus STRETCH only.*substantive posting.*supporting core work.*role-defining specialization.*STRETCH.*Reserve LIMITED.*little relevant core foundation/i,
   "supporting core evidence keeps a missing specialization at stretch rather than limited"
 );
+assert.match(FIT_ASSESSMENT_RULES, /Meaningful transferable evidence for core work can also support STRETCH/);
+assert.match(FIT_ASSESSMENT_RULES, /Generic skills or interest alone do not establish that foundation/);
+assert.match(FIT_ASSESSMENT_RULES, /higher category's definition; STRETCH may rely on meaningful transferable core evidence/);
+assert.doesNotMatch(FIT_ASSESSMENT_RULES, /choose the lower category unless direct candidate evidence/);
 assert.match(
   FIT_ASSESSMENT_RULES,
   /most decision-relevant.*posting order.*tie-breaker/i,
@@ -276,5 +285,40 @@ assert.doesNotMatch(
   /\r/,
   "combined Prepare sends the same normalized posting used by exact-excerpt validation"
 );
+
+// Provider instructions and accepted response shapes must agree in both paths.
+assert.equal(FIT_ASSESSMENT_PROMPT_VERSION, "fit-assessment-direct-rubric-v5");
+assert.equal(JSON.parse(FIT_ASSESSMENT_RESPONSE_SCHEMA).status, "ASSESSED");
+const insufficientShape = { status: "INSUFFICIENT_JOB_INFORMATION" };
+for (const prompt of [prompts, combinedPrompts]) {
+  assert.ok(prompt.systemPrompt.includes(JSON.stringify(insufficientShape)));
+  assert.ok(prompt.userPrompt.includes(FIT_ASSESSMENT_RESPONSE_SCHEMA));
+  assert.match(prompt.userPrompt, /insufficient job information.*compact object/i);
+  assert.match(prompt.systemPrompt, /Every excerpt in matches, gaps, and eligibility must be at most 500 characters/);
+  assert.match(prompt.systemPrompt, /Optional notes must be at most 240 characters/);
+  assert.match(prompt.systemPrompt, /When STRETCH has no direct matches, at least one gap must include this affirmative transferable citation/);
+}
+const sparseInput = { jobText: "Apply now at Synthetic Company.", resumeText };
+assert.equal(sanitizeFitAssessmentResponse(insufficientShape, sparseInput)?.status, insufficientShape.status);
+assert.equal(sanitizeFitAssessmentResponse({ ...insufficientShape, verdict: "LIMITED", eligibility: { status: "CLEAR" } }, sparseInput), null);
+
+const transferableInput = { jobText: "Leadership experience.", resumeText: "Completed leadership coursework." };
+const transferableGap = { jobExcerpt: transferableInput.jobText, status: "NOT_SHOWN" };
+const stretch = { status: "ASSESSED", verdict: "STRETCH", matches: [], gaps: [transferableGap] };
+assert.equal(sanitizeFitAssessmentResponse(stretch, transferableInput), null);
+assert.equal(sanitizeFitAssessmentResponse({ ...stretch, gaps: [{ ...transferableGap, relationship: "transferable", candidateSource: "RESUME", candidateExcerpt: transferableInput.resumeText }] }, transferableInput)?.verdict, "STRETCH");
+
+for (const length of [500, 501]) {
+  const excerpt = "Build Python services. ".padEnd(length, "x");
+  const input = { jobText: excerpt, resumeText: "Built Python services." };
+  const raw = { status: "ASSESSED", verdict: "STRONG", matches: [{ jobExcerpt: excerpt, candidateSource: "RESUME", candidateExcerpt: input.resumeText }], gaps: [] };
+  assert.equal(Boolean(sanitizeFitAssessmentResponse(raw, input)), length === 500);
+  raw.matches[0].jobExcerpt = "Build Python services.";
+  assert.ok(sanitizeFitAssessmentResponse(raw, input), "shorter exact excerpt fits the same long source");
+}
+for (const length of [240, 241]) {
+  const raw = { ...validRaw, gaps: [{ ...validRaw.gaps[0], note: "x".repeat(length) }] };
+  assert.equal(Boolean(sanitizeFitAssessmentResponse(raw, { jobText, resumeText, candidateContext })), length === 240);
+}
 
 console.log("fit-assessment probes passed");

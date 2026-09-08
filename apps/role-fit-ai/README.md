@@ -19,7 +19,13 @@ The default workflow is Prepare → Assess fit → Polish → Apply. Reassess fi
 any time after preparation without repeating Job analysis.
 
 **Prepare** keeps the editable job brief beside one application rail: both
-material cards, the fit assessment, readiness, and Apply.
+material cards, the fit assessment, readiness, optional final review, and Apply.
+
+Final application review is a manual advisory check of current included documents,
+with source-linked findings and explicit incomplete/stale states. Configure its
+provider under Settings; it initially copies Fit settings once. It never accepts
+proposals, changes files, or gates Apply. Content-poor postings now show
+**Insufficient job information** without a negative candidate-fit verdict.
 
 ![RoleFit AI prepare workspace](docs/prepare.png)
 
@@ -115,7 +121,7 @@ editable documents.
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
   eligibility state. Each match shows the exact resume or About you evidence
-  beneath the posting excerpt. Rubric v3 prioritizes decision-critical responsibilities
+  beneath the posting excerpt. Rubric v5 prioritizes decision-critical responsibilities
   and core qualifications, preserves explicit evidence-source boundaries, ignores
   logistics or application-form noise when judging fit, and self-checks every
   evidence excerpt before the server's exact-anchor boundary.

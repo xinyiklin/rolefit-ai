@@ -114,12 +114,9 @@ function upgradeLegacyInterestedApplications(applications: unknown[]): {
   return { applications: normalized, upgraded };
 }
 
-// Fit Assessment summary copy is derived entirely from its verdict. Older tracker
-// rows may carry the provider-generated sentence that preceded the fixed-copy
-// contract, so ignore only that redundant leaf during the strict canonical
-// comparison. Unknown fields and every other sanitizer change remain visible
-// to isDeepStrictEqual and still fail closed.
-function normalizeDerivedFitAssessmentSummariesForComparison(
+// Normalize only lossless legacy representations for strict comparison. All
+// other differences still fail closed; compatibility reads do not rewrite data.
+function normalizeCompatibleApplicationFieldsForComparison(
   applications: unknown[],
   canonical: unknown[]
 ): unknown[] {
@@ -127,7 +124,11 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
     if (!application || typeof application !== "object" || Array.isArray(application)) {
       return application;
     }
-    const raw = application as Record<string, unknown>;
+    let raw = application as Record<string, unknown>;
+    if (raw.appliedAt === "") {
+      const { appliedAt: _emptyDate, ...preserved } = raw;
+      raw = preserved;
+    }
     const fitAssessment = raw.fitAssessment;
     const canonicalApplication = canonical[index];
     if (
@@ -138,7 +139,7 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
       typeof canonicalApplication !== "object" ||
       Array.isArray(canonicalApplication)
     ) {
-      return application;
+      return raw;
     }
     const result = (fitAssessment as Record<string, unknown>).result;
     const canonicalFitAssessment = (canonicalApplication as Record<string, unknown>).fitAssessment;
@@ -150,16 +151,16 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
       typeof canonicalFitAssessment !== "object" ||
       Array.isArray(canonicalFitAssessment)
     ) {
-      return application;
+      return raw;
     }
     const canonicalResult = (canonicalFitAssessment as Record<string, unknown>).result;
     if (!canonicalResult || typeof canonicalResult !== "object" || Array.isArray(canonicalResult)) {
-      return application;
+      return raw;
     }
     const summary = (canonicalResult as Record<string, unknown>).summary;
     const rawSummary = (result as Record<string, unknown>).summary;
     if (typeof summary !== "string" || typeof rawSummary !== "string" || !rawSummary.trim()) {
-      return application;
+      return raw;
     }
     return {
       ...raw,
@@ -167,6 +168,10 @@ function normalizeDerivedFitAssessmentSummariesForComparison(
         ...(fitAssessment as Record<string, unknown>),
         result: {
           ...(result as Record<string, unknown>),
+          ...(!Object.hasOwn(result, "status") &&
+            (canonicalResult as Record<string, unknown>).status === "ASSESSED"
+            ? { status: "ASSESSED" }
+            : {}),
           summary
         }
       }
@@ -198,7 +203,7 @@ export async function readApplications(workspaceDir: string) {
     const interestedUpgrade = upgradeLegacyInterestedApplications(priorityUpgrade.applications);
     const sane = sanitizeApplications(interestedUpgrade.applications);
     const canonical = JSON.parse(JSON.stringify(sane)) as unknown[];
-    const comparable = normalizeDerivedFitAssessmentSummariesForComparison(
+    const comparable = normalizeCompatibleApplicationFieldsForComparison(
       interestedUpgrade.applications,
       canonical
     );

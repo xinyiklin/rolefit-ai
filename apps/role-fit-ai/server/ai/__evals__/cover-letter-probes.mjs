@@ -265,7 +265,7 @@ assert.equal(
 // ----- output validation -----
 
 const groundedBody = `I am applying for the Software Engineer role at Acme. ${authoredSentence}`;
-const secondBody = `At Acme I would build dependable Python services and REST APIs the way I did for reporting workflows. ${authoredSentence}`;
+const secondBody = "I built dependable Python services and REST APIs for reporting workflows.";
 
 function validate(output, options = {}) {
   return validateCoverLetterTailorOutput({
@@ -361,8 +361,8 @@ assert.match(
       },
       { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
     ],
-  }).issues.map((issue) => issue.repairMessage).join(" "),
-  /generic brochure phrasing/,
+  }).output.warnings.join(" "),
+  /generic phrasing/,
 );
 assert.equal(
   validate({ bodyParagraphs: [] }).output,
@@ -399,6 +399,7 @@ const prompts = buildCoverLetterTailorPrompts({
   employerContext: [],
   customInstructions: "",
 });
+assert.doesNotMatch(prompts.systemPrompt, /claim binding|job_posting|exact excerpt supporting/i, "paragraph citations must not request removed sentence bindings");
 assert.match(prompts.systemPrompt, /deep self-audit/i, "high effort requests a deeper internal cover-letter audit");
 assert.match(prompts.systemPrompt, /Do not include audit notes or scratch work/i);
 assert.match(prompts.systemPrompt, /never candidate evidence/i);
@@ -714,7 +715,7 @@ try {
   ]);
   const employerFact = await tailorCoverLetter({
     ...common,
-    jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
+    jobText: "Acme runs Kubernetes across its platform. The opening is for a Software Engineer.",
   });
   assert.equal(employerFact.status, "ready");
   assert.equal(providerCalls, 1, "an employer-subject sentence needs no repair");
@@ -738,7 +739,7 @@ try {
           slotIds: [],
         },
         {
-          text: `At Acme, Inc. I would build dependable Python services and REST APIs the way I did for reporting workflows. ${authoredSentence}`,
+          text: secondBody,
           evidenceIds: [evidence[0].id],
           slotIds: [],
         },
@@ -748,7 +749,7 @@ try {
   const punctuatedEmployerFact = await tailorCoverLetter({
     ...common,
     jobText:
-      "Acme, Inc. needs Kubernetes platform experience for its Software Engineer role.",
+      "Acme, Inc. runs Kubernetes across its platform. The opening is for a Software Engineer.",
     resolvedContext: punctuatedResolved,
   });
   assert.equal(punctuatedEmployerFact.status, "ready");

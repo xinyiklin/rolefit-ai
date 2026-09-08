@@ -1,5 +1,5 @@
 import type { ResolvedCoverLetterContext } from "../../src/lib/coverLetterPreflight.ts";
-import { findUngroundedJdTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
+import { findUngroundedJdTerm, findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
 import { findUngroundedNumericClaim } from "./sanitize.ts";
 import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 
@@ -16,13 +16,13 @@ function claimSurfaceValue(claim: string, normalizedValue: string): string {
 // candidate claim surface so a paraphrase cannot bypass grounding by avoiding
 // a finite list of comparison words.
 const DIRECT_EMPLOYER_FACT =
-  /^(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|seeks?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|(?:is|are) (?:hiring|looking for|seeking|building|developing|operating|focused on|based (?:in|on)|located in|remote|hybrid|onsite|part of|responsible for))\b/i;
+  /^(?:used|built|ran|operated|developed|maintained|offered|provided|served|sought|needed|required|valued|prioritized|included|had\b|uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|seeks?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|(?:is|are) (?:hiring|looking for|seeking|building|developing|operating|focused on|based (?:in|on)|located in|remote|hybrid|onsite|part of|responsible for))\b/i;
 const POSSESSIVE_EMPLOYER_FACT =
   /^(?![^.!?]*\b(?:experience|expertise|background|track record|skills?|abilities|knowledge|proficiency|familiarity)\b)[^.!?]{1,120}\b(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|is (?:built|based) on)\b/i;
 
 // Employer/job statements may use posting facts, but they must never widen the
 // candidate corpus. Mixed employer/candidate sentences stay in every gate.
-function candidateClaimSentences(
+export function candidateClaimSentences(
   text: string,
   resolved: ResolvedCoverLetterContext
 ): string[] {
@@ -75,7 +75,7 @@ export function coverLetterGroundingIssues({
   const jobLower = jobText.toLowerCase();
   const groundingLower = grounding.toLowerCase();
   const issues: CoverLetterValidationIssue[] = [];
-  const ungroundedTerm = findUngroundedJdTerm(
+  const ungroundedTerm = findUngroundedCuratedClaimTerm(claims, grounding) || findUngroundedJdTerm(
     claims,
     jobLower,
     groundingLower,

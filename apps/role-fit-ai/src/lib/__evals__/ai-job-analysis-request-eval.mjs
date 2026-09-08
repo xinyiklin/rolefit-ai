@@ -117,6 +117,16 @@ const invalidFit = await analyzeFitAssessment(POSTING, FIT_REQUEST);
 assert.equal(invalidFit.fitAssessment, null);
 assert.equal(invalidFit.failure?.detail, "Fit Assessment returned no usable screening");
 
+const fitAssessmentError = "The assessment did not cover every role requirement and its conditions.";
+nextResponse = response({ source: "ai", fitAssessment: null, fitAssessmentError });
+assert.equal((await analyzeFitAssessment(POSTING, FIT_REQUEST)).failure?.detail, fitAssessmentError.slice(0, -1));
+nextResponse = response({ ...VALID_ANALYSIS, fitAssessment: null, fitAssessmentError });
+const rejectedCombined = await analyzeJobPosting(POSTING, { fitAssessment: FIT_REQUEST });
+assert.equal(rejectedCombined.source, "ai");
+assert.equal(rejectedCombined.fitAssessmentError, fitAssessmentError);
+nextResponse = response({ ...VALID_ANALYSIS, fitAssessmentError });
+assert.equal((await analyzeJobPosting(POSTING, { fitAssessment: FIT_REQUEST })).fitAssessmentError, undefined);
+
 nextResponse = new TypeError("Failed to fetch");
 const networkFailure = await analyzeFitAssessment(POSTING, FIT_REQUEST);
 assert.equal(networkFailure.failure?.kind, "network");

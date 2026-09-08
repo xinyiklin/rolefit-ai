@@ -33,6 +33,9 @@ export type PersistedSettings = {
   jobAnalysisCliReasoningEffort?: string;
   // Fit Assessment, cover-letter polish, and application Q&A keep independent
   // concrete configs.
+  finalReviewProvider?: AiProviderValue;
+  finalReviewSelectedModel?: string;
+  finalReviewCliReasoningEffort?: string;
   fitAssessmentProvider?: AiProviderValue;
   fitAssessmentSelectedModel?: string;
   fitAssessmentCliReasoningEffort?: string;

@@ -1,3 +1,4 @@
+import type { ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
 export type ResumeProposalField = "bullet" | "skill";
 
 export type ResumeProposalTarget = {
@@ -28,6 +29,8 @@ export type PolishedResume = {
   suggestedChanges?: ResumeProposalSuggestion[];
   polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
   omittedTargetCount?: number;
+  advice?: ResumePolishAdvice[];
+  adviceStale?: boolean;
   withheld?: {
     count: number;
     reasons: Array<"UNSUPPORTED" | "INVALID_TARGET" | "UNCHANGED" | "MALFORMED">;

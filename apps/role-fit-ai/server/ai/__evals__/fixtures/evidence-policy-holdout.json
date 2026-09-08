@@ -1,0 +1,55 @@
+{
+  "labelProvenance": "Agent-authored synthetic expectations fixed after implementation corrections and before first execution; no human review recorded",
+  "humanReviewed": false,
+  "scope": "Deterministic helper behavior, not provider generation quality or general semantic accuracy",
+  "cases": [
+    {
+      "id": "currency-denomination-control",
+      "check": "number",
+      "claim": "Managed \u20ac45 million.",
+      "evidence": "Managed \u20ac45 million.",
+      "expected": "accept",
+      "dimension": "measurement"
+    },
+    {
+      "id": "version-change",
+      "check": "number",
+      "claim": "Used Python 3.11.",
+      "evidence": "Used Python 3.10.",
+      "expected": "reject",
+      "dimension": "measurement"
+    },
+    {
+      "id": "negated-tool",
+      "check": "skill",
+      "claim": "Java",
+      "evidence": "I have never used Java.",
+      "expected": "reject",
+      "dimension": "polarity"
+    },
+    {
+      "id": "machine-learning-positive",
+      "check": "skill",
+      "claim": "Python",
+      "evidence": "Built machine learning pipelines using Python.",
+      "expected": "accept",
+      "dimension": "polarity"
+    },
+    {
+      "id": "maintenance-positive",
+      "check": "fit",
+      "claim": "Maintain Rust services.",
+      "evidence": "Maintained Rust services.",
+      "expected": "accept",
+      "dimension": "relationship"
+    },
+    {
+      "id": "professional-source-negative",
+      "check": "fit",
+      "claim": "Professional experience building Python services.",
+      "evidence": "Personal experience building Python services.",
+      "expected": "reject",
+      "dimension": "attribution"
+    }
+  ]
+}

@@ -41,7 +41,7 @@ import {
   CoverLetterBlockedError,
   repairMessagesForCoverLetterIssues
 } from "./coverLetterIssues.ts";
-import { coverLetterGroundingIssues } from "./coverLetterGroundingIssues.ts";
+import { coverLetterParagraphClaims } from "./coverLetterParagraphEvidence.ts";
 
 // Optional dispatch-attempt collector (same additive pattern as the sanitizer's
 // drop-stats): callConfiguredProvider bumps `attempts` once per dispatch attempt.
@@ -94,11 +94,6 @@ export async function tailorCoverLetter(
     employerContext,
     customInstructions
   };
-  const grounding = [
-    sourceContext.authoredProse,
-    ...evidenceItems.map((item) => item.text),
-    JSON.stringify(resolvedContext)
-  ].join("\n");
 
   const attempt = async (repair?: { violations: string[]; rejectedOutput: unknown }) => {
     const { systemPrompt, userPrompt } = buildCoverLetterTailorPrompts({
@@ -115,17 +110,16 @@ export async function tailorCoverLetter(
       sourceContext,
       resolved: resolvedContext
     });
-    const issues = [
-      ...validation.issues,
-      ...(validation.output
-        ? coverLetterGroundingIssues({
-            coverLetterText: validation.coverLetterText,
-            jobText,
-            grounding,
-            resolved: resolvedContext
-          })
-        : [])
-    ];
+    const claimReview = validation.output
+      ? coverLetterParagraphClaims({
+          paragraphs: validation.output.bodyParagraphs,
+          evidence: evidenceItems, authoredProse: sourceContext.authoredProse,
+          jobText, employerContext: employerContext.map((item) => item.fact).join("\n"),
+          resolved: resolvedContext
+        })
+      : { issues: [], warnings: [] };
+    const issues = [...validation.issues, ...claimReview.issues];
+    if (validation.output) validation.output.warnings.push(...claimReview.warnings);
     return { parsed, validation, issues };
   };
 

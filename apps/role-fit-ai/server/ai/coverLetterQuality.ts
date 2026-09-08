@@ -1,6 +1,5 @@
-// Quality grading for the live cover-letter eval. These are aspirational
-// standards, not acceptance gates — the server's own validation decides what
-// reaches the editor, and a letter can be shippable while scoring below 100.
+// Structural and style checks only. The aggregate does not measure factual
+// support, requirement coverage, role relevance, or human writing quality.
 
 import type {
   CoverLetterEvidenceItem,
@@ -22,7 +21,7 @@ export type CoverLetterQualityCheck = {
 
 export type CoverLetterQualityReport = {
   passed: boolean;
-  score: number;
+  structuralScore: number;
   checks: Record<string, CoverLetterQualityCheck>;
 };
 
@@ -70,23 +69,23 @@ export function gradeCoverLetterResult({
       !hasUnresolvedCoverLetterTokens(result.coverLetterText),
       "No unresolved bracketed, mustache, or template tokens."
     ),
-    evidenceGrounding: check(
+    citationValidity: check(
       paragraphEvidenceValid && citedIds.size >= 1,
       "Every body paragraph cites evidence that exists in the supplied corpus."
     ),
-    focusedNarrative: check(
+    paragraphAndCitationBounds: check(
       result.bodyParagraphs.length >= 2 &&
         result.bodyParagraphs.length <= 5 &&
         citedIds.size <= 6,
-      "A focused 2-5 paragraph narrative built from a handful of connections."
+      "Two to five paragraphs and no more than six cited source IDs."
     ),
-    noResumeDump: check(
+    verbatimBulletReuse: check(
       verbatimReuse.length === 0,
       verbatimReuse.length
         ? "A resume bullet was pasted verbatim instead of elaborated."
-        : "Evidence is elaborated rather than pasted."
+        : "No exact long evidence bullet was copied."
     ),
-    specificFit: check(
+    targetNamesPresent: check(
       lowerLetter.includes(resolved.role.toLowerCase()) &&
         lowerLetter.includes(resolved.company.toLowerCase()),
       "The resolved role and company are named."
@@ -101,7 +100,7 @@ export function gradeCoverLetterResult({
       wordCount >= 180 && wordCount <= 420 && onePage,
       `Letter is ${wordCount} words and ${onePage ? "one page" : "not one page"}.`
     ),
-    naturalLanguage: check(
+    genericPhraseScreen: check(
       !GENERIC_AI_LANGUAGE.test(bodyText),
       "The body avoids generic AI and brochure phrasing."
     )
@@ -109,7 +108,7 @@ export function gradeCoverLetterResult({
   const passedCount = Object.values(checks).filter((item) => item.passed).length;
   return {
     passed: passedCount === Object.keys(checks).length,
-    score: Math.round((passedCount / Object.keys(checks).length) * 100),
+    structuralScore: Math.round((passedCount / Object.keys(checks).length) * 100),
     checks
   };
 }

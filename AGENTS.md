@@ -58,10 +58,10 @@ reporting. Do not copy it here. This repo may strengthen it, never weaken it.
 - **Extra Change Request triggers** beyond the portable list: moving app code
   into a package, changing the dependency direction, or any change that could
   weaken evidence-grounded AI output or the local-only data posture.
-- **Task artifacts** live under `.agent-work/tasks/<task-id>/`; keep them local
-  while a task is active. Because this repo tracks its agent guidance *and*
-  `CONTINUITY.md`, commit the completed task folders that continuity references
-  with `[TASK <task-id>]`, so the ledger never points at missing local files.
+- **Task artifacts** live under ignored `.agent-work/tasks/<task-id>/` and stay
+  local, including after completion. Do not force-add them. Keep durable decisions,
+  outcomes, and verification summaries self-contained in tracked documentation
+  and `CONTINUITY.md`; task IDs may identify work without linking to local artifacts.
 
 The seven workflow templates are building blocks, not mandatory files. A normal
 task uses Product Brief, Delivery Plan, Alignment Review, Implementation

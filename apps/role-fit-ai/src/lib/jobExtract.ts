@@ -1,3 +1,5 @@
+import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
+
 // Local, dependency-free analyzer for imported job postings.
 //
 // The server hands back tag-stripped text from a job page (or a known ATS JSON
@@ -35,6 +37,7 @@ export type ExtractedJobPosting = {
   roleDescription: string;
   tracking: ExtractedJobTracking;
   manualReviewFields: string[];
+  conditionIssues?: JobConditionIssue[];
   sourceTextLength: number;
 };
 
@@ -1165,7 +1168,8 @@ function extractWorkAuth(lines: string[]): string {
   // Prefer lines with a strong mandatory signal
   const strong = candidates.find((c) => WORK_AUTH_STRONG.test(c));
   const chosen = strong ?? candidates[0];
-  return clipSentence(cleanSummaryLine(chosen), 220);
+  const condition = cleanSummaryLine(chosen);
+  return condition.length <= 1000 ? condition : "";
 }
 
 function extractReviewMetadata(lines: string[]) {

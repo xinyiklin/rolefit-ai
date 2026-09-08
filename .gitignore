@@ -10,7 +10,7 @@ dist
 .env.*
 !.env.example
 *.pem
-/CLAUDE.local.md
+CLAUDE.local.md
 .claude/
 .playwright-cli/
 output/playwright/
@@ -22,3 +22,22 @@ __pycache__/
 # Generated: mirrored from packages/engine/fonts by the app sync-fonts script.
 apps/typeset/public/fonts/
 apps/role-fit-ai/public/fonts/
+
+# Machine-local setup and package-manager state.
+MACHINE.md
+.skill-lock.json
+.npmrc
+# The root npmrc is the shared install policy, not machine-local credentials.
+!/.npmrc
+
+# Caches, editor state, and recoverable setup-script backups.
+.cache/
+coverage/
+*.backup-*
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+
+# Local agent task artifacts; durable summaries belong in tracked documentation.
+.agent-work/

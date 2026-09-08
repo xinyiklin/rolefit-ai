@@ -1,3 +1,6 @@
+import { useApplicationReview } from "./hooks/useApplicationReview";
+import { buildApplicationReviewInput } from "./lib/applicationReview";
+import { ApplicationReview } from "./sections/tabs/prepare/ApplicationReview";
 import {
   lazy,
   Suspense,
@@ -2062,6 +2065,24 @@ function App() {
     setExpandedApplicationId
   });
 
+  const finalReviewInput = useMemo(() => buildApplicationReviewInput({
+    jobText: jobRawText,
+    company: jobTracking.company ?? "",
+    role: jobTracking.role || jobTracking.title || "",
+    includeResume: materialSelection.resume,
+    includeCoverLetter: materialSelection.coverLetter,
+    resumeText: currentResumeText,
+    coverLetterText: coverLetterEditor.text,
+    originalResumeText: ["saved", "uploaded", "authored"].includes(resumeOrigin) ? resumeText : "",
+    candidateContext: requestHonestContext
+  }), [jobRawText, jobTracking.company, jobTracking.role, jobTracking.title, materialSelection, currentResumeText, coverLetterEditor.text, resumeOrigin, resumeText, requestHonestContext]);
+  const finalReview = useApplicationReview({
+    input: finalReviewInput,
+    stage: stages["final-review"],
+    preparationIdentity: JSON.stringify([currentPreparationId, preparationSession, coverLetterEditor.sourceRevision, baseResumeName, isApplying, ["prepare", "resume", "cover"].includes(activeOutputTab) ? "draft" : activeOutputTab]),
+    ensureProviderReady: () => providerAvailability.ensureProvider(stages["final-review"].provider)
+  });
+
   const skipModeAvailable = preparationSession.mode === "new";
   const skipBlocker = trackerReadinessBlocker
     ? trackerReadinessBlocker
@@ -2646,6 +2667,13 @@ function App() {
         >
           {activeOutputTab === "prepare" ? (
             <PrepareTab
+              finalReview={<ApplicationReview review={finalReview}
+                providerLabel={`${stages["final-review"].provider} · ${stages["final-review"].selectedModel}`}
+                onSettings={() => setSettingsSection("stages")}
+                onOpenDocument={(document) => { setActiveOutputTab(document === "resume" ? "resume" : "cover"); requestAnimationFrame(() => (document === "resume" ? typesetEditorRef : coverLetterEditorRef).current?.focusDocumentStart()); }}
+                pendingProposals={Boolean(resumeProposalDecisions.outstanding || coverLetterProposal)}
+                disabled={isApplying || jobPreparationActive || isManuallySelectingResumeVariant || isResolvingPreparedResume || coverLetterSelectionPending}
+              />}
               jobUrl={jobUrl}
               onJobUrlChange={handleJobUrlChange}
               jobDescription={jobDescription}

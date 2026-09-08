@@ -390,7 +390,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   inferred fact (e.g. "clinics run Windows") into the resume.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used by the
   job analyzer's `workAuth` grounding. It does not select a fit verdict.
-- `fitAssessment.ts` — executable prompt, response schema, and mechanical validation
+- `fitAssessment.ts` — executable prompt, response schema, and bounded source/relationship validation
   for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
   Model summary text is never part of the accepted contract.
 - Candidate facts reach the model only through `honestContext`. The client's
@@ -729,3 +729,5 @@ In the response:
   auto-update, or site-to-companion pairing belongs to that slice.
 - Do not make remote API writes unless explicitly requested. Dry-run
   write-oriented remote commands first when possible.
+
+Final review and Fit v5 compact-response and evidence boundaries are specified in the [AI runtime contract](../../server/ai/README.md). The new `/api/application-review` endpoint is read-only and uses a single explicit provider dispatch.

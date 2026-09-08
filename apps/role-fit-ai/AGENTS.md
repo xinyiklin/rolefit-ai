@@ -53,11 +53,13 @@ own a second resume model, editor, layout engine, or PDF implementation.
   unknown; the first actual provider request verifies the session or fails with
   recovery guidance.
 - Never invent employers, dates, metrics, education, tools, experience, or
-  outcomes. Missing facts become gaps or bracketed prompts for human evidence.
+  outcomes. Missing facts become separate evidence gaps; finished Resume Polish
+  replacements never contain drafting placeholders. Application-answer prompts
+  retain their existing behavior.
 - Fit Assessment changes must preserve the user contract in `PRODUCT.md`, the
   technical contract in `server/ai/README.md`, and the executable
   `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
-  hidden requirement bookkeeping, a server-derived fallback verdict, tracker
+  a visible or persisted requirement ledger, a server-derived fallback verdict, tracker
   application-priority fields, or a second assessment path.
 - Normal Resume Polish is one proposal request, never Tailor followed by Review.
   It uses flat server-owned target IDs and returns Proposal, No changes, or
@@ -322,3 +324,10 @@ for RoleFit-specific operational detail. Do not duplicate the same receipt.
 Follow root `docs/git-workflow.md`. Work locally unless the user asks for git
 actions. Never stage `.env`, generated outputs/fonts, resumes/PDFs, or private
 workspace data. Stage exact paths in this frequently dirty worktree.
+
+- Fit v5 leaves semantic judgment and the advisory verdict to the model. Return
+  at most three matches and three gaps; do not add hidden requirement records,
+  completeness gates, or deterministic verdict scoring. Validate exact excerpts
+  and focused explicit conflicts. Insufficient job information has no verdict.
+- Final application review is an explicit, independently configured read-only
+  stage. It remains session-only and never gates Apply or includes application answers.

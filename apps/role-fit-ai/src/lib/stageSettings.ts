@@ -12,6 +12,7 @@ const DEFAULT_PROVIDER: AiProviderValue = "claude-cli";
 const DEFAULT_MODEL = "claude-sonnet-5";
 
 export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
+  if (stage === "final-review" && saved.finalReviewProvider === undefined) return seedStage("fit-assessment", saved);
   const ownKeys = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === stage)!);
   const bag = saved as unknown as Record<string, string | undefined>;
   const provider = (bag[ownKeys.provider] as AiProviderValue | undefined) ?? DEFAULT_PROVIDER;

@@ -104,6 +104,7 @@ function createHarness({
   requestFieldsRef,
   jobAnalysisGate,
   fitResponseGate,
+  fitAssessmentError,
   selection = { text: RESUME, label: "Synthetic resume" },
   resolvePreparedResumeImpl,
   analysisBody,
@@ -232,7 +233,8 @@ function createHarness({
         status: 200,
         json: async () => ({
           source: "ai",
-          fitAssessment: VALID_FIT,
+          fitAssessment: fitAssessmentError ? null : VALID_FIT,
+          ...(fitAssessmentError ? { fitAssessmentError } : {}),
           provider: payload.provider,
           model: payload.model,
           reasoningEffort: payload.reasoningEffort
@@ -257,7 +259,10 @@ function createHarness({
         model: "synthetic-model",
         reasoningEffort: "medium",
         attempts: 1,
-        ...(payload.fitAssessment ? { fitAssessment: VALID_FIT } : {})
+        ...(payload.fitAssessment ? {
+          fitAssessment: fitAssessmentError ? null : VALID_FIT,
+          ...(fitAssessmentError ? { fitAssessmentError } : {})
+        } : {})
       })
     };
   };
@@ -514,7 +519,7 @@ const sharedCommitOrder = [
   assert.equal(harness.log.some(({ event }) => event === "fetch:/api/job-analysis"), false);
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
   assert.equal(harness.state[5].latestCompleted, null);
-  assert.match(harness.state[5].lastError?.message ?? "", /unavailable/i);
+  assert.equal(harness.state[5].lastError?.message, "No provider configured");
   assert.match(
     harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
     /local brief is ready/i,
@@ -601,7 +606,7 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assert.equal(harness.requests.filter(({ url }) => url === "/api/job-analysis").length, 1);
   assert.equal(harness.state[5].latestCompleted, null);
-  assert.match(harness.state[5].lastError?.message ?? "", /unavailable/i);
+  assert.equal(harness.state[5].lastError?.message, "Synthetic provider unavailable");
   assert.match(
     harness.log.filter(({ event }) => event === "setLinkStatus").at(-1).value,
     /local brief is ready/i,
@@ -702,4 +707,25 @@ const sharedCommitOrder = [
   );
 }
 
+for (const fitProvider of ["codex-cli", "anthropic"]) {
+  const fitAssessmentError = "Fit could not verify the cited evidence";
+  const harness = createHarness({ fitProvider, fitAssessmentError });
+  await runPaste(harness);
+  assert.equal(harness.state[5].lastError?.message, fitAssessmentError, "both combined and standalone Fit preserve the rejection reason");
+  assert.equal(harness.state[5].latestCompleted, null);
+  await harness.render().reassessFit();
+  assert.equal(harness.state[5].lastError?.message, fitAssessmentError, "manual retry preserves the rejection reason");
+}
+{
+  const message = "Fit provider setup failed before dispatch";
+  const harness = createHarness({
+    fitProvider: "anthropic",
+    fitReadinessImpl: async () => { throw new Error(message); }
+  });
+  await runPaste(harness);
+  assert.equal(harness.state[5].lastError?.message, message);
+  await harness.render().reassessFit();
+  assert.equal(harness.state[5].lastError?.message, message);
+  assert.equal(harness.requests.filter(({ payload }) => payload.mode === "fit-assessment").length, 0);
+}
 console.log("Job intake entry-point characterization: passed");

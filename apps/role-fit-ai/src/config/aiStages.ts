@@ -10,7 +10,7 @@
 // `settingsPrefix` is the persisted key prefix. Resume Polish keeps its original
 // unprefixed fields; the other stages use explicit names.
 
-export type AiStageId = "job-analysis" | "fit-assessment" | "resume-polish" | "cover" | "answers";
+export type AiStageId = "job-analysis" | "fit-assessment" | "resume-polish" | "cover" | "answers" | "final-review";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -19,7 +19,7 @@ export type AiStageDescriptor = {
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
   readonly blurb: string;
-  readonly settingsPrefix: "" | "jobAnalysis" | "fitAssessment" | "cover" | "answers";
+  readonly settingsPrefix: "" | "jobAnalysis" | "fitAssessment" | "cover" | "answers" | "finalReview";
   readonly supportsInstructions: boolean;
 };
 
@@ -67,6 +67,14 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     blurb: "Drafts grounded answers to an application's written questions.",
     settingsPrefix: "answers",
     supportsInstructions: true
+  },
+  {
+    id: "final-review",
+    label: "Final application review",
+    title: "Final application review",
+    blurb: "Reviews the current included materials when you request it; never changes or submits them.",
+    settingsPrefix: "finalReview",
+    supportsInstructions: false
   }
 ];
 

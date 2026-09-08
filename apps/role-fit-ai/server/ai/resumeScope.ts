@@ -1,3 +1,4 @@
+import { UserSafeAiError } from "./errors.ts";
 import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
 
 type ScopeBullet = { id: string; text: string };
@@ -22,8 +23,10 @@ export type NormalizedResumeScope = {
   contextSections: ScopeSection[];
 };
 
-function trimText(value: unknown, max = 1200): string {
-  return String(value ?? "").trim().slice(0, max);
+function trimText(value: unknown, max = 20_000): string {
+  const text = String(value ?? "").trim();
+  if (text.length > max) throw new UserSafeAiError("A resume field is too long. Shorten that field before polishing.", 400);
+  return text;
 }
 
 const INLINE_MARK_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
@@ -36,8 +39,8 @@ export function stripStructuralInlineMarks(value: unknown): string {
   );
 }
 
-function trimScopeText(value: unknown, max = 1200): string {
-  return stripStructuralInlineMarks(value).trim().slice(0, max);
+function trimScopeText(value: unknown, max = 20_000): string {
+  return trimText(stripStructuralInlineMarks(value), max);
 }
 
 function normalizeScopeSection(raw: unknown): ScopeSection | null {
@@ -69,9 +72,9 @@ function normalizeScopeSection(raw: unknown): ScopeSection | null {
           const bullet = rawBullet as Record<string, unknown>;
           const bulletId = trimText(bullet.id, 120);
           return bulletId ? [{ id: bulletId, text: trimScopeText(bullet.text) }] : [];
-        }).slice(0, 20)
+        })
       }];
-    }).slice(0, 20)
+    })
   };
 }
 
@@ -84,15 +87,20 @@ export function normalizeResumeScope(raw: unknown): NormalizedResumeScope {
       const normalized = normalizeScopeSection(section);
       return normalized ? [normalized] : [];
     })
-    .slice(0, 12);
-  const sectionIds = new Set(sections.map((section) => section.id));
+    ;
   const contextSections = (Array.isArray(source.contextSections) ? source.contextSections : [])
     .flatMap((section): ScopeSection[] => {
       const normalized = normalizeScopeSection(section);
       return normalized ? [normalized] : [];
     })
-    .filter((section) => !sectionIds.has(section.id))
-    .slice(0, 12);
+    ;
+  const ids = new Set<string>();
+  for (const section of [...sections, ...contextSections]) {
+    for (const id of [section.id, ...section.entries.flatMap((entry) => [entry.id, ...entry.bullets.map((bullet) => bullet.id)])]) {
+      if (ids.has(id)) throw new UserSafeAiError("Resume structure contains duplicate identifiers. Reload the resume before polishing.", 400);
+      ids.add(id);
+    }
+  }
   const locked = source.locked && typeof source.locked === "object" && !Array.isArray(source.locked)
     ? source.locked as Record<string, unknown>
     : {};

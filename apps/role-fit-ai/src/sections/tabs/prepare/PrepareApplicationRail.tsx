@@ -55,6 +55,7 @@ type PrepareApplicationRailProps = {
   skipHint: string;
   isSkipping: boolean;
   onSkip: () => void | Promise<void>;
+  finalReview?: ReactNode;
   children: ReactNode;
 };
 
@@ -76,7 +77,8 @@ export function PrepareApplicationRail({
   skipHint,
   isSkipping,
   onSkip,
-  children
+  children,
+  finalReview
 }: PrepareApplicationRailProps) {
   const hasSavedResume = Boolean(
     linkedApplication?.resumeArtifacts?.hasSource || linkedApplication?.resumeArtifacts?.hasPdf
@@ -143,7 +145,7 @@ export function PrepareApplicationRail({
           {assessmentSnapshot ? (
             <>
               <div className="prepare-fit__summary">
-                <strong className={`fit-assessment-verdict is-${assessmentSnapshot.result.verdict.toLowerCase()}`}>
+                <strong className={`fit-assessment-verdict is-${(assessmentSnapshot.result.verdict?.toLowerCase() ?? "neutral")}`}>
                   {fitAssessmentVerdictLabel(assessmentSnapshot.result.verdict)}
                 </strong>
               </div>
@@ -168,7 +170,10 @@ export function PrepareApplicationRail({
                 <div className="fit-assessment-list">
                   <strong>Important gaps</strong>
                   <ul>
-                    {assessmentSnapshot.result.gaps.map((gap) => <li key={gap}>{gap}</li>)}
+                    {assessmentSnapshot.result.gaps.map((gap) => {
+                      const detail = assessmentSnapshot.result.gapDetails?.find((item) => item.jobExcerpt === gap);
+                      return <li key={gap}>{gap}{detail ? <small>{detail.relationship === "transferable" ? "Transferable evidence; direct requirement not shown" : "Conflicting candidate evidence"}: {detail.candidateExcerpt}</small> : null}</li>;
+                    })}
                   </ul>
                 </div>
               ) : null}
@@ -264,6 +269,8 @@ export function PrepareApplicationRail({
             ))}
           </ul>
         </div>
+
+        {finalReview}
 
         {linkedApplication && primaryAction.kind !== "update-job" ? (
           <div className="prepare-saved">

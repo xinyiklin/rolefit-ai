@@ -56,7 +56,7 @@ for (const fixture of fixtures) {
   assert(fixture.jobText.includes("Synthetic"), `${fixture.id} visibly identifies synthetic input`);
   assert(fixture.resumeText.includes("Synthetic"), `${fixture.id} visibly identifies synthetic input`);
   assert(Array.isArray(fixture.materialThemes) && fixture.materialThemes.length >= 2);
-  assert(Array.isArray(fixture.expectedVerdicts) && fixture.expectedVerdicts.length >= 1);
+  assert(Array.isArray(fixture.expectedOutcomes ?? fixture.expectedVerdicts) && (fixture.expectedOutcomes ?? fixture.expectedVerdicts).length >= 1);
   assert(Array.isArray(fixture.allowedEligibility) && fixture.allowedEligibility.length >= 1);
 }
 

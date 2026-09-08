@@ -258,3 +258,5 @@ browser-side effects; components render them and App composes them.
   dispatching another provider request.
 - Add a focused eval for durable sequencing, identity, or state-transition
   rules that can be tested without React/browser orchestration.
+
+- `useApplicationReview` owns session-only receipts, exact request equality, generation/cancellation, and dependency freshness. Its input contains current included material text, never pending proposals or application answers. It has no Apply or persistence callbacks.

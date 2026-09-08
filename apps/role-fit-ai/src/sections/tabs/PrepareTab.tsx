@@ -1,4 +1,4 @@
-import { useEffect, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type ReactNode, type KeyboardEvent } from "react";
 import { ArrowRight, Check, Circle, LoaderCircle } from "lucide-react";
 
 import { APPLICATION_SOURCES, JOB_TYPES, type Application } from "../../hooks/useApplications";
@@ -138,6 +138,7 @@ export type PrepareTabProps = {
   onAssessFit: () => void;
   canAssessFit: boolean;
   linkedApplication: Application | null;
+  finalReview?: ReactNode;
   readiness: PreparationReadiness;
   primaryAction: PreparationPrimaryAction;
   primaryActionReady: boolean;
@@ -212,6 +213,7 @@ export function PrepareTab({
   canAssessFit,
   linkedApplication,
   readiness,
+  finalReview,
   primaryAction,
   primaryActionReady,
   primaryActionBlocker,
@@ -744,6 +746,20 @@ export function PrepareTab({
                   <PreparedJobBriefSections sections={BRIEF_SECTIONS} brief={brief} onChange={onJobBriefChange} />
                 </fieldset>
 
+                {(displayedJob?.conditionIssues?.length ?? 0) > 0 ? (
+                  <details className="prepare-note">
+                    <summary>Review extracted conditions</summary>
+                    <ul>
+                      {displayedJob?.conditionIssues?.map((issue, index) => (
+                        <li key={`${issue.field}:${index}`}>
+                          <p>{issue.reason}</p>
+                          <blockquote>{issue.sourceExcerpt}</blockquote>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+
                 <div className="prepare-gaps">
                   <div>
                     <p className="prepare-page__eyebrow">Extraction gaps</p>
@@ -778,6 +794,7 @@ export function PrepareTab({
             canAssessFit={canAssessFit}
             linkedApplication={linkedApplication}
             readiness={readiness}
+            finalReview={finalReview}
             primaryAction={primaryAction}
             primaryActionReady={primaryActionReady}
             primaryActionBlocker={primaryActionBlocker}

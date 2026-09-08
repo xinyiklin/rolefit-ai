@@ -52,7 +52,7 @@ and a new exact-head review.
   concurrent or uncommitted work.
 - Stage exact paths. Do not use broad staging as a shortcut around a dirty tree.
 - Never stage `.env`, personal RoleFit workspace data, exported resumes/PDFs,
-  `node_modules`, app `dist/`, or generated app font mirrors.
+  `node_modules`, app `dist/`, generated app font mirrors, or `.agent-work/`.
 - Treat `AGENTS.md`, `CLAUDE.md`, READMEs, product/design docs, and package docs
   as normal tracked files when they are part of the requested change.
 - Never force-push, amend, rebase, switch branches, or rewrite history without
@@ -69,7 +69,9 @@ documentation. Update the visitor-facing README when behavior, commands, or
 availability changes, and update engineering documentation when a contract
 changes. Include the compact, privacy-safe `CONTINUITY.md` receipt in the
 behavior-slice commit; do not record personal resume/job content, credentials,
-or provider responses.
+or provider responses. Task artifacts in `.agent-work/` remain ignored and local,
+including completed briefs, plans, and reports. Keep durable documentation
+self-contained instead of linking to those files; task IDs may remain as labels.
 
 When changing a product version, update the canonical package/app version and
 user-facing version references together. During a requested push, merge, or
