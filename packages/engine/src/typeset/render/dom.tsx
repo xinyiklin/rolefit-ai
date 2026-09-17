@@ -1,26 +1,6 @@
-// DOM backend: paint an engine LayoutDocument as absolutely-positioned REAL
-// text. The engine owns all layout (line breaks, baselines, x positions); the
-// browser is asked only to rasterize glyphs inside boxes we place — the
-// Monaco/old-Kix architecture. Unlike the retired canvas painter, the output
-// is selectable, copyable, findable, screen-reader-visible, and prints as
-// vector text; it serves every human-facing surface (the editor, Preview
-// overlay, and the ⌘P print layer).
-//
-// Baseline math: CSS positions boxes by their TOP edge; where the baseline
-// falls inside a line box depends on the font-box metrics the BROWSER uses
-// (which may differ from static hhea tables across engines). So we measure
-// each face's actual CSS line-box baseline once at runtime. A line starts at
-//   min(engine baseline − run CSS ascent)
-// and its fixed-width inline runs use native `vertical-align: baseline`.
-// That gives every family/size one shared browser baseline while retaining the
-// engine's exact x positions.
-//
-// Text integrity: engine runs are word-level boxes (spaces are glue, not
-// text). We regroup them into one span per style-run WITH real space
-// characters so selection/copy/find work, and correct any difference between
-// the engine's set glue and the natural space width via `word-spacing` — so
-// shrunk lines keep exact engine geometry. Each line is a block element, so
-// copied text gets line breaks.
+// Physical page geometry and decorations share one layout with the logical
+// selectable text layer. Font measurement here calibrates browser baselines;
+// wrapping and pagination remain engine-owned for screen, print, and PDF.
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -32,18 +12,19 @@ import {
   type DocumentFontFamily
 } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
-import { fieldKey, type FieldSrc, type GlyphRun } from "../types.ts";
+import { fieldKey } from "../types.ts";
 import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "../blocks.ts";
 import type { DocumentStyle } from "../../lib/documentStyle.ts";
 import {
   layoutCoverLetter,
   layoutResume,
-  lineSeparators,
   type LayoutDocument,
   type LayoutPage
 } from "../layout.ts";
-import { spaceWidth, underlineRule, underlineSpans } from "../measure.ts";
+import { underlineRule, underlineSpans } from "../measure.ts";
 import type { TypesetSchema } from "../schema.ts";
+import { groupRuns } from "./segments.ts";
+import { LogicalFields } from "./logicalFields.tsx";
 
 function cssFontShorthand(family: DocumentFontFamily, face: FaceName, sizePx: number): string {
   const f = fontFace(family, face);
@@ -149,97 +130,6 @@ export function browserFaceBox(
   return box;
 }
 
-// ---- Run grouping: word boxes → style spans with real spaces ----
-
-type Segment = {
-  text: string;
-  family: DocumentFontFamily;
-  face: FaceName;
-  size: number;
-  tracking: number;
-  x: number;
-  end: number; // right edge in bp (for boundary-space decisions)
-  href?: string;
-  underline?: boolean;
-  src?: FieldSrc;
-  marker?: boolean; // bullet marker run (data-tsdm; editor mapping skips it)
-  wordSpacing: number; // bp delta vs the natural space width
-};
-
-function groupRuns(runs: GlyphRun[]): Segment[] {
-  const segs: Segment[] = [];
-  let cur: (Segment & { gaps: number[] }) | null = null;
-  const flush = () => {
-    if (!cur) return;
-    // Engine glue vs natural space: apply the average delta as word-spacing.
-    if (cur.gaps.length) {
-      const natural = spaceWidth({ family: cur.family, face: cur.face, size: cur.size, tracking: cur.tracking });
-      const avg = cur.gaps.reduce((s, g) => s + g, 0) / cur.gaps.length;
-      const delta = avg - natural;
-      if (Math.abs(delta) > 0.02) cur.wordSpacing = delta;
-    }
-    const { gaps: _g, ...seg } = cur;
-    segs.push(seg);
-    cur = null;
-  };
-  for (const run of runs) {
-    const spaceish = spaceWidth(run.style);
-    const gap = cur ? run.x - cur.end : 0;
-    // Join only across genuine interword glue. Justified stretch tops out
-    // near 1.63× the natural space (tolerance 200 ⇒ r ≈ 1.26 of a 0.5-space
-    // stretch budget); anything wider (the contact "|" divider boxes at ~2.3×)
-    // is layout, not a space — joining it would pollute word-spacing and
-    // stretch the segment's real spaces.
-    const joinable =
-      cur &&
-      cur.family === run.style.family &&
-      cur.face === run.style.face &&
-      cur.size === run.style.size &&
-      cur.tracking === run.style.tracking &&
-      cur.href === run.href &&
-      cur.underline === run.underline &&
-      Boolean(cur.marker) === Boolean(run.marker) &&
-      (cur.src ? fieldKey(cur.src) : "") === (run.src ? fieldKey(run.src) : "") &&
-      gap >= -0.05 &&
-      gap <= spaceish * 1.75;
-    if (joinable && cur) {
-      if (gap > 0.3) {
-        cur.text += ` ${run.text}`;
-        cur.gaps.push(gap);
-      } else {
-        cur.text += run.text; // kern-adjacent fragments, no glue
-      }
-      cur.end = run.x + run.width;
-    } else {
-      flush();
-      cur = {
-        text: run.text,
-        family: run.style.family,
-        face: run.style.face,
-        size: run.style.size,
-        tracking: run.style.tracking,
-        x: run.x,
-        href: run.href,
-        underline: run.underline,
-        src: run.src,
-        marker: run.marker,
-        wordSpacing: 0,
-        end: run.x + run.width,
-        gaps: []
-      };
-    }
-  }
-  flush();
-  // Selection/text-extraction fidelity: `white-space: pre` renders trailing whitespace
-  // inside a span's own box without moving any glyph, so appending it never
-  // shifts layout. A trailing space where a glue gap separates two segments
-  // (style boundaries, the bullet marker) keeps browser-derived words apart.
-  for (let i = 0; i < segs.length - 1; i += 1) {
-    if (segs[i + 1].x - segs[i].end > 0.3) segs[i].text += " ";
-  }
-  return segs;
-}
-
 // ---- Painters ----
 
 // `unit` converts bp → CSS length: px×zoom for screen, pt for print (612pt is
@@ -252,49 +142,23 @@ type Unit = (bp: number) => string;
 // rule's ABSOLUTE page position: snapping must happen in page space (the line
 // div's own top is fractional), then convert back to a line-relative offset.
 type RuleBox = (yAbs: number, thickness: number, lineTop: number) => { top: string; height: string };
-// React omits an empty string child, leaving no text node for contenteditable
-// to place a caret in. This browser-only, zero-width placeholder keeps an empty
-// engine run editable; data-tsde lets the selection adapter treat it as model
-// length zero.
-export const EMPTY_EDITABLE_PLACEHOLDER = "\uFEFF";
-
-// A zero-width run IS its own alignment anchor: an empty centred field sits at
-// the column's midpoint, an empty right-aligned one at its trailing edge. A host
-// hint painted from that point would run off the page, so publish how far along
-// the column the insertion point sits and let the hint shift by that share of
-// its own width. Purely presentational — no layout, print, or PDF path reads it.
-function emptyRunHintShift(x: number, geometry: LayoutDocument["geometry"]): string | undefined {
-  if (geometry.textWidth <= 0) return undefined;
-  const fraction = Math.min(1, Math.max(0, (x - geometry.marginLeft) / geometry.textWidth));
-  const percent = Math.round(fraction * 10000) / 100;
-  return percent === 0 ? "0%" : `-${percent}%`;
-}
-
 function PageLines({
   page,
-  geometry,
-  separators,
+  pageIndex,
   unit,
-  ruleBox,
-  highlightFieldKey
+  ruleBox
 }: {
   page: LayoutPage;
-  geometry: LayoutDocument["geometry"];
-  separators: readonly string[];
+  pageIndex: number;
   unit: Unit;
   ruleBox: RuleBox;
-  highlightFieldKey?: string | null;
 }) {
   return (
     <>
       {page.lines.map((line, li) => {
         const segs = groupRuns(line.runs);
-        // The line div is a REAL block box (true top/height), so browser text
-        // extraction can distinguish visual lines. External editor copy is
-        // intercepted and serialized from logical fields instead; paint wraps
-        // must never become hard paragraph boundaries. Fixed-width inline
-        // segments share the browser's native baseline while margins preserve
-        // every engine x.
+        // Physical line boxes own hit testing and selection bands. Text lives
+        // in LogicalFields and refers back to these boxes by line identity.
         const lineTop = segs.length
           ? Math.min(...segs.map((s) => line.baseline - browserFaceBox(s.family, s.face).ascent * s.size))
           : line.baseline - 10;
@@ -305,6 +169,7 @@ function PageLines({
           <div
             key={li}
             className="tsd-line"
+            data-tsd-line-box={`${pageIndex}-${li}`}
             style={{
               position: "absolute",
               left: 0,
@@ -327,16 +192,15 @@ function PageLines({
                 : { "--tsd-paragraph-space-after": unit(line.paragraphSpaceAfter) })
             } as React.CSSProperties}
           >
-            {segs.map((seg, si) => {
+            {segs.filter(seg => !seg.src || seg.marker).map((seg, si) => {
               const box = browserFaceBox(seg.family, seg.face);
               const font = fontFace(seg.family, seg.face);
               const key = seg.src ? fieldKey(seg.src) : undefined;
-              const highlighted = Boolean(key && key === highlightFieldKey && !seg.marker);
-              const previousEnd = si > 0 ? segs[si - 1].end : 0;
               const style = {
-                display: "inline-block",
-                verticalAlign: "baseline",
-                marginLeft: unit(seg.x - previousEnd),
+                position: "absolute",
+                display: "block",
+                left: unit(seg.x),
+                top: unit(line.baseline - box.ascent * seg.size - lineTop),
                 width: unit(seg.end - seg.x),
                 fontFamily: `"${font.cssFamily}"`,
                 fontWeight: font.weight,
@@ -346,10 +210,7 @@ function PageLines({
                 whiteSpace: "pre",
                 letterSpacing: seg.tracking ? unit(seg.tracking) : 0,
                 wordSpacing: seg.wordSpacing ? unit(seg.wordSpacing) : undefined,
-                color: "#000",
-                ...(seg.text || !key
-                  ? {}
-                  : { "--tsd-empty-hint-shift": emptyRunHintShift(seg.x, geometry) })
+                color: "#000"
               } as React.CSSProperties;
               if (seg.href) {
                 return (
@@ -359,11 +220,11 @@ function PageLines({
                     target="_blank"
                     rel="noreferrer"
                     data-tsdf={key}
+                    data-tsd-decoration="1"
                     data-tsde={seg.text ? undefined : "1"}
-                    className={highlighted ? "tsd-run--highlighted" : undefined}
                     style={{ ...style, color: "#000", textDecoration: "none" }}
                   >
-                    {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
+                    {seg.text}
                   </a>
                 );
               }
@@ -371,20 +232,15 @@ function PageLines({
                 <span
                   key={si}
                   data-tsdf={key}
+                  data-tsd-decoration="1"
                   data-tsde={seg.text ? undefined : "1"}
                   data-tsdm={seg.marker ? "1" : undefined}
-                  className={highlighted ? "tsd-run--highlighted" : undefined}
                   style={style}
                 >
-                  {seg.text || EMPTY_EDITABLE_PLACEHOLDER}
+                  {seg.text}
                 </span>
               );
             })}
-            {separators[li] ? (
-              <span data-tsds="1" contentEditable={false} style={{ whiteSpace: "pre" }}>
-                {separators[li]}
-              </span>
-            ) : null}
             {/* Links and explicit underlines use an engine-painted rule with the
                 same device-pixel snapping as section rules, grouped by the shared
                 span owner so it runs through interior spaces and never steps
@@ -493,7 +349,6 @@ export function TypesetDomPages({
     onDoc?.(next);
   }, [loadedFamily, family, schema, docStyle, onPageCount, onDoc, documentKind]);
 
-  const separators = useMemo(() => (doc ? lineSeparators(doc.pages) : []), [doc]);
 
   const unit = useMemo<Unit>(
     () => (variant === "print" ? (bp) => `${+bp.toFixed(3)}pt` : (bp) => `${+(bp * zoom).toFixed(3)}px`),
@@ -541,6 +396,7 @@ export function TypesetDomPages({
     <div
       ref={hostRef}
       className={`tsd-doc tsd-doc--${variant}${editable ? " tsd-doc--editable" : ""}`}
+      style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), margin: "0 auto" }}
       contentEditable={editable || undefined}
       suppressContentEditableWarning={editable || undefined}
       spellCheck={editable ? spellCheck : undefined}
@@ -553,20 +409,19 @@ export function TypesetDomPages({
           key={i}
           className="tsd-page"
           data-tsd-page={i}
-          role="document"
-          aria-label={`${documentKind === "cover-letter" ? "Cover letter" : "Resume"} page ${i + 1}`}
-          style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), height: unit(PAGE_HEIGHT_BP) }}
+          aria-hidden="true"
+          contentEditable={false}
+          style={{ position: "relative", overflow: "hidden", width: unit(PAGE_WIDTH_BP), height: unit(PAGE_HEIGHT_BP), breakAfter: i === doc.pages.length - 1 ? "auto" : "page" }}
         >
           <PageLines
             page={page}
-            geometry={doc.geometry}
-            separators={separators[i] ?? []}
+            pageIndex={i}
             unit={unit}
             ruleBox={ruleBox}
-            highlightFieldKey={highlightFieldKey}
           />
         </div>
       ))}
+      <LogicalFields doc={doc} variant={variant} zoom={zoom} unit={unit} faceBox={browserFaceBox} highlightFieldKey={highlightFieldKey} />
     </div>
   );
 }

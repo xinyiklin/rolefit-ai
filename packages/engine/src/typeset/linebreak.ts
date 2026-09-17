@@ -73,6 +73,7 @@ export function breakParagraph(items: ParaItem[], target: number, align: Paragra
     for (const item of items) {
       if (item.kind === "forcedBreak") {
         lines.push(...breakSoftParagraph(chunk, target, align));
+        lines[lines.length - 1].breakAfter = "\n";
         chunk = [];
       } else {
         chunk.push(item);
@@ -166,7 +167,12 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
   let from = 0;
   for (let bi = 0; bi < breaks.length; bi += 1) {
     const to = breaks[bi];
-    lines.push(setLine(items, measureLine(from, to), target, align, bi === breaks.length - 1));
+    const measured = measureLine(from, to);
+    const line = setLine(items, measured, target, align, bi === breaks.length - 1);
+    if (bi < breaks.length - 1) {
+      line.breakAfter = items[to]?.kind === "glue" ? " " : "";
+    }
+    lines.push(line);
     from = to;
   }
   return lines;
@@ -215,6 +221,7 @@ function setLine(
       last.style.tracking === box.style.tracking &&
       last.lineHeight === box.lineHeight &&
       last.href === box.href &&
+      last.linkSuppressed === box.linkSuppressed &&
       last.underline === box.underline &&
       last.x + last.width === x
     ) {
@@ -227,6 +234,7 @@ function setLine(
         x,
         width: box.width,
         lineHeight: box.lineHeight,
+        ...(box.linkSuppressed ? { linkSuppressed: true } : {}),
         href: box.href,
         underline: box.underline
       });
@@ -247,13 +255,16 @@ function setLine(
 // Keep combining marks, variation selectors, and ZWJ sequences with their base
 // character. This is deliberately local and deterministic rather than relying
 // on host-specific Intl.Segmenter behavior.
-function graphemeClusters(text: string): string[] {
+export function graphemeClusters(text: string): string[] {
   const clusters: string[] = [];
   for (const codePoint of Array.from(text)) {
     const previous = clusters[clusters.length - 1];
     const joinsPrevious =
       clusters.length > 0 &&
       (/^\p{Mark}$/u.test(codePoint) ||
+        /^\p{Emoji_Modifier}$/u.test(codePoint) ||
+        /^[\u{E0020}-\u{E007F}]$/u.test(codePoint) ||
+        (/^\p{Regional_Indicator}$/u.test(codePoint) && /^\p{Regional_Indicator}$/u.test(previous)) ||
         codePoint === "\uFE0E" ||
         codePoint === "\uFE0F" ||
         codePoint === "\u200D" ||
@@ -264,50 +275,57 @@ function graphemeClusters(text: string): string[] {
   return clusters;
 }
 
-function splitBoxPrefix(
-  box: BoxItem,
-  maxWidth: number,
-  forceOne = false
-): { head: BoxItem | null; tail: BoxItem | null } {
-  const clusters = graphemeClusters(box.text);
-  if (clusters.length <= 1) {
-    return box.width <= maxWidth || forceOne
-      ? { head: box, tail: null }
-      : { head: null, tail: box };
+export function minimumParagraphWidth(items: readonly ParaItem[]): number {
+  let width = 0;
+  let boxes: BoxItem[] = [];
+  const flush = () => {
+    let offset = 0;
+    for (const cluster of graphemeClusters(boxes.map(box => box.text).join(""))) {
+      const pieces = sliceBoxes(boxes, offset, offset + cluster.length);
+      width = Math.max(width, pieces.reduce((sum, box) => sum + box.width, 0));
+      offset += cluster.length;
+    }
+    boxes = [];
+  };
+  for (const item of items) {
+    if (item.kind === "box") boxes.push(item);
+    else flush();
   }
+  flush();
+  return width;
+}
 
-  let low = 1;
-  let high = clusters.length;
-  let fit = 0;
-  let fitWidth = 0;
+function sliceBoxes(boxes: readonly BoxItem[], start: number, end: number): BoxItem[] {
+  const result: BoxItem[] = [];
+  let offset = 0;
+  for (const box of boxes) {
+    const from = Math.max(0, start - offset), to = Math.min(box.text.length, end - offset);
+    if (from < to) {
+      const text = box.text.slice(from, to);
+      result.push(from === 0 && to === box.text.length ? box : { ...box, text, width: measure(text, box.style) });
+    }
+    offset += box.text.length;
+    if (offset >= end) break;
+  }
+  return result;
+}
+
+// Choose boundaries over the entire styled token: a mark can begin inside a grapheme.
+function splitBoxesPrefix(boxes: BoxItem[], maxWidth: number, forceOne = false) {
+  const text = boxes.map(box => box.text).join("");
+  const ends: number[] = [];
+  let offset = 0;
+  for (const cluster of graphemeClusters(text)) { offset += cluster.length; ends.push(offset); }
+  let low = 1, high = ends.length, fit = 0;
   while (low <= high) {
     const mid = Math.floor((low + high) / 2);
-    const text = clusters.slice(0, mid).join("");
-    const width = measure(text, box.style);
-    if (width <= maxWidth) {
-      fit = mid;
-      fitWidth = width;
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
+    const width = sliceBoxes(boxes, 0, ends[mid - 1]).reduce((sum, box) => sum + box.width, 0);
+    if (width <= maxWidth) { fit = mid; low = mid + 1; }
+    else high = mid - 1;
   }
-
-  if (fit === 0) {
-    if (!forceOne) return { head: null, tail: box };
-    // A single glyph may itself exceed the whole column at extreme custom
-    // sizes. Keep it intact and let only that glyph overflow an empty line.
-    fit = 1;
-    fitWidth = measure(clusters[0], box.style);
-  }
-  const headText = clusters.slice(0, fit).join("");
-  const tailText = clusters.slice(fit).join("");
-  return {
-    head: { ...box, text: headText, width: fitWidth },
-    tail: tailText
-      ? { ...box, text: tailText, width: measure(tailText, box.style) }
-      : null
-  };
+  if (!fit && forceOne) fit = 1;
+  const boundary = fit ? ends[fit - 1] : 0;
+  return { head: sliceBoxes(boxes, 0, boundary), tail: sliceBoxes(boxes, boundary, text.length) };
 }
 
 // One unbreakable unit: the boxes between two legal break opportunities. A word
@@ -403,47 +421,24 @@ function greedyFallback(items: SoftParaItem[], target: number, align: ParagraphA
       continue;
     }
 
-    // Only now is the unit genuinely unbreakable and wider than the column:
-    // fill through its boxes, splitting at measured grapheme boundaries.
-    for (const unitBox of unit.boxes) {
-      let box: BoxItem | null = unitBox;
-      while (box) {
-        const available = target - currentWidth;
-        if (box.width <= available) {
-          place(box);
-          box = null;
-          continue;
-        }
-        if (available <= 0 && hasCurrentBox) {
-          flush();
-          continue;
-        }
-        let { head, tail } = splitBoxPrefix(box, Math.max(0, available));
-        if (!head && hasCurrentBox) {
-          flush();
-          continue;
-        }
-        if (!head) {
-          // Not even one grapheme fits an empty column: let that single glyph
-          // overflow rather than loop forever.
-          ({ head, tail } = splitBoxPrefix(box, target, true));
-        }
-        if (!head) break;
-        place(head);
-        box = tail;
-        if (box) flush();
-      }
+    let remaining = unit.boxes;
+    while (remaining.length) {
+      const available = target - currentWidth;
+      let { head, tail } = splitBoxesPrefix(remaining, Math.max(0, available));
+      if (!head.length && hasCurrentBox) { flush(); continue; }
+      if (!head.length) ({ head, tail } = splitBoxesPrefix(remaining, target, true));
+      for (const box of head) place(box);
+      remaining = tail;
+      if (remaining.length) flush();
     }
   }
   flush();
 
-  return chunks.map((lineItems, index) =>
-    setLine(
-      lineItems,
-      lineMeasure(lineItems),
-      target,
-      align,
-      index === chunks.length - 1
-    )
-  );
+  return chunks.map((lineItems, index) => {
+    const line = setLine(lineItems, lineMeasure(lineItems), target, align, index === chunks.length - 1);
+    if (index < chunks.length - 1) {
+      line.breakAfter = lineItems[lineItems.length - 1]?.kind === "glue" ? " " : "";
+    }
+    return line;
+  });
 }

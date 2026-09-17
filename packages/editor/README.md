@@ -33,6 +33,12 @@ Backspace at the start of an empty Subtitle left removes the row only when both
 sides are empty. Each structural edit supports Undo/Redo. Fully empty entries
 can regain their rows through the containing section's `Empty entry N` submenu.
 
+Long section titles, entry titles/subtitles, names, and contact values wrap
+using the shared engine.
+Visual continuation lines retain one field's selection, formatting, clipboard,
+and history semantics. A triple click selects the complete logical field;
+wrapping does not change Enter or Tab's structural meaning.
+
 ## Checks
 
 Run from the repository root:

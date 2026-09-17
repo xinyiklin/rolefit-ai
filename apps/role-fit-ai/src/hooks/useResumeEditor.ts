@@ -59,6 +59,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
     const shared = editor.actions;
 
     return {
+      getDocumentGeneration: shared.getDocumentGeneration,
       createHeader: () => { markManual(); shared.createHeader(); },
       setHeaderVisible: (visible: boolean) => { markManual(); shared.setHeaderVisible(visible); },
       setHeaderName: (...args: Parameters<typeof shared.setHeaderName>) => {

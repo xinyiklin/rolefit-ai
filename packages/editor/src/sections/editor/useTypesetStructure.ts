@@ -14,6 +14,7 @@ export type PendingCaret = (
   key: string;
   valueIndex: number;
   valueEndIndex?: number;
+  backward?: boolean;
   endKey?: string;
 } | null;
 

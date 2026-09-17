@@ -1,3 +1,6 @@
+import { runHostAuditContracts } from "./editor-browser-contracts/host-audit.mjs";
+import { runWrappedHeaderContracts } from "./editor-browser-contracts/wrapped-header.mjs";
+import { runWrappedRowContracts } from "./editor-browser-contracts/wrapped-rows.mjs";
 import { runEntryRowContracts } from "./editor-browser-contracts/entry-rows.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
@@ -1199,6 +1202,9 @@ try {
   await browserConnection.send("Browser.setDownloadBehavior", {
     behavior: "deny"
   });
+  await runWrappedRowContracts({ makeWindow, waitFor, baseUrl });
+  await runWrappedHeaderContracts({ makeWindow, waitFor, baseUrl });
+  await runHostAuditContracts({ makeWindow, waitFor, baseUrl });
   console.log("Chromium contracts: editor behaviors");
   await runEditorContracts();
   await runEntryRowContracts({ makeWindow, waitFor, baseUrl });

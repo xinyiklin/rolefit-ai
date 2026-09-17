@@ -1,3 +1,6 @@
+import { contentSpansOf, displayRangeFragments } from "./domSelection.ts";
+import type { FieldRange } from "./multiFieldSelection.ts";
+
 const SELECTED_LINE_CLASS = "tsd-line--selected";
 const LEFT_PROPERTY = "--tsd-selection-left";
 const WIDTH_PROPERTY = "--tsd-selection-width";
@@ -72,7 +75,7 @@ export function clearSelectionHighlights(host: HTMLElement): void {
 }
 
 // Replace fragmented native highlights with text-bounded rectangles per engine line.
-export function paintSelectionHighlights(host: HTMLElement): void {
+export function paintSelectionHighlights(host: HTMLElement, ranges: readonly FieldRange[] | null): void {
   clearSelectionHighlights(host);
   const selection = window.getSelection();
   if (
@@ -87,9 +90,9 @@ export function paintSelectionHighlights(host: HTMLElement): void {
     return;
   }
 
-  const fragments = Array.from(selection.getRangeAt(0).getClientRects()).filter(
-    (rect) => rect.width > 0 && rect.height > 0
-  );
+  const fragments = (ranges ?? [])
+    .flatMap((range) => displayRangeFragments(host, range.key, range.map.display, range.dStart, range.dEnd))
+    .filter((rect) => rect.height > 0);
   if (!fragments.length) return;
 
   const lines: LineGeometry[] = Array.from(
@@ -99,14 +102,7 @@ export function paintSelectionHighlights(host: HTMLElement): void {
     // Inline text boxes only. Rules are absolutely positioned divs (a section
     // rule spans the whole column), and the bullet marker sits outside the
     // selectable value — the same exclusion the mapping in domSelection makes.
-    const contentElements = Array.from(element.children)
-      .filter(
-        (child): child is HTMLElement =>
-          child instanceof HTMLElement &&
-          child.tagName !== "DIV" &&
-          !child.hasAttribute("data-tsdm") &&
-          !child.hasAttribute("data-tsds")
-      );
+    const contentElements = contentSpansOf(element);
     const boxes = contentElements.map((child) => child.getBoundingClientRect());
     return {
       element,
@@ -139,19 +135,6 @@ export function paintSelectionHighlights(host: HTMLElement): void {
     if (!target) continue;
     target.left = Math.min(target.left, fragment.left - target.rect.left);
     target.right = Math.max(target.right, fragment.right - target.rect.left);
-  }
-
-  // Blank lines between selected fragments receive a visible selection stub.
-  const withFragment = lines
-    .map((line, index) => (Number.isFinite(line.left) ? index : -1))
-    .filter((index) => index >= 0);
-  if (withFragment.length) {
-    for (let index = withFragment[0]; index <= withFragment[withFragment.length - 1]; index += 1) {
-      const line = lines[index];
-      if (Number.isFinite(line.left)) continue;
-      line.left = line.textLeft;
-      line.right = line.textRight;
-    }
   }
 
   const isSelected = (line: LineGeometry | undefined): boolean =>

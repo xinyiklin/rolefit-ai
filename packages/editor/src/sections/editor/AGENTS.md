@@ -157,6 +157,8 @@ typesetting guide when a change affects painted output or layout provenance.
   pre-edit DOM.
 - `useTypesetOverlayAnchors.ts` owns overlay geometry: page origins inside the
   wrapper, pointer-hover block targeting, and the caret-active field anchor.
+  Hover identity includes the physical page: a wrapped block can keep its field
+  identity while its continuation needs controls on a different page.
 - `typesetStructure.ts` derives pure anchors, extents, and drop slots from the
   engine layout.
 - `TypesetStructureOverlay.tsx` paints drag affordances outside the editable DOM.
@@ -382,9 +384,15 @@ typesetting guide when a change affects painted output or layout provenance.
 - A selection covering exactly ONE field is single-field whichever way the
   browser shaped its boundaries — Gecko anchors a select-all on the editing host,
   so endpoint lookup alone would strand it and lose every one-field command.
-- The painter's line-separator span (`data-tsds`) is not field content. Caret
-  placement, line-edge movement, and the selection rectangle must exclude it, or
-  End parks the caret in text that maps to no field.
+- The painter's line-separator span (`data-tsds`) represents consumed field
+  whitespace and publishes `data-tsd-owner`. It is not an editable content span.
+  Native endpoints there resolve to adjacent field text. Physical lines are
+  resolved through fragment `data-tsd-line` and page identity; text follows
+  logical field order and is not nested in the physical line/page boxes.
+- Triple click selects a logical field, including its wrapped continuations.
+  Queued character deletion uses the same grapheme steps as fallback live input.
+  Queued word deletion retains word intent without triggering plain-Backspace
+  row removal. Replay continues past no-op commands until a mutation requires a repaint.
 - Deferring an automatic link while its trailing caret is being typed repaints
   that field between `<a>` and `<span>`. Never perform that swap while a primary
   pointer selection is in flight: replacing the range's anchor node between

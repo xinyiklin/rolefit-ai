@@ -66,8 +66,8 @@ Target WCAG 2.2 AA for application chrome. Provide complete keyboard access,
 visible focus states, semantic toolbar and popover behavior, non-color status
 cues, reduced-motion support, and minimum practical touch targets on tablets.
 Keep the editor available at compact widths: auto-fit the page, progressively
-disclose toolbar controls, and hide file actions at 400px and below rather than
-blocking access with a screen-size gate.
+disclose toolbar controls, and retain Open/Save actions at compact widths rather
+than blocking access with a screen-size gate.
 
 ## Resume entry rows
 
@@ -83,3 +83,15 @@ A fully empty entry remains recoverable from the containing section's
 its space from editor, print, and PDF output. Existing resumes retain their
 appearance; older builds reject newly saved files with removed rows. These
 controls do not apply to section headings, Skills, Summary, or cover letters.
+
+Long title/subtitle values wrap within the paired row, keeping a short date or
+location intact when space permits. Names and individual contacts also wrap
+inside the document margins. Continuations preserve authored text, formatting,
+links, and the existing Enter/Tab behavior; unusually tall headings continue on
+the next page. Fitting paired rows keep their existing layout. Header baselines
+stay fixed when typing different letter shapes at the same font, size and wrap
+count, including typing the first character into an empty name.
+
+Section titles also wrap inside the text margins. Their alignment and heading
+case are preserved; one section rule follows the final continuation, and tall
+headings can continue onto another page without changing saved text.

@@ -69,6 +69,7 @@ export type DisplayMap = {
 };
 
 export type TypesetSelection = {
+  backward?: boolean;
   src: FieldSrc;
   key: string;
   map: DisplayMap;

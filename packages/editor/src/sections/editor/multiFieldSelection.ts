@@ -15,6 +15,7 @@ import { caretToDisplayIndex, keyOfNode } from "./domSelection.ts";
 import type { DisplayMap } from "./inlineTextEditing.ts";
 
 export type FieldRange = {
+  backward?: boolean;
   src: FieldSrc;
   key: string;
   map: DisplayMap;
@@ -144,6 +145,38 @@ export function readFieldRanges(
 
   const keys = orderedFieldKeys(host);
   if (!keys.length) return null;
+
+  // Resolve direction independently of normalized Range endpoints so backward
+  // selections survive formatting and reflow.
+  const anchorKey = keyOfNode(selection.anchorNode)?.key;
+  const focusKey = keyOfNode(selection.focusNode)?.key;
+  if (selection.rangeCount === 1 && anchorKey && focusKey && keys.includes(anchorKey) && keys.includes(focusKey)) {
+    const anchorSrc = parseFieldKey(anchorKey);
+    const focusSrc = parseFieldKey(focusKey);
+    if (!anchorSrc || !focusSrc) return null;
+    const anchorField = resolve(anchorSrc);
+    const focusField = anchorKey === focusKey ? anchorField : resolve(focusSrc);
+    const anchorOffset = caretToDisplayIndex(host, anchorKey, anchorField.map.display, selection.anchorNode!, selection.anchorOffset);
+    const focusOffset = caretToDisplayIndex(host, focusKey, focusField.map.display, selection.focusNode!, selection.focusOffset);
+    if (anchorOffset === null || focusOffset === null) return null;
+    const ai = keys.indexOf(anchorKey), fi = keys.indexOf(focusKey);
+    const backward = ai > fi || (ai === fi && anchorOffset > focusOffset);
+    const start = backward ? fi : ai, end = backward ? ai : fi;
+    if (end - start + 1 > maxFields) return null;
+    const ranges = keys.slice(start, end + 1).map((key, index) => {
+      const src = parseFieldKey(key)!;
+      const field = key === anchorKey ? anchorField : key === focusKey ? focusField : resolve(src);
+      return {
+        src, key, ...field,
+        dStart: index === 0 ? backward ? focusOffset : anchorOffset : 0,
+        dEnd: start + index === end ? backward ? anchorOffset : focusOffset : field.map.chars.length,
+        ...(backward ? { backward: true } : {})
+      };
+    });
+    while (ranges.length > 1 && ranges[ranges.length - 1].dStart === ranges[ranges.length - 1].dEnd) ranges.pop();
+    while (ranges.length > 1 && ranges[0].dStart === ranges[0].dEnd) ranges.shift();
+    return ranges;
+  }
 
   const startKey = inHost(range.startContainer) ? keyOfNode(range.startContainer)?.key : undefined;
   const endKey = inHost(range.endContainer) ? keyOfNode(range.endContainer)?.key : undefined;

@@ -28,6 +28,10 @@ style state; app lifecycle and persistence policy remain in the apps.
   a new transaction after Undo invalidates Redo in both reducers. Sequence
   allocation must be idempotent for the same state/action pair because React
   Strict Mode may invoke a reducer twice before committing either result.
+- The existing history-clock generation also identifies document replacement
+  for input replay. `actions.getDocumentGeneration()` exposes that read-only
+  boundary; the editor discards queued input and pending caret restoration from
+  an older generation before touching the replacement document.
 - Prefer derived state over synchronized copies. Use refs only for transient
   controller values that should not trigger presentation.
 - Hooks do not own app files, autosave destinations, provider settings, tracker

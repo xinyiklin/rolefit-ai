@@ -1,23 +1,28 @@
 import { useLayoutEffect, useRef, type Dispatch, type MutableRefObject, type SetStateAction } from "react";
 import type { TextHistoryIntent } from "../../hooks/useResumeEditor.ts";
+import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 
 import {
   caretClientX,
   caretToDisplayIndex,
   contentSpansOf,
+  displayIndexToCaret,
   fieldEdgeAnchors,
+  keyOfNode,
   lineDivs,
   lineEdgePosition,
   lineOf,
   nearestLineByPoint,
   placeInLine,
+  restoreDomSelection,
   setCaret,
   spanEndPosition
 } from "./domSelection.ts";
 import {
   indentDeletionRange,
   inlineFragmentForRange,
-  type TypesetSelection
+  type TypesetSelection,
+  type DisplayMap
 } from "./inlineTextEditing.ts";
 import {
   inlineFragmentFromHtml,
@@ -31,6 +36,8 @@ import {
 } from "./clipboardPrivateCodec.ts";
 import { clipboardBlocks } from "./documentPasteMapping.ts";
 
+import { isWrappedEntryField, textStep } from "./wrappedFieldNavigation.ts";
+
 export type QueuedIntent =
   | { kind: "insert"; text: string }
   | {
@@ -41,8 +48,8 @@ export type QueuedIntent =
       blocks: string[];
       plainText: string;
     }
-  | { kind: "deleteBack"; entryRow?: boolean }
-  | { kind: "deleteFwd" }
+  | { kind: "deleteBack"; entryRow?: boolean; word?: boolean }
+  | { kind: "deleteFwd"; word?: boolean }
   | { kind: "deleteSelection" }
   | { kind: "indent" }
   | { kind: "outdent" }
@@ -57,6 +64,8 @@ function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
   if (type === "insertParagraph") return { kind: "enter", shiftKey: false };
   if (type === "deleteContentBackward") return { kind: "deleteBack" };
   if (type === "deleteContentForward") return { kind: "deleteFwd" };
+  if (type === "deleteWordBackward") return { kind: "deleteBack", entryRow: false, word: true };
+  if (type === "deleteWordForward") return { kind: "deleteFwd", word: true };
   if (type.startsWith("delete")) return { kind: "deleteSelection" };
   if (type === "historyUndo") return { kind: "history", direction: "undo" };
   if (type === "historyRedo") return { kind: "history", direction: "redo" };
@@ -73,7 +82,9 @@ function intentForInput(event: InputEvent, type: string): QueuedIntent | null {
   return null;
 }
 
+
 type TypesetInputEventsArgs = {
+  resolveField: (src: FieldSrc) => { map: DisplayMap; value: string };
   hostRef: MutableRefObject<HTMLDivElement | null>;
   structuredTabScope: "document" | "header";
   nonce: number;
@@ -126,6 +137,7 @@ type TypesetInputEventsArgs = {
 };
 
 export function useTypesetInputEvents({
+  resolveField,
   hostRef,
   structuredTabScope,
   nonce,
@@ -175,7 +187,8 @@ export function useTypesetInputEvents({
       const rect = target.getBoundingClientRect();
       const clampedX = Math.min(Math.max(x, rect.left + 1), rect.right - 1);
       // Reuse line-aware pointer placement to keep blank lines on their own row.
-      const position = placeInLine(target, clampedX);
+      const key = keyOfNode(selection?.focusNode ?? null)?.key;
+      const position = placeInLine(target, clampedX, key && isWrappedEntryField(host, key) ? key : undefined);
       if (!position) return false;
       setCaret(position, extend);
       return true;
@@ -183,7 +196,8 @@ export function useTypesetInputEvents({
     const moveLineEdge = (edge: "start" | "end", extend: boolean) => {
       const current = lineOf(window.getSelection()?.focusNode ?? null);
       if (!current) return;
-      const position = lineEdgePosition(current, edge);
+      const key = keyOfNode(window.getSelection()?.focusNode ?? null)?.key;
+      const position = lineEdgePosition(current, edge, key && isWrappedEntryField(host, key) ? key : undefined);
       if (position) setCaret(position, extend);
     };
     const moveDocumentEdge = (edge: "start" | "end", extend: boolean) => {
@@ -235,7 +249,7 @@ export function useTypesetInputEvents({
       goalXRef.current = null;
       if (commitPendingRef.current) {
         const queued = intentForInput(event, type);
-        if (queued?.kind === "deleteBack") queued.entryRow = !rowShortcutModifiedRef.current;
+        if (queued?.kind === "deleteBack") queued.entryRow ??= !rowShortcutModifiedRef.current;
         if (queued?.kind === "enter") queued.entryRow = !rowShortcutModifiedRef.current;
         if (queued) queueIntent(queued);
         return;
@@ -333,8 +347,8 @@ export function useTypesetInputEvents({
             }
           }
           const ranges = event.getTargetRanges?.() ?? [];
-          let start = backward ? selection.dStart - 1 : selection.dStart;
-          let end = backward ? selection.dStart : selection.dStart + 1;
+          let start = backward ? textStep(selection.map.display, selection.dStart, -1) : selection.dStart;
+          let end = backward ? selection.dStart : textStep(selection.map.display, selection.dStart, 1);
           if (ranges[0]) {
             const intendedStart = caretToDisplayIndex(
               host,
@@ -354,6 +368,11 @@ export function useTypesetInputEvents({
               start = Math.min(intendedStart, intendedEnd);
               end = Math.max(intendedStart, intendedEnd);
             }
+          }
+          if (isWrappedEntryField(host, selection.key) && type.includes("Word")) {
+            const target = textStep(selection.map.display, selection.dStart, backward ? -1 : 1, true);
+            start = Math.min(selection.dStart, target);
+            end = Math.max(selection.dStart, target);
           }
           if (start < 0 || end > selection.map.chars.length || start === end) return;
           commitReplace(
@@ -629,6 +648,40 @@ export function useTypesetInputEvents({
       dragEdgeStart = { x: event.clientX, y: event.clientY, position, armed };
     };
 
+    const selectFieldGesture = (event: MouseEvent, field: HTMLElement): boolean => {
+      const key = field.getAttribute("data-tsdf");
+      const src = key ? parseFieldKey(key) : null;
+      if (!key || !src) return false;
+      const { map } = resolveField(src);
+      let startIndex = 0, endIndex = map.display.length;
+      if (event.detail === 2) {
+        const text = field.textContent?.trimEnd() ?? "";
+        if (!field.firstChild || !text) return false;
+        const fragmentEnd = caretToDisplayIndex(host, key, map.display, field.firstChild, text.length);
+        if (fragmentEnd === null) return false;
+        const glyph = document.createRange();
+        glyph.setStart(field.firstChild, textStep(text, text.length, -1));
+        glyph.setEnd(field.firstChild, text.length);
+        const rect = glyph.getBoundingClientRect();
+        if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) return false;
+        startIndex = textStep(map.display, fragmentEnd, -1, true);
+        endIndex = textStep(map.display, fragmentEnd - 1, 1, true);
+      }
+      const start = displayIndexToCaret(host, key, map.display, startIndex);
+      const end = displayIndexToCaret(host, key, map.display, endIndex);
+      if (!start || !end) return false;
+      event.preventDefault();
+      host.focus({ preventScroll: true });
+      restoreDomSelection(start, end);
+      return true;
+    };
+    // Chromium can overwrite a fragment-tail word selection on mouse release,
+    // even after preventing mousedown. Correct that native boundary afterward.
+    const onDoubleClick = (event: MouseEvent) => {
+      const field = (event.target as HTMLElement).closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
+      if (event.button === 0 && field) selectFieldGesture(event, field);
+    };
+
     const onMouseDown = (event: MouseEvent) => {
       breakTextHistoryGroup();
       goalXRef.current = null;
@@ -646,7 +699,7 @@ export function useTypesetInputEvents({
       if (event.button !== 0) return;
       const marker = target.closest<HTMLElement>("[data-tsdm]");
       if (marker) {
-        const line = marker.closest<HTMLElement>(".tsd-line");
+        const line = lineOf(marker);
         const content = line
           ? contentSpansOf(line).find(
               (element) => element.getAttribute("data-tsdf") === marker.getAttribute("data-tsdf")
@@ -664,15 +717,16 @@ export function useTypesetInputEvents({
       const directField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
       if (directField) {
         // Edge drags snap only after movement so nearby clicks remain native.
-        const line = directField.closest<HTMLElement>(".tsd-line");
+        const line = lineOf(directField);
         const key = directField.getAttribute("data-tsdf");
+        if (event.detail >= 3 && selectFieldGesture(event, directField)) return;
         const position = line && key ? edgeDragAnchor(line, event.clientX, key) : null;
         if (position) beginPointerDrag(event, position, false);
         return;
       }
       // Off-text starts require synthetic drag because manual caret placement prevents native drag.
       const line =
-        target.closest<HTMLElement>(".tsd-line") ?? nearestLineByPoint(host, event.clientX, event.clientY);
+        lineOf(target) ?? nearestLineByPoint(host, event.clientX, event.clientY);
       if (!line) return;
       const position = edgeDragAnchor(line, event.clientX) ?? placeInLine(line, event.clientX);
       if (!position) return;
@@ -696,7 +750,7 @@ export function useTypesetInputEvents({
       }
       const target = event.target;
       const overLine =
-        target instanceof Element ? target.closest<HTMLElement>(".tsd-line") : null;
+        target instanceof Element ? lineOf(target) : null;
       // The pointer is allowed to leave the sheet entirely while the button is
       // down; the drag keeps resolving against the vertically nearest line.
       const line =
@@ -859,6 +913,7 @@ export function useTypesetInputEvents({
     host.addEventListener("beforeinput", onBeforeInput);
     host.addEventListener("keydown", onKeyDown);
     host.addEventListener("mousedown", onMouseDown);
+    host.addEventListener("dblclick", onDoubleClick);
     ownerDocument.addEventListener("mousemove", onMouseMove);
     ownerDocument.addEventListener("mouseup", onMouseUp);
     host.addEventListener("paste", onPaste);
@@ -873,6 +928,7 @@ export function useTypesetInputEvents({
       host.removeEventListener("beforeinput", onBeforeInput);
       host.removeEventListener("keydown", onKeyDown);
       host.removeEventListener("mousedown", onMouseDown);
+      host.removeEventListener("dblclick", onDoubleClick);
       ownerDocument.removeEventListener("mousemove", onMouseMove);
       ownerDocument.removeEventListener("mouseup", onMouseUp);
       host.removeEventListener("paste", onPaste);
@@ -884,6 +940,7 @@ export function useTypesetInputEvents({
       host.removeEventListener("compositionend", onCompositionEnd);
     };
   }, [
+    resolveField,
     breakTextHistoryGroup,
     commitClearFormatting,
     commitCrossFieldIntent,

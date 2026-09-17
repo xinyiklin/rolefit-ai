@@ -247,12 +247,6 @@
   }
 }
 
-@media (max-width: 400px) {
-  .top-toolbar__file-actions {
-    display: none;
-  }
-}
-
 @media (pointer: coarse) {
   .app-notice > button {
     width: 40px;

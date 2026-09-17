@@ -47,6 +47,9 @@ paints).
   `documentStyleTools` slot replaces the complete default resume-style menu
   group for another document grammar; it does not replace history, zoom,
   selection typography, marks, alignment, links, or spell-check.
+- Popovers also clamp their horizontal position inside the viewport on open
+  and resize, preserving their start/center/end alignment when it already fits.
+  Compact document file actions remain reachable rather than disappearing.
 - `toolbar/TopToolbar.tsx` composes the standalone Typeset document row with
   its file actions and `FormattingToolbar`.
 - `toolbar/styleOptions.ts` owns toolbar option lists and preset helpers

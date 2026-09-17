@@ -568,3 +568,15 @@ A fully empty entry remains recoverable from the containing section's
 its space from editor, print, and PDF output. Existing resumes retain their
 appearance; older builds reject newly saved files with removed rows. These
 controls do not apply to section headings, Skills, Summary, or cover letters.
+
+Long title/subtitle values wrap within their paired row. Names and individual
+contact values wrap inside the document margins in both Resume and Cover letter.
+Continuations preserve text, formatting, links, and existing editing commands;
+oversized heading groups can continue on the next page. Fitting paired rows
+retain their existing layout. Resume and Cover letter header baselines stay
+fixed when typing different letter shapes at the same font, size and wrap count,
+including typing the first character into an empty name.
+
+Section titles also wrap inside the text margins. Their alignment and heading
+case are preserved; one section rule follows the final continuation, and tall
+headings can continue onto another page without changing saved text.

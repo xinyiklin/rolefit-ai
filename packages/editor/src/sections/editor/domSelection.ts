@@ -28,7 +28,13 @@ export function fieldCaretOf(
   const named = keyOfNode(node);
   if (named && host.contains(named.el)) return { key: named.key, node, offset };
   const element = node instanceof HTMLElement ? node : node.parentElement;
-  const line = element?.closest<HTMLElement>(".tsd-line");
+  const separator = element?.closest<HTMLElement>("[data-tsd-owner]");
+  if (separator) {
+    const key = separator.getAttribute("data-tsd-owner")!;
+    const preceding = separator.previousElementSibling;
+    if (preceding?.firstChild) return { key, node: preceding.firstChild, offset: preceding.textContent?.length ?? 0 };
+  }
+  const line = lineOf(node);
   if (!line || !host.contains(line)) return null;
   const spans = contentSpansOf(line);
   if (!spans.length) return null;
@@ -69,7 +75,7 @@ export function fieldCaretOf(
 const BREAK_CHARS = new Set([" ", "\n"]);
 
 function lineElementOf(span: HTMLElement): HTMLElement | null {
-  return span.closest<HTMLElement>(".tsd-line");
+  return lineOf(span);
 }
 
 export function caretToDisplayIndex(
@@ -161,6 +167,8 @@ export function displayIndexToCaret(
 
 export function lineOf(node: Node | null): HTMLElement | null {
   const element = node instanceof HTMLElement ? node : node?.parentElement ?? null;
+  const identity = element?.closest<HTMLElement>("[data-tsd-line]")?.getAttribute("data-tsd-line");
+  if (identity) return element?.closest(".tsd-doc")?.querySelector<HTMLElement>(`[data-tsd-line-box="${CSS.escape(identity)}"]`) ?? null;
   return element?.closest<HTMLElement>(".tsd-line") ?? null;
 }
 
@@ -170,12 +178,14 @@ export function lineDivs(host: HTMLElement): HTMLElement[] {
 
 export function lineEdgePosition(
   line: HTMLElement,
-  edge: "start" | "end"
+  edge: "start" | "end",
+  fieldKey?: string
 ): { node: Node; offset: number } | null {
-  const spans = Array.from(line.children).filter(
+  const spans = contentSpansOf(line).filter(
     (element): element is HTMLElement =>
       element instanceof HTMLElement &&
       !element.hasAttribute("data-tsdm") &&
+      (!fieldKey || element.getAttribute("data-tsdf") === fieldKey) &&
       // The line-separator span holds no field text; a caret there maps nowhere.
       !element.hasAttribute("data-tsds") &&
       element.firstChild?.nodeType === Node.TEXT_NODE
@@ -204,6 +214,41 @@ export function setCaret(position: { node: Node; offset: number }, extend: boole
     selection.addRange(range);
   }
   (position.node.parentElement ?? undefined)?.scrollIntoView({ block: "nearest" });
+}
+
+export function restoreDomSelection(
+  start: { node: Node; offset: number },
+  end = start,
+  backward = false
+): void {
+  const selection = window.getSelection();
+  if (!selection) return;
+  const anchor = backward ? end : start;
+  const focus = backward ? start : end;
+  selection.setBaseAndExtent(anchor.node, anchor.offset, focus.node, focus.offset);
+}
+
+// Intersect each logical selection with its own painted fragments.
+export function displayRangeFragments(
+  host: HTMLElement, key: string, display: string, dStart: number, dEnd: number
+): DOMRect[] {
+  const fragments: DOMRect[] = [];
+  for (const span of fieldSpans(host, key)) {
+    const node = span.firstChild;
+    if (!node || node.nodeType !== Node.TEXT_NODE) continue;
+    const from = caretToDisplayIndex(host, key, display, node, 0);
+    const length = isEmptyEditableSpan(span) ? 0 : (node.textContent ?? "").length;
+    const to = caretToDisplayIndex(host, key, display, node, length);
+    if (from === null || to === null || to < dStart || from > dEnd) continue;
+    if (!display.length) { fragments.push(span.getBoundingClientRect()); continue; }
+    const start = Math.max(dStart, from), end = Math.min(dEnd, to);
+    if (start >= end) continue;
+    const range = document.createRange();
+    range.setStart(node, Math.min(length, start - from));
+    range.setEnd(node, Math.min(length, end - from));
+    fragments.push(...Array.from(range.getClientRects()));
+  }
+  return fragments;
 }
 
 // A DOM Range over a field's display range [dStart, dEnd). Both endpoints go
@@ -324,7 +369,10 @@ export function nearestLineByPoint(
 }
 
 export function contentSpansOf(line: HTMLElement): HTMLElement[] {
-  return Array.from(line.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")).filter(
+  const identity = line.getAttribute("data-tsd-line-box");
+  const root = identity ? line.closest(".tsd-doc") : line;
+  const selector = identity ? `[data-tsdf][data-tsd-line="${CSS.escape(identity)}"]:not([data-tsdm])` : "[data-tsdf]:not([data-tsdm])";
+  return Array.from(root?.querySelectorAll<HTMLElement>(selector) ?? []).filter(
     (element) => element.firstChild?.nodeType === Node.TEXT_NODE
   );
 }
@@ -484,8 +532,10 @@ const pastIndent = (
   return position.offset < indent ? { node: position.node, offset: indent } : position;
 };
 
-export function placeInLine(line: HTMLElement, clientX: number): { node: Node; offset: number } | null {
-  const spans = contentSpansOf(line);
+export function placeInLine(line: HTMLElement, clientX: number, preferredKey?: string): { node: Node; offset: number } | null {
+  const all = contentSpansOf(line);
+  const preferred = preferredKey ? all.filter((span) => span.getAttribute("data-tsdf") === preferredKey) : [];
+  const spans = preferred.length ? preferred : all;
   if (!spans.length) return lineEdgePosition(line, "start");
   const firstRect = spans[0].getBoundingClientRect();
   if (clientX <= firstRect.left) {
@@ -507,7 +557,7 @@ export function placeInLine(line: HTMLElement, clientX: number): { node: Node; o
     if (clientX <= rect.right) {
       const isFirstSpan = span === spans[0];
       const position = positionFromPoint(clientX, rect.top + rect.height / 2);
-      if (position && position.node.nodeType === Node.TEXT_NODE && lineOf(position.node) === line) {
+      if (position && position.node.nodeType === Node.TEXT_NODE && lineOf(position.node) === line && (!preferred.length || keyOfNode(position.node)?.key === preferredKey)) {
         return pastIndent(span, position, isFirstSpan && position.node === span.firstChild);
       }
       return pastIndent(span, positionInSpanByX(span, clientX), isFirstSpan);

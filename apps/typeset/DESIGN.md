@@ -170,6 +170,11 @@ header, and section-heading alignment. Two-sided title/date and
 subtitle/location rows retain their pinned anchors until a local override
 intentionally aligns that row as a group.
 
+Wrapped paired fields keep those anchors on each continuation. A short side
+retains its natural width; two long sides share the available row width with
+one role-size point gap. The header gives an oversized name or contact value
+the full text width. Wrapping never introduces a font-size reduction.
+
 ## 4. Elevation
 
 The interface is flat by default. Toolbar structure uses tonal layering and

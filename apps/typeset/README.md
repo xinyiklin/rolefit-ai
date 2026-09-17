@@ -14,7 +14,9 @@ static assets, and your resume content never leaves your device.
 ## Features
 
 - **Direct page editing** — select text and type on the rendered resume instead
-  of filling out a separate form.
+  of filling out a separate form. Long names, contacts, section titles and entry
+  headings wrap within their available width; typing taller letters keeps the
+  header baseline stable.
 - **Familiar document toolbar** — Open and Save menus group New, `.resume`, and
   PDF actions beside undo, redo,
   selection formatting, a spell-check toggle, compact text/page panels, and
