@@ -10,6 +10,28 @@ async function clipboard(h) {
   });
 }
 
+async function nativeWordOffsets(h, text, offset, modifier) {
+  await h.evaluate((text, offset) => {
+    const control = document.createElement('div');
+    control.id = 'native-word-reference';
+    control.contentEditable = 'true';
+    control.style.cssText = 'position:fixed;inset:0 auto auto 0;width:1000px;white-space:pre-wrap';
+    control.textContent = text;
+    document.body.append(control);
+    control.focus();
+    window.getSelection().collapse(control.firstChild, offset);
+  }, text, offset);
+  try {
+    await h.key('ArrowLeft', 37, modifier);
+    const backward = await h.evaluate(() => window.getSelection().focusOffset);
+    await h.key('ArrowRight', 39, modifier);
+    const forward = await h.evaluate(() => window.getSelection().focusOffset);
+    return { backward, forward };
+  } finally {
+    await h.evaluate(() => document.getElementById('native-word-reference').remove());
+  }
+}
+
 export async function runWrappedNativeContracts(h, host, evidence) {
   const fixture = h.fixture();
   const wordModifier = process.platform === 'darwin' ? 1 : 2;
@@ -18,6 +40,8 @@ export async function runWrappedNativeContracts(h, host, evidence) {
     const text = fixture.sections[0].items[0][field];
     const wordStart = text.indexOf('heading', 140);
     const wordEnd = wordStart+'heading'.length;
+    const native = await nativeWordOffsets(h, text, wordEnd, wordModifier);
+    assert.equal(native.backward, wordStart, 'plain browser control reaches the expected previous word');
     await h.select(field, wordEnd);
     await h.key('ArrowLeft', 37, wordModifier);
     assert.equal((await h.selection()).focus.key, `entry|section|entry|${field}`);
@@ -25,7 +49,7 @@ export async function runWrappedNativeContracts(h, host, evidence) {
     await h.key('ArrowRight', 39, wordModifier);
     const forward = (await h.selection()).focus;
     assert.equal(forward.key, `entry|section|entry|${field}`);
-    assert.equal(forward.offset, process.platform === 'darwin' ? wordEnd : wordEnd+1, 'native word-right follows platform word boundary');
+    assert.equal(forward.offset, native.forward, 'word-right matches the plain browser control');
     await h.select(field, wordEnd);
     await h.key('Backspace', 8, wordModifier);
     assert.equal((await h.entry())[field], text.slice(0,wordStart)+text.slice(wordEnd), 'native word deletion preserves neighboring columns');
