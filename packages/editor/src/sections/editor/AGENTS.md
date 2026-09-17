@@ -170,6 +170,19 @@ typesetting guide when a change affects painted output or layout provenance.
 
 ## Editing Invariants
 
+- Standard entry row Add/Remove commands live in `useTypesetStructure.ts` and
+  are shared by the context menu and keyboard paths. Enter at the collapsed end
+  of Title right adds/focuses Subtitle left; unmodified backward deletion at
+  the start of Subtitle left removes it only when both sides are display-empty.
+  Removal returns to the end of Title right when present. Preserve the same
+  guards during queued input and composition; Undo must distinguish absent
+  fields from present empty strings.
+- Entry and bullet context menus expose the applicable Add/Remove row actions.
+  A rowless, bulletless entry stays in data and is recoverable from its section's
+  `Empty entry N` submenu. Bullet-only entries retain entry deletion/reordering
+  through their context menu. No placeholder is painted into the document to
+  represent an absent row; entry Hide/Show is not part of this contract.
+
 - The engine-painted DOM is the editing surface, but the browser never commits
   mutations directly. Prevent the native edit, transform the serialized field,
   dispatch a structured action, repaint, and restore the caret.

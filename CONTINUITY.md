@@ -3,6 +3,29 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-16
+
+- [USER+CODE] [TASK entry-rows-20260915] Approved Add/Remove-only title/subtitle
+  row controls in both resume hosts. Menu removal clears both fields; Enter
+  from the end of Title right adds/focuses Subtitle left, and Backspace from
+  its start removes the row only when both subtitle fields are empty. Undo
+  restores removal; fully empty entries recover from their section context menu.
+- [CODE] Standard entries retain four required `.resume` v1 field keys with
+  paired strings for present rows and paired nulls for absent rows. Mixed pairs
+  and null rows in nonstandard sections are rejected. Existing string-valued
+  files retain their layout; older builds reject new null-row files. No personal
+  files were rewritten and no versions changed. The user subsequently authorized
+  review and, if ready, publication through the repository's push/merge workflow.
+- [TOOL] Verification passed: combined workspace check; final editor and both
+  app checks after interaction fixes; Chromium contracts for both resume hooks,
+  compact menu recovery, queued Enter, composition, and Undo/Redo; strict file
+  round trips/rejection; unchanged-file geometry; rendered mixed-size row
+  combinations in editor, print, and dedicated PDF including a page boundary.
+  Two independent reviews completed with no unresolved findings. Review-found
+  queued Enter stalling and reproduced menu overflow were fixed and retested.
+  Browser QA used synthetic Chromium fixtures; additional browsers and personal
+  documents were not tested.
+
 ## 2026-09-08
 
 - [USER+CODE] Authorized review, browser QA, and merge of the accumulated RoleFit

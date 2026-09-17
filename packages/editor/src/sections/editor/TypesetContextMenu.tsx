@@ -20,14 +20,16 @@ export type ContextMenuItem = {
 };
 
 type TypesetContextMenuProps = {
+  keyboard?: boolean;
   x: number;
   y: number;
   items: Array<ContextMenuItem | "divider">;
   onClose: () => void;
 };
 
-export function TypesetContextMenu({ x, y, items, onClose }: TypesetContextMenuProps) {
+export function TypesetContextMenu({ keyboard = false, x, y, items, onClose }: TypesetContextMenuProps) {
   const ref = useRef<HTMLDivElement | null>(null);
+  const submenuRef = useRef<HTMLDivElement | null>(null);
   const [pos, setPos] = useState({ left: x, top: y });
   const [openSubId, setOpenSubId] = useState<string | null>(null);
 
@@ -42,6 +44,27 @@ export function TypesetContextMenu({ x, y, items, onClose }: TypesetContextMenuP
     setPos({ left, top });
   }, [x, y]);
 
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    const submenu = submenuRef.current;
+    if (!menu || !submenu) return;
+    const placeSubmenu = () => {
+      const anchor = submenu.parentElement!.getBoundingClientRect();
+      const rect = submenu.getBoundingClientRect();
+      const preferredLeft = anchor.right + 4 + rect.width <= window.innerWidth - 8
+        ? anchor.right + 4 : anchor.left - rect.width - 4;
+      submenu.style.left = `${Math.max(8, Math.min(preferredLeft, window.innerWidth - rect.width - 8))}px`;
+      submenu.style.top = `${Math.max(8, Math.min(anchor.top, window.innerHeight - rect.height - 8))}px`;
+    };
+    placeSubmenu();
+    menu.addEventListener("scroll", placeSubmenu);
+    return () => menu.removeEventListener("scroll", placeSubmenu);
+  }, [openSubId, pos]);
+
+  useEffect(() => {
+    if (keyboard) ref.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus({ preventScroll: true });
+  }, [keyboard]);
+
   useEffect(() => {
     // A pointerdown anywhere outside dismisses (a right-click elsewhere fires
     // pointerdown too, so it closes here before its own menu opens). Escape,
@@ -55,14 +78,17 @@ export function TypesetContextMenu({ x, y, items, onClose }: TypesetContextMenuP
         onClose();
       }
     };
+    const onScroll = (event: Event) => {
+      if (!ref.current?.contains(event.target as Node)) onClose();
+    };
     document.addEventListener("pointerdown", onPointerDown, true);
     document.addEventListener("keydown", onKeyDown, true);
-    window.addEventListener("scroll", onClose, true);
+    window.addEventListener("scroll", onScroll, true);
     window.addEventListener("resize", onClose);
     return () => {
       document.removeEventListener("pointerdown", onPointerDown, true);
       document.removeEventListener("keydown", onKeyDown, true);
-      window.removeEventListener("scroll", onClose, true);
+      window.removeEventListener("scroll", onScroll, true);
       window.removeEventListener("resize", onClose);
     };
   }, [onClose]);
@@ -102,7 +128,7 @@ export function TypesetContextMenu({ x, y, items, onClose }: TypesetContextMenuP
               <ChevronRight size={14} className="ts-context-menu__chevron" aria-hidden="true" />
             </button>
             {openSubId === item.id ? (
-              <div className="ts-context-menu ts-context-menu__submenu" role="menu">
+              <div ref={submenuRef} className="ts-context-menu ts-context-menu__submenu" role="menu">
                 {item.submenu.map((sub) => (
                   <button
                     key={sub.id}

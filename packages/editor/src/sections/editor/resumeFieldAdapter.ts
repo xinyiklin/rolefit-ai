@@ -59,8 +59,8 @@ export function valueForField(data: ResumeData, src: FieldSrc): string {
       if (!entry) return "";
       // Leading whitespace is outside the printable field, but label-end and
       // skills-end whitespace are live typing state and must survive repaint.
-      const label = entry.titleLeft.trimStart();
-      return label ? `${label}: ${entry.subtitleLeft}` : entry.subtitleLeft;
+      const label = (entry.titleLeft ?? "").trimStart();
+      return label ? `${label}: ${entry.subtitleLeft}` : entry.subtitleLeft ?? "";
     }
   }
 }
@@ -102,7 +102,7 @@ export function withFieldValue(data: ResumeData, src: FieldSrc, value: string): 
       return {
         ...data,
         sections: data.sections.map((s) =>
-          s.id === src.sectionId ? mapEntry(src.entryId, (e) => ({ ...e, [src.field]: value }))(s) : s
+          s.id === src.sectionId ? mapEntry(src.entryId, (e) => e[src.field] === null ? e : ({ ...e, [src.field]: value }))(s) : s
         )
       };
     case "bullet":
@@ -133,8 +133,9 @@ function fieldSources(data: ResumeData): FieldSrc[] {
     for (const entry of section.items) {
       if (section.type === "skills") {
         sources.push({ kind: "skillsRow", sectionId: section.id, entryId: entry.id });
-      } else {
+      } else if (section.type === "standard") {
         for (const field of ["titleLeft", "titleRight", "subtitleLeft", "subtitleRight"] as const) {
+          if (entry[field] === null) continue;
           sources.push({ kind: "entry", sectionId: section.id, entryId: entry.id, field });
         }
       }
@@ -169,8 +170,14 @@ export function historyCaretTarget(
     };
   }
 
-  for (const src of fieldSources(after)) {
+  const beforeKeys = new Set(fieldSources(before).map(fieldKey));
+  const afterSources = fieldSources(after);
+  const afterKeys = new Set(afterSources.map(fieldKey));
+  for (const src of afterSources) {
     const afterValue = valueForField(after, src);
+    if (src.kind === "entry" && !beforeKeys.has(fieldKey(src)) && afterValue === "") {
+      return { key: fieldKey(src), valueIndex: 0 };
+    }
     const beforeValue = valueForField(before, src);
     if (afterValue === beforeValue) continue;
     const maxCommon = Math.min(afterValue.length, beforeValue.length);
@@ -189,6 +196,15 @@ export function historyCaretTarget(
       valueIndex: prefix,
       valueEndIndex: end > prefix ? end : undefined
     };
+  }
+  const removed = fieldSources(before).find((src) => src.kind === "entry" && !afterKeys.has(fieldKey(src)));
+  if (removed?.kind === "entry") {
+    const sameEntry = afterSources.filter((src) =>
+      (src.kind === "entry" || src.kind === "bullet") && src.sectionId === removed.sectionId && src.entryId === removed.entryId);
+    const titleRight = sameEntry.find((src) => src.kind === "entry" && src.field === "titleRight");
+    const target = (removed.field.startsWith("subtitle") ? titleRight : null) ?? sameEntry[0]
+      ?? afterSources.find((src) => src.kind === "heading" && src.sectionId === removed.sectionId);
+    if (target) return { key: fieldKey(target), valueIndex: target === titleRight ? valueForField(after, target).length : 0 };
   }
   return null;
 }

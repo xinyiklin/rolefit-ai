@@ -21,7 +21,9 @@ static assets, and your resume content never leaves your device.
   zoom stay close at hand.
 - **Structured editing** — add, remove, and reorder sections, entries, bullets,
   skill rows, summary paragraphs, and contact items without losing document
-  structure.
+  structure. Entry context menus also add/remove title and subtitle rows;
+  Enter from the end of Title right adds/focuses the subtitle, and Backspace
+  from Subtitle left removes a fully empty subtitle row. Undo restores removal.
 - **Deterministic layout** — the editor, browser print layer, and dedicated PDF
   emitter share the same structured input, bundled fonts, committed metrics,
   page geometry, and pagination.
@@ -36,7 +38,8 @@ static assets, and your resume content never leaves your device.
   paragraphs, independently from Compact, Balanced, Spacious, and custom
   document-gap presets.
 - **Portable source files** — `.resume` preserves editable content and every
-  print-affecting style setting.
+  print-affecting style setting. Older builds cannot open files containing
+  removed entry rows; existing string-valued files remain valid.
 - **Real undo and redo** — text and structural edits share bounded history with
   caret restoration. Continuous typing and held Backspace/Delete bursts each
   undo as a group; changing direction, moving the caret, changing fields, or

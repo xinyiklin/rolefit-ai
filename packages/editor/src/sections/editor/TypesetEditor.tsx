@@ -673,9 +673,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
 
   const {
     headerCommands,
+    entryRowCommands,
     removeBulletAt,
     addBulletToEntry,
     removeEntryAt,
+    moveEntryRelative,
     addSection,
     addEntryRelative,
     addBulletRelative,
@@ -2958,10 +2960,39 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [headerCommands, structureCapabilities.nameRemovable]
   );
 
+  const commitEmptyEntryRow = useCallback((sel: TypesetSelection): boolean => {
+    if (!structureCapabilities.sections || sel.src.kind !== "entry" ||
+        sel.src.field !== "subtitleLeft" || sel.dStart !== 0 || sel.dEnd !== 0) return false;
+    const src = sel.src;
+    const section = dataRef.current.sections.find((item) => item.id === src.sectionId);
+    const entry = section?.items.find((item) => item.id === src.entryId);
+    if (section?.type !== "standard" || !entry || entry.subtitleLeft === null ||
+        stripInlineMarks(entry.subtitleLeft).trim() || stripInlineMarks(entry.subtitleRight ?? "").trim()) return false;
+    recordPreEditSelection(sel);
+    entryRowCommands.removeRow(src.sectionId, src.entryId, "subtitle");
+    return true;
+  }, [entryRowCommands, recordPreEditSelection, structureCapabilities.sections]);
+
   // Enter grows header contacts and non-empty list rows; prose always permits
   // a new paragraph.
   const commitEnter = useCallback(
-    (sel: TypesetSelection, shiftKey = false) => {
+    (sel: TypesetSelection, shiftKey = false, allowEntryRow = true) => {
+      if (allowEntryRow && structureCapabilities.sections && !shiftKey && sel.src.kind === "entry" &&
+          sel.src.field === "titleRight" && sel.dStart === sel.dEnd && sel.dEnd === sel.map.display.length) {
+        const src = sel.src;
+        const section = dataRef.current.sections.find((item) => item.id === src.sectionId);
+        const entry = section?.items.find((item) => item.id === src.entryId);
+        if (section?.type !== "standard" || !entry) return;
+        if (entry.subtitleLeft === null) {
+          recordPreEditSelection(sel);
+          entryRowCommands.addRow(src.sectionId, src.entryId, "subtitle");
+        } else if (hostRef.current) {
+          const target: FieldSrc = { ...src, field: "subtitleLeft" };
+          hostRef.current.focus({ preventScroll: true });
+          selectDisplayRange(hostRef.current, fieldKey(target), mapFor(target, entry.subtitleLeft).display, 0, 0);
+        }
+        return;
+      }
       if (sel.src.kind === "contact") {
         headerCommands.addContactRelative(
           sel.src.index,
@@ -3000,7 +3031,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       }
     },
-    [addEntryRelative, commitSplitBullet, headerCommands, hostRef, mapFor]
+    [addEntryRelative, commitSplitBullet, entryRowCommands, headerCommands, hostRef, mapFor, recordPreEditSelection, structureCapabilities.sections]
   );
 
   const commitMergeBullet = useCallback(
@@ -3169,16 +3200,15 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         }
       }
     }
-    // 2) Paint and data are the same generation again: open the gate and
-    // replay ONE queued intent (its own commit re-closes the gate; the next
-    // repaint drains the next intent).
+    // 2) Replay one mutation per paint, continuing past focus-only/no-op Enter
+    // commands so they cannot strand subsequent input without a new paint.
     commitPendingRef.current = false;
     if (pendingTimerRef.current !== null) {
       window.clearTimeout(pendingTimerRef.current);
       pendingTimerRef.current = null;
     }
-    const intent = replayQueueRef.current.shift();
-    if (intent) {
+    while (!commitPendingRef.current && replayQueueRef.current.length > 0) {
+      const intent = replayQueueRef.current.shift()!;
       const sel = readSelection();
       if (!sel) {
         // The queued intent may have been aimed at a selection crossing fields.
@@ -3219,7 +3249,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           );
         }
         else if (collapsed && backward && sel.dStart === 0) {
-          if (!commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
+          const removedRow = intent.kind === "deleteBack" && intent.entryRow !== false && commitEmptyEntryRow(sel);
+          if (!removedRow && !commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
         }
         else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
           commitMergeBullet(sel, "down");
@@ -3247,7 +3278,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       } else if (intent.kind === "deleteSelection") {
         if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
       } else if (intent.kind === "enter") {
-        commitEnter(sel, intent.shiftKey);
+        commitEnter(sel, intent.shiftKey, intent.entryRow !== false);
       } else if (intent.kind === "deleteHeaderField") {
         commitEmptyHeaderField(sel, intent.direction);
       } else if (intent.kind === "toggleMark") {
@@ -3257,6 +3288,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       } else {
         commitHistory(intent.direction);
       }
+      if (intent.kind !== "enter") break;
     }
   }, [
     focusIsInAnotherTextField,
@@ -3264,6 +3296,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitClearFormatting,
     commitEnter,
     commitEmptyHeaderField,
+    commitEmptyEntryRow,
     commitHistory,
     commitMergeBullet,
     applyMark,
@@ -3304,6 +3337,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitRichPaste,
     onEnter: commitEnter,
     commitEmptyHeaderField,
+    commitEmptyEntryRow,
     commitMergeBullet,
     commitToggleMark: applyMark,
     commitCrossFieldIntent,
@@ -3332,12 +3366,14 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     structureCapabilities,
     canPasteAsDocument: documentKind === "cover-letter",
     headerCommands,
+    entryRowCommands,
     commands,
     inlineFormat: inlineFormatState,
     addSectionRelative,
     removeSectionAt,
     addEntryRelative,
     removeEntryAt,
+    moveEntryRelative,
     addBulletToEntry,
     addBulletRelative,
     removeBulletAt,
@@ -3389,6 +3425,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       onMouseMove={onMouseMove}
       onMouseLeave={clearHover}
       onContextMenu={openContextMenu}
+      onKeyDown={openContextMenu}
     >
       <TypesetDomPages
         key={nonce}
@@ -3436,6 +3473,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         : null}
       {contextMenu ? (
         <TypesetContextMenu
+          keyboard={contextMenu.keyboard}
           x={contextMenu.x}
           y={contextMenu.y}
           items={menuItems}

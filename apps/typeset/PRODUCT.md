@@ -68,3 +68,18 @@ cues, reduced-motion support, and minimum practical touch targets on tablets.
 Keep the editor available at compact widths: auto-fit the page, progressively
 disclose toolbar controls, and hide file actions at 400px and below rather than
 blocking access with a screen-size gate.
+
+## Resume entry rows
+
+Standard resume entries support Add/Remove title and subtitle rows from the
+right-click menu, including when targeting an entry's bullet. Each row includes
+its left and right fields; Remove clears both and supports Undo. Enter at the
+end of Title right adds or focuses Subtitle left. Backspace at the start of
+Subtitle left removes the row only when both subtitle fields are empty, then
+returns to Title right when available. Forward Delete is unchanged.
+
+A fully empty entry remains recoverable from the containing section's
+`Empty entry N` context submenu. Row absence persists in `.resume` and removes
+its space from editor, print, and PDF output. Existing resumes retain their
+appearance; older builds reject newly saved files with removed rows. These
+controls do not apply to section headings, Skills, Summary, or cover letters.

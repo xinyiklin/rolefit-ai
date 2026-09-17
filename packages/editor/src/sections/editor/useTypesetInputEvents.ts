@@ -41,12 +41,12 @@ export type QueuedIntent =
       blocks: string[];
       plainText: string;
     }
-  | { kind: "deleteBack" }
+  | { kind: "deleteBack"; entryRow?: boolean }
   | { kind: "deleteFwd" }
   | { kind: "deleteSelection" }
   | { kind: "indent" }
   | { kind: "outdent" }
-  | { kind: "enter"; shiftKey: boolean }
+  | { kind: "enter"; shiftKey: boolean; entryRow?: boolean }
   | { kind: "deleteHeaderField"; direction: "back" | "forward" }
   | { kind: "toggleMark"; mark: "bold" | "italic" | "underline" }
   | { kind: "clearFormatting" }
@@ -98,7 +98,8 @@ type TypesetInputEventsArgs = {
     selection: TypesetSelection,
     intent: Extract<QueuedIntent, { kind: "richPaste" }>
   ) => boolean;
-  onEnter: (selection: TypesetSelection, shiftKey: boolean) => void;
+  onEnter: (selection: TypesetSelection, shiftKey: boolean, allowEntryRow?: boolean) => void;
+  commitEmptyEntryRow: (selection: TypesetSelection) => boolean;
   commitEmptyHeaderField: (
     selection: TypesetSelection,
     direction: "back" | "forward"
@@ -139,6 +140,7 @@ export function useTypesetInputEvents({
   commitRichPaste,
   onEnter,
   commitEmptyHeaderField,
+  commitEmptyEntryRow,
   commitMergeBullet,
   commitToggleMark,
   commitClearFormatting,
@@ -152,6 +154,7 @@ export function useTypesetInputEvents({
 }: TypesetInputEventsArgs) {
   const goalXRef = useRef<number | null>(null);
   const composingRef = useRef(false);
+  const rowShortcutModifiedRef = useRef(false);
   const compositionSelectionRef = useRef<TypesetSelection | null>(null);
 
   useLayoutEffect(() => {
@@ -232,6 +235,8 @@ export function useTypesetInputEvents({
       goalXRef.current = null;
       if (commitPendingRef.current) {
         const queued = intentForInput(event, type);
+        if (queued?.kind === "deleteBack") queued.entryRow = !rowShortcutModifiedRef.current;
+        if (queued?.kind === "enter") queued.entryRow = !rowShortcutModifiedRef.current;
         if (queued) queueIntent(queued);
         return;
       }
@@ -247,7 +252,7 @@ export function useTypesetInputEvents({
       }
 
       if (type === "insertParagraph") {
-        onEnter(selection, false);
+        onEnter(selection, false, !rowShortcutModifiedRef.current);
         return;
       }
       if (
@@ -295,6 +300,7 @@ export function useTypesetInputEvents({
         const backward = type.endsWith("Backward");
         if (selection.dStart === selection.dEnd) {
           if (backward && selection.dStart === 0) {
+            if (type === "deleteContentBackward" && !rowShortcutModifiedRef.current && commitEmptyEntryRow(selection)) return;
             // A paragraph indent is the one thing Tab adds that no other
             // keystroke removes, so it comes off before the paragraph merges.
             if (commitParagraphOutdent(selection)) return;
@@ -368,6 +374,8 @@ export function useTypesetInputEvents({
     };
 
     const onKeyDown = (event: KeyboardEvent) => {
+      rowShortcutModifiedRef.current = event.metaKey || event.ctrlKey || event.altKey || event.shiftKey;
+      if (composingRef.current || event.isComposing) return;
       const mod = event.metaKey || event.ctrlKey;
       if (
         [
@@ -468,7 +476,7 @@ export function useTypesetInputEvents({
         const selection = readSelection();
         if (
           selection &&
-          isHeaderField(selection.key)
+          (isHeaderField(selection.key) || (selection.src.kind === "entry" && !event.shiftKey))
         ) {
           event.preventDefault();
           goalXRef.current = null;
@@ -882,6 +890,7 @@ export function useTypesetInputEvents({
     commitRichPaste,
     commitHistory,
     commitEmptyHeaderField,
+    commitEmptyEntryRow,
     commitMergeBullet,
     commitPendingRef,
     commitIndent,

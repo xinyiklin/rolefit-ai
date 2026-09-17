@@ -71,10 +71,10 @@ export function defaultResumePolishScopeModes(data: ResumeData | null): Record<s
 function scopeEntry(entry: ResumeEntry): ResumePolishScopeEntry {
   return {
     id: entry.id,
-    titleLeft: entry.titleLeft,
-    titleRight: entry.titleRight,
-    subtitleLeft: entry.subtitleLeft,
-    subtitleRight: entry.subtitleRight,
+    titleLeft: entry.titleLeft ?? "",
+    titleRight: entry.titleRight ?? "",
+    subtitleLeft: entry.subtitleLeft ?? "",
+    subtitleRight: entry.subtitleRight ?? "",
     bullets: entry.bullets.map((bullet) => ({ id: bullet.id, text: bullet.text }))
   };
 }

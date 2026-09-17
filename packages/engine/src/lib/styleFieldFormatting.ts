@@ -69,12 +69,12 @@ function valuesForStyleField(data: ResumeData, field: StyleTextField): string[] 
     return data.sections
       .filter((section) => section.type === "skills")
       .flatMap((section) => section.items.map((entry) => entry.titleLeft))
-      .filter((value) => stripInlineMarks(value).trim());
+      .filter((value): value is string => value !== null && Boolean(stripInlineMarks(value).trim()));
   }
   return data.sections
     .filter((section) => section.type !== "skills" && section.type !== "summary")
     .flatMap((section) => section.items.map((entry) => entry[field]))
-    .filter((value) => stripInlineMarks(value).trim());
+    .filter((value): value is string => value !== null && Boolean(stripInlineMarks(value).trim()));
 }
 
 // Apply a per-value text transform to every instance of one style field: the
@@ -112,7 +112,9 @@ function mapStyleField(
     const entryField = field === "skillLabel" ? "titleLeft" : field;
     let sectionChanged = false;
     const items = section.items.map((entry) => {
-      const next = transform(entry[entryField]);
+      const value = entry[entryField];
+      if (value === null) return entry;
+      const next = transform(value);
       if (next === entry[entryField]) return entry;
       changed = true;
       sectionChanged = true;
@@ -204,7 +206,7 @@ export function globalAlignmentState(resume: ResumeData, style: DocumentStyle) {
   const bodyFields = resume.sections.flatMap((section) =>
     section.items.flatMap((entry) =>
       section.type === "skills"
-        ? [entry.titleLeft, entry.subtitleLeft]
+        ? [entry.titleLeft ?? "", entry.subtitleLeft ?? ""]
         : entry.bullets.map((bullet) => bullet.text)
     )
   );

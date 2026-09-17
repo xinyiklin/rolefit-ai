@@ -1,3 +1,4 @@
+import { TypesetEntryRowsContract, RoleFitEntryRowsContract } from "./EntryRowsContract.tsx";
 import {
   StrictMode,
   useEffect,
@@ -526,6 +527,8 @@ function DocumentWorkbenchContractApp() {
 
 const hash = window.location.hash;
 const app =
+  hash === "#entry-rows-typeset" ? <TypesetEntryRowsContract /> :
+  hash === "#entry-rows-rolefit" ? <RoleFitEntryRowsContract /> :
   hash === "#typeset" ? (
     <TypesetApp />
   ) : hash === "#recovery" ? (

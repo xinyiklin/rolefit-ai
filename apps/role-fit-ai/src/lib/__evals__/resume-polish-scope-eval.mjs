@@ -147,3 +147,21 @@ assert.equal(resumePolishScopeToText(scopeAllOff), "", "every-section-off (nothi
 assert.equal(resumePolishScopeToText(scopeAllOff, true), "", "every-section-off stays empty under editableOnly too");
 
 console.log("resume-polish-scope probes passed");
+
+const absentRows = { header: null, sections: [section('absent-section', 'Experience', 'standard', [entry('absent-entry', { titleLeft: null, titleRight: null, subtitleLeft: null, subtitleRight: null, bullets: ['Built accessible tooling.'] })])] };
+const absentScope = buildResumePolishScope(absentRows, ['absent-section']);
+assert.equal(absentScope.sections[0].entries[0].titleLeft, '');
+assert.equal(absentScope.sections[0].entries[0].subtitleLeft, '');
+assert.match(resumePolishScopeToText(absentScope), /Built accessible tooling/);
+assert(!resumePolishScopeToText(absentScope).includes('null'));
+const { serializeResumeData } = await import('../resumeText.ts');
+assert.match(serializeResumeData(absentRows), /Built accessible tooling/);
+assert(!serializeResumeData(absentRows).includes('null'));
+const { buildCoverLetterEvidence } = await import('../coverLetterEvidence.ts');
+assert(buildCoverLetterEvidence({ resumeData: absentRows, honestContext: '' }).some(item => item.text.includes('Built accessible tooling')));
+const { currentTargetText } = await import('../../hooks/useResumeProposalDecisions.ts');
+const { resumeProposalEditIsPending } = await import('../resumeProposalDecisionState.ts');
+const staleRowProposal = { target: { sectionId: 'absent-section', entryId: 'absent-entry', field: 'skills' }, currentText: '', proposedText: 'Recreated subtitle' };
+assert.equal(currentTargetText(absentRows, staleRowProposal), null);
+assert.equal(resumeProposalEditIsPending(currentTargetText(absentRows, staleRowProposal), staleRowProposal), false, 'removed subtitle is not an editable stale-proposal target');
+console.log('Absent row text, evidence, scope, and stale proposal checks passed');

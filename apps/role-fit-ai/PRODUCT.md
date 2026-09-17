@@ -553,3 +553,18 @@ sources; they do not independently verify those sources. Ordinary paraphrases
 never require hidden sentence records or literal wording checks. Editorial advice
 may mention missing skills or suggest a bullet count without asserting those as
 candidate facts. Actual edits retain factual safeguards.
+
+## Resume entry rows
+
+Standard resume entries support Add/Remove title and subtitle rows from the
+right-click menu, including when targeting an entry's bullet. Each row includes
+its left and right fields; Remove clears both and supports Undo. Enter at the
+end of Title right adds or focuses Subtitle left. Backspace at the start of
+Subtitle left removes the row only when both subtitle fields are empty, then
+returns to Title right when available. Forward Delete is unchanged.
+
+A fully empty entry remains recoverable from the containing section's
+`Empty entry N` context submenu. Row absence persists in `.resume` and removes
+its space from editor, print, and PDF output. Existing resumes retain their
+appearance; older builds reject newly saved files with removed rows. These
+controls do not apply to section headings, Skills, Summary, or cover letters.

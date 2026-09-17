@@ -335,3 +335,14 @@ For docs and agent-guide work:
    implementation rules in the nearest `AGENTS.md`, and architecture in root
    docs.
 5. Run `git diff --check` on the touched documentation paths.
+
+### Entry-row regression evidence
+
+The browser fixture serves bundled engine fonts and exercises Add/Remove rows
+with both Typeset's shared state hook and RoleFit's adapter, including caret,
+Undo/Redo, composition, queued deletion, rowless entry operations, and recovery
+after reopen. `ROLEFIT_EDITOR_ROW_AUDIT_DIR` optionally retains synthetic screen
+captures and browser-print PDFs. No personal workspace or live provider is used.
+Owner evals also cover strict null pairs, all row combinations, phantom-gap
+rejection, and stale proposal safety. Files containing null rows require the
+updated build even though the current portable schema remains version 1.

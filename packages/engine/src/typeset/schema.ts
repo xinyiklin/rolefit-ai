@@ -8,10 +8,10 @@ export type TypesetSectionType = ResumeSectionType;
 
 export type TypesetSchemaEntry = {
   id: string;
-  titleLeft: string;
-  titleRight: string;
-  subtitleLeft: string;
-  subtitleRight: string;
+  titleLeft: string | null;
+  titleRight: string | null;
+  subtitleLeft: string | null;
+  subtitleRight: string | null;
   bullets: string[];
   bulletIds: string[];
 };
@@ -47,10 +47,10 @@ export function toTypesetSchema(data: ResumeData): TypesetSchema {
       type: section.type,
       items: section.items.map((item) => ({
         id: item.id,
-        titleLeft: section.type === "summary" ? "" : item.titleLeft.trimStart(),
-        titleRight: section.type === "summary" ? "" : item.titleRight.trimStart(),
-        subtitleLeft: section.type === "summary" ? "" : item.subtitleLeft.trimStart(),
-        subtitleRight: section.type === "summary" ? "" : item.subtitleRight.trimStart(),
+        titleLeft: section.type === "summary" ? "" : item.titleLeft === null ? null : item.titleLeft.trimStart(),
+        titleRight: section.type === "summary" ? "" : item.titleRight === null ? null : item.titleRight.trimStart(),
+        subtitleLeft: section.type === "summary" ? "" : item.subtitleLeft === null ? null : item.subtitleLeft.trimStart(),
+        subtitleRight: section.type === "summary" ? "" : item.subtitleRight === null ? null : item.subtitleRight.trimStart(),
         // Prose preserves authored indentation; ordinary resume bullets trim marker space.
         bullets: item.bullets.map((bullet) =>
           section.type === "summary" ? bullet.text : bullet.text.trimStart()

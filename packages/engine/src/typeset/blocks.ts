@@ -563,7 +563,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
     let previousParagraphSpaceAfterPt = 0;
 
     for (const item of items) {
-      const f = item;
+      const f = {
+        titleLeft: item.titleLeft ?? "",
+        titleRight: item.titleRight ?? "",
+        subtitleLeft: item.subtitleLeft ?? "",
+        subtitleRight: item.subtitleRight ?? ""
+      };
       const ids = { sectionId: section.id, entryId: item.id };
       const entrySrc = (field: "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight"): FieldSrc =>
         ({ kind: "entry", ...ids, field });
@@ -640,46 +645,47 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         continue;
       }
 
-      // Standard entry: title row, optional subtitle row, bullets.
+      // Standard entries may omit either heading row.
       const titleSize = sizes.normalsize;
       const subSize = sizes.small;
-      const titleLeft = styledFieldRuns(
-        f.titleLeft,
-        titleSize,
-        false,
-        false,
-        geo.entryIndent,
-        family,
-        tracking,
-        entrySrc("titleLeft")
-      );
-      const rawTitleRuns = headRow(titleLeft, f.titleRight, titleSize, false, geo, family, tracking, entrySrc("titleRight"));
-      const titleAlignment = alignmentFromInlineMarks(f.titleLeft) ?? alignmentFromInlineMarks(f.titleRight);
-      const titleRuns = titleAlignment && titleAlignment !== "justify"
-        ? alignRuns(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
-        : rawTitleRuns;
-      const inkT = inkOfRuns(titleRuns);
-      const titleRowInk = rowInkOfRuns(titleRuns, titleSize, inkT);
-      const titleOverflow = boxOverflowOfRuns(titleRuns, titleSize);
-      push({
-        runs: titleRuns,
-        height: titleRowInk.height,
-        depth: titleRowInk.depth,
-        riseOverflow: titleOverflow.rise,
-        dropOverflow: titleOverflow.drop,
-        dist:
-          lineAdvance(titleSize, style.lineHeight) +
-          (firstInSection ? gap("sectionEntryGapPt") : gap("entryGapPt")),
-        keepWithPrev: firstInSection
-      });
-      firstInSection = false;
+      const hasTitle = item.titleLeft !== null;
+      const hasSub = item.subtitleLeft !== null;
+      let titleInkDepth = 0;
+      if (hasTitle) {
+        const titleLeft = styledFieldRuns(
+          f.titleLeft,
+          titleSize,
+          false,
+          false,
+          geo.entryIndent,
+          family,
+          tracking,
+          entrySrc("titleLeft")
+        );
+        const rawTitleRuns = headRow(titleLeft, f.titleRight, titleSize, false, geo, family, tracking, entrySrc("titleRight"));
+        const titleAlignment = alignmentFromInlineMarks(f.titleLeft) ?? alignmentFromInlineMarks(f.titleRight);
+        const titleRuns = titleAlignment && titleAlignment !== "justify"
+          ? alignRuns(rawTitleRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
+          : rawTitleRuns;
+        const inkT = inkOfRuns(titleRuns);
+        const titleRowInk = rowInkOfRuns(titleRuns, titleSize, inkT);
+        const titleOverflow = boxOverflowOfRuns(titleRuns, titleSize);
+        push({
+          runs: titleRuns,
+          height: titleRowInk.height,
+          depth: titleRowInk.depth,
+          riseOverflow: titleOverflow.rise,
+          dropOverflow: titleOverflow.drop,
+          dist:
+            lineAdvance(titleSize, style.lineHeight) +
+            (firstInSection ? gap("sectionEntryGapPt") : gap("entryGapPt")),
+          keepWithPrev: firstInSection
+        });
+        firstInSection = false;
+        titleInkDepth = inkT.depth + (titleRuns.some((run) => run.href || run.underline) ? UNDERLINE_EXTRA : 0);
+      }
 
-      // Editable entries always paint the subtitle row so a new or subtitle-less
-      // entry keeps a caret target to fill (the pencil form that used to add one
-      // is gone). Paint-only callers without ids still drop an empty subtitle.
-      // The row lives in the shared layout, so editor and PDF stay identical.
-      const hasSub = Boolean(f.subtitleLeft.trim() || f.subtitleRight.trim());
-      if (hasSub || ids) {
+      if (hasSub) {
         const subLeft = styledFieldRuns(
           f.subtitleLeft,
           subSize,
@@ -707,7 +713,6 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const inkS = inkOfRuns(subRuns);
         const subRowInk = rowInkOfRuns(subRuns, subSize, inkS);
         const subOverflow = boxOverflowOfRuns(subRuns, subSize);
-        const titleInkDepth = inkT.depth + (titleRuns.some((run) => run.href || run.underline) ? UNDERLINE_EXTRA : 0);
         const spaced = lineAdvance(subSize, style.lineHeight) + gap("titleSubGapPt");
         // A tight line height, or a deep box such as an underlined link, must
         // never pull the subtitle up into the title: clamp to an ink-based floor
@@ -719,9 +724,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           depth: subRowInk.depth,
           riseOverflow: subOverflow.rise,
           dropOverflow: subOverflow.drop,
-          dist: Math.max(spaced, inkFloor),
-          keepWithPrev: true
+          dist: hasTitle
+            ? Math.max(spaced, inkFloor)
+            : lineAdvance(subSize, style.lineHeight) + (firstInSection ? gap("sectionEntryGapPt") : gap("entryGapPt")),
+          keepWithPrev: hasTitle || firstInSection
         });
+        firstInSection = false;
       }
 
       let previousBulletSpaceAfterPt = 0;
@@ -730,7 +738,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const bulletIndentPt = paragraphIndentFromInlineMarks(bullet);
         const dist =
           lineAdvance(sizes.small, style.lineHeight) +
-          (bi === 0 ? gap("headBulletGapPt") : gap("bulletGapPt")) +
+          (bi === 0
+            ? hasTitle || hasSub ? gap("headBulletGapPt") : gap(firstInSection ? "sectionEntryGapPt" : "entryGapPt")
+            : gap("bulletGapPt")) +
           previousBulletSpaceAfterPt +
           (paragraphSpacing.spaceBeforePt ?? 0);
         const lines = paragraphLines(
@@ -744,7 +754,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           alignmentFromInlineMarks(bullet) ?? bodyAlign,
           sizes.small * style.lineHeight,
           dist,
-          true, // bullets keep with their entry head / previous bullet start
+          hasTitle || hasSub || firstInSection,
           family,
           tracking,
           true,
@@ -776,6 +786,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         // Allow page breaks BETWEEN bullets (not before the first).
         if (bi > 0 && lines.length) lines[0].keepWithPrev = false;
         lines.forEach(push);
+        if (lines.length) firstInSection = false;
         previousBulletSpaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
       });
     }
