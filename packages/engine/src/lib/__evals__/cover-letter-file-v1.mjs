@@ -14,7 +14,7 @@ import {
 } from "../coverLetter.ts";
 import { paragraphSpacingFromInlineMarks } from "../inlineMarksText.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
-import { layoutCoverLetter, lineSeparators } from "../../typeset/layout.ts";
+import { layoutCoverLetter } from "../../typeset/layout.ts";
 import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
 import { breakParagraph } from "../../typeset/linebreak.ts";
 import {
@@ -401,12 +401,10 @@ assert.equal(
 // Line separators: what a break stands for once the painted lines carry no
 // character for the glue the breaker consumed.
 const separatorsFor = (paragraphs) =>
-  lineSeparators(
-    layoutCoverLetter(
-      toTypesetSchema(parseCoverLetterText(paragraphs.join("\n"))),
-      coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
-    ).pages
-  );
+  layoutCoverLetter(
+    toTypesetSchema(parseCoverLetterText(paragraphs.join("\n"))),
+    coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
+  ).pages.map(page => page.lines.map(line => line.runs.at(-1)?.breakAfter ?? ""));
 // Assert separator shape because wrap count varies with the default family's advances.
 const softWrapped = separatorsFor([
   "The quick brown fox jumps over the lazy dog and keeps running well past the right margin so it wraps, " +
@@ -421,13 +419,13 @@ assert.deepEqual(
 );
 assert.deepEqual(
   separatorsFor(["First paragraph.", "", "Second paragraph."]),
-  [["\n", ""]],
-  "crossing into another paragraph stands for a newline"
+  [["", ""]],
+  "separate logical paragraphs need no field-local break separator"
 );
 assert.deepEqual(
   separatorsFor(["Held\nover two authored lines."]),
-  [[" ", ""]],
-  "an authored break inside one field reads as a space; the model keeps the real newline"
+  [["\n", ""]],
+  "an authored break keeps its newline in field-local layout provenance"
 );
 
 const unbrokenData = parseCoverLetterText("A".repeat(240));

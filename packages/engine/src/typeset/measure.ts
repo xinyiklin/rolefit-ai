@@ -269,7 +269,8 @@ export function paragraphItems(
   value: string,
   sizeBp: number,
   family: DocumentFontFamily,
-  tracking: number
+  tracking: number,
+  faceOverride?: FaceName
 ): ParaItem[] {
   const items: ParaItem[] = [];
   const segments = segmentsFromInlineMarks(value);
@@ -302,7 +303,7 @@ export function paragraphItems(
   for (const seg of segments) {
     const style: FontStyle = {
       family: seg.fontFamily ?? family,
-      face: faceFor(seg.bold, seg.italic),
+      face: faceOverride ?? faceFor(seg.bold, seg.italic),
       size: seg.fontSizePt ?? sizeBp,
       tracking
     };
@@ -346,14 +347,15 @@ export function paragraphItems(
         style,
         seg.linkSuppressed ? undefined : seg.href ?? automaticLinkHref(part) ?? undefined,
         seg.underline,
-        seg.lineHeight
+        seg.lineHeight,
+        seg.linkSuppressed
       );
       hasPrecedingBox = true;
     }
   }
   // Trailing spaces at the paragraph's end are kept in full so the caret can sit
   // after them (buildDisplayMap keeps them too when preserving whitespace).
-  if (pending && hasPrecedingBox) spaceBox(pending.count, pending.style, pending.lineHeight);
+  if (pending) spaceBox(pending.count, pending.style, pending.lineHeight);
   return items;
 }
 
@@ -368,7 +370,8 @@ function pushWord(
   style: FontStyle,
   href?: string,
   underline = false,
-  lineHeight: number | null = null
+  lineHeight: number | null = null,
+  linkSuppressed = false
 ) {
   const display = texLigatures(word);
   const pieces = display.split(/(?<=-)(?=[^-])/); // split AFTER each hyphen run
@@ -381,6 +384,7 @@ function pushWord(
       style,
       width: measure(text, style),
       lineHeight: lineHeight ?? undefined,
+      ...(linkSuppressed ? { linkSuppressed: true } : {}),
       href,
       underline
     } satisfies BoxItem);

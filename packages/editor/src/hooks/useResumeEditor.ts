@@ -852,6 +852,7 @@ export function useResumeEditor(
 
   const actions = useMemo(
     () => ({
+      getDocumentGeneration: documentHistoryClock.currentGeneration,
       createHeader: () => dispatch({ type: "createHeader" }),
       setHeaderVisible: (visible: boolean) => dispatch({ type: "setHeaderVisible", visible }),
       setHeaderName: (value: string, options?: TextEditOptions) =>
@@ -944,7 +945,7 @@ export function useResumeEditor(
       undo: () => dispatch({ type: "undo" }),
       redo: () => dispatch({ type: "redo" })
     }),
-    []
+    [documentHistoryClock]
   );
 
   let undoIndex = state.past.length - 1;

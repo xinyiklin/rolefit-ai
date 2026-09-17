@@ -1,3 +1,9 @@
+import { createPortal } from "react-dom";
+import { TypesetDomPages } from "../../packages/engine/src/typeset/render/dom.tsx";
+import { toTypesetSchema } from "../../packages/engine/src/typeset/schema.ts";
+import { layoutCoverLetter } from "../../packages/engine/src/typeset/layout.ts";
+import { HostAuditContract } from "./HostAuditContract.tsx";
+import { selectContractRange, readContractSelection } from "./selection-fixture.ts";
 import { TypesetEntryRowsContract, RoleFitEntryRowsContract } from "./EntryRowsContract.tsx";
 import {
   StrictMode,
@@ -24,7 +30,7 @@ import {
   TypesetEditor,
   type TypesetEditorCommands
 } from "../../packages/editor/src/sections/editor/TypesetEditor.tsx";
-import { coverLetterResumeData } from "../../packages/engine/src/lib/coverLetter.ts";
+import { coverLetterResumeData, documentStyleToCoverLetterStyle, parseCoverLetterFile, serializeCoverLetterFile } from "../../packages/engine/src/lib/coverLetter.ts";
 import {
   DOC_STYLE_DEFAULTS,
   toDocumentStyle
@@ -61,6 +67,12 @@ type EditorContract = {
     contactGapPt: number;
     headerSectionGapPt: number;
   };
+  reset(data: ResumeData): void;
+  reopen(): void;
+  layout(): ReturnType<typeof layoutCoverLetter>;
+  pdf(): Promise<number[]>;
+  select(anchorKey: string, anchor: number, focusKey?: string, focus?: number): void;
+  selection(): ReturnType<typeof readContractSelection>;
   setDisabled(value: boolean): void;
   undo(): void;
   pasteAsDocument(): Promise<void>;
@@ -140,6 +152,16 @@ function EditorContractApp() {
     window.__editorContract = {
       data: editor.editedResume,
       spacing,
+      reset: editor.seedData,
+      layout: () => layoutCoverLetter(toTypesetSchema(editor.editedResume!), docStyle.style),
+      pdf: async () => {
+        const { emitPdf, fetchFontBytes } = await import("../../packages/engine/src/typeset/pdf/emit.ts");
+        const layout = layoutCoverLetter(toTypesetSchema(editor.editedResume!), docStyle.style);
+        return Array.from(await emitPdf(layout, await fetchFontBytes(layout, "/fonts"), { title: "Wrapped cover header contract" }));
+      },
+      reopen: () => editor.seedData(parseCoverLetterFile(serializeCoverLetterFile(editor.editedResume!, documentStyleToCoverLetterStyle(docStyle.style))).data),
+      select: (anchorKey, anchor, focusKey = anchorKey, focus = anchor) => selectContractRange(editor.editedResume!, anchorKey, anchor, focusKey, focus),
+      selection: () => readContractSelection(editor.editedResume!),
       setDisabled,
       undo: editor.actions.undo,
       pasteAsDocument: () =>
@@ -151,6 +173,7 @@ function EditorContractApp() {
 
   return (
     <div style={{ padding: 16 }}>
+      {createPortal(<div className="resume-print-layer" aria-hidden="true"><TypesetDomPages schema={toTypesetSchema(editor.editedResume)} docStyle={docStyle.style} documentKind="cover-letter" variant="print" /></div>, document.body)}
       <DocumentStructureControls
         header={editor.editedResume.header}
         contactDivider={docStyle.style.contactDivider}
@@ -274,10 +297,9 @@ function WorkspaceResumeContractApp() {
         recoveryCommitCountRef.current += 1;
       }
     },
-    seedResumeEditor: () => {
-      appliedCountRef.current += 1;
-    },
     fileName,
+    setDocumentTitle: () => undefined,
+    setResumeOrigin: () => undefined,
     setResumeText: () => undefined,
     setFileName,
     setResult: () => undefined,
@@ -290,9 +312,7 @@ function WorkspaceResumeContractApp() {
     seedResumeData: () => {
       appliedCountRef.current += 1;
     },
-    currentResumeText: contentVersion,
-    resumeText: contentVersion,
-    editedResume: null,
+    editedResume: { header: null, sections: [] },
     docStyle
   });
 
@@ -405,6 +425,7 @@ function WorkspaceResumeContractApp() {
 }
 
 type DocumentWorkbenchContractSurfaceProps = {
+  pageWidthPx: number;
   draft: string;
   fitViewportRef: RefObject<HTMLDivElement | null>;
   initialScrollTop: number;
@@ -414,6 +435,7 @@ type DocumentWorkbenchContractSurfaceProps = {
 };
 
 function DocumentWorkbenchContractSurface({
+  pageWidthPx,
   draft,
   fitViewportRef,
   initialScrollTop,
@@ -428,6 +450,7 @@ function DocumentWorkbenchContractSurface({
 
   return (
     <DocumentWorkbench
+      pageWidthPx={pageWidthPx}
       layoutRef={layoutScrollerRef}
       rail={{
         id: "cover-tailoring-contract",
@@ -510,6 +533,7 @@ function DocumentWorkbenchContractApp() {
       >
         {workbenchMounted ? (
           <DocumentWorkbenchContractSurface
+            pageWidthPx={1_000 * docStyle.style.zoom}
             draft={draft}
             fitViewportRef={fitViewportRef}
             initialScrollTop={savedScrollTopRef.current}
@@ -527,6 +551,8 @@ function DocumentWorkbenchContractApp() {
 
 const hash = window.location.hash;
 const app =
+  hash === "#host-audit-resume" ? <HostAuditContract kind="resume" /> :
+  hash === "#host-audit-cover" ? <HostAuditContract kind="cover" /> :
   hash === "#entry-rows-typeset" ? <TypesetEntryRowsContract /> :
   hash === "#entry-rows-rolefit" ? <RoleFitEntryRowsContract /> :
   hash === "#typeset" ? (

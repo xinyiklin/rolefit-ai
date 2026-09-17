@@ -142,6 +142,12 @@ export function Popover({
       if (!surface || !anchor) return;
       const below = window.innerHeight - anchor.getBoundingClientRect().bottom - VIEWPORT_GUTTER;
       surface.style.setProperty("--popover-space", `${Math.max(MIN_SURFACE_HEIGHT, below)}px`);
+      surface.style.removeProperty("translate");
+      const translation = getComputedStyle(surface).translate;
+      const [x = "0px", y = "0px"] = translation === "none" ? [] : translation.split(" ");
+      const rect = surface.getBoundingClientRect();
+      const left = Math.max(VIEWPORT_GUTTER, Math.min(rect.left, window.innerWidth - VIEWPORT_GUTTER - rect.width));
+      surface.style.translate = `calc(${x} + ${left - rect.left}px) ${y}`;
     };
     apply();
     window.addEventListener("resize", apply);

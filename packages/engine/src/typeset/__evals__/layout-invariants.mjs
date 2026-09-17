@@ -3,6 +3,9 @@
 // deliberate layout change is reviewed.
 
 import assert from "node:assert/strict";
+import "./section-wrap.mjs";
+import "./editable-field-width.mjs";
+import "./header-baseline.mjs";
 
 import {
   coverLetterResumeData
@@ -194,3 +197,5 @@ for (const title of [true, false]) for (const subtitle of [true, false]) {
 const emptyEntry = { ...rowEntry, id: 'empty-entry', titleLeft: null, titleRight: null, subtitleLeft: null, subtitleRight: null, bullets: [] };
 assert.deepEqual(layoutResume(toTypesetSchema(rowData([emptyEntry, rowEntry, emptyEntry])), commonStyle), layoutResume(toTypesetSchema(rowData([rowEntry])), commonStyle), 'fully empty entries add no geometry or pagination state');
 console.log('entry row layout combinations and absent-junction checks passed');
+
+await import("./heading-wrap.mjs");

@@ -11,7 +11,7 @@ Use `src/lib/AGENTS.md` for resume/cover-letter domain and file work and
   registry/assets, measurement model, layout, DOM/print painter, and PDF
   emitter for every consumer.
 - Keep domain and layout logic deterministic and React-free. The intentional
-  exception is `src/typeset/render/dom.tsx`; Node consumers must be able to
+  exception is DOM painting under `src/typeset/render/`; Node consumers must be able to
   import domain subpaths without loading React.
 - Depend on no app and no editor package. Do not add provider, tracker,
   navigation, browser-storage, or host lifecycle knowledge.

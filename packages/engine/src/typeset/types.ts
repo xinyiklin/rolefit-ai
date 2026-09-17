@@ -89,11 +89,14 @@ export type GlyphRun = {
   // (clicking it targets the bullet) but is not part of the bullet's text, so
   // the typeset editor's offset mapping must skip it.
   marker?: boolean;
+  // Consumed separator after a visual field fragment; empty means a split token.
+  breakAfter?: "" | " " | "\n";
 };
 
 // One typeset line of a paragraph: runs positioned relative to the paragraph's
 // left edge; `width` is the natural (unset) content width for diagnostics.
 export type Line = {
+  breakAfter?: "" | " " | "\n";
   runs: GlyphRun[];
   width: number;
 };
@@ -106,6 +109,7 @@ export type ParagraphAlign = FieldAlignment;
 
 // An unbreakable fragment (word or piece of a hyphenated word).
 export type BoxItem = {
+  linkSuppressed?: boolean;
   kind: "box";
   text: string;
   style: FontStyle;

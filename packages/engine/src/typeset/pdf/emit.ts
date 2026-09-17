@@ -25,6 +25,7 @@ import type { FaceName } from "../metrics.gen.ts";
 import { PAGE_HEIGHT_BP as PAGE_H, PAGE_WIDTH_BP as PAGE_W } from "../blocks.ts";
 import type { LayoutDocument } from "../layout.ts";
 import { underlineRule, underlineSpans } from "../measure.ts";
+import { fieldKey, type GlyphRun } from "../types.ts";
 
 const faceKey = (family: DocumentFontFamily, face: FaceName) => `${family}:${face}`;
 
@@ -103,10 +104,18 @@ export async function emitPdf(
     // graphics state before the call carries into it; set it only when it
     // changes. A fresh page content stream starts at the Tc=0 default.
     let currentTracking = 0;
-    for (const line of layoutPage.lines) {
-      // PDF's y axis grows upward; engine baselines are measured from the top.
-      const y = PAGE_H - line.baseline;
-      for (const run of line.runs) {
+    // Keep a wrapped field contiguous in the content stream; its coordinates
+    // still come from physical lines, including across paired columns.
+    const fields = new Map<string, Array<{ run: GlyphRun; y: number }>>();
+    for (const [index, line] of layoutPage.lines.entries()) {
+      for (const [ri, run] of line.runs.entries()) {
+        const key = run.src ? fieldKey(run.src) : `decoration:${index}:${ri}`;
+        if (!fields.has(key)) fields.set(key, []);
+        fields.get(key)!.push({ run, y: PAGE_H - line.baseline });
+      }
+    }
+    for (const fragments of fields.values()) {
+      for (const { run, y } of fragments) {
         if (run.text) {
           if (run.style.tracking !== currentTracking) {
             page.pushOperators(setCharacterSpacing(run.style.tracking));
@@ -135,6 +144,9 @@ export async function emitPdf(
           );
         }
       }
+    }
+    for (const line of layoutPage.lines) {
+      const y = PAGE_H - line.baseline;
       // A link OR an explicit underline mark draws the same engine-painted rule
       // as the DOM painter, grouped by the shared span owner so an underlined
       // phrase gets one continuous rule instead of one per word.

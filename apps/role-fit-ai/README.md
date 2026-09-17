@@ -71,6 +71,10 @@ preview. Resume and cover-letter pages share the deterministic layout engine
 with their PDF exports, while strict `.resume` and `.cover` files preserve the
 editable documents.
 
+Long names, contacts, section titles and entry headings wrap within the document
+margins. Header baselines remain stable while typing different letter shapes;
+font, size and wrapping changes still reflow the page normally.
+
 ## Highlights
 
 - **Resume input** — open a strict `.resume` document, or start with a blank

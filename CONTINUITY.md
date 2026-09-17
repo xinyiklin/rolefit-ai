@@ -3,6 +3,54 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-17
+
+- [USER] [TASK editor-stress-20260916] Approved editor stress work, including
+  paired title/subtitle wrapping and the logical text layer. Subsequent reports
+  exposed omitted name/contact, section-title overflow and glyph-dependent name
+  placement. The user authorized final correctness/maintainability review,
+  necessary simplification, push and merge once green.
+- [CODE] Shared measured wrapping covers paired entry fields, section titles,
+  names and contacts. Short paired fields retain their widths; long counterparts
+  share available space. Source text, marks, links and logical field identity
+  survive wraps; oversized groups split at continuation boundaries. Section
+  rules follow the last continuation. Header baselines use font-face metrics,
+  including blank plain fields. This intentionally replaces typed-ink placement:
+  all 75 starter snapshot rows move down 11.275pt, with text/X/pages unchanged.
+- [CODE] The selectable DOM follows logical field order while painting engine
+  geometry, preserving native selection/search and accessibility-tree order.
+  PDF text operators follow field order within each page. Editor fixes cover
+  directional selection, wrapped navigation, grapheme/word deletion, queued
+  input/no-op replay and document replacement, tight title/subtitle clearance,
+  and page-aware structure controls. Compact Typeset retains Open/Save actions;
+  shared popovers stay within the viewport. Schemas, dependencies, versions,
+  provider behavior and persistence ownership are unchanged.
+- [TOOL] Prior implementation gates passed across both apps/packages and
+  isolated Chromium fixtures. Regression families include all 12 editable
+  field paths, six fonts, blank/long/token input, native typing/selection/history,
+  strict files, rendered print/PDF, 384 header stability cases and independent
+  review of each correction. Earlier completion claims omitted field types;
+  the explicit inventory and subsequent regressions replace those claims.
+- [CODE+TOOL] Final publication review removed redundant horizontal caret
+  interception, an unused selection-painting fallback and browser-test import
+  cycles. Native horizontal navigation now follows the browser's platform
+  conventions. Fresh full workspace and Chromium gates passed after cleanup,
+  covering both resume hosts and Cover; two independent reviewers cleared
+  their scopes. Independent output comparison passed 28 browser/dedicated PDF
+  fixture pairs (35 pages per backend). Linux browser CI remains a publication
+  gate; local native checks ran on macOS Chromium.
+- [TOOL] Initial Linux CI exposed a section-fixture startup race: its data API
+  existed before fonts finished loading and the editor painted. The test now
+  waits for its rendered heading, matching the other browser fixture waits.
+  Native word navigation is compared with a plain control in the same browser
+  instead of assuming that every non-macOS browser skips trailing whitespace.
+- [CODE] Limits remain explicit: physically impossible glyph geometry is not
+  silently shrunk; oversized keep-groups can leave unused preceding-page space.
+  Actual OS IME, screen readers, native Find UI and other browsers remain
+  unverified; synthetic composition, AX traversal and browser text search are
+  distinct checks. Cover file size limits are unchanged. Test artifacts and
+  personal documents stay local and ignored.
+
 ## 2026-09-16
 
 - [USER+CODE] [TASK entry-rows-20260915] Approved Add/Remove-only title/subtitle

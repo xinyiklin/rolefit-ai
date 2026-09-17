@@ -73,6 +73,7 @@ import {
   caretToDisplayIndex,
   displayIndexToCaret,
   fieldCaretOf,
+  restoreDomSelection,
   selectDisplayRange,
   selectedVisualLineRanges,
   type DisplayRange
@@ -127,6 +128,7 @@ import {
   type FieldRange
 } from "./multiFieldSelection.ts";
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
+import { textStep } from "./wrappedFieldNavigation.ts";
 import {
   clipboardHtmlForRanges,
   clipboardPlainTextForRanges,
@@ -638,6 +640,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // discarded or left stranded behind a gate that cannot settle.
   const commitPendingRef = useRef(false);
   const replayQueueRef = useRef<QueuedIntent[]>([]);
+  const inputGenerationRef = useRef(actions.getDocumentGeneration());
   const pendingTimerRef = useRef<number | null>(null);
   const markPending = useCallback(() => {
     commitPendingRef.current = true;
@@ -748,7 +751,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         map: only.map,
         value: only.value,
         dStart: only.dStart,
-        dEnd: only.dEnd
+        dEnd: only.dEnd,
+        backward: only.backward
       };
     }
     const src = parseFieldKey(anchor.key);
@@ -758,7 +762,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     const a = caretToDisplayIndex(host, anchor.key, map.display, anchor.node, anchor.offset);
     const f = caretToDisplayIndex(host, anchor.key, map.display, focus.node, focus.offset);
     if (a === null || f === null) return null;
-    return { src, key: anchor.key, map, value, dStart: Math.min(a, f), dEnd: Math.max(a, f) };
+    return { src, key: anchor.key, map, value, dStart: Math.min(a, f), dEnd: Math.max(a, f), backward: a > f };
   }, [mapFor, readRanges]);
 
   const lineRangesFor = useCallback(
@@ -828,13 +832,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     restoringSelectionRef.current = true;
     try {
       host.focus({ preventScroll: true });
-      const browserSelection = window.getSelection();
-      if (!browserSelection) return;
-      const range = document.createRange();
-      range.setStart(start.node, start.offset);
-      range.setEnd(end.node, end.offset);
-      browserSelection.removeAllRanges();
-      browserSelection.addRange(range);
+      restoreDomSelection(start, end, selection.backward);
     } finally {
       restoringSelectionRef.current = false;
     }
@@ -867,7 +865,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // editor range. Preserve the painted range in that case; otherwise keep
       // the line-wide highlight synchronized with the browser selection.
       if (host && !editorToolbarOwnsFocus()) {
-        paintSelectionHighlights(host);
+        paintSelectionHighlights(host, readRanges());
       }
       const selection = readSelection();
       // Deferred auto-linking: suppress the render link of the URL word whose
@@ -892,7 +890,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           const vStart = selection.map.valueStart[selection.dStart] ?? selection.value.length;
           const vEnd =
             selection.dEnd > selection.dStart ? (selection.map.valueStart[selection.dEnd] ?? selection.value.length) : undefined;
-          pendingCaretRef.current = () => ({ key, valueIndex: vStart, valueEndIndex: vEnd });
+          pendingCaretRef.current = () => ({ key, valueIndex: vStart, valueEndIndex: vEnd, backward: selection.backward });
         } else {
           const ranges = readRanges();
           const first = ranges?.[0];
@@ -903,6 +901,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               valueIndex:
                 first.map.valueStart[first.dStart] ?? first.value.length,
               endKey: last.key,
+              backward: first.backward,
               valueEndIndex:
                 last.map.valueStart[last.dEnd] ?? last.value.length
             });
@@ -1539,7 +1538,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         return {
           key,
           valueIndex: valueIndexForDisplayIndex(nextMap, freshValue, dStart),
-          valueEndIndex: valueIndexForDisplayIndex(nextMap, freshValue, dEnd)
+          valueEndIndex: valueIndexForDisplayIndex(nextMap, freshValue, dEnd),
+          backward: sel.backward
         };
       };
     },
@@ -1633,6 +1633,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             first.dStart
           ),
           endKey: last.key,
+          backward: first.backward,
           valueEndIndex: valueIndexForDisplayIndex(endMap, endValue, last.dEnd)
         };
       };
@@ -2491,7 +2492,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       pendingCaretRef.current = () => ({
         key,
         valueIndex: valueIndexForDisplayIndex(nextMap, value, sel.dStart),
-        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd)
+        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd),
+        backward: sel.backward
       });
     },
     [actions, mapFor, markPending, recordPreEditSelection]
@@ -2512,7 +2514,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       pendingCaretRef.current = () => ({
         key,
         valueIndex: valueIndexForDisplayIndex(nextMap, value, sel.dStart),
-        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd)
+        valueEndIndex: valueIndexForDisplayIndex(nextMap, value, sel.dEnd),
+        backward: sel.backward
       });
     },
     [actions, mapFor, markPending, recordPreEditSelection]
@@ -3136,6 +3139,12 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   useLayoutEffect(() => {
     const host = hostRef.current;
     if (!host) return;
+    const generation = actions.getDocumentGeneration();
+    if (inputGenerationRef.current !== generation) {
+      inputGenerationRef.current = generation;
+      replayQueueRef.current = [];
+      pendingCaretRef.current = null;
+    }
     // 0) A freshly opened document starts at its first painted field, and a
     // remounted one resumes where the host says the caret was. Both are one-shot
     // and both lose to the caret an in-flight edit is restoring, which is the
@@ -3174,124 +3183,124 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const pos = displayIndexToCaret(host, target.key, map.display, d);
         if (pos) {
           host.focus({ preventScroll: true });
-          const sel = window.getSelection();
-          if (sel) {
-            const range = document.createRange();
-            range.setStart(pos.node, pos.offset);
-            if (target.valueEndIndex !== undefined) {
-              const endKey = target.endKey ?? target.key;
-              const endSrc = target.endKey ? parseFieldKey(target.endKey) : src;
-              const endValue = endSrc ? valueForField(dataRef.current, endSrc) : value;
-              const endMap = endSrc ? mapFor(endSrc, endValue) : map;
-              const dEnd = displayIndexForValueIndex(
-                endMap,
-                Math.min(target.valueEndIndex, endValue.length)
-              );
-              const end = displayIndexToCaret(host, endKey, endMap.display, dEnd);
-              if (end) range.setEnd(end.node, end.offset);
-              else range.collapse(true);
-            } else {
-              range.collapse(true);
-            }
-            sel.removeAllRanges();
-            sel.addRange(range);
+          let end = pos;
+          if (target.valueEndIndex !== undefined) {
+            const endKey = target.endKey ?? target.key;
+            const endSrc = target.endKey ? parseFieldKey(target.endKey) : src;
+            const endValue = endSrc ? valueForField(dataRef.current, endSrc) : value;
+            const endMap = endSrc ? mapFor(endSrc, endValue) : map;
+            const dEnd = displayIndexForValueIndex(endMap, Math.min(target.valueEndIndex, endValue.length));
+            end = displayIndexToCaret(host, endKey, endMap.display, dEnd) ?? pos;
           }
+          restoreDomSelection(pos, end, target.backward);
           (pos.node.parentElement ?? undefined)?.scrollIntoView({ block: "nearest" });
         }
       }
     }
-    // 2) Replay one mutation per paint, continuing past focus-only/no-op Enter
-    // commands so they cannot strand subsequent input without a new paint.
+    // 2) Replay one mutation per paint, continuing past no-op commands so they
+    // cannot strand subsequent input without a new paint.
     commitPendingRef.current = false;
     if (pendingTimerRef.current !== null) {
       window.clearTimeout(pendingTimerRef.current);
       pendingTimerRef.current = null;
     }
-    while (!commitPendingRef.current && replayQueueRef.current.length > 0) {
-      const intent = replayQueueRef.current.shift()!;
-      const sel = readSelection();
-      if (!sel) {
-        // The queued intent may have been aimed at a selection crossing fields.
-        // Drop the queue only when nothing can apply it.
-        if (!commitCrossFieldIntent(intent)) replayQueueRef.current = [];
+    if (!replayQueueRef.current.length) return;
+    // Yield between commits so a held key cannot build a synchronous React
+    // update chain. Keep the gate closed so newer input cannot overtake it.
+    commitPendingRef.current = true;
+    const replayTimer = window.setTimeout(() => {
+      commitPendingRef.current = false;
+      if (actions.getDocumentGeneration() !== generation) {
+        replayQueueRef.current = [];
         return;
       }
-      if (intent.kind === "insert") {
-        commitReplace(
-          sel,
-          sel.dStart,
-          sel.dEnd,
-          intent.text,
-          sel.dStart === sel.dEnd ? "insert" : undefined
-        );
-      } else if (intent.kind === "richPaste") {
-        commitRichPaste(sel, intent);
-      } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
-        // Held Backspace/Delete replays through here, so it has to step over
-        // authored indentation exactly as the live keystroke does.
-        const backward = intent.kind === "deleteBack";
-        const collapsed = sel.dStart === sel.dEnd;
-        const indent = collapsed
-          ? indentDeletionRange(
-              sel.map.display,
-              sel.dStart,
-              backward ? "backward" : "forward",
-              indentWidthAt(sel)
-            )
-          : null;
-        if (indent) {
+      while (!commitPendingRef.current && replayQueueRef.current.length > 0) {
+        const intent = replayQueueRef.current.shift()!;
+        const sel = readSelection();
+        if (!sel) {
+          // The queued intent may have been aimed at a selection crossing fields.
+          // Drop the queue only when nothing can apply it.
+          if (!commitCrossFieldIntent(intent)) replayQueueRef.current = [];
+          return;
+        }
+        if (intent.kind === "insert") {
           commitReplace(
             sel,
-            indent.start,
-            indent.end,
-            "",
-            backward ? "deleteBackward" : "deleteForward"
+            sel.dStart,
+            sel.dEnd,
+            intent.text,
+            sel.dStart === sel.dEnd ? "insert" : undefined
           );
-        }
-        else if (collapsed && backward && sel.dStart === 0) {
-          const removedRow = intent.kind === "deleteBack" && intent.entryRow !== false && commitEmptyEntryRow(sel);
-          if (!removedRow && !commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
-        }
-        else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
-          commitMergeBullet(sel, "down");
-        } else if (collapsed) {
-          if (backward) {
+        } else if (intent.kind === "richPaste") {
+          commitRichPaste(sel, intent);
+        } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
+          // Held Backspace/Delete replays through here, so it has to step over
+          // authored indentation exactly as the live keystroke does.
+          const backward = intent.kind === "deleteBack";
+          const collapsed = sel.dStart === sel.dEnd;
+          const indent = collapsed && !intent.word
+            ? indentDeletionRange(
+                sel.map.display,
+                sel.dStart,
+                backward ? "backward" : "forward",
+                indentWidthAt(sel)
+              )
+            : null;
+          if (indent) {
             commitReplace(
               sel,
-              sel.dStart - 1,
-              sel.dStart,
+              indent.start,
+              indent.end,
               "",
-              "deleteBackward"
-            );
-          } else {
-            commitReplace(
-              sel,
-              sel.dStart,
-              sel.dStart + 1,
-              "",
-              "deleteForward"
+              backward ? "deleteBackward" : "deleteForward"
             );
           }
-        } else commitReplace(sel, sel.dStart, sel.dEnd, "");
-      } else if (intent.kind === "indent" || intent.kind === "outdent") {
-        commitIndent(sel, intent.kind === "indent" ? "in" : "out");
-      } else if (intent.kind === "deleteSelection") {
-        if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
-      } else if (intent.kind === "enter") {
-        commitEnter(sel, intent.shiftKey, intent.entryRow !== false);
-      } else if (intent.kind === "deleteHeaderField") {
-        commitEmptyHeaderField(sel, intent.direction);
-      } else if (intent.kind === "toggleMark") {
-        applyMark(sel, intent.mark);
-      } else if (intent.kind === "clearFormatting") {
-        if (sel.dStart !== sel.dEnd) commitClearFormatting(sel);
-      } else {
-        commitHistory(intent.direction);
+          else if (collapsed && backward && sel.dStart === 0) {
+            const removedRow = intent.kind === "deleteBack" && intent.entryRow !== false && commitEmptyEntryRow(sel);
+            if (!removedRow && !commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
+          }
+          else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
+            commitMergeBullet(sel, "down");
+          } else if (collapsed) {
+            if (backward) {
+              commitReplace(
+                sel,
+                textStep(sel.map.display, sel.dStart, -1, intent.word),
+                sel.dStart,
+                "",
+                "deleteBackward"
+              );
+            } else {
+              commitReplace(
+                sel,
+                sel.dStart,
+                textStep(sel.map.display, sel.dStart, 1, intent.word),
+                "",
+                "deleteForward"
+              );
+            }
+          } else commitReplace(sel, sel.dStart, sel.dEnd, "");
+        } else if (intent.kind === "indent" || intent.kind === "outdent") {
+          commitIndent(sel, intent.kind === "indent" ? "in" : "out");
+        } else if (intent.kind === "deleteSelection") {
+          if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
+        } else if (intent.kind === "enter") {
+          commitEnter(sel, intent.shiftKey, intent.entryRow !== false);
+        } else if (intent.kind === "deleteHeaderField") {
+          commitEmptyHeaderField(sel, intent.direction);
+        } else if (intent.kind === "toggleMark") {
+          applyMark(sel, intent.mark);
+        } else if (intent.kind === "clearFormatting") {
+          if (sel.dStart !== sel.dEnd) commitClearFormatting(sel);
+        } else {
+          commitHistory(intent.direction);
+        }
       }
-      if (intent.kind !== "enter") break;
-    }
+    }, 0);
+    return () => window.clearTimeout(replayTimer);
   }, [
     focusIsInAnotherTextField,
+    actions,
     placeCaret,
     commitClearFormatting,
     commitEnter,
@@ -3323,6 +3332,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   );
 
   useTypesetInputEvents({
+    resolveField: resolveFieldRange,
     hostRef,
     structuredTabScope: documentKind === "resume" ? "document" : "header",
     nonce,

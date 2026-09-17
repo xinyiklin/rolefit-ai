@@ -80,8 +80,8 @@ The dependency direction is:
 - `packages/engine/` — deterministic document behavior: `ResumeData`, the
   constrained cover-letter paragraph adapter, document style, the strict
   `.resume`/`.cover` codecs, bundled fonts, measurement, layout, DOM/print
-  painting, PDF emission. Mostly React-free; `typeset/render/dom.tsx` is the
-  intentional rendering boundary, and **Node server imports must stay on
+  painting, PDF emission. Mostly React-free; DOM painting under `typeset/render/`
+  is the intentional React boundary, and **Node server imports must stay on
   React-free engine subpaths**.
 - `packages/editor/` — the reusable React editing surface: document/history
   hooks, contenteditable adapter, formatting toolbar/popovers, editor chrome,

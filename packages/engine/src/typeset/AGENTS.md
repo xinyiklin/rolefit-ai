@@ -22,7 +22,9 @@ contract. Follow the repository root guide first.
   (`PAGE_WIDTH_BP`/`PAGE_HEIGHT_BP`) every renderer imports.
 - `layout.ts` owns shared pagination and produces `LayoutDocument` for resume
   and cover-letter streams.
-- `render/dom.tsx` paints selectable DOM used by the editor and browser print.
+- `render/dom.tsx` paints physical pages/rules; `render/logicalFields.tsx` paints
+  selectable field-ordered inline text for the editor and browser print.
+  `render/segments.ts` groups measured word runs without changing layout.
 - `pdf/emit.ts` serializes `LayoutDocument` to PDF bytes, embedded fonts, vector
   rules, and link annotations.
 
@@ -38,7 +40,7 @@ it truthfully.
   on glyph advances, positions, baselines, rules, links, alignment, whitespace,
   and pagination.
 - Keep the core deterministic and independent of React/DOM globals. DOM-specific
-  work stays in `render/dom.tsx`; PDF-library work stays in `pdf/emit.ts`.
+  work stays under `render/`; PDF-library work stays in `pdf/emit.ts`.
 - Absent standard-entry rows emit no lines or gaps. The first remaining title,
   subtitle, or bullet owns the section/entry junction; title-subtitle and
   head-bullet gaps apply only when both sides exist. Fully empty entries do not
@@ -80,12 +82,24 @@ it truthfully.
   clear its neighbours' real ink. `inkExtent` remains for calibrated TeX row
   mechanics (the entry title/subtitle strut) — do not reintroduce it into
   spacing, page-top placement, page fit, or rule geometry.
-- Line separation is layout, not text: a break consumes the interword glue and
-  each painted line is its own box. Every renderer must emit `lineSeparators`'
-  character at a line's end, or the browser's word iterator runs the last word of
-  a line into the first word of the next and text derived from the paint loses
-  the gap. Mark it so caret and selection helpers can exclude it — it belongs to
-  no field.
+- Line separation is layout provenance: `GlyphRun.breakAfter` records consumed
+  space, authored newline, or an empty hard-token break for each field fragment.
+  The DOM emits those separators without inventing spaces at token boundaries.
+  Physical line/page boxes are separate from logical field text, and fragments
+  publish their page/line identity. Caret and selection code must resolve those
+  identities rather than assume a fragment is nested inside its physical line.
+- Section headings reuse measured single-field wrapping with their caps face
+  and alignment preserved. Emit the section rule only on the last continuation;
+  preserve fitting geometry and allow oversized chains to split between lines.
+- Names and contact values wrap at the header width; paired entry fields retain
+  natural short-side width or divide available width when both sides are long.
+  Fitting paired rows preserve their existing geometry. Continuation boundaries allow
+  an oversized heading keep-chain to paginate. Never shrink a glyph or discard
+  text to conceal impossible page geometry.
+- Header row footprints use `faceExtent` at the run size capped by its role size,
+  with oversized rise/drop counted separately. Empty runs reserve the same face
+  box. Never use typed ink to place a name/contact at page top or test page fit;
+  ascenders and descenders must not shift the header or following content.
 - Underline and link rules come from `underlineSpans` plus `underlineRule`, so
   every renderer draws one rule per contiguous underlined phrase at one
   face-derived depth. Never derive a rule from the text a renderer happens to

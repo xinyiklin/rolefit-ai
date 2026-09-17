@@ -7,6 +7,7 @@
 //
 //   node src/typeset/__evals__/pdf-roundtrip.mjs
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import {
@@ -263,6 +264,40 @@ if (coverTextItems < coverParagraphs.length || coverLinks < 1) {
     `cover letter: ${coverTextItems} text items and ${coverLinks} links across ${coverDoc.numPages} pages`
   );
   failures += 1;
+}
+
+// Paired wraps remain contiguous in the PDF content stream, while every glyph
+// and link retains the engine's physical page coordinates.
+for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
+  const wrapped = layoutResume({
+    header: { name: "Example name ".repeat(12), contact: [`https://example.test/${"path".repeat(80)}`] },
+    sections: [{ id: "s", type: "standard", heading: "Experience", items: [{
+      id: "i", titleLeft: `<link=https://left.example.test>${"ALPHA bridge ".repeat(90)}</link>`,
+      titleRight: `<u>${"BETA location ".repeat(80)}</u>`, subtitleLeft: null, subtitleRight: null,
+      bullets: ["Following content."], bulletIds: ["b"]
+    }] }]
+  }, { ...DOC_STYLE_DEFAULTS, fontFamily: family });
+  const wrappedBytes = await emitPdf(wrapped, fonts);
+  retainAuditPdf(`wrapped-header-pairs-${family}.pdf`, wrappedBytes);
+  const pdf = await pdfjs.getDocument({ data: wrappedBytes.slice(), useWorkerFetch: false, isEvalSupported: false }).promise;
+  assert.equal(pdf.numPages, wrapped.pages.length, "wrapped PDF retains engine pagination");
+  for (let number = 1; number <= pdf.numPages; number++) {
+    const page = await pdf.getPage(number);
+    const items = (await page.getTextContent()).items.filter(item => item.str.trim());
+    const words = items.map(item => item.str).join(" ");
+    if (words.includes("ALPHA") && words.includes("BETA")) {
+      assert(words.lastIndexOf("ALPHA") < words.indexOf("BETA"), "paired PDF text stays in logical field order on each page");
+    }
+    const lines = wrapped.pages[number - 1].lines;
+    for (const line of lines) for (const run of line.runs.filter(run => run.text.trim())) {
+      assert(items.some(item => Math.abs(item.transform[4] - run.x) < 0.2 &&
+        Math.abs(792 - item.transform[5] - line.baseline) < 0.2 && item.str.startsWith(run.text.trimEnd().slice(0, 8))),
+      `${family}: wrapped glyph ${JSON.stringify(run.text)} stays at (${run.x}, ${line.baseline}); nearby=${JSON.stringify(items.filter(item => Math.abs(792 - item.transform[5] - line.baseline) < 0.2).map(item => ({ text: item.str, x: item.transform[4] })))}`);
+    }
+    const links = (await page.getAnnotations()).filter(annotation => annotation.subtype === "Link");
+    const expected = lines.flatMap(line => line.runs.filter(run => run.href));
+    assert.equal(links.length, expected.length, "wrapped links survive emission");
+  }
 }
 
 if (failures) {

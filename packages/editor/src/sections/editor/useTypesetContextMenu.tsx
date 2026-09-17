@@ -1,3 +1,4 @@
+import { contentSpansOf, lineOf } from "./domSelection.ts";
 import { useCallback, useMemo, useState, type MouseEvent, type KeyboardEvent, type RefObject } from "react";
 import {
   ArrowDownToLine,
@@ -122,12 +123,10 @@ export function useTypesetContextMenu({
       // A right-click in a line's blank area still targets that line, so the
       // structural commands cover the full row and not just its glyphs.
       const directField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
-      const line = target.closest<HTMLElement>(".tsd-line");
+      const line = lineOf(target);
       let field = directField;
       if (!field && line) {
-        const candidates = Array.from(
-          line.querySelectorAll<HTMLElement>("[data-tsdf]:not([data-tsdm])")
-        );
+        const candidates = contentSpansOf(line);
         const contacts = candidates.filter((candidate) =>
           candidate.getAttribute("data-tsdf")?.startsWith("contact|")
         );

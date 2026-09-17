@@ -131,6 +131,7 @@ export function useTypesetOverlayAnchors({
         if (
           prev &&
           next &&
+          prev.page === next.page &&
           prev.kind === next.kind &&
           prev.sectionId === next.sectionId &&
           prev.entryId === next.entryId &&

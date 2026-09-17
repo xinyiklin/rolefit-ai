@@ -782,7 +782,10 @@ assert.equal(bulletAnchor?.x1, 116);
 // drive it with the smallest faithful stand-in for the painted tree.
 globalThis.CSS ??= { escape: (value) => value };
 globalThis.Node ??= { TEXT_NODE: 3, ELEMENT_NODE: 1 };
-globalThis.HTMLElement ??= class HTMLElement {};
+globalThis.HTMLElement ??= class HTMLElement {
+  getAttribute() { return null; }
+  querySelectorAll() { return this.children ?? []; }
+};
 const {
   caretToDisplayIndex,
   displayIndexToCaret,
