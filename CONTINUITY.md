@@ -39,6 +39,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   their scopes. Independent output comparison passed 28 browser/dedicated PDF
   fixture pairs (35 pages per backend). Linux browser CI remains a publication
   gate; local native checks ran on macOS Chromium.
+- [TOOL] Initial Linux CI exposed a section-fixture startup race: its data API
+  existed before fonts finished loading and the editor painted. The test now
+  waits for its rendered heading, matching the other browser fixture waits.
 - [CODE] Limits remain explicit: physically impossible glyph geometry is not
   silently shrunk; oversized keep-groups can leave unused preceding-page space.
   Actual OS IME, screen readers, native Find UI and other browsers remain

@@ -144,7 +144,7 @@ export async function runWrappedSectionContracts({ makeWindow, waitFor, baseUrl 
     const page = await makeWindow();
     await page.connection.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false }, page.sessionId);
     await page.loadURL(`${baseUrl}#entry-rows-${host}`);
-    await waitFor(page, 'window.__rowContract?.data.sections[0]?.id === "section"', `${host} section fixture`);
+    await waitFor(page, `window.__rowContract?.data.sections[0]?.id === "section" && document.querySelector('[contenteditable=true] [data-tsdf="${headingKey}"]')`, `${host} section fixture`);
     const h = await wrappedHarness(page, waitFor);
     const style = await h.evaluate(() => window.__rowContract.style);
     const report = { host, cases: [], native: [], limitations: ['Synthetic clipboard events', 'window.find is not native Find UI', 'AX tree is not an actual screen-reader session'] };
