@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type MouseEvent, type RefObject } from "react";
+import { useCallback, useMemo, useState, type MouseEvent, type KeyboardEvent, type RefObject } from "react";
 import {
   ArrowDownToLine,
   ArrowUpToLine,
@@ -24,7 +24,7 @@ import { parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { InlineFormatState, TypesetEditorCommands } from "./TypesetEditor.tsx";
 import type { ContextMenuItem } from "./TypesetContextMenu.tsx";
 import type {
-  HeaderStructureCommands
+  HeaderStructureCommands, EntryRowCommands
 } from "./useTypesetStructure.ts";
 
 const IS_MAC =
@@ -40,6 +40,7 @@ type Position = "above" | "below";
 // can move the selection in between, and re-reading it keeps a menu item and the
 // equivalent toolbar button acting on exactly the same thing.
 type ContextMenuState = {
+  keyboard: boolean;
   x: number;
   y: number;
   // The field the pointer was over, which drives the structural commands. It is
@@ -59,6 +60,7 @@ type ContextMenuControllerArgs = {
   };
   canPasteAsDocument: boolean;
   headerCommands: HeaderStructureCommands;
+  entryRowCommands: EntryRowCommands;
   commands: TypesetEditorCommands;
   // The same state the toolbar renders from, so an item is enabled exactly when
   // its toolbar twin is.
@@ -66,6 +68,7 @@ type ContextMenuControllerArgs = {
   addSectionRelative: (sectionId: string, position: Position, type: ResumeSectionType) => void;
   removeSectionAt: (sectionId: string) => void;
   addEntryRelative: (sectionId: string, entryId: string, position: Position) => void;
+  moveEntryRelative: (sectionId: string, entryId: string, direction: -1 | 1) => void;
   removeEntryAt: (sectionId: string, entryId: string) => void;
   addBulletToEntry: (sectionId: string, entryId: string) => void;
   addBulletRelative: (sectionId: string, entryId: string, bulletId: string, position: Position) => void;
@@ -81,12 +84,14 @@ export function useTypesetContextMenu({
   structureCapabilities,
   canPasteAsDocument,
   headerCommands,
+  entryRowCommands,
   commands,
   inlineFormat,
   addSectionRelative,
   removeSectionAt,
   addEntryRelative,
   removeEntryAt,
+  moveEntryRelative,
   addBulletToEntry,
   addBulletRelative,
   removeBulletAt,
@@ -95,16 +100,25 @@ export function useTypesetContextMenu({
   onRequestLinkEditor
 }: ContextMenuControllerArgs) {
   const [contextMenu, setContextMenu] = useState<ContextMenuState | null>(null);
-  const closeContextMenu = useCallback(() => setContextMenu(null), []);
+  const closeContextMenu = useCallback(() => {
+    if (contextMenu?.keyboard) hostRef.current?.focus({ preventScroll: true });
+    setContextMenu(null);
+  }, [contextMenu?.keyboard, hostRef]);
 
   const openContextMenu = useCallback(
-    (event: MouseEvent) => {
+    (event: MouseEvent | KeyboardEvent) => {
+      const keyboard = "key" in event;
+      if (keyboard && event.key !== "ContextMenu" && !(event.key === "F10" && event.shiftKey)) return;
       // Only replace the native menu inside the editable page. Drag grips in
       // the sibling structure overlay keep the browser menu.
       if (!hostRef.current?.contains(event.target as Node)) return;
       event.preventDefault();
 
-      const target = event.target as HTMLElement;
+      const selectionNode = keyboard ? window.getSelection()?.focusNode : null;
+      const target = (selectionNode instanceof HTMLElement ? selectionNode : selectionNode?.parentElement) ?? event.target as HTMLElement;
+      const rect = target.getBoundingClientRect();
+      const clientX = keyboard ? rect.left : event.clientX;
+      const clientY = keyboard ? rect.bottom : event.clientY;
       // A right-click in a line's blank area still targets that line, so the
       // structural commands cover the full row and not just its glyphs.
       const directField = target.closest<HTMLElement>("[data-tsdf]:not([data-tsdm])");
@@ -122,10 +136,10 @@ export function useTypesetContextMenu({
             const nearestRect = nearest.getBoundingClientRect();
             const candidateRect = candidate.getBoundingClientRect();
             const nearestDistance = Math.abs(
-              event.clientX - (nearestRect.left + nearestRect.right) / 2
+              clientX - (nearestRect.left + nearestRect.right) / 2
             );
             const candidateDistance = Math.abs(
-              event.clientX - (candidateRect.left + candidateRect.right) / 2
+              clientX - (candidateRect.left + candidateRect.right) / 2
             );
             return candidateDistance < nearestDistance ? candidate : nearest;
           });
@@ -136,8 +150,9 @@ export function useTypesetContextMenu({
       const key = field?.getAttribute("data-tsdf");
 
       setContextMenu({
-        x: event.clientX,
-        y: event.clientY,
+        keyboard,
+        x: clientX,
+        y: clientY,
         structuralSrc: key ? parseFieldKey(key) : null,
         selectedText: commands.selectionText()
       });
@@ -188,6 +203,47 @@ export function useTypesetContextMenu({
     const headerSource = structureCapabilities.header ? structuralSrc : null;
     const source = structureCapabilities.sections ? structuralSrc : null;
     const structural: Array<ContextMenuItem | "divider"> = [];
+    const rowItems = (sectionId: string, entryId: string): ContextMenuItem[] => {
+      const section = data.sections.find((item) => item.id === sectionId);
+      const entry = section?.items.find((item) => item.id === entryId);
+      if (section?.type !== "standard" || !entry) return [];
+      return (["title", "subtitle"] as const).map((row) => {
+        const present = entry[row === "title" ? "titleLeft" : "subtitleLeft"] !== null;
+        return {
+          id: `${present ? "remove" : "add"}-${row}-row-${entryId}`,
+          label: `${present ? "Remove" : "Add"} ${row} row`,
+          icon: present ? <Trash2 size={14} /> : <ListPlus size={14} />,
+          onSelect: () => present
+            ? entryRowCommands.removeRow(sectionId, entryId, row)
+            : entryRowCommands.addRow(sectionId, entryId, row)
+        };
+      });
+    };
+    const moveEntryItems = (sectionId: string, entryId: string): ContextMenuItem[] => {
+      const section = data.sections.find((item) => item.id === sectionId);
+      const index = section?.items.findIndex((item) => item.id === entryId) ?? -1;
+      if (!section || section.items.length < 2 || index < 0) return [];
+      return ([-1, 1] as const).map((direction) => ({
+        id: `move-entry-${direction}`, label: `Move entry ${direction === -1 ? "up" : "down"}`,
+        disabled: index + direction < 0 || index + direction >= section.items.length,
+        onSelect: () => moveEntryRelative(sectionId, entryId, direction)
+      }));
+    };
+    if (source?.kind === "entry" || source?.kind === "bullet") {
+      const rows = rowItems(source.sectionId, source.entryId);
+      if (rows.length) structural.push(...rows, "divider");
+    }
+    if (source?.kind === "heading") {
+      const section = data.sections.find((item) => item.id === source.sectionId);
+      if (section?.type === "standard") section.items.forEach((entry, index) => {
+        if (entry.titleLeft !== null || entry.subtitleLeft !== null || entry.bullets.length) return;
+        structural.push({
+          id: `empty-entry-${entry.id}`, label: `Empty entry ${index + 1}`,
+          submenu: rowItems(section.id, entry.id), onSelect: () => {}
+        });
+      });
+      if (structural.length) structural.push("divider");
+    }
     if (headerSource?.kind === "contact") {
       structural.push(
         {
@@ -282,6 +338,7 @@ export function useTypesetContextMenu({
           icon: <ListPlus size={14} />,
           onSelect: () => addBulletToEntry(source.sectionId, source.entryId)
         },
+        ...moveEntryItems(source.sectionId, source.entryId),
         deleteItem("delete-entry", "entry", () => removeEntryAt(source.sectionId, source.entryId)),
         "divider"
       );
@@ -295,6 +352,17 @@ export function useTypesetContextMenu({
       );
     } else if (source?.kind === "bullet") {
       const section = data.sections.find((item) => item.id === source.sectionId);
+      const entryIndex = section?.items.findIndex((entry) => entry.id === source.entryId) ?? -1;
+      const entry = section?.items[entryIndex];
+      if (section?.type === "standard" && entry?.titleLeft === null && entry.subtitleLeft === null) {
+        structural.push(
+          insertItem("add-entry-above", "entry", "above", () => addEntryRelative(section.id, entry.id, "above")),
+          insertItem("add-entry-below", "entry", "below", () => addEntryRelative(section.id, entry.id, "below")),
+          ...moveEntryItems(section.id, entry.id),
+          deleteItem("delete-entry", "entry", () => removeEntryAt(section.id, entry.id)),
+          "divider"
+        );
+      }
       // Summary paragraphs are a single running block: they don't offer add or
       // delete paragraph commands. Only bulleted-entry sections get them.
       if (section?.type !== "summary") {
@@ -461,10 +529,12 @@ export function useTypesetContextMenu({
     contextMenu,
     data,
     headerCommands,
+    entryRowCommands,
     inlineFormat,
     onRequestLinkEditor,
     removeBulletAt,
     removeEntryAt,
+    moveEntryRelative,
     removeSectionAt,
     structureCapabilities,
     writePlainText

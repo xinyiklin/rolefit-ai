@@ -233,6 +233,8 @@
   position: fixed;
   z-index: 50;
   min-width: 184px;
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
   padding: var(--s1);
   border: 1px solid var(--hairline-strong);
   border-radius: var(--r-md);
@@ -318,10 +320,7 @@
 }
 
 .ts-context-menu__submenu {
-  position: absolute;
-  left: 100%;
-  top: calc(-1 * var(--s1));
-  margin-left: 4px;
+  position: fixed;
 }
 
 @media (pointer: coarse) {

@@ -89,6 +89,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         shared.setHeading(...args);
       },
       insertEntry: (...args: Parameters<typeof shared.insertEntry>) => { markManual(); shared.insertEntry(...args); },
+      setEntryRow: (...args: Parameters<typeof shared.setEntryRow>) => { markManual(); shared.setEntryRow(...args); },
       removeEntry: (sectionId: string, entryId: string) => { markManual(); shared.removeEntry(sectionId, entryId); },
       reorderEntries: (sectionId: string, from: number, to: number) => {
         markManual();

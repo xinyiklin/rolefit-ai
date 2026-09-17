@@ -92,6 +92,13 @@ grammar, margin table, or link-normalization path.
   Do not add a hidden document-wide paragraph-gap field or accept the removed
   beta prototype field as a compatibility alias.
 - Unsupported versions and pre-release prototype shapes must be rejected.
+- Standard entry title/subtitle rows use the existing required left/right keys:
+  two strings mean present (including a blank row), and two nulls mean absent.
+  Reject mixed pairs and null rows in Skills/Summary sections. Constructors,
+  hydration, formatting, and field edits must preserve absence; only an explicit
+  Add-row action creates strings again. This value expansion keeps existing
+  string-valued v1 files valid without migration or a second parser branch.
+  Older builds reject files containing null row values.
 - The file contains structured content plus every print-affecting style value.
   Page margins persist only as physical point values; Narrow, Normal, and
   Custom are editor conveniences rather than file-format state.

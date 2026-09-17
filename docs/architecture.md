@@ -49,6 +49,13 @@ never import each other.
 | Public product/download page | `apps/role-fit-ai/landing/` | Separate static entry graph; public GitHub release metadata only, with no loopback calls or app renderer. |
 | Electron provider setup, lifecycle, and security | `apps/role-fit-ai/desktop/` | Required distributed-product launcher and compact local manager for three supported CLIs and two supported API providers; it never hosts the RoleFit product renderer or enters shared packages. |
 
+Standard entry row presence is owned by `ResumeData` and the strict `.resume`
+codec: paired strings preserve a title/subtitle row, including a blank row;
+paired nulls remove it. Shared reducer commands, field traversal, and layout
+honor this state. RoleFit adapts absent fields to empty text only at its AI/text
+boundaries and cannot recreate them through stale proposal application. No
+row-visibility state or app-owned parallel representation exists.
+
 ## Shared versus host-specific UI
 
 Share a component when the interaction contract, accessibility behavior, and

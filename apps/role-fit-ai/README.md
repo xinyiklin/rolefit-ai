@@ -34,6 +34,11 @@ rail beside it:
 
 ![RoleFit AI resume workspace](docs/screenshot.png)
 
+Entry context menus add/remove title and subtitle rows. Enter at the end of
+Title right adds or focuses the subtitle; Backspace from Subtitle left removes
+it only when both sides are empty. Undo restores a removed row. These choices
+persist in `.resume`; older builds reject files containing removed rows.
+
 The **cover-letter editor** keeps the source letter, job evidence, named
 variants, proposal review, and final export page together:
 

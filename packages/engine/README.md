@@ -30,6 +30,12 @@ PDF hosts call `fetchFontBytes(document, fontAssetBaseUrl)` with their explicit
 deployment-aware public font base. The engine intentionally has no domain-root
 fallback because a consumer may be hosted below a path prefix.
 
+Standard entry rows retain their four required field keys: paired strings
+represent present title/subtitle rows; paired nulls represent removed rows.
+Existing string-valued `.resume` files retain their output. Older builds reject
+new files containing null row values; no file migration or schema-version bump
+is needed for the expanded current v1 value contract.
+
 ## Checks
 
 Run from the repository root:

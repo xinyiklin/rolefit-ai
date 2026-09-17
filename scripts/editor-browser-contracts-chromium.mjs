@@ -1,3 +1,4 @@
+import { runEntryRowContracts } from "./editor-browser-contracts/entry-rows.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { access, mkdtemp, readFile, rm } from "node:fs/promises";
@@ -274,6 +275,7 @@ async function runEditorContracts() {
     "window.__editorContract?.data?.header",
     "editor fixture"
   );
+  await waitFor(win, 'document.querySelector("[data-tsdf]")', "document fonts and paint");
 
   await click(win, 'button[aria-label="Header"]');
   await waitFor(
@@ -1199,6 +1201,7 @@ try {
   });
   console.log("Chromium contracts: editor behaviors");
   await runEditorContracts();
+  await runEntryRowContracts({ makeWindow, waitFor, baseUrl });
   console.log("Chromium contracts: Typeset save lifecycle");
   await runTypesetSaveContract();
   console.log("Chromium contracts: two-tab recovery");
@@ -1212,6 +1215,7 @@ try {
     "editor Chromium contracts passed: header marks/link undo, disabled controls, focus, rich paste, Typeset dirty baseline, deduplicated two-tab restore, live resume replacement guards, shared document rail disclosure/layout/persistence/Fit/landmarks/scroll restoration"
   );
 } catch (error) {
+  console.error(pageErrors);
   console.error(error);
   process.exitCode = 1;
 } finally {

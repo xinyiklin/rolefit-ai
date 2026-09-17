@@ -9,6 +9,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = join(repoRoot, "scripts", "editor-browser-contracts");
 const server = await createServer({
   root: fixtureRoot,
+  publicDir: join(repoRoot, "packages", "engine"),
   plugins: [react()],
   logLevel: "error",
   server: {

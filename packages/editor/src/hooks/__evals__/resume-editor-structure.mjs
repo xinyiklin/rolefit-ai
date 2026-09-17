@@ -1204,3 +1204,5 @@ assert.equal(
 assert.deepEqual(alignmentBase, alignmentPristine, "alignment clearing never mutates its input state");
 
 console.log("resume editor structure eval: all checks passed");
+
+await import('./entry-rows.mjs');

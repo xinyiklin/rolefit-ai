@@ -208,3 +208,30 @@ assert.equal(resumeFileName("<b></b>. ."), "Untitled resume.resume", "a name tha
 console.log(
   "resume file v1: round-trip, strict rejection, style-bound, binary-input, and filename checks passed"
 );
+
+// Row absence is explicit; empty strings remain editable structure.
+for (const title of [true, false]) for (const subtitle of [true, false]) {
+  const source = structuredClone(starter);
+  const section = source.sections.find((item) => item.type === 'standard');
+  const entry = section.items[0];
+  entry.titleLeft = title ? '' : null;
+  entry.titleRight = title ? '' : null;
+  entry.subtitleLeft = subtitle ? '<i>Company</i>' : null;
+  entry.subtitleRight = subtitle ? '' : null;
+  const text = serializeResumeFile(source, DOC_STYLE_DEFAULTS);
+  const reopened = parseResumeFile(text);
+  const restored = reopened.data.sections.find((item) => item.type === 'standard').items[0];
+  for (const key of ['titleLeft', 'titleRight', 'subtitleLeft', 'subtitleRight']) assert.equal(restored[key], entry[key]);
+  assert.notEqual(restored.id, entry.id);
+  assert.equal(serializeResumeFile(reopened.data, DOC_STYLE_DEFAULTS), text);
+}
+for (const type of ['standard', 'skills', 'summary']) {
+  const invalid = structuredClone(saved);
+  const section = invalid.document.sections[0];
+  section.type = type;
+  section.items[0].titleLeft = null;
+  assert.throws(() => parseResumeFile(JSON.stringify(invalid)), ResumeFileError, 'half-absent rows are rejected');
+  section.items[0].titleRight = null;
+  if (type !== 'standard') assert.throws(() => parseResumeFile(JSON.stringify(invalid)), ResumeFileError, 'nonstandard rows cannot be absent');
+}
+console.log('entry row file presence, absence, fresh ids, and malformed pairs passed');

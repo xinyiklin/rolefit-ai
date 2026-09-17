@@ -25,6 +25,14 @@ replace `FormattingToolbar`'s default resume style menus through
 `documentStyleTools` while retaining the shared history, zoom, selection
 formatting, alignment, link, and spell-check controls.
 
+## Entry rows
+
+Standard resume entries offer Add/Remove title and subtitle rows from their
+context menu. Enter at the end of Title right adds or focuses Subtitle left;
+Backspace at the start of an empty Subtitle left removes the row only when both
+sides are empty. Each structural edit supports Undo/Redo. Fully empty entries
+can regain their rows through the containing section's `Empty entry N` submenu.
+
 ## Checks
 
 Run from the repository root:

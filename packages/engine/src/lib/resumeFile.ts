@@ -29,10 +29,10 @@ export const MAX_RESUME_FILE_BYTES = 2 * 1024 * 1024;
 type PortableResumeBullet = { text: string };
 
 type PortableResumeEntry = {
-  titleLeft: string;
-  titleRight: string;
-  subtitleLeft: string;
-  subtitleRight: string;
+  titleLeft: string | null;
+  titleRight: string | null;
+  subtitleLeft: string | null;
+  subtitleRight: string | null;
   bullets: PortableResumeBullet[];
 };
 
@@ -217,6 +217,12 @@ function validateDocument(
       const item = requireRecord(rawItem, itemPath);
       requireExactKeys(item, ENTRY_KEYS, itemPath);
 
+      for (const [left, right] of [["titleLeft", "titleRight"], ["subtitleLeft", "subtitleRight"]] as const) {
+        if ((item[left] === null) !== (item[right] === null)) {
+          invalid(itemPath, "absent rows must have two null fields");
+        }
+      }
+
       const bullets = requireArray(item.bullets, `${itemPath}.bullets`, 20_000).map((rawBullet, bulletIndex) => {
         const bulletPath = `${itemPath}.bullets[${bulletIndex}]`;
         const bullet = requireRecord(rawBullet, bulletPath);
@@ -225,10 +231,10 @@ function validateDocument(
       });
 
       return {
-        titleLeft: requireString(item.titleLeft, `${itemPath}.titleLeft`),
-        titleRight: requireString(item.titleRight, `${itemPath}.titleRight`),
-        subtitleLeft: requireString(item.subtitleLeft, `${itemPath}.subtitleLeft`),
-        subtitleRight: requireString(item.subtitleRight, `${itemPath}.subtitleRight`),
+        titleLeft: item.titleLeft === null && type === "standard" ? null : requireString(item.titleLeft, `${itemPath}.titleLeft`),
+        titleRight: item.titleRight === null && type === "standard" ? null : requireString(item.titleRight, `${itemPath}.titleRight`),
+        subtitleLeft: item.subtitleLeft === null && type === "standard" ? null : requireString(item.subtitleLeft, `${itemPath}.subtitleLeft`),
+        subtitleRight: item.subtitleRight === null && type === "standard" ? null : requireString(item.subtitleRight, `${itemPath}.subtitleRight`),
         bullets
       };
     });

@@ -39,6 +39,10 @@ it truthfully.
   and pagination.
 - Keep the core deterministic and independent of React/DOM globals. DOM-specific
   work stays in `render/dom.tsx`; PDF-library work stays in `pdf/emit.ts`.
+- Absent standard-entry rows emit no lines or gaps. The first remaining title,
+  subtitle, or bullet owns the section/entry junction; title-subtitle and
+  head-bullet gaps apply only when both sides exist. Fully empty entries do not
+  consume pagination state. Blank present rows retain their editable provenance.
 - Preserve provenance ids needed for caret/selection mapping without writing
   session ids into portable files.
 - Store print geometry in physical points and line height as a unitless value.

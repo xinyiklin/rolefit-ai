@@ -27,7 +27,7 @@ export function buildApplicationRoleEvidence(data: ResumeData | null): Applicati
       // check compares the same representation instead of rejecting formatted
       // but otherwise identical labels/bullets.
       const label = [entry.titleLeft, entry.subtitleLeft, entry.titleRight, entry.subtitleRight]
-        .map((value) => stripInlineMarks(value).trim())
+        .map((value) => stripInlineMarks(value ?? "").trim())
         .filter(Boolean)
         .join(" | ");
       const bullets = entry.bullets.map((bullet) => stripInlineMarks(bullet.text).trim()).filter(Boolean);

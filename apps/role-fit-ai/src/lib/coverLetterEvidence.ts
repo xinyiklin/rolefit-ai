@@ -78,7 +78,7 @@ const ENTRY_LABEL_SEPARATOR = " · ";
 
 function entryLabel(entry: ResumeEntry): string {
   return [entry.titleLeft, entry.titleRight, entry.subtitleLeft, entry.subtitleRight]
-    .map((value) => compact(stripInlineMarks(value)))
+    .map((value) => compact(stripInlineMarks(value ?? "")))
     .filter(Boolean)
     .join(ENTRY_LABEL_SEPARATOR);
 }
@@ -147,13 +147,13 @@ export function buildCoverLetterEvidence({
       }
       if (section.type === "skills") {
         const skillsText =
-          entry.subtitleLeft.trim() || entry.subtitleRight.trim() || entry.titleLeft.trim();
-        const category = compact(stripInlineMarks(entry.titleLeft));
+          (entry.subtitleLeft ?? "").trim() || (entry.subtitleRight ?? "").trim() || (entry.titleLeft ?? "").trim();
+        const category = compact(stripInlineMarks(entry.titleLeft ?? ""));
         pushEvidence(items, occurrences, {
           source: "resume",
           text: skillsText,
           section: sectionLabel,
-          ...(category && skillsText !== entry.titleLeft.trim() ? { entry: category } : {})
+          ...(category && skillsText !== (entry.titleLeft ?? "").trim() ? { entry: category } : {})
         });
         continue;
       }
@@ -164,6 +164,7 @@ export function buildCoverLetterEvidence({
         ["Subtitle detail", entry.subtitleRight]
       ] as const;
       for (const [fieldLabel, text] of fieldValues) {
+        if (text === null) continue;
         pushEvidence(items, occurrences, {
           source: "resume",
           text,

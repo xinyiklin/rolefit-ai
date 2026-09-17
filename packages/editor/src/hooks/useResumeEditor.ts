@@ -11,6 +11,7 @@ import {
   type ResumeData,
   type DocumentHeader,
   type ResumeEntry,
+  type EntryRow,
   type ResumeSectionData,
   type ResumeSectionType
 } from "@typeset/engine/lib/resumeData.ts";
@@ -157,6 +158,7 @@ type Action =
   | { type: "reorderSections"; from: number; to: number }
   | ({ type: "setHeading"; sectionId: string; heading: string } & TextEditOptions)
   | { type: "insertEntry"; sectionId: string; afterEntryId: string; position?: "above" | "below" }
+  | { type: "setEntryRow"; sectionId: string; entryId: string; row: EntryRow; present: boolean }
   | { type: "removeEntry"; sectionId: string; entryId: string }
   | { type: "reorderEntries"; sectionId: string; from: number; to: number }
   | ({
@@ -388,9 +390,19 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
         const items = reorder(section.items, action.from, action.to);
         return items === section.items ? section : { ...section, items };
       });
+    case "setEntryRow":
+      return mapSection(data, action.sectionId, (section) => {
+        if (section.type !== "standard") return section;
+        return mapEntry(section, action.entryId, (entry) => {
+          const left = action.row === "title" ? "titleLeft" : "subtitleLeft";
+          const right = action.row === "title" ? "titleRight" : "subtitleRight";
+          if ((entry[left] !== null) === action.present) return entry;
+          return { ...entry, [left]: action.present ? "" : null, [right]: action.present ? "" : null };
+        });
+      });
     case "updateEntry":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({ ...entry, [action.field]: action.value }))
+        mapEntry(section, action.entryId, (entry) => entry[action.field] === null ? entry : ({ ...entry, [action.field]: action.value }))
       );
     case "updateSkillsRow":
       // The painted skills row is one editable field ("Label: skills"), so
@@ -438,8 +450,8 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       }
       if (data.sections.every((section) => section.items.every((entry) => {
         const skillsUnchanged = section.type !== "skills" || (
-          clearAlignmentOverride(entry.titleLeft) === entry.titleLeft
-          && clearAlignmentOverride(entry.subtitleLeft) === entry.subtitleLeft
+          clearAlignmentOverride(entry.titleLeft ?? "") === entry.titleLeft
+          && clearAlignmentOverride(entry.subtitleLeft ?? "") === entry.subtitleLeft
         );
         return skillsUnchanged
           && entry.bullets.every((bullet) => clearAlignmentOverride(bullet.text) === bullet.text);
@@ -450,8 +462,8 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
           ...section,
           items: section.items.map((entry) => ({
             ...entry,
-            titleLeft: section.type === "skills" ? clearAlignmentOverride(entry.titleLeft) : entry.titleLeft,
-            subtitleLeft: section.type === "skills" ? clearAlignmentOverride(entry.subtitleLeft) : entry.subtitleLeft,
+            titleLeft: section.type === "skills" ? clearAlignmentOverride(entry.titleLeft ?? "") : entry.titleLeft,
+            subtitleLeft: section.type === "skills" ? clearAlignmentOverride(entry.subtitleLeft ?? "") : entry.subtitleLeft,
             bullets: entry.bullets.map((bullet) => ({
               ...bullet,
               text: clearAlignmentOverride(bullet.text)
@@ -866,6 +878,8 @@ export function useResumeEditor(
       ) => dispatch({ type: "setHeading", sectionId, heading, ...options }),
       insertEntry: (sectionId: string, afterEntryId: string, position?: "above" | "below") =>
         dispatch({ type: "insertEntry", sectionId, afterEntryId, position }),
+      setEntryRow: (sectionId: string, entryId: string, row: EntryRow, present: boolean) =>
+        dispatch({ type: "setEntryRow", sectionId, entryId, row, present }),
       removeEntry: (sectionId: string, entryId: string) => dispatch({ type: "removeEntry", sectionId, entryId }),
       reorderEntries: (sectionId: string, from: number, to: number) =>
         dispatch({ type: "reorderEntries", sectionId, from, to }),

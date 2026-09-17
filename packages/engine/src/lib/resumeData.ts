@@ -15,12 +15,15 @@ export const SECTION_TYPE_OPTIONS = [
   { type: "skills", label: "Skill list", description: "Label and inline skills" }
 ] as const satisfies readonly { type: ResumeSectionType; label: string; description: string }[];
 
+export type EntryRow = "title" | "subtitle";
+
+// A null pair removes a row; empty strings preserve a blank editable row.
 export type ResumeEntry = {
   id: string;
-  titleLeft: string;
-  titleRight: string;
-  subtitleLeft: string;
-  subtitleRight: string;
+  titleLeft: string | null;
+  titleRight: string | null;
+  subtitleLeft: string | null;
+  subtitleRight: string | null;
   bullets: ResumeBullet[];
 };
 
@@ -69,12 +72,17 @@ export function newBullet(text = ""): ResumeBullet {
 }
 
 export function newEntry(partial: Partial<Omit<ResumeEntry, "id" | "bullets">> = {}): ResumeEntry {
+  for (const [left, right] of [["titleLeft", "titleRight"], ["subtitleLeft", "subtitleRight"]] as const) {
+    if ((partial[left] === null) !== (partial[right] === null)) {
+      throw new Error("An absent entry row must have two null fields.");
+    }
+  }
   return {
     id: uid("entry"),
-    titleLeft: partial.titleLeft ?? "",
-    titleRight: partial.titleRight ?? "",
-    subtitleLeft: partial.subtitleLeft ?? "",
-    subtitleRight: partial.subtitleRight ?? "",
+    titleLeft: partial.titleLeft === undefined ? "" : partial.titleLeft,
+    titleRight: partial.titleRight === undefined ? "" : partial.titleRight,
+    subtitleLeft: partial.subtitleLeft === undefined ? "" : partial.subtitleLeft,
+    subtitleRight: partial.subtitleRight === undefined ? "" : partial.subtitleRight,
     bullets: [newBullet()]
   };
 }

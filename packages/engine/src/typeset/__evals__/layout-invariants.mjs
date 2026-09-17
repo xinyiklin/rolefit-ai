@@ -172,3 +172,25 @@ assert.deepEqual(
 console.log(
   "layout invariants passed: zero gaps, header independence/parity, ink floor, monotonic gaps, deterministic pagination"
 );
+
+const rowEntry = { id: 'rows-entry', titleLeft: 'Title', titleRight: '', subtitleLeft: 'Subtitle', subtitleRight: '', bullets: [{ id: 'rows-bullet', text: 'Body' }] };
+const rowData = (entries) => ({ header: null, sections: [{ id: 'rows-section', heading: 'Experience', type: 'standard', items: entries }] });
+for (const title of [true, false]) for (const subtitle of [true, false]) {
+  const entry = { ...rowEntry, titleLeft: title ? rowEntry.titleLeft : null, titleRight: title ? '' : null, subtitleLeft: subtitle ? rowEntry.subtitleLeft : null, subtitleRight: subtitle ? '' : null };
+  const schema = toTypesetSchema(rowData([entry]));
+  const lines = buildVerticalStream(schema, commonStyle);
+  const fields = lines.flatMap((line) => line.runs.map((run) => run.src?.field));
+  assert.equal(fields.includes('titleLeft'), title);
+  assert.equal(fields.includes('subtitleLeft'), subtitle);
+  assert.equal(lines.length, 2 + Number(title) + Number(subtitle));
+  if (!title) {
+    const changedGap = buildVerticalStream(schema, { ...commonStyle, titleSubGapPt: 55 });
+    assert.deepEqual(changedGap, lines, 'absent title has no title/subtitle junction');
+  }
+  if (!title && !subtitle) {
+    assert.deepEqual(buildVerticalStream(schema, { ...commonStyle, headBulletGapPt: 55 }), lines, 'bullet-only entry has no head/bullet junction');
+  }
+}
+const emptyEntry = { ...rowEntry, id: 'empty-entry', titleLeft: null, titleRight: null, subtitleLeft: null, subtitleRight: null, bullets: [] };
+assert.deepEqual(layoutResume(toTypesetSchema(rowData([emptyEntry, rowEntry, emptyEntry])), commonStyle), layoutResume(toTypesetSchema(rowData([rowEntry])), commonStyle), 'fully empty entries add no geometry or pagination state');
+console.log('entry row layout combinations and absent-junction checks passed');

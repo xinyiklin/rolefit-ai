@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject, type PointerEvent } from "react";
 
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor.ts";
-import type { ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
+import type { EntryRow, ResumeData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 import { fieldKey } from "@typeset/engine/typeset/types.ts";
 import { extentOf, slotsFor, type BlockAnchor, type DragState, type Extent, type TypesetAnchors } from "./typesetStructure.ts";
 
@@ -16,6 +16,11 @@ export type PendingCaret = (
   valueEndIndex?: number;
   endKey?: string;
 } | null;
+
+export type EntryRowCommands = {
+  addRow: (sectionId: string, entryId: string, row: EntryRow) => void;
+  removeRow: (sectionId: string, entryId: string, row: EntryRow) => void;
+};
 
 export type HeaderStructureCommands = {
   createHeader: () => void;
@@ -78,12 +83,13 @@ function entryCaretKey(
         })
       : null;
   }
-  return fieldKey({
-    kind: "entry",
-    sectionId,
-    entryId,
-    field: "titleLeft"
-  });
+  if (entry.titleLeft !== null || entry.subtitleLeft !== null) {
+    return fieldKey({ kind: "entry", sectionId, entryId,
+      field: entry.titleLeft !== null ? "titleLeft" : "subtitleLeft" });
+  }
+  return entry.bullets[0]
+    ? fieldKey({ kind: "bullet", sectionId, entryId, bulletId: entry.bullets[0].id })
+    : fieldKey({ kind: "heading", sectionId });
 }
 
 function bodyStartKey(data: ResumeData): string | null {
@@ -118,6 +124,32 @@ export function useTypesetStructure({
   pageOrigins,
   zoom
 }: StructureControllerArgs) {
+  const setEntryRow = useCallback(
+    (sectionId: string, entryId: string, row: EntryRow, present: boolean) => {
+      const section = findSection(dataRef.current, sectionId);
+      const entry = section?.items.find((item) => item.id === entryId);
+      const left = row === "title" ? "titleLeft" : "subtitleLeft";
+      if (section?.type !== "standard" || !entry || (entry[left] !== null) === present) return;
+      markPending();
+      actions.setEntryRow(sectionId, entryId, row, present);
+      pendingCaretRef.current = (data) => {
+        const current = findSection(data, sectionId)?.items.find((item) => item.id === entryId);
+        if (!current) return null;
+        if (present) return { key: fieldKey({ kind: "entry", sectionId, entryId, field: left }), valueIndex: 0 };
+        if (row === "subtitle" && current.titleRight !== null) {
+          return { key: fieldKey({ kind: "entry", sectionId, entryId, field: "titleRight" }), valueIndex: current.titleRight.length };
+        }
+        const key = entryCaretKey(data, sectionId, entryId);
+        return key ? { key, valueIndex: 0 } : null;
+      };
+    },
+    [actions, dataRef, markPending, pendingCaretRef]
+  );
+  const entryRowCommands = useMemo<EntryRowCommands>(() => ({
+    addRow: (sectionId, entryId, row) => setEntryRow(sectionId, entryId, row, true),
+    removeRow: (sectionId, entryId, row) => setEntryRow(sectionId, entryId, row, false)
+  }), [setEntryRow]);
+
   const createHeader = useCallback(() => {
     markPending();
     actions.createHeader();
@@ -250,6 +282,18 @@ export function useTypesetStructure({
     },
     [actions, markPending, pendingCaretRef]
   );
+
+  const moveEntryRelative = useCallback((sectionId: string, entryId: string, direction: -1 | 1) => {
+    const section = findSection(dataRef.current, sectionId);
+    const index = section?.items.findIndex((entry) => entry.id === entryId) ?? -1;
+    if (!section || index < 0 || index + direction < 0 || index + direction >= section.items.length) return;
+    markPending();
+    actions.reorderEntries(sectionId, index, index + direction);
+    pendingCaretRef.current = (data) => {
+      const key = entryCaretKey(data, sectionId, entryId);
+      return key ? { key, valueIndex: 0 } : null;
+    };
+  }, [actions, dataRef, markPending, pendingCaretRef]);
 
   const removeEntryAt = useCallback(
     (sectionId: string, entryId: string) => {
@@ -574,9 +618,11 @@ export function useTypesetStructure({
 
   return {
     headerCommands,
+    entryRowCommands,
     removeBulletAt,
     addBulletToEntry,
     removeEntryAt,
+    moveEntryRelative,
     addSection,
     addEntryRelative,
     addBulletRelative,

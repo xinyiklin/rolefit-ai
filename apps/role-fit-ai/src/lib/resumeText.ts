@@ -195,8 +195,8 @@ function parsePlainResume(text: string): ResumeData {
 // and skills rows as "Label: comma-separated skills".
 
 function formatSkillRow(item: ResumeEntry): string {
-  const label = item.titleLeft.trim();
-  const skills = item.subtitleLeft.trim();
+  const label = (item.titleLeft ?? "").trim();
+  const skills = (item.subtitleLeft ?? "").trim();
   if (label && skills) return `${label}: ${skills}`;
   return label || skills;
 }
@@ -238,7 +238,7 @@ export function serializeResumeData(data: ResumeData): string {
 
     for (const item of section.items) {
       const headingLine = [item.titleLeft, item.subtitleLeft, item.titleRight, item.subtitleRight]
-        .map((slot) => slot.trim())
+        .map((slot) => (slot ?? "").trim())
         .filter(Boolean)
         .join(" | ");
       if (headingLine) lines.push(headingLine);
