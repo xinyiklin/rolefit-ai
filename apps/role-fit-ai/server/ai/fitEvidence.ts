@@ -1,5 +1,4 @@
 import { evidencePolarity, evidenceSegments } from "./claimEvidence.ts";
-import { findUngroundedToolClaimTerm, hasUnsupportedOwnershipIncrease } from "./grounding.ts";
 
 export function isAffirmativeFitEvidence(evidence: string, corpus = evidence): boolean {
   return evidencePolarity(evidence) === "affirmative" && !evidenceSegments(corpus).some(
@@ -15,13 +14,7 @@ export function hasFitEvidenceConflict(requirement: string, evidence: string, co
     (!/\b(?:personal|academic|volunteer|coursework)\b/i.test(requirement) || personalSourceExcluded) &&
     /\b(?:personal|academic|volunteer|coursework)\b/i.test(evidence) &&
     !/\b(?:professional|paid|industry|commercial|employment|employed)\b/i.test(evidence)) return true;
-  if (hasUnsupportedOwnershipIncrease(requirement, evidence, evidence)) return true;
-  // Examples and alternatives are semantic choices, not a demand for every tool.
-  if (!/\b(?:or|such as|e\.g|for example)\b/i.test(requirement) &&
-    findUngroundedToolClaimTerm(requirement, evidence)) return true;
-  return /\b(?:build|develop|implement|create)\b/i.test(requirement) &&
-    /\b(?:documented|observed|reviewed)\b/i.test(evidence) &&
-    !/\b(?:built|developed|implemented|created|building|developing|implementing|creating)\b/i.test(evidence);
+  return false;
 }
 
 export function explicitEligibilityConflict(job: string, candidate: string): boolean {

@@ -22,10 +22,17 @@ for (const [job, resume] of [
   ["Production Python deployments.", "Built personal Python deployments in production."],
   ["Rust or Go experience.", "Rust experience."]
 ]) assert.ok(assess(job, resume), "ordinary evidence does not need literal prose or numeric equality");
+// Acceptance here verifies source integrity, not the model's semantic judgment.
 for (const [job, resume] of [
-  ["Build Python services.", "Played volleyball with friends."],
+  ["Foundational understanding of software design, APIs, databases, and cloud environments (AWS, Azure, etc.)", "Designed APIs and databases and deployed services on AWS."],
+  ["AWS and Azure experience required.", "Deployed services on AWS."],
+  ["Lead service delivery.", "Delivered services."],
+  ["Build services.", "Documented services."],
   ["Build Python services.", "Documented Python services."],
   ["Build Python services.", "Built Go services."],
+  ["Build Python services.", "Played volleyball with friends."]
+]) assert.ok(assess(job, resume), "the model owns relevance, tool coverage, and responsibility judgment");
+for (const [job, resume] of [
   ["Python experience.", "I have never used Python."],
   ["Python experience.", "I am currently learning Python."],
   ["Professional Python experience.", "Personal Python experience."],
