@@ -69,10 +69,12 @@ is not part of the wire contract.
 removes the transient requirement ledger, posting-completeness gate, and
 match-count verdict calculation introduced in v4. The model judges materiality,
 paraphrases, durations, and alternatives. Code checks exact anchors, list bounds,
-duplicates, and focused explicit conflicts such as denied or aspirational evidence,
-unshown named tools, increased ownership, or clearly personal work cited for an
-explicitly professional requirement. These guards do not prove semantic entailment
-or hiring accuracy. Production is a deployment environment, not employment.
+duplicates, and focused explicit conflicts such as denied or aspirational evidence
+or clearly personal work cited for an explicitly professional requirement. Fit is
+advisory: tool coverage, responsibility wording, and strength of experience remain
+model judgments, without deterministic word-matching vetoes. Genuine citations do
+not prove semantic support or hiring accuracy. Polish and cover-letter grounding
+remain separate and unchanged. Production is a deployment environment, not employment.
 Personal production deployments can support source-neutral deployment work.
 
 Transferable displayed gaps may include compact candidate-source
@@ -80,7 +82,9 @@ metadata. Missing or malformed optional metadata is omitted without dropping the
 gap. `BLOCKED` eligibility needs an explicit related conflict; other exact-anchored
 conditions become `CHECK` without discarding the independent Fit verdict.
 Malformed required evidence or input beyond prompt bounds yields a specific,
-privacy-safe failure message, never a guessed verdict. Legacy snapshots retain
+privacy-safe failure message, never a guessed verdict. Invalid structure or
+duplicate findings, unverifiable citations, and retained explicit evidence
+conflicts have distinct static messages; no private text is included. Legacy snapshots retain
 their original prompt provenance and are not revalidated as v5.
 
 Prompt clarifications and bug fixes that preserve the assessment criteria and

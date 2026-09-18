@@ -280,7 +280,10 @@ also keeps the exact conflicting About you fact. Missing evidence is a gap, not
 proof that the candidate is incapable. Strong and Reasonable require at least one direct match. Stretch may instead
 show relevant transferable evidence beside a gap. The model judges fit; source
 checks protect exact excerpts and clear factual conflicts without a hidden
-requirement ledger or deterministic verdict scoring. Unusable required evidence
+requirement ledger or deterministic verdict scoring. As an advisory assessment,
+Fit leaves technology coverage and strength of experience to the model; genuine
+citations do not guarantee an accurate judgment. Document-generation safeguards
+remain independent. Unusable required evidence
 fails closed. The result has no numeric score, confidence, visible
 requirement ledger, recommendation, or analytics role, and it never silently
 controls tracker state or workflow. Unusable provider output becomes unavailable rather

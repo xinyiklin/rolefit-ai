@@ -133,7 +133,9 @@ font, size and wrapping changes still reflow the page normally.
   beneath the posting excerpt. Rubric v5 prioritizes decision-critical responsibilities
   and core qualifications, preserves explicit evidence-source boundaries, ignores
   logistics or application-form noise when judging fit, and self-checks every
-  evidence excerpt before the server's exact-anchor boundary.
+  evidence excerpt before the server's exact-anchor boundary. Fit leaves technology
+  coverage and responsibility judgments to the model; source checks verify citations
+  and clear conflicts without treating missing tool names as automatic rejection.
   Its behavior and verdict meanings live in the
   [Fit Assessment user contract](PRODUCT.md#fit-assessment-user-contract); provider,
   grounding, reassessment, and provenance details live in the

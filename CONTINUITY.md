@@ -3,6 +3,21 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-18
+
+- [USER+CODE] [TASK fit-assessment-rejection-20260918] Approved the advisory Fit
+  guard simplification and publication after review. The RoleFit-owned change
+  removes semantic word-matching vetoes while preserving citation integrity
+  and focused explicit-conflict checks. Shared packages, document-generation
+  safeguards, schemas, provider settings, and product versions are unchanged.
+- [TOOL] Five focused Fit/evidence suites and the full RoleFit gate passed:
+  app/server/landing builds, desktop contracts, and all 117 offline probe files.
+  Two fresh independent reviewers found no
+  actionable issues. The local companion was gracefully refreshed and reported
+  healthy with unchanged workspace identity. Browser QA was not needed for the
+  server/static-copy change; no live provider evaluation ran, and the exact
+  original assessment failure remains unconfirmed.
+
 ## 2026-09-17
 
 - [USER] [TASK editor-stress-20260916] Approved editor stress work, including

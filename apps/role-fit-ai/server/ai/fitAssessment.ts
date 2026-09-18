@@ -30,7 +30,8 @@ type AttemptStats = { attempts?: number };
 const FIT_FAILURE_MESSAGES = {
   "input-limit": "Fit could not review all supplied text because it exceeds the assessment limit. Shorten the posting or candidate context, or select a shorter resume.",
   "invalid-response": "The AI returned an assessment in an unsupported format. Retry the assessment or choose another model in Fit settings.",
-  "unverified-evidence": "Fit could not verify the cited excerpts, or they contain an explicit evidence conflict. Review the selected resume and candidate context, or retry; you can continue to Polish.",
+  "unverified-evidence": "Fit could not verify the cited excerpts against the supplied sources. Retry the assessment; you can continue to Polish.",
+  "evidence-conflict": "Fit found an explicit evidence conflict in a cited match. Review the selected resume and candidate context, or retry; you can continue to Polish.",
   "unverified-conclusion": "The assessment did not include candidate evidence for its verdict. Retry the assessment; you can continue to Polish."
 } as const;
 type FitFailureReason = keyof typeof FIT_FAILURE_MESSAGES;
@@ -138,23 +139,28 @@ function dedupeKey(value: string): string {
   return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
-function sanitizeMatches(raw: unknown, sources: PromptSources): FitAssessmentMatch[] | null {
-  if (!Array.isArray(raw) || raw.length > 3) return null;
+function sanitizeMatches(
+  raw: unknown, sources: PromptSources, reject: (reason: FitFailureReason) => null
+): FitAssessmentMatch[] | null {
+  if (!Array.isArray(raw) || raw.length > 3) return reject("invalid-response");
   const seen = new Set<string>();
   const matches: FitAssessmentMatch[] = [];
   for (const item of raw) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    if (!item || typeof item !== "object" || Array.isArray(item)) return reject("invalid-response");
     const source = item as Record<string, unknown>;
     const jobExcerpt = exactExcerpt(source.jobExcerpt, sources.jobText);
     const candidateSource = compactText(source.candidateSource, 32).toUpperCase();
-    if (!jobExcerpt || !evidenceSources.has(candidateSource)) return null;
+    if (!evidenceSources.has(candidateSource)) return reject("invalid-response");
+    if (!jobExcerpt) return reject("unverified-evidence");
     const candidateExcerpt = exactExcerpt(
       source.candidateExcerpt,
       candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext
     );
     const key = dedupeKey(jobExcerpt);
-    if (!candidateExcerpt || seen.has(key) || hasFitEvidenceConflict(jobExcerpt, candidateExcerpt,
-      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return null;
+    if (!candidateExcerpt) return reject("unverified-evidence");
+    if (seen.has(key)) return reject("invalid-response");
+    if (hasFitEvidenceConflict(jobExcerpt, candidateExcerpt,
+      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return reject("evidence-conflict");
     seen.add(key);
     matches.push({
       jobExcerpt,
@@ -165,18 +171,22 @@ function sanitizeMatches(raw: unknown, sources: PromptSources): FitAssessmentMat
   return matches;
 }
 
-function sanitizeGaps(raw: unknown, sources: PromptSources, occupied: ReadonlySet<string>): string[] | null {
-  if (!Array.isArray(raw) || raw.length > 3) return null;
+function sanitizeGaps(
+  raw: unknown, sources: PromptSources, occupied: ReadonlySet<string>,
+  reject: (reason: FitFailureReason) => null
+): string[] | null {
+  if (!Array.isArray(raw) || raw.length > 3) return reject("invalid-response");
   const seen = new Set(occupied);
   const gaps: string[] = [];
   for (const item of raw) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    if (!item || typeof item !== "object" || Array.isArray(item)) return reject("invalid-response");
     const source = item as Record<string, unknown>;
     const jobExcerpt = exactExcerpt(source.jobExcerpt, sources.jobText);
     const status = compactText(source.status, 24).toUpperCase();
     const note = compactText(source.note, MAX_NOTE_LENGTH + 1);
     const key = jobExcerpt ? dedupeKey(jobExcerpt) : "";
-    if (!jobExcerpt || status !== "NOT_SHOWN" || note.length > MAX_NOTE_LENGTH || seen.has(key)) return null;
+    if (status !== "NOT_SHOWN" || note.length > MAX_NOTE_LENGTH || seen.has(key)) return reject("invalid-response");
+    if (!jobExcerpt) return reject("unverified-evidence");
     seen.add(key);
     gaps.push(jobExcerpt);
   }
@@ -200,22 +210,24 @@ function sanitizeGapDetails(raw: unknown, sources: PromptSources): FitAssessment
   });
 }
 
-function sanitizeEligibility(raw: unknown, sources: PromptSources): FitAssessmentResult["eligibility"] | null | undefined {
+function sanitizeEligibility(
+  raw: unknown, sources: PromptSources, reject: (reason: FitFailureReason) => null
+): FitAssessmentResult["eligibility"] | null | undefined {
   if (raw === undefined || raw === null) return undefined;
-  if (typeof raw !== "object" || Array.isArray(raw)) return null;
+  if (typeof raw !== "object" || Array.isArray(raw)) return reject("invalid-response");
   const source = raw as Record<string, unknown>;
   const status = compactText(source.status, 16).toUpperCase();
-  if (!eligibilityStatuses.has(status)) return null;
+  if (!eligibilityStatuses.has(status)) return reject("invalid-response");
   const note = compactText(source.note, MAX_NOTE_LENGTH + 1);
-  if (note.length > MAX_NOTE_LENGTH) return null;
+  if (note.length > MAX_NOTE_LENGTH) return reject("invalid-response");
 
   if (status === "CHECK" || status === "BLOCKED") {
-    if (!exactExcerpt(source.jobExcerpt, sources.jobText)) return null;
+    if (!exactExcerpt(source.jobExcerpt, sources.jobText)) return reject("unverified-evidence");
   }
-  if (status === "BLOCKED" && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
+  if (status === "BLOCKED" && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return reject("unverified-evidence");
   if (source.candidateExcerpt !== undefined && status !== "BLOCKED") {
-    if (typeof source.candidateExcerpt !== "string") return null;
-    if (source.candidateExcerpt.trim() && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return null;
+    if (typeof source.candidateExcerpt !== "string") return reject("invalid-response");
+    if (source.candidateExcerpt.trim() && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return reject("unverified-evidence");
   }
 
   if (status === "BLOCKED" && !explicitEligibilityConflict(
@@ -254,15 +266,15 @@ export function sanitizeFitAssessmentResponse(
   if (source.status !== undefined && source.status !== "ASSESSED") return reject("invalid-response");
   const verdict = compactText(source.verdict, 24).toUpperCase();
   if (!verdicts.has(verdict)) return reject("invalid-response");
-  const matches = sanitizeMatches(source.matches, sources);
-  if (!matches) return reject("unverified-evidence");
-  const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))));
-  if (!gaps) return reject("unverified-evidence");
+  const matches = sanitizeMatches(source.matches, sources, reject);
+  if (!matches) return null;
+  const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))), reject);
+  if (!gaps) return null;
   const gapDetails = sanitizeGapDetails(source.gaps, sources);
   if (verdict !== "LIMITED" && matches.length === 0 &&
     !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) return reject("unverified-conclusion");
-  const eligibility = sanitizeEligibility(source.eligibility, sources);
-  if (eligibility === null) return reject("unverified-evidence");
+  const eligibility = sanitizeEligibility(source.eligibility, sources, reject);
+  if (eligibility === null) return null;
 
   const typedVerdict = verdict as FitAssessmentVerdict;
   return {

@@ -139,6 +139,9 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 - `claimEvidence.ts` and `jobConditionEvidence.ts` own claim polarity and job
   condition safeguards. `fitEvidence.ts` catches focused explicit conflicts;
   do not expand it into a lexical proof of semantic support or a second classifier.
+  Fit is advisory: leave tool coverage and responsibility/ownership judgments to
+  the model. Retain citation integrity, polarity, and explicit experience-source
+  restrictions without importing document-generation word-matching gates.
 - Resume replacements reject unfinished tokens and unsupported atoms. Complete
   target enumeration precedes budgeting. Optional structural advice is separately
   validated and never changes the document. Education uses the shared RoleFit

@@ -40,6 +40,55 @@ for (const [patch, expected] of [
   assert.deepEqual(combined.fields.responsibilities, [requirement], "Fit rejection preserves successful job extraction");
 }
 assert.equal(evaluateFitAssessmentResponse(response, input).fitAssessmentError, undefined);
+const cloudInput = {
+  jobText: "Foundational understanding of software design, APIs, databases, and cloud environments (AWS, Azure, etc.)",
+  resumeText: "Designed APIs and databases and deployed services on AWS."
+};
+const cloudRaw = { ...response, matches: [{ jobExcerpt: cloudInput.jobText, candidateSource: "RESUME", candidateExcerpt: cloudInput.resumeText }] };
+const cloudResult = evaluateFitAssessmentResponse(cloudRaw, cloudInput);
+assert.ok(cloudResult.fitAssessment, "illustrative cloud platforms do not require every example");
+assert.deepEqual(sanitizePrepareAnalysisResponse({ job: {}, fitAssessment: cloudRaw }, cloudInput.jobText,
+  { resumeText: cloudInput.resumeText }).fitAssessment, cloudResult.fitAssessment);
+
+const denied = "I have never used Python.";
+const failureInput = { ...input, resumeText: `${evidence}\n${denied}` };
+const gap = { jobExcerpt: requirement, status: "NOT_SHOWN" };
+for (const [patch, reason] of [
+  [{ matches: null }, "invalid-response"],
+  [{ matches: [null] }, "invalid-response"],
+  [{ matches: Array(4).fill(response.matches[0]) }, "invalid-response"],
+  [{ matches: [{ ...response.matches[0], candidateSource: "UNKNOWN" }] }, "invalid-response"],
+  [{ matches: [response.matches[0], response.matches[0]] }, "invalid-response"],
+  [{ gaps: [gap] }, "invalid-response"],
+  [{ matches: [], verdict: "LIMITED", gaps: [gap, gap] }, "invalid-response"],
+  [{ gaps: [{ ...gap, status: "UNKNOWN" }] }, "invalid-response"],
+  [{ gaps: [{ ...gap, note: "x".repeat(241) }] }, "invalid-response"],
+  [{ matches: [{ ...response.matches[0], jobExcerpt: "Build services." }] }, "unverified-evidence"],
+  [{ matches: [{ ...response.matches[0], candidateExcerpt: "Built services." }] }, "unverified-evidence"],
+  [{ gaps: [{ jobExcerpt: "Invented requirement.", status: "NOT_SHOWN" }] }, "unverified-evidence"],
+  [{ matches: [{ ...response.matches[0], candidateExcerpt: denied }] }, "evidence-conflict"],
+  [{ matches: [{ ...response.matches[0], candidateExcerpt: "used Python" }] }, "evidence-conflict"],
+  [{ eligibility: { status: "UNKNOWN" } }, "invalid-response"],
+  [{ eligibility: { status: "CHECK", jobExcerpt: "Invented condition." } }, "unverified-evidence"],
+  [{ eligibility: { status: "BLOCKED", jobExcerpt: requirement, candidateExcerpt: "Invented context." } }, "unverified-evidence"]
+]) {
+  const raw = { ...response, ...patch };
+  const reasons = [];
+  assert.equal(sanitizeFitAssessmentResponse(raw, failureInput, (failure) => reasons.push(failure)), null);
+  assert.deepEqual(reasons, [reason], "each rejection reports one precise category");
+  const standalone = evaluateFitAssessmentResponse(raw, failureInput);
+  const expectedMessage = reason === "invalid-response" ? /unsupported format/
+    : reason === "evidence-conflict" ? /evidence conflict/ : /could not verify/;
+  assert.match(standalone.fitAssessmentError, expectedMessage);
+  for (const privateText of [requirement, evidence, denied, "Invented"])
+    assert.ok(!standalone.fitAssessmentError.includes(privateText), "failure copy must not expose source/provider text");
+  const combined = sanitizePrepareAnalysisResponse({ job: { responsibilities: [requirement] }, fitAssessment: raw },
+    failureInput.jobText, { resumeText: failureInput.resumeText });
+  assert.equal(combined.fitAssessment, null);
+  assert.equal(combined.fitAssessmentError, standalone.fitAssessmentError);
+  assert.deepEqual(combined.fields.responsibilities, [requirement]);
+}
+
 const benefits = "Health insurance and paid time off.";
 for (const field of ["responsibilities", "requiredQualifications", "preferredQualifications"]) {
   const extracted = sanitizeJobAnalysis({ [field]: [benefits] }, `${input.jobText}\nBenefits\n${benefits}`);
