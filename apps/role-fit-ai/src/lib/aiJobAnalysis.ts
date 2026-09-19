@@ -1,3 +1,4 @@
+import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
 import { sanitizeJobConditionIssues } from "../../shared/jobConditionContract.ts";
 // Client-side Job analysis orchestrator. Tries the AI analyzer (POST /api/job-analysis,
 // keys stay server-side) and falls back to the deterministic engine on ANY
@@ -23,7 +24,7 @@ import {
   type FitAssessmentResult
 } from "../../shared/fitAssessmentContract.ts";
 
-// The structured fields /api/job-analysis returns (already grounded/anti-fab on the
+// The structured fields /api/job-analysis returns (checked for evidence concerns on the
 // server). Every field is optional at runtime — the model output is untrusted.
 // provider/model/reasoningEffort/attempts are the resolved-request echo the
 // server adds alongside the analyzed content, used only for aiUsage attribution.
@@ -53,6 +54,7 @@ export type AiJobAnalysisFields = {
   fitAssessmentStatus?: unknown;
   fitAssessmentError?: unknown;
   conditionIssues?: unknown;
+  jobWarnings?: unknown;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -85,8 +87,8 @@ function buildExtractedFromAi(fields: Partial<AiJobAnalysisFields>, sourceText: 
     workAuth: str(fields.workAuth) || undefined,
     salaryMin: hasSalary ? salaryMin : undefined,
     salaryMax: hasSalary ? salaryMax : undefined,
-    salaryCurrency: hasSalary ? str(fields.salaryCurrency) || undefined : undefined,
-    salaryPeriod: hasSalary && PERIODS.includes(period) ? period : undefined,
+    salaryCurrency: str(fields.salaryCurrency) || undefined,
+    salaryPeriod: PERIODS.includes(period) ? period : undefined,
     roleDescription: roleDescription || undefined
   };
 
@@ -107,6 +109,7 @@ function buildExtractedFromAi(fields: Partial<AiJobAnalysisFields>, sourceText: 
     tracking,
     manualReviewFields: [],
     conditionIssues: sanitizeJobConditionIssues(fields.conditionIssues, sourceText),
+    jobWarnings: sanitizeJobAnalysisWarnings(fields.jobWarnings),
     sourceTextLength: sourceText.length
   };
   result.manualReviewFields = manualReviewFields(result);
@@ -293,26 +296,11 @@ function localOnlyUsage(): StageAiUsage {
   return { source: "local", completedAt: new Date().toISOString() };
 }
 
-// Build from AI fields, but fall back to the deterministic engine when the AI
-// surfaced no usable *content* — the deterministic engine may catch structure the
-// model missed, and "Analyzed with AI" should only be claimed when the model
-// actually produced a tailoring brief. `fields === null` means the AI job analysis
-// failed/was absent. Shared by the client `/api/job-analysis` path and the extension
-// import (both analyze client-side through `/api/job-analysis`; the extension's server
-// pass only prepares the raw text).
-//
-// "Usable AI content" mirrors the other model-backed stages' usable-response
-// guards: a reply the
-// server grounded down to nothing of substance is an AI no-op. A bare title or
-// other metadata scalar does NOT count — the deterministic engine extracts those
-// too, so reporting them as "ai" mislabels a failure as success while the same
-// misbehaving provider makes Resume Polish show a fallback. We key off ONLY the
-// server-grounded content lists (responsibilities/qualifications/tech/seniority/
-// domain). roleDescription is deliberately NOT a signal here: a grounded summary
-// alone still provides no actionable requirements for polishing. When all lists
-// are empty we defer to the local engine and label the result "local" honestly.
+// Preserve every usable generated field; only an empty result needs a local fallback.
 function hasUsableAiContent(fields: Partial<AiJobAnalysisFields>): boolean {
   return (
+    [fields.title, fields.company, fields.location, fields.roleDescription, fields.jobType, fields.workAuth, fields.salaryCurrency, fields.salaryPeriod].some((value) => str(value).trim()) ||
+    num(fields.salaryMin) !== null || num(fields.salaryMax) !== null ||
     strArray(fields.responsibilities).length > 0 ||
     strArray(fields.requiredQualifications).length > 0 ||
     strArray(fields.preferredQualifications).length > 0 ||
@@ -360,7 +348,7 @@ export function extractedFromAiOrLocal(
     extracted: localExtracted ?? extractJobPosting(text, { url }),
     source: "local",
     usage: localFallbackUsage(aiRequest),
-    failure: classifyFailure(new ApiError("The job analyzer returned no usable job requirements", 502)),
+    failure: classifyFailure(new ApiError("The job analyzer returned no usable job fields", 502)),
     fitAssessmentRequested,
     ...(fitAssessmentError ? { fitAssessmentError } : {}),
     fitAssessment

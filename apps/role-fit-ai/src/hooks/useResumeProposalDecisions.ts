@@ -1,3 +1,5 @@
+import { lostAcceptedTerms } from "../resume/terminology.ts";
+import { serializeResumeData } from "../lib/resumeText.ts";
 /**
  * useResumeProposalDecisions — accept / edit / discard state for the resume
  * proposal's individual edits.
@@ -58,13 +60,16 @@ type UseResumeProposalDecisionsArgs = {
   result: PolishedResume | null;
   resume: ResumeData;
   actions: ResumeEditorActions;
+  terminologyInputKey?: string;
 };
 
 export function useResumeProposalDecisions({
   result,
   resume,
-  actions
+  actions,
+  terminologyInputKey
 }: UseResumeProposalDecisionsArgs) {
+  const documentReplaced = result?.documentGeneration !== undefined && result.documentGeneration !== actions.getDocumentGeneration();
   const suggestions = useMemo(() => result?.suggestedChanges ?? [], [result]);
   // Suggestion ids are unique within one proposal but not across proposals, so
   // decisions reset on the proposal's own identity rather than on any single id.
@@ -80,9 +85,9 @@ export function useResumeProposalDecisions({
   const isPending = useCallback(
     (suggestion: ResumeProposalSuggestion): boolean => {
       const current = currentTargetText(resume, suggestion);
-      return resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
+      return !documentReplaced && resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
     },
-    [decisions, resume]
+    [decisions, resume, documentReplaced]
   );
 
   const outstanding = useMemo(
@@ -92,7 +97,7 @@ export function useResumeProposalDecisions({
 
   const accept = useCallback(
     (suggestion: ResumeProposalSuggestion, value = suggestion.proposedText) => {
-      if (!value.trim()) return;
+      if (!value.trim() || !isPending(suggestion)) return;
       applyTarget(actions, suggestion, value);
       setDecisionState((current) => recordProposalDecision(
         current,
@@ -101,7 +106,7 @@ export function useResumeProposalDecisions({
         { kind: "accepted", text: value }
       ));
     },
-    [actions, proposalKey]
+    [actions, proposalKey, isPending]
   );
 
   const discard = useCallback((suggestion: ResumeProposalSuggestion) => {
@@ -117,6 +122,7 @@ export function useResumeProposalDecisions({
   // reverting has to put the original back before the row returns to pending;
   // a discarded edit never touched the document and only needs its record gone.
   const revert = useCallback((suggestion: ResumeProposalSuggestion) => {
+    if (documentReplaced) return;
     const decision = decisions[suggestion.id];
     const state = resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decision);
     if (state !== "accepted" && state !== "discarded") return;
@@ -124,7 +130,7 @@ export function useResumeProposalDecisions({
       applyTarget(actions, suggestion, suggestion.currentText);
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
-  }, [actions, decisions, proposalKey, resume]);
+  }, [actions, decisions, proposalKey, resume, documentReplaced]);
 
   const applyAll = useCallback(() => {
     const pending = suggestions.filter(isPending);
@@ -151,7 +157,33 @@ export function useResumeProposalDecisions({
     ));
   }, [isPending, proposalKey, suggestions]);
 
+  const accepted = suggestions.flatMap((suggestion) => {
+    const decision = decisions[suggestion.id];
+    const current = currentTargetText(resume, suggestion);
+    return decision?.kind === "accepted" && current === decision.text
+      ? [{ original: suggestion.currentText, current }] : [];
+  });
+  const evidenceResume = { ...resume, sections: resume.sections.map((section) => ({ ...section,
+    items: section.items.map((entry) => {
+      const uncertain = suggestions.filter((suggestion) => suggestion.warnings?.length
+        && suggestion.target.sectionId === section.id && suggestion.target.entryId === entry.id
+        && (() => {
+          const decision = decisions[suggestion.id];
+          return currentTargetText(resume, suggestion) === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
+        })());
+      return { ...entry,
+        subtitleLeft: uncertain.some((suggestion) => suggestion.target.field === "skill") ? "" : entry.subtitleLeft,
+        bullets: entry.bullets.map((bullet) => uncertain.some((suggestion) => suggestion.target.bulletId === bullet.id)
+          ? { ...bullet, text: "" } : bullet)
+      };
+    })
+  })) };
+  const currentEvidence = serializeResumeData(evidenceResume);
+  const terminologyWarnings = lostAcceptedTerms(result?.terminology, terminologyInputKey, currentEvidence, accepted);
+
   return {
+    documentReplaced,
+    terminologyWarnings,
     decisions,
     proposalKey,
     suggestions,

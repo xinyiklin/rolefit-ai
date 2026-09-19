@@ -1,16 +1,4 @@
-// /api/job-analysis route handler. An AI-based job-description analyzer: it sends the
-// raw (tag-stripped) posting text to the configured provider and gets back the
-// SAME structured fields the deterministic engine (src/lib/jobExtract.ts) emits,
-// but resolved semantically — so novel ATS layouts, inline-prose duties, and
-// unusual section headings parse where the regex engine's heading tables can't.
-//
-// Anti-fabrication is enforced server-side, not just by the prompt: the model is
-// told to extract only what the posting states, and then every SCALAR fact it
-// returns (title, company, location, salary numbers, tech keywords) is dropped
-// unless it is grounded in the source text. The client falls back to the
-// deterministic engine on any non-200, so a missing key / timeout / bad model
-// reply never breaks job analysis.
-
+// Job analysis preserves safe generated fields and attaches evidence warnings.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
@@ -24,6 +12,7 @@ import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { groundedJobCondition } from "./jobConditionEvidence.ts";
+import { sanitizeJobAnalysisWarnings, type JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 import {
   LIST_STOPWORDS,
@@ -140,7 +129,7 @@ function fitAssessmentInput(body: Record<string, unknown>): FitAssessmentInput |
 const norm = (s: unknown): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 function str(value: unknown, max = 200): string {
-  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+  return typeof value === "string" ? value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
 function strList(value: unknown, { maxItems, maxLen = 240, minLen = 3 }: StrListOptions): string[] {
@@ -159,9 +148,7 @@ function strList(value: unknown, { maxItems, maxLen = 240, minLen = 3 }: StrList
   return out;
 }
 
-// A scalar fact is kept only if it is grounded in the source text (case/spacing-
-// insensitive substring). Guards against the model inventing or "tidying" a value
-// into something the posting never said.
+// Case/spacing-insensitive source matching supplies advisory evidence checks.
 function grounded(value: unknown, sourceNorm: string): boolean {
   const v = norm(value);
   return Boolean(v) && v.length >= 2 && sourceNorm.includes(v);
@@ -195,10 +182,7 @@ function atomicTechClaimsGrounded(claim: unknown, sourceText: string): boolean {
   return true;
 }
 
-// roleDescription used to pass through as trusted prose. Keep a neutral/lightly
-// paraphrased extract only when nearly all of its distinctive content is present
-// in the posting. Every distinctive token must match (with only light morphology
-// and established aliases), so one novel domain cannot hide inside copied prose.
+// A novel domain or technology inside copied prose remains an evidence concern.
 function groundedRoleDescription(value: unknown, sourceText: string): string {
   const description = str(value, 900);
   if (!description) return "";
@@ -210,14 +194,7 @@ function groundedRoleDescription(value: unknown, sourceText: string): string {
   return hits === tokens.length ? description : "";
 }
 
-// A content-list item (a duty / qualification sentence) is kept only if it is
-// ANCHORED in the posting: a clear majority (>=60%) of its distinctive word
-// tokens actually appear in the source. This extends the scalar/tech grounding
-// to free-text lists — the model may lightly paraphrase or re-case (its job),
-// but a "requirement" whose key terms never appear in the posting (e.g. an
-// invented "Kubernetes and HIPAA" line) is a fabrication and is dropped. Items
-// with no distinctive tokens left after stop-word removal are kept (already
-// cleaned, nothing left to verify against).
+// Detect weak source overlap separately from preserving usable list text.
 function listItemGrounded(item: unknown, sourceTokens: Set<string>, sourceText: string): boolean {
   if (!atomicTechClaimsGrounded(item, sourceText)) return false;
   const tokens = norm(item)
@@ -227,11 +204,6 @@ function listItemGrounded(item: unknown, sourceTokens: Set<string>, sourceText: 
   let hits = 0;
   for (const t of tokens) if (sourceTokens.has(t)) hits += 1;
   return hits * 5 >= tokens.length * 3; // hits / tokens >= 0.6, integer-safe
-}
-
-// Clean + cap a list (strList), then drop any item not grounded in the source.
-function groundedList(value: unknown, opts: StrListOptions, sourceTokens: Set<string>, sourceText: string): string[] {
-  return strList(value, opts).filter((item) => listItemGrounded(item, sourceTokens, sourceText));
 }
 
 // Tech grounding is symbol-aware (C#, C++, .NET, Go) — norm() would strip the
@@ -293,11 +265,11 @@ function periodFromSalaryContext(salaryContext: string): string {
 
 function normalizeJobType(value: unknown): string {
   const t = str(value, 40);
-  if (/full[-\s]?time/i.test(t)) return "Full-time";
-  if (/part[-\s]?time/i.test(t)) return "Part-time";
-  if (/contract/i.test(t)) return "Contract";
-  if (/intern(ship)?/i.test(t)) return "Internship";
-  if (/temp(orary)?/i.test(t)) return "Temporary";
+  if (/^full[-\s]?time$/i.test(t)) return "Full-time";
+  if (/^part[-\s]?time$/i.test(t)) return "Part-time";
+  if (/^contract$/i.test(t)) return "Contract";
+  if (/^intern(ship)?$/i.test(t)) return "Internship";
+  if (/^temp(orary)?$/i.test(t)) return "Temporary";
   return "";
 }
 
@@ -354,8 +326,7 @@ function groundedJobType(value: unknown, sourceText: string): string {
   return affirmative ? normalized : "";
 }
 
-// A salary number is kept only when its digits actually appear in the posting
-// (as 120000 / 120,000 / 120k), so the model can't fabricate a figure.
+// Numeric source matching detects invented salary figures without withholding them.
 function groundedAmount(value: unknown, sourceText: string): number | null {
   const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
   if (n == null || n <= 0) return null;
@@ -370,67 +341,69 @@ function groundedAmount(value: unknown, sourceText: string): number | null {
 }
 
 export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
-  // Model output: read fields defensively off a record view (never validated).
-  const obj = (parsed && typeof parsed === "object" ? parsed : {}) as Record<string, unknown>;
+  const obj = (parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}) as Record<string, unknown>;
   const sourceNorm = norm(sourceText);
   const conditionIssues: JobConditionIssue[] = [];
-  // Token set for list grounding (distinctive words actually present in the posting).
+  const warnings: JobAnalysisWarning[] = [];
   const sourceTokens = new Set(sourceNorm.split(" ").filter(Boolean));
-
-  const titleRaw = str(obj.title);
-  const companyRaw = str(obj.company);
-  const locationRaw = str(obj.location);
-  // Scalars must be grounded in the posting.
-  const title = grounded(titleRaw, sourceNorm) ? titleRaw : "";
-  const company = grounded(companyRaw, sourceNorm) ? companyRaw : "";
-  const location = grounded(locationRaw, sourceNorm) ? locationRaw : "";
-
+  const warn = (field: JobAnalysisWarning["field"], supported: boolean, value: unknown) => {
+    if (value !== "" && value !== null && !supported && !warnings.some((item) => item.field === field && item.message.startsWith("Not supported"))) warnings.push({
+      field, message: "Not supported by provided evidence. Check this generated field against the original posting."
+    });
+  };
+  const scalar = (field: "title" | "company" | "location") => {
+    const value = str(obj[field]);
+    warn(field, grounded(value, sourceNorm), value);
+    return value;
+  };
+  const list = (field: "responsibilities" | "requiredQualifications" | "preferredQualifications" | "senioritySignals" | "domainSignals", maxItems: number, maxLen: number) => {
+    if (Array.isArray(obj[field]) && obj[field].length > maxItems) warnings.push({ field, message: "Additional generated items were omitted at the display limit. Review the original posting for complete requirements." });
+    return strList(obj[field], { maxItems, maxLen, minLen: 1 }).map((item) => {
+      warn(field, listItemGrounded(item, sourceTokens, sourceText), item);
+      return field === "senioritySignals" || field === "domainSignals"
+        ? item : groundedJobCondition(item, field, sourceText, conditionIssues, warnings);
+    });
+  };
   const salaryContext = salaryContextFromSource(sourceText);
-  // A number elsewhere in the posting (headcount, users, requisition id) is not
-  // salary evidence. Require amounts to occur in an explicit pay context.
-  let salaryMin = groundedAmount(obj.salaryMin, salaryContext);
-  let salaryMax = groundedAmount(obj.salaryMax, salaryContext);
-  if (salaryMin != null && salaryMax != null && salaryMin > salaryMax) {
-    [salaryMin, salaryMax] = [salaryMax, salaryMin];
+  const salary = (field: "salaryMin" | "salaryMax") => {
+    const raw = obj[field];
+    const value = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null;
+    warn(field, groundedAmount(value, salaryContext) === value, value);
+    return value;
+  };
+  const salaryMin = salary("salaryMin");
+  const salaryMax = salary("salaryMax");
+  if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
+    warnings.push({ field: "salaryMin", message: "The generated minimum exceeds the maximum. Review the salary range." });
   }
-  const hasSalary = salaryMin != null || salaryMax != null;
-
-  // techKeywords must each be named in the posting (symbol-aware, 2-char floor
-  // so "Go"/"C#"/"AI" survive while inventions are dropped).
-  const sourceLower = sourceText.toLowerCase();
-  const techKeywords = strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 1 }).filter((t) =>
-    groundedTech(t, sourceText)
-  );
-
-  return {
-    title,
-    company,
-    location,
-    jobType: groundedJobType(obj.jobType, sourceText),
-    workAuth: groundedJobCondition(str(obj.workAuth, 1000), "workAuth", sourceText, conditionIssues),
-    salaryMin,
-    salaryMax,
-    salaryCurrency: hasSalary ? currencyFromSalaryContext(salaryContext) : "",
-    salaryPeriod: hasSalary ? periodFromSalaryContext(salaryContext) : "",
-    roleDescription: groundedRoleDescription(obj.roleDescription, sourceText),
-    // Content lists are grounded against the posting (anti-fabrication), like scalars/tech.
-    responsibilities: strList(obj.responsibilities, { maxItems: 12, maxLen: 1000 })
-      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
-      .map((item) => groundedJobCondition(item, "responsibilities", sourceText, conditionIssues)).filter(Boolean),
-    requiredQualifications: strList(obj.requiredQualifications, { maxItems: 12, maxLen: 1000 })
-      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
-      .map((item) => groundedJobCondition(item, "requiredQualifications", sourceText, conditionIssues)).filter(Boolean),
-    preferredQualifications: strList(obj.preferredQualifications, { maxItems: 12, maxLen: 1000 })
-      .filter((item) => listItemGrounded(item, sourceTokens, sourceText))
-      .map((item) => groundedJobCondition(item, "preferredQualifications", sourceText, conditionIssues)).filter(Boolean),
+  const salaryCurrencyRaw = str(obj.salaryCurrency, 20).toUpperCase();
+  const salaryCurrency = ["USD", "GBP", "EUR", "CAD", "AUD", "JPY"].includes(salaryCurrencyRaw) ? salaryCurrencyRaw : "";
+  const salaryPeriodRaw = str(obj.salaryPeriod, 20);
+  const salaryPeriod = ["yr", "mo", "hr"].includes(salaryPeriodRaw) ? salaryPeriodRaw : "";
+  warn("salaryCurrency", salaryCurrency === currencyFromSalaryContext(salaryContext), salaryCurrency);
+  warn("salaryPeriod", salaryPeriod === periodFromSalaryContext(salaryContext), salaryPeriod);
+  const jobType = normalizeJobType(obj.jobType);
+  warn("jobType", jobType === groundedJobType(obj.jobType, sourceText), jobType);
+  const roleDescription = str(obj.roleDescription, 900);
+  warn("roleDescription", Boolean(groundedRoleDescription(roleDescription, sourceText)), roleDescription);
+  const techKeywords = strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 1 });
+  if (Array.isArray(obj.techKeywords) && obj.techKeywords.length > 24) warnings.push({ field: "techKeywords", message: "Additional generated terms were omitted at the display limit. Review the original posting for complete requirements." });
+  for (const term of techKeywords) warn("techKeywords", groundedTech(term, sourceText), term);
+  const result = {
+    title: scalar("title"), company: scalar("company"), location: scalar("location"),
+    jobType,
+    workAuth: groundedJobCondition(str(obj.workAuth, 1000), "workAuth", sourceText, conditionIssues, warnings),
+    salaryMin, salaryMax, salaryCurrency, salaryPeriod, roleDescription,
+    responsibilities: list("responsibilities", 12, 1000),
+    requiredQualifications: list("requiredQualifications", 12, 1000),
+    preferredQualifications: list("preferredQualifications", 12, 1000),
     techKeywords,
-    // senioritySignals/domainSignals feed the visible job brief and later checks,
-    // so they get the same source-grounding as the content lists —
-    // an invented "fintech" domain or "staff-level" seniority signal is dropped.
-    senioritySignals: groundedList(obj.senioritySignals, { maxItems: 8, maxLen: 60 }, sourceTokens, sourceText),
-    domainSignals: groundedList(obj.domainSignals, { maxItems: 8, maxLen: 40 }, sourceTokens, sourceText),
+    senioritySignals: list("senioritySignals", 8, 60),
+    domainSignals: list("domainSignals", 8, 40),
     conditionIssues
   };
+  const jobWarnings = sanitizeJobAnalysisWarnings(warnings);
+  return { ...result, ...(jobWarnings ? { jobWarnings } : {}) };
 }
 
 export function sanitizePrepareAnalysisResponse(
@@ -462,7 +435,7 @@ export function sanitizePrepareAnalysisResponse(
 }
 
 // Resolve provider from `body` (default provider when none given), call the model,
-// and return grounded fields plus the RESOLVED provider/model/reasoningEffort and
+// and return checked fields plus the RESOLVED provider/model/reasoningEffort and
 // the dispatch attempt count. Used by the /api/job-analysis route (extension imports
 // also analyze through that route, client-side from the receiving tab — the
 // server-side import pass only resolves the raw page text). Throws on

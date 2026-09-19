@@ -140,11 +140,19 @@ export function validateCoverLetterTailorOutput({
       issues: [{
         code: "invalid_structure",
         category: "structure",
+        blocking: true,
         detail: "The provider response did not contain usable body paragraphs.",
         recovery: "retry",
         repairMessage: "The response contained no body paragraphs."
       }]
     };
+  }
+  if (rawParagraphs.length > 20) {
+    return { output: null, coverLetterText: "", issues: [{
+      blocking: true, code: "invalid_structure", category: "structure",
+      detail: "The provider response exceeded the paragraph limit.", recovery: "retry",
+      repairMessage: "Return at most 20 body paragraphs."
+    }] };
   }
   if (rawParagraphs.length < 2 || rawParagraphs.length > 5) {
     issues.push({
@@ -167,11 +175,18 @@ export function validateCoverLetterTailorOutput({
   const bodyParagraphs: CoverLetterBodyParagraph[] = [];
   for (const [paragraphIndex, raw] of rawParagraphs.entries()) {
     const paragraph = object(raw);
-    const paragraphText = text(paragraph?.text, 3_000);
+    const paragraphText = typeof paragraph?.text === "string" ? paragraph.text.trim() : "";
+    if (paragraphText.length > 3_000 || /<\/?[a-z][^>]*>|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(paragraphText)) {
+      issues.push({ blocking: true, code: "invalid_structure", category: "structure",
+        detail: "A body paragraph contains unsafe markup or exceeds the text limit.", recovery: "retry",
+        repairMessage: "Return bounded plain-text paragraphs without markup.", paragraphIndex });
+      continue;
+    }
     if (!paragraphText) {
       issues.push({
         code: "invalid_structure",
         category: "structure",
+        blocking: true,
         detail: "A body paragraph contained no usable text.",
         recovery: "retry",
         repairMessage: "A body paragraph had no usable text.",
@@ -215,6 +230,7 @@ export function validateCoverLetterTailorOutput({
         code: "unresolved_template",
         category: "template",
         claim: paragraphText,
+        blocking: true,
         detail: "This paragraph referenced a template instruction that was not available.",
         recovery: "edit_source",
         repairMessage:
@@ -238,6 +254,7 @@ export function validateCoverLetterTailorOutput({
         code: "invalid_structure",
         category: "structure",
         claim: paragraphText,
+        blocking: true,
         detail: "A body paragraph repeated the letter greeting.",
         recovery: "retry",
         repairMessage: "A paragraph includes a greeting. The server owns the greeting.",
@@ -249,6 +266,7 @@ export function validateCoverLetterTailorOutput({
         code: "invalid_structure",
         category: "structure",
         claim: paragraphText,
+        blocking: true,
         detail: "A body paragraph repeated the letter sign-off.",
         recovery: "retry",
         repairMessage: "A paragraph includes a sign-off. The server owns the sign-off.",
@@ -260,6 +278,7 @@ export function validateCoverLetterTailorOutput({
         code: "invalid_structure",
         category: "structure",
         claim: paragraphText,
+        blocking: true,
         detail: "A body paragraph repeated the correspondence date.",
         recovery: "retry",
         repairMessage: "A paragraph includes the correspondence date. The server owns the date.",
@@ -280,6 +299,7 @@ export function validateCoverLetterTailorOutput({
       issues: issues.length > 0 ? issues : [{
         code: "invalid_structure",
         category: "structure",
+        blocking: true,
         detail: "The provider response contained no usable prose.",
         recovery: "retry",
         repairMessage: "The response contained no usable prose."
@@ -325,6 +345,7 @@ export function validateCoverLetterTailorOutput({
     issues.push({
       code: "quality_contract",
       category: "quality",
+      blocking: true,
       detail: "The generated letter exceeded RoleFit's safe document length.",
       recovery: "retry",
       repairMessage: "The letter is far longer than one page. Tighten it substantially."
@@ -337,6 +358,7 @@ export function validateCoverLetterTailorOutput({
     issues.push({
       code: "invalid_structure",
       category: "structure",
+      blocking: true,
       detail: "The assembled letter did not contain exactly one greeting.",
       recovery: "retry",
       repairMessage: "The assembled letter must contain exactly one greeting."
@@ -346,7 +368,7 @@ export function validateCoverLetterTailorOutput({
   return {
     output: {
       bodyParagraphs,
-      warnings: [...stringArray(parsed.warnings, 6, 300), ...styleWarnings]
+      warnings: styleWarnings
     },
     coverLetterText,
     issues
@@ -371,9 +393,4 @@ export function evidenceUsedByParagraphs(
 ): CoverLetterEvidenceItem[] {
   const used = new Set(bodyParagraphs.flatMap((paragraph) => paragraph.evidenceIds));
   return evidence.filter((item) => used.has(item.id));
-}
-
-function stringArray(value: unknown, maxItems: number, maxChars: number): string[] {
-  if (!Array.isArray(value) || value.length > maxItems) return [];
-  return value.map((item) => text(item, maxChars)).filter(Boolean);
 }

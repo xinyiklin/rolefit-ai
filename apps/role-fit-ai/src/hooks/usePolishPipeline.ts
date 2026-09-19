@@ -1,3 +1,5 @@
+import { currentResumeConcerns, sameProposalTarget, type ResumeSourceConcern } from "../resume/proposalWarnings.ts";
+import { affirmativeTerm, jobTerminology } from "../resume/terminology.ts";
 import { useEffect, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
@@ -32,6 +34,8 @@ type PolishContext = {
   resumeScope: ReturnType<typeof buildResumePolishScope>;
   scopedResumeText: string;
   inputFingerprint: string;
+  documentGeneration: number;
+  sourceConcerns: ResumeSourceConcern[];
 };
 
 export type PolishRunOptions = {
@@ -41,6 +45,8 @@ export type PolishRunOptions = {
 
 type UsePolishPipelineArgs = {
   editedResume: ResumeData | null;
+  getDocumentGeneration: () => number;
+  previousResult: PolishedResume | null;
   polishScopeModes: Record<string, ResumePolishScopeMode>;
   currentResumeText: string;
   jobDescription: string;
@@ -80,13 +86,16 @@ function proposalSuggestions(
       sectionHeading: target.section,
       currentText: target.currentText,
       proposedText: change.replacement,
-      reason: change.reason ?? ""
+      reason: change.reason ?? "",
+      warnings: change.warnings
     }];
   });
 }
 
 export function usePolishPipeline({
   editedResume,
+  getDocumentGeneration,
+  previousResult,
   polishScopeModes,
   currentResumeText,
   jobDescription,
@@ -112,6 +121,7 @@ export function usePolishPipeline({
   const runLockRef = useRef(false);
   const startSettlementRef = useRef<PolishRunOptions["onStartSettled"]>(undefined);
   const inputFingerprint = workflowInputFingerprint({
+    documentGeneration: getDocumentGeneration(),
     editedResume,
     polishScopeModes,
     currentResumeText,
@@ -124,6 +134,11 @@ export function usePolishPipeline({
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
   const previousJobDescriptionRef = useRef(jobDescription);
+  const terminologyInputKey = workflowInputFingerprint({
+    generation: getDocumentGeneration(), jobDescription, requestHonestContext,
+    polishScopeModes, customInstructions: customInstructionsFor("resume-polish"),
+    boldBulletKeywords, resumePolish: buildStageRequestFields(resumePolish)
+  });
 
   function settleStart(outcome: "started" | "declined"): void {
     const callback = startSettlementRef.current;
@@ -191,11 +206,13 @@ export function usePolishPipeline({
     const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
     const resumeScope = buildResumePolishScope(editedResume, polishIds, contextIds);
     const scopedResumeText = resumePolishScopeToText(resumeScope);
-    if (!flattenResumeTargets(resumeScope).length || resumePolishScopeToText(resumeScope, true).trim().length < 40) {
+    if (!flattenResumeTargets(resumeScope).length) {
       setPolishStatus("Set at least one editable resume section to Polish.");
       return null;
     }
-    return { resumeScope, scopedResumeText, inputFingerprint: inputFingerprintRef.current };
+    const documentGeneration = getDocumentGeneration();
+    const sourceConcerns = currentResumeConcerns(previousResult, flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])), documentGeneration);
+    return { resumeScope, scopedResumeText, inputFingerprint: inputFingerprintRef.current, documentGeneration, sourceConcerns };
   }
 
   async function runProposal(
@@ -216,6 +233,8 @@ export function usePolishPipeline({
           resumeScope: context.resumeScope,
           jobText: jobDescription,
           honestContext: requestHonestContext,
+          sourceWarnings: context.sourceConcerns.length
+            ? ["Some current resume wording came from earlier generated edits with unresolved evidence concerns. Candidate-supplied text is not independently verified; check every claim against the original supplied sources."] : undefined,
           customInstructions: customInstructionsFor("resume-polish"),
           boldBulletKeywords
         }),
@@ -228,15 +247,28 @@ export function usePolishPipeline({
       if (!data || data.omittedTargetCount > flattenResumeTargets(context.resumeScope).length) {
         throw new ApiError("Resume Polish returned an invalid outcome", 422);
       }
-      const suggestions = proposalSuggestions(data, context.resumeScope);
+      const suggestions = proposalSuggestions(data, context.resumeScope).map((suggestion) => {
+        const prior = context.sourceConcerns.find((concern) => sameProposalTarget(concern.target, suggestion.target));
+        return prior ? { ...suggestion, warnings: [...(suggestion.warnings ?? []), "Earlier wording in this field had unresolved evidence concerns; editing or repeating Polish does not verify it.", ...prior.warnings] } : suggestion;
+      });
       if (data.status === "PROPOSAL" && !suggestions.length) {
         throw new ApiError("Resume Polish returned no usable proposal edits", 422);
       }
       const analysis = analyzeResumeText(currentResumeText || context.scopedResumeText, jobDescription);
+      const terminology = jobTerminology(jobDescription);
+      const supportedText = flattenResumeTargets(context.resumeScope)
+        .filter((target) => !context.sourceConcerns.some((concern) => sameProposalTarget(concern.target, target.target)))
+        .map((target) => target.currentText).join("\n");
       setResult({
         ...analysis,
+        terminology: { ...terminology, inputKey: terminologyInputKey,
+          terms: terminology.terms.filter(({ keyword }) => affirmativeTerm(supportedText, keyword)) },
         proposalBaselineText: currentResumeText || context.scopedResumeText,
         source: "ai",
+        runId: crypto.randomUUID(),
+        documentGeneration: context.documentGeneration,
+        sourceConcerns: context.sourceConcerns,
+        warnings: [...(data.warnings ?? []), ...(context.sourceConcerns.length ? ["Some current resume fields retain earlier evidence concerns; acceptance and repeated Polish are not verification."] : [])],
         polishOutcome: data.status,
         advice: data.advice,
         adviceStale: false,
@@ -249,14 +281,14 @@ export function usePolishPipeline({
       const note = data.status === "PROPOSAL"
         ? `${suggestions.length} edit${suggestions.length === 1 ? "" : "s"} ready`
         : data.status === "NO_CHANGES"
-          ? "No safe material changes suggested"
+          ? "No material changes suggested"
           : "Suggestions withheld; resume unchanged";
       setPolishProgress(data.status === "WITHHELD"
         ? {
             polish: {
               status: "failed",
               errorHeadline: "Suggestions withheld",
-              error: "The generated edits could not be verified. Your resume is unchanged."
+              error: "No usable edits were returned. Your resume is unchanged."
             }
           }
         : {
@@ -397,6 +429,7 @@ export function usePolishPipeline({
   }
 
   return {
+    terminologyInputKey,
     isPolishStarting,
     isPolishing,
     polishProgress,

@@ -538,167 +538,47 @@ try {
   assert.equal(result.coverLetterText.includes("Software Engineer"), true);
   assert.equal(result.coverLetterText.includes("["), false);
 
-  // A slip is repaired silently, and the repair prompt carries the reason.
-  resetProvider([
-    {
-      bodyParagraphs: [
-        { text: `${authoredSentence}`, evidenceIds: ["source_letter"], slotIds: [] },
-        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-      ],
-    },
-    validOutput,
-  ]);
+  // A technical shape defect gets the existing single repair.
+  resetProvider([{ bodyParagraphs: [] }, validOutput]);
   const repaired = await tailorCoverLetter(common);
-  assert.equal(providerCalls, 2, "one automatic repair, never more");
+  assert.equal(providerCalls, 2);
   assert.equal(repaired.repaired, true);
-  assert.match(capturedPrompts[1], /Your previous response was rejected/);
-  assert.match(capturedPrompts[1], /Name the exact role/);
 
-  // Two failures keep the candidate's existing letter rather than escalating
-  // into an evidence-planning workflow.
-  resetProvider([
-    {
-      bodyParagraphs: [
-        { text: groundedBody, evidenceIds: ["resume:invented"], slotIds: [] },
-        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-      ],
-    },
-  ]);
-  await assertUserSafeError(
-    tailorCoverLetter(common),
-    422,
-    /evidence checks/,
-    "an unrepairable draft never reaches the editor",
-    (error) => {
-      assert.equal(error.repairAttempted, true);
-      assert.equal(error.issues[0].code, "unknown_evidence_reference");
-      assert.doesNotMatch(JSON.stringify(error.issues), /resume:invented/);
-    },
-  );
-  assert.equal(providerCalls, 2, "failure costs at most two requests");
+  resetProvider([{ bodyParagraphs: [] }]);
+  await assertUserSafeError(tailorCoverLetter(common), 422, /technically usable/,
+    "unusable structure remains blocking");
+  assert.equal(providerCalls, 2);
 
-  // Candidate claims must be grounded even when the JD names the technology.
-  resetProvider([
-    {
-      bodyParagraphs: [
-        {
-          text: `I am applying for the Software Engineer role at Acme. I have run Kubernetes clusters in production for three years.`,
-          evidenceIds: [evidence[0].id],
-          slotIds: [],
-        },
-        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-      ],
-    },
-  ]);
-  await assertUserSafeError(
-    tailorCoverLetter({
-      ...common,
-      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
-    }),
-    422,
-    /evidence checks/,
-    "an ungrounded JD skill claim fails closed",
-    (error) => {
-      assert.equal(error.repairAttempted, true);
-      assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
-      assert.equal(error.issues.some((issue) => issue.code === "unsupported_number"), true);
-    },
-  );
-
-  // An employer-led sentence can still make an implied claim about the
-  // candidate. The company subject must not exempt its experience predicate
-  // from the same grounding gates as an explicit first-person claim.
-  resetProvider([
-    {
-      bodyParagraphs: [
-        {
-          text:
-            `I am applying for the Software Engineer role at Acme. ` +
-            `Acme's Kubernetes environment aligns with extensive hands-on production experience. ${authoredSentence}`,
-          evidenceIds: [evidence[0].id],
-          slotIds: [],
-        },
-        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-      ],
-    },
-  ]);
-  await assertUserSafeError(
-    tailorCoverLetter({
-      ...common,
-      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
-    }),
-    422,
-    /evidence checks/,
-    "an employer-led sentence cannot hide an implied candidate skill claim",
-    (error) => {
-      assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
-    },
-  );
-
-  // The grounding boundary must fail closed for employer-led paraphrases, not
-  // only for a finite list of comparison verbs. Each sentence still assigns
-  // unsupported Kubernetes production experience to the candidate.
-  for (const impliedCandidateClaim of [
-    "Acme's Kubernetes environment is a natural fit for extensive production experience.",
-    "Acme's Kubernetes platform would be strengthened by deep production experience.",
+  // Independently specified concern fixtures retain exact text and never repair.
+  for (const fixture of [
+    { text: authoredSentence, ids: ["source_letter"], warning: /exact prepared role/ },
+    { text: groundedBody, ids: ["resume:invented"], warning: /cited evidence/ },
+    { text: "I am applying for the Software Engineer role at Acme. I have run Kubernetes clusters in production for three years.", ids: [evidence[0].id], warning: /Kubernetes/, number: true },
+    { text: "I am applying for the Software Engineer role at Acme. Acme's Kubernetes environment aligns with extensive hands-on production experience.", ids: [evidence[0].id], warning: /Kubernetes/ },
+    { text: "I am applying for the Software Engineer role at Acme. Acme's Kubernetes environment is a natural fit for extensive production experience.", ids: [evidence[0].id], warning: /Kubernetes/ },
+    { text: "I am applying for the Software Engineer role at Acme. Acme's Kubernetes platform would be strengthened by deep production experience.", ids: [evidence[0].id], warning: /Kubernetes/ },
+    { text: "I am applying for the Software Engineer role at Acme. [Referral name]", ids: [], warning: /unresolved template/ }
   ]) {
-    resetProvider([
-      {
-        bodyParagraphs: [
-          {
-            text:
-              `I am applying for the Software Engineer role at Acme. ` +
-              `${impliedCandidateClaim} ${authoredSentence}`,
-            evidenceIds: [evidence[0].id],
-            slotIds: [],
-          },
-          { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-        ],
-      },
-    ]);
-    await assertUserSafeError(
-      tailorCoverLetter({
-        ...common,
-        jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
-      }),
-      422,
-      /evidence checks/,
-      "an unfamiliar employer-led paraphrase cannot bypass candidate grounding",
-      (error) => {
-        assert.equal(error.issues.some((issue) => issue.code === "unsupported_job_term"), true);
-      },
-    );
+    resetProvider([{ bodyParagraphs: [{ text: fixture.text, evidenceIds: fixture.ids, slotIds: [] }] }]);
+    const warned = await tailorCoverLetter({ ...common,
+      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
+      employerContext: [{ fact: "Acme runs Kubernetes across its platform.", source: "https://acme.example" }]
+    });
+    assert.equal(warned.status, "ready");
+    assert.equal(warned.bodyParagraphs[0].text, fixture.text);
+    assert.match(warned.warnings.join(" "), fixture.warning);
+    if (fixture.number) assert.match(warned.warnings.join(" "), /three years/);
+    assert.equal(providerCalls, 1, "content concerns never dispatch repair");
+    assert.equal(warned.repaired, undefined);
+    if (fixture.ids.includes("resume:invented")) assert.deepEqual(warned.bodyParagraphs[0].evidenceIds, []);
   }
 
-  // Public employer research may support facts about the company, but it must
-  // never make the same technology look like candidate evidence.
-  resetProvider([
-    {
-      bodyParagraphs: [
-        {
-          text: `I am applying for the Software Engineer role at Acme. I have run Kubernetes clusters in production.`,
-          evidenceIds: [evidence[0].id],
-          slotIds: [],
-        },
-        { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
-      ],
-    },
-  ]);
-  await assertUserSafeError(
-    tailorCoverLetter({
-      ...common,
-      jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
-      employerContext: [
-        {
-          fact: "Acme runs Kubernetes across its platform.",
-          source: "https://www.acme.example/engineering",
-        },
-      ],
-    }),
-    422,
-    /evidence checks/,
-    "employer research never widens candidate grounding",
-  );
+  for (const unsafe of ["<script>alert(1)</script>", "x".repeat(3001)]) {
+    resetProvider([{ bodyParagraphs: [{ text: unsafe, evidenceIds: [], slotIds: [] }] }]);
+    await assertUserSafeError(tailorCoverLetter(common), 422, /technically usable/,
+      "unsafe or resource-exceeding content remains blocked");
+    assert.equal(providerCalls, 2);
+  }
 
   // Employer statements from the posting are not candidate claims.
   resetProvider([
@@ -812,9 +692,8 @@ try {
     "POST",
     routeBody({ sourceCoverLetterText: referralBody }),
   );
-  assert.equal(referral.status, 422);
-  assert.equal(referral.payload.privateSlots.length, 1);
-  assert.equal(referral.payload.reasons.length, 1, "one focused question, not a checklist");
+  assert.equal(referral.status, 200);
+  assert.match(referral.payload.warnings.join(" "), /referr/i);
 
   resetProvider([validOutput]);
   const answered = await runHandler(
@@ -844,14 +723,11 @@ try {
       jobText: "Acme needs Kubernetes platform experience for its Software Engineer role.",
     }),
   );
-  assert.equal(blocked.status, 422);
-  assert.equal(blocked.payload.status, "blocked");
-  assert.equal(blocked.payload.reason, "evidence_checks");
-  assert.equal(blocked.payload.repairAttempted, true);
-  assert.equal(blocked.payload.issues[0].code, "unsupported_job_term");
-  assert.equal(blocked.payload.issues[0].unsupportedValue.toLowerCase(), "kubernetes");
-  assert.doesNotMatch(JSON.stringify(blocked.payload.issues), /repairMessage|evidenceIds/);
-  assert.equal("coverLetterText" in blocked.payload, false, "a rejected provider draft never enters the response");
+  assert.equal(blocked.status, 200);
+  assert.equal(blocked.payload.status, "ready");
+  assert.match(blocked.payload.warnings.join(" "), /Kubernetes/);
+  assert.match(blocked.payload.coverLetterText, /Kubernetes/);
+  assert.equal(providerCalls, 1);
 
   assert.equal((await runHandler("POST", routeBody({ jobText: "Short." }))).status, 400);
   assert.equal(

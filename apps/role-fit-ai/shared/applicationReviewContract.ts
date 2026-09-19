@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "./contentWarnings.ts";
 import { applicationDocumentConflicts } from "./applicationReviewConflicts.ts";
 import { analyzeCoverLetterTemplate } from "../src/lib/coverLetterTemplate.ts";
 export const APPLICATION_REVIEW_CODES = [
@@ -47,6 +48,7 @@ export type ApplicationReviewInput = {
   evidence: ApplicationReviewEvidence[];
 };
 export type ApplicationReviewFinding = {
+  warnings?: string[];
   code: (typeof APPLICATION_REVIEW_CODES)[number];
   document: ApplicationReviewDocument;
   anchor: string;
@@ -215,7 +217,12 @@ export function mergeApplicationReviewFindings(
   const findings = [...local];
   for (const finding of incoming) {
     const identity = key(finding);
-    if (seen.has(identity)) continue;
+    if (seen.has(identity)) {
+      const index = findings.findIndex((existing) => key(existing) === identity);
+      const warnings = sanitizeContentWarnings([...(findings[index].warnings ?? []), ...(finding.warnings ?? [])]);
+      if (warnings?.length) findings[index] = { ...findings[index], warnings };
+      continue;
+    }
     seen.add(identity);
     findings.push(finding);
   }
@@ -262,7 +269,12 @@ export function sanitizeApplicationReviewFinding(
     finding.code !== "completeness"
   )
     return null;
-  if (finding.anchor && !doc.includes(finding.anchor)) return null;
+  const warnings = sanitizeContentWarnings(finding.warnings);
+  if (finding.warnings !== undefined && !warnings) return null;
+  const concerns = [...(warnings ?? [])];
+  if ([finding.anchor, finding.message, finding.recovery].some((text) => /<[^>]*>/.test(text))) return null;
+  if (finding.evidenceId !== undefined && (typeof finding.evidenceId !== "string" || finding.evidenceId.length > 120)) return null;
+  if (finding.anchor && !doc.includes(finding.anchor)) concerns.push("Document reference could not be confirmed. Quoted text is unconfirmed.");
   if (finding.sourceExcerpt !== undefined) {
     const source =
       finding.evidenceId === "current_resume" &&
@@ -277,13 +289,20 @@ export function sanitizeApplicationReviewFinding(
                 ?.text;
     if (
       typeof finding.sourceExcerpt !== "string" ||
-      !finding.sourceExcerpt ||
       finding.sourceExcerpt.length > 1000 ||
-      !source?.includes(finding.sourceExcerpt)
+      /<[^>]*>/.test(finding.sourceExcerpt)
     )
       return null;
+    if (!finding.sourceExcerpt || !source?.includes(finding.sourceExcerpt)) concerns.push("Source reference could not be confirmed. Quoted text is unconfirmed.");
   }
-  return finding;
+  return {
+    code: finding.code, document: finding.document, anchor: finding.anchor,
+    message: finding.message, recovery: finding.recovery,
+    dependencies: [...finding.dependencies],
+    ...(finding.evidenceId ? { evidenceId: finding.evidenceId } : {}),
+    ...(finding.sourceExcerpt ? { sourceExcerpt: finding.sourceExcerpt } : {}),
+    ...(concerns.length ? { warnings: sanitizeContentWarnings(concerns) } : {})
+  };
 }
 
 export function sanitizeApplicationReviewResult(
@@ -308,14 +327,10 @@ export function sanitizeApplicationReviewResult(
     value.reviewedDocuments.some((doc) => !actual.includes(doc))
   )
     return null;
-  if (
-    value.findings.some(
-      (finding) => !sanitizeApplicationReviewFinding(finding, input, actual),
-    )
-  )
-    return null;
+  const findings = value.findings.map((finding) => sanitizeApplicationReviewFinding(finding, input, actual));
+  if (findings.some((finding) => !finding)) return null;
   return {
-    findings: value.findings,
+    findings: findings as ApplicationReviewFinding[],
     complete: value.complete && !value.overflow,
     overflow: value.overflow,
     reviewedDocuments: actual,

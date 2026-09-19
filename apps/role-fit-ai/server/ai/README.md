@@ -5,6 +5,14 @@ sanitization for RoleFit's AI stages. The broader loopback and trust boundary is
 documented in [`docs/engineering/ai-server.md`](../../docs/engineering/ai-server.md),
 and contributor rules live in [`AGENTS.md`](AGENTS.md).
 
+## Content warning contract
+
+The [product policy](../../PRODUCT.md#content-and-evidence-warning-policy) keeps
+otherwise usable output with bounded warnings across server, client, and saved
+receipts. Unconfirmed citations remain labelled as unconfirmed. Structure,
+resource, authorization, mutation-target, and freshness protections remain blocking.
+Generation instructions continue to require supplied facts and truthful attribution.
+
 ## Fit Assessment technical contract
 
 This section is the canonical technical specification for Fit Assessment. User-
@@ -28,7 +36,7 @@ declared experience categories retain their evidence source: professional or
 industry requirements are not satisfied by academic, personal, volunteer, or
 open-source work unless the posting accepts those sources. Categories may
 overlap, so their years/counts are never summed and counts never imply duration.
-Rubric v5 first separates main responsibilities and core qualifications from
+The rubric first separates main responsibilities and core qualifications from
 preferred items, logistics, and administrative/form noise, then selects the most
 decision-relevant findings. Existing source and overlap boundaries still prevent
 project evidence from satisfying an explicitly professional source, prevent
@@ -39,8 +47,8 @@ meaningful direct supporting-core evidence stays Stretch when the role-defining
 specialization is unshown. Meaningful transferable core evidence can also support
 Stretch without a direct match; neither allowance promotes a case to Reasonable
 or Strong. Before returning JSON, the provider self-checks every evidence excerpt
-character-for-character; the server remains
-the fail-closed authority for exact anchors, duplicates, and list bounds.
+character-for-character. The server warns on source/overlap concerns while
+enforcing technical shape and resource limits.
 
 The provider selects the verdict before assessing eligibility. Eligibility is
 limited to work authorization, sponsorship/visa, clearance, or legal ability to
@@ -49,50 +57,35 @@ verdict.
 
 ### Structured output and grounding
 
-The response contains one verdict, up to three matches with exact posting and
-resume/candidate-context excerpts, up to three `NOT_SHOWN` gaps with exact
-posting excerpts, and at most one eligibility result. The server retains both
-sides of each accepted match so the UI can show why it counts; exact excerpts
-are trimmed at their outer boundary but never whitespace-rewritten. `STRONG` and `REASONABLE` require at least one accepted direct match. `STRETCH`
-may instead cite transferable candidate evidence in a gap; when it has no direct
-matches, at least one affirmative transferable citation is required. All excerpts
-are bounded to 500 characters and optional notes to 240. The prompt states these
-same limits and shows `{"status":"INSUFFICIENT_JOB_INFORMATION"}` separately from
-the assessed result. In combined Job analysis, that compact object is the
-`fitAssessment` value and does not replace the independent job object. `CHECK` requires an
-exact posting condition; `BLOCKED` additionally requires an exact conflicting
-candidate-context fact, and both accepted anchors remain in the response. The
-accepted verdict maps to fixed public summary copy; model-authored summary text
-is not part of the wire contract.
+The compact response retains one verdict, up to three matches, up to three
+`NOT_SHOWN` gaps, and at most one eligibility result. Excerpts are bounded to
+500 characters and optional notes to 240. Required enums, safe text, bounded
+arrays, and usable structure are validated in both directions. The prompt asks
+for exact posting and candidate excerpts, direct support for Strong/Reasonable,
+and affirmative transferable support for Stretch without a direct match.
 
-`fitAssessment.ts` validates the compact response and source excerpts. Rubric v5
-removes the transient requirement ledger, posting-completeness gate, and
-match-count verdict calculation introduced in v4. The model judges materiality,
-paraphrases, durations, and alternatives. Code checks exact anchors, list bounds,
-duplicates, and focused explicit conflicts such as denied or aspirational evidence
-or clearly personal work cited for an explicitly professional requirement. Fit is
-advisory: tool coverage, responsibility wording, and strength of experience remain
-model judgments, without deterministic word-matching vetoes. Genuine citations do
-not prove semantic support or hiring accuracy. Polish and cover-letter grounding
-remain separate and unchanged. Production is a deployment environment, not employment.
-Personal production deployments can support source-neutral deployment work.
+Source checks produce warnings for unlocated excerpts, repeated/overlapping
+findings, explicit evidence conflicts, unsupported summaries, missing supporting
+findings, and unclear eligibility conflicts. Safe prose and conclusions survive;
+code does not change `BLOCKED` to `CHECK`, remove usable gap details, or replace a
+usable model summary with fixed copy. Fixed summary copy remains the fallback
+when no summary was supplied. Missing candidate citations remain visibly
+unconfirmed. Located excerpts establish location, not semantic truth or hiring
+accuracy. Invalid source navigation is unavailable without disabling use.
 
-Transferable displayed gaps may include compact candidate-source
-metadata. Missing or malformed optional metadata is omitted without dropping the
-gap. `BLOCKED` eligibility needs an explicit related conflict; other exact-anchored
-conditions become `CHECK` without discarding the independent Fit verdict.
-Malformed required evidence or input beyond prompt bounds yields a specific,
-privacy-safe failure message, never a guessed verdict. Invalid structure or
-duplicate findings, unverifiable citations, and retained explicit evidence
-conflicts have distinct static messages; no private text is included. Legacy snapshots retain
-their original prompt provenance and are not revalidated as v5.
+Fit v6 changes evidence handling and optional warning transport, not the rubric's
+verdict meanings or scoring. The model still judges materiality, paraphrases,
+durations, alternatives, and strength of experience. There is no requirement
+ledger, posting-completeness gate, match-count score, or deterministic verdict.
+Production describes a deployment environment, not professional employment.
 
-Prompt clarifications and bug fixes that preserve the assessment criteria and
-accepted output contract remain on v5. A new rubric version is warranted for a
-material change to verdict meanings, evidence policy, or output contract; ordinary
-implementation changes use Git history. Preserve historical version labels rather
-than reusing them. The v5 clarification reconciles Limited and the adjacent-category
-tie-breaker with Stretch's existing allowance for meaningful transferable evidence.
+Technically unusable responses and input beyond prompt bounds yield a specific,
+privacy-safe failure, never a guessed verdict. Saved Fit/job receipts preserve
+optional warnings. Legacy records retain their original provenance and remain
+readable without implied verification. Older builds may reject newly saved
+warning metadata; no downgrade guarantee is provided. Preserve historical prompt
+versions. Future material evidence-policy or output-contract changes require new
+provenance; implementation-only fixes use Git history.
 
 ### Request identity and lifecycle
 
@@ -127,8 +120,9 @@ and one shared URL/paste/extension/Retry post-acquisition coordinator.
 Rejected Fit responses carry an optional, fixed-copy `fitAssessmentError` through
 both paths. The current session shows that reason instead of discarding it for
 a generic message. It contains no provider prose or source excerpts and is not
-saved in an assessment snapshot. Evidence rejection remains advisory and never
-creates a verdict or starts automatic Polish.
+saved in an assessment snapshot. These errors report technical failure. Usable
+results carry content warnings and remain eligible for configured automatic
+Polish under the existing thresholds and fresh preparation token.
 
 ### Security and verification
 
@@ -142,6 +136,9 @@ Required offline and opt-in live checks are listed in
 [`docs/engineering/testing.md`](../../docs/engineering/testing.md) and the scoped
 [`AGENTS.md`](AGENTS.md).
 
+The historical v5 receipts below predate the v6 warning policy and do not
+validate its runtime behavior.
+
 The 2026-09-08 v5 boundary comparison used eight synthetic cases with independently
 agent-authored expectations fixed before output, three repetitions per wording,
 Codex CLI / GPT-5.6 Sol / medium, and no unreadable-output retries. All 24 baseline
@@ -149,8 +146,8 @@ and 24 clarified-prompt results validated and met their allowed outcomes, with
 identical verdicts across all paired runs. One case explicitly allowed either
 Limited or Stretch. This supports removing the wording contradiction; it does
 not demonstrate improved accuracy or human-adjudicated correctness. Exact prompt
-hashes and synthetic receipts remain local; production rules match the evaluated
-clarification's SHA-256 `8a39181f38b5844d59e71ec1e9a9b7e59d91a82631acf6657a86c30c331d5f76`.
+hashes and synthetic receipts remain local; that historical evaluated prompt had
+SHA-256 `8a39181f38b5844d59e71ec1e9a9b7e59d91a82631acf6657a86c30c331d5f76`.
 
 Six combined-path validation cases repeated three times produced 18 valid results
 and 17/18 agreement with the frozen expectations. One teaching-transfer result
@@ -175,9 +172,12 @@ Local checks retain empty-material, placeholder, target, and narrow explicit
 cross-document responsibility/date findings even when provider work fails.
 One selected-provider request adds bounded source-linked findings. This route
 disables unreadable-output retries; other stages retain their existing policy.
-Invalid findings, missing provenance, overflow beyond 12 findings, and failed
-requests cannot produce a complete review. Candidate revisions require candidate
-sources; posting evidence supports employer facts. Current-document references
+Malformed findings, warnings, overflow beyond 12 findings, and failed requests
+cannot produce a complete review. Safe findings with missing or unconfirmed
+provenance remain visible with warnings, including their original messages and
+recovery advice; source navigation is enabled only for located references.
+Candidate revisions require candidate sources; posting evidence supports employer
+facts. Current-document references
 may identify conflicts but never independently establish truth. Recovery is editorial
 advice, not replacement document text; numbers in instructions or references to
 missing skills are not candidate claims. Explicit first-person candidate claims
@@ -210,13 +210,19 @@ ordinary duties retain concise model wording rather than duplicate whole clauses
 Cover-letter factual guards use paragraph-cited sources and explicitly named entry
 identity in one typed factual pass; employer facts use the posting. Explicit prior
 affiliations need candidate evidence, while generic acronyms are not employer names.
-Neither letters nor Resume Polish require hidden sentence bindings or literal proof of paraphrases. Only explicit factual
-conflicts, identity/format defects, and placeholders trigger withholding or repair.
+Neither letters nor Resume Polish require hidden sentence bindings or literal
+proof of paraphrases. Explicit factual conflicts and safe placeholders produce
+warnings. Only technical structure, identity, markup, and resource failures
+withhold operations;
+Cover may repair technically unusable output once.
 Resume Polish protects actual education/credential records, enumerates all bounded
 targets, and sends selected entry evidence once alongside target references. The
 existing wider resume context still supports Skills and Summary. Optional structural
 advice keeps bounded source references and never becomes a replacement.
-Application-question behavior remains unchanged.
+Application answers and role descriptions preserve content concerns with item
+warnings. Question/role identity binding stays strict, while a warned item does
+not erase its usable siblings. Earlier Resume source uncertainty accompanies
+Cover and answer requests/results without becoming fresh source verification.
 
 `evidence-policy-probes.mjs` reports synthetic label provenance, adversarial and
 valid counts, false acceptance/rejection, and errors by dimension. Labels are

@@ -1,3 +1,5 @@
+import { ContentWarnings } from "../../components/ContentWarnings";
+import { jobAnalysisWarningMessages } from "../../../shared/jobAnalysisWarnings";
 import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Files, History } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import { NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
@@ -158,6 +160,7 @@ export function TrackerInspector({
         <ApplicationFitSummary
           label={verdict?.label ?? "Not checked"}
           tone={verdict?.tone ?? "neutral"}
+          warnings={selected.fitAssessment?.result.warnings}
           summary={selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
         />
         {fitAssessmentMeta ? <p className="application-inspector-fit__meta">{fitAssessmentMeta}</p> : null}
@@ -315,6 +318,8 @@ export function TrackerInspector({
         </section>
       ) : null}
 
+      {selected.jobWarnings?.length ? <p className="prepare-note">Warnings describe generated wording. Later edits do not establish verification.</p> : null}
+      <ContentWarnings warnings={jobAnalysisWarningMessages(selected.jobWarnings)} />
       {selected.roleDescription ? (
         <section className="side-section">
           <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Role summary</p>

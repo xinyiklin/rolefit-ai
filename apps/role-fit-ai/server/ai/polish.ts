@@ -49,7 +49,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       });
       return;
     }
-    if (!resumeScope.sections.length || editableText.length < 40 || jobText.trim().length < 40) {
+    if (!resumeScope.sections.length || !editableText.trim() || jobText.trim().length < 40) {
       sendJson(res, 400, {
         error: "Select at least one editable resume section and add a job description before polishing."
       });

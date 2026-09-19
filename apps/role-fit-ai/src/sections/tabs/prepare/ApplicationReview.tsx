@@ -1,3 +1,4 @@
+import { ContentWarnings } from "../../../components/ContentWarnings";
 import { useState } from "react";
 import type { useApplicationReview } from "../../../hooks/useApplicationReview";
 import { AiWorkflowProgress } from "../../AiWorkflowProgress";
@@ -70,11 +71,12 @@ export function ApplicationReview({
             {result.findings.map((finding, index) => (
               <li key={index}>
                 <strong>{finding.message}</strong>
+                <ContentWarnings warnings={finding.warnings} />
                 {review.findingStale(finding) ? <small>Changed since review</small> : null}
                 <p>{finding.recovery}</p>
                 {finding.anchor || finding.sourceExcerpt ? (
                   <details>
-                    <summary>Source details</summary>
+                    <summary>{finding.warnings?.some((warning) => /reference could not be confirmed/i.test(warning)) ? "Unconfirmed references" : "Source details"}</summary>
                     {finding.anchor ? <blockquote>{finding.anchor}</blockquote> : null}
                     {finding.sourceExcerpt ? (
                       <blockquote>{finding.sourceExcerpt}</blockquote>
@@ -103,7 +105,7 @@ export function ApplicationReview({
           </p>
           <ul>
             {review.previous.result.findings.map((finding, index) => (
-              <li key={index}>{finding.message}</li>
+              <li key={index}>{finding.message}<ContentWarnings warnings={finding.warnings} /></li>
             ))}
           </ul>
         </details>

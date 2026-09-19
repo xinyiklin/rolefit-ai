@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { useEffect, useRef, useState } from "react";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { classifyFailure, ApiError } from "../lib/failures";
@@ -16,6 +17,7 @@ type UseApplicationAnswersArgs = {
   jobDescription: string;
   jobUrl: string;
   honestContext: string;
+  sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
   providerReady: boolean;
@@ -31,6 +33,7 @@ export function useApplicationAnswers({
   jobDescription,
   jobUrl,
   honestContext,
+  sourceWarnings,
   customInstructions,
   aiRequest,
   providerReady,
@@ -73,12 +76,13 @@ export function useApplicationAnswers({
     jobDescription,
     jobUrl,
     honestContext,
+    sourceWarnings,
     customInstructions,
     aiRequest: buildStageRequestFields(aiRequest)
   });
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
-  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl });
+  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl, honestContext, customInstructions, sourceWarnings });
   const previousContentFingerprintRef = useRef(contentFingerprint);
 
   // Any request-input change invalidates only an IN-FLIGHT generation. Completed
@@ -106,7 +110,7 @@ export function useApplicationAnswers({
     if (previousContentFingerprintRef.current === contentFingerprint) return;
     previousContentFingerprintRef.current = contentFingerprint;
     if (!answersResult) return;
-    setAnswersStatus("Resume or job changed. Existing answer drafts were kept; review them or generate a fresh set.");
+    setAnswersStatus("Resume, job, or drafting context changed. Existing warnings describe the earlier inputs; review the drafts or generate a fresh set.");
     setAnswersProgress({
       status: "stopped",
       errorHeadline: "Draft inputs changed",
@@ -176,6 +180,7 @@ export function useApplicationAnswers({
           jobText: jobDescription,
           honestContext,
           customInstructions,
+          sourceWarnings,
           questions: submittedQuestions,
           includeRoleDescriptions,
           roleEvidence
@@ -186,8 +191,8 @@ export function useApplicationAnswers({
       if (!isCurrent()) return;
       if (!response.ok) throw new ApiError(data.error ?? "Could not generate answers.", response.status);
       setAnswersResult({
-        answers: Array.isArray(data.answers) ? data.answers : [],
-        roleDescriptions: Array.isArray(data.roleDescriptions) ? data.roleDescriptions : []
+        answers: Array.isArray(data.answers) ? data.answers.map((item: Record<string, unknown>) => ({ ...item, warnings: sanitizeContentWarnings(item.warnings) })) : [],
+        roleDescriptions: Array.isArray(data.roleDescriptions) ? data.roleDescriptions.map((item: Record<string, unknown>) => ({ ...item, warnings: sanitizeContentWarnings(item.warnings) })) : []
       });
       const count = Array.isArray(data.answers) ? data.answers.length : 0;
       setAnswersStatus(

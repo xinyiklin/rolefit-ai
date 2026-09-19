@@ -140,3 +140,12 @@ await assert.rejects(
 );
 
 console.log("AI Job analysis request evals passed");
+
+const jobWarnings = [{ field: "roleDescription", message: "Not supported by provided evidence." }];
+nextResponse = response({ source: "ai", roleDescription: "Generated uncertain role context.", jobWarnings });
+const summaryOnly = await analyzeJobPosting(POSTING);
+assert.equal(summaryOnly.source, "ai", "usable summary cannot be replaced by local fallback");
+assert.equal(summaryOnly.extracted.roleDescription, "Generated uncertain role context.");
+assert.deepEqual(summaryOnly.extracted.jobWarnings, jobWarnings);
+nextResponse = response({ source: "ai", title: "Generated uncertain title.", jobWarnings: [{ field: "title", message: "Not supported by provided evidence." }] });
+assert.equal((await analyzeJobPosting(POSTING)).source, "ai", "usable scalar remains reviewable");

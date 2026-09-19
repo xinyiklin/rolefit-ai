@@ -37,17 +37,17 @@ for (const [job, resume] of [
   ["Python experience.", "I am currently learning Python."],
   ["Professional Python experience.", "Personal Python experience."],
   ["Professional Python experience required; personal projects do not count.", "Personal Python projects."]
-]) assert.equal(assess(job, resume), null, "explicit evidence conflicts remain rejected");
-assert.equal(sanitizeFitAssessmentResponse({
+]) assert.ok(assess(job, resume)?.warnings?.length, "explicit evidence conflicts remain detected and advisory");
+assert.ok(sanitizeFitAssessmentResponse({
   verdict: "STRONG", matches: [{ jobExcerpt: "Python experience.", candidateSource: "RESUME", candidateExcerpt: "used Python" }], gaps: []
-}, { jobText: "Python experience.", resumeText: "I have never used Python." }), null);
+}, { jobText: "Python experience.", resumeText: "I have never used Python." })?.warnings?.length);
 
 const transferableGap = { jobExcerpt: "Build Kubernetes deployments.", status: "NOT_SHOWN", relationship: "transferable", candidateSource: "RESUME", candidateExcerpt: "Built Docker deployments." };
 const transferable = assess(transferableGap.jobExcerpt, transferableGap.candidateExcerpt, { verdict: "STRETCH", matches: [], gaps: [transferableGap] });
 assert.equal(transferable?.verdict, "STRETCH");
 assert.equal(transferable.gapDetails?.[0].relationship, "transferable");
 assert.equal(sanitizeFitAssessment(transferable)?.verdict, "STRETCH", "browser and saved readers accept the same compact result");
-assert.equal(assess(transferableGap.jobExcerpt, transferableGap.candidateExcerpt, { verdict: "STRONG", matches: [], gaps: [transferableGap] }), null);
+assert.ok(assess(transferableGap.jobExcerpt, transferableGap.candidateExcerpt, { verdict: "STRONG", matches: [], gaps: [transferableGap] })?.warnings?.length);
 
 for (const [relationship, evidence] of [
   ["contradictory", "I have used Python."],
@@ -57,8 +57,9 @@ for (const [relationship, evidence] of [
   const gap = { jobExcerpt: "Python experience.", status: "NOT_SHOWN", relationship, candidateSource: "RESUME", candidateExcerpt: evidence };
   const result = assess(gap.jobExcerpt, evidence, { verdict: "LIMITED", matches: [], gaps: [gap] });
   assert.deepEqual(result?.gaps, [gap.jobExcerpt], "bad optional evidence must preserve the gap");
-  assert.equal(result.gapDetails, undefined);
-  assert.equal(assess(gap.jobExcerpt, evidence, { verdict: "STRETCH", matches: [], gaps: [gap] }), null, "denied evidence cannot authorize transferable-only Stretch");
+  assert.equal(result.gapDetails[0].candidateExcerpt, evidence, "safe uncertain explanation is not dropped");
+  assert.equal(assess(gap.jobExcerpt, evidence, { verdict: "STRETCH", matches: [], gaps: [gap] })?.verdict, "STRETCH", "uncertain evidence does not silently rewrite the model verdict");
+  if (relationship === "transferable") assert.ok(result.warnings?.length, "negation still detected");
 }
 
 const insufficient = sanitizeFitAssessmentResponse({ status: "INSUFFICIENT_JOB_INFORMATION" }, { jobText: "Engineer at Synthetic Company. Apply now.", resumeText: "Built Python services." });
@@ -72,5 +73,6 @@ const condition = "No sponsorship is available unless you hold a STEM degree.";
 const context = "I require sponsorship and hold a STEM degree.";
 const eligible = sanitizeFitAssessmentResponse({ verdict: "LIMITED", matches: [], gaps: [], eligibility: { status: "BLOCKED", jobExcerpt: condition, candidateExcerpt: context } }, { jobText: `Build Python services.\n${condition}`, resumeText: "Rust projects.", candidateContext: context });
 assert.equal(eligible?.verdict, "LIMITED");
-assert.equal(eligible.eligibility?.status, "CHECK", "unproven eligibility does not discard the independent assessment");
+assert.equal(eligible.eligibility?.status, "BLOCKED", "unproven eligibility does not rewrite the model finding");
+assert.ok(eligible.warnings?.length);
 console.log("Compact Fit refinement and explicit-conflict probes passed");

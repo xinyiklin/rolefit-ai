@@ -435,8 +435,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 - **Automation and assessment boundaries:** keep Fit Assessment and Proposal
   Validation visibly and architecturally distinct. Fit Assessment is the
   reusable advisory about how the selected resume and candidate context align
-  with the prepared role at the time it runs. Proposal Validation is the
-  fail-closed evidence gate over proposed changes before they can be accepted.
+  with the prepared role at the time it runs. Proposal Validation checks content
+  and safe operations. Evidence concerns are advisory before acceptance; technical
+  guards preserve operation safety.
   Polish also instructs the selected model to silently audit its own evidence
   and output before returning; that internal pass is not a third user-facing
   workflow. No layer substitutes for another or turns its result into a numeric
@@ -541,7 +542,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   the working pane and the 392px Fit/activity rail scroll independently; at
   and below 1080px they stack into one natural modal scroll. Fit remains a plain
   categorical advisory: the one-word Limited / Stretch / Reasonable / Strong
-  verdict stays left while the fixed summary sits right in one
+  verdict stays left while the summary sits right in one
   quiet tinted block, with no score, ring, confidence, or implied gauge. Delete sits apart from Cancel/Close and Save changes, and closing
   edited fields confirms before discarding them. It labels its handoff Edit
   preparation for every stored record. Prepare uses one flat persistent banner
@@ -655,10 +656,10 @@ editor), each row carries Undo, and each names the section and entry it edits so
 the list reads on its own. A decided row de-emphasizes so the queue shows what is
 still waiting. Do not give either document a second commit location, a third
 verb, or a private way of showing what changed.
-If that draft fails the evidence checks after repair, the rail shows one flat
-issue list with the exact bounded claim and its recovery action. A collapsed
-Cover letter rail adds the bounded issue count to the icon tab and accessible
-label; it does not badge ordinary readiness gaps or provider errors.
+A usable draft keeps its proposal controls and displays compact content warnings
+before acceptance. Technically unusable responses show bounded recovery issues;
+Cover retries structure once, without repairing content-only concerns. Do not badge ordinary readiness gaps or provider errors as evidence
+warnings.
 Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Resume and Cover letter use the same
@@ -744,6 +745,19 @@ register, not a CRM grid.
 One-sentence audit test: if a screen would look at home in a SaaS template
 gallery (filled pills, stat cards, banner CTAs), it has left the drafting
 desk; rebuild it from hairlines, paper tones, and ledger vocabulary.
+
+### Content warnings
+
+Follow the [system-wide product policy](PRODUCT.md#content-and-evidence-warning-policy).
+Use one compact warning pattern beside affected generated content or assessment
+findings, visible before acceptance: **Not supported by provided evidence**, with
+a short specific reason only when useful. Keep existing Accept, Edit, and Reject
+controls and downstream actions available. Do not require dismissal, added
+evidence, confirmation, or a separate review step. Accepting never changes a
+warning into a Verified label. Unknown citations remain unconfirmed text without
+source navigation/highlighting while use stays enabled. Safe placeholders,
+shortness, and content-quality issues are warnings; invalid edit targets and
+other technical failures retain blocking recovery. Reuse the current rail, findings, disclosures, and tokens.
 
 ### Final application review and evidence disclosures
 

@@ -21,6 +21,7 @@ function normalize(value: string): string {
 
 export function resumeProposalKey(result: PolishedResume | null): string {
   return JSON.stringify({
+    runId: result?.runId ?? "",
     outcome: result?.polishOutcome ?? "",
     changes: (result?.suggestedChanges ?? []).map((suggestion) => ({
       targetId: suggestion.id,

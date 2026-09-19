@@ -53,6 +53,7 @@ export function ResumeWorkflowRail({
   onStop,
   onHighlight
 }: ResumeWorkflowRailProps) {
+  proposalStale = proposalStale || decisions.documentReplaced;
   const proposalResult = result?.polishOutcome ? result : null;
   const target = [jobTarget?.role, jobTarget?.company].filter(Boolean).join(" at ") || "Resume";
   const ready = resumeReady && jobReady && resumePolishProviderReady && polishSectionCount > 0;

@@ -78,9 +78,9 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
     ])
   );
   return evidenceIds
-    .map((id) => id === "source_letter" ? "Current letter" : (labels.get(id) ?? "Supplied evidence"))
+    .map((id) => id === "source_letter" ? "Current letter" : (labels.get(id) ?? "Unconfirmed source reference"))
     .filter((label, index, values) => values.indexOf(label) === index)
-    .join(" · ");
+    .join(" · ") || "Source reference could not be confirmed";
 }
 
 function issueRecovery(issue: CoverLetterIssue): string {
@@ -126,13 +126,7 @@ export function CoverLetterReview({
   const { resolved } = preflight;
   const target = [resolved.role, resolved.company].filter(Boolean).join(" at ") || "Cover letter";
   const ready = preflight.canTailor && resumeReady && jobReady && providerReady;
-  // The missing fields render right below this row with their own reasons, so it
-  // counts them instead of repeating the first reason verbatim. Template slot
-  // questions have no inline field, so those still speak for themselves.
-  const fieldCount = preflight.missingFields.length;
-  const slotBlocker = preflight.blockers[fieldCount];
-  const detailsBlocked = slotBlocker
-    ?? (fieldCount > 0 ? `${fieldCount} ${fieldCount === 1 ? "field" : "fields"} below` : "Complete the fields");
+  const detailsBlocked = preflight.blockers[0] ?? "Prepare the job target";
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
@@ -151,7 +145,7 @@ export function CoverLetterReview({
     proposalSuperseded: Boolean(proposal?.stale)
   });
   const description = isTailoring
-    ? "Creating a grounded cover-letter proposal from your evidence."
+    ? "Creating a cover-letter proposal from your supplied evidence."
     : failure || proposal?.stale
         ? ""
         : workflow.state === "stale" && workflow.staleReason === "proposal-superseded"
@@ -229,7 +223,7 @@ export function CoverLetterReview({
       description={description}
       checks={proposal || appliedResult || failure || isTailoring ? [] : checks}
       failure={failure ? {
-        title: blockedFailure ? "Evidence check failed" : (errorFailure?.headline ?? "Polish failed"),
+        title: blockedFailure ? "Draft could not be used" : (errorFailure?.headline ?? "Polish failed"),
         message: blockedFailure
           ? `RoleFit rejected ${blockedFailure.issues.length} ${blockedFailure.issues.length === 1 ? "draft issue" : "draft issues"}${blockedFailure.repairAttempted ? " after one repair attempt" : ""}. Your current letter is unchanged.`
           : "No changes were applied. Your current letter is unchanged.",
@@ -245,7 +239,7 @@ export function CoverLetterReview({
         <section className="cover-letter-proposal" aria-label="Proposed replacement">
           <div className="cover-letter-proposal__meta">
             <span>{proposal.result.coverLetterText.trim().split(/\s+/).length} words</span>
-            {proposal.result.repaired ? <span>Repaired once</span> : <span>Passed first check</span>}
+            {proposal.result.repaired ? <span>Structure repaired once</span> : null}
           </div>
           <ProposalFeedbackList title="Check before using" items={proposal.result.warnings} tone="warning" />
           {proposal.stale ? (
@@ -289,7 +283,7 @@ export function CoverLetterReview({
               of "Paragraph N" rows with no statement of what they were. The
               title now matches the other feedback headings in this rail. */}
           <section className="cover-letter-proposal__evidence">
-            <h3>Where each paragraph came from</h3>
+            <h3>Sources cited by each paragraph</h3>
             <dl>
               {proposal.result.bodyParagraphs.map((paragraph, index) => (
                 <div key={`${index}-${paragraph.text.slice(0, 24)}`}>
@@ -305,21 +299,23 @@ export function CoverLetterReview({
             </p>
           ) : null}
         </section>
-      ) : appliedResult && canRestore ? (
+      ) : appliedResult ? (
         <section className="cover-letter-applied" aria-label="Applied letter summary">
           <p>{words} words · {pageCount === 1 ? "1 page" : `${pageCount || 0} pages`}</p>
           {pageCount > 1 ? <p>Runs {pageCount} pages — shorten before exporting.</p> : null}
+          {appliedResult.warnings.length > 0 && currentText !== appliedResult.coverLetterText ? <p>Warnings refer to the earlier accepted wording.</p> : null}
           {appliedResult.warnings.map((warning) => <p key={warning}>{warning}</p>)}
         </section>
       ) : (
         <>
+          <ProposalFeedbackList title="Check before using" items={preflight.warnings ?? []} tone="warning" />
           {preflight.missingFields.length > 0 ? (
             <div className="cover-letter-review__fields">
               {preflight.missingFields.map((field) => {
                 const id = `cover-letter-detail-${field.key}`;
                 return (
                   <label key={field.key} htmlFor={id}>
-                    <span>{field.label}</span>
+                    <span>{field.label}{field.key === "candidate_name" ? " (optional)" : ""}</span>
                     <input
                       id={id}
                       maxLength={FIELD_COPY[field.key].maxLength}
@@ -340,7 +336,7 @@ export function CoverLetterReview({
                 const id = `cover-template-answer-${slot.id}`;
                 return (
                   <label key={slot.id} htmlFor={id}>
-                    <span>{slot.normalizedPrompt}</span>
+                    <span>{slot.normalizedPrompt} (optional)</span>
                     <textarea
                       id={id}
                       rows={2}

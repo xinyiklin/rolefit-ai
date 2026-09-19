@@ -27,6 +27,52 @@ the expected Gatekeeper or SmartScreen warning. The browser remains the only
 working product surface. The public site is a static product/download page,
 never a hosted copy of the workbench.
 
+## Content and evidence warning policy
+
+**Content checks are advisory (2026-09-18).**
+Content and evidence checks inform the user; they do not decide what the user
+may accept. This applies throughout RoleFit: resume tailoring/Polish,
+cover-letter generation/Polish, application answers, role descriptions, Job
+analysis, Fit Assessment, and review feedback.
+
+Keep checks for unsupported claims, missing evidence, attribution, metrics,
+content quality, and ATS terminology. Safe literal placeholders, shortness,
+style, wording, and target-description concerns are advisory when the output is
+otherwise usable. Preserve the output and show a compact warning beside the
+affected suggestion or finding **before acceptance**, such as **Not supported by provided evidence**, with a short
+reason where useful. A failed check means review is needed, not proof of falsity.
+Existing Accept, Edit, and Reject controls remain available; evidence warnings
+alone must not disable applying edits, saving, copying, exporting, or continuing.
+Do not require added evidence, dismissal, another step, or confirmation.
+Acceptance records the user's choice, never system verification.
+
+Keep generation instructions factual and grounded in supplied information. An
+uncertain excerpt or unknown source reference may be retained as unconfirmed
+feedback, but must not be linked to an unrelated source or presented as verified
+support. Disable only invalid source navigation/highlighting, not use or
+acceptance. An invalid mutation target is different: it cannot safely authorize an
+edit. Unsafe markup, unusable response structures, unauthorized changes, invalid
+edit targets, and stale responses applied to the wrong document retain their
+technical protections. Missing required operation inputs and provider failures
+remain distinct from content judgments. Empty or unrenderable documents may
+remain unavailable for an operation; arbitrary word counts, harmless placeholders,
+and missing evidence must not gate otherwise usable documents.
+
+Reuse existing checks, result types, review components, and decision controls,
+adding small optional warning fields only where needed. Do not add a policy
+engine, evidence ledger, approval workflow, confidence score, review dashboard,
+or extra AI analysis stage. Provider defaults, local privacy, Fit's rubric, and
+portable document schemas remain unchanged. ATS terminology improvements are a
+separate workstream governed by this same policy.
+
+Warnings stay attached to the output they describe. Editing labels retained
+concerns as referring to earlier wording; acceptance does not clear uncertainty.
+Saved Fit and prepared-job receipts retain optional warning metadata. Older records
+remain readable without inventing verification; older app versions may reject
+new warning-bearing records, so downgrade compatibility is not guaranteed.
+Known uncertainty from accepted Resume text also accompanies Cover and answer
+requests and results instead of becoming independently verified evidence.
+
 ## Product Purpose
 
 Applications and Analytics show structured loading placeholders while their
@@ -43,8 +89,8 @@ surface: the paired browser extension is primary, with URL fetch and pasted text
 as deliberate fallbacks. Its complete editable brief exposes tracked job facts,
 one role context, responsibilities, required and preferred qualifications,
 technical keywords, seniority and domain signals, benefits, and extraction
-gaps. Resume proposals remain constrained by server-side
-grounding and anti-fabrication checks. Normal Resume Polish is one provider
+gaps. Resume proposals are checked for grounding and fabrication concerns.
+Otherwise usable suggestions retain detected concerns as warnings. Normal Resume Polish is one provider
 operation that stages a proposal for human decisions; oversized documents
 prioritize material, job-relevant fields and disclose the fields outside that
 pass. It does not automatically run a second assessment over edits the user may
@@ -76,28 +122,30 @@ name, role, company, greeting, and sign-off itself, sends the whole candidate
 evidence corpus with the source letter, and lets the model choose which
 experiences and honest-context notes this particular posting warrants. Bracketed
 text in a base variant is a drafting instruction, never candidate evidence.
-Grounding, placeholder rejection, and a single silent repair pass all run on the
-server. A valid result becomes a whole-letter proposal beside the unchanged
-editor; only **Accept proposal** replaces the live document and creates the exact
+Grounding, placeholder, and quality checks run on the server and produce
+warnings alongside usable text. Only technically unusable output receives a
+single repair attempt. A usable result becomes a whole-letter proposal beside the unchanged editor; only **Accept proposal**
+replaces the live document and creates the exact
 one-click Restore baseline. **Discard proposal** performs no document mutation. A
-later resume edit keeps that already-validated proposal reviewable, but warns
+later resume edit keeps that existing proposal reviewable, but warns
 that it was checked against the earlier resume before the user accepts it. A
 changed source letter, job, personal evidence, or polishing instruction still
-requires Polish again before acceptance. A letter that still fails after repair
-is discarded with the current one kept,
-and bounded typed validation issues identify the rejected claim and recovery
-without exposing provider output, repair instructions, or internal evidence ids.
+requires Polish again before acceptance. A letter still technically unusable
+after repair returns bounded issues and leaves the current document untouched.
+Content concerns never trigger a repair or prevent acceptance. Accepted warnings
+remain visible after editing, labelled as referring to the earlier wording;
+Restore remains available only while the editor retains its exact baseline. Neither warnings nor errors expose repair instructions or internal evidence ids.
 An unfinished Guidance prompt never counts as evidence, and spelled-out
 durations receive the same grounding check as digit forms.
 
-The letter asks a question only when a fact genuinely cannot be resolved — a
-missing company, role title, or candidate name, or a template that names a
-private fact such as a referral. A hiring manager's name, a reason for interest,
-which experience to lead with, and tone are never questions: an authored
-greeting supplies a recipient and the company hiring team is always a correct
-fallback. Both editors share
-deterministic typesetting and PDF export, and the same recovery and naming
-behavior: meaningful unsaved edits go to a 24-hour, per-tab recovery entry,
+The prepared role and company remain necessary operation inputs. A missing
+candidate name or private template fact, such as a referral, is advisory;
+optional fields stay editable without gating Polish. An authored greeting
+supplies the recipient, with the company hiring team as the fallback. A reason
+for interest, which experience to lead with, and tone do not introduce another
+question or approval step.
+Both editors share deterministic typesetting and PDF export, and the same
+recovery and naming behavior: meaningful unsaved edits go to a 24-hour, per-tab recovery entry,
 including a cover letter changed only by title or style. Only a reload or
 restored instance of that same tab may offer **Recovery draft available**; a
 fresh tab never adopts another session's entry, and a browser-extension import
@@ -117,7 +165,10 @@ files. Resume always
 owns a real structured editor document: without a saved or opened source it is
 a clean blank page with an editable header anchor, not an empty-state substitute.
 That blank remains valid for editing and strict `.resume` save, but does not
-qualify for PDF export, Polish, or Apply until it contains meaningful evidence.
+qualify for PDF export, Polish, or Apply until it contains meaningful document
+content. Readiness uses renderable content rather than minimum word counts or
+safe-placeholder checks. Empty-document and unrenderable-content protections
+remain independent of evidence verification.
 The product also includes session-local application-question drafts and a
 lightweight application pipeline tracker. Generated answers remain editable and
 copyable in the current preparation, but never create or update a tracker
@@ -268,27 +319,29 @@ Stretch boundary only, meaningful direct evidence for supporting core work stays
 Stretch when the role-defining specialization is unshown. Meaningful transferable
 core experience can also support Stretch; lacking a direct match alone does not
 make it Limited. Neither allowance raises a case to Reasonable or Strong. Before returning,
-the provider must re-check that every finding is copied exactly from its source;
-the server still rejects the entire result when a required anchor is unusable.
+the provider must re-check that every finding is copied exactly from its source.
+The server retains otherwise usable findings with unconfirmed-source or
+evidence warnings when those checks fail. It does not invent a located source
+or silently rewrite the verdict or eligibility conclusion.
 
-Prepare shows the verdict, fixed summary, last-assessed time,
+Prepare shows the verdict, summary, last-assessed time,
 resolved provider/model/reasoning attribution, rubric version, and at most three
-direct matches and three not-shown gaps. Each match keeps the exact posting
-excerpt beside the exact resume or About you evidence that supports it. A Check
-or Blocked eligibility result keeps its exact posting condition, and Blocked
-also keeps the exact conflicting About you fact. Missing evidence is a gap, not
-proof that the candidate is incapable. Strong and Reasonable require at least one direct match. Stretch may instead
-show relevant transferable evidence beside a gap. The model judges fit; source
-checks protect exact excerpts and clear factual conflicts without a hidden
-requirement ledger or deterministic verdict scoring. As an advisory assessment,
+direct matches and three not-shown gaps. Findings retain their returned posting
+and candidate excerpts; unlocated or missing references are labelled unconfirmed.
+The prompt requires direct support for Strong/Reasonable and permits relevant
+transferable evidence beside a gap for Stretch. A usable conclusion that lacks
+that support remains visible with a warning, not a different server verdict.
+Missing evidence is not proof of incapability. Source checks flag exact-excerpt
+and explicit-conflict concerns without a hidden requirement ledger or scoring.
+As an advisory assessment,
 Fit leaves technology coverage and strength of experience to the model; genuine
-citations do not guarantee an accurate judgment. Document-generation safeguards
-remain independent. Unusable required evidence
-fails closed. The result has no numeric score, confidence, visible
+citations do not guarantee an accurate judgment. Evidence concerns follow the
+system-wide warning policy; unsafe operations and unusable response structures
+remain blocking. The result has no numeric score, confidence, visible
 requirement ledger, recommendation, or analytics role, and it never silently
-controls tracker state or workflow. Unusable provider output becomes unavailable rather
-than a guessed result; the deterministic local job brief remains editable and
-manual Polish remains available.
+controls tracker state or workflow. Technically unusable provider output becomes
+unavailable rather than a guessed result; the deterministic local job brief
+remains editable and manual Polish remains available.
 
 Settings > About you may add optional candidate-declared education and
 scheduling facts: a 4.0-scale GPA attached to a declared education level, plus
@@ -312,9 +365,11 @@ no stated employment-eligibility condition needs attention. **Check** means the
 posting states a work-authorization, sponsorship/visa, clearance, or legal-work
 condition the candidate should confirm. **Blocked** requires both an explicit
 posting condition and an explicit conflicting candidate-context fact. Education,
-skills, and experience are fit evidence, not eligibility. Only Blocked stops an
-otherwise eligible automatic Polish run; Check may proceed because Polish is a
-reviewable proposal, not a submission.
+skills, and experience are fit evidence, not eligibility. A returned Blocked
+label with unconfirmed support remains visible with a warning. Eligibility does
+not veto automatic Polish; user-configured switches and verdict thresholds,
+provider readiness, and fresh one-use preparation tokens still govern it.
+Neither eligibility uncertainty nor a Blocked label disables manual actions.
 
 Fit Assessment defaults on and owns provider, model, and reasoning settings
 independently from Job analysis. Its first run shares Prepare's Job analysis
@@ -455,7 +510,7 @@ disappears into the task. Quiet competence, not salesmanship.
     cards. Posting source remains visible as read-only provenance in Job details;
     structured corrections, including source, belong to Prepare. A 392px rail keeps Fit first and always shows Job activity directly below
     it, using an explicit empty state when no other saved record exists. Fit leads with a one-word categorical verdict
-    and the fixed summary in one two-column advisory block without repeating the assessed resume; it never uses a
+    and the summary in one two-column advisory block without repeating the assessed resume; it never uses a
     score, progress ring, confidence, or implied metric. Job snapshot is permanently expanded, shows no section count, and projects only the saved prepared brief into
     overview, responsibility, qualification, Benefits & policies, and signal groups; the
     immutable full source opens from Job snapshot or Documents in the same focus-managed,

@@ -45,7 +45,7 @@ browser-side effects; components render them and App composes them.
   individual edits. It lives above the review list because the resulting resume
   only exists once every edit has a decision, and that is when the check runs;
   `outstanding` re-derives from the live document so an undo makes an edit
-  pending again. Its proposal key includes outcome, target id, original text,
+  pending again. Its proposal key includes run identity, outcome, target id, original text,
   replacement text, and reason. A changed key derives empty decisions during
   render and initializes keyed state only from the next user decision.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
@@ -169,14 +169,16 @@ browser-side effects; components render them and App composes them.
   pre-tailor snapshot; discarding a proposal performs no editor mutation, and a
   changed source letter, job, non-resume evidence, or polishing instruction marks
   it stale without conflating provider selection with document content. A later
-  resume edit leaves the already-validated proposal reviewable with a warning
+  resume edit leaves the existing proposal reviewable with a warning
   that it was checked against the earlier resume; accepting a sibling Resume
   proposal must not dead-end the Cover Letter decision. Keep that
   request/proposal boundary in one coordinator:
   splitting its abort refs, fingerprints, and transitions across hooks would
-  weaken the atomic transition; extract pure contracts into `lib/`. Restore and
-  the applied-result summary share one lifetime (`tailorApplied`), so the rail
-  cannot advertise an undo the editor can no longer perform.
+  weaken the atomic transition; extract pure contracts into `lib/`. Restore
+  follows the editor's exact snapshot lifetime. Accepted warning receipts survive
+  later edits with an earlier-wording label and clear on source replacement;
+  preserving concerns must not advertise an expired undo. Known Resume source
+  warnings accompany Cover and answer requests and results.
 - Both editors recover unsaved work the same way: `useAutosaveDraft` and
   `useCoverLetterAutosaveDraft` each own one document's debounced draft, over
   the shared rules in `lib/autosaveDraftStorage.ts` (same-tab recovery, live

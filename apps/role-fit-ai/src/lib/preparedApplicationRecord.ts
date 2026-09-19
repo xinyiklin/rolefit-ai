@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import type { Application } from "../hooks/useApplications.ts";
 import type { ExtractedJobTracking } from "./jobExtract.ts";
 import { copyAiUsage, type StageAiUsage } from "./aiUsage.ts";
@@ -9,6 +10,7 @@ type PreparedApplicationRecordArgs = {
   existing: Application | null;
   jobUrl: string;
   preparedJobDescription: string;
+  jobWarnings?: JobAnalysisWarning[];
   jobRawText: string;
   tracking: ExtractedJobTracking;
   pipelineAiUsage: Record<string, StageAiUsage>;
@@ -29,6 +31,7 @@ export function preparedApplicationRecord({
   existing,
   jobUrl,
   preparedJobDescription,
+  jobWarnings,
   jobRawText,
   tracking,
   pipelineAiUsage,
@@ -80,6 +83,7 @@ export function preparedApplicationRecord({
       jobUrl: nextJobUrl,
       jobDescription: preparedJobDescription.trim(),
       rawJobDescription: jobRawText.trim(),
+      jobWarnings: jobWarnings?.length ? jobWarnings : undefined,
       roleDescription: String(tracking.roleDescription ?? "").trim(),
       location: String(tracking.location ?? "").trim(),
       jobType: String(tracking.jobType ?? "").trim(),
@@ -100,6 +104,7 @@ export function preparedApplicationRecord({
         : {})
     },
     clearFields: [
+      ...(!jobWarnings?.length ? ["jobWarnings" as const] : []),
       ...(fitAssessmentPersistence.action === "clear" ? ["fitAssessment" as const] : []),
       ...(!tracking.salaryPeriod ? ["salaryPeriod" as const] : [])
     ]

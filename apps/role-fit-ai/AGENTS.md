@@ -34,6 +34,15 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - root/package guides — shared engine/editor behavior. Read those before
   changing a package or shared control.
 
+## Content and evidence policy
+
+Follow [PRODUCT.md's warning policy](PRODUCT.md#content-and-evidence-warning-policy)
+for every RoleFit generation and assessment surface. Preserve otherwise usable output,
+show warnings before acceptance, and keep current actions enabled without added
+evidence, dismissal, or confirmation. Acceptance is not verification. Retain
+truthful prompts and technical protections; an unknown citation can be
+unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
+
 ## Product and safety invariants
 
 - Resume/job data and provider credentials are sensitive. Never print or log
@@ -52,10 +61,11 @@ own a second resume model, editor, layout engine, or PDF implementation.
   provider may be request-eligible as ready-to-verify while `authState` remains
   unknown; the first actual provider request verifies the session or fails with
   recovery guidance.
-- Never invent employers, dates, metrics, education, tools, experience, or
-  outcomes. Missing facts become separate evidence gaps; finished Resume Polish
-  replacements never contain drafting placeholders. Application-answer prompts
-  retain their existing behavior.
+- Generation prompts must forbid invented employers, dates, metrics, education,
+  tools, experience, and outcomes, and ask for finished text without drafting
+  placeholders. Missing facts and questionable output become visible warnings
+  under this policy, including in application answers; do not certify
+  user-accepted text as grounded.
 - Fit Assessment changes must preserve the user contract in `PRODUCT.md`, the
   technical contract in `server/ai/README.md`, and the executable
   `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
@@ -69,8 +79,9 @@ own a second resume model, editor, layout engine, or PDF implementation.
   sections and Skills category labels stay locked; only bullets and actual
   Skills lists are proposal targets. The live resume
   changes only through explicit Accept all, Accept, or edited acceptance, and
-  Undo on a settled row restores exactly the text that row replaced. Skill
-  list category substitutions and job-only skill insertions fail independently.
+  Undo on a settled row restores exactly the text that row replaced. Category substitutions and job-only skill insertions remain reviewable with
+  warnings; invalid targets remain blocked. Supported job terminology loss is a
+  separate advisory derived from actual acceptance and the current document.
   When all editable targets do
   not fit the prompt budget, material and job-relevant targets win without
   prefix-order bias; only sent targets may be changed, and the rail states the
@@ -231,8 +242,8 @@ or workspace state, keep it here and expose the smallest host seam instead.
   unique winner, and preserve Prepare's output title. Body/style edits,
   application ownership, saves, and manual selection still block replacement.
   Do not add persisted variant metadata or another schema for either choice.
-- Proposal decisions are keyed by outcome plus each target's id, original text,
-  proposed text, and reason. A mismatched key derives an empty decision map
+- Proposal decisions are keyed by proposal run and outcome plus each target's id,
+  original text, proposed text, and reason. A mismatched key derives an empty decision map
   without setting state during render; the first decision initializes the new
   key. A complete proposal payload forms its identity, so reused target ids
   cannot carry decisions into a new response.
@@ -325,9 +336,10 @@ Follow root `docs/git-workflow.md`. Work locally unless the user asks for git
 actions. Never stage `.env`, generated outputs/fonts, resumes/PDFs, or private
 workspace data. Stage exact paths in this frequently dirty worktree.
 
-- Fit v5 leaves semantic judgment and the advisory verdict to the model. Return
+- Fit v6 leaves semantic judgment and the advisory verdict to the model. Return
   at most three matches and three gaps; do not add hidden requirement records,
-  completeness gates, or deterministic verdict scoring. Validate exact excerpts
-  and focused explicit conflicts. Insufficient job information has no verdict.
+  completeness gates, or deterministic verdict scoring. Check exact excerpts
+  and focused explicit conflicts, displaying evidence concerns as unconfirmed
+  findings under the warning policy. Insufficient job information has no verdict.
 - Final application review is an explicit, independently configured read-only
   stage. It remains session-only and never gates Apply or includes application answers.

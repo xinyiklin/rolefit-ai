@@ -1,8 +1,9 @@
+import { sanitizeContentWarnings } from "./contentWarnings.ts";
 export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
 export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
 export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
 export const FIT_ASSESSMENT_INPUT_CHANGES = ["job", "resume", "candidate-context", "settings"] as const;
-export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v5";
+export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v6";
 
 export type FitAssessmentVerdict = (typeof FIT_ASSESSMENT_VERDICTS)[number];
 export type FitAssessmentEligibilityStatus = (typeof FIT_ASSESSMENT_ELIGIBILITY)[number];
@@ -30,12 +31,19 @@ export function normalizeFitAssessmentInput(value: unknown): string {
   return String(value ?? "").normalize("NFKC").replace(/\r\n?/g, "\n").trim();
 }
 
-export type FitAssessmentGapDetail = {jobExcerpt:string;relationship:"transferable"|"contradictory";candidateSource:FitAssessmentEvidenceSource;candidateExcerpt:string};
+export type FitAssessmentGapDetail = {
+  jobExcerpt: string;
+  note?: string;
+  relationship?: "transferable" | "contradictory";
+  candidateSource?: FitAssessmentEvidenceSource;
+  candidateExcerpt?: string;
+};
 
 export const INSUFFICIENT_JOB_SUMMARY = "Add substantive role responsibilities or qualifications to assess fit.";
 
 export type FitAssessmentResult = {
   status: "ASSESSED";
+  warnings?: string[];
   verdict: FitAssessmentVerdict;
   summary: string;
   matches: FitAssessmentMatch[];
@@ -49,6 +57,7 @@ export type FitAssessmentResult = {
   };
 } | {
   status: "INSUFFICIENT_JOB_INFORMATION";
+  warnings?: string[];
   summary: string;
   verdict?: never;
   matches: [];
@@ -121,18 +130,15 @@ function text(value: unknown, maxLength: number): string {
 function excerpt(value: unknown, maxLength = 500): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
-  return trimmed.length <= maxLength ? trimmed : "";
+  return trimmed.length <= maxLength && !/<[^>]*>/.test(trimmed) ? trimmed : "";
 }
 
 function excerptList(value: unknown): string[] | null {
   if (!Array.isArray(value) || value.length > 3) return null;
-  const seen = new Set<string>();
   const result: string[] = [];
   for (const item of value) {
     const cleaned = excerpt(item);
-    const key = cleaned.toLocaleLowerCase().replace(/\s+/g, " ");
-    if (!cleaned || seen.has(key)) return null;
-    seen.add(key);
+    if (!cleaned) return null;
     result.push(cleaned);
   }
   return result;
@@ -140,7 +146,6 @@ function excerptList(value: unknown): string[] | null {
 
 function matchList(value: unknown): FitAssessmentMatch[] | null {
   if (!Array.isArray(value) || value.length > 3) return null;
-  const seen = new Set<string>();
   const matches: FitAssessmentMatch[] = [];
   for (const item of value) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return null;
@@ -148,14 +153,11 @@ function matchList(value: unknown): FitAssessmentMatch[] | null {
     const jobExcerpt = excerpt(source.jobExcerpt);
     const candidateExcerpt = excerpt(source.candidateExcerpt);
     const candidateSource = text(source.candidateSource, 32).toUpperCase();
-    const key = jobExcerpt.toLocaleLowerCase().replace(/\s+/g, " ");
     if (
       !jobExcerpt
-      || !candidateExcerpt
+      || (typeof source.candidateExcerpt !== "string" || (source.candidateExcerpt.trim() && !candidateExcerpt))
       || !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(candidateSource as FitAssessmentEvidenceSource)
-      || seen.has(key)
     ) return null;
-    seen.add(key);
     matches.push({
       jobExcerpt,
       candidateSource: candidateSource as FitAssessmentEvidenceSource,
@@ -169,13 +171,16 @@ function matchList(value: unknown): FitAssessmentMatch[] | null {
 export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
+  const warnings = sanitizeContentWarnings(source.warnings);
+  if (source.warnings !== undefined && !warnings) return null;
   if (source.status === "INSUFFICIENT_JOB_INFORMATION") {
     if (source.verdict !== undefined || source.eligibility !== undefined || (Array.isArray(source.matches) && source.matches.length) || (Array.isArray(source.gaps) && source.gaps.length)) return null;
-    return { status: "INSUFFICIENT_JOB_INFORMATION", summary: INSUFFICIENT_JOB_SUMMARY, matches: [], gaps: [] };
+    return { status: "INSUFFICIENT_JOB_INFORMATION", summary: INSUFFICIENT_JOB_SUMMARY, matches: [], gaps: [], ...(warnings ? { warnings } : {}) };
   }
   if (source.status !== undefined && source.status !== "ASSESSED") return null;
   const verdict = text(source.verdict, 24).toUpperCase();
   if (!verdicts.has(verdict)) return null;
+  if (source.summary !== undefined && (typeof source.summary !== "string" || source.summary.length > 500 || /<[^>]*>/.test(source.summary))) return null;
   const matches = matchList(source.matches);
   const gaps = excerptList(source.gaps);
   if (!matches || !gaps) return null;
@@ -187,11 +192,13 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
     const eligibilitySource = rawEligibility as Record<string, unknown>;
     const status = text(eligibilitySource.status, 16).toUpperCase();
     if (!eligibilityStatuses.has(status)) return null;
+    if (eligibilitySource.note !== undefined && (typeof eligibilitySource.note !== "string" || eligibilitySource.note.length > 240 || /<[^>]*>/.test(eligibilitySource.note))) return null;
+    for (const field of ["jobExcerpt", "candidateExcerpt"] as const) {
+      if (eligibilitySource[field] !== undefined && eligibilitySource[field] !== "" && !excerpt(eligibilitySource[field])) return null;
+    }
     const note = text(eligibilitySource.note, 240);
     const jobExcerpt = excerpt(eligibilitySource.jobExcerpt);
     const candidateExcerpt = excerpt(eligibilitySource.candidateExcerpt);
-    if ((status === "CHECK" || status === "BLOCKED") && !jobExcerpt) return null;
-    if (status === "BLOCKED" && !candidateExcerpt) return null;
     eligibility = {
       status: status as FitAssessmentEligibilityStatus,
       ...(jobExcerpt ? { jobExcerpt } : {}),
@@ -204,18 +211,26 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
   if (source.gapDetails !== undefined) {
     if (!Array.isArray(source.gapDetails) || source.gapDetails.length > 3) return null;
     for (const rawDetail of source.gapDetails) {
+      if (!rawDetail || typeof rawDetail !== "object" || Array.isArray(rawDetail)) return null;
       const detail = rawDetail as FitAssessmentGapDetail;
-      if (!detail || !gaps.includes(detail.jobExcerpt) || !["transferable","contradictory"].includes(detail.relationship) || !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(detail.candidateSource) || !excerpt(detail.candidateExcerpt)) return null;
-      gapDetails.push(detail);
+      if (!gaps.includes(detail.jobExcerpt)) return null;
+      if (detail.relationship !== undefined && !["transferable", "contradictory"].includes(detail.relationship)) return null;
+      if (detail.candidateSource !== undefined && !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(detail.candidateSource)) return null;
+      if (detail.candidateExcerpt !== undefined && !excerpt(detail.candidateExcerpt)) return null;
+      if (detail.note !== undefined && (typeof detail.note !== "string" || detail.note.length > 240 || /<[^>]*>/.test(detail.note))) return null;
+      gapDetails.push({ jobExcerpt: detail.jobExcerpt,
+        ...(detail.note ? { note: detail.note } : {}),
+        ...(detail.relationship ? { relationship: detail.relationship } : {}),
+        ...(detail.candidateSource ? { candidateSource: detail.candidateSource } : {}),
+        ...(detail.candidateExcerpt ? { candidateExcerpt: detail.candidateExcerpt } : {}) });
     }
   }
   const typedVerdict = verdict as FitAssessmentVerdict;
-  if (verdict !== "LIMITED" && matches.length === 0 &&
-    !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) return null;
   return {
     status: "ASSESSED",
     verdict: typedVerdict,
-    summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
+    summary: text(source.summary, 500) || FIT_ASSESSMENT_SUMMARY[typedVerdict],
+    ...(warnings ? { warnings } : {}),
     matches,
     gaps,
     ...(gapDetails.length ? {gapDetails} : {}),

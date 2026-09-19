@@ -1,3 +1,5 @@
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
+import { jobTerminology, unsupportedTerminology } from "../../src/resume/terminology.ts";
 import { templateHasUnresolvedSlots } from "../../src/lib/coverLetterTemplate.ts";
 import { affirmativeEvidenceForTerm, candidateClaimIssue, explicitAdviceClaims } from "./claimEvidence.ts";
 import {
@@ -119,7 +121,8 @@ export function buildResumeProposalPrompts({
   customInstructions,
   boldBulletKeywords = true,
   reasoningEffort,
-  adviceSources = ""
+  adviceSources = "",
+  sourceWarnings = []
 }: {
   jobText: string;
   targets: FlatResumeTarget[];
@@ -129,6 +132,7 @@ export function buildResumeProposalPrompts({
   boldBulletKeywords?: boolean;
   reasoningEffort?: unknown;
   adviceSources?: string;
+  sourceWarnings?: string[];
 }) {
   const targetSelection = selectPromptTargets(targets, jobText);
   const auditInstructions = polishSelfAuditInstructions(reasoningEffort);
@@ -146,6 +150,10 @@ ${fenceUntrusted(clipForPrompt(jobText, 24_000, "job posting"))}
 <editable_targets>
 ${fenceUntrusted(targetSelection.serialized)}
 </editable_targets>
+
+<earlier_output_concerns>
+${fenceUntrusted(JSON.stringify(sourceWarnings))}
+</earlier_output_concerns>
 
 <resume_context>
 ${fenceUntrusted(clipForPrompt(scopeText, 28_000, "resume context"))}
@@ -174,6 +182,10 @@ ${boldBulletKeywords
 - A new skill may come only from the resume or candidate context, never merely from the job description.
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry.
 - Preserve same-entry attribution; negative or aspirational text is not evidence.
+- Prefer posting terminology when supported. Preserve clear mentions of important supported requirements somewhere in the resume. True aliases are equivalent; related tools or partial composites are not. Never stuff keywords or copy posting sentences.
+<terminology_priorities>
+${fenceUntrusted(JSON.stringify(jobTerminology(jobText).terms))}
+</terminology_priorities>
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 - summary is optional concise feedback, maximum 3 items.
 - advice is optional editorial guidance about emphasis, order, space, or missing evidence. Cite exact job and entry excerpts. Advice never supplies replacement text or asserts new candidate facts.
@@ -325,7 +337,6 @@ export function sanitizeResumeProposal(
       || !stripInlineMarks(normalized)
       || String(replacementRaw ?? "").length > 1400
       || containsStructuredMarkup(replacementRaw)
-      || templateHasUnresolvedSlots(normalized)
     ) {
       increment(counts, "MALFORMED");
       continue;
@@ -338,14 +349,16 @@ export function sanitizeResumeProposal(
       increment(counts, "UNCHANGED");
       continue;
     }
+    const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? target.entryText : `${scopeText}\n${honestContext}`, jobText);
     if (!replacementIsSupported(replacement, target, jobText, scopeText, honestContext)) {
-      increment(counts, "UNSUPPORTED");
-      continue;
+      warnings.push("Not supported by provided evidence. Review tools, metrics, outcomes and attribution in this edit.");
     }
+    if (templateHasUnresolvedSlots(replacement)) warnings.push("This edit contains unfinished placeholder text.");
     seenTargets.add(targetId);
     changes.push({
       targetId,
       replacement,
+      ...(warnings.length ? { warnings } : {}),
       ...(text(change.reason, 240) ? { reason: text(change.reason, 240) } : {})
     });
     if (changes.length === 12) break;
@@ -374,33 +387,35 @@ export function sanitizeResumeProposal(
   else if (rawChanges.length > 0 || droppedCount > 0 || requestedStatus === "WITHHELD") status = "WITHHELD";
   else status = VALID_STATUSES.has(requestedStatus) && requestedStatus === "NO_CHANGES" ? "NO_CHANGES" : "WITHHELD";
 
-  const resultingGrounding = `${scopeText}\n${changes.map((change) => change.replacement).join("\n")}`;
-  const summary = changes.length
-    ? optionalList(source.summary, 260).filter((item) =>
-        !proseHasUngroundedTerm(item, jobText.toLowerCase(), resultingGrounding.toLowerCase())
-        && !findUngroundedClaimTerm(item, resultingGrounding)
-        && !findUngroundedOutcomeClaim(item, resultingGrounding)
-        && !hasUngroundedNumericClaim(item, resultingGrounding)
-      )
-    : [];
+  const summary = optionalList(source.summary, 260);
+  const warnings = summary.some((item) =>
+    proseHasUngroundedTerm(item, jobText.toLowerCase(), scopeText.toLowerCase())
+    || findUngroundedClaimTerm(item, scopeText)
+    || findUngroundedOutcomeClaim(item, scopeText)
+    || hasUngroundedNumericClaim(item, scopeText)
+  ) ? ["Summary feedback is not supported by provided evidence."] : [];
+  if (rawChanges.length > 12) warnings.push("Only the first 12 usable edits are shown; additional edits may be omitted.");
 
   return {
     status,
     changes,
     summary,
+    ...(warnings.length ? { warnings } : {}),
     omittedTargetCount,
     withheld: { count: withheldCount, reasons: withheldReasons }
   };
 }
 
 export function sanitizeResumeAdvice(raw: unknown, scope: NormalizedResumeScope, jobText: string) {
-  return sanitizeResumePolishAdvice(raw).filter((item) => {
+  return sanitizeResumePolishAdvice(raw).map((item) => {
     const section = [...scope.sections, ...scope.contextSections].find((section) => section.id === item.sectionId);
     const entry = section?.entries.find((entry) => entry.id === item.entryId);
     const evidence = entry ? [entry.titleLeft, entry.subtitleLeft, ...entry.bullets.map((bullet) => bullet.text)].join("\n") : "";
-    return Boolean(entry && jobText.includes(item.jobExcerpt) && evidence.includes(item.candidateExcerpt)
-      && !explicitAdviceClaims(item.rationale).some((claim) => candidateClaimIssue(claim, evidence)
-        || findUngroundedProseProperClaimTerm(claim, evidence, "")));
+    const warnings: string[] = [];
+    if (!entry || !item.jobExcerpt || !item.candidateExcerpt || !jobText.includes(item.jobExcerpt) || !evidence.includes(item.candidateExcerpt)) warnings.push("Source reference could not be confirmed.");
+    if (explicitAdviceClaims(item.rationale).some((claim) => candidateClaimIssue(claim, evidence)
+      || findUngroundedProseProperClaimTerm(claim, evidence, ""))) warnings.push("Advice is not supported by provided evidence.");
+    return { ...item, ...(warnings.length ? { warnings } : {}) };
   });
 }
 
@@ -446,6 +461,7 @@ export async function generateResumeProposal({
     customInstructions,
     boldBulletKeywords,
     reasoningEffort,
+    sourceWarnings: sanitizeContentWarnings(body.sourceWarnings),
     adviceSources: JSON.stringify(adviceSources)
   });
   const stats: AttemptStats = {};

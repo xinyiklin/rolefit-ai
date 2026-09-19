@@ -323,10 +323,7 @@ try {
   }
   if (!duplicateWriteRejected) failures.push("duplicate application ids were accepted for storage");
 
-  // Fit Assessment summaries are fixed display copy derived from the verdict. A
-  // tracker written before that contract changed may contain the old generated
-  // sentence, but that redundant value must not make every tracker-dependent
-  // route fail while the rest of the record remains byte-for-byte canonical.
+  // Safe historical explanation text remains readable without rewriting it.
   const staleSummaryRecord = sanitizeApplications([{
     id: "stale-fit-assessment-summary",
     title: "Stale Fit Assessment summary",
@@ -352,11 +349,24 @@ try {
   await writeFile(filePath, JSON.stringify({ applications: [staleSummaryRecord] }), "utf8");
   try {
     const normalizedSummaryRead = await readApplications(workspace);
-    if (normalizedSummaryRead[0]?.fitAssessment?.result.summary !== FIT_ASSESSMENT_SUMMARY.REASONABLE) {
-      failures.push("a stale derived Fit Assessment summary was not normalized on read");
+    if (normalizedSummaryRead[0]?.fitAssessment?.result.summary !== "Legacy provider-generated summary.") {
+      failures.push("a saved Fit Assessment explanation was silently rewritten");
     }
   } catch {
     failures.push("a stale derived Fit Assessment summary blocked the otherwise canonical tracker");
+  }
+  const warnedFit = structuredClone(staleSummaryRecord);
+  warnedFit.fitAssessment.promptVersion = "fit-assessment-direct-rubric-v6";
+  warnedFit.fitAssessment.result.warnings = ["Source reference could not be confirmed."];
+  warnedFit.fitAssessment.result.gapDetails = [{ jobExcerpt: "Kubernetes", note: "Check this gap against your own records." }];
+  warnedFit.fitAssessment.result.eligibility = { status: "BLOCKED", note: "Unconfirmed condition." };
+  await writeApplications(workspace, [warnedFit]);
+  assert.deepEqual((await readApplications(workspace))[0].fitAssessment, warnedFit.fitAssessment, "saved warning and explanation receipts survive the strict storage boundary");
+  for (const warnings of ["bad", [42], ["<script>bad</script>"], ["x".repeat(501)]]) {
+    const malformed = structuredClone(warnedFit);
+    malformed.fitAssessment.result.warnings = warnings;
+    await writeFile(filePath, JSON.stringify({ applications: [malformed] }), "utf8");
+    await assert.rejects(readApplications(workspace), ApplicationsStorageError, "invalid warning metadata cannot be erased during storage reads");
   }
   for (const [label, malformedSummary] of [
     ["missing", undefined],

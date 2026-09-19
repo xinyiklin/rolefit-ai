@@ -15,6 +15,12 @@ application-data service.
 
 Current desktop source version: **0.7.0** (preview).
 
+[Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
+keep otherwise usable output available with warnings before use. Accept, edit,
+copy, save, export, and Apply remain available without acknowledging warnings.
+Acceptance is your choice of wording, not factual verification; technical safety
+and document-ownership checks still apply.
+
 The default workflow is Prepare → Assess fit → Polish → Apply. Reassess fit at
 any time after preparation without repeating Job analysis.
 
@@ -86,20 +92,20 @@ font, size and wrapping changes still reflow the page normally.
   sign-off itself, and the model picks which of your experiences and personal
   notes this posting actually warrants. Bracketed text is treated as an
   instruction to the writer, never as something you wrote about yourself.
-  Grounding and placeholder checks run on the server, then the finished letter
+  Grounding and placeholder checks attach warnings on the server, then the letter
   appears beside the unchanged editor as a whole-document proposal, opening on a
   **Changes** view that marks what accepting would rewrite (the full letter is one
   click away). **Accept
   proposal** applies it atomically and enables **Restore previous** until the
-  next edit; **Discard proposal** performs no document mutation. Validation blockers
-  identify the rejected claim and whether to add evidence, edit the source, or
-  retry without exposing rejected provider output or internal evidence ids. An
+  next edit; **Discard proposal** performs no document mutation. Content concerns
+  remain beside the proposal without disabling acceptance. Only technically
+  unusable output gets one repair attempt. Accepted warnings remain after
+  editing, labelled as concerns about earlier wording. An
   unfinished Guidance prompt is ignored until completed, and worded durations
   such as “three years” are grounded like `3 years`. If the workflow rail is
   collapsed, its icon shows the bounded issue count. You
-  are only asked something when a fact cannot
-  be resolved at all — a missing company or role, or a template that names a
-  private detail such as a referral. Unsaved edits are kept in a
+  need a prepared company and role. Missing private details, such as a referral
+  or candidate name, are optional and do not gate a usable draft. Unsaved edits are kept in a
   recoverable draft and the letter is named like the resume
   (`Name_Company_Cover_Letter`), so both editors behave the same way. Selecting
   a saved cover-letter variant changes its contents without replacing that
@@ -129,13 +135,13 @@ font, size and wrapping changes still reflow the page normally.
   and does not depend on material,
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
-  eligibility state. Each match shows the exact resume or About you evidence
-  beneath the posting excerpt. Rubric v5 prioritizes decision-critical responsibilities
+  eligibility state. Each match shows the returned resume or About you excerpt
+  beneath the posting excerpt, with unconfirmed references labelled. The rubric prioritizes decision-critical responsibilities
   and core qualifications, preserves explicit evidence-source boundaries, ignores
   logistics or application-form noise when judging fit, and self-checks every
-  evidence excerpt before the server's exact-anchor boundary. Fit leaves technology
-  coverage and responsibility judgments to the model; source checks verify citations
-  and clear conflicts without treating missing tool names as automatic rejection.
+  evidence excerpt before the server checks source location. Fit leaves technology
+  coverage and responsibility judgments to the model; unlocated citations or
+  evidence conflicts produce warnings without replacing usable conclusions.
   Its behavior and verdict meanings live in the
   [Fit Assessment user contract](PRODUCT.md#fit-assessment-user-contract); provider,
   grounding, reassessment, and provenance details live in the
@@ -188,16 +194,17 @@ font, size and wrapping changes still reflow the page normally.
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
-  remain editable. The server drops malformed, unknown, unchanged, swapped, or
-  unsupported edits independently, so a bad optional note or one bad edit does
-  not discard safe siblings. Only bullets and Skills lists are mutable;
+  remain editable. Unknown targets and unsafe/unusable mutations are rejected;
+  unchanged edits are no-ops. Unsupported wording stays reviewable with a warning,
+  and one concern does not erase usable siblings. Only bullets and Skills lists are mutable;
   role, employer, subtitle, date, identity, contact, and education fields remain
   read-only evidence. Large resumes prioritize material, job-relevant
   fields inside the prompt budget, validate replies only against fields actually
-  sent, and show how many editable fields were outside that pass. Any upward
-  ownership rewrite is withheld unless evidence at that level is semantically
-  tied to the target's own work; leadership in an unrelated sibling bullet or
-  broad context cannot authorize it. The source
+  sent, and show how many editable fields were outside that pass. Unsupported
+  ownership or wrong-entry attribution receives a warning. A separate advisory
+  identifies actual accepted edits that remove the last supported important job
+  term, while true aliases elsewhere preserve coverage. This is terminology
+  assistance, not an ATS score or interview-outcome prediction. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
   **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
   preference; when disabled, every bullet Polish rewrites arrives without bold

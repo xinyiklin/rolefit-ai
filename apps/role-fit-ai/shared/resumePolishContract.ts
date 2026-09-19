@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "./contentWarnings.ts";
 import { isEducationHeading } from "../src/resume/sections.ts";
 export const RESUME_POLISH_STATUSES = ["PROPOSAL", "NO_CHANGES", "WITHHELD"] as const;
 export const RESUME_POLISH_WITHHELD_REASONS = [
@@ -14,6 +15,7 @@ export type ResumePolishWireChange = {
   targetId: string;
   replacement: string;
   reason?: string;
+  warnings?: string[];
 };
 
 export type ResumePolishAdvice = {
@@ -23,6 +25,7 @@ export type ResumePolishAdvice = {
   jobExcerpt: string;
   candidateExcerpt: string;
   rationale: string;
+  warnings?: string[];
 };
 
 export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
@@ -31,15 +34,17 @@ export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const value = item as Record<string, unknown>;
     if (!["emphasis", "order", "space", "missing-evidence"].includes(String(value.kind))) return [];
-    for (const key of ["sectionId", "entryId", "jobExcerpt", "candidateExcerpt", "rationale"]) {
-      if (typeof value[key] !== "string" || !value[key].trim() || value[key].length > 500) return [];
+    if (typeof value.rationale !== "string" || !value.rationale.trim() || value.rationale.length > 500 || /<[^>]*>/.test(value.rationale)) return [];
+    for (const key of ["sectionId", "entryId", "jobExcerpt", "candidateExcerpt"]) {
+      if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length > 500 || /<[^>]*>/.test(value[key]))) return [];
     }
     return [{
       kind: value.kind as ResumePolishAdvice["kind"],
-      sectionId: value.sectionId as string,
-      entryId: value.entryId as string,
-      jobExcerpt: value.jobExcerpt as string,
-      candidateExcerpt: value.candidateExcerpt as string,
+      sectionId: (value.sectionId as string) ?? "",
+      entryId: (value.entryId as string) ?? "",
+      jobExcerpt: (value.jobExcerpt as string) ?? "",
+      candidateExcerpt: (value.candidateExcerpt as string) ?? "",
+      ...(value.warnings !== undefined ? { warnings: sanitizeContentWarnings(value.warnings) } : {}),
       rationale: value.rationale as string
     }];
   });
@@ -47,6 +52,7 @@ export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
 
 export type ResumePolishWireResult = {
   advice?: ResumePolishAdvice[];
+  warnings?: string[];
   status: ResumePolishStatus;
   changes: ResumePolishWireChange[];
   summary: string[];
@@ -180,7 +186,7 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     const replacement = clean(change.replacement, 1400);
     if (!targetId || !replacement) return null;
     const reason = clean(change.reason, 240);
-    changes.push({ targetId, replacement, ...(reason ? { reason } : {}) });
+    changes.push({ targetId, replacement, ...(reason ? { reason } : {}), ...(change.warnings !== undefined ? { warnings: sanitizeContentWarnings(change.warnings) } : {}) });
     if (changes.length === 12) break;
   }
   if ((status === "PROPOSAL") !== (changes.length > 0)) return null;
@@ -209,6 +215,7 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
 
   return {
     advice: sanitizeResumePolishAdvice(source.advice),
+    ...(source.warnings !== undefined ? { warnings: sanitizeContentWarnings(source.warnings) } : {}),
     status: status as ResumePolishStatus,
     changes,
     summary: list(source.summary, 260),

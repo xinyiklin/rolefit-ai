@@ -13,6 +13,12 @@ import {
   sanitizeFitAssessment
 } from "../../../shared/fitAssessmentContract.ts";
 
+function assertWarned(result, message) {
+  assert.ok(result, message);
+  assert.ok(result.warnings?.length, message);
+  assert.deepEqual(sanitizeFitAssessment(result), result, "client preserves warning receipt");
+}
+
 const jobText = `Senior Product Engineer
 Build accessible React workflows for healthcare teams.
 Lead design reviews with product and engineering partners.
@@ -28,7 +34,7 @@ const candidateContext = "I require employment sponsorship.";
 const validRaw = {
   status: "ASSESSED",
   verdict: "REASONABLE",
-  summary: "Provider text must not become public copy.",
+  summary: "Provider explanation remains advisory.",
   matches: [
     {
       jobExcerpt: "Build accessible React workflows for healthcare teams.",
@@ -58,7 +64,9 @@ const validRaw = {
 
 const valid = sanitizeFitAssessmentResponse(validRaw, { jobText, resumeText, candidateContext });
 assert.ok(valid, "a fully anchored response is usable");
-assert.equal(valid.summary, FIT_ASSESSMENT_SUMMARY.REASONABLE, "the server owns stable public summary copy");
+assert.equal(valid.summary, validRaw.summary, "usable explanatory text is retained");
+assert.equal(valid.gapDetails[0].note, validRaw.gaps[0].note);
+assert.equal(valid.warnings, undefined, "anchored consistent output has no false warning");
 assert.deepEqual(valid.matches, validRaw.matches, "validated candidate evidence remains inspectable");
 assert.deepEqual(valid.gaps, ["Lead design reviews with product and engineering partners."]);
 assert.deepEqual(valid.eligibility, {
@@ -69,12 +77,11 @@ assert.deepEqual(valid.eligibility, {
 });
 
 for (const verdict of ["STRONG", "REASONABLE", "STRETCH"]) {
-  assert.equal(
+  assertWarned(
     sanitizeFitAssessmentResponse(
       { verdict, matches: [], gaps: validRaw.gaps, eligibility: { status: "CLEAR" } },
       { jobText, resumeText, candidateContext }
     ),
-    null,
     `${verdict} cannot contradict its findings by claiming no direct match`
   );
 }
@@ -137,7 +144,7 @@ assert.deepEqual(
   "empty schema placeholders remain optional for CLEAR eligibility"
 );
 
-assert.equal(
+assertWarned(
   sanitizeFitAssessmentResponse(
     {
       ...validRaw,
@@ -145,11 +152,10 @@ assert.equal(
     },
     { jobText, resumeText, candidateContext }
   ),
-  null,
   "job excerpts must exist exactly in the normalized posting"
 );
 
-assert.equal(
+assertWarned(
   sanitizeFitAssessmentResponse(
     {
       ...validRaw,
@@ -157,11 +163,10 @@ assert.equal(
     },
     { jobText, resumeText, candidateContext }
   ),
-  null,
   "candidate excerpts must exist exactly in their declared source"
 );
 
-assert.equal(
+assertWarned(
   sanitizeFitAssessmentResponse(
     {
       ...validRaw,
@@ -173,11 +178,10 @@ assert.equal(
     },
     { jobText, resumeText, candidateContext }
   ),
-  null,
   "BLOCKED fails closed without an exact conflicting candidate fact"
 );
 
-assert.equal(
+assertWarned(
   sanitizeFitAssessmentResponse(
     {
       ...validRaw,
@@ -185,7 +189,6 @@ assert.equal(
     },
     { jobText, resumeText, candidateContext }
   ),
-  null,
   "duplicate findings are unusable instead of double-counted"
 );
 
@@ -200,10 +203,9 @@ const clientResult = sanitizeFitAssessment({
     note: "Confirm work authorization."
   }
 });
-assert.equal(clientResult?.summary, FIT_ASSESSMENT_SUMMARY.STRONG);
-assert.equal(
+assert.equal(clientResult?.summary, "Untrusted provider summary");
+assert.ok(
   sanitizeFitAssessment({ verdict: "STRONG", matches: [validRaw.matches[0], validRaw.matches[0]], gaps: [] }),
-  null,
   "the client boundary also rejects duplicate public findings"
 );
 
@@ -247,7 +249,7 @@ assert.match(
 );
 assert.match(
   FIT_ASSESSMENT_RULES,
-  /Before returning JSON.*exact contiguous character-for-character text.*Never rewrite, combine, or normalize punctuation.*omit that finding/i,
+  /Before returning JSON.*exact contiguous character-for-character text.*Never rewrite, combine, or normalize punctuation.*describe that uncertainty honestly/i,
   "the provider self-checks exact excerpts before the server grounding boundary"
 );
 assert.match(FIT_ASSESSMENT_RULES, /never appear in both matches and gaps/i);
@@ -287,7 +289,7 @@ assert.doesNotMatch(
 );
 
 // Provider instructions and accepted response shapes must agree in both paths.
-assert.equal(FIT_ASSESSMENT_PROMPT_VERSION, "fit-assessment-direct-rubric-v5");
+assert.equal(FIT_ASSESSMENT_PROMPT_VERSION, "fit-assessment-direct-rubric-v6");
 assert.equal(JSON.parse(FIT_ASSESSMENT_RESPONSE_SCHEMA).status, "ASSESSED");
 const insufficientShape = { status: "INSUFFICIENT_JOB_INFORMATION" };
 for (const prompt of [prompts, combinedPrompts]) {
@@ -305,7 +307,7 @@ assert.equal(sanitizeFitAssessmentResponse({ ...insufficientShape, verdict: "LIM
 const transferableInput = { jobText: "Leadership experience.", resumeText: "Completed leadership coursework." };
 const transferableGap = { jobExcerpt: transferableInput.jobText, status: "NOT_SHOWN" };
 const stretch = { status: "ASSESSED", verdict: "STRETCH", matches: [], gaps: [transferableGap] };
-assert.equal(sanitizeFitAssessmentResponse(stretch, transferableInput), null);
+assertWarned(sanitizeFitAssessmentResponse(stretch, transferableInput), "unsupported conclusion stays reviewable");
 assert.equal(sanitizeFitAssessmentResponse({ ...stretch, gaps: [{ ...transferableGap, relationship: "transferable", candidateSource: "RESUME", candidateExcerpt: transferableInput.resumeText }] }, transferableInput)?.verdict, "STRETCH");
 
 for (const length of [500, 501]) {

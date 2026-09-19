@@ -1,3 +1,5 @@
+import { candidateClaimIssue, evidenceSegments } from "./claimEvidence.ts";
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { explicitEligibilityConflict, hasFitEvidenceConflict, isAffirmativeFitEvidence } from "./fitEvidence.ts";
 import {
   INSUFFICIENT_JOB_SUMMARY,
@@ -29,10 +31,7 @@ type AttemptStats = { attempts?: number };
 
 const FIT_FAILURE_MESSAGES = {
   "input-limit": "Fit could not review all supplied text because it exceeds the assessment limit. Shorten the posting or candidate context, or select a shorter resume.",
-  "invalid-response": "The AI returned an assessment in an unsupported format. Retry the assessment or choose another model in Fit settings.",
-  "unverified-evidence": "Fit could not verify the cited excerpts against the supplied sources. Retry the assessment; you can continue to Polish.",
-  "evidence-conflict": "Fit found an explicit evidence conflict in a cited match. Review the selected resume and candidate context, or retry; you can continue to Polish.",
-  "unverified-conclusion": "The assessment did not include candidate evidence for its verdict. Retry the assessment; you can continue to Polish."
+  "invalid-response": "The AI returned an assessment in an unsupported format. Retry the assessment or choose another model in Fit settings."
 } as const;
 type FitFailureReason = keyof typeof FIT_FAILURE_MESSAGES;
 
@@ -94,7 +93,7 @@ Evidence rules:
 - Eligibility covers only work authorization, visa or sponsorship, security clearance, or legal ability to take the role; education, skills, and experience are fit evidence, not eligibility. CLEAR means no stated eligibility condition needs attention. CHECK means the posting states an eligibility condition the candidate should confirm. BLOCKED requires both an explicit posting condition and a conflicting explicit candidate-context fact.
 - Location, onsite or hybrid schedule, relocation, and application-form questions are neither fit gaps nor eligibility conditions unless they state a legal-work restriction. When explicit candidate facts satisfy a stated eligibility condition, return CLEAR.
 - Eligibility never changes the verdict. If the candidate context does not explicitly conflict, never return BLOCKED.
-- Before returning JSON, locate and verify every job and candidate excerpt as exact contiguous character-for-character text in the supplied source. Never rewrite, combine, or normalize punctuation in an excerpt. If you cannot copy an exact excerpt, omit that finding. Verify that no job excerpt appears twice or in both lists and that each list has at most three items.
+- Before returning JSON, locate and verify every job and candidate excerpt as exact contiguous character-for-character text in the supplied source. Never rewrite, combine, or normalize punctuation in an excerpt. If a source is uncertain, describe that uncertainty honestly; never invent a quotation to make a finding appear verified. Verify that no job excerpt appears twice or in both lists and that each list has at most three items.
 - Return only the fields in the response shape.`;
 
 type PromptSources = {
@@ -128,19 +127,25 @@ function compactText(value: unknown, maxLength: number): string {
   return value.replace(/\s+/g, " ").trim().slice(0, maxLength);
 }
 
-function exactExcerpt(value: unknown, source: string): string | null {
+function excerpt(value: unknown): string | null {
   if (typeof value !== "string") return null;
-  const excerpt = value.trim();
-  if (!excerpt || excerpt.length > MAX_EXCERPT_LENGTH || !source.includes(excerpt)) return null;
-  return excerpt;
+  const text = value.trim();
+  return text && text.length <= MAX_EXCERPT_LENGTH && !/<[^>]*>/.test(text) ? text : null;
 }
 
 function dedupeKey(value: string): string {
   return value.toLocaleLowerCase().replace(/\s+/g, " ").trim();
 }
 
+function unexplainedCandidateClaim(text: string, sources: PromptSources): boolean {
+  return evidenceSegments(text).some((segment) => {
+    if (/\b(?:not (?:shown|established|provided|demonstrated|confirmed|evident|supported)|no evidence|missing evidence)\b/i.test(segment)) return false;
+    return Boolean(candidateClaimIssue(segment, `${sources.resumeText}\n${sources.candidateContext}`));
+  });
+}
+
 function sanitizeMatches(
-  raw: unknown, sources: PromptSources, reject: (reason: FitFailureReason) => null
+  raw: unknown, sources: PromptSources, warnings: string[], reject: (reason: FitFailureReason) => null
 ): FitAssessmentMatch[] | null {
   if (!Array.isArray(raw) || raw.length > 3) return reject("invalid-response");
   const seen = new Set<string>();
@@ -148,70 +153,78 @@ function sanitizeMatches(
   for (const item of raw) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return reject("invalid-response");
     const source = item as Record<string, unknown>;
-    const jobExcerpt = exactExcerpt(source.jobExcerpt, sources.jobText);
+    const jobExcerpt = excerpt(source.jobExcerpt);
     const candidateSource = compactText(source.candidateSource, 32).toUpperCase();
-    if (!evidenceSources.has(candidateSource)) return reject("invalid-response");
-    if (!jobExcerpt) return reject("unverified-evidence");
-    const candidateExcerpt = exactExcerpt(
-      source.candidateExcerpt,
-      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext
-    );
+    const candidateExcerpt = source.candidateExcerpt === undefined || source.candidateExcerpt === "" ? "" : excerpt(source.candidateExcerpt);
+    if (!evidenceSources.has(candidateSource) || !jobExcerpt || candidateExcerpt === null) return reject("invalid-response");
+    const candidateText = candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext;
+    if (!sources.jobText.includes(jobExcerpt) || !candidateExcerpt || !candidateText.includes(candidateExcerpt)) {
+      warnings.push(`Match ${matches.length + 1}: source reference could not be confirmed. Quoted text is unconfirmed.`);
+    }
     const key = dedupeKey(jobExcerpt);
-    if (!candidateExcerpt) return reject("unverified-evidence");
-    if (seen.has(key)) return reject("invalid-response");
-    if (hasFitEvidenceConflict(jobExcerpt, candidateExcerpt,
-      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return reject("evidence-conflict");
+    if (seen.has(key)) warnings.push(`Match ${matches.length + 1}: this requirement is repeated.`);
+    if (hasFitEvidenceConflict(jobExcerpt, candidateExcerpt, candidateText)) {
+      warnings.push(`Match ${matches.length + 1}: not supported by provided evidence; an explicit conflict was detected.`);
+    }
     seen.add(key);
-    matches.push({
-      jobExcerpt,
-      candidateSource: candidateSource as FitAssessmentMatch["candidateSource"],
-      candidateExcerpt
-    });
+    matches.push({ jobExcerpt, candidateSource: candidateSource as FitAssessmentMatch["candidateSource"], candidateExcerpt });
   }
   return matches;
 }
 
 function sanitizeGaps(
-  raw: unknown, sources: PromptSources, occupied: ReadonlySet<string>,
+  raw: unknown, sources: PromptSources, occupied: ReadonlySet<string>, warnings: string[],
   reject: (reason: FitFailureReason) => null
-): string[] | null {
+): { gaps: string[]; gapDetails: FitAssessmentGapDetail[] } | null {
   if (!Array.isArray(raw) || raw.length > 3) return reject("invalid-response");
   const seen = new Set(occupied);
   const gaps: string[] = [];
+  const gapDetails: FitAssessmentGapDetail[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object" || Array.isArray(item)) return reject("invalid-response");
     const source = item as Record<string, unknown>;
-    const jobExcerpt = exactExcerpt(source.jobExcerpt, sources.jobText);
+    const jobExcerpt = excerpt(source.jobExcerpt);
     const status = compactText(source.status, 24).toUpperCase();
     const note = compactText(source.note, MAX_NOTE_LENGTH + 1);
-    const key = jobExcerpt ? dedupeKey(jobExcerpt) : "";
-    if (status !== "NOT_SHOWN" || note.length > MAX_NOTE_LENGTH || seen.has(key)) return reject("invalid-response");
-    if (!jobExcerpt) return reject("unverified-evidence");
+    if (!jobExcerpt || status !== "NOT_SHOWN" || note.length > MAX_NOTE_LENGTH || /<[^>]*>/.test(note)) return reject("invalid-response");
+    if (note && unexplainedCandidateClaim(note, sources)) warnings.push(`Gap ${gaps.length + 1}: explanatory claims are not supported by provided evidence.`);
+    const key = dedupeKey(jobExcerpt);
+    if (seen.has(key)) warnings.push(`Gap ${gaps.length + 1}: this requirement overlaps another finding.`);
+    if (!sources.jobText.includes(jobExcerpt)) warnings.push(`Gap ${gaps.length + 1}: source reference could not be confirmed. Quoted text is unconfirmed.`);
     seen.add(key);
     gaps.push(jobExcerpt);
+    const detail: FitAssessmentGapDetail = { jobExcerpt, ...(note ? { note } : {}) };
+    if (source.relationship !== undefined) {
+      if (source.relationship !== "transferable" && source.relationship !== "contradictory") return reject("invalid-response");
+      detail.relationship = source.relationship;
+    }
+    if (source.candidateSource !== undefined) {
+      const candidateSource = compactText(source.candidateSource, 32).toUpperCase();
+      if (!evidenceSources.has(candidateSource)) return reject("invalid-response");
+      detail.candidateSource = candidateSource as FitAssessmentMatch["candidateSource"];
+    }
+    if (source.candidateExcerpt !== undefined) {
+      const candidateExcerpt = excerpt(source.candidateExcerpt);
+      if (!candidateExcerpt) return reject("invalid-response");
+      detail.candidateExcerpt = candidateExcerpt;
+    }
+    if (detail.relationship || detail.candidateExcerpt || detail.candidateSource) {
+      const candidateText = detail.candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext;
+      if (!detail.candidateSource || !detail.candidateExcerpt || !candidateText.includes(detail.candidateExcerpt)) {
+        warnings.push(`Gap ${gaps.length}: source reference could not be confirmed. Quoted text is unconfirmed.`);
+      } else if (detail.relationship === "transferable" && !isAffirmativeFitEvidence(detail.candidateExcerpt, candidateText)) {
+        warnings.push(`Gap ${gaps.length}: the cited text does not establish affirmative transferable support.`);
+      } else if (detail.relationship === "contradictory" && !hasFitEvidenceConflict(jobExcerpt, detail.candidateExcerpt, candidateText)) {
+        warnings.push(`Gap ${gaps.length}: the reported evidence conflict could not be confirmed.`);
+      }
+    }
+    if (note || detail.relationship || detail.candidateSource || detail.candidateExcerpt) gapDetails.push(detail);
   }
-  return gaps;
-}
-
-function sanitizeGapDetails(raw: unknown, sources: PromptSources): FitAssessmentGapDetail[] {
-  if (!Array.isArray(raw)) return [];
-  return raw.flatMap((item) => {
-    if (!item || typeof item !== "object" ||
-      item.relationship !== "transferable") return [];
-    const jobExcerpt = exactExcerpt(item.jobExcerpt, sources.jobText);
-    const candidateSource = compactText(item.candidateSource, 32).toUpperCase();
-    if (!jobExcerpt || !evidenceSources.has(candidateSource)) return [];
-    const candidateExcerpt = exactExcerpt(item.candidateExcerpt,
-      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext);
-    if (!candidateExcerpt || !isAffirmativeFitEvidence(candidateExcerpt,
-      candidateSource === "RESUME" ? sources.resumeText : sources.candidateContext)) return [];
-    return [{ jobExcerpt, relationship: item.relationship as FitAssessmentGapDetail["relationship"],
-      candidateSource: candidateSource as FitAssessmentMatch["candidateSource"], candidateExcerpt }];
-  });
+  return { gaps, gapDetails };
 }
 
 function sanitizeEligibility(
-  raw: unknown, sources: PromptSources, reject: (reason: FitFailureReason) => null
+  raw: unknown, sources: PromptSources, warnings: string[], reject: (reason: FitFailureReason) => null
 ): FitAssessmentResult["eligibility"] | null | undefined {
   if (raw === undefined || raw === null) return undefined;
   if (typeof raw !== "object" || Array.isArray(raw)) return reject("invalid-response");
@@ -219,30 +232,22 @@ function sanitizeEligibility(
   const status = compactText(source.status, 16).toUpperCase();
   if (!eligibilityStatuses.has(status)) return reject("invalid-response");
   const note = compactText(source.note, MAX_NOTE_LENGTH + 1);
-  if (note.length > MAX_NOTE_LENGTH) return reject("invalid-response");
-
-  if (status === "CHECK" || status === "BLOCKED") {
-    if (!exactExcerpt(source.jobExcerpt, sources.jobText)) return reject("unverified-evidence");
+  if (note.length > MAX_NOTE_LENGTH || /<[^>]*>/.test(note)) return reject("invalid-response");
+  if (note && unexplainedCandidateClaim(note, sources)) warnings.push("Eligibility: explanatory claims are not supported by provided evidence.");
+  const jobExcerpt = source.jobExcerpt === undefined || source.jobExcerpt === "" ? undefined : excerpt(source.jobExcerpt);
+  const candidateExcerpt = source.candidateExcerpt === undefined || source.candidateExcerpt === "" ? undefined : excerpt(source.candidateExcerpt);
+  if (jobExcerpt === null || candidateExcerpt === null) return reject("invalid-response");
+  if ((status === "CHECK" || status === "BLOCKED") && (!jobExcerpt || !sources.jobText.includes(jobExcerpt)) ||
+    candidateExcerpt && !sources.candidateContext.includes(candidateExcerpt)) {
+    warnings.push("Eligibility: source reference could not be confirmed. Quoted text is unconfirmed.");
   }
-  if (status === "BLOCKED" && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return reject("unverified-evidence");
-  if (source.candidateExcerpt !== undefined && status !== "BLOCKED") {
-    if (typeof source.candidateExcerpt !== "string") return reject("invalid-response");
-    if (source.candidateExcerpt.trim() && !exactExcerpt(source.candidateExcerpt, sources.candidateContext)) return reject("unverified-evidence");
+  if (status === "BLOCKED" && !explicitEligibilityConflict(jobExcerpt ?? "", candidateExcerpt ?? "")) {
+    warnings.push("Eligibility: not supported by provided evidence; the supplied context does not establish a clear conflict.");
   }
-
-  if (status === "BLOCKED" && !explicitEligibilityConflict(
-    String(source.jobExcerpt ?? ""), String(source.candidateExcerpt ?? "")
-  )) return { status: "CHECK", jobExcerpt: exactExcerpt(source.jobExcerpt, sources.jobText) as string,
-    note: "Confirm this eligibility condition; the supplied context does not establish a clear conflict." };
-
   return {
     status: status as FitAssessmentEligibilityStatus,
-    ...((status === "CHECK" || status === "BLOCKED")
-      ? { jobExcerpt: exactExcerpt(source.jobExcerpt, sources.jobText) as string }
-      : {}),
-    ...(status === "BLOCKED"
-      ? { candidateExcerpt: exactExcerpt(source.candidateExcerpt, sources.candidateContext) as string }
-      : {}),
+    ...(jobExcerpt ? { jobExcerpt } : {}),
+    ...(candidateExcerpt ? { candidateExcerpt } : {}),
     ...(note ? { note } : {})
   };
 }
@@ -266,21 +271,29 @@ export function sanitizeFitAssessmentResponse(
   if (source.status !== undefined && source.status !== "ASSESSED") return reject("invalid-response");
   const verdict = compactText(source.verdict, 24).toUpperCase();
   if (!verdicts.has(verdict)) return reject("invalid-response");
-  const matches = sanitizeMatches(source.matches, sources, reject);
+  const warnings: string[] = [];
+  const matches = sanitizeMatches(source.matches, sources, warnings, reject);
   if (!matches) return null;
-  const gaps = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))), reject);
-  if (!gaps) return null;
-  const gapDetails = sanitizeGapDetails(source.gaps, sources);
+  const gapResult = sanitizeGaps(source.gaps, sources, new Set(matches.map(({ jobExcerpt }) => dedupeKey(jobExcerpt))), warnings, reject);
+  if (!gapResult) return null;
+  const { gaps, gapDetails } = gapResult;
   if (verdict !== "LIMITED" && matches.length === 0 &&
-    !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) return reject("unverified-conclusion");
-  const eligibility = sanitizeEligibility(source.eligibility, sources, reject);
+    !(verdict === "STRETCH" && gapDetails.some((detail) => detail.relationship === "transferable"))) warnings.push("Verdict: not supported by provided evidence; no supporting candidate finding was supplied.");
+  const eligibility = sanitizeEligibility(source.eligibility, sources, warnings, reject);
   if (eligibility === null) return null;
 
+  if (source.summary !== undefined && typeof source.summary !== "string") return reject("invalid-response");
+  const summary = source.summary === undefined ? "" : compactText(source.summary, 501);
+  if (summary.length > 500 || /<[^>]*>/.test(summary)) return reject("invalid-response");
+  if (summary && unexplainedCandidateClaim(summary, sources)) {
+    warnings.push("Summary: not supported by provided evidence. Review candidate tools, metrics and outcomes.");
+  }
   const typedVerdict = verdict as FitAssessmentVerdict;
   return {
     status: "ASSESSED",
     verdict: typedVerdict,
-    summary: FIT_ASSESSMENT_SUMMARY[typedVerdict],
+    summary: summary || FIT_ASSESSMENT_SUMMARY[typedVerdict],
+    ...(warnings.length ? { warnings: sanitizeContentWarnings(warnings) } : {}),
     matches,
     gaps,
     ...(gapDetails.length ? { gapDetails } : {}),

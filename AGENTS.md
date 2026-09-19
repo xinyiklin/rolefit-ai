@@ -160,8 +160,13 @@ can verify the move.
   resume content to an application service. RoleFit sends only the inputs
   required for the user-selected local CLI or API workflow and keeps its local
   workspace ignored.
-- AI output must remain evidence-grounded. Never invent employers, dates,
-  metrics, education, tools, experience, or outcomes.
+- AI generation instructions must remain evidence-grounded: never instruct
+  invention of employers, dates, metrics, education, tools, experience, or
+  outcomes. RoleFit content/evidence judgments follow its
+  [user-directed warning policy](apps/role-fit-ai/PRODUCT.md#content-and-evidence-warning-policy):
+  otherwise usable output remains reviewable with warnings, while security and
+  data-integrity protections remain blocking. This policy does not change Typeset
+  or portable document schemas.
 
 ## Commands
 

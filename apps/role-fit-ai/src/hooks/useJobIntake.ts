@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 /**
  * useJobIntake — the job-analysis/import flows, extracted from App.tsx:
@@ -80,6 +81,7 @@ export type ImportedJobSnapshot = {
   brief: PreparedJobBrief;
   manualReviewFields: string[];
   conditionIssues?: JobConditionIssue[];
+  jobWarnings?: JobAnalysisWarning[];
 };
 
 function importedJobSnapshot(
@@ -96,6 +98,7 @@ function importedJobSnapshot(
     tracking: extracted.tracking,
     brief,
     conditionIssues: extracted.conditionIssues ?? [],
+    jobWarnings: extracted.jobWarnings,
     manualReviewFields: reconcilePreparedJobManualReviewFields(
       extracted.tracking,
       brief,

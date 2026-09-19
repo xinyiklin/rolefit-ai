@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 // Drafts truthful answers to the supplemental free-text questions a job
 // application asks (e.g. "Why do you want to work here?"), plus a short
 // description of each past role for the per-experience boxes some forms have.
@@ -18,6 +19,7 @@ import {
   findUngroundedProseProperClaimTerm,
   proseHasUngroundedTerm
 } from "./grounding.ts";
+import { candidateClaimIssue } from "./claimEvidence.ts";
 import { hasUngroundedNumericClaim } from "./sanitize.ts";
 
 // Optional dispatch-attempt collector: callConfiguredProvider bumps `attempts`.
@@ -145,10 +147,13 @@ export function bindApplicationAnswers(
     ) {
       unusableAnswers();
     }
-    const text = String(answer.answer ?? "").trim().slice(0, 4_000);
-    if (!text) unusableAnswers();
+    const text = typeof answer.answer === "string" ? answer.answer.trim() : "";
+    if (!text || text.length > 4_000 || /<\/?[a-z][^>]*>|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(text)) unusableAnswers();
+    const warnings: string[] = [];
+    const claimIssue = candidateClaimIssue(text, groundingText, groundingText);
     if (
-      proseHasUngroundedTerm(text, jobLower, groundingLower)
+      claimIssue
+      || proseHasUngroundedTerm(text, jobLower, groundingLower)
       || hasUngroundedNumericClaim(text, groundingText)
       // The JD-specific prose gate above cannot see a fabricated technology
       // absent from the posting (for example, claiming Salesforce in a Python-
@@ -161,12 +166,13 @@ export function bindApplicationAnswers(
       || findUngroundedProseProperClaimTerm(text, groundingText, jobText)
       || findUngroundedOutcomeClaim(text, groundingText, { candidateProse: true })
     ) {
-      throw new UserSafeAiError("AI response included an unsupported claim in an application answer. The draft was withheld; try again or add honest context.", 502);
+      warnings.push(`Not supported by provided evidence. ${claimIssue ?? "Check the claims, tools, numbers, and outcomes in this answer."}`);
     }
     return {
       question,
       answer: text,
-      needsInput: answer.needsInput === true || /\[add:/i.test(text)
+      needsInput: answer.needsInput === true || /\[add:/i.test(text),
+      ...(warnings.length ? { warnings } : {})
     };
   });
 }
@@ -215,20 +221,23 @@ export function bindApplicationRoleDescriptions(
     if (!item || typeof item !== "object") unusableRoleDescriptions();
     const record = item as Record<string, unknown>;
     if (String(record.roleId ?? "") !== role.id) unusableRoleDescriptions();
-    const description = String(record.description ?? "").trim().slice(0, 2_000);
-    if (!description) unusableRoleDescriptions();
+    const description = typeof record.description === "string" ? record.description.trim() : "";
+    if (!description || description.length > 2_000 || /<\/?[a-z][^>]*>|[\u0000-\u0008\u000b\u000c\u000e-\u001f]/i.test(description)) unusableRoleDescriptions();
+    const warnings: string[] = [];
     const roleGrounding = `${role.label}\n${role.bullets.join("\n")}`;
     const roleGroundingLower = roleGrounding.toLowerCase();
+    const claimIssue = candidateClaimIssue(description, roleGrounding, roleGrounding);
     if (
-      !roleDescriptionAnchored(description, roleGrounding)
+      claimIssue
+      || !roleDescriptionAnchored(description, roleGrounding)
       || proseHasUngroundedTerm(description, jobLower, roleGroundingLower)
       || hasUngroundedNumericClaim(description, roleGrounding)
       || findUngroundedClaimTerm(description, roleGrounding)
       || findUngroundedOutcomeClaim(description, roleGrounding)
     ) {
-      throw new UserSafeAiError("AI response included an unsupported claim in a role description. The draft was withheld; try again.", 502);
+      warnings.push(`Not supported by provided evidence for this role. ${claimIssue ?? "Check attribution, tools, numbers, and outcomes against this experience."}`);
     }
-    return { role: role.label, description, needsInput: true };
+    return { role: role.label, description, needsInput: true, ...(warnings.length ? { warnings } : {}) };
   });
 }
 
@@ -317,14 +326,15 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
-    const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
+    const sourceWarnings = sanitizeContentWarnings(body.sourceWarnings) ?? [];
+    const customInstructions = [String(body.customInstructions ?? "").slice(0, 4_000), ...sourceWarnings].join("\n");
     const includeRoleDescriptions = body.includeRoleDescriptions === true;
     const questions = normalizeApplicationQuestions(body.questions);
     const roleEvidence = includeRoleDescriptions
       ? normalizeApplicationRoleEvidence(body.roleEvidence, resumeText)
       : [];
 
-    if (resumeText.trim().length < 80) {
+    if (!resumeText.trim()) {
       sendJson(res, 400, { error: "Add your resume before generating answers." });
       return;
     }
@@ -388,7 +398,9 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     assertUsableApplicationAnswerOutput(questions, includeRoleDescriptions, answers, roleDescriptions);
 
     // Echo the resolved provider/model/reasoningEffort (never the API key).
-    sendJson(res, 200, { answers, roleDescriptions, model, provider, reasoningEffort, attempts: stats.attempts ?? 1 });
+    const withSourceConcerns = <T extends { warnings?: string[] }>(item: T): T => sourceWarnings.length
+      ? { ...item, warnings: sanitizeContentWarnings([...(item.warnings ?? []), ...sourceWarnings]) } : item;
+    sendJson(res, 200, { answers: answers.map(withSourceConcerns), roleDescriptions: roleDescriptions.map(withSourceConcerns), model, provider, reasoningEffort, attempts: stats.attempts ?? 1 });
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
     if (error instanceof UserSafeAiError) {

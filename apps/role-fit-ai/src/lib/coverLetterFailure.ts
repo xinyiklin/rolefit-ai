@@ -101,7 +101,7 @@ export function parseCoverLetterBlockedFailure(value: unknown): CoverLetterBlock
   const candidate = object(value);
   if (
     candidate?.status !== "blocked" ||
-    candidate.reason !== "evidence_checks" ||
+    !["technical_checks", "evidence_checks"].includes(String(candidate.reason)) ||
     !Array.isArray(candidate.issues)
   ) return null;
   const issues = candidate.issues

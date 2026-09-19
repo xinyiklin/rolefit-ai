@@ -13,10 +13,11 @@ assert.deepEqual(concise.responsibilities, ["Build Python services.", "Maintain 
 assert.deepEqual(concise.conditionIssues, []);
 for (const original of ["Python or Java experience is required.", "Python experience is not required.", "Python experience is required unless equivalent experience is demonstrated."]) {
   const result = sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, original);
-  assert.deepEqual(result.requiredQualifications, [original]);
+  assert.deepEqual(result.requiredQualifications, ["Python experience is required."]);
+  if (original !== "Python experience is required.") assert.ok(result.jobWarnings?.length);
 }
-assert.deepEqual(sanitizeJobAnalysis({requiredQualifications:["Python experience is required."]}, "Python experience is preferred.").requiredQualifications, ["Python experience is preferred."]);
-assert.equal(sanitizeJobAnalysis({workAuth:"Visa sponsorship is available."}, "We do not offer visa sponsorship.").workAuth, "We do not offer visa sponsorship.");
+assert.deepEqual(sanitizeJobAnalysis({requiredQualifications:["Python experience is required."]}, "Python experience is preferred.").requiredQualifications, ["Python experience is required."]);
+assert.equal(sanitizeJobAnalysis({workAuth:"Visa sponsorship is available."}, "We do not offer visa sponsorship.").workAuth, "Visa sponsorship is available.");
 
 const input = {jobText:"Build Python services.", company:"Acme", role:"Engineer", includeResume:true, includeCoverLetter:false, resumeText:"Built Python services with Kubernetes.", coverLetterText:"", evidence:[{id:"original",kind:"resume",label:"Loaded resume evidence",text:"Built Python services."}]};
 for (const recovery of ["Remove Kubernetes; the source only shows Python.", "Use 2 bullets to explain the Python work."]) {

@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { findUngroundedProseProperClaimTerm } from "./grounding.ts";
 import { candidateClaimSentences } from "./coverLetterGroundingIssues.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -116,21 +117,18 @@ export function reviewProviderFindings(
       "evidence",
       "settings",
     ];
-    const finding = { ...candidate, dependencies };
+    const finding = { ...candidate, dependencies, warnings: undefined };
     const checked = sanitizeApplicationReviewFinding(
       finding,
       input,
       local.reviewedDocuments,
     );
-    if (
-      !checked ||
-      !finding.anchor ||
-      !finding.sourceExcerpt ||
-      !finding.evidenceId
-    ) {
+    if (!checked) {
       incomplete = true;
       continue;
     }
+    const warnings = [...(checked.warnings ?? [])];
+    if (!finding.anchor || !finding.sourceExcerpt || !finding.evidenceId) warnings.push("Source reference could not be confirmed; this finding is missing a document or source reference.");
     const evidence = input.evidence.find(
       (item) => item.id === finding.evidenceId,
     );
@@ -153,8 +151,7 @@ export function reviewProviderFindings(
       (isCandidate && !evidence && !crossDocument && !targetFinding) ||
       (!isCandidate && finding.evidenceId !== "job_posting")
     ) {
-      incomplete = true;
-      continue;
+      warnings.push("Not supported by provided evidence: the cited source does not establish this claim's attribution.");
     }
     const recoveryClaims = explicitAdviceClaims(finding.recovery);
     const recoverySource =
@@ -171,8 +168,7 @@ export function reviewProviderFindings(
             findUngroundedProseProperClaimTerm(claim, recoverySource, ""),
         ))
     ) {
-      incomplete = true;
-      continue;
+      warnings.push("Not supported by provided evidence: the suggested recovery introduces an unconfirmed claim.");
     }
 
     if (
@@ -180,8 +176,7 @@ export function reviewProviderFindings(
       finding.code === "attribution"
     ) {
       if (!evidence && !crossDocument) {
-        incomplete = true;
-        continue;
+        warnings.push("Not supported by provided evidence: no independent candidate source confirms this finding.");
       }
       if (
         !candidateClaimIssue(
@@ -189,17 +184,16 @@ export function reviewProviderFindings(
           evidence?.text ?? input.resumeText + "\n" + input.coverLetterText,
         )
       ) {
-        finding.code = "uncertain";
-        finding.message =
-          "Check this claim and its attribution against the cited source.";
+        warnings.push("This claim or attribution concern could not be independently confirmed. Check the cited source.");
       }
     }
-    accepted.push(finding);
+    accepted.push({ ...checked, ...(warnings.length ? { warnings: sanitizeContentWarnings(warnings) } : {}) });
   }
   const all = mergeApplicationReviewFindings(local.findings, accepted);
   const overflow = local.overflow || value.overflow || all.length > 12;
   const complete =
     !incomplete &&
+    !accepted.some((finding) => finding.warnings?.length) &&
     !overflow &&
     input.evidence.length > 0 &&
     Boolean(input.jobText.trim()) &&

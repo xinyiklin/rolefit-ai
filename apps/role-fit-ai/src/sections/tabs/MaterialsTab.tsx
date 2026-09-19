@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Clipboard, Plus, Sparkles, X } from "lucide-react";
-import type { ApplicationAnswersResult } from "../shared";
+import { ContentWarnings } from "../../components/ContentWarnings";
+import type { ApplicationAnswersResult, GeneratedAnswer, GeneratedRoleDescription } from "../shared";
 
 const DEFAULT_QUESTIONS = [
   "Why do you want to work for us?",
@@ -9,8 +10,8 @@ const DEFAULT_QUESTIONS = [
   "Describe a project or accomplishment relevant to this role."
 ];
 
-type AnswerDraft = { question: string; answer: string; needsInput: boolean };
-type RoleDraft = { role: string; description: string; needsInput: boolean };
+type AnswerDraft = GeneratedAnswer;
+type RoleDraft = GeneratedRoleDescription;
 
 export type MaterialsTabProps = {
   answersResult: ApplicationAnswersResult;
@@ -135,6 +136,8 @@ export function MaterialsTab({
                 const key = `a-${i}`;
                 return (
                   <article className="draft-sheet" key={key}>
+                    {d.warnings?.length && d.answer !== answersResult?.answers[i]?.answer ? <p>Warnings refer to the earlier generated wording.</p> : null}
+                    <ContentWarnings warnings={d.warnings} />
                     <div className="draft-sheet__head">
                       <div className="draft-sheet__meta">
                         <span className="draft-sheet__kind">Question</span>
@@ -177,6 +180,8 @@ export function MaterialsTab({
                 const key = `r-${i}`;
                 return (
                   <article className="draft-sheet" key={key}>
+                    {r.warnings?.length && r.description !== answersResult?.roleDescriptions[i]?.description ? <p>Warnings refer to the earlier generated wording.</p> : null}
+                    <ContentWarnings warnings={r.warnings} />
                     <div className="draft-sheet__head">
                       <div className="draft-sheet__meta">
                         <span className="draft-sheet__kind">Role note</span>

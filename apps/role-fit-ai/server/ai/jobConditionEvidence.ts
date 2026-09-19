@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 import { AUTH_STEMS, mentionsAuthStem } from "./eligibilityLexicon.ts";
 import { distinctiveTokenKeys, LIST_STOPWORDS } from "./grounding.ts";
@@ -39,7 +40,8 @@ export function groundedJobCondition(
   value: string,
   field: JobConditionIssue["field"],
   source: string,
-  issues: JobConditionIssue[]
+  issues: JobConditionIssue[],
+  warnings: JobAnalysisWarning[] = []
 ): string {
   if (!value.trim()) return "";
   const words = distinctiveTokenKeys(value, LIST_STOPWORDS);
@@ -59,13 +61,17 @@ export function groundedJobCondition(
     })
     .sort((a, b) => b.score - a.score);
   const candidate = ranked[0];
-  if (!candidate || candidate.score < 0.5) return "";
+  if (!candidate || candidate.score < 0.5) {
+    warnings.push({ field, message: "Not supported by provided evidence. This condition could not be located in the original posting." });
+    return value;
+  }
   const { clause } = candidate;
   const headingConcern = field !== "workAuth" && clause.nonRequirementSection;
   const qualificationConcern = field === "requiredQualifications" && /\bpreferred\b/i.test(clause.text);
   const preserveCondition = field === "workAuth" || /\b(?:not|no|never|unless|except|only|either|or|must|required|preferred|minimum|at least|at most)\b|\d/i.test(clause.text);
   const tooLong = preserveCondition && clause.text.length > (field === "workAuth" ? 240 : 1000);
   if (qualificationConcern || headingConcern || tooLong || (preserveCondition && canonical(value) !== canonical(clause.text))) {
+    warnings.push({ field, message: "Review this generated condition against the original posting; its wording or classification may change the source meaning." });
     if (issues.length < 8) issues.push({
       field,
       sourceExcerpt: clause.text.slice(0, 1000),
@@ -75,8 +81,8 @@ export function groundedJobCondition(
           ? "Check this classification against the posting; its section heading suggests non-requirement content."
           : tooLong
             ? "This condition is too long to safely summarize. Review the original wording."
-            : "The original condition was retained to preserve its meaning."
+            : "The generated condition differs from this original wording; review its meaning."
     });
   }
-  return tooLong ? "" : preserveCondition ? clause.text : value;
+  return value;
 }

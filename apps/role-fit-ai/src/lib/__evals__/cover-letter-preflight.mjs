@@ -217,9 +217,10 @@ const referralText = `${authoredParagraph}
 
 Mention [Referral name].`;
 const referral = buildCoverLetterPreflight({ text: referralText, ...target });
-assert.equal(referral.canTailor, false);
+assert.equal(referral.canTailor, true);
 assert.equal(referral.privateSlots.length, 1, "a referral is a private fact");
-assert.equal(referral.blockers.length, 1, "it asks exactly one focused question");
+assert.equal(referral.blockers.length, 0, "private evidence is advisory");
+assert.equal(referral.warnings.length, 1, "the missing private fact remains visible");
 const referralSlot = referral.privateSlots[0];
 const answeredReferral = buildCoverLetterPreflight({
   text: referralText,

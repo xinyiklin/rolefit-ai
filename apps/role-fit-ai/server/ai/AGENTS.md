@@ -3,6 +3,17 @@
 Applies to `apps/role-fit-ai/server/ai/` and `server/ai-cli/`. Prompt and
 sanitizer code is executable product behavior and anti-fabrication-critical.
 
+## Content and evidence policy
+
+The [canonical product policy](../../PRODUCT.md#content-and-evidence-warning-policy)
+requires content/evidence failures to preserve otherwise usable output with
+warnings across all RoleFit generation, analysis, assessment, and review paths.
+Keep truthful prompts and existing checks; do not add an AI analysis stage or
+policy engine. Unknown source references or unconfirmed excerpts are evidence
+warnings, never verified citations or links to unrelated sources. Invalid edit
+targets, unsafe markup, unusable structures, unauthorized mutations, and stale
+application retain blocking technical guards.
+
 ## Module ownership
 
 - `providers.ts` resolves provider identity, defaults, credentials, models, and
@@ -28,16 +39,15 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   reruns only the compact fit after a relevant input changes. Fit Assessment must
   follow the canonical
   [`server/ai/README.md`](README.md#fit-assessment-technical-contract)
-  contract: both paths render one exported rules block, every finding uses exact
-  current-source excerpts, and focused explicit-conflict guards protect evidence.
+  contract: both paths render one exported rules block and request exact
+  current-source excerpts. Unlocated references and explicit conflicts remain
+  visible as warnings; safe conclusions and summary prose are preserved.
   The model owns semantic judgment; no requirement ledger, completeness gate,
   deterministic verdict calculation, or guessed fallback is permitted.
-  Cover-letter tailoring is **one call**. It requires the candidate's source
-  letter and the evidence corpus derived from their own resume, notes, and
-  answers; it never generates from resume/job inputs alone. The route shares
-  deterministic preflight with the browser, returns `422 needs_input` before
-  provider dispatch only for a genuinely unresolvable fact, and cannot return
-  `ready` with template tokens or unresolved correspondence fields.
+  Cover-letter tailoring is one operation over the source letter and candidate
+  evidence. Shared preflight requires a prepared role/company and a usable resume
+  corpus; a missing candidate name or private fact is advisory. Safe placeholders
+  remain usable text with warnings. No additional evidence-planning stage exists.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks. The direct category rubric in `fitAssessment.ts` is provider-applied; do
   not add a deterministic fit classifier, numeric scores, or a visible/persisted
@@ -46,52 +56,46 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,
   a use/skip classification pass, or a selected-evidence request field.
-- Validation collects typed issues with separate internal repair instructions
-  and runs exactly one silent repair request carrying those instructions plus
-  the rejected output. A second failure fails closed, returns at most eight
-  deterministic user-safe issue records (`code`, `category`, `detail`,
-  `recovery`, and optional bounded claim/value fields), and keeps the
-  candidate's existing letter; never return the repair instruction, internal
-  evidence ids, or rejected provider output. Proposal acceptance remains a
-  client-side boundary, not another server stage. Never route a model-authored
-  slip into a candidate-facing planning step.
+- Cover-letter validation separates content findings from technical defects.
+  A usable body returns `ready` with warnings without repair. Unusable structure
+  may receive one silent repair; a repeated technical failure returns bounded
+  user-safe issues and leaves the editor unchanged. Never expose internal repair
+  instructions or treat source-id location as factual verification. Acceptance
+  remains a client-side boundary, not another server stage.
 - Unfinished Guidance prompts are not evidence. Filter unresolved bracketed
   context in the browser corpus builder and independently at the server request
   boundary. Numeric grounding normalizes equivalent digit and word durations
-  (for example, `3 years` and `three years`) while still rejecting a duration
-  absent from candidate evidence.
+  (for example, `3 years` and `three years`). A duration absent from candidate
+  evidence must produce a warning, not discard usable text.
 - A pure employer fact may stay outside the candidate-claim surface, but an
   employer-led sentence that compares the employer with candidate experience or
-  implies a candidate background remains inside every grounding gate. Grammatical
+  implies a candidate background remains inside the grounding checks. Grammatical
   subject alone is not an evidence exemption.
 - Bracketed slot text is a drafting instruction, never candidate evidence and
-  never voice. Only a slot naming a private fact (a referral, a prior personal
-  relationship) may ask the candidate; every other slot is generative, and the
-  model may legitimately leave one unused.
+  never voice. The model may legitimately leave a slot unused. Optional private
+  facts can be flagged but must not require user input before usable output
+  proceeds; they do not become operational requirements merely by appearing in
+  a template.
 - Length is a warning, never a gate. Do not restore a word-count or
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
 ## Trust contracts
 
-- Resume Polish emits targeted suggestions grounded in the submitted
-  resume/honest context. Never import JD-only skills or fabricate claims.
+- Resume Polish prompts require suggestions grounded in the submitted
+  resume/honest context; never instruct JD-only skill insertion or fabrication.
   Only bullets and actual Skills lists are mutable targets; category labels and standard
   entry role, employer, subtitle, and date fields remain read-only evidence.
-  Unknown, duplicate, unchanged, malformed, or unsupported edits are dropped
-  independently. A category phrase or unsupported new list item is dropped
-  without erasing safe siblings.
-  Optional summary/gap failures never erase safe siblings, while an all-drop for
-  any safety reason returns Withheld rather than a successful empty proposal.
-  UNCHANGED is the one exception, because it is not a withholding: the model
-  returned text the resume already has, so an all-UNCHANGED settle with a valid
-  non-Withheld provider status reports No changes and the wire payload still
-  records the reason. An explicit Withheld status remains Withheld. A single
-  safety drop alongside an echo is enough to return Withheld, and
-  `withheld.count` carries only those safety drops so a rendered "could not be
-  verified" count never includes an echo. Changes beyond the examined response
-  window count as malformed safety drops rather than disappearing from the
-  diagnostic payload.
+  Unknown/duplicate targets and unsafe or unusable mutation structures retain
+  technical guards; unchanged text remains a no-op. Unsupported edits,
+  category-like text in actual Skills targets, unfinished placeholders, and
+  feedback concerns remain reviewable with warnings. Withheld counts describe
+  invalid/unusable operations, never content concerns or unchanged echoes.
+  Changes beyond the bounded response window remain disclosed as malformed.
+  Proposal decisions include run identity; supported-term preservation compares
+  actual accepted edits with the current document, job, and supported baseline.
+  True aliases can preserve a mention; related tools never establish support.
+  Keep this advisory separate from Fit, without a score or coverage guarantee.
 - Polish failures fail plainly without changing the document.
   Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
@@ -136,13 +140,14 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 
 ## Evidence-grounding ownership
 
-- `claimEvidence.ts` and `jobConditionEvidence.ts` own claim polarity and job
-  condition safeguards. `fitEvidence.ts` catches focused explicit conflicts;
+- `shared/evidencePolarity.ts` owns clause-level polarity for client and server.
+  `claimEvidence.ts` and `jobConditionEvidence.ts` own claim and job-condition checks. `fitEvidence.ts` catches focused explicit conflicts;
   do not expand it into a lexical proof of semantic support or a second classifier.
   Fit is advisory: leave tool coverage and responsibility/ownership judgments to
   the model. Retain citation integrity, polarity, and explicit experience-source
   restrictions without importing document-generation word-matching gates.
-- Resume replacements reject unfinished tokens and unsupported atoms. Complete
+- Resume replacement checks detect unfinished tokens and unsupported atoms;
+  content-only failures become warnings. Complete
   target enumeration precedes budgeting. Optional structural advice is separately
   validated and never changes the document. Education uses the shared RoleFit
   classifier; credential-shaped titles stay locked even under mixed headings.

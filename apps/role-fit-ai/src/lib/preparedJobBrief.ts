@@ -59,7 +59,7 @@ function uniqueItems(values: string[], limit = 16): string[] {
   return result;
 }
 
-function parseTailoringSections(tailoringText: string): Omit<PreparedJobBrief, "benefits"> {
+export function parseTailoringSections(tailoringText: string, listLimit = 16): Omit<PreparedJobBrief, "benefits"> {
   const lists: Record<Exclude<PreparedJobBriefField, "companyContext" | "benefits">, string[]> = {
     responsibilities: [],
     requiredQualifications: [],
@@ -103,12 +103,12 @@ function parseTailoringSections(tailoringText: string): Omit<PreparedJobBrief, "
 
   return {
     companyContext,
-    responsibilities: uniqueItems(lists.responsibilities),
-    requiredQualifications: uniqueItems(lists.requiredQualifications),
-    preferredQualifications: uniqueItems(lists.preferredQualifications),
-    techKeywords: uniqueItems(lists.techKeywords),
-    senioritySignals: uniqueItems(lists.senioritySignals),
-    domainSignals: uniqueItems(lists.domainSignals)
+    responsibilities: uniqueItems(lists.responsibilities, listLimit),
+    requiredQualifications: uniqueItems(lists.requiredQualifications, listLimit),
+    preferredQualifications: uniqueItems(lists.preferredQualifications, listLimit),
+    techKeywords: uniqueItems(lists.techKeywords, listLimit),
+    senioritySignals: uniqueItems(lists.senioritySignals, listLimit),
+    domainSignals: uniqueItems(lists.domainSignals, listLimit)
   };
 }
 

@@ -5,6 +5,27 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-18
 
+- [USER+CODE] [TASK ats-terminology-20260918] Approved system-wide advisory
+  content checks and supported-term preservation, then requested review and a
+  branch push. This supersedes the earlier evidence-rejection behavior below:
+  RoleFit preserves usable questioned output with warnings and user actions,
+  while truthful prompts and technical/stale-document protections remain.
+  Root guidance now distinguishes this RoleFit policy from Typeset. Shared
+  packages, portable schemas, provider defaults and product versions are unchanged.
+- [CODE] Required-first terminology uses strict aliases and actual accepted
+  decisions; ordinary Go/Express wording and qualified unit/integration testing
+  do not count as equivalent technical claims. Saved Fit/job receipts retain
+  optional warnings; older builds may reject those newer receipts. Draft warning
+  metadata stays session-local. Visitor and engineering docs describe the limits.
+
+- [TOOL] Final pre-push RoleFit gate passed app/server/landing/desktop checks
+  and 121/121 offline probes after terminology corrections. Document workflows
+  and synthetic desktop/390px QA passed during implementation; two independent
+  implementation reviewers and a fresh publication reviewer cleared their scopes.
+  Live providers, vendor ATS and hiring outcomes remain unverified; no efficacy
+  claim. Native full-shell Save/Export/Apply clicks were not exercised. Local
+  artifacts and personal data remain excluded from publication.
+
 - [USER+CODE] [TASK fit-assessment-rejection-20260918] Approved the advisory Fit
   guard simplification and publication after review. The RoleFit-owned change
   removes semantic word-matching vetoes while preserving citation integrity

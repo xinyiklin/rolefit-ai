@@ -1,0 +1,3 @@
+.content-warnings { margin-block: .5rem; padding: .5rem .65rem; border-inline-start: 2px solid currentColor; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; min-width: 0; }
+.content-warnings strong { font-weight: 600; }
+.content-warnings ul { margin: .25rem 0 0; padding-inline-start: 1.1rem; }

@@ -1,9 +1,10 @@
 // Cover-letter AI is one request. The model sees the whole evidence corpus and
 // decides what to use; the server resolves correspondence deterministically,
-// validates the result, and repairs once in silence before giving up. The
+// warns on content concerns and repairs unusable structure once. The
 // server has no approval stage; the browser stages a valid response as a
 // proposal.
 
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
@@ -39,6 +40,7 @@ import {
 import type { CoverLetterSourceContext } from "../../src/lib/coverLetterTemplate.ts";
 import {
   CoverLetterBlockedError,
+  coverLetterIssueWarnings,
   repairMessagesForCoverLetterIssues
 } from "./coverLetterIssues.ts";
 import { coverLetterParagraphClaims } from "./coverLetterParagraphEvidence.ts";
@@ -125,17 +127,16 @@ export async function tailorCoverLetter(
 
   let run = await attempt();
   let repaired = false;
-  if (run.issues.length > 0) {
-    // One silent repair. A model that omits an id or reaches for a stock phrase
-    // is a drafting slip, not a reason to hand the candidate a planning task.
+  if (!run.validation.output || run.issues.some((issue) => issue.blocking)) {
+    // Repair only technical defects; usable content concerns remain advisory.
     repaired = true;
     run = await attempt({
-      violations: repairMessagesForCoverLetterIssues(run.issues),
+      violations: repairMessagesForCoverLetterIssues(run.issues.filter((issue) => issue.blocking)),
       rejectedOutput: run.parsed
     });
   }
-  if (!run.validation.output || run.issues.length > 0) {
-    throw new CoverLetterBlockedError(run.issues, repaired);
+  if (!run.validation.output || run.issues.some((issue) => issue.blocking)) {
+    throw new CoverLetterBlockedError(run.issues.filter((issue) => issue.blocking), repaired);
   }
 
   const { output } = run.validation;
@@ -145,7 +146,7 @@ export async function tailorCoverLetter(
     coverLetterText,
     bodyParagraphs: output.bodyParagraphs,
     evidenceUsed: evidenceUsedByParagraphs(output.bodyParagraphs, evidenceItems),
-    warnings: [...output.warnings, ...coverLetterLengthWarnings(coverLetterText)],
+    warnings: sanitizeContentWarnings([...coverLetterIssueWarnings(run.issues), ...output.warnings, ...coverLetterLengthWarnings(coverLetterText)]) ?? [],
     ...(repaired ? { repaired: true } : {})
   };
 }
@@ -209,7 +210,8 @@ export async function handleCoverLetter(
     const body = await readAiJsonBody(req, 1_000_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const sourceCoverLetterText = String(body.sourceCoverLetterText ?? "").slice(0, 35_000);
-    const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
+    const sourceWarnings = sanitizeContentWarnings(body.sourceWarnings) ?? [];
+    const customInstructions = [String(body.customInstructions ?? "").slice(0, 4_000), ...sourceWarnings].join("\n");
     const detailValues = parseDetailValues(body);
     const rawResolved =
       body.resolvedContext && typeof body.resolvedContext === "object"
@@ -276,6 +278,7 @@ export async function handleCoverLetter(
     );
     sendJson(res, 200, {
       ...result,
+      warnings: sanitizeContentWarnings([...preflight.warnings, ...result.warnings, ...sourceWarnings]) ?? [],
       model,
       provider,
       reasoningEffort,
@@ -286,7 +289,7 @@ export async function handleCoverLetter(
     if (error instanceof CoverLetterBlockedError) {
       sendJson(res, error.status, {
         status: "blocked",
-        reason: "evidence_checks",
+        reason: "technical_checks",
         error: error.message,
         issues: error.issues,
         repairAttempted: error.repairAttempted

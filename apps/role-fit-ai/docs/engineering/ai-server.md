@@ -3,6 +3,11 @@
 Paths in this document are relative to `apps/role-fit-ai/`. Run commands from
 the repository root.
 
+The [content warning policy](../../PRODUCT.md#content-and-evidence-warning-policy)
+keeps usable AI output reviewable with bounded warnings, without an acknowledgment
+step. Security, structure, resource, mutation-target, persistence, and stale-response
+protections remain blocking. Generation prompts still require truthful source use.
+
 RoleFit AI's reusable server runtime (`server/runtime.ts`) serves the Vite
 frontend in development, exposes a small set of local API routes, and owns all
 outbound AI provider calls. The thin web entry point (`server.ts`) supplies the
@@ -132,11 +137,11 @@ owns:
   material bullets, summaries, actual skill lists, and job-relevant fields
   without prefix-order bias. It serializes only complete target objects and
   validates the reply against exactly that selected set. Skills category labels
-  are locked; actual skill lists remain targets. Category substitutions and
-  job-only skill additions are rejected independently beside unknown,
-  duplicate, unchanged, malformed, and unsupported mutations. Optional
-  feedback is tolerant while mutation validation stays strict. Only bullets and
-  actual Skills lists are mutable targets. Identity, contact,
+  are locked; actual skill lists remain targets. Unsupported new skills, category
+  substitutions in a list target, and other content concerns produce warnings.
+  Unknown/duplicate targets and malformed or unsafe mutations remain blocked;
+  unchanged text is a no-op. Optional feedback concerns do not erase safe siblings.
+  Only bullets and actual Skills lists are mutable targets. Identity, contact,
   education, and standard-entry role/employer/subtitle/date fields remain
   read-only evidence; omitted sections are absent.
   `/api/polish` accepts only the one-pass `resume-proposal` contract. Its prompt
@@ -149,42 +154,34 @@ owns:
   description, `resolvedContext` hints, any `slotAnswers`, and optional
   app-supplied `employerContext`; there is no mode, plan, or selection field.
   Shared deterministic preflight resolves date, candidate name, role, company,
-  greeting, and sign-off, and returns `422 needs_input` before any provider
-  dispatch only when a fact truly cannot be resolved: a missing candidate name,
-  role, or company, or an unanswered private template slot. Generative template
-  slots never block. A recipient named in the source greeting is preserved;
-  otherwise the company hiring team is the fallback.
-  The model receives the full completed corpus and chooses what to use — that
-  selection is its job, not the candidate's. Unresolved bracketed Guidance
-  prompts are filtered by the browser corpus builder and again by the server
-  request parser, so a recovery prompt cannot become candidate evidence. The
-  model returns body paragraphs with the evidence ids it actually used and the
-  generative slot ids it resolved; the server assembles date, greeting, body,
-  and sign-off. Server validation collects typed **repairable issues** rather
-  than failing outright: unknown evidence or slot ids, a
-  paragraph citing nothing, a residual template token, a greeting/sign-off/date
-  inside the body, a missing role or company, a second greeting, generic
-  brochure phrasing, and ungrounded candidate terms, numbers, or outcomes.
-  Numeric grounding treats equivalent word/digit durations alike while still
-  requiring the candidate corpus to contain that duration. Any issue triggers
-  exactly **one silent repair request** carrying internal repair instructions
-  and the rejected output. A second failure returns `422` with `status:
-  "blocked"`, `reason: "evidence_checks"`, `repairAttempted`, a user-safe error,
-  and at most eight deterministic issue records (`code`, `category`, `detail`,
-  `recovery`, and optional bounded `claim` / `unsupportedValue`); it never
-  returns repair instructions, internal evidence ids, or rejected provider
-  text. The client validates the fixed code/category/recovery relationships and
-  keeps the current letter
-  unchanged and offers recovery near the workflow heading. A valid response is
-  also staged client-side as a fingerprinted proposal: only **Accept proposal**
-  applies it, **Discard proposal** does not touch the editor, and changed semantic
-  inputs disable acceptance until Resume Polish runs again. The flow never escalates
-  into asking the candidate to plan evidence. Length is advisory — outside
-  180-420 words the letter still returns, with a warning attached. Pure employer
-  facts are excluded from the candidate-claim surface, but employer-led sentences
-  with explicit or implied candidate experience or comparison cues remain inside
-  every grounding gate. It and `/api/application-answers` echo the resolved
-  `provider` / `model` / `reasoningEffort`.
+  greeting, and sign-off. Missing role/company inputs return `422 needs_input`;
+  candidate name and private template details are optional warnings. An authored
+  recipient is preserved, otherwise the company hiring team is used.
+  The model chooses from the full completed candidate corpus. Unresolved Guidance
+  prompts are filtered as evidence at both boundaries. Model paragraphs name their
+  source ids; known ids remain available without certifying their claims.
+  Content checks detect unlocated evidence, missing citations, safe placeholders,
+  target wording, generic prose, and unsupported terms, metrics, or outcomes.
+  Those issues return usable text with warnings and never trigger repair.
+  Technical issues, including unusable paragraphs, unsafe markup, invalid template
+  slot ids, correspondence assembly defects, and resource limits, may trigger one
+  repair. Repeated technical failure returns `422`, `status: "blocked"`,
+  `reason: "technical_checks"`, and at most eight display-safe issue records.
+  Internal repair instructions and rejected provider bodies never reach the UI.
+  A usable response is staged as a fingerprinted proposal: **Accept proposal**
+  applies it, **Discard proposal** does not mutate the editor, and stale content
+  identity prevents applying to another document. Resume-only changes retain the
+  proposal with an earlier-resume warning. Accepted concerns survive later edits
+  with an earlier-wording label; Restore follows the editor's own snapshot lifetime.
+  The 180–420-word preference is advisory. Employer facts use employer evidence;
+  implied candidate experience still goes through candidate checks. Equivalent
+  word/digit durations receive the same support check.
+  `/api/application-answers` retains each usable answer/role description with item
+  warnings for unsupported claims or wrong-entry attribution. Wrong question/role
+  bindings and unsafe structures still fail. Both routes accept bounded
+  `sourceWarnings` for known uncertainty in earlier Resume wording and carry them
+  into prompts and results. This propagation does not verify the source. Both
+  echo resolved `provider`, `model`, and `reasoningEffort`, never credentials.
 - resume input into the structured editor: pasted resume text is parsed once into
   `ResumeData`, the source of truth thereafter; a previously saved `.resume` file
   loads its `ResumeData` directly. The file picker accepts only `.resume` (no DOCX,
@@ -220,10 +217,11 @@ owns:
   checks supplement the prompt: scalar facts (including title, company,
   location, salary, `roleDescription`, `jobType`, and tech) and content-list
   items (responsibilities, required/preferred qualifications) are checked
-  against the source and dropped when the current deterministic matchers cannot
-  ground them. This reduces unsupported output but does not replace human
-  review. The source URL is never sent to the model
-  (it can carry private ATS tokens, so only the posting text is forwarded).
+  against the source. Safe fields remain visible with field/item warnings when
+  support cannot be confirmed; their generated wording does not replace the retained
+  posting as source evidence. A technically usable partial result is not replaced
+  by local fallback because a content check failed. The source URL is never sent
+  to the model (it can carry private ATS tokens, so only posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
   provider after publishing the deterministic local brief. Combined analysis and
   reassessment pass through one private request boundary that owns JSON decoding,
@@ -233,7 +231,7 @@ owns:
 
 ### Fit Assessment integration boundary
 
-The canonical prompt, structured-output, exact-grounding, provider, request-
+The canonical prompt, structured-output, source-checking, provider, request-
 identity, and verification contract lives in
 [`server/ai/README.md`](../../server/ai/README.md#fit-assessment-technical-contract).
 At the server boundary, combined Job analysis and reassessment remain modes of
@@ -375,24 +373,27 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   a valid non-Withheld status: UNCHANGED means the model returned text the resume
   already has. An explicit `WITHHELD` status remains withheld, and one safety
   drop beside an echo also raises the withheld card. `withheld.count` carries
-  only the safety drops, so the rail's "could not be verified" line never counts
-  an echo; `withheld.reasons` still lists UNCHANGED as the diagnostic record. A
-  response longer than the examined window can never settle as `NO_CHANGES`,
+  only technical safety drops, so the rail never counts content warnings or
+  an echo as unusable edits; `withheld.reasons` still lists UNCHANGED as the
+  diagnostic record. A response longer than the examined window cannot settle
+  as `NO_CHANGES`,
   because its tail was never read; each beyond-window change is recorded as a
   malformed safety drop. Eligible items are examined in order until 12 safe
   edits fill the wire cap. `stripBoldMarks` is
   case-insensitive and re-collapses whitespace on purpose: the markup gate
   accepts `<B>`, and removing a tag can join the spaces around it.
-  Hit-keyword grounding: a suggestion whose claimed JD
-  keyword appears in `proposedText` but whose significant words exist
-  nowhere in the scope text or honest context is dropped
-  (`ungroundedKeyword`) — the model-prose evidence field cannot launder an
-  inferred fact (e.g. "clinics run Windows") into the resume.
+  Content checks warn when proposed terminology lacks support in the target's
+  evidence; model-authored rationale is not independent proof. The client derives
+  a separate preservation advisory from current accepted decisions, a supported
+  baseline, and the current job/document identity. Required/preferred terminology
+  uses prepared-job distinctions before flat keyword limits. True aliases differ
+  from related concepts, and negated or uncertain text does not establish support.
 - `eligibilityLexicon.ts` — work-authorization and credential stems used by the
   job analyzer's `workAuth` grounding. It does not select a fit verdict.
 - `fitAssessment.ts` — executable prompt, response schema, and bounded source/relationship validation
   for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
-  Model summary text is never part of the accepted contract.
+  Safe model summary text is retained with evidence warnings when needed; fixed
+  summary copy is used only when no model summary was supplied.
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, field of
@@ -408,9 +409,9 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   date must be a real ISO calendar date. Any new fact added there widens the
   allowlist and needs the grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
-  sanitizers. The proposed-text gate compares normalized JD terms against the
+  sanitizers. Proposed-text checks compare normalized JD terms against the
   submitted resume scope and honest context; unsupported JD-only terms produce
-  structured grounding drops before a suggestion can be applied. Treat the
+  visible warnings without preventing acceptance. Treat the
   current normalization/matching rules as implementation detail and keep their
   behavior locked by grounding/sanitizer probes rather than documenting one
   prefix heuristic as a stable contract.
@@ -730,4 +731,4 @@ In the response:
 - Do not make remote API writes unless explicitly requested. Dry-run
   write-oriented remote commands first when possible.
 
-Final review and Fit v5 compact-response and evidence boundaries are specified in the [AI runtime contract](../../server/ai/README.md). The new `/api/application-review` endpoint is read-only and uses a single explicit provider dispatch.
+Final review and Fit v6 compact-response and evidence boundaries are specified in the [AI runtime contract](../../server/ai/README.md). The `/api/application-review` endpoint is read-only and uses a single explicit provider dispatch.

@@ -1,3 +1,4 @@
+import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
@@ -33,6 +34,7 @@ type UseCoverLetterArgs = {
   resumeData: ResumeData | null;
   jobText: string;
   honestContext: string;
+  sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
   providerReady: boolean;
@@ -74,7 +76,7 @@ function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   ) {
     return null;
   }
-  return candidate as CoverLetterTailorResult;
+  return { ...candidate, warnings: sanitizeContentWarnings(candidate.warnings) ?? [] } as CoverLetterTailorResult;
 }
 
 // Owns the whole cover-letter AI workflow: deterministic preflight, the single
@@ -86,6 +88,7 @@ export function useCoverLetter({
   resumeData,
   jobText,
   honestContext,
+  sourceWarnings,
   customInstructions,
   aiRequest,
   providerReady,
@@ -93,7 +96,6 @@ export function useCoverLetter({
   resumeText,
   sourceRevision,
   candidateName,
-  tailorApplied,
   jobTarget,
   onApplyTailored,
   onUsage,
@@ -155,10 +157,16 @@ export function useCoverLetter({
       }),
     [honestContext, resumeData, slotAnswers, slotLabels],
   );
+  const inputSourceWarnings = sanitizeContentWarnings([
+    ...(sourceWarnings ?? []),
+    ...(lastAppliedResult?.warnings.length ? ["Earlier accepted cover-letter wording had unresolved concerns; repeating Polish or editing does not verify it.", ...lastAppliedResult.warnings] : [])
+  ]) ?? [];
   const proposalContentFingerprint = workflowInputFingerprint({
+    sourceRevision,
     currentCoverLetterText,
     jobText,
     customInstructions,
+    sourceWarnings: inputSourceWarnings,
     resolved: preflight.resolved,
     evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
   });
@@ -202,11 +210,11 @@ export function useCoverLetter({
     setSlotAnswers({});
   }, [jobText, sourceRevision]);
 
-  // The summary and Restore share one lifetime: they last exactly as long as the
-  // tailored letter is still the untouched live document.
+  // Editing does not certify the accepted wording. Clear its receipt only when
+  // another source document replaces this one.
   useEffect(() => {
-    if (!tailorApplied) setLastAppliedResult(null);
-  }, [tailorApplied]);
+    setLastAppliedResult(null);
+  }, [sourceRevision]);
 
   useEffect(() => {
     const inputsChanged = previousRequestInputFingerprintRef.current !== requestInputFingerprint;
@@ -347,6 +355,7 @@ export function useCoverLetter({
           sourceCoverLetterText: currentCoverLetterText.trim(),
           jobText,
           customInstructions,
+          sourceWarnings: inputSourceWarnings,
           detailValues,
           resolvedContext: preflight.resolved,
           evidenceItems,
