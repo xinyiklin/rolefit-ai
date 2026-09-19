@@ -44,6 +44,19 @@ for (const [key,text,decisions] of [
  ['job-a',accepted[0].original,accepted], // Undo/manual restoration
 ]) assert.deepEqual(lostAcceptedTerms(snapshot,key,text,decisions),[]);
 assert.equal(lostAcceptedTerms(snapshot,'job-a','Currently learning PostgreSQL.',accepted).length,1);
+const warnedMetric = {original:'Maintained PostgreSQL reports.',current:'Maintained PostgreSQL reports, reducing runtime by 50%.'};
+assert.deepEqual(lostAcceptedTerms(snapshot,'job-a',accepted[0].current,accepted,[warnedMetric]),[],
+ 'an unrelated metric warning must not hide originally supported retained terminology');
+assert.deepEqual(lostAcceptedTerms(snapshot,'job-a',accepted[0].current,accepted,[{...warnedMetric,current:'Maintained Postgres reports, reducing runtime by 50%.'}]),[],
+ 'a retained true alias also preserves the supported mention');
+for (const uncertain of [
+ {original:'Maintained reports.',current:warnedMetric.current},
+ {...warnedMetric,current:'Maintained reports, reducing runtime by 50%.'},
+ {...warnedMetric,current:'No PostgreSQL experience.'},
+ {...warnedMetric,current:'Currently learning PostgreSQL.'}
+]) assert.equal(lostAcceptedTerms(snapshot,'job-a',accepted[0].current,accepted,[uncertain]).length,1,
+ 'new, removed, negated or aspirational terms in a warned field cannot suppress a real loss');
+
 assert.notEqual(resumeProposalKey({runId:'one'}),resumeProposalKey({runId:'two'}));
 for (const value of [[],['Review this'],Array(14).fill(0).map((_,i)=>`Concern ${i}`),{},[null],['<script>bad</script>']]) {
  const safe=sanitizeContentWarnings(value);

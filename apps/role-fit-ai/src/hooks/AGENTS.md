@@ -48,6 +48,9 @@ browser-side effects; components render them and App composes them.
   pending again. Its proposal key includes run identity, outcome, target id, original text,
   replacement text, and reason. A changed key derives empty decisions during
   render and initializes keyed state only from the next user decision.
+  For terminology preservation, a warned field may retain a term supported by
+  both its original and current wording. An unrelated metric/quality warning
+  must not erase that support; newly added uncertain terms do not count.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending

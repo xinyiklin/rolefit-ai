@@ -1,3 +1,4 @@
+import { sameProposalTarget } from "../resume/proposalWarnings.ts";
 import { lostAcceptedTerms } from "../resume/terminology.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 /**
@@ -163,6 +164,7 @@ export function useResumeProposalDecisions({
     return decision?.kind === "accepted" && current === decision.text
       ? [{ original: suggestion.currentText, current }] : [];
   });
+  const uncertainEdits: Array<{ original: string; current: string }> = [];
   const evidenceResume = { ...resume, sections: resume.sections.map((section) => ({ ...section,
     items: section.items.map((entry) => {
       const uncertain = suggestions.filter((suggestion) => suggestion.warnings?.length
@@ -171,6 +173,13 @@ export function useResumeProposalDecisions({
           const decision = decisions[suggestion.id];
           return currentTargetText(resume, suggestion) === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
         })());
+      for (const suggestion of uncertain) {
+        const prior = result?.sourceConcerns?.find((concern) => sameProposalTarget(concern.target, suggestion.target));
+        uncertainEdits.push({
+          original: prior?.originalText ?? suggestion.currentText,
+          current: currentTargetText(resume, suggestion) ?? ""
+        });
+      }
       return { ...entry,
         subtitleLeft: uncertain.some((suggestion) => suggestion.target.field === "skill") ? "" : entry.subtitleLeft,
         bullets: entry.bullets.map((bullet) => uncertain.some((suggestion) => suggestion.target.bulletId === bullet.id)
@@ -179,7 +188,7 @@ export function useResumeProposalDecisions({
     })
   })) };
   const currentEvidence = serializeResumeData(evidenceResume);
-  const terminologyWarnings = lostAcceptedTerms(result?.terminology, terminologyInputKey, currentEvidence, accepted);
+  const terminologyWarnings = lostAcceptedTerms(result?.terminology, terminologyInputKey, currentEvidence, accepted, uncertainEdits);
 
   return {
     documentReplaced,

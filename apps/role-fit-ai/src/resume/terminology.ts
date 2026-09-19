@@ -43,10 +43,12 @@ export function unsupportedTerminology(replacement: string, evidence: string, jo
 }
 
 export function lostAcceptedTerms(snapshot: TerminologySnapshot | undefined, inputKey: string | undefined,
-  currentText: string, accepted: Array<{ original: string; current: string }>): string[] {
+  currentText: string, accepted: Array<{ original: string; current: string }>,
+  uncertain: Array<{ original: string; current: string }> = []): string[] {
   if (!snapshot || snapshot.inputKey !== inputKey) return [];
   return snapshot.terms.filter(({ keyword }) =>
     !affirmativeTerm(currentText, keyword)
+    && !uncertain.some(({ original, current }) => affirmativeTerm(original, keyword) && affirmativeTerm(current, keyword))
     && accepted.some(({ original, current }) => affirmativeTerm(original, keyword) && !affirmativeTerm(current, keyword))
   ).map(({ keyword, category }) => `This accepted edit removes the last clear ${keyword} mention (${category} in the posting). Review whether to keep that supported term.`);
 }

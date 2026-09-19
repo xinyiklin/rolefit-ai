@@ -5,6 +5,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-18
 
+- [USER+CODE] Follow-up review corrected a terminology warning false positive:
+  an unrelated warning no longer hides a supported term retained in the same
+  field. Original/current terminology pairs preserve genuine aliases while
+  newly added, negated or aspirational terms remain uncertain. The correction
+  leaves warning visibility, decision controls and technical protections intact.
+- [TOOL] Corrected build and all 121 offline probes passed; an independent
+  reviewer reproduced the retained-term case through the production hook and
+  cleared adversarial/Undo/identity checks. Actual production App acceptance
+  used disposable storage and synthetic provider replies: Resume/Cover Save,
+  real Apply tracker/document writes, and both downloaded PDFs passed strict
+  source/text/render checks. Desktop/390px checks had no browser errors. This
+  supersedes the earlier full-shell acceptance gap below; OS file dialogs,
+  live providers, ATS imports and hiring outcomes remain untested.
 - [USER+CODE] [TASK ats-terminology-20260918] Approved system-wide advisory
   content checks and supported-term preservation, then requested review and a
   branch push. This supersedes the earlier evidence-rejection behavior below:
