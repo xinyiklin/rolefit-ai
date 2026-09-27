@@ -1,3 +1,4 @@
+import { ContentWarnings } from "../../../components/ContentWarnings";
 import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
@@ -150,13 +151,14 @@ export function PrepareApplicationRail({
                 </strong>
               </div>
               <p>{assessmentSnapshot.result.summary}</p>
+              <ContentWarnings warnings={assessmentSnapshot.result.warnings} />
               {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
               {assessmentSnapshot.result.matches.length ? (
                 <div className="fit-assessment-list">
                   <strong>Matches</strong>
                   <ul>
-                    {assessmentSnapshot.result.matches.map((match) => (
-                      <li key={`${match.candidateSource}:${match.jobExcerpt}:${match.candidateExcerpt}`}>
+                    {assessmentSnapshot.result.matches.map((match, index) => (
+                      <li key={index}>
                         {match.jobExcerpt}
                         <small>
                           {match.candidateSource === "RESUME" ? "Resume" : "About you"}: {match.candidateExcerpt}
@@ -170,9 +172,12 @@ export function PrepareApplicationRail({
                 <div className="fit-assessment-list">
                   <strong>Important gaps</strong>
                   <ul>
-                    {assessmentSnapshot.result.gaps.map((gap) => {
+                    {assessmentSnapshot.result.gaps.map((gap, index) => {
                       const detail = assessmentSnapshot.result.gapDetails?.find((item) => item.jobExcerpt === gap);
-                      return <li key={gap}>{gap}{detail ? <small>{detail.relationship === "transferable" ? "Transferable evidence; direct requirement not shown" : "Conflicting candidate evidence"}: {detail.candidateExcerpt}</small> : null}</li>;
+                      return <li key={index}>{gap}
+                        {detail?.note ? <small>{detail.note}</small> : null}
+                        {detail?.candidateExcerpt ? <small>{detail.relationship === "transferable" ? "Reported transferable evidence" : "Candidate reference"}: {detail.candidateExcerpt}</small> : null}
+                      </li>;
                     })}
                   </ul>
                 </div>
@@ -181,10 +186,11 @@ export function PrepareApplicationRail({
                 <p className="fit-assessment-eligibility">
                   <strong>
                     {assessmentSnapshot.result.eligibility.status === "BLOCKED"
-                      ? "Eligibility conflict."
+                      ? "Reported eligibility conflict."
                       : "Confirm eligibility."}
                   </strong>{" "}
                   {assessmentSnapshot.result.eligibility.jobExcerpt}
+                  {assessmentSnapshot.result.eligibility.note ? <small>{assessmentSnapshot.result.eligibility.note}</small> : null}
                   {assessmentSnapshot.result.eligibility.candidateExcerpt ? (
                     <small>About you: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
                   ) : null}

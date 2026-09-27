@@ -1,12 +1,15 @@
+import { ContentWarnings } from "../../components/ContentWarnings";
+
 type ApplicationFitTone = "strong" | "good" | "stretch" | "weak" | "neutral";
 
 type ApplicationFitSummaryProps = {
   label: string;
   tone: ApplicationFitTone;
   summary: string;
+  warnings?: string[];
 };
 
-export function ApplicationFitSummary({ label, tone, summary }: ApplicationFitSummaryProps) {
+export function ApplicationFitSummary({ label, tone, summary, warnings }: ApplicationFitSummaryProps) {
   return (
     <div
       className={`application-fit-summary application-fit-summary--${tone}`}
@@ -18,6 +21,7 @@ export function ApplicationFitSummary({ label, tone, summary }: ApplicationFitSu
         <strong className={`application-fit application-fit--${tone}`}>{label}</strong>
       </div>
       <p className="application-fit-summary__copy">{summary}</p>
+      <ContentWarnings warnings={warnings} />
     </div>
   );
 }

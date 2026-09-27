@@ -1,4 +1,4 @@
-import { normalizeText, titleCase, unique } from "./text";
+import { normalizeText, titleCase, unique } from "./text.ts";
 
 export const ACTION_VERBS = [
   "accelerated",
@@ -286,4 +286,36 @@ export function extractKeywords(source: string, limit = 18) {
     .map(([word]) => word);
 
   return unique([...roleMatches, ...extracted]).slice(0, limit);
+}
+
+// Discovery relationships above remain broad. These overrides are equivalences
+// only; related tools and partial composite skills cannot certify a mention.
+const EXACT_ALIASES: Record<string, string[]> = {
+  "ci/cd": ["ci/cd", "cicd", "ci cd", "continuous integration and continuous delivery", "continuous integration and continuous deployment"],
+  "html/css": ["html/css", "html and css", "html & css"],
+  testing: ["testing", "tests"],
+  debugging: ["debugging", "debug"],
+  database: ["database", "databases"],
+  authentication: ["authentication"],
+  performance: ["performance"],
+  ".net": [".net", "dotnet"],
+  "rest api": ["rest api", "rest apis", "restful api", "restful apis"],
+};
+
+function containsPhrase(source: string, phrase: string): boolean {
+  const normalize = (text: string) => text.toLowerCase().replace(/<\/?(?:b|i|u)>/g, "")
+    .replace(/[^a-z0-9+#./&-]+/g, " ").replace(/\.(?=\s|$)/g, " ").trim();
+  const escaped = normalize(phrase).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9+#.])${escaped}(?=$|[^a-z0-9+#.])`, "i").test(normalize(source));
+}
+
+export function terminologyMatch(source: string, keyword: string): "exact" | "equivalent" | "related" | "absent" {
+  const aliases = EXACT_ALIASES[keyword] ?? keywordAliases(keyword);
+  const plainSource = source.replace(/<\/?(?:b|i|u)>/gi, "");
+  const exactSource = keyword === "testing"
+    ? plainSource.replace(/\b(?:unit|integration)[\s-]+test(?:s|ing)?\b/gi, " ")
+    : plainSource;
+  if (aliases.includes(keyword) && containsPhrase(exactSource, keyword)) return "exact";
+  if (aliases.some((alias) => containsPhrase(exactSource, alias))) return "equivalent";
+  return exactSource !== plainSource || includesKeyword(plainSource, keyword) ? "related" : "absent";
 }

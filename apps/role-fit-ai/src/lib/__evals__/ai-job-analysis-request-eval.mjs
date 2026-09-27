@@ -140,3 +140,10 @@ await assert.rejects(
 );
 
 console.log("AI Job analysis request evals passed");
+
+const jobWarnings = [{ field: "roleDescription", message: "Not supported by provided evidence." }];
+nextResponse = response({ source: "ai", roleDescription: "Generated uncertain role context.", jobWarnings });
+const summaryOnly = await analyzeJobPosting(POSTING);
+assert.equal(summaryOnly.source, "local", "metadata without requirement lists falls back to the local engine");
+nextResponse = response({ source: "ai", title: "Generated uncertain title.", jobWarnings: [{ field: "title", message: "Not supported by provided evidence." }] });
+assert.equal((await analyzeJobPosting(POSTING)).source, "local", "a bare scalar is not a tailoring brief");

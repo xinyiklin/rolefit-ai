@@ -3,7 +3,7 @@
 // helpers depended on by two or more of those modules. Section/bullet vocabulary
 // lives in the single source of truth ./sections.ts (shared with the editor +
 // server parsers); the re-exports below keep existing importers unchanged.
-import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections";
+import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections.ts";
 
 export const hasMetric = (text: string) =>
   /(\$\s?\d+|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:percent|x|k|m|tb|gb|mb)\b|\d+\+|\d+(?:\.\d+)?\s+(?:\w+\s+){0,2}(?:users?|requests?|records?|models?|endpoints?|apps?|patients?|facilities?|hours?|days?|weeks?|months?|ms|milliseconds?|seconds?|minutes?)\b)/i.test(text);

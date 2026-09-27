@@ -246,8 +246,8 @@ for (const [name, html, announcement] of [
 }
 
 for (const [outcome, message] of [
-  ["NO_CHANGES", "No safe material changes were suggested."],
-  ["WITHHELD", "The generated edits could not be verified. Your resume is unchanged."]
+  ["NO_CHANGES", "No material changes were suggested."],
+  ["WITHHELD", "No usable edits were returned. Your resume is unchanged."]
 ]) {
   const html = rendered.renderResumeSettled(outcome, message);
   assert.equal(occurrences(html, message), 1, `${outcome} shows its settled result once`);

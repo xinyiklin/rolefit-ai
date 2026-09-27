@@ -34,9 +34,10 @@ export type CoverLetterPreflight = {
   hasCompletedGreeting: boolean;
   missingFields: MissingCoverLetterField[];
   // Template slots naming a private fact RoleFit cannot infer (a referral, a
-  // prior personal relationship). These are the only slots that block Polish.
+  // prior personal relationship). They are optional guidance, not a Polish gate.
   privateSlots: CoverLetterTemplateSlot[];
   blockers: string[];
+  warnings: string[];
   resolved: ResolvedCoverLetterContext;
   values: CoverLetterDetailValues;
   canTailor: boolean;
@@ -180,13 +181,10 @@ export function buildCoverLetterPreflight({
     missingFields.push(field("company", "Company", "The job description did not resolve a company."));
   }
 
-  const blockers: string[] = [
-    ...missingFields.map((item) => item.reason),
-    ...template.requiredInputs.map((slot) =>
-      slot.resolution.kind === "needs_input"
-        ? slot.resolution.question
-        : `Answer ${slot.normalizedPrompt}.`
-    )
+  const blockers = missingFields.filter((item) => item.key !== "candidate_name").map((item) => item.reason);
+  const warnings: string[] = [
+    ...missingFields.filter((item) => item.key === "candidate_name").map((item) => item.reason),
+    ...template.requiredInputs.map((slot) => `Optional private detail not supplied: ${slot.normalizedPrompt}. Review any reference to it before use.`)
   ];
 
   return {
@@ -197,6 +195,7 @@ export function buildCoverLetterPreflight({
     missingFields,
     privateSlots: template.userInputSlots,
     blockers,
+    warnings,
     resolved: {
       candidateName: resolvedCandidateName,
       role: resolvedRole,

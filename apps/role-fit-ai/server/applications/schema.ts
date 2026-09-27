@@ -1,3 +1,4 @@
+import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import {
   MAX_ATTACHMENTS_PER_APPLICATION,
@@ -363,6 +364,7 @@ function sanitizeApplication(raw: unknown) {
     title,
     company: typeof r.company === "string" ? r.company.slice(0, 200) : "",
     role: typeof r.role === "string" ? r.role.slice(0, 200) : "",
+    ...(r.jobWarnings !== undefined ? { jobWarnings: sanitizeJobAnalysisWarnings(r.jobWarnings) } : {}),
     roleDescription: typeof r.roleDescription === "string" ? r.roleDescription.slice(0, 2_000) : "",
     source,
     jobUrl,

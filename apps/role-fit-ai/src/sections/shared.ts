@@ -35,8 +35,8 @@ export const TAB_GROUPS: Record<OutputTab, OutputTabGroup> = {
 // Application Questions tab: drafted answers to supplemental application
 // questions, plus a short description per work-experience role. Mirrors the
 // /api/application-answers response shape.
-export type GeneratedAnswer = { question: string; answer: string; needsInput: boolean };
-export type GeneratedRoleDescription = { role: string; description: string; needsInput: boolean };
+export type GeneratedAnswer = { question: string; answer: string; needsInput: boolean; warnings?: string[] };
+export type GeneratedRoleDescription = { role: string; description: string; needsInput: boolean; warnings?: string[] };
 export type ApplicationAnswersResult = {
   answers: GeneratedAnswer[];
   roleDescriptions: GeneratedRoleDescription[];

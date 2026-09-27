@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 export type JobPostingRelationship = {
   matchedApplicationId: string;
   jobPostingGroupId?: string;
@@ -45,12 +46,14 @@ export function preparationCommitIdentity({
   preparationId,
   jobUrl,
   preparedJobDescription,
+  jobWarnings,
   jobRawText
 }: {
   session: PreparationSession;
   preparationId: string;
   jobUrl: string;
   preparedJobDescription: string;
+  jobWarnings?: JobAnalysisWarning[];
   jobRawText: string;
 }): string {
   return [
@@ -59,7 +62,8 @@ export function preparationCommitIdentity({
     preparationId,
     jobUrl.trim(),
     preparedJobDescription.trim(),
-    jobRawText.trim()
+    jobRawText.trim(),
+    JSON.stringify(jobWarnings ?? [])
   ].join("\u0000");
 }
 

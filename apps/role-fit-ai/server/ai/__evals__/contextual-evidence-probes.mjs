@@ -64,12 +64,12 @@ const numericCases = [
 for (const [name, claim, evidence, rejected] of numericCases) {
   assert.equal(findUngroundedNumericClaim(claim, evidence) !== null, rejected, name);
 }
-assert.notEqual(
+assert.equal(
   sanitizeJobAnalysis(
     { workAuth: "Visa sponsorship is available." },
     "We do not offer visa sponsorship."
   ).workAuth,
-  "Visa sponsorship is available."
+  "We do not offer visa sponsorship."
 );
 assert.equal(
   sanitizeJobAnalysis(
@@ -109,6 +109,7 @@ assert.deepEqual(
     .requiredQualifications,
   [alternative]
 );
+assert.ok(sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, alternative).jobWarnings?.length);
 const fallback = extractJobPosting(
   "Software Developer\nExample Company\nResponsibilities\nBuild Python services and support our product.\nWe do not offer visa sponsorship."
 );

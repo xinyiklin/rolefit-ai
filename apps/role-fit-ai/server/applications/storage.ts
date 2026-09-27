@@ -171,8 +171,7 @@ function normalizeCompatibleApplicationFieldsForComparison(
           ...(!Object.hasOwn(result, "status") &&
             (canonicalResult as Record<string, unknown>).status === "ASSESSED"
             ? { status: "ASSESSED" }
-            : {}),
-          summary
+            : {})
         }
       }
     };

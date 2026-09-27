@@ -56,9 +56,8 @@ const USABLE_JOB_FIELDS = {
   responsibilities: ["Build Go services on Postgres"]
 };
 
-// The half that fails: every grounded content list came back empty, so the app
-// honestly labels the brief "local" — but the screening beside it is intact.
-const UNUSABLE_JOB_FIELDS = { source: "ai", title: "Senior Backend Engineer", fitAssessment: VALID_FIT };
+// A genuinely empty job half falls back locally without losing the independent Fit result.
+const UNUSABLE_JOB_FIELDS = { source: "ai", fitAssessment: VALID_FIT };
 
 {
   const result = extractedFromAiOrLocal(
@@ -79,7 +78,7 @@ const UNUSABLE_JOB_FIELDS = { source: "ai", title: "Senior Backend Engineer", fi
   check(Boolean(result.failure), true, "the job-analysis failure is still reported honestly");
   check(
     result.fitAssessment?.summary,
-    "Your background aligns well, with a few material gaps.",
+    VALID_FIT.summary,
     "a valid screening survives a local job-analysis fallback — the halves are independent"
   );
   check(result.fitAssessment?.matches, VALID_FIT.matches, "the surviving screening keeps its grounded matches");

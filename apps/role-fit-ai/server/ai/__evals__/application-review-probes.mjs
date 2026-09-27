@@ -68,7 +68,9 @@ const bad = reviewProviderFindings(
   local,
 );
 assert.equal(bad.complete, false);
-assert.equal(bad.findings.length, local.findings.length);
+assert.equal(bad.findings.length, local.findings.length + 1);
+assert.equal(bad.findings.at(-1).anchor, "Invented anchor");
+assert.ok(bad.findings.at(-1).warnings?.length);
 assert.equal(
   reviewProviderFindings(
     { coverageComplete: true, overflow: true, findings: [] },
@@ -202,7 +204,7 @@ const fabricated = reviewProviderFindings(
   localApplicationReview(conflicting),
 );
 assert.equal(fabricated.complete, false);
-assert.ok(!fabricated.findings.some((finding) => finding.code === "revision"));
+assert.ok(fabricated.findings.find((finding) => finding.code === "revision")?.warnings?.length);
 
 const employerInput = {
   ...input,
@@ -229,7 +231,7 @@ assert.ok(
   ).findings.some((finding) => finding.code === "revision"),
 );
 assert.ok(
-  !reviewProviderFindings(
+  reviewProviderFindings(
     {
       coverageComplete: true,
       overflow: false,
@@ -243,7 +245,7 @@ assert.ok(
     },
     employerInput,
     localApplicationReview(employerInput),
-  ).findings.some((finding) => finding.code === "revision"),
+  ).findings.find((finding) => finding.code === "revision")?.warnings?.length,
 );
 
 const placeholderInput = {
@@ -284,7 +286,7 @@ assert.equal(
   "local and provider duplicates merge before the display cap",
 );
 assert.equal(duplicates.overflow, false);
-assert.equal(duplicates.complete, true);
+assert.equal(duplicates.complete, true, "duplicate exact references do not create false warnings");
 const nestedDuplicate = reviewProviderFindings(
   {
     coverageComplete: true,
@@ -356,15 +358,14 @@ assert.equal(
   0,
   "client result validation checks inclusion without rerunning local analysis",
 );
-assert.equal(
+assert.ok(
   sanitizeApplicationReviewResult(
     {
       ...scanResult,
       findings: [{ ...scanResult.findings[0], anchor: "Not in resume" }],
     },
     scanInput,
-  ),
-  null,
+  )?.findings[0].warnings?.length,
 );
 
 const manyEvidence = Array.from({ length: 65 }, (_, i) => ({
@@ -430,5 +431,6 @@ const targetResult = reviewProviderFindings({coverageComplete:true,overflow:fals
 assert.ok(targetResult.findings.some(f=>f.code === "target"), "first-person target findings may cite the posting");
 for (const code of ["revision", "coverage", "unsupported_claim"]) {
  const result = reviewProviderFindings({coverageComplete:true,overflow:false,findings:[{...wrongTarget,code}]},wrongTargetInput,localApplicationReview(wrongTargetInput));
- assert.equal(result.findings.length,0,"posting cannot support candidate claims");
+ assert.equal(result.findings.length,1,"usable findings remain reviewable");
+ assert.ok(result.findings[0].warnings?.length,"posting-only candidate claim support is still flagged");
 }

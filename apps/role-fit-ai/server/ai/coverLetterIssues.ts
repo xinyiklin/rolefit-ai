@@ -7,6 +7,7 @@ import type {
 import { UserSafeAiError } from "./errors.ts";
 
 export type CoverLetterValidationIssue = {
+  blocking?: boolean;
   code: CoverLetterIssueCode;
   category: CoverLetterIssueCategory;
   detail: string;
@@ -19,7 +20,7 @@ export type CoverLetterValidationIssue = {
 };
 
 const BLOCKED_MESSAGE =
-  "The tailored draft did not pass RoleFit's evidence checks. Your current letter was kept.";
+  "The provider did not return a technically usable letter. Your current letter was kept.";
 
 function displayText(value: unknown, maxLength: number): string {
   return String(value ?? "")
@@ -77,4 +78,14 @@ export class CoverLetterBlockedError extends UserSafeAiError {
     this.issues = publicCoverLetterIssues(issues);
     this.repairAttempted = repairAttempted;
   }
+}
+
+export function coverLetterIssueWarnings(issues: CoverLetterValidationIssue[]): string[] {
+  return issues.filter((issue) => !issue.blocking).map((issue) =>
+    `${issue.paragraphIndex === undefined ? "" : `Paragraph ${issue.paragraphIndex + 1}: `}${
+      issue.code === "unknown_evidence_reference" || issue.code === "missing_evidence_reference"
+        ? "Source reference could not be confirmed. "
+        : issue.category === "evidence" ? "Not supported by provided evidence. " : ""
+    }${displayText(issue.detail, 300)}`
+  );
 }

@@ -1,3 +1,4 @@
+import { ContentWarnings } from "../../components/ContentWarnings.tsx";
 import { useState } from "react";
 import { Check, Pencil, Undo2, X } from "lucide-react";
 
@@ -55,7 +56,7 @@ export function ResumeProposalReview({
       <ul>{result.advice.map((item, index) => {
         const section = resume.sections.find((section) => section.id === item.sectionId);
         const entry = section?.items.find((entry) => entry.id === item.entryId);
-        return <li key={index}><strong>{section?.heading} · {stripInlineMarks(entry?.titleLeft ?? "")}</strong><p>{item.rationale}</p><blockquote>{item.jobExcerpt}</blockquote><blockquote>{item.candidateExcerpt}</blockquote></li>;
+        return <li key={index}><strong>{section?.heading} · {stripInlineMarks(entry?.titleLeft ?? "")}</strong><p>{item.rationale}</p><ContentWarnings warnings={item.warnings} />{item.warnings?.length ? <p>Unconfirmed references: {item.jobExcerpt} / {item.candidateExcerpt}</p> : <><blockquote>{item.jobExcerpt}</blockquote><blockquote>{item.candidateExcerpt}</blockquote></>}</li>;
       })}</ul>
     </details>
   ) : null;
@@ -69,16 +70,22 @@ export function ResumeProposalReview({
     setDraft("");
   }
 
+  const feedback = <>
+    <ContentWarnings warnings={result.warnings} />
+    <ContentWarnings warnings={proposal.terminologyWarnings} />
+    <ProposalFeedbackList title="Proposed improvements" items={result.changeSummary?.slice(0, 3) ?? []} />
+  </>;
+  const terminologyLimits = result.terminology ? <details className="prepare-note"><summary>Terminology check limits</summary><ul>{result.terminology.limitations.map((note) => <li key={note}>{note}</li>)}</ul></details> : null;
   if (result.polishOutcome === "NO_CHANGES") {
-    return <><p className="resume-proposal__empty" role="status">No safe material changes were suggested.</p>{advice}{omittedNote}</>;
+    return <><p className="resume-proposal__empty" role="status">No material changes were suggested.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
-    return <><p className="resume-proposal__empty is-warn" role="status">The generated edits could not be verified. Your resume is unchanged.</p>{advice}{omittedNote}</>;
+    return <><p className="resume-proposal__empty is-warn" role="status">No usable edits were returned. Your resume is unchanged.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
   }
 
   return (
     <div className="resume-proposal">
-      <ProposalFeedbackList title="What improved" items={result.changeSummary?.slice(0, 3) ?? []} />
+      {feedback}
 
       {suggestions.length ? (
         // Open by default: the edits ARE the review, and the letter shows its
@@ -129,6 +136,8 @@ export function ResumeProposalReview({
                     </p>
                   )}
                   {suggestion.reason && !editing ? <p className="resume-proposal__reason">{suggestion.reason}</p> : null}
+                  {suggestion.warnings?.length && (editing || proposedText !== suggestion.proposedText || state === "changed") ? <p className="resume-proposal__reason">Concerns below describe the original proposed wording; edits are not verification.</p> : null}
+                  <ContentWarnings warnings={suggestion.warnings} />
                   <div className="resume-proposal__actions">
                     {editing ? (
                       <>
@@ -177,11 +186,12 @@ export function ResumeProposalReview({
 
       {result.withheld?.count ? (
         <p className="resume-proposal__withheld">
-          {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be verified.
+          {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be applied safely.
         </p>
       ) : null}
       {advice}
       {omittedNote}
+      {terminologyLimits}
     </div>
   );
 }

@@ -13,9 +13,8 @@ export type CoverLetterEvidenceItem = {
   entry?: string;
 };
 
-// One finished body paragraph plus the provenance the server verifies. The model
-// chooses which evidence to use; the ids exist so the choice can be checked and
-// shown, not so the candidate has to approve it in advance.
+// A body paragraph and its located source ids. Located references do not certify
+// factual support; content concerns remain attached to the result as warnings.
 export type CoverLetterBodyParagraph = {
   text: string;
   evidenceIds: string[];

@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 /** Owns Apply confirmation, tracker commit, document snapshots, and optional PDF export. */
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { makeApplicationRecord, type Application } from "./useApplications";
@@ -39,6 +40,7 @@ type UseApplyFlowArgs = {
   includeCoverLetter: boolean;
   jobUrl: string;
   preparedJobDescription: string;
+  jobWarnings?: JobAnalysisWarning[];
   jobRawText: string;
   result: PolishedResume | null;
   currentResumeText: string;
@@ -97,6 +99,7 @@ export function useApplyFlow({
   includeCoverLetter,
   jobUrl,
   preparedJobDescription,
+  jobWarnings,
   jobRawText,
   result,
   currentResumeText,
@@ -176,6 +179,7 @@ export function useApplyFlow({
     preparationId: currentPreparationId,
     jobUrl,
     preparedJobDescription,
+    jobWarnings,
     jobRawText
   });
   const latestDocumentVersionsRef = useRef({
@@ -397,6 +401,7 @@ export function useApplyFlow({
         existing,
         jobUrl,
         preparedJobDescription,
+        jobWarnings,
         jobRawText,
         tracking,
         pipelineAiUsage,
@@ -558,6 +563,7 @@ export function useApplyFlow({
         preparationId: currentPreparationId,
         jobUrl,
         preparedJobDescription,
+        jobWarnings,
         jobRawText
       });
       applyPreparationIdRef.current = currentPreparationId;

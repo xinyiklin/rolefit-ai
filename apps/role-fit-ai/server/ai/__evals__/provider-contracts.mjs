@@ -441,8 +441,8 @@ try {
     "Built Python APIs for internal services."
   );
   assert.equal(boundAnswers[0].question, "Why this role?");
-  assert.throws(
-    () => bindApplicationAnswers(
+  assert.match(
+    bindApplicationAnswers(
       [{
         questionId: "question-1",
         question: "Why this role?",
@@ -451,12 +451,12 @@ try {
       ["Why this role?"],
       "This role needs Python backend APIs.",
       "Built Python APIs for internal services."
-    ),
-    /unsupported claim/,
-    "ordinary-language fabricated outcomes are withheld from application answers"
+    )[0].warnings?.join(" ") ?? "",
+    /Not supported by provided evidence/,
+    "ordinary-language fabricated outcomes remain visible with warnings"
   );
-  assert.throws(
-    () => bindApplicationAnswers(
+  assert.match(
+    bindApplicationAnswers(
       [{
         questionId: "question-1",
         question: "Why this role?",
@@ -465,12 +465,12 @@ try {
       ["Why this role?"],
       "This role needs Python backend APIs.",
       "Built Python APIs for internal services."
-    ),
-    /unsupported claim/,
-    "a curated technology absent from both the JD and candidate evidence is withheld"
+    )[0].warnings?.join(" ") ?? "",
+    /Not supported by provided evidence/,
+    "a curated technology absent from both the JD and candidate evidence is warned"
   );
-  assert.throws(
-    () => bindApplicationAnswers(
+  assert.match(
+    bindApplicationAnswers(
       [{
         questionId: "question-1",
         question: "Why this role?",
@@ -479,12 +479,12 @@ try {
       ["Why this role?"],
       "Acme needs Python backend API experience.",
       "Built Python APIs for internal services."
-    ),
-    /unsupported claim/,
-    "an invented mid-sentence employer proper name is withheld"
+    )[0].warnings?.join(" ") ?? "",
+    /Not supported by provided evidence/,
+    "an invented mid-sentence employer proper name is warned"
   );
-  assert.throws(
-    () => bindApplicationAnswers(
+  assert.match(
+    bindApplicationAnswers(
       [{
         questionId: "question-1",
         question: "Why this role?",
@@ -493,9 +493,9 @@ try {
       ["Why this role?"],
       "Acme needs Python backend API experience.",
       "Built Python APIs for internal services."
-    ),
-    /unsupported claim/,
-    "an unsupported single TitleCase company used as the sentence subject is withheld"
+    )[0].warnings?.join(" ") ?? "",
+    /Not supported by provided evidence/,
+    "an unsupported single TitleCase company used as the sentence subject is warned"
   );
   const targetCompanyAnswer = bindApplicationAnswers(
     [{
@@ -598,12 +598,12 @@ Platform Engineer | Beta | 2020 - 2022
     { roleId: "role-2", description: "Deployed Kubernetes services for production." }
   ], roles, "React and Kubernetes experience preferred.");
   assert.equal(roleDescriptions[0].role, "Software Engineer | Acme | 2022 - Present");
-  assert.throws(
-    () => bindApplicationRoleDescriptions([
+  assert.match(
+    bindApplicationRoleDescriptions([
       { roleId: "role-1", description: "Built Kubernetes services for production." },
       { roleId: "role-2", description: "Deployed Kubernetes services for production." }
-    ], roles, "Kubernetes experience preferred."),
-    /unsupported claim/,
+    ], roles, "Kubernetes experience preferred.")[0].warnings?.join(" ") ?? "",
+    /Not supported by provided evidence/,
     "a technology grounded under another employer cannot move into this role description"
   );
 

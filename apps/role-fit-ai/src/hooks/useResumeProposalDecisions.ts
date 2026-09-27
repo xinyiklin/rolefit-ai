@@ -1,3 +1,6 @@
+import { sameProposalTarget } from "../resume/proposalWarnings.ts";
+import { lostAcceptedTerms } from "../resume/terminology.ts";
+import { serializeResumeData } from "../lib/resumeText.ts";
 /**
  * useResumeProposalDecisions — accept / edit / discard state for the resume
  * proposal's individual edits.
@@ -58,13 +61,19 @@ type UseResumeProposalDecisionsArgs = {
   result: PolishedResume | null;
   resume: ResumeData;
   actions: ResumeEditorActions;
+  terminologyInputKey?: string;
 };
 
 export function useResumeProposalDecisions({
   result,
   resume,
-  actions
+  actions,
+  terminologyInputKey
 }: UseResumeProposalDecisionsArgs) {
+  // Generation is read at call time too, so an action never lands on a replaced document.
+  const isDocumentReplaced = useCallback(() => result?.documentGeneration !== undefined
+    && result.documentGeneration !== actions.getDocumentGeneration(), [actions, result]);
+  const documentReplaced = isDocumentReplaced();
   const suggestions = useMemo(() => result?.suggestedChanges ?? [], [result]);
   // Suggestion ids are unique within one proposal but not across proposals, so
   // decisions reset on the proposal's own identity rather than on any single id.
@@ -80,9 +89,9 @@ export function useResumeProposalDecisions({
   const isPending = useCallback(
     (suggestion: ResumeProposalSuggestion): boolean => {
       const current = currentTargetText(resume, suggestion);
-      return resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
+      return !isDocumentReplaced() && resumeProposalEditIsPending(current, suggestion, decisions[suggestion.id]);
     },
-    [decisions, resume]
+    [decisions, resume, isDocumentReplaced]
   );
 
   const outstanding = useMemo(
@@ -92,7 +101,7 @@ export function useResumeProposalDecisions({
 
   const accept = useCallback(
     (suggestion: ResumeProposalSuggestion, value = suggestion.proposedText) => {
-      if (!value.trim()) return;
+      if (!value.trim() || !isPending(suggestion)) return;
       applyTarget(actions, suggestion, value);
       setDecisionState((current) => recordProposalDecision(
         current,
@@ -101,7 +110,7 @@ export function useResumeProposalDecisions({
         { kind: "accepted", text: value }
       ));
     },
-    [actions, proposalKey]
+    [actions, proposalKey, isPending]
   );
 
   const discard = useCallback((suggestion: ResumeProposalSuggestion) => {
@@ -117,6 +126,7 @@ export function useResumeProposalDecisions({
   // reverting has to put the original back before the row returns to pending;
   // a discarded edit never touched the document and only needs its record gone.
   const revert = useCallback((suggestion: ResumeProposalSuggestion) => {
+    if (isDocumentReplaced()) return;
     const decision = decisions[suggestion.id];
     const state = resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decision);
     if (state !== "accepted" && state !== "discarded") return;
@@ -124,7 +134,7 @@ export function useResumeProposalDecisions({
       applyTarget(actions, suggestion, suggestion.currentText);
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
-  }, [actions, decisions, proposalKey, resume]);
+  }, [actions, decisions, proposalKey, resume, isDocumentReplaced]);
 
   const applyAll = useCallback(() => {
     const pending = suggestions.filter(isPending);
@@ -151,7 +161,45 @@ export function useResumeProposalDecisions({
     ));
   }, [isPending, proposalKey, suggestions]);
 
+  const terminologyWarnings = useMemo(() => {
+    if (!result?.terminology || result.terminology.inputKey !== terminologyInputKey) return [];
+    const accepted = suggestions.flatMap((suggestion) => {
+      const decision = decisions[suggestion.id];
+      const current = currentTargetText(resume, suggestion);
+      return decision?.kind === "accepted" && current === decision.text
+        ? [{ original: suggestion.currentText, current }] : [];
+    });
+    if (!accepted.length) return [];
+    const uncertainEdits: Array<{ original: string; current: string }> = [];
+    const evidenceResume = { ...resume, sections: resume.sections.map((section) => ({ ...section,
+      items: section.items.map((entry) => {
+        const uncertain = suggestions.filter((suggestion) => suggestion.warnings?.length
+          && suggestion.target.sectionId === section.id && suggestion.target.entryId === entry.id
+          && (() => {
+            const decision = decisions[suggestion.id];
+            return currentTargetText(resume, suggestion) === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
+          })());
+        for (const suggestion of uncertain) {
+          const prior = result?.sourceConcerns?.find((concern) => sameProposalTarget(concern.target, suggestion.target));
+          uncertainEdits.push({
+            original: prior?.originalText ?? suggestion.currentText,
+            current: currentTargetText(resume, suggestion) ?? ""
+          });
+        }
+        return { ...entry,
+          subtitleLeft: uncertain.some((suggestion) => suggestion.target.field === "skill") ? "" : entry.subtitleLeft,
+          bullets: entry.bullets.map((bullet) => uncertain.some((suggestion) => suggestion.target.bulletId === bullet.id)
+            ? { ...bullet, text: "" } : bullet)
+        };
+      })
+    })) };
+    const currentEvidence = serializeResumeData(evidenceResume);
+    return lostAcceptedTerms(result.terminology, terminologyInputKey, currentEvidence, accepted, uncertainEdits);
+  }, [decisions, resume, result, suggestions, terminologyInputKey]);
+
   return {
+    documentReplaced,
+    terminologyWarnings,
     decisions,
     proposalKey,
     suggestions,

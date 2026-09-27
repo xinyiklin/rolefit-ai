@@ -3,7 +3,63 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-27
+
+- [USER+CODE] Pre-merge code review of the advisory-content-checks branch; the
+  user approved fixing all ten findings. These fixes restore guards the branch had loosened:
+  - job conditions that change meaning keep the posting's source clause;
+  - metadata-only Job analysis falls back to the local engine;
+  - confirmed BLOCKED eligibility stops automatic Polish;
+  - BLOCKED without located, explicitly conflicting excerpts is downgraded to CHECK;
+  - Apply needs 40 authored words and no template slots in the cover letter;
+  - Resume Polish withholds edits that contain placeholders.
+
+  They also fix job-type and salary normalization, and add a call-time check
+  for a replaced document plus memoized terminology checks. The warning policy
+  docs now carve out these exceptions.
+- [CODE] Independent review found the branch's loose `<…>` markup test would
+  make main-era saved Fit excerpts (for example `<50ms … >99.9%`, `List<T>`)
+  unloadable and discard Final Review on `<insert …>` placeholders. Only
+  tag-shaped text is now treated as markup. Quotes may contain it only when
+  found verbatim in their source.
+- [TOOL] RoleFit gate (build, landing, desktop, server tsc) and 121/121 offline
+  probes passed after the fixes. Two independent reviewers covered the fixes
+  and the AI sanitizer/grounding surface; live providers and browser QA were
+  not run.
+
 ## 2026-09-18
+
+- [USER+CODE] Follow-up review corrected a terminology warning false positive:
+  an unrelated warning no longer hides a supported term retained in the same
+  field. Original/current terminology pairs preserve genuine aliases while
+  newly added, negated or aspirational terms remain uncertain. The correction
+  leaves warning visibility, decision controls and technical protections intact.
+- [TOOL] Corrected build and all 121 offline probes passed; an independent
+  reviewer reproduced the retained-term case through the production hook and
+  cleared adversarial/Undo/identity checks. Actual production App acceptance
+  used disposable storage and synthetic provider replies: Resume/Cover Save,
+  real Apply tracker/document writes, and both downloaded PDFs passed strict
+  source/text/render checks. Desktop/390px checks had no browser errors. This
+  supersedes the earlier full-shell acceptance gap below; OS file dialogs,
+  live providers, ATS imports and hiring outcomes remain untested.
+- [USER+CODE] [TASK ats-terminology-20260918] Approved system-wide advisory
+  content checks and supported-term preservation, then requested review and a
+  branch push. This supersedes the earlier evidence-rejection behavior below:
+  RoleFit preserves usable questioned output with warnings and user actions,
+  while truthful prompts and technical/stale-document protections remain.
+  Root guidance now distinguishes this RoleFit policy from Typeset. Shared
+  packages, portable schemas, provider defaults and product versions are unchanged.
+- [CODE] Required-first terminology uses strict aliases and actual accepted
+  decisions (details in RoleFit's AI docs). Saved Fit/job receipts retain
+  optional warnings; older builds may reject those newer receipts. Draft warning
+  metadata stays session-local. Visitor and engineering docs describe the limits.
+
+- [TOOL] Final pre-push RoleFit gate passed app/server/landing/desktop checks
+  and 121/121 offline probes after terminology corrections. Document workflows
+  and synthetic desktop/390px QA passed during implementation; two independent
+  implementation reviewers and a fresh publication reviewer cleared their scopes.
+  Live providers, vendor ATS and hiring outcomes remain unverified; no efficacy
+  claim. Local artifacts and personal data remain excluded from publication.
 
 - [USER+CODE] [TASK fit-assessment-rejection-20260918] Approved the advisory Fit
   guard simplification and publication after review. The RoleFit-owned change

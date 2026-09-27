@@ -14,6 +14,10 @@ file/layout contracts remain in `@typeset/engine`.
 - Do not promote job-description-only terms into resume evidence. Rewrites may
   clarify facts already present in the resume or honest user context, never
   invent experience, tools, metrics, employers, dates, or outcomes.
+- `terminology.ts` owns job-term extraction (required, responsibility,
+  technical, then preferred; at most 48 terms), unsupported-term warnings, and
+  lost-term advisories; `proposalWarnings.ts` carries earlier proposal concerns
+  forward to the current document. Neither certifies evidence.
 
 ## Maintainability
 

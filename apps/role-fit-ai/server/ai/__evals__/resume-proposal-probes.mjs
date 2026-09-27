@@ -203,10 +203,10 @@ const partial = sanitizeResumeProposal(
   ""
 );
 assert.equal(partial.status, "PROPOSAL");
-assert.equal(partial.changes.length, 1, "malformed or unsupported edits do not discard a valid edit");
+assert.equal(partial.changes.length, 2, "warned and supported edits both survive technical sibling errors");
 assert.equal(partial.changes[0].targetId, "target-1");
-assert.equal(partial.withheld.count, 3);
-assert.deepEqual(partial.withheld.reasons, ["UNSUPPORTED", "INVALID_TARGET", "MALFORMED"]);
+assert.equal(partial.withheld.count, 2);
+assert.deepEqual(partial.withheld.reasons, ["INVALID_TARGET", "MALFORMED"]);
 
 const safeSkillEdits = sanitizeResumeProposal(
   {
@@ -240,8 +240,8 @@ for (const [label, targetId, replacement] of [
     scopeText,
     ""
   );
-  assert.equal(rejected.status, "WITHHELD", `${label} is withheld`);
-  assert.equal(rejected.changes.length, 0, `${label} cannot mutate the resume`);
+  assert.equal(rejected.status, "PROPOSAL", `${label} remains reviewable`);
+  assert.ok(rejected.changes[0].warnings?.length, `${label} warns before use`);
 }
 
 const partialSkills = sanitizeResumeProposal(
@@ -274,9 +274,11 @@ const withheld = sanitizeResumeProposal(
   scopeText,
   ""
 );
-assert.equal(withheld.status, "WITHHELD");
-assert.equal(withheld.changes.length, 0);
-assert.deepEqual(withheld.summary, []);
+assert.equal(withheld.status, "PROPOSAL");
+assert.equal(withheld.changes.length, 1);
+assert.ok(withheld.changes[0].warnings?.length);
+assert.deepEqual(withheld.summary, ["Added Kubernetes"]);
+assert.ok(withheld.warnings?.length);
 
 for (const [label, targetId, replacement, honestContext = ""] of [
   ["technology relocation", "target-1", "Built Kubernetes tools for internal teams.", "I have used Kubernetes."],
@@ -290,8 +292,8 @@ for (const [label, targetId, replacement, honestContext = ""] of [
     scopeText,
     honestContext
   );
-  assert.equal(rejected.status, "WITHHELD", `unsupported ${label} is withheld`);
-  assert.equal(rejected.changes.length, 0, `unsupported ${label} cannot mutate the resume`);
+  assert.equal(rejected.status, "PROPOSAL", `unsupported ${label} stays reviewable`);
+  assert.ok(rejected.changes[0].warnings?.length, `unsupported ${label} is labelled`);
 }
 
 for (const [sourceText, replacement] of [
@@ -311,7 +313,8 @@ for (const [sourceText, replacement] of [
     sourceText,
     ""
   );
-  assert.equal(rejected.status, "WITHHELD", `${sourceText} cannot be inflated to ${replacement}`);
+  assert.equal(rejected.status, "PROPOSAL");
+  assert.ok(rejected.changes[0].warnings?.length, `${sourceText} to ${replacement} warns about ownership`);
 }
 
 const siblingLeadershipTarget = {
@@ -336,8 +339,8 @@ const siblingLeadership = sanitizeResumeProposal(
   ""
 );
 assert.equal(
-  siblingLeadership.status,
-  "WITHHELD",
+  Boolean(siblingLeadership.changes[0].warnings?.length),
+  true,
   "an unrelated leadership bullet in the same entry cannot authorize target ownership"
 );
 
@@ -510,20 +513,19 @@ const unchangedBesideUnsupported = sanitizeResumeProposal(
 );
 assert.equal(
   unchangedBesideUnsupported.status,
-  "WITHHELD",
-  "a safety drop alongside UNCHANGED still withholds"
+  "PROPOSAL",
+  "a warned edit alongside UNCHANGED stays reviewable"
 );
-assert.deepEqual(unchangedBesideUnsupported.withheld.reasons.sort(), ["UNCHANGED", "UNSUPPORTED"]);
+assert.deepEqual(unchangedBesideUnsupported.withheld.reasons.sort(), ["UNCHANGED"]);
 assert.equal(
   unchangedBesideUnsupported.withheld.count,
-  1,
+  0,
   "only the safety drop is counted, so the rail reports one failure and not two"
 );
 
 // Every safety reason must behave the same beside an echo; the count reports only
 // the safety drop so the rail cannot describe an echo as a failed verification.
 for (const [reason, change] of [
-  ["UNSUPPORTED", { targetId: skillListTarget.targetId, replacement: "JavaScript, SQL, Kubernetes" }],
   ["MALFORMED", { targetId: skillListTarget.targetId, replacement: "<b></b>" }],
   ["INVALID_TARGET", { targetId: "target-999", replacement: "Anything at all." }]
 ]) {

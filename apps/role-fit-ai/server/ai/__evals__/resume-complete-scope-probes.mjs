@@ -65,7 +65,7 @@ console.log(
 
 const advice={kind:'emphasis',sectionId:'s0',entryId:'e0',jobExcerpt:'Python services',candidateExcerpt:'Built Python service.',rationale:'Highlight the Python service work.'};
 assert.equal(sanitizeResumeAdvice([advice],scope,'Python services and Terraform workflows').length,1);
-assert.equal(sanitizeResumeAdvice([{...advice,entryId:'not-sent'}],scope,'Python services').length,0);
+assert.ok(sanitizeResumeAdvice([{...advice,entryId:'not-sent'}],scope,'Python services')[0].warnings.length);
 assert.equal(sanitizeResumeAdvice([{...advice,rationale:'Ask for evidence of Terraform workflows before adding them.'}],scope,'Python services and Terraform workflows').length,1,'editorial guidance may discuss missing evidence without asserting it');
 
 for (const rationale of [
@@ -81,7 +81,9 @@ for (const patch of [
   { sectionId: 'not-sent' },
   { rationale: 'x'.repeat(501) }
 ]) {
-  assert.equal(sanitizeResumeAdvice([{ ...advice, ...patch }], scope, 'Python services').length, 0);
+  const result = sanitizeResumeAdvice([{ ...advice, ...patch }], scope, 'Python services');
+  if (patch.rationale) assert.equal(result.length, 0, 'oversized field remains technical');
+  else assert.ok(result[0].warnings.length, 'unconfirmed advice remains visible');
 }
 const canonicalAdvice = sanitizeResumeAdvice([{ ...advice, replacement: 'Fabricated resume edit', claims: ['ignored'] }], scope, 'Python services')[0];
 assert.equal('replacement' in canonicalAdvice, false);
@@ -125,6 +127,6 @@ assert.equal(boldClaim.changes[0].replacement, safeReplacement);
 {
   const scope = normalizeResumeScope({sections:[{id:"s",heading:"Projects",type:"standard",entries:[{id:"e",titleLeft:"Atlas",bullets:[{id:"b",text:"Built Python services."}]}]}]});
   const advice = {kind:"emphasis",sectionId:"s",entryId:"e",jobExcerpt:"Build Python services.",candidateExcerpt:"Built Python services.",rationale:"I led Terraform deployments and increased revenue by 99%."};
-  assert.deepEqual(sanitizeResumeAdvice([advice],scope,advice.jobExcerpt),[],"explicit unsupported candidate claims are not editorial advice");
+  assert.ok(sanitizeResumeAdvice([advice],scope,advice.jobExcerpt)[0].warnings.length,"explicit unsupported claims stay visible with warnings");
   assert.equal(sanitizeResumeAdvice([{...advice,rationale:"Use 2 bullets; do not add Terraform experience."}],scope,advice.jobExcerpt).length,1);
 }

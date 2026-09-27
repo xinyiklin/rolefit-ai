@@ -1,3 +1,5 @@
+import type { ResumeSourceConcern } from "./proposalWarnings.ts";
+import type { TerminologySnapshot } from "./terminology.ts";
 import type { ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
 export type ResumeProposalField = "bullet" | "skill";
 
@@ -15,6 +17,7 @@ export type ResumeProposalSuggestion = {
   currentText: string;
   proposedText: string;
   reason: string;
+  warnings?: string[];
 };
 
 export type PolishedResume = {
@@ -22,6 +25,11 @@ export type PolishedResume = {
   // document to this baseline; this is not an auto-applied polished output.
   proposalBaselineText: string;
   source?: "ai";
+  runId?: string;
+  documentGeneration?: number;
+  sourceConcerns?: ResumeSourceConcern[];
+  terminology?: TerminologySnapshot;
+  warnings?: string[];
   missingKeywords: string[];
   // 1-3 bullets from the AI describing what changed (or why nothing needed
   // changing). Absent when no Resume Polish pass ran.

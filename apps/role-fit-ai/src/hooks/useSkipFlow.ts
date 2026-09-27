@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
   makeApplicationRecord,
@@ -33,6 +34,7 @@ type UseSkipFlowArgs = {
   skipBlocker: string;
   jobUrl: string;
   preparedJobDescription: string;
+  jobWarnings?: JobAnalysisWarning[];
   jobRawText: string;
   pipelineAiUsage: Record<string, StageAiUsage>;
   fitAssessmentPersistence: FitAssessmentPersistenceDecision;
@@ -57,6 +59,7 @@ export function useSkipFlow({
   skipBlocker,
   jobUrl,
   preparedJobDescription,
+  jobWarnings,
   jobRawText,
   pipelineAiUsage,
   fitAssessmentPersistence,
@@ -92,6 +95,7 @@ export function useSkipFlow({
     preparationId: currentPreparationId,
     jobUrl,
     preparedJobDescription,
+    jobWarnings,
     jobRawText
   });
 
@@ -136,6 +140,7 @@ export function useSkipFlow({
         preparationId: currentPreparationId,
         jobUrl,
         preparedJobDescription,
+        jobWarnings,
         jobRawText
       });
       skipPreparationIdRef.current = currentPreparationId;
@@ -219,6 +224,7 @@ export function useSkipFlow({
         existing: matchedNotApplying,
         jobUrl,
         preparedJobDescription,
+        jobWarnings,
         jobRawText,
         tracking,
         pipelineAiUsage,
@@ -330,6 +336,7 @@ export function useSkipFlow({
         existing,
         jobUrl,
         preparedJobDescription,
+        jobWarnings,
         jobRawText,
         tracking,
         pipelineAiUsage,

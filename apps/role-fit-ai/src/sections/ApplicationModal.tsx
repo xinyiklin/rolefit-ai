@@ -1,3 +1,5 @@
+import { ContentWarnings } from "../components/ContentWarnings";
+import { jobAnalysisWarningMessages } from "../../shared/jobAnalysisWarnings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
@@ -935,6 +937,8 @@ export function ApplicationModal({
 
                   <section className="application-job-card" aria-labelledby="application-work-title">
                     <h3 id="application-work-title"><BriefcaseBusiness size={16} aria-hidden="true" />Job details</h3>
+                    {activeApplication.jobWarnings?.length ? <p className="prepare-note">Warnings describe generated wording. Later edits do not establish verification.</p> : null}
+                    <ContentWarnings warnings={jobAnalysisWarningMessages(activeApplication.jobWarnings)} />
                     <dl className="application-fact-list">
                       <div><dt><MapPin size={14} aria-hidden="true" />Location</dt><dd>{displayValue(form.location)}</dd></div>
                       <div><dt><BriefcaseBusiness size={14} aria-hidden="true" />Job type</dt><dd>{displayValue(form.jobType)}</dd></div>
@@ -964,6 +968,7 @@ export function ApplicationModal({
                   <ApplicationFitSummary
                     label={fitVerdict?.label ?? "Not checked"}
                     tone={fitVerdict?.tone ?? "neutral"}
+                    warnings={fitAssessment?.result.warnings}
                     summary={fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
                   />
                   {fitAssessmentMeta ? <p className="application-match-card__meta">{fitAssessmentMeta}</p> : null}

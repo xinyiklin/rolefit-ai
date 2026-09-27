@@ -1,3 +1,4 @@
+import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { inferApplicationTitle, inferCompanyFromUrl } from "../lib/jobTarget";
 import { sourceFromUrl, type ExtractedJobTracking } from "../lib/jobExtract";
@@ -83,6 +84,7 @@ export type ApplicationAttachment = {
 };
 
 export type Application = {
+  jobWarnings?: JobAnalysisWarning[];
   id: string;
   title: string;
   company?: string;

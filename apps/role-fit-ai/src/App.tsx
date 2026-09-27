@@ -1,3 +1,7 @@
+import { buildResumePolishScope } from "./lib/resumePolishScope.ts";
+import { currentResumeConcerns } from "./resume/proposalWarnings.ts";
+import { flattenResumeTargets } from "../shared/resumePolishContract.ts";
+import { jobAnalysisWarningContext } from "../shared/jobAnalysisWarnings.ts";
 import { useApplicationReview } from "./hooks/useApplicationReview";
 import { buildApplicationReviewInput } from "./lib/applicationReview";
 import { ApplicationReview } from "./sections/tabs/prepare/ApplicationReview";
@@ -1075,6 +1079,18 @@ function App() {
     ? assemblePreparedJobApplicationText(importedJob.tracking, importedJob.brief)
     : jobDescription.trim();
 
+  const resultCarriesConcerns = Boolean(result?.sourceConcerns?.length
+    || result?.suggestedChanges?.some((suggestion) => suggestion.warnings?.length));
+  const resumeSourceWarnings = resultCarriesConcerns && currentResumeConcerns(result,
+    flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])),
+    resumeEditorActions.getDocumentGeneration()).length
+      ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
+
+  const jobWarningContext = jobAnalysisWarningContext(importedJob?.jobWarnings);
+  const draftingJobDescription = jobWarningContext
+    ? `Prepared job fields (generated or edited):\n${jobDescription}\n\nKnown concerns:\n${jobWarningContext}\n\nOriginal captured posting:\n${importedJob?.sourceText || jobRawText}`
+    : jobDescription;
+
   const {
     answersResult,
     answersStatus,
@@ -1087,9 +1103,10 @@ function App() {
   } = useApplicationAnswers({
     resumeText: currentResumeText || resumeText,
     resumeData: editedResume,
-    jobDescription,
+    jobDescription: draftingJobDescription,
     jobUrl,
     honestContext: requestHonestContext,
+    sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("answers"),
     aiRequest: stages.answers,
     providerReady: answersProviderReady,
@@ -1121,8 +1138,9 @@ function App() {
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
     resumeData: editedResume,
-    jobText: jobDescription,
+    jobText: draftingJobDescription,
     honestContext: requestHonestContext,
+    sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("cover"),
     aiRequest: stages.cover,
     providerReady: coverProviderReady,
@@ -1221,7 +1239,7 @@ function App() {
   const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
   const resumeIsStarterSample = resumeOrigin === "starter" && applicationOfRecordId === null;
   const resumeReady = Boolean(
-    (currentResumeText || resumeText).trim().length > 80 && !resumeIsStarterSample
+    resumeHasContent && !resumeIsStarterSample
   );
   useEffect(() => {
     const nextOrigin = resumeOriginAfterEdit(
@@ -1554,12 +1572,15 @@ function App() {
     setPolishProgressVisible,
     handlePolish,
     retryStage,
-    stopPolish
+    stopPolish,
+    terminologyInputKey
   } = usePolishPipeline({
     editedResume,
+    getDocumentGeneration: resumeEditorActions.getDocumentGeneration,
+    previousResult: result,
     polishScopeModes,
     currentResumeText,
-    jobDescription,
+    jobDescription: draftingJobDescription,
     requestHonestContext,
     customInstructionsFor,
     boldBulletKeywords,
@@ -1577,7 +1598,8 @@ function App() {
   const resumeProposalDecisions = useResumeProposalDecisions({
     result,
     resume: editedResume,
-    actions: resumeEditorActions
+    actions: resumeEditorActions,
+    terminologyInputKey
   });
   // Cross-tab presence: each browser tab is an independent RoleFit session, so
   // we publish this tab's coarse phase (derived from existing flow state — never
@@ -2028,6 +2050,7 @@ function App() {
     includeCoverLetter: materialSelection.coverLetter,
     jobUrl,
     preparedJobDescription: preparedApplicationJobDescription,
+    jobWarnings: importedJob?.jobWarnings,
     jobRawText,
     result,
     currentResumeText,
@@ -2106,6 +2129,7 @@ function App() {
     skipBlocker,
     jobUrl,
     preparedJobDescription: preparedApplicationJobDescription,
+    jobWarnings: importedJob?.jobWarnings,
     jobRawText,
     pipelineAiUsage,
     fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
@@ -2330,7 +2354,8 @@ function App() {
               tailoringText: restoredTailoringText,
               tracking: restoredTracking,
               brief: restoredBrief,
-              manualReviewFields: restoredManualReviewFields
+              manualReviewFields: restoredManualReviewFields,
+              ...(app.jobWarnings ? { jobWarnings: app.jobWarnings } : {})
             }
           : null
       );
