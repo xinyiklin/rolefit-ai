@@ -36,8 +36,8 @@ cover-letter generation/Polish, application answers, role descriptions, Job
 analysis, Fit Assessment, and review feedback.
 
 Keep checks for unsupported claims, missing evidence, attribution, metrics,
-content quality, and ATS terminology. Safe literal placeholders, shortness,
-style, wording, and target-description concerns are advisory when the output is
+content quality, and ATS terminology. Shortness, style, wording, and
+target-description concerns are advisory when the output is
 otherwise usable. Preserve the output and show a compact warning beside the
 affected suggestion or finding **before acceptance**, such as **Not supported by provided evidence**, with a short
 reason where useful. A failed check means review is needed, not proof of falsity.
@@ -55,8 +55,10 @@ edit. Unsafe markup, unusable response structures, unauthorized changes, invalid
 edit targets, and stale responses applied to the wrong document retain their
 technical protections. Missing required operation inputs and provider failures
 remain distinct from content judgments. Empty or unrenderable documents may
-remain unavailable for an operation; arbitrary word counts, harmless placeholders,
-and missing evidence must not gate otherwise usable documents.
+remain unavailable for an operation, and missing evidence must not gate otherwise
+usable documents. Resume Polish edits with unresolved template placeholders are
+withheld, and Apply includes a cover letter only when it has at least 40
+authored words and no unresolved template slots.
 
 Reuse existing checks, result types, review components, and decision controls,
 adding small optional warning fields only where needed. Do not add a policy
@@ -166,8 +168,9 @@ owns a real structured editor document: without a saved or opened source it is
 a clean blank page with an editable header anchor, not an empty-state substitute.
 That blank remains valid for editing and strict `.resume` save, but does not
 qualify for PDF export, Polish, or Apply until it contains meaningful document
-content. Readiness uses renderable content rather than minimum word counts or
-safe-placeholder checks. Empty-document and unrenderable-content protections
+content. Resume readiness uses renderable content rather than minimum word
+counts; cover-letter Apply readiness also requires 40 authored words and no
+unresolved template slots. Empty-document and unrenderable-content protections
 remain independent of evidence verification.
 The product also includes session-local application-question drafts and a
 lightweight application pipeline tracker. Generated answers remain editable and
@@ -366,10 +369,11 @@ posting states a work-authorization, sponsorship/visa, clearance, or legal-work
 condition the candidate should confirm. **Blocked** requires both an explicit
 posting condition and an explicit conflicting candidate-context fact. Education,
 skills, and experience are fit evidence, not eligibility. A returned Blocked
-label with unconfirmed support remains visible with a warning. Eligibility does
-not veto automatic Polish; user-configured switches and verdict thresholds,
-provider readiness, and fresh one-use preparation tokens still govern it.
-Neither eligibility uncertainty nor a Blocked label disables manual actions.
+label without explicit conflicting posting and candidate facts located in the
+supplied sources is downgraded to Check with a warning. A confirmed Blocked result stops automatic Polish; Check does not.
+User-configured switches and verdict thresholds, provider readiness, and fresh
+one-use preparation tokens also govern it. Neither eligibility uncertainty nor a
+Blocked label disables manual actions.
 
 Fit Assessment defaults on and owns provider, model, and reasoning settings
 independently from Job analysis. Its first run shares Prepare's Job analysis

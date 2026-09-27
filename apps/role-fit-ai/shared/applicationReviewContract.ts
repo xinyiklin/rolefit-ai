@@ -1,4 +1,4 @@
-import { sanitizeContentWarnings } from "./contentWarnings.ts";
+import { hasMarkupTag, sanitizeContentWarnings } from "./contentWarnings.ts";
 import { applicationDocumentConflicts } from "./applicationReviewConflicts.ts";
 import { analyzeCoverLetterTemplate } from "../src/lib/coverLetterTemplate.ts";
 export const APPLICATION_REVIEW_CODES = [
@@ -272,7 +272,9 @@ export function sanitizeApplicationReviewFinding(
   const warnings = sanitizeContentWarnings(finding.warnings);
   if (finding.warnings !== undefined && !warnings) return null;
   const concerns = [...(warnings ?? [])];
-  if ([finding.anchor, finding.message, finding.recovery].some((text) => /<[^>]*>/.test(text))) return null;
+  // Quotes may contain tag-shaped text (an <insert …> placeholder) only when found verbatim.
+  if ([finding.message, finding.recovery].some((text) => hasMarkupTag(text))) return null;
+  if (finding.anchor && hasMarkupTag(finding.anchor) && !doc.includes(finding.anchor)) return null;
   if (finding.evidenceId !== undefined && (typeof finding.evidenceId !== "string" || finding.evidenceId.length > 120)) return null;
   if (finding.anchor && !doc.includes(finding.anchor)) concerns.push("Document reference could not be confirmed. Quoted text is unconfirmed.");
   if (finding.sourceExcerpt !== undefined) {
@@ -290,7 +292,7 @@ export function sanitizeApplicationReviewFinding(
     if (
       typeof finding.sourceExcerpt !== "string" ||
       finding.sourceExcerpt.length > 1000 ||
-      /<[^>]*>/.test(finding.sourceExcerpt)
+      (hasMarkupTag(finding.sourceExcerpt) && !source?.includes(finding.sourceExcerpt))
     )
       return null;
     if (!finding.sourceExcerpt || !source?.includes(finding.sourceExcerpt)) concerns.push("Source reference could not be confirmed. Quoted text is unconfirmed.");

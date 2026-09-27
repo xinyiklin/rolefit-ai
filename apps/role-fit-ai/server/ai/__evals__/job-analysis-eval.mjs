@@ -38,9 +38,9 @@ const cases = [
   ["workAuth", "Active security clearance required", SOURCE, true],
   ["workAuth", "Valid EAD required", "You will lead the team and read the specs.", true],
   ["workAuth", "Lead engineer role, ready to start", "We need a lead engineer.", true],
-  ["workAuth", "Visa sponsorship is available.", "We do not offer visa sponsorship.", true],
+  ["workAuth", "Visa sponsorship is available.", "We do not offer visa sponsorship.", true, "We do not offer visa sponsorship."],
   ["workAuth", "Must hold a valid EAD to work here.", "Must hold a valid EAD to work here.", false],
-  ["workAuth", "Must be authorized to work in the US without visa sponsorship.", "Must be authorized to work in the US; no visa sponsorship available.", true],
+  ["workAuth", "Must be authorized to work in the US without visa sponsorship.", "Must be authorized to work in the US; no visa sponsorship available.", true, "Must be authorized to work in the US; no visa sponsorship available."],
   ["salaryMin", 250000, SOURCE, true],
   ["salaryMax", 999999, SOURCE, true],
   ["salaryMin", 20000, "The base salary range is $120,000 to $150,000.", true],
@@ -48,18 +48,15 @@ const cases = [
   ["salaryMin", 120000, "We serve 120000 users worldwide.", true],
   ["salaryMin", 120000, "Pay range: $120k-$150k.", false],
   ["salaryMin", 95000, "Base salary around $95,000 annually.", false],
-  ["salaryCurrency", "USD", "Salary: £55,000 - £75,000 per year.", true],
-  ["salaryCurrency", "EUR", "Pay: $120,000.", true],
-  ["salaryCurrency", "USD", "Compensation: 140000 - 160000", true],
-  ["salaryPeriod", "yr", "Compensation: 140000 - 160000", true],
-  ["salaryPeriod", "yr", "Compensation: $140000 per year", false],
+  ["salaryCurrency", "USD", "Salary: £55,000 - £75,000 per year.", false, ""],
+  ["salaryPeriod", "yr", "Compensation: $140000 per year", false, ""],
   ["responsibilities", ["Operate distributed services in Python."], SOURCE, false],
   ["responsibilities", ["Manage a SOC 2 compliance program."], SOURCE, true],
   ["responsibilities", ["Build reliable Kubernetes APIs for healthcare systems"], "You will build reliable APIs for healthcare systems and collaborate with product teams.", true],
   ["responsibilities", ["Lead Go market planning", "Partner with C suite leaders", "Support R analytics", "Deliver TypeScript development"], "Lead go-to-market planning. Partner with C-suite leaders. Support R&D analytics. Deliver TS/SCI development.", true],
   ["requiredQualifications", ["Experience with Kubernetes and HIPAA"], SOURCE, true],
   ["requiredQualifications", ["5+ years building backend systems."], SOURCE, false],
-  ["requiredQualifications", ["Python experience is required."], "Python or Java experience is required unless equivalent experience is demonstrated.", true],
+  ["requiredQualifications", ["Python experience is required."], "Python or Java experience is required unless equivalent experience is demonstrated.", true, ["Python or Java experience is required unless equivalent experience is demonstrated."]],
   ["requiredQualifications", ["Python experience is preferred."], "Preferred qualifications\nPython experience is preferred.", true],
   ["preferredQualifications", ["Knowledge of Rust and blockchain."], SOURCE, true],
   ["senioritySignals", ["principal", "leadership"], SOURCE, true],
@@ -73,13 +70,14 @@ const cases = [
   ["techKeywords", ["TS", ".NET", "Go", "C", "R"], "Use TypeScript (TS), .NET, Go, C, and R to build the platform.", false]
 ];
 let missed = 0, falseWarnings = 0, withheld = 0;
-for (const [field, value, source, expectedWarning] of cases) {
+// A fifth element is the retained source clause when the generated condition changes its meaning.
+for (const [field, value, source, expectedWarning, retained = value] of cases) {
   const result = sanitizeJobAnalysis({ [field]: value }, source);
   const warned = result.jobWarnings?.some((item) => item.field === field) ?? false;
   if (expectedWarning && !warned) missed++;
   if (!expectedWarning && warned) falseWarnings++;
-  try { assert.deepEqual(result[field], value); } catch { withheld++; }
-  assert.deepEqual(result[field], value, `${field}: usable wording preserved`);
+  try { assert.deepEqual(result[field], retained); } catch { withheld++; }
+  assert.deepEqual(result[field], retained, `${field}: usable wording preserved`);
   assert.equal(warned, expectedWarning, `${field}: ${JSON.stringify(value)}`);
 }
 const mixed = sanitizeJobAnalysis({ techKeywords: ["Python", "COBOL"], responsibilities: ["Operate distributed services in Python.", "Lead a team of 40 engineers."] }, SOURCE);
@@ -87,6 +85,20 @@ assert.deepEqual(mixed.techKeywords, ["Python", "COBOL"]);
 assert.equal(mixed.responsibilities.length, 2, "questioned item cannot remove its usable sibling");
 assert.equal(sanitizeJobAnalysis({ jobType: "Full Time" }, SOURCE).jobType, "Full-time");
 assert.equal(sanitizeJobAnalysis({ jobType: "Intern" }, "Job Type: Intern").jobType, "Internship");
+const foreign = sanitizeJobAnalysis({ salaryMin: 55000, salaryMax: 75000, salaryCurrency: "USD" }, "Salary: £55,000 - £75,000 per year.");
+assert.equal(foreign.salaryCurrency, "USD", "a questioned currency stays reviewable");
+assert.ok(foreign.jobWarnings?.some((item) => item.field === "salaryCurrency"));
+for (const [currency, source] of [["EUR", "Pay: $120,000."], ["USD", "Compensation: 140000 - 160000"]]) {
+  assert.ok(sanitizeJobAnalysis({ salaryMin: 120000, salaryCurrency: currency }, source).jobWarnings?.some((item) => item.field === "salaryCurrency"));
+}
+assert.ok(sanitizeJobAnalysis({ salaryMin: 140000, salaryPeriod: "yr" }, "Compensation: 140000 - 160000").jobWarnings?.some((item) => item.field === "salaryPeriod"));
+const derived = sanitizeJobAnalysis({ salaryMin: 120000, salaryMax: 150000 }, "Salary: $120,000 - $150,000 per year.");
+assert.deepEqual([derived.salaryCurrency, derived.salaryPeriod], ["USD", "yr"], "omitted currency/period derive from the pay context");
+assert.equal(sanitizeJobAnalysis({ salaryCurrency: "USD", salaryPeriod: "yr" }, "Salary: $120,000 per year.").salaryCurrency, "", "currency needs a salary amount");
+assert.equal(sanitizeJobAnalysis({ jobType: "Full-time (Permanent)" }, "Employment type: Full-time").jobType, "Full-time");
+assert.equal(sanitizeJobAnalysis({ jobType: "International" }, SOURCE).jobType, "", "word boundaries keep International out of Internship");
+const matchingPay = sanitizeJobAnalysis({ salaryMin: 140000, salaryPeriod: "yr", salaryCurrency: "USD" }, "Compensation: $140000 per year");
+assert.deepEqual([matchingPay.salaryCurrency, matchingPay.salaryPeriod, matchingPay.jobWarnings], ["USD", "yr", undefined], "a correct model currency/period stays without warnings");
 const reversed = sanitizeJobAnalysis({ salaryMin: 185000, salaryMax: 140000 }, SOURCE);
 assert.equal(reversed.salaryMin, 185000, "content concerns do not silently rewrite the range");
 assert.ok(reversed.jobWarnings?.length);

@@ -69,7 +69,7 @@ assert.equal(
     { workAuth: "Visa sponsorship is available." },
     "We do not offer visa sponsorship."
   ).workAuth,
-  "Visa sponsorship is available."
+  "We do not offer visa sponsorship."
 );
 assert.equal(
   sanitizeJobAnalysis(
@@ -107,7 +107,7 @@ const alternative =
 assert.deepEqual(
   sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, alternative)
     .requiredQualifications,
-  ["Python experience is required."]
+  [alternative]
 );
 assert.ok(sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, alternative).jobWarnings?.length);
 const fallback = extractJobPosting(

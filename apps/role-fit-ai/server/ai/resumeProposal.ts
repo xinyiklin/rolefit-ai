@@ -184,7 +184,7 @@ ${boldBulletKeywords
 - Preserve same-entry attribution; negative or aspirational text is not evidence.
 - Prefer posting terminology when supported. Preserve clear mentions of important supported requirements somewhere in the resume. True aliases are equivalent; related tools or partial composites are not. Never stuff keywords or copy posting sentences.
 <terminology_priorities>
-${fenceUntrusted(JSON.stringify(jobTerminology(jobText).terms))}
+${fenceUntrusted(JSON.stringify(jobTerminology(jobText).terms.map(({ keyword, category }) => ({ keyword, category }))))}
 </terminology_priorities>
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 - summary is optional concise feedback, maximum 3 items.
@@ -311,6 +311,7 @@ export function sanitizeResumeProposal(
   }
   const seenTargets = new Set<string>();
   const changes: ResumePolishWireChange[] = [];
+  const postingTerms = jobTerminology(jobText).terms;
 
   for (const rawChange of rawChanges.slice(0, MAX_EXAMINED_CHANGES)) {
     if (!rawChange || typeof rawChange !== "object" || Array.isArray(rawChange)) {
@@ -337,6 +338,7 @@ export function sanitizeResumeProposal(
       || !stripInlineMarks(normalized)
       || String(replacementRaw ?? "").length > 1400
       || containsStructuredMarkup(replacementRaw)
+      || templateHasUnresolvedSlots(normalized)
     ) {
       increment(counts, "MALFORMED");
       continue;
@@ -349,11 +351,10 @@ export function sanitizeResumeProposal(
       increment(counts, "UNCHANGED");
       continue;
     }
-    const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? target.entryText : `${scopeText}\n${honestContext}`, jobText);
+    const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? target.entryText : `${scopeText}\n${honestContext}`, postingTerms);
     if (!replacementIsSupported(replacement, target, jobText, scopeText, honestContext)) {
       warnings.push("Not supported by provided evidence. Review tools, metrics, outcomes and attribution in this edit.");
     }
-    if (templateHasUnresolvedSlots(replacement)) warnings.push("This edit contains unfinished placeholder text.");
     seenTargets.add(targetId);
     changes.push({
       targetId,

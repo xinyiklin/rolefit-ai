@@ -129,7 +129,7 @@ function fitAssessmentInput(body: Record<string, unknown>): FitAssessmentInput |
 const norm = (s: unknown): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 function str(value: unknown, max = 200): string {
-  return typeof value === "string" ? value.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
+  return typeof value === "string" ? value.replace(/<\/?[a-z][^>]*>/gi, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
 
 function strList(value: unknown, { maxItems, maxLen = 240, minLen = 3 }: StrListOptions): string[] {
@@ -265,11 +265,11 @@ function periodFromSalaryContext(salaryContext: string): string {
 
 function normalizeJobType(value: unknown): string {
   const t = str(value, 40);
-  if (/^full[-\s]?time$/i.test(t)) return "Full-time";
-  if (/^part[-\s]?time$/i.test(t)) return "Part-time";
-  if (/^contract$/i.test(t)) return "Contract";
-  if (/^intern(ship)?$/i.test(t)) return "Internship";
-  if (/^temp(orary)?$/i.test(t)) return "Temporary";
+  if (/full[-\s]?time/i.test(t)) return "Full-time";
+  if (/part[-\s]?time/i.test(t)) return "Part-time";
+  if (/\bcontract\b/i.test(t)) return "Contract";
+  if (/\bintern(ship)?\b/i.test(t)) return "Internship";
+  if (/\btemp(orary)?\b/i.test(t)) return "Temporary";
   return "";
 }
 
@@ -377,9 +377,12 @@ export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
     warnings.push({ field: "salaryMin", message: "The generated minimum exceeds the maximum. Review the salary range." });
   }
   const salaryCurrencyRaw = str(obj.salaryCurrency, 20).toUpperCase();
-  const salaryCurrency = ["USD", "GBP", "EUR", "CAD", "AUD", "JPY"].includes(salaryCurrencyRaw) ? salaryCurrencyRaw : "";
+  const hasSalary = salaryMin !== null || salaryMax !== null;
+  const salaryCurrency = !hasSalary ? "" : ["USD", "GBP", "EUR", "CAD", "AUD", "JPY"].includes(salaryCurrencyRaw)
+    ? salaryCurrencyRaw : currencyFromSalaryContext(salaryContext);
   const salaryPeriodRaw = str(obj.salaryPeriod, 20);
-  const salaryPeriod = ["yr", "mo", "hr"].includes(salaryPeriodRaw) ? salaryPeriodRaw : "";
+  const salaryPeriod = !hasSalary ? "" : ["yr", "mo", "hr"].includes(salaryPeriodRaw)
+    ? salaryPeriodRaw : periodFromSalaryContext(salaryContext);
   warn("salaryCurrency", salaryCurrency === currencyFromSalaryContext(salaryContext), salaryCurrency);
   warn("salaryPeriod", salaryPeriod === periodFromSalaryContext(salaryContext), salaryPeriod);
   const jobType = normalizeJobType(obj.jobType);

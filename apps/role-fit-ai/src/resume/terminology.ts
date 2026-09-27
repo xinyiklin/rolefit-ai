@@ -36,8 +36,8 @@ export function jobTerminology(jobText: string): { terms: JobTerm[]; limitations
   return { terms: terms.slice(0, 48), limitations };
 }
 
-export function unsupportedTerminology(replacement: string, evidence: string, jobText: string): string[] {
-  return jobTerminology(jobText).terms
+export function unsupportedTerminology(replacement: string, evidence: string, terms: JobTerm[]): string[] {
+  return terms
     .filter(({ keyword }) => affirmativeTerm(replacement, keyword) && !affirmativeTerm(evidence, keyword))
     .map(({ keyword }) => `${keyword}: not supported by provided evidence for this entry.`);
 }

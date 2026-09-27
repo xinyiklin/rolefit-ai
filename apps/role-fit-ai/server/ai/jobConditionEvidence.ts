@@ -71,7 +71,9 @@ export function groundedJobCondition(
   const preserveCondition = field === "workAuth" || /\b(?:not|no|never|unless|except|only|either|or|must|required|preferred|minimum|at least|at most)\b|\d/i.test(clause.text);
   const tooLong = preserveCondition && clause.text.length > (field === "workAuth" ? 240 : 1000);
   if (qualificationConcern || headingConcern || tooLong || (preserveCondition && canonical(value) !== canonical(clause.text))) {
-    warnings.push({ field, message: "Review this generated condition against the original posting; its wording or classification may change the source meaning." });
+    warnings.push({ field, message: preserveCondition && !tooLong
+      ? "The posting's original wording was kept because the generated condition changed it; review its classification."
+      : "Review this generated condition against the original posting; its wording or classification may change the source meaning." });
     if (issues.length < 8) issues.push({
       field,
       sourceExcerpt: clause.text.slice(0, 1000),
@@ -81,8 +83,8 @@ export function groundedJobCondition(
           ? "Check this classification against the posting; its section heading suggests non-requirement content."
           : tooLong
             ? "This condition is too long to safely summarize. Review the original wording."
-            : "The generated condition differs from this original wording; review its meaning."
+            : "The original condition was retained to preserve its meaning."
     });
   }
-  return value;
+  return preserveCondition && !tooLong ? clause.text : value;
 }

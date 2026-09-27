@@ -74,6 +74,12 @@ Good server verification covers:
   the NodeNext, rewrite, and erasable-syntax options make this the type +
   native-runtime syntax gate)
 - the affected route returns the expected JSON shape and HTTP status
+- advisory-warning contracts stay covered by
+  `server/ai/__evals__/assessment-warning-contracts.mjs` (Fit and application
+  review), `server/applications/__evals__/job-warning-persistence.mjs` (saved
+  job warnings), `src/lib/__evals__/application-answer-warnings-eval.mjs`, and
+  `src/lib/__evals__/terminology-warnings-eval.mjs` (supported-term
+  preservation and unsupported-term warnings)
 - normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
   `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
   provider dispatch. It prompts with flat `target-N` IDs only; only bullets and
@@ -81,8 +87,9 @@ Good server verification covers:
   education, and omitted sections never become targets. Oversized fixtures prove complete
   JSON stays within budget, later job-relevant targets survive, response ids
   outside the selected set are withheld, and the omitted count round-trips
-- one malformed, unknown, duplicate, unchanged, or unsupported edit is dropped
-  without discarding valid siblings. Malformed optional summary/gap items are
+- one malformed, unknown, duplicate, unchanged, or placeholder-bearing edit is
+  dropped without discarding valid siblings; an unsupported edit stays
+  reviewable with warnings. Malformed optional summary/gap items are
   independently ignored. An all-drop for any safety reason returns Withheld, not
   a completed proposal; an all-UNCHANGED settle with a valid non-Withheld model
   status returns No changes with the reason still on the wire, while an explicit
@@ -135,14 +142,15 @@ Good server verification covers:
   data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
   invalid fit preserves valid job fields, the prompt contains the direct rubric
   as one identical system-level block in combined and reassessment paths, includes
-  the conservative lower-category and stable posting-order tie breaks, all
-  match/gap/eligibility anchors are exact current-source excerpts without
-  whitespace rewriting, both sides of accepted match evidence reach the client,
-  every non-Limited verdict has at least one accepted match, public lists cap at
-  three and reject duplicates, malformed enums or anchors fail unavailable,
-  `CHECK` preserves its posting condition, `BLOCKED` preserves that condition
-  plus the explicit conflicting candidate fact, fixed public summaries replace
-  provider prose, and reassessments omit the Job analysis schema
+  the conservative lower-category and stable posting-order tie breaks, unlocated
+  match/gap/eligibility excerpts, duplicates, explicit conflicts, and
+  non-Limited verdicts without an accepted match stay usable with warnings,
+  both sides of accepted match evidence reach the client, public lists cap at
+  three, malformed enums or unsafe text fail unavailable, `BLOCKED` without
+  located, explicitly conflicting excerpts is downgraded to `CHECK` with a
+  warning, a
+  safe provider summary survives with fixed copy as fallback, and reassessments
+  omit the Job analysis schema
 - `src/lib/__evals__/ai-job-analysis-request-eval.mjs` must exercise the one
   browser request boundary with combined and reassessment success, provider HTTP
   failure, unreadable and invalid responses, network failure, and abort
@@ -164,11 +172,11 @@ Good server verification covers:
   preserve the threshold values/order/labels, and keep automation policy out of
   the shared Fit Assessment contract
 - resume proposal probes must keep category labels out of the target set, allow
-  grounded list reordering/additions, reject category substitutions, job-only
-  skills, every upward ownership inflation (including level 1 to 2), and
-  `spearheaded`/`oversaw`/`orchestrated` inflation; unrelated sibling or broad
-  context leadership cannot authorize the target, and safe sibling edits remain
-  preserved
+  grounded list reordering/additions, and attach warnings to category
+  substitutions, job-only skills, every upward ownership inflation (including
+  level 1 to 2), and `spearheaded`/`oversaw`/`orchestrated` inflation; unrelated
+  sibling or broad context leadership cannot silence those warnings, and safe
+  sibling edits remain preserved
 - application storage probes must prove compact Fit Assessment snapshots
   round-trip while numeric scores, full recruiter reviews, and missing-skill
   compatibility fields are omitted at the storage boundary. Current preview
@@ -188,17 +196,19 @@ Good server verification covers:
   fallback and retain their own retryable task progress. Cover-letter probes
   must prove the **one-click contract**: a template-only starter, a blank
   document, and every base-variant job family reach Polish with zero extra
-  fields; only a missing name/role/company or an unanswered private slot
-  blocks; a recipient named in the source survives and an impersonal greeting
+  fields; only a missing role or company blocks, while a missing candidate name
+  or private slot is a warning; a recipient named in the source survives and an impersonal greeting
   falls back to the company hiring team; markdown links, citations, array
   indexes, and escaped brackets stay literal. Probes must show the normal path
-  is exactly one provider request, that a violation triggers exactly one silent
-  repair carrying its reasons, and that a second failure fails closed with the
-  existing letter kept. Rejections must cover unknown evidence or slot ids, an
-  uncited paragraph, a residual template token, a body-level greeting or
-  sign-off, a missing role or company, generic phrasing, and ungrounded
-  candidate terms, numbers, and outcomes — while an employer-subject sentence
-  drawn from the posting must not widen candidate evidence. Length is asserted
+  is exactly one provider request, that a technical violation triggers exactly
+  one silent repair carrying its reasons, and that a second technical failure
+  fails closed with the existing letter kept. Technical rejections cover
+  unusable structure, unsafe markup, an unresolved template instruction, and a
+  body-level greeting, sign-off, or date; unknown evidence ids, uncited
+  paragraphs, generic phrasing, and ungrounded candidate terms, numbers, and
+  outcomes return the letter with warnings and never trigger repair — while an
+  employer-subject sentence drawn from the posting must not widen candidate
+  evidence. Length is asserted
   as a warning, never a gate. The thirteen-fixture synthetic corpus spans
   general full-stack, frontend, backend/platform, healthcare, applied AI, a
   role whose strongest lead is not the most prominent project, relevant

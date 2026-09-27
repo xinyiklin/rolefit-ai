@@ -32,8 +32,8 @@ assert.equal(analysis.terms[1].keyword, 'kubernetes');
 assert.equal(analysis.terms.find(t => t.keyword === 'react').category, 'preferred');
 assert.ok(analysis.limitations.length);
 assert.ok(jobTerminology('Uncategorized job prose').limitations.some(t => t.includes('not assessed')));
-assert.ok(unsupportedTerminology('Built CI/CD pipelines.', 'Built continuous integration pipelines.', job).length);
-assert.equal(unsupportedTerminology('Used k8s.', 'Used Kubernetes.', job).length, 0);
+assert.ok(unsupportedTerminology('Built CI/CD pipelines.', 'Built continuous integration pipelines.', jobTerminology(job).terms).length);
+assert.equal(unsupportedTerminology('Used k8s.', 'Used Kubernetes.', jobTerminology(job).terms).length, 0);
 const snapshot = {inputKey:'job-a', terms: [{keyword:'postgresql',phrase:'PostgreSQL',category:'required'}], limitations:[]};
 const accepted = [{original:'Built PostgreSQL tools.',current:'Built relational database tools.'}];
 assert.equal(lostAcceptedTerms(snapshot,'job-a',accepted[0].current,accepted).length,1);
@@ -68,7 +68,7 @@ for (const [replacement,warning,technical] of [
  ['Built reliable Python tools.',false,false],
  ['Built Kubernetes tools.',true,false],
  ['Built 500 Python tools.',true,false],
- ['Built [add metric] Python tools.',true,false],
+ ['Built [add metric] Python tools.',false,true],
  ['<script>steal()</script>',false,true],
  ['<b></b>',false,true],
 ]) {
@@ -85,7 +85,7 @@ console.log(`Terminology/warning fixtures passed: ${matches.length} match cases,
 for (const value of ['PostgreSQL-backed services', 'PostgreSQL/MySQL']) assert.equal(affirmativeTerm(value, 'postgresql'), true);
 assert.deepEqual(jobTerminology('Required Qualifications:\nGo to customer sites.').terms, []);
 assert.deepEqual(jobTerminology('Required Qualifications:\nExpress interest in customer needs.').terms, []);
-assert.deepEqual(unsupportedTerminology('Express interest in customer needs.', 'Built Python APIs.', 'Required Qualifications:\nExpress interest in customer needs.'), []);
+assert.deepEqual(unsupportedTerminology('Express interest in customer needs.', 'Built Python APIs.', jobTerminology('Required Qualifications:\nExpress interest in customer needs.').terms), []);
 assert.equal(jobTerminology('Required Qualifications:\nexpress.js').terms[0].keyword, 'express');
 assert.equal(jobTerminology('Required Qualifications:\nKubernetes/Docker').terms.length, 2);
 const advice = {kind:'emphasis',sectionId:'s',entryId:'e',jobExcerpt:'Kubernetes',rationale:'Emphasize service implementation.'};

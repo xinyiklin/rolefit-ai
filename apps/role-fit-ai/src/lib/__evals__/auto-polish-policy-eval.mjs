@@ -61,6 +61,7 @@ assert.equal(
 for (const input of [
   { enabled: false, thresholdMet: true, automationBlocked: false },
   { enabled: true, thresholdMet: false, automationBlocked: false },
+  { enabled: true, thresholdMet: true, automationBlocked: true }
 ]) {
   assert.equal(
     automaticPolishActionDecision({
@@ -69,7 +70,7 @@ for (const input of [
       canStart: true
     }),
     "decline",
-    "disabled and below-threshold actions settle as permanent declines"
+    "disabled, below-threshold, and blocked actions settle as permanent declines"
   );
 }
 assert.equal(

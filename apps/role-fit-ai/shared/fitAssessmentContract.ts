@@ -1,4 +1,4 @@
-import { sanitizeContentWarnings } from "./contentWarnings.ts";
+import { hasMarkupTag, sanitizeContentWarnings } from "./contentWarnings.ts";
 export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMITED"] as const;
 export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
 export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
@@ -130,7 +130,7 @@ function text(value: unknown, maxLength: number): string {
 function excerpt(value: unknown, maxLength = 500): string {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
-  return trimmed.length <= maxLength && !/<[^>]*>/.test(trimmed) ? trimmed : "";
+  return trimmed.length <= maxLength ? trimmed : "";
 }
 
 function excerptList(value: unknown): string[] | null {
@@ -180,7 +180,7 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
   if (source.status !== undefined && source.status !== "ASSESSED") return null;
   const verdict = text(source.verdict, 24).toUpperCase();
   if (!verdicts.has(verdict)) return null;
-  if (source.summary !== undefined && (typeof source.summary !== "string" || source.summary.length > 500 || /<[^>]*>/.test(source.summary))) return null;
+  if (source.summary !== undefined && (typeof source.summary !== "string" || source.summary.length > 500 || hasMarkupTag(source.summary))) return null;
   const matches = matchList(source.matches);
   const gaps = excerptList(source.gaps);
   if (!matches || !gaps) return null;
@@ -192,7 +192,7 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
     const eligibilitySource = rawEligibility as Record<string, unknown>;
     const status = text(eligibilitySource.status, 16).toUpperCase();
     if (!eligibilityStatuses.has(status)) return null;
-    if (eligibilitySource.note !== undefined && (typeof eligibilitySource.note !== "string" || eligibilitySource.note.length > 240 || /<[^>]*>/.test(eligibilitySource.note))) return null;
+    if (eligibilitySource.note !== undefined && (typeof eligibilitySource.note !== "string" || eligibilitySource.note.length > 240 || hasMarkupTag(eligibilitySource.note))) return null;
     for (const field of ["jobExcerpt", "candidateExcerpt"] as const) {
       if (eligibilitySource[field] !== undefined && eligibilitySource[field] !== "" && !excerpt(eligibilitySource[field])) return null;
     }
@@ -217,7 +217,7 @@ export function sanitizeFitAssessment(raw: unknown): FitAssessmentResult | null 
       if (detail.relationship !== undefined && !["transferable", "contradictory"].includes(detail.relationship)) return null;
       if (detail.candidateSource !== undefined && !FIT_ASSESSMENT_EVIDENCE_SOURCES.includes(detail.candidateSource)) return null;
       if (detail.candidateExcerpt !== undefined && !excerpt(detail.candidateExcerpt)) return null;
-      if (detail.note !== undefined && (typeof detail.note !== "string" || detail.note.length > 240 || /<[^>]*>/.test(detail.note))) return null;
+      if (detail.note !== undefined && (typeof detail.note !== "string" || detail.note.length > 240 || hasMarkupTag(detail.note))) return null;
       gapDetails.push({ jobExcerpt: detail.jobExcerpt,
         ...(detail.note ? { note: detail.note } : {}),
         ...(detail.relationship ? { relationship: detail.relationship } : {}),

@@ -638,7 +638,7 @@ Proposal, No changes, and Withheld remain visibly distinct.
 Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.
-A resume-only change keeps that validated proposal in the proposal state with
+A resume-only change keeps that existing proposal in the proposal state with
 an inline earlier-resume warning and an enabled Accept proposal action; changes
 to the letter, job, personal evidence, or polishing instructions use the blocked
 stale state and require Polish again.
@@ -749,15 +749,16 @@ desk; rebuild it from hairlines, paper tones, and ledger vocabulary.
 ### Content warnings
 
 Follow the [system-wide product policy](PRODUCT.md#content-and-evidence-warning-policy).
-Use one compact warning pattern beside affected generated content or assessment
-findings, visible before acceptance: **Not supported by provided evidence**, with
-a short specific reason only when useful. Keep existing Accept, Edit, and Reject
+Use one compact "Review before use" note beside affected generated content or
+assessment findings, visible before acceptance, listing specific concerns;
+evidence concerns use **Not supported by provided evidence**, with a short
+specific reason only when useful. Keep existing Accept, Edit, and Reject
 controls and downstream actions available. Do not require dismissal, added
 evidence, confirmation, or a separate review step. Accepting never changes a
 warning into a Verified label. Unknown citations remain unconfirmed text without
-source navigation/highlighting while use stays enabled. Safe placeholders,
-shortness, and content-quality issues are warnings; invalid edit targets and
-other technical failures retain blocking recovery. Reuse the current rail, findings, disclosures, and tokens.
+source navigation/highlighting while use stays enabled. Shortness and
+content-quality issues are warnings; unresolved template placeholders, invalid
+edit targets, and other technical failures retain blocking recovery. Reuse the current rail, findings, disclosures, and tokens.
 
 ### Final application review and evidence disclosures
 

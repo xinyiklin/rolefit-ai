@@ -1,4 +1,4 @@
-import { sanitizeContentWarnings } from "./contentWarnings.ts";
+import { hasMarkupTag, sanitizeContentWarnings } from "./contentWarnings.ts";
 import { isEducationHeading } from "../src/resume/sections.ts";
 export const RESUME_POLISH_STATUSES = ["PROPOSAL", "NO_CHANGES", "WITHHELD"] as const;
 export const RESUME_POLISH_WITHHELD_REASONS = [
@@ -34,9 +34,9 @@ export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const value = item as Record<string, unknown>;
     if (!["emphasis", "order", "space", "missing-evidence"].includes(String(value.kind))) return [];
-    if (typeof value.rationale !== "string" || !value.rationale.trim() || value.rationale.length > 500 || /<[^>]*>/.test(value.rationale)) return [];
+    if (typeof value.rationale !== "string" || !value.rationale.trim() || value.rationale.length > 500 || hasMarkupTag(value.rationale)) return [];
     for (const key of ["sectionId", "entryId", "jobExcerpt", "candidateExcerpt"]) {
-      if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length > 500 || /<[^>]*>/.test(value[key]))) return [];
+      if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length > 500)) return [];
     }
     return [{
       kind: value.kind as ResumePolishAdvice["kind"],

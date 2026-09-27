@@ -31,6 +31,12 @@ try {
   const reopened = await readApplications(dir);
   assert.deepEqual(reopened[0].jobWarnings, jobWarnings);
   assert.equal(reopened[1].jobWarnings, undefined);
+  const comparisonFit = { resumeLabel: "Backend resume", assessedAt: base.updatedAt, provider: "codex-cli", model: "synthetic", reasoningEffort: "medium", attempts: 1, promptVersion: "fit-assessment-direct-rubric-v5",
+    result: { status: "ASSESSED", verdict: "REASONABLE", summary: "Synthetic summary.", matches: [{ jobExcerpt: "p99 <50ms and >99.9% availability", candidateSource: "RESUME", candidateExcerpt: "Kept List<T> caches under 50ms" }], gaps: [] } };
+  await writeFile(join(dir, "applications.json"), JSON.stringify({ applications: [{ ...legacy, id: "comparison", fitAssessment: comparisonFit }] }));
+  assert.equal((await readApplications(dir))[0].fitAssessment?.result.matches[0].candidateExcerpt, "Kept List<T> caches under 50ms", "main-era excerpts with < and > still load");
+  await writeApplications(dir, sanitizeApplications([{ ...stored, jobWarnings: [{ field: "title", message: "<<i>b>Check title" }] }]));
+  assert.equal((await readApplications(dir))[0].jobWarnings?.[0].message, "Check title", "nested tag fragments strip to a stable message");
   await writeFile(join(dir, "applications.json"), JSON.stringify({ applications: [{ ...stored, jobWarnings: [{ field: "wrong-field", message: "Unknown field" }] }] }));
   await assert.rejects(readApplications(dir), /safely|repair|restore/i, "invalid warning association does not silently rewrite stored data");
 } finally {

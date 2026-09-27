@@ -131,8 +131,11 @@ owns:
   plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
   `mode: "resume-proposal"` and performs one provider operation. The server
   flattens mutable fields to `target-1`, `target-2`, and so on, keeps their
-  document mapping private, and returns only outcome, changes, short feedback,
-  withheld counts, prompt-omitted target count, and provider provenance. If the
+  document mapping private, and returns only outcome, changes with optional
+  per-change warnings, short feedback, optional result warnings, withheld
+  counts, prompt-omitted target count, and provider provenance. Bounded
+  `sourceWarnings` about earlier generated resume wording reach the prompt as
+  fenced `<earlier_output_concerns>`; they do not verify that wording. If the
   complete target set exceeds 42,000 serialized characters, the server selects
   material bullets, summaries, actual skill lists, and job-relevant fields
   without prefix-order bias. It serializes only complete target objects and

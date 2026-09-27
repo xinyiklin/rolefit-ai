@@ -3,6 +3,30 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-27
+
+- [USER+CODE] Pre-merge code review of the advisory-content-checks branch; the
+  user approved fixing all ten findings. These fixes restore guards the branch had loosened:
+  - job conditions that change meaning keep the posting's source clause;
+  - metadata-only Job analysis falls back to the local engine;
+  - confirmed BLOCKED eligibility stops automatic Polish;
+  - BLOCKED without located, explicitly conflicting excerpts is downgraded to CHECK;
+  - Apply needs 40 authored words and no template slots in the cover letter;
+  - Resume Polish withholds edits that contain placeholders.
+
+  They also fix job-type and salary normalization, and add a call-time check
+  for a replaced document plus memoized terminology checks. The warning policy
+  docs now carve out these exceptions.
+- [CODE] Independent review found the branch's loose `<…>` markup test would
+  make main-era saved Fit excerpts (for example `<50ms … >99.9%`, `List<T>`)
+  unloadable and discard Final Review on `<insert …>` placeholders. Only
+  tag-shaped text is now treated as markup. Quotes may contain it only when
+  found verbatim in their source.
+- [TOOL] RoleFit gate (build, landing, desktop, server tsc) and 121/121 offline
+  probes passed after the fixes. Two independent reviewers covered the fixes
+  and the AI sanitizer/grounding surface; live providers and browser QA were
+  not run.
+
 ## 2026-09-18
 
 - [USER+CODE] Follow-up review corrected a terminology warning false positive:
@@ -26,8 +50,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   Root guidance now distinguishes this RoleFit policy from Typeset. Shared
   packages, portable schemas, provider defaults and product versions are unchanged.
 - [CODE] Required-first terminology uses strict aliases and actual accepted
-  decisions; ordinary Go/Express wording and qualified unit/integration testing
-  do not count as equivalent technical claims. Saved Fit/job receipts retain
+  decisions (details in RoleFit's AI docs). Saved Fit/job receipts retain
   optional warnings; older builds may reject those newer receipts. Draft warning
   metadata stays session-local. Visitor and engineering docs describe the limits.
 
@@ -36,8 +59,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   and synthetic desktop/390px QA passed during implementation; two independent
   implementation reviewers and a fresh publication reviewer cleared their scopes.
   Live providers, vendor ATS and hiring outcomes remain unverified; no efficacy
-  claim. Native full-shell Save/Export/Apply clicks were not exercised. Local
-  artifacts and personal data remain excluded from publication.
+  claim. Local artifacts and personal data remain excluded from publication.
 
 - [USER+CODE] [TASK fit-assessment-rejection-20260918] Approved the advisory Fit
   guard simplification and publication after review. The RoleFit-owned change

@@ -87,8 +87,8 @@ function buildExtractedFromAi(fields: Partial<AiJobAnalysisFields>, sourceText: 
     workAuth: str(fields.workAuth) || undefined,
     salaryMin: hasSalary ? salaryMin : undefined,
     salaryMax: hasSalary ? salaryMax : undefined,
-    salaryCurrency: str(fields.salaryCurrency) || undefined,
-    salaryPeriod: PERIODS.includes(period) ? period : undefined,
+    salaryCurrency: hasSalary ? str(fields.salaryCurrency) || undefined : undefined,
+    salaryPeriod: hasSalary && PERIODS.includes(period) ? period : undefined,
     roleDescription: roleDescription || undefined
   };
 
@@ -296,11 +296,10 @@ function localOnlyUsage(): StageAiUsage {
   return { source: "local", completedAt: new Date().toISOString() };
 }
 
-// Preserve every usable generated field; only an empty result needs a local fallback.
+// Metadata alone is not a tailoring brief; without requirement lists the local
+// engine may still extract structure, so fall back and label the result "local".
 function hasUsableAiContent(fields: Partial<AiJobAnalysisFields>): boolean {
   return (
-    [fields.title, fields.company, fields.location, fields.roleDescription, fields.jobType, fields.workAuth, fields.salaryCurrency, fields.salaryPeriod].some((value) => str(value).trim()) ||
-    num(fields.salaryMin) !== null || num(fields.salaryMax) !== null ||
     strArray(fields.responsibilities).length > 0 ||
     strArray(fields.requiredQualifications).length > 0 ||
     strArray(fields.preferredQualifications).length > 0 ||

@@ -66,10 +66,12 @@ and affirmative transferable support for Stretch without a direct match.
 
 Source checks produce warnings for unlocated excerpts, repeated/overlapping
 findings, explicit evidence conflicts, unsupported summaries, missing supporting
-findings, and unclear eligibility conflicts. Safe prose and conclusions survive;
-code does not change `BLOCKED` to `CHECK`, remove usable gap details, or replace a
-usable model summary with fixed copy. Fixed summary copy remains the fallback
-when no summary was supplied. Missing candidate citations remain visibly
+findings, and unclear eligibility conflicts. Safe prose and conclusions survive,
+except that a `BLOCKED` without located, explicitly conflicting posting and
+candidate excerpts is downgraded to `CHECK` with a neutral note and a warning; code does not remove usable gap details or
+replace a usable model summary with fixed copy. Fixed summary copy remains the fallback
+when no summary was supplied; the response shape does not request one, so fixed
+copy is the usual display. Missing candidate citations remain visibly
 unconfirmed. Located excerpts establish location, not semantic truth or hiring
 accuracy. Invalid source navigation is unavailable without disabling use.
 
@@ -172,8 +174,8 @@ Local checks retain empty-material, placeholder, target, and narrow explicit
 cross-document responsibility/date findings even when provider work fails.
 One selected-provider request adds bounded source-linked findings. This route
 disables unreadable-output retries; other stages retain their existing policy.
-Malformed findings, warnings, overflow beyond 12 findings, and failed requests
-cannot produce a complete review. Safe findings with missing or unconfirmed
+Malformed findings, findings carrying warnings, overflow beyond 12 findings, and
+failed requests cannot produce a complete review. Safe findings with missing or unconfirmed
 provenance remain visible with warnings, including their original messages and
 recovery advice; source navigation is enabled only for located references.
 Candidate revisions require candidate sources; posting evidence supports employer
@@ -211,8 +213,8 @@ Cover-letter factual guards use paragraph-cited sources and explicitly named ent
 identity in one typed factual pass; employer facts use the posting. Explicit prior
 affiliations need candidate evidence, while generic acronyms are not employer names.
 Neither letters nor Resume Polish require hidden sentence bindings or literal
-proof of paraphrases. Explicit factual conflicts and safe placeholders produce
-warnings. Only technical structure, identity, markup, and resource failures
+proof of paraphrases. Explicit factual conflicts and safe cover-letter
+placeholders produce warnings; Resume Polish withholds placeholder edits. Only technical structure, identity, markup, and resource failures
 withhold operations;
 Cover may repair technically unusable output once.
 Resume Polish protects actual education/credential records, enumerates all bounded

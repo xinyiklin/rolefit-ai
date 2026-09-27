@@ -45,8 +45,9 @@ application retain blocking technical guards.
   The model owns semantic judgment; no requirement ledger, completeness gate,
   deterministic verdict calculation, or guessed fallback is permitted.
   Cover-letter tailoring is one operation over the source letter and candidate
-  evidence. Shared preflight requires a prepared role/company and a usable resume
-  corpus; a missing candidate name or private fact is advisory. Safe placeholders
+  evidence. Shared preflight requires a prepared role/company, and the route
+  also requires resume evidence; a missing candidate name or private fact is
+  advisory. Safe placeholders
   remain usable text with warnings. No additional evidence-planning stage exists.
 - `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
   checks. The direct category rubric in `fitAssessment.ts` is provider-applied; do
@@ -87,9 +88,10 @@ application retain blocking technical guards.
   Only bullets and actual Skills lists are mutable targets; category labels and standard
   entry role, employer, subtitle, and date fields remain read-only evidence.
   Unknown/duplicate targets and unsafe or unusable mutation structures retain
-  technical guards; unchanged text remains a no-op. Unsupported edits,
-  category-like text in actual Skills targets, unfinished placeholders, and
-  feedback concerns remain reviewable with warnings. Withheld counts describe
+  technical guards, and edits with unresolved template placeholders are
+  withheld as malformed; unchanged text remains a no-op. Unsupported edits,
+  category-like text in actual Skills targets, and feedback concerns remain
+  reviewable with warnings. Withheld counts describe
   invalid/unusable operations, never content concerns or unchanged echoes.
   Changes beyond the bounded response window remain disclosed as malformed.
   Proposal decisions include run identity; supported-term preservation compares
@@ -141,6 +143,9 @@ application retain blocking technical guards.
 ## Evidence-grounding ownership
 
 - `shared/evidencePolarity.ts` owns clause-level polarity for client and server.
+  `shared/contentWarnings.ts` bounds every warning list (8 items, 500
+  characters, markup stripped); `shared/jobAnalysisWarnings.ts` owns field-keyed
+  job warnings, including saved-record sanitization.
   `claimEvidence.ts` and `jobConditionEvidence.ts` own claim and job-condition checks. `fitEvidence.ts` catches focused explicit conflicts;
   do not expand it into a lexical proof of semantic support or a second classifier.
   Fit is advisory: leave tool coverage and responsibility/ownership judgments to

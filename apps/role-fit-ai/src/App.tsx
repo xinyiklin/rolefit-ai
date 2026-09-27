@@ -1079,7 +1079,9 @@ function App() {
     ? assemblePreparedJobApplicationText(importedJob.tracking, importedJob.brief)
     : jobDescription.trim();
 
-  const resumeSourceWarnings = currentResumeConcerns(result,
+  const resultCarriesConcerns = Boolean(result?.sourceConcerns?.length
+    || result?.suggestedChanges?.some((suggestion) => suggestion.warnings?.length));
+  const resumeSourceWarnings = resultCarriesConcerns && currentResumeConcerns(result,
     flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])),
     resumeEditorActions.getDocumentGeneration()).length
       ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
@@ -1248,7 +1250,7 @@ function App() {
     if (nextOrigin !== resumeOrigin) setResumeOrigin(nextOrigin);
   }, [currentResumeText, resumeDocumentDirty, resumeOrigin, resumeText]);
   const coverLetterReady =
-    Boolean(coverLetterEditor.text.trim());
+    coverLetterPreflight.authoredWordCount >= 40 && coverLetterPreflight.template.slots.length === 0;
   // A usable application starts with a completed intake snapshot. Nonempty
   // source text alone is not enough: editing either source field invalidates
   // the snapshot until Prepare runs again.
@@ -1840,6 +1842,7 @@ function App() {
       };
     }
     const receipt = autoProposalFitRef.current;
+    const automationBlocked = fit.eligibility?.status === "BLOCKED";
     const resumePolishCanStart =
       jobPrepared &&
       canPolish &&
@@ -1854,6 +1857,7 @@ function App() {
         fit.verdict,
         resumeAutoPolishThreshold
       ),
+      automationBlocked,
       prerequisitePending: false,
       canStart: resumePolishCanStart
     });
@@ -1884,6 +1888,7 @@ function App() {
         fit.verdict,
         coverLetterAutoPolishThreshold
       ),
+      automationBlocked,
       prerequisitePending: coverLetterSelectionPending,
       canStart: coverPolishCanStart
     });

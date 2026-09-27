@@ -23,7 +23,7 @@ for (const [label, raw] of [
   assert.ok(result.warnings?.length, label);
   assert.equal(result.verdict, raw.verdict, "the original conclusion survives");
   assert.deepEqual(sanitizeFitAssessment(result), result, "client and saved receipts keep warnings");
-  if (raw.eligibility) assert.deepEqual(result.eligibility, raw.eligibility);
+  if (raw.eligibility) assert.deepEqual(result.eligibility, { ...raw.eligibility, status: "CHECK", note: "Confirm this eligibility condition; the supplied context does not establish a clear conflict." }, "unproven BLOCKED is downgraded");
 }
 const supportedSources = { jobText: "Python experience.", resumeText: "Built Python services." };
 const supported = { ...base, matches: [{ ...match, candidateExcerpt: supportedSources.resumeText }] };
@@ -62,4 +62,15 @@ for (const patch of [{ document: "unknown" }, { message: "<script>bad()</script>
   assert.equal(result.complete, false);
 }
 assert.deepEqual(counters, { missedWarnings: 0, falseWarnings: 0, incorrectlyWithheld: 0, unsafeAccepted: 0 });
+
+// Comparison operators and generics are ordinary text, not markup.
+const comparison = { jobText: "Keep p99 latency <50ms and >99.9% availability.", resumeText: "Kept p99 <50ms with >99.9% uptime using List<T> caches.", candidateContext: "" };
+const comparisonFit = sanitizeFitAssessmentResponse({ verdict: "REASONABLE", summary: "Latency <50ms and >99.9% uptime are shown.", matches: [{ jobExcerpt: "Keep p99 latency <50ms and >99.9% availability.", candidateSource: "RESUME", candidateExcerpt: comparison.resumeText }], gaps: [] }, comparison);
+assert.ok(comparisonFit, "a verbatim comparison excerpt is not rejected as markup");
+assert.deepEqual(sanitizeFitAssessment(comparisonFit), comparisonFit, "saved comparison excerpts round-trip");
+const placeholderInput = { ...input, resumeText: "Improved latency by <insert metric>." };
+const placeholderLocal = localApplicationReview(placeholderInput);
+assert.ok(placeholderLocal.findings.some((item) => item.code === "placeholder"));
+const placeholderReview = reviewProviderFindings({ coverageComplete: true, overflow: false, findings: [] }, placeholderInput, placeholderLocal);
+assert.ok(sanitizeApplicationReviewResult(placeholderReview, placeholderInput), "an <insert …> placeholder anchor keeps the review usable");
 console.log("Assessment warning fixtures:", JSON.stringify(counters));
