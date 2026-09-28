@@ -5,6 +5,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-27
 
+- [CODE+TOOL] PR #157 Chromium CI failed because the wrapped-header test still
+  expected `.cover` headers above 1,000 characters to be rejected after the
+  approved limit alignment. The test now requires successful reopen and exact
+  header preservation for all existing 80/512/4096-character cases in all hosts.
+  Cover codec/layout evals and 16 focused header round trips passed, including
+  the 10,000-character boundary and rejection above it. The full local Chromium
+  suite passed after granting loopback access, including the corrected cover
+  cases. Independent review found no actionable issues; syntax and diff checks
+  passed. The correction changes only test expectations.
+
 - [USER+CODE] [TASK engine-editor-bugfix-20260927] Approved fixing the shared
   engine/editor review's user-facing bugs.
   - The PDF now carries kern adjustments (TJ), so exported widths match the

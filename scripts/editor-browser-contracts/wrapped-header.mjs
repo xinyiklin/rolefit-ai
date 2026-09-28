@@ -35,11 +35,7 @@ async function nativeHeaderLifecycle(h, api, key, text) {
   await h.key('z', 90, 4);
   assert.equal(await value(), text, 'Undo restores native header range replacement');
   const before = await h.evaluate(api => window[api].data.header, api);
-  if (api === '__editorContract' && text.length > 1000) {
-    await assert.rejects(() => h.evaluate(api => window[api].reopen(), api), /no longer than 1,000 characters/, 'strict cover codec rejects oversized name/contact values');
-  } else {
-    await h.evaluate(api => window[api].reopen(), api); await h.settle(); await h.settle();
-  }
+  await h.evaluate(api => window[api].reopen(), api); await h.settle(); await h.settle();
   assert.deepEqual(await h.evaluate(api => window[api].data.header, api), before, 'strict file reopen preserves header content');
 }
 
