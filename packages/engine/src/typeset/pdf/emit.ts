@@ -11,14 +11,26 @@
 
 import {
   PDFDocument,
+  PDFHexString,
   PDFName,
+  PDFNumber,
+  PDFOperator,
+  PDFOperatorNames,
   PDFString,
+  beginText,
+  endText,
+  popGraphicsState,
+  pushGraphicsState,
   setCharacterSpacing,
+  setFontAndSize,
+  setTextMatrix,
+  type PDFArray,
+  type PDFContext,
   type PDFFont,
   type PDFPage,
   type PDFRef
 } from "pdf-lib";
-import fontkit from "@pdf-lib/fontkit";
+import fontkit, { type Font as ShapingFont } from "@pdf-lib/fontkit";
 
 import { sfntAssetFile, type DocumentFontFamily } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
@@ -83,14 +95,16 @@ export async function emitPdf(
   // The shipped TrueType sfnt files are already reduced to the engine's
   // supported repertoire, so full embedding stays small and avoids fontkit's
   // format-sensitive subsetters while keeping a standalone font program.
-  const embedded = new Map<string, PDFFont>();
-  const fontFor = async (family: DocumentFontFamily, face: FaceName): Promise<PDFFont> => {
+  // The unsubsetted embedding keeps the font's own glyph ids as CIDs; a second
+  // fontkit parse of the same bytes supplies the kerned positions of those ids.
+  const embedded = new Map<string, { pdfFont: PDFFont; shaper: ShapingFont }>();
+  const fontFor = async (family: DocumentFontFamily, face: FaceName) => {
     const key = faceKey(family, face);
     let f = embedded.get(key);
     if (!f) {
       const bytes = fonts.get(key);
       if (!bytes) throw new Error(`missing embedded font for ${key}`);
-      f = await pdf.embedFont(bytes, { subset: false });
+      f = { pdfFont: await pdf.embedFont(bytes, { subset: false }), shaper: fontkit.create(bytes) };
       embedded.set(key, f);
     }
     return f;
@@ -99,10 +113,11 @@ export async function emitPdf(
   for (const layoutPage of doc.pages) {
     const page = pdf.addPage([PAGE_W, PAGE_H]);
     const annots: PDFRef[] = [];
+    const fontKeys = new Map<PDFFont, PDFName>();
     // Character spacing (letter tracking) the engine folded into each run's
-    // width. drawText wraps its glyphs in q…Q, so a Tc set on the page's
-    // graphics state before the call carries into it; set it only when it
-    // changes. A fresh page content stream starts at the Tc=0 default.
+    // width. Each run's text sits in q…Q, so a Tc set on the page's graphics
+    // state before it carries in; set it only when it changes. A fresh page
+    // content stream starts at the Tc=0 default.
     let currentTracking = 0;
     // Keep a wrapped field contiguous in the content stream; its coordinates
     // still come from physical lines, including across paired columns.
@@ -121,12 +136,23 @@ export async function emitPdf(
             page.pushOperators(setCharacterSpacing(run.style.tracking));
             currentTracking = run.style.tracking;
           }
-          page.drawText(run.text, {
-            x: run.x,
-            y,
-            size: run.style.size,
-            font: await fontFor(run.style.family, run.style.face)
-          });
+          const { pdfFont, shaper } = await fontFor(run.style.family, run.style.face);
+          let fontKey = fontKeys.get(pdfFont);
+          if (!fontKey) {
+            fontKey = page.node.newFontDictionary(pdfFont.name, pdfFont.ref);
+            fontKeys.set(pdfFont, fontKey);
+          }
+          // q…Q per run, as drawText wrote it: pdf.js ends a text item at a
+          // restore, so each run still extracts as its own item.
+          page.pushOperators(
+            pushGraphicsState(),
+            beginText(),
+            setFontAndSize(fontKey, run.style.size),
+            setTextMatrix(1, 0, 0, 1, run.x, y),
+            PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [kernedGlyphs(pdf.context, pdfFont, shaper, pdfSafeText(run.text))]),
+            endText(),
+            popGraphicsState()
+          );
         }
         if (run.href) {
           const ul = underlineRule(run.style);
@@ -172,6 +198,35 @@ export async function emitPdf(
   }
 
   return pdf.save();
+}
+
+// A TJ array for one run: the embedded font's shaped glyph ids with its kern
+// adjustments. A bare Tj would space glyphs by plain advances, dropping the
+// pair kerning `measure()` counts (pdf-font-parity locks the two shapings).
+// Ids come from pdfFont.encodeText, as drawText's did: its shaping also records
+// each glyph's source text for the ToUnicode map, which keeps extraction exact.
+// The same control-character cleanup pdf-lib's drawText applied, so a pasted
+// tab or line separator never becomes a missing-glyph box.
+function pdfSafeText(text: string): string {
+  return text.replace(/[\t\u0085\u2028\u2029]/g, "    ").replace(/[\b\v\n\r]/g, "");
+}
+
+function kernedGlyphs(context: PDFContext, font: PDFFont, shaper: ShapingFont, text: string): PDFArray {
+  const ids = font.encodeText(text).asString();
+  const { glyphs, positions } = shaper.layout(text);
+  if (ids.length !== glyphs.length * 4) throw new Error(`PDF shaping diverged for ${JSON.stringify(text)}`);
+  const elements: Array<PDFHexString | PDFNumber> = [];
+  let start = 0;
+  for (const [i, glyph] of glyphs.entries()) {
+    const kern = positions[i].xAdvance - glyph.advanceWidth;
+    if (kern !== 0 && i < glyphs.length - 1) {
+      // TJ numbers are thousandths of text space, subtracted from the advance.
+      elements.push(PDFHexString.of(ids.slice(start, (i + 1) * 4)), PDFNumber.of((-kern * 1000) / shaper.unitsPerEm));
+      start = (i + 1) * 4;
+    }
+  }
+  if (start < ids.length) elements.push(PDFHexString.of(ids.slice(start)));
+  return context.obj(elements);
 }
 
 function setAnnots(page: PDFPage, annots: PDFRef[]) {

@@ -360,9 +360,11 @@ const strictModeSecond = rootReducer(
   strictModeAction,
   strictModeClock
 );
+// coalesceAt is a wall-clock stamp; two calls may straddle a millisecond.
+assert.ok(Math.abs(strictModeSecond.coalesceAt - strictModeFirst.coalesceAt) < 1_000);
 assert.deepEqual(
-  strictModeSecond,
-  strictModeFirst,
+  { ...strictModeSecond, coalesceAt: 0 },
+  { ...strictModeFirst, coalesceAt: 0 },
   "React Strict Mode double invocation allocates one history sequence"
 );
 
@@ -618,6 +620,13 @@ assert.equal(
   documentStyleIsDirty(styleUndone.style, DOC_STYLE_DEFAULTS),
   false,
   "undoing back to the saved style clears document-style dirty state"
+);
+const bulletIndentChanged = reduceStyle(styleSeeded, { type: "set", key: "bulletIndentPt", value: 0 });
+assert.equal(documentStyleIsDirty(bulletIndentChanged.style, DOC_STYLE_DEFAULTS), true, "bullet indent is portable document style");
+assert.equal(
+  reduceStyle(bulletIndentChanged, { type: "undo" }).style.bulletIndentPt,
+  DOC_STYLE_DEFAULTS.bulletIndentPt,
+  "style undo restores bullet indent"
 );
 const zoomChanged = reduceStyle(styleSeeded, { type: "set", key: "zoom", value: 0.8 });
 assert.equal(zoomChanged.past.length, 0, "view-only zoom stays outside document history");
@@ -1202,6 +1211,79 @@ assert.equal(
   "clearing with no overrides returns the same state"
 );
 assert.deepEqual(alignmentBase, alignmentPristine, "alignment clearing never mutates its input state");
+
+// ----- text edits that change nothing keep document identity -----
+// rootReducer reads `data === state.data` as "no edit"; a new object for an
+// identical value or a stale id would mark the document dirty and push an empty
+// undo step.
+const noOpBase = {
+  header: { visible: true, name: "Candidate", contact: [] },
+  sections: [
+    {
+      id: "exp",
+      heading: "Experience",
+      type: "standard",
+      items: [
+        {
+          id: "e1",
+          titleLeft: "Engineer",
+          titleRight: "2024",
+          subtitleLeft: "Acme",
+          subtitleRight: "",
+          bullets: [{ id: "b1", text: "Shipped" }]
+        }
+      ]
+    },
+    {
+      id: "skills",
+      heading: "Skills",
+      type: "skills",
+      items: [
+        {
+          id: "s1",
+          titleLeft: "Languages",
+          titleRight: "",
+          subtitleLeft: "TypeScript",
+          subtitleRight: "",
+          bullets: []
+        }
+      ]
+    }
+  ]
+};
+const noOpActions = [
+  ["an unchanged heading", { type: "setHeading", sectionId: "exp", heading: "Experience" }],
+  ["an unchanged entry field", { type: "updateEntry", sectionId: "exp", entryId: "e1", field: "titleLeft", value: "Engineer" }],
+  ["an unchanged skills row", { type: "updateSkillsRow", sectionId: "skills", entryId: "s1", label: "Languages", skills: "TypeScript" }],
+  ["an unchanged bullet", { type: "updateBullet", sectionId: "exp", entryId: "e1", bulletId: "b1", value: "Shipped" }],
+  ["a stale bullet id", { type: "updateBullet", sectionId: "exp", entryId: "e1", bulletId: "missing", value: "Other" }]
+];
+const noOpClock = createHistoryClock();
+const noOpSeed = rootReducer(
+  { data: null, dirty: false, past: [], future: [], coalesceKey: null, coalesceAt: 0 },
+  { type: "seed", data: noOpBase },
+  noOpClock
+);
+for (const [label, action] of noOpActions) {
+  assert.equal(reduceResumeData(noOpBase, action), noOpBase, `${label} returns the same document`);
+  const next = rootReducer(noOpSeed, action, noOpClock);
+  assert.equal(next, noOpSeed, `${label} neither marks the document dirty nor pushes an undo step`);
+}
+const realHeading = reduceResumeData(noOpBase, { type: "setHeading", sectionId: "exp", heading: "Work" });
+assert.equal(realHeading.sections[0].heading, "Work", "a changed heading still applies");
+assert.equal(realHeading.sections[1], noOpBase.sections[1], "a heading edit leaves other sections untouched");
+assert.equal(
+  reduceResumeData(noOpBase, { type: "updateBullet", sectionId: "exp", entryId: "e1", bulletId: "b1", value: "Led" })
+    .sections[0].items[0].bullets[0].text,
+  "Led",
+  "a changed bullet still applies"
+);
+assert.equal(
+  reduceResumeData(noOpBase, { type: "updateSkillsRow", sectionId: "skills", entryId: "s1", label: "Languages", skills: "TypeScript, Go" })
+    .sections[1].items[0].subtitleLeft,
+  "TypeScript, Go",
+  "a skills row with one changed column still applies"
+);
 
 console.log("resume editor structure eval: all checks passed");
 

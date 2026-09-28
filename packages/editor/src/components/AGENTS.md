@@ -13,7 +13,9 @@ paints).
   `.modal__body` / `.modal__foot`.
 - `Popover.tsx` owns the anchored non-modal disclosure used by every toolbar
   menu: trigger wiring, controlled/uncontrolled open state, focus and
-  outside-click behavior.
+  outside-click behavior. Font, size, and zoom menus portal to `<body>` under
+  `[data-typeset-toolbar-portal]`; `toolbarPortal.ts` treats those targets as
+  inside for outside-dismissal and Escape in every surface (Popover, More).
 - `toolbar/DocumentToolbar.tsx` owns the shared document/header row: optional
   product identity, document metadata, structure controls, and a host action
   slot. Embedded apps omit the Typeset product name and keep their own file
@@ -107,6 +109,8 @@ paints).
 - Numeric text inputs follow the draft pattern: local draft state, commit on
   blur/Enter (parse, clamp, round), reset on Escape. Each control keeps its
   own units and precision; there is deliberately no shared draft-input hook.
+  `toolbar/numericDraft.ts` is only the shared commit decision: an empty,
+  unparsable, or unchanged draft reverts without calling `onChange`.
 - Zoom's Fit option is a real display state: the compact control reads `Fit`
   until a typed/preset percentage replaces it, and refits after viewport
   changes settle. A host whose editor pane can resize without a window resize

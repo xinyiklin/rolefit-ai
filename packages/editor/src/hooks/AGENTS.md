@@ -13,6 +13,10 @@ style state; app lifecycle and persistence policy remain in the apps.
 - `useModalFocus.ts` owns the cross-host modal keyboard/stacking contract:
   focus entry and restoration, Tab containment, topmost-only Escape handling,
   and background-scroll locking. Hosts retain their own dialog markup/styles.
+  A close handler may send focus elsewhere (for example back to the editor),
+  but it must close the dialog first and move focus second: the trap re-checks
+  in a microtask, and closing restores focus only when it fell to the body or a
+  removed element.
 
 ## Rules
 

@@ -365,10 +365,9 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
     case "setHeading":
       // Heading edits never change the section type — type is set explicitly when
       // the section is added (prevents a rename from hiding an entry's bullets).
-      return mapSection(data, action.sectionId, (section) => ({
-        ...section,
-        heading: action.heading
-      }));
+      return mapSection(data, action.sectionId, (section) =>
+        section.heading === action.heading ? section : { ...section, heading: action.heading }
+      );
 
     case "insertEntry":
       // Insert a sibling above or below the given entry (the per-row "+" and the
@@ -402,17 +401,21 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       });
     case "updateEntry":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => entry[action.field] === null ? entry : ({ ...entry, [action.field]: action.value }))
+        mapEntry(section, action.entryId, (entry) =>
+          entry[action.field] === null || entry[action.field] === action.value
+            ? entry
+            : { ...entry, [action.field]: action.value }
+        )
       );
     case "updateSkillsRow":
       // The painted skills row is one editable field ("Label: skills"), so
       // update both backing columns in one reducer action / undo snapshot.
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({
-          ...entry,
-          titleLeft: action.label,
-          subtitleLeft: action.skills
-        }))
+        mapEntry(section, action.entryId, (entry) =>
+          entry.titleLeft === action.label && entry.subtitleLeft === action.skills
+            ? entry
+            : { ...entry, titleLeft: action.label, subtitleLeft: action.skills }
+        )
       );
     case "setStyleFieldMark":
       return setStyleFieldMark(data, action.field, action.mark, action.on);
@@ -504,10 +507,13 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
       );
     case "updateBullet":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({
-          ...entry,
-          bullets: entry.bullets.map((bullet) => (bullet.id === action.bulletId ? { ...bullet, text: action.value } : bullet))
-        }))
+        mapEntry(section, action.entryId, (entry) => {
+          const index = entry.bullets.findIndex((bullet) => bullet.id === action.bulletId);
+          if (index < 0 || entry.bullets[index].text === action.value) return entry;
+          const bullets = entry.bullets.slice();
+          bullets[index] = { ...bullets[index], text: action.value };
+          return { ...entry, bullets };
+        })
       );
 
     case "splitBullet":

@@ -17,6 +17,7 @@ import {
   stripInlineMarks
 } from "./inlineMarksText.ts";
 import {
+  DOCUMENT_HEADER_LIMITS,
   newSummaryEntry,
   newSection,
   type DocumentHeader,
@@ -221,17 +222,18 @@ function validateHeader(value: unknown): DocumentHeader {
   if (typeof header.visible !== "boolean") {
     fail("invalid-document", "Cover-letter header visible must be true or false.");
   }
-  if (header.name !== null && (typeof header.name !== "string" || header.name.length > 1_000)) {
-    fail("invalid-document", "Cover-letter header name must be null or text no longer than 1,000 characters.");
+  const { textChars, contactItems } = DOCUMENT_HEADER_LIMITS;
+  if (header.name !== null && (typeof header.name !== "string" || header.name.length > textChars)) {
+    fail("invalid-document", `Cover-letter header name must be null or text no longer than ${textChars.toLocaleString("en-US")} characters.`);
   }
   if (
     !Array.isArray(header.contact) ||
-    header.contact.length > 20 ||
-    header.contact.some((item) => typeof item !== "string" || item.length > 1_000)
+    header.contact.length > contactItems ||
+    header.contact.some((item) => typeof item !== "string" || item.length > textChars)
   ) {
     fail(
       "invalid-document",
-      "Cover-letter header must contain at most 20 text contact items, each no longer than 1,000 characters."
+      `Cover-letter header must contain at most ${contactItems.toLocaleString("en-US")} text contact items, each no longer than ${textChars.toLocaleString("en-US")} characters.`
     );
   }
   const validated = {
@@ -350,6 +352,7 @@ export function coverLetterPlainText(data: ResumeData): string {
 const NO_RESUME_BODY: ResumeBodyStyle = {
   entryIndentPt: 0,
   entryEndIndentPt: 0,
+  bulletIndentPt: 0,
   sectionGapPt: 0,
   sectionEntryGapPt: 0,
   entryGapPt: 0,

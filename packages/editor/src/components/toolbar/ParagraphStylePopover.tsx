@@ -137,6 +137,16 @@ export function ParagraphStylePopover({
                   displayValue={`${style.entryEndIndentPt.toFixed(1)} pt`}
                   onChange={(value) => docStyle.set("entryEndIndentPt", value)}
                 />
+                <StyleRange
+                  id={`${idPrefix}-bullet-indent`}
+                  label="Bullet indent"
+                  value={style.bulletIndentPt}
+                  min={DOC_STYLE_BOUNDS.bulletIndentPt.min}
+                  max={DOC_STYLE_BOUNDS.bulletIndentPt.max}
+                  step={DOC_STYLE_BOUNDS.bulletIndentPt.step}
+                  displayValue={`${style.bulletIndentPt.toFixed(1)} pt`}
+                  onChange={(value) => docStyle.set("bulletIndentPt", value)}
+                />
               </div>
             </section>
           </div>

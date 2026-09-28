@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { PAGE_MARGIN_BOUNDS_PT, pageMarginValuesFor, type PageMargins } from "@typeset/engine/lib/pageMargins.ts";
+import { numericDraftCommit } from "./numericDraft";
 import { ToolbarButton } from "./ToolbarButton";
 
 export type PageStylePopoverProps = {
@@ -43,13 +44,14 @@ function MarginInput({
   useEffect(() => setDraft(formatMarginInches(valuePt)), [valuePt]);
 
   const commit = () => {
-    const parsed = Number(draft);
-    if (!Number.isFinite(parsed)) {
+    const nextPt = numericDraftCommit(draft, formatMarginInches(valuePt), valuePt, (inches) => {
+      const clampedPt = Math.min(PAGE_MARGIN_BOUNDS_PT.max, Math.max(PAGE_MARGIN_BOUNDS_PT.min, inches * 72));
+      return Math.round(clampedPt * 10) / 10;
+    });
+    if (nextPt === null) {
       setDraft(formatMarginInches(valuePt));
       return;
     }
-    const clampedPt = Math.min(PAGE_MARGIN_BOUNDS_PT.max, Math.max(PAGE_MARGIN_BOUNDS_PT.min, parsed * 72));
-    const nextPt = Math.round(clampedPt * 10) / 10;
     setDraft(formatMarginInches(nextPt));
     onChange(nextPt);
   };

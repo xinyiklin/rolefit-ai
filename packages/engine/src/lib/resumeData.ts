@@ -44,6 +44,10 @@ export type DocumentHeader = {
   contact: string[];
 };
 
+// One header bound for both file codecs, so any header the shared editor can
+// build saves as either document kind.
+export const DOCUMENT_HEADER_LIMITS = { textChars: 10_000, contactItems: 1_000 } as const;
+
 export type ResumeData = {
   // null means the document has no header structure at all.
   header: DocumentHeader | null;

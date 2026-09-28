@@ -12,6 +12,8 @@ typesetting guide when a change affects painted output or layout provenance.
   commit-gate refs with the restore/replay effect, and extracting them would
   thread a dozen refs through a hook seam without isolating anything (their
   pure math already lives in `inlineTextEditing.ts`).
+- `intentControl.ts` owns the pure keyboard/replay decisions (indent vs
+  tab-stop, queued-intent draining) so evals can drive them without React.
 - `inlineTextEditing.ts` owns pure value/display mapping and mark-balanced text
   transformations. Keep it free of React and DOM reads. Its anchored tag
   scanner is a deliberate second automaton over the grammar owned by
@@ -31,7 +33,9 @@ typesetting guide when a change affects painted output or layout provenance.
   marks, and multiple HTML blocks become separate bullet/summary fields
   through one structural editor action rather than hard breaks inside one
   field. Keep all other arbitrary clipboard CSS, scripts, event attributes,
-  unsupported fonts, and invalid links out of document state.
+  unsupported fonts, and invalid links out of document state. Inbound HTML
+  whitespace collapses as a browser renders it; only `PRE` and
+  `pre`/`pre-wrap`/`break-spaces` (newlines for `pre-line`) keep source spacing.
   Attach the private selection MIME only when every selected cover-letter field
   is representable. A header plus paragraphs is a full-document payload; never
   consume only its header or silently fall back to a lossy partial private
@@ -168,7 +172,9 @@ typesetting guide when a change affects painted output or layout provenance.
   editor's shared command surface; `TypesetContextMenu.tsx` only renders the menu.
 - `useTypesetLinkCard.ts` resolves the link the CARET is in (or the selection
   covers) to its field and display range, from the selection the controller has
-  already resolved; `TypesetLinkCard.tsx` only renders the card.
+  already resolved; `TypesetLinkCard.tsx` only renders the card. The card owns
+  Escape only inside itself or on the editable page, never in sibling dialogs
+  or menus (`linkCardOwnsEscape`).
 
 ## Editing Invariants
 

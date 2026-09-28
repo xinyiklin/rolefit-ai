@@ -278,8 +278,8 @@ print or PDF output. Resume-wide line height and physical document gaps live
 together in Spacing.
 Global alignment reflects the effective fields in its scope and clears
 conflicting local overrides when applied; any later local divergence clears
-that global active state. Entry start and end indents live independently in
-Paragraph, while structural formatting values live in Styles.
+that global active state. Entry start and end indents and the bullet indent
+live independently in Paragraph, while structural formatting values live in Styles.
 
 The Page popover stays compact at 288px on desktop (Paragraph/Styles are
 324px and Spacing 316px). Page margins offer Narrow and Normal shortcuts plus

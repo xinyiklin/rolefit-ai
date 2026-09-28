@@ -18,7 +18,9 @@ import {
   measure,
   paragraphItems,
   segmentsFromInlineMarks,
-  texLigatures
+  texLigatures,
+  underlineRule,
+  underlineSpans
 } from "./measure.ts";
 import { automaticLinkHref } from "../lib/links.ts";
 import { breakParagraph } from "./linebreak.ts";
@@ -52,7 +54,7 @@ export type VLine = {
   emergencyBreakBefore?: boolean;
   runs: GlyphRun[]; // x already includes the line's indent
   // The row's role-size footprint for page-top placement and page-bottom fit.
-  // Headers reserve face boxes; calibrated body rows retain their ink footprint.
+  // Headers reserve face boxes; body rows a fixed reference-string ink box.
   // Oversized inline runs contribute through the overflow fields instead.
   height: number;
   depth: number;
@@ -121,16 +123,20 @@ export function pageBox(style: PageStyle) {
 // The page box plus the entry insets only a resume's body uses.
 export function pageGeometry(style: DocumentStyle) {
   const box = pageBox(style);
-  const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
+  const baseFontSize = num(style.baseFontSizePt, 10);
+  const sizes = fontSizesFor(baseFontSize);
   const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
   const entryEndIndent = num(style.entryEndIndentPt, DOC_STYLE_DEFAULTS.entryEndIndentPt);
+  const bulletMarker = entryIndent + num(style.bulletIndentPt, DOC_STYLE_DEFAULTS.bulletIndentPt);
   const textWidth = box.textWidth;
   return {
     ...box,
-    // Entry content is inset 0.15in; bullets add 2.2em at the body size.
     entryIndent,
     entryEndIndent,
-    bulletIndent: entryIndent + 2.2 * sizes.normalsize,
+    bulletMarker,
+    // Text follows the dot at the historical gap (2.2em text inset minus the
+    // default 14.73pt dot offset), so the default reproduces the LaTeX layout.
+    bulletIndent: bulletMarker + 2.2 * sizes.normalsize - DOC_STYLE_DEFAULTS.bulletIndentPt * (baseFontSize / 10),
     // Start indent moves only the left edge. End indent independently moves the
     // right edge, so changing one never drags the other. The inset applies to
     // the entry's right edge, so every row of the entry keeps it — head rows,
@@ -151,13 +157,14 @@ const lineAdvance = (size: number, lineHeight: number) => size * lineHeight;
 // mean the same distance in a resume and in a double-spaced cover letter.
 const HEADER_LINE_HEIGHT = 1;
 
-// Shared link rules extend about 2pt below the content's ink depth.
-const UNDERLINE_EXTRA = 2.04;
 // Minimal clear gap between the title's descender ink and the subtitle's
 // ascender ink. Ink extents do not scale with line height, so a tight line
 // height or a negative head-row gap would otherwise drive the rows into
 // overlap; this floors the distance so they can never collapse onto each other.
 const MIN_TITLE_SUB_INK_GAP = 0.3;
+// Calibrated clearance below an underlined or linked title's ink; the floor also
+// honours the real rule depth, which this constant undershoots at larger sizes.
+const UNDERLINE_EXTRA = 2.04;
 
 function inkOfRuns(runs: GlyphRun[]): { height: number; depth: number } {
   let height = 0;
@@ -170,19 +177,17 @@ function inkOfRuns(runs: GlyphRun[]): { height: number; depth: number } {
   return { height, depth };
 }
 
-// The row's footprint at its role size. Runs larger than the role size are
-// measured AT that size here and contribute their excess through
-// boxOverflowOfRuns, so one oversized word cannot silently restyle the row.
-function rowInkOfRuns(
-  runs: GlyphRun[],
-  roleSize: number,
-  fallback: { height: number; depth: number }
-): { height: number; depth: number } {
-  if (!runs.some((run) => run.text)) return fallback;
+// The row's page-top and page-fit footprint: a fixed reference string in each
+// run's font at its role size, so typed glyphs never move a page break. (Face
+// boxes would too, but Latin Modern's ascent exceeds the first-baseline inset
+// and would move page-top baselines.) Runs larger than the role size contribute
+// their excess through boxOverflowOfRuns.
+const ROW_FOOTPRINT_TEXT = "Agjpqy";
+function rowFootprint(runs: GlyphRun[], roleSize: number): { height: number; depth: number } {
   let height = 0;
   let depth = 0;
   for (const run of runs) {
-    const extent = inkExtent(run.text, {
+    const extent = inkExtent(ROW_FOOTPRINT_TEXT, {
       ...run.style,
       size: Math.min(run.style.size, roleSize)
     });
@@ -283,7 +288,8 @@ function styledFieldRuns(
       src,
       href: seg.linkSuppressed ? undefined : seg.href ?? automaticLinkHref(seg.text) ?? undefined,
       underline: seg.underline,
-      linkSuppressed: seg.linkSuppressed
+      linkSuppressed: seg.linkSuppressed,
+      ...(seg.lineHeight === null ? {} : { lineHeight: seg.lineHeight })
     });
     cursorX += width;
   }
@@ -330,6 +336,20 @@ function runLineHeight(runs: GlyphRun[], fallback: number): number {
   return overrides.length ? Math.max(...overrides) : fallback;
 }
 
+// A title/subtitle row owns its leading when it wraps or carries a line-height
+// mark, so the mark spaces the row identically either way. Other rows keep the
+// calibrated junction and publish no leading.
+function headRowLeading(
+  runs: GlyphRun[],
+  size: number,
+  lineHeight: number,
+  wrapped: boolean
+): { leading?: number; afterDist?: number } {
+  if (!wrapped && runs.every((run) => run.lineHeight === undefined)) return {};
+  const leading = size * runLineHeight(runs, lineHeight);
+  return { leading, afterDist: leading - lineAdvance(size, lineHeight) };
+}
+
 // Paragraph → VLines at an indent within a column width.
 export function paragraphLines(
   value: string,
@@ -371,14 +391,12 @@ export function paragraphLines(
       runs = [{ text: "", style: bodyStyle, x: indent, width: 0, src }];
     }
     if (line.breakAfter !== undefined) runs[runs.length - 1].breakAfter = line.breakAfter;
-    // A textless row keeps a full body-height footprint so a blank line occupies
-    // the same space as a written one.
-    const rowInk = rowInkOfRuns(runs, size, inkExtent("Ag", bodyStyle));
+    const footprint = rowFootprint(runs, size);
     const overflow = boxOverflowOfRuns(runs, size);
     return {
       runs,
-      height: rowInk.height,
-      depth: rowInk.depth,
+      height: footprint.height,
+      depth: footprint.depth,
       riseOverflow: overflow.rise,
       dropOverflow: overflow.drop,
       dist: i === 0 ? firstDist : baselineskip,
@@ -556,11 +574,6 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       );
       const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, sizes.large, family, tracking,
         caseMode === "smallcaps" ? "caps" : undefined);
-      const fallbackHeadingStyle: FontStyle = { family, face: caseMode === "smallcaps" ? "caps" : "regular", size: sizes.large, tracking };
-      // A cleared heading paints one injected space. Its row keeps the full
-      // heading footprint so the section's spacing does not change when the
-      // text is emptied.
-      const blankHeadingInk = inkExtent("Ag", fallbackHeadingStyle);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
@@ -568,12 +581,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         (prevKind === "header" ? gap("headerSectionGapPt") : gap("sectionGapPt"));
       headingRows.forEach((row, index) => {
         const runs = alignRuns(row, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
-        const rowInk = headingText ? rowInkOfRuns(runs, sizes.large, blankHeadingInk) : blankHeadingInk;
+        const footprint = rowFootprint(runs, sizes.large);
         const overflow = boxOverflowOfRuns(runs, sizes.large);
         push({
           runs,
-          height: rowInk.height,
-          depth: rowInk.depth,
+          height: footprint.height,
+          depth: footprint.depth,
           riseOverflow: overflow.rise,
           dropOverflow: overflow.drop,
           dist: index ? sizes.large * runLineHeight(headingRows[index - 1], style.lineHeight) : beforeGap,
@@ -701,14 +714,14 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
             ? alignRuns(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
             : rawRuns;
           const inkT = inkOfRuns(titleRuns);
-          const titleRowInk = rowInkOfRuns(titleRuns, titleSize, inkT);
+          const titleFootprint = rowFootprint(titleRuns, titleSize);
           const titleOverflow = boxOverflowOfRuns(titleRuns, titleSize);
-          const leading = titleSize * runLineHeight(titleRuns, style.lineHeight);
+          const titleLeading = headRowLeading(titleRuns, titleSize, style.lineHeight, titleRows.length > 1);
           push({
-            ...(titleRows.length > 1 ? { leading, afterDist: leading - lineAdvance(titleSize, style.lineHeight) } : {}),
+            ...titleLeading,
             runs: titleRuns,
-            height: titleRowInk.height,
-            depth: titleRowInk.depth,
+            height: titleFootprint.height,
+            depth: titleFootprint.depth,
             riseOverflow: titleOverflow.rise,
             dropOverflow: titleOverflow.drop,
             dist:
@@ -718,8 +731,12 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
             ...(rowIndex > 0 ? { emergencyBreakBefore: true } : {})
           });
           firstInSection = false;
-          titleInkDepth = inkT.depth + (titleRuns.some((run) => run.href || run.underline) ? UNDERLINE_EXTRA : 0);
-          titleAfterDist = titleRows.length > 1 ? leading - lineAdvance(titleSize, style.lineHeight) : 0;
+          const underlined = titleRuns.some((run) => run.href || run.underline);
+          titleInkDepth = Math.max(inkT.depth + (underlined ? UNDERLINE_EXTRA : 0), ...underlineSpans(titleRuns).map((span) => {
+            const rule = underlineRule(span.style);
+            return rule.offset + rule.thickness;
+          }));
+          titleAfterDist = titleLeading.afterDist ?? 0;
         }
       }
 
@@ -751,19 +768,18 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
             ? alignRuns(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
             : rawRuns;
           const inkS = inkOfRuns(subRuns);
-          const subRowInk = rowInkOfRuns(subRuns, subSize, inkS);
+          const subFootprint = rowFootprint(subRuns, subSize);
           const subOverflow = boxOverflowOfRuns(subRuns, subSize);
-          const leading = subSize * runLineHeight(subRuns, style.lineHeight);
           const spaced = lineAdvance(subSize, style.lineHeight) + gap("titleSubGapPt");
           // A tight line height, or a deep box such as an underlined link, must
           // never pull the subtitle up into the title: clamp to an ink-based floor
           // that keeps a hair of clearance regardless of the authored gap.
           const inkFloor = titleInkDepth + inkS.height + MIN_TITLE_SUB_INK_GAP * fontScale;
           push({
-            ...(subRows.length > 1 ? { leading, afterDist: leading - lineAdvance(subSize, style.lineHeight) } : {}),
+            ...headRowLeading(subRuns, subSize, style.lineHeight, subRows.length > 1),
             runs: subRuns,
-            height: subRowInk.height,
-            depth: subRowInk.depth,
+            height: subFootprint.height,
+            depth: subFootprint.depth,
             riseOverflow: subOverflow.rise,
             dropOverflow: subOverflow.drop,
             dist: rowIndex > 0 ? lineAdvance(subSize, style.lineHeight) : hasTitle
@@ -807,7 +823,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
             ? paragraphSpacing.lineHeight ?? undefined
             : undefined
         );
-        // First line carries the bullet marker (tiny math bullet at 25.53bp).
+        // First line carries the bullet marker (tiny math bullet) at the bullet indent.
         // It shares the bullet's provenance so clicking it edits the bullet.
         if (lines.length) {
           lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
@@ -818,7 +834,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
               sizes.tiny,
               false,
               false,
-              geo.entryIndent + bulletIndentPt + 14.73 * fontScale,
+              geo.bulletMarker + bulletIndentPt,
               family,
               tracking,
               bulletSrc(bi)

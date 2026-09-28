@@ -8,12 +8,14 @@
 // contract: the engine's `measure()` (committed advances + kerning + the five
 // modeled ligatures). The DOM is calibrated to it; the PDF must match it too.
 //
-// pdf-lib draws a run via `font.layout(text)` (@pdf-lib/fontkit), then places it at
-// the engine's x. So if fontkit's shaped advance for every run equals the engine's
-// `measure()`, the PDF's glyphs land exactly where the editor's do. This asserts
-// that for every family/face over a corpus that exercises ligatures, kerning,
-// accents, punctuation, and digits — catching the two regressions that broke 1:1
-// (fontkit applying unmodeled ligatures like `ft`, and dropped letter tracking).
+// The emitter shapes each run with `font.layout(text)` (@pdf-lib/fontkit) and
+// writes those glyphs AND their kern adjustments as a TJ array at the engine's x.
+// So if fontkit's shaped advance for every run equals the engine's `measure()`,
+// the PDF's glyphs land exactly where the editor's do. This asserts that for
+// every family/face over a corpus that exercises ligatures, kerning, accents,
+// punctuation, and digits — catching fontkit applying unmodeled ligatures like
+// `ft`. RoleFit's `pdf-kerning` eval (pdf.js is an app dependency) reads emitted PDFs back to prove the emitter writes that
+// shaping (kerning and tracking included) rather than bare glyph advances.
 //
 // Run: node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs
 

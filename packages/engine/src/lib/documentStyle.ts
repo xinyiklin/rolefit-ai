@@ -46,6 +46,8 @@ export type HeaderStyle = {
 export type ResumeBodyStyle = {
   entryIndentPt: number;
   entryEndIndentPt: number;
+  // Bullet dot offset from the entry's start edge; text keeps a fixed gap after it.
+  bulletIndentPt: number;
   sectionGapPt: number;
   sectionEntryGapPt: number;
   entryGapPt: number;
@@ -105,6 +107,7 @@ export const DOC_STYLE_BOUNDS = {
   lineHeight: { min: 1, max: 2, step: 0.01 },
   entryIndentPt: { min: 0, max: 36, step: 0.1 },
   entryEndIndentPt: { min: 0, max: 36, step: 0.1 },
+  bulletIndentPt: { min: 0, max: 36, step: 0.1 },
   nameContactGapPt: { min: 0, max: 24, step: 0.1 },
   // Horizontal slot for the contact separator; the painter floors it at the
   // separator glyph's own width.
@@ -138,6 +141,8 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   // A 5.4 pt end inset at the default US-Letter text width, matching the
   // entry's 0.15in start inset.
   entryEndIndentPt: 5.4,
+  // The LaTeX-derived dot position at the default 10pt body size.
+  bulletIndentPt: 14.73,
   nameContactGapPt: 4,
   contactGapPt: 18,
   headerSectionGapPt: 14,
@@ -168,6 +173,7 @@ export function toDocumentStyle(style: DocStyle): DocumentStyle {
     lineHeight: style.lineHeight,
     entryIndentPt: style.entryIndentPt,
     entryEndIndentPt: style.entryEndIndentPt,
+    bulletIndentPt: style.bulletIndentPt,
     nameContactGapPt: style.nameContactGapPt,
     contactGapPt: style.contactGapPt,
     headerSectionGapPt: style.headerSectionGapPt,
@@ -184,7 +190,7 @@ export function toDocumentStyle(style: DocStyle): DocumentStyle {
     headerAlign: style.headerAlign,
     bodyAlign: style.bodyAlign,
     headingAlign: style.headingAlign,
-      pageMarginTopPt: style.pageMarginTopPt,
+    pageMarginTopPt: style.pageMarginTopPt,
     pageMarginRightPt: style.pageMarginRightPt,
     pageMarginBottomPt: style.pageMarginBottomPt,
     pageMarginLeftPt: style.pageMarginLeftPt
@@ -197,6 +203,7 @@ export type DocStyleFields = Pick<
   DocStyle,
   | "entryIndentPt"
   | "entryEndIndentPt"
+  | "bulletIndentPt"
   | "headingCase"
   | "sectionRule"
   | "contactDivider"
@@ -210,6 +217,7 @@ export type DocStyleFields = Pick<
 export const TEXT_STYLE_DEFAULTS: DocStyleFields = {
   entryIndentPt: DOC_STYLE_DEFAULTS.entryIndentPt,
   entryEndIndentPt: DOC_STYLE_DEFAULTS.entryEndIndentPt,
+  bulletIndentPt: DOC_STYLE_DEFAULTS.bulletIndentPt,
   headingCase: "smallcaps",
   sectionRule: true,
   contactDivider: "|",
@@ -367,6 +375,7 @@ export function coerceDocStyle(raw: unknown): DocStyle {
       r.entryEndIndentPt,
       DOC_STYLE_DEFAULTS.entryEndIndentPt
     ),
+    bulletIndentPt: clampStyleNumber("bulletIndentPt", r.bulletIndentPt, DOC_STYLE_DEFAULTS.bulletIndentPt),
     nameContactGapPt: clampStyleNumber("nameContactGapPt", r.nameContactGapPt, DOC_STYLE_DEFAULTS.nameContactGapPt),
     contactGapPt: clampStyleNumber("contactGapPt", r.contactGapPt, DOC_STYLE_DEFAULTS.contactGapPt),
     headerSectionGapPt: clampStyleNumber(

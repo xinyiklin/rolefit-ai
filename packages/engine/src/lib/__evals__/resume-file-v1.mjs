@@ -83,6 +83,17 @@ const missingStyleField = structuredClone(saved);
 delete missingStyleField.style.entryEndIndentPt;
 expectError(missingStyleField, "invalid-style");
 
+assert.equal(saved.style.bulletIndentPt, DOC_STYLE_DEFAULTS.bulletIndentPt);
+expectError(mutated((file) => { delete file.style.bulletIndentPt; }), "invalid-style");
+expectError(mutated((file) => { file.style.bulletIndentPt = -0.1; }), "invalid-style");
+expectError(mutated((file) => { file.style.bulletIndentPt = 36.1; }), "invalid-style");
+// Converted documents carry exact off-grid values; the codec must not snap them.
+assert.equal(
+  parseResumeFile(JSON.stringify(mutated((file) => { file.style.bulletIndentPt = 15.4665; })))
+    .documentStyle.bulletIndentPt,
+  15.4665
+);
+
 const legacyStyleField = structuredClone(saved);
 legacyStyleField.style.boldTitles = true;
 expectError(legacyStyleField, "invalid-style");

@@ -474,6 +474,7 @@ export function useTypesetInputEvents({
         }
         const selection = readSelection();
         if (selection && selection.dEnd > selection.dStart) commitClearFormatting(selection);
+        else if (!selection) commitCrossFieldIntent({ kind: "clearFormatting" });
         return;
       }
       if (mod && event.key.toLowerCase() === "z") {

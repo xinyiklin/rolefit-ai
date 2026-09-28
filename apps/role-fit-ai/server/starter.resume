@@ -123,6 +123,7 @@
     "lineHeight": 1.18,
     "entryIndentPt": 10.8,
     "entryEndIndentPt": 5.4,
+    "bulletIndentPt": 14.73,
     "nameContactGapPt": 4,
     "contactGapPt": 18,
     "headerSectionGapPt": 14,

@@ -75,7 +75,8 @@ it truthfully.
   engine baseline. The DOM painter may measure CSS face baselines at its
   browser-only boundary.
 - Vertical placement is a function of the fonts and sizes on a line, never of the
-  glyphs typed into it. A line carries its role-size ink footprint plus a
+  glyphs typed into it. A line carries the ink footprint of a fixed reference
+  string (`Agjpqy`) in its role font and size, never of its typed text, plus a
   rise/drop overflow derived from `faceExtent`, and pagination adds only that
   overflow to a calibrated junction. Typing a taller ascender or a deeper
   descender must not move any baseline, while an oversized inline run must still

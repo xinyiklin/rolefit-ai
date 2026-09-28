@@ -1,4 +1,5 @@
 import {
+  DOCUMENT_HEADER_LIMITS,
   newBullet,
   newEntry,
   newSection,
@@ -92,6 +93,7 @@ const STYLE_KEYS = [
   "lineHeight",
   "entryIndentPt",
   "entryEndIndentPt",
+  "bulletIndentPt",
   "nameContactGapPt",
   "contactGapPt",
   "headerSectionGapPt",
@@ -180,8 +182,8 @@ function requireEnum<T extends string>(value: unknown, values: readonly T[], pat
 }
 
 function validateContact(value: unknown, path: string): string[] {
-  return requireArray(value, path, 1_000).map((item, index) =>
-    requireString(item, `${path}[${index}]`, 10_000)
+  return requireArray(value, path, DOCUMENT_HEADER_LIMITS.contactItems).map((item, index) =>
+    requireString(item, `${path}[${index}]`, DOCUMENT_HEADER_LIMITS.textChars)
   );
 }
 
@@ -191,7 +193,7 @@ function validateHeader(value: unknown, path: string): DocumentHeader | null {
   requireExactKeys(header, HEADER_KEYS, path);
   const validated = {
     visible: requireBoolean(header.visible, `${path}.visible`),
-    name: header.name === null ? null : requireString(header.name, `${path}.name`, 10_000),
+    name: header.name === null ? null : requireString(header.name, `${path}.name`, DOCUMENT_HEADER_LIMITS.textChars),
     contact: validateContact(header.contact, `${path}.contact`)
   };
   if (validated.name === null && validated.contact.length === 0) {
@@ -275,6 +277,7 @@ function readDocumentStyle(style: JsonRecord): DocumentStyle {
     lineHeight: requireStyleNumber(style, "lineHeight"),
     entryIndentPt: requireStyleNumber(style, "entryIndentPt"),
     entryEndIndentPt: requireStyleNumber(style, "entryEndIndentPt"),
+    bulletIndentPt: requireStyleNumber(style, "bulletIndentPt"),
     nameContactGapPt: requireStyleNumber(style, "nameContactGapPt"),
     contactGapPt: requireStyleNumber(style, "contactGapPt"),
     headerSectionGapPt: requireStyleNumber(style, "headerSectionGapPt"),

@@ -10,6 +10,10 @@ import {
   paragraphSpacePt
 } from "@typeset/engine/lib/inlineMarksText.ts";
 
+// How source whitespace lays out: "normal" collapses spaces and newlines,
+// "pre-line" collapses spaces but keeps newlines, "pre" keeps both.
+type WhiteSpace = "normal" | "pre-line" | "pre";
+
 type RichStyle = {
   bold: boolean;
   italic: boolean;
@@ -18,6 +22,7 @@ type RichStyle = {
   fontSizePt: number | null;
   lineHeight: number | null;
   href: string | null;
+  whiteSpace: WhiteSpace;
 };
 
 const PLAIN_STYLE: RichStyle = {
@@ -27,7 +32,8 @@ const PLAIN_STYLE: RichStyle = {
   fontFamily: null,
   fontSizePt: null,
   lineHeight: null,
-  href: null
+  href: null,
+  whiteSpace: "normal"
 };
 
 const BLOCK_TAGS = new Set([
@@ -107,9 +113,35 @@ export function clipboardLineHeight(
   return paragraphLineHeight(points / fontSizePt);
 }
 
+function whiteSpaceFor(value: string): WhiteSpace | null {
+  const normalized = value.trim().toLowerCase();
+  // Newer two-value syntax (`preserve nowrap`) and white-space-collapse keywords.
+  if (/^(?:preserve|break-spaces)\b/.test(normalized)) return "pre";
+  if (/^preserve-breaks\b/.test(normalized)) return "pre-line";
+  if (/^collapse\b/.test(normalized)) return "normal";
+  switch (normalized) {
+    case "pre":
+    case "pre-wrap":
+    case "break-spaces":
+      return "pre";
+    case "pre-line":
+      return "pre-line";
+    case "normal":
+    case "nowrap":
+      return "normal";
+    default:
+      return null;
+  }
+}
+
 function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle {
   const next = { ...inherited };
   const tag = element.tagName;
+  if (tag === "PRE") next.whiteSpace = "pre";
+  next.whiteSpace =
+    whiteSpaceFor(element.style.whiteSpace) ??
+    whiteSpaceFor(element.style.getPropertyValue("white-space-collapse")) ??
+    next.whiteSpace;
   if (tag === "B" || tag === "STRONG") next.bold = true;
   if (tag === "I" || tag === "EM") next.italic = true;
   if (tag === "U") next.underline = true;
@@ -156,52 +188,105 @@ function wrapText(text: string, style: RichStyle): string {
 // unsupported fonts, and unknown markup never cross into document state.
 const BLOCK_SEPARATOR = "\uFDD0";
 
+// A collapsed space the text ended with, followed only by closing mark tags.
+const TRAILING_COLLAPSED_SPACE = / ((?:<\/[^<>]+>)*)$/;
+
+function collapseWhiteSpace(text: string, mode: WhiteSpace): string {
+  if (mode === "pre") return text;
+  if (mode === "pre-line") {
+    return text.replace(/\r\n?/g, "\n").replace(/[\t ]*\n[\t ]*/g, "\n").replace(/[\t ]+/g, " ");
+  }
+  return text.replace(/[\t\n\r ]+/g, " ");
+}
+
 function fragmentsFromHtml(html: string): ParsedClipboardHtml {
   if (!html || html.length > MAX_INLINE_CLIPBOARD_CHARS) {
     return parsedClipboardHtml(null, false);
   }
   const document = new DOMParser().parseFromString(html, "text/html");
   let sawBlockStructure = false;
+  // Emitted pieces; a block joins and rewraps only its own tail, so large
+  // pastes never re-copy the whole output per paragraph.
+  const out: string[] = [];
+  // Browser-style collapsing across text nodes: a collapsed space is dropped at
+  // a line start, after another collapsed space, and before a line end. A
+  // whitespace-only node waits in `pendingSpace` so a line end can discard it
+  // without leaving an empty mark behind.
+  let atLineStart = true;
+  let endsWithCollapsedSpace = false;
+  let pendingSpace: string | null = null;
 
-  const visit = (node: Node, inherited: RichStyle): string => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      return wrapText(node.nodeValue ?? "", inherited);
-    }
-    if (!(node instanceof HTMLElement)) return "";
-    if (node.tagName === "BR") return "\n";
-    const style = styleForElement(node, inherited);
-    let value = Array.from(node.childNodes)
-      .map((child) => visit(child, style))
-      .join("");
-    if (BLOCK_TAGS.has(node.tagName)) {
-      sawBlockStructure = true;
-      // Descendant blocks already own their separators and margins; wrapping a
-      // container such as Google Docs' internal root would add a false block.
-      if (value.includes(BLOCK_SEPARATOR)) return value;
-      const spaceBeforePt = clipboardParagraphSpacePt(
-        node.style.marginTop || node.style.marginBlockStart
-      );
-      const spaceAfterPt = clipboardParagraphSpacePt(
-        node.style.marginBottom || node.style.marginBlockEnd
-      );
-      if ((spaceAfterPt ?? 0) > 0) {
-        value = `<space-after=${spaceAfterPt}>${value}</space-after>`;
-      }
-      if ((spaceBeforePt ?? 0) > 0) {
-        value = `<space-before=${spaceBeforePt}>${value}</space-before>`;
-      }
-      if (style.lineHeight !== null && !/<line-height=/i.test(value)) {
-        value = `<line-height=${style.lineHeight}>${value}</line-height>`;
-      }
-      value += BLOCK_SEPARATOR;
-    }
-    return value;
+  const endLine = () => {
+    // The flag guarantees the last piece is the text that ended with the space.
+    if (endsWithCollapsedSpace) out.push(out.pop()!.replace(TRAILING_COLLAPSED_SPACE, "$1"));
+    endsWithCollapsedSpace = false;
+    pendingSpace = null;
+    atLineStart = true;
   };
 
-  const value = Array.from(document.body.childNodes)
-    .map((node) => visit(node, PLAIN_STYLE))
-    .join("")
-    .replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
+  const emitText = (raw: string, style: RichStyle) => {
+    let text = collapseWhiteSpace(raw, style.whiteSpace);
+    if (style.whiteSpace !== "pre" && (atLineStart || endsWithCollapsedSpace || pendingSpace !== null)) {
+      text = text.replace(/^ /, "");
+    }
+    if (!text) return;
+    if (style.whiteSpace !== "pre" && text === " ") {
+      pendingSpace = wrapText(text, style);
+      return;
+    }
+    out.push((pendingSpace ?? "") + wrapText(text, style));
+    pendingSpace = null;
+    atLineStart = text.endsWith("\n");
+    endsWithCollapsedSpace = style.whiteSpace !== "pre" && text.endsWith(" ");
+  };
+
+  const visit = (node: Node, inherited: RichStyle): void => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      emitText(node.nodeValue ?? "", inherited);
+      return;
+    }
+    if (!(node instanceof HTMLElement)) return;
+    if (node.tagName === "BR") {
+      endLine();
+      out.push("\n");
+      return;
+    }
+    const style = styleForElement(node, inherited);
+    const block = BLOCK_TAGS.has(node.tagName);
+    if (block) endLine();
+    const start = out.length;
+    for (const child of Array.from(node.childNodes)) visit(child, style);
+    if (!block) return;
+    endLine();
+    sawBlockStructure = true;
+    let value = out.splice(start).join("");
+    // Descendant blocks already own their separators and margins; wrapping a
+    // container such as Google Docs' internal root would add a false block.
+    if (value.includes(BLOCK_SEPARATOR)) {
+      out.push(value);
+      return;
+    }
+    const spaceBeforePt = clipboardParagraphSpacePt(
+      node.style.marginTop || node.style.marginBlockStart
+    );
+    const spaceAfterPt = clipboardParagraphSpacePt(
+      node.style.marginBottom || node.style.marginBlockEnd
+    );
+    if ((spaceAfterPt ?? 0) > 0) {
+      value = `<space-after=${spaceAfterPt}>${value}</space-after>`;
+    }
+    if ((spaceBeforePt ?? 0) > 0) {
+      value = `<space-before=${spaceBeforePt}>${value}</space-before>`;
+    }
+    if (style.lineHeight !== null && !/<line-height=/i.test(value)) {
+      value = `<line-height=${style.lineHeight}>${value}</line-height>`;
+    }
+    out.push(value + BLOCK_SEPARATOR);
+  };
+
+  for (const node of Array.from(document.body.childNodes)) visit(node, PLAIN_STYLE);
+  endLine();
+  const value = out.join("").replace(new RegExp(`${BLOCK_SEPARATOR}+$`), "");
   return parsedClipboardHtml(value || null, sawBlockStructure);
 }
 
