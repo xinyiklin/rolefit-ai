@@ -128,6 +128,7 @@ import {
   type FieldRange
 } from "./multiFieldSelection.ts";
 import { useTypesetInputEvents, type QueuedIntent } from "./useTypesetInputEvents.ts";
+import { drainReplayQueue, indentReplacesSelection } from "./intentControl.ts";
 import { textStep } from "./wrappedFieldNavigation.ts";
 import {
   clipboardHtmlForRanges,
@@ -1578,13 +1579,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     [actions, markPending, recordPreEditSelection, restoreRangeAfterRepaint]
   );
 
-  // At the first glyph Tab changes paragraph indentation; later selections receive spaces.
   const commitIndent = useCallback(
     (sel: TypesetSelection, direction: "in" | "out") => {
       const unit = " ".repeat(indentWidthAt(sel));
-      // Authored indentation is one non-addressable unit before the first glyph.
-      const leading = /^ */.exec(sel.map.display)?.[0].length ?? 0;
-      if (sel.dStart > leading) {
+      if (indentReplacesSelection(sel.map.display, sel.dStart, direction)) {
         commitReplace(sel, sel.dStart, sel.dEnd, unit);
         return;
       }
@@ -1948,10 +1946,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             ? commitRangesDelete(ranges, intent.plainText)
             : false;
         case "enter":
-          // Drop the selection first, then let the queue replay the split into the
-          // collapsed caret that leaves behind.
+          // Drop the selection first, then replay the split into the collapsed
+          // caret that leaves behind, ahead of any input already queued.
           if (!commitRangesDelete(ranges)) return false;
-          replayQueueRef.current.push(intent);
+          replayQueueRef.current.unshift(intent);
           return true;
         case "deleteHeaderField":
           return false;
@@ -3214,88 +3212,84 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         replayQueueRef.current = [];
         return;
       }
-      while (!commitPendingRef.current && replayQueueRef.current.length > 0) {
-        const intent = replayQueueRef.current.shift()!;
-        const sel = readSelection();
-        if (!sel) {
-          // The queued intent may have been aimed at a selection crossing fields.
-          // Drop the queue only when nothing can apply it.
-          if (!commitCrossFieldIntent(intent)) replayQueueRef.current = [];
-          return;
-        }
-        if (intent.kind === "insert") {
-          commitReplace(
-            sel,
-            sel.dStart,
-            sel.dEnd,
-            intent.text,
-            sel.dStart === sel.dEnd ? "insert" : undefined
-          );
-        } else if (intent.kind === "richPaste") {
-          commitRichPaste(sel, intent);
-        } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
-          // Held Backspace/Delete replays through here, so it has to step over
-          // authored indentation exactly as the live keystroke does.
-          const backward = intent.kind === "deleteBack";
-          const collapsed = sel.dStart === sel.dEnd;
-          const indent = collapsed && !intent.word
-            ? indentDeletionRange(
-                sel.map.display,
-                sel.dStart,
-                backward ? "backward" : "forward",
-                indentWidthAt(sel)
-              )
-            : null;
-          if (indent) {
+      drainReplayQueue(replayQueueRef, {
+        gateClosed: () => commitPendingRef.current,
+        readSelection,
+        history: commitHistory,
+        crossField: commitCrossFieldIntent,
+        single: (sel, intent) => {
+          if (intent.kind === "insert") {
             commitReplace(
               sel,
-              indent.start,
-              indent.end,
-              "",
-              backward ? "deleteBackward" : "deleteForward"
+              sel.dStart,
+              sel.dEnd,
+              intent.text,
+              sel.dStart === sel.dEnd ? "insert" : undefined
             );
-          }
-          else if (collapsed && backward && sel.dStart === 0) {
-            const removedRow = intent.kind === "deleteBack" && intent.entryRow !== false && commitEmptyEntryRow(sel);
-            if (!removedRow && !commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
-          }
-          else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
-            commitMergeBullet(sel, "down");
-          } else if (collapsed) {
-            if (backward) {
+          } else if (intent.kind === "richPaste") {
+            commitRichPaste(sel, intent);
+          } else if (intent.kind === "deleteBack" || intent.kind === "deleteFwd") {
+            // Held Backspace/Delete replays through here, so it has to step over
+            // authored indentation exactly as the live keystroke does.
+            const backward = intent.kind === "deleteBack";
+            const collapsed = sel.dStart === sel.dEnd;
+            const indent = collapsed && !intent.word
+              ? indentDeletionRange(
+                  sel.map.display,
+                  sel.dStart,
+                  backward ? "backward" : "forward",
+                  indentWidthAt(sel)
+                )
+              : null;
+            if (indent) {
               commitReplace(
                 sel,
-                textStep(sel.map.display, sel.dStart, -1, intent.word),
-                sel.dStart,
+                indent.start,
+                indent.end,
                 "",
-                "deleteBackward"
-              );
-            } else {
-              commitReplace(
-                sel,
-                sel.dStart,
-                textStep(sel.map.display, sel.dStart, 1, intent.word),
-                "",
-                "deleteForward"
+                backward ? "deleteBackward" : "deleteForward"
               );
             }
-          } else commitReplace(sel, sel.dStart, sel.dEnd, "");
-        } else if (intent.kind === "indent" || intent.kind === "outdent") {
-          commitIndent(sel, intent.kind === "indent" ? "in" : "out");
-        } else if (intent.kind === "deleteSelection") {
-          if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
-        } else if (intent.kind === "enter") {
-          commitEnter(sel, intent.shiftKey, intent.entryRow !== false);
-        } else if (intent.kind === "deleteHeaderField") {
-          commitEmptyHeaderField(sel, intent.direction);
-        } else if (intent.kind === "toggleMark") {
-          applyMark(sel, intent.mark);
-        } else if (intent.kind === "clearFormatting") {
-          if (sel.dStart !== sel.dEnd) commitClearFormatting(sel);
-        } else {
-          commitHistory(intent.direction);
+            else if (collapsed && backward && sel.dStart === 0) {
+              const removedRow = intent.kind === "deleteBack" && intent.entryRow !== false && commitEmptyEntryRow(sel);
+              if (!removedRow && !commitParagraphOutdent(sel)) commitMergeBullet(sel, "up");
+            }
+            else if (collapsed && !backward && sel.dEnd === sel.map.chars.length) {
+              commitMergeBullet(sel, "down");
+            } else if (collapsed) {
+              if (backward) {
+                commitReplace(
+                  sel,
+                  textStep(sel.map.display, sel.dStart, -1, intent.word),
+                  sel.dStart,
+                  "",
+                  "deleteBackward"
+                );
+              } else {
+                commitReplace(
+                  sel,
+                  sel.dStart,
+                  textStep(sel.map.display, sel.dStart, 1, intent.word),
+                  "",
+                  "deleteForward"
+                );
+              }
+            } else commitReplace(sel, sel.dStart, sel.dEnd, "");
+          } else if (intent.kind === "indent" || intent.kind === "outdent") {
+            commitIndent(sel, intent.kind === "indent" ? "in" : "out");
+          } else if (intent.kind === "deleteSelection") {
+            if (sel.dStart !== sel.dEnd) commitReplace(sel, sel.dStart, sel.dEnd, "");
+          } else if (intent.kind === "enter") {
+            commitEnter(sel, intent.shiftKey, intent.entryRow !== false);
+          } else if (intent.kind === "deleteHeaderField") {
+            commitEmptyHeaderField(sel, intent.direction);
+          } else if (intent.kind === "toggleMark") {
+            applyMark(sel, intent.mark);
+          } else if (intent.kind === "clearFormatting") {
+            if (sel.dStart !== sel.dEnd) commitClearFormatting(sel);
+          }
         }
-      }
+      });
     }, 0);
     return () => window.clearTimeout(replayTimer);
   }, [

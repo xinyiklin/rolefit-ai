@@ -80,7 +80,8 @@ export async function runWrappedRowContracts({ makeWindow, waitFor, baseUrl }) {
     await h.evaluate(style => window.__rowContract.applyStyle(style), {
       ...style, baseFontSizePt: bounds.baseFontSizePt.max,
       pageMarginLeftPt: bounds.pageMarginLeftPt.max, pageMarginRightPt: bounds.pageMarginRightPt.max,
-      entryIndentPt: bounds.entryIndentPt.max, entryEndIndentPt: bounds.entryEndIndentPt.max
+      entryIndentPt: bounds.entryIndentPt.max, entryEndIndentPt: bounds.entryEndIndentPt.max,
+      bulletIndentPt: bounds.bulletIndentPt.max
     });
     await assertWrappedBounds(h, paired, `${host} combined narrow maximum size`);
     await h.evaluate(style => window.__rowContract.applyStyle(style), style);

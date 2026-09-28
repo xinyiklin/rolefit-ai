@@ -39,6 +39,7 @@ import { ZoomControl } from "./ZoomControl";
 import { FontSizeControl } from "./FontSizeControl";
 import { FontFamilyControl } from "./FontFamilyControl";
 import { LinkControl } from "./LinkControl";
+import { isInsideToolbarPortal } from "../toolbarPortal";
 
 export type InlineFormatCommand = {
   onToggle: () => void;
@@ -267,7 +268,7 @@ export function FormattingToolbar({
     if (!moreOpen) return;
 
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
+      if (event.key !== "Escape" || isInsideToolbarPortal(event.target)) return;
       event.preventDefault();
       setMoreOpen(false);
       moreButtonRef.current?.focus();
@@ -277,7 +278,7 @@ export function FormattingToolbar({
       const target = event.target;
       if (!(target instanceof Node)) return;
       if (moreButtonRef.current?.contains(target) || morePanelRef.current?.contains(target)) return;
-      if (target instanceof Element && target.closest(".font-size-control__menu")) return;
+      if (isInsideToolbarPortal(event.target)) return;
       setMoreOpen(false);
     };
 

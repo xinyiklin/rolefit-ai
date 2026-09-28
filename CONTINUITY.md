@@ -5,6 +5,71 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-27
 
+- [USER+CODE] [TASK engine-editor-bugfix-20260927] Approved fixing the shared
+  engine/editor review's user-facing bugs.
+  - The PDF now carries kern adjustments (TJ), so exported widths match the
+    editor. It keeps drawText's control-character cleanup.
+  - Year ranges and numeric dates no longer auto-link as phones; every format
+    that linked before still does.
+  - Page fit uses a fixed reference-string row footprint (`Agjpqy`), never
+    typed glyphs.
+  - The title/subtitle ink floor is max(old floor, real underline depth).
+  - Title line-height marks apply whether or not the title wraps.
+  - `.cover` header limits now equal `.resume`'s (`DOCUMENT_HEADER_LIMITS`),
+    which relaxes a `.cover` bound.
+  - Editor fixes:
+    - portaled toolbar menus no longer close their popover;
+    - empty or unchanged numeric drafts revert;
+    - dialog close keeps editor focus;
+    - the link card owns Escape only on the page or card;
+    - no-op edits add no undo step;
+    - pasted HTML whitespace collapses;
+    - Shift+Tab mid-paragraph outdents;
+    - replay continues past no-op and undo intents;
+    - cross-field Enter and clear formatting keep order and parity.
+- [TOOL] Every regression eval fails on HEAD and passes now.
+  - Engine/editor checks, the Typeset build/check, the RoleFit check and
+    `npm test` passed.
+  - The workspace layout diff found 0 changes (221 `.resume` files; the
+    verifier also checked 50 `.cover` files).
+  - The base resume PDF extracts the identical word sequence, with 7 links.
+  - Typeset browser checks passed: popover menus, empty size revert, undo.
+  - A verifier and an adversarial reviewer found no failures. The reviewer's
+    phone regression was fixed, and its three low findings were addressed.
+- [CODE] Residual limitations:
+  - Positive kern pairs ≥0.1em (rare Source Serif/bracket pairs) can make
+    pdf.js extract a stray space.
+  - Non-year number ranges (`1000-5000`) still auto-link, as they did before.
+  - The live cover-letter-only behaviors (Shift+Tab, spacing dialog focus) are
+    eval-proven only.
+- [CODE] Deferred:
+  - codec-accepted unrendered fields (a schema decision);
+  - context-menu keyboard navigation;
+  - space-kern DOM drift (unconfirmed);
+  - all refactor/simplification items.
+
+- [USER+CODE] [TASK bullet-indent-20260927] Approved a document-wide
+  `.resume` style field, `bulletIndentPt`. It is the bullet dot's offset from
+  the entry start (0–36pt), shown in Paragraph → Entry layout in both apps.
+  Bullet text keeps its historical gap after the dot. The default is 14.73,
+  which reproduces the previous LaTeX-derived layout exactly at the default
+  10pt body size. Unlike the old constant, the dot position is absolute
+  points: it no longer scales with `baseFontSizePt`, although the dot-to-text
+  gap still does. No UI changes the base size.
+- [USER+CODE] Under the pre-release schema policy the field is required, with no
+  absent-field default. Older `.resume` files and stale browser autosaves are
+  rejected (a stale Typeset autosave is replaced by a fresh document); the user
+  accepted this.
+- [CODE] `.cover` is unchanged; letters carry an inert 0.
+- [TOOL] A throwaway script converted 214 of the 229 ignored RoleFit workspace
+  `.resume` files, using exact per-size values. The before/after layout diff was
+  0pt with identical pages. The 15 skipped files were July trash copies that
+  already failed on the retired `letterSpacingPt`.
+- [TOOL] Engine and editor checks, the Typeset build/check, the RoleFit check,
+  and `npm test` passed. A Typeset browser check confirmed the slider, a flush
+  dot at 0, undo, and an autosave reload round trip; PDF rendering was
+  inspected.
+
 - [USER+CODE] Pre-merge code review of the advisory-content-checks branch; the
   user approved fixing all ten findings. These fixes restore guards the branch had loosened:
   - job conditions that change meaning keep the posting's source clause;

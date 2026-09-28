@@ -50,6 +50,16 @@ function restoreFocus(target: HTMLElement | null | undefined): void {
   (isUsableFocusTarget(target) ? target : visibleFocusable(document.body)[0])?.focus();
 }
 
+// A close handler may already have sent focus somewhere deliberate (Custom
+// spacing returns it to the editor selection); restoring would take it away.
+export function focusMovedOutside(active: Element | null, container: Element | null): boolean {
+  return Boolean(
+    active?.isConnected
+    && active !== active.ownerDocument.body
+    && !container?.contains(active)
+  );
+}
+
 function preferredReturnFocus(
   previouslyFocused: HTMLElement | null,
   fallback: HTMLElement | null | undefined
@@ -113,7 +123,13 @@ export function useModalFocus({
     function keepFocusInside(event: FocusEvent) {
       if (!isTopmost()) return;
       const container = containerRef.current;
-      if (container && event.target instanceof Node && !container.contains(event.target)) focusFirst();
+      if (!container || !(event.target instanceof Node) || container.contains(event.target)) return;
+      // Re-check in a microtask: when a close handler closes first and then
+      // moves focus out, React's unmount flush runs before this check.
+      queueMicrotask(() => {
+        const current = containerRef.current;
+        if (isTopmost() && current && !current.contains(document.activeElement)) focusFirst();
+      });
     }
     document.addEventListener("focusin", keepFocusInside);
 
@@ -127,7 +143,9 @@ export function useModalFocus({
       if (modalStack.length === 0) {
         document.body.style.overflow = bodyOverflowBeforeFirstModal ?? "";
         bodyOverflowBeforeFirstModal = null;
-        restoreFocus(preferredReturnFocus(previouslyFocused, returnFocusRef?.current));
+        if (!focusMovedOutside(document.activeElement, containerRef.current)) {
+          restoreFocus(preferredReturnFocus(previouslyFocused, returnFocusRef?.current));
+        }
       } else {
         // A lower modal may unmount while another surface remains open. Keep
         // the global scroll lock, and only move focus when the closed surface

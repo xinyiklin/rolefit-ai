@@ -6,6 +6,7 @@ import {
   INLINE_FONT_SIZE_MAX_PT,
   INLINE_FONT_SIZE_MIN_PT
 } from "@typeset/engine/lib/inlineMarksText.ts";
+import { numericDraftCommit } from "./numericDraft";
 
 const COMMON_SIZES = [6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 
@@ -93,15 +94,15 @@ export function FontSizeControl({
     onChange(clamped);
   };
   const commitDraft = () => {
-    const parsed = Number(draft.trim());
-    if (!Number.isFinite(parsed)) {
+    const next = numericDraftCommit(draft, displaySize(value), value, clamp);
+    if (next === null) {
       setDraft(displaySize(value));
       return;
     }
-    commitValue(parsed);
+    commitValue(next);
   };
   const step = (delta: -1 | 1) => {
-    const parsed = Number(draft.trim());
+    const parsed = draft.trim() === "" ? Number.NaN : Number(draft.trim());
     commitValue((Number.isFinite(parsed) ? parsed : value ?? min) + delta);
   };
   const returnFocusAfterCommit = () => {

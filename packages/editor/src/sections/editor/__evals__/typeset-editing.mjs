@@ -1602,7 +1602,82 @@ for (const isALink of ["example.com", "sub.example.co.uk", "example.io/resume.pd
   else globalThis.window = originalWindow;
 }
 
+// Keyboard intents keep their meaning on the live and queued-replay paths.
+{
+  const { drainReplayQueue, indentReplacesSelection } = await import("../intentControl.ts");
+  const INDENTED = "        A paragraph.";
+  assert.equal(indentReplacesSelection(INDENTED, 12, "in"), true, "mid-paragraph Tab inserts a tab stop");
+  assert.equal(
+    indentReplacesSelection(INDENTED, 12, "out"),
+    false,
+    "mid-paragraph Shift+Tab outdents instead of inserting spaces"
+  );
+  assert.equal(indentReplacesSelection(INDENTED, 8, "in"), false, "Tab at the first glyph indents the paragraph");
+
+  const replay = (kinds, { selection = null, crossFieldApplies = () => false, historyApplies = true } = {}) => {
+    const intents = {
+      insert: { kind: "insert", text: "x" },
+      toggleMark: { kind: "toggleMark", mark: "bold" },
+      clearFormatting: { kind: "clearFormatting" },
+      undo: { kind: "history", direction: "undo" }
+    };
+    const queue = { current: kinds.map((kind) => intents[kind]) };
+    const log = [];
+    let gateClosed = false;
+    drainReplayQueue(queue, {
+      gateClosed: () => gateClosed,
+      readSelection: () => selection,
+      history: (direction) => {
+        log.push(`history:${direction}`);
+        gateClosed = historyApplies;
+      },
+      crossField: (intent) => {
+        const applied = crossFieldApplies(intent);
+        log.push(`cross:${intent.kind}:${applied}`);
+        gateClosed = applied;
+        return applied;
+      },
+      single: (_selection, intent) => {
+        log.push(`single:${intent.kind}`);
+        gateClosed = true;
+      }
+    });
+    return { log, remaining: queue.current.map((intent) => intent.kind) };
+  };
+
+  // Select All -> Cmd+B that changes nothing -> quick Cmd+Z -> typing.
+  assert.deepEqual(replay(["toggleMark", "undo", "insert"]), {
+    log: ["cross:toggleMark:false", "history:undo"],
+    remaining: ["insert"]
+  }, "a no-op cross-field command neither drops the undo nor the input queued behind it");
+  assert.deepEqual(replay(["undo", "insert"]), {
+    log: ["history:undo"],
+    remaining: ["insert"]
+  }, "history replays without a single-field selection");
+  assert.deepEqual(replay(["undo", "clearFormatting"], { historyApplies: false }).log, [
+    "history:undo",
+    "cross:clearFormatting:false"
+  ], "replay continues past a history step with nothing to undo");
+  assert.deepEqual(replay(["clearFormatting", "insert"], { crossFieldApplies: () => true }), {
+    log: ["cross:clearFormatting:true"],
+    remaining: ["insert"]
+  }, "a cross-field mutation waits for its repaint before later input");
+  assert.deepEqual(replay(["undo", "insert"], { selection: {} }).log, ["history:undo"]);
+  assert.deepEqual(replay(["insert", "insert"], { selection: {} }).log, ["single:insert"]);
+}
+
+const editorSource = readFileSync(new URL("../TypesetEditor.tsx", import.meta.url), "utf8");
+assert.match(
+  editorSource,
+  /case "enter":[\s\S]{0,300}?replayQueueRef\.current\.unshift\(intent\)/,
+  "a cross-field Enter replays its split before input already queued behind it"
+);
 const inputEventsSource = readFileSync(new URL("../useTypesetInputEvents.ts", import.meta.url), "utf8");
+assert.match(
+  inputEventsSource,
+  /event\.key === "\\\\"[\s\S]{0,400}?else if \(!selection\) commitCrossFieldIntent\(\{ kind: "clearFormatting" \}\)/,
+  "live Cmd/Ctrl+\\ clears formatting across fields, as its queued copy does"
+);
 const editorCss = readFileSync(new URL("../../../styles/resume-document.css", import.meta.url), "utf8");
 assert.match(
   inputEventsSource,

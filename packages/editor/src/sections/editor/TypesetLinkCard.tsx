@@ -36,6 +36,16 @@ function shortHref(href: string): string {
   return `${trimmed.slice(0, MAX_HREF - 21)}…${trimmed.slice(-20)}`;
 }
 
+// The card renders inside the editor wrapper, so its parent is the editor. Only
+// Escape aimed at the editable page or the card is the card's to take; dialogs
+// and menus in the same wrapper, and chrome outside it, keep their own Escape.
+export function linkCardOwnsEscape(card: HTMLElement | null, target: EventTarget | null): boolean {
+  if (!card || !target) return false;
+  const node = target as Node;
+  if (card.contains(node)) return true;
+  return Boolean(card.parentElement?.contains(node) && (target as Partial<HTMLElement>).isContentEditable);
+}
+
 export function TypesetLinkCard({
   href,
   anchorRect,
@@ -69,10 +79,9 @@ export function TypesetLinkCard({
   useEffect(() => {
     // Capture phase so Escape closes the card before the editor sees the key.
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        event.stopPropagation();
-        onDismiss();
-      }
+      if (event.key !== "Escape" || !linkCardOwnsEscape(ref.current, event.target)) return;
+      event.stopPropagation();
+      onDismiss();
     };
     document.addEventListener("keydown", onKeyDown, true);
     return () => document.removeEventListener("keydown", onKeyDown, true);

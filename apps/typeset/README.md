@@ -101,7 +101,8 @@ mixed runs with committed metrics before it breaks lines, so the editable page,
 browser print layer, and dedicated PDF output stay aligned. Typography stays in
 the direct toolbar; selecting all text is the explicit way to restyle the entire
 resume. Paragraph owns document-wide body, header, and heading alignment plus
-independent persisted entry start and end indents. Styles owns heading case and
+independent persisted entry start and end indents and the bullet indent (the
+dot's offset from the entry start; text keeps its gap after the dot). Styles owns heading case and
 rule treatment plus per-role font, size, and emphasis for headings, entry
 columns, skill labels, and contact text. Those field controls reflect manual
 inline changes and can reapply or remove formatting across every matching

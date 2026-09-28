@@ -10,6 +10,8 @@ import {
   type RefCallback
 } from "react";
 
+import { isInsideToolbarPortal } from "./toolbarPortal";
+
 const FOCUSABLE_SELECTOR = [
   "button:not([disabled])",
   "a[href]",
@@ -159,6 +161,7 @@ export function Popover({
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") return;
+      if (isInsideToolbarPortal(event.target)) return;
       event.preventDefault();
       event.stopPropagation();
       close(true);
@@ -166,7 +169,7 @@ export function Popover({
 
     function onPointerDown(event: PointerEvent) {
       const root = rootRef.current;
-      if (!root || event.composedPath().includes(root)) return;
+      if (!root || event.composedPath().includes(root) || isInsideToolbarPortal(event.target)) return;
       const target = event.target instanceof HTMLElement ? event.target : null;
       const willReceiveFocus = Boolean(target?.closest(FOCUSABLE_SELECTOR));
       close(!willReceiveFocus);
@@ -174,7 +177,12 @@ export function Popover({
 
     function onFocusIn(event: FocusEvent) {
       const root = rootRef.current;
-      if (root && event.target instanceof Node && !root.contains(event.target)) {
+      if (
+        root
+        && event.target instanceof Node
+        && !root.contains(event.target)
+        && !isInsideToolbarPortal(event.target)
+      ) {
         close(false);
       }
     }

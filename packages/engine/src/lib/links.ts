@@ -26,17 +26,31 @@ const FILE_LIKE_SUFFIXES = new Set([
   "zip", "rar", "tar", "gz", "bz2", "7z", "exe", "dmg", "pkg", "deb", "rpm", "iso", "bak", "tmp"
 ]);
 
+// Unprefixed phone-like text auto-links unless its shape is a known non-phone:
+// a decimal, a year range, a numeric date, or a short bare count. Everything
+// else that PHONE_RE accepts (7–15 digits) keeps linking as before.
+const YEAR = /^(?:19|20)\d{2}$/;
+function isPhoneShaped(number: string): boolean {
+  const groups = number.match(/\d+/g) ?? [];
+  if (/^\+?\d+\.\d+$/.test(number)) return false;
+  if (number.startsWith("+")) return true;
+  if (groups.length >= 2 && groups.every((group) => YEAR.test(group))) return false;
+  if (/^\d{1,2}[./-]\d{1,2}[./-]\d{4}$/.test(number)) return false;
+  if (/^(?:19|20)\d{2}[\s./-]+\d{1,2}[\s./-]+\d{1,2}$/.test(number)) return false;
+  return groups.length > 1 || number.length >= 10;
+}
+
 function normalizeTelephone(value: string): string | null {
   const explicit = value.match(/^tel:(.*)$/i);
   const candidate = (explicit?.[1] ?? value)
     .replace(/;ext=(\d{1,6})$/i, " ext $1")
     .trim();
   if (!PHONE_RE.test(candidate)) return null;
-  if (!explicit && /^\d{4}-\d{1,2}-\d{1,2}$/.test(candidate)) return null;
   const extension = candidate.match(/(?:x|ext\.?)\s*(\d{1,6})$/i)?.[1] ?? "";
   const number = extension
     ? candidate.slice(0, candidate.search(/(?:x|ext\.?)\s*\d{1,6}$/i))
     : candidate;
+  if (!explicit && !isPhoneShaped(number.trim())) return null;
   const digits = number.replace(/\D/g, "");
   if (digits.length < 7 || digits.length > 15) return null;
   const prefix = number.trim().startsWith("+") ? "+" : "";

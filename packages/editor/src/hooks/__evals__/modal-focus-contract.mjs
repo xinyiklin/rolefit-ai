@@ -50,4 +50,35 @@ assert.match(
   "a render that disables the focused control moves focus to the dialog fallback"
 );
 
+// A close handler that already moved focus out (Custom spacing returns it to the
+// editor selection) keeps it: the trap must not pull it back mid-close, and
+// cleanup must not replace it with the opener or the first page control.
+const { focusMovedOutside } = await import("../useModalFocus.ts");
+const ownerDocument = { body: null };
+const body = { isConnected: true, ownerDocument };
+ownerDocument.body = body;
+const inside = { isConnected: true, ownerDocument };
+const editor = { isConnected: true, ownerDocument };
+const detached = { isConnected: false, ownerDocument };
+const dialog = { contains: (node) => node === inside };
+assert.equal(focusMovedOutside(editor, dialog), true, "focus moved to a live control outside the dialog is kept");
+assert.equal(focusMovedOutside(editor, null), true, "an unmounted dialog still keeps focus that moved elsewhere");
+assert.equal(focusMovedOutside(body, null), false, "focus that fell back to the body is restored");
+assert.equal(focusMovedOutside(detached, null), false, "focus on a removed element is restored");
+assert.equal(focusMovedOutside(inside, dialog), false, "focus still inside a deactivated dialog is restored");
+assert.equal(focusMovedOutside(null, dialog), false, "no active element is restored");
+
+const trapStart = source.indexOf("function keepFocusInside");
+const trap = source.slice(trapStart, source.indexOf('document.addEventListener("focusin", keepFocusInside)', trapStart));
+assert.match(
+  trap,
+  /queueMicrotask\(\(\) => \{[\s\S]{0,200}?isTopmost\(\)[\s\S]{0,200}?focusFirst\(\)/,
+  "the focus trap re-checks after the current task, so a close that moves focus out is not undone"
+);
+assert.match(
+  source,
+  /modalStack\.length === 0\)[\s\S]{0,200}?if \(!focusMovedOutside\(document\.activeElement, containerRef\.current\)\)[\s\S]{0,40}?restoreFocus\(/,
+  "closing the last modal restores focus only when nothing else took it"
+);
+
 console.log("Modal focus contract passed");

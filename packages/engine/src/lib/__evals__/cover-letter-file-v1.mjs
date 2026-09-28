@@ -574,10 +574,16 @@ for (const mutation of [
   );
 }
 
+const manyContacts = { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) } };
+assert.equal(
+  parseCoverLetterFile(serializeCoverLetterFile(manyContacts, COVER_LETTER_STYLE_DEFAULTS)).data.header.contact.length,
+  21,
+  "any header the shared editor builds saves as a letter (same limits as .resume)"
+);
 for (const invalidData of [
-  { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) } },
-  { ...withHeader, header: { ...withHeader.header, name: "x".repeat(1_001) } },
-  { ...withHeader, header: { ...withHeader.header, contact: ["x".repeat(1_001)] } },
+  { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 1_001 }, (_, index) => `item-${index}`) } },
+  { ...withHeader, header: { ...withHeader.header, name: "x".repeat(10_001) } },
+  { ...withHeader, header: { ...withHeader.header, contact: ["x".repeat(10_001)] } },
   { ...withHeader, header: { visible: true, name: null, contact: [] } }
 ]) {
   assert.throws(

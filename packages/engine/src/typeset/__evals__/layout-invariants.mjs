@@ -6,6 +6,8 @@ import assert from "node:assert/strict";
 import "./section-wrap.mjs";
 import "./editable-field-width.mjs";
 import "./header-baseline.mjs";
+import "./autolink.mjs";
+import "./vertical-rows.mjs";
 
 import {
   coverLetterResumeData
@@ -197,5 +199,41 @@ for (const title of [true, false]) for (const subtitle of [true, false]) {
 const emptyEntry = { ...rowEntry, id: 'empty-entry', titleLeft: null, titleRight: null, subtitleLeft: null, subtitleRight: null, bullets: [] };
 assert.deepEqual(layoutResume(toTypesetSchema(rowData([emptyEntry, rowEntry, emptyEntry])), commonStyle), layoutResume(toTypesetSchema(rowData([rowEntry])), commonStyle), 'fully empty entries add no geometry or pagination state');
 console.log('entry row layout combinations and absent-junction checks passed');
+
+// Bullet indent moves every bullet dot and bullet line together, and nothing else.
+const bulletSchema = toTypesetSchema(rowData([{
+  ...rowEntry,
+  bullets: [{ id: 'long-bullet', text: 'Wrapped bullet words '.repeat(20) }, { id: 'indented-bullet', text: '<indent=36>Indented' }]
+}]));
+const bulletGeometry = (style) => {
+  const lines = buildVerticalStream(bulletSchema, style);
+  const heads = lines.filter((line) => line.runs[0].src?.kind !== 'bullet');
+  const bullets = lines.filter((line) => line.runs[0].src?.kind === 'bullet');
+  const firsts = bullets.filter((line) => line.runs[0].marker)
+    .map((line) => ({ dot: line.runs[0].x, text: line.runs[1].x }));
+  const continuations = bullets.filter((line) => !line.runs[0].marker).map((line) => line.runs[0].x);
+  return { heads, bullets, firsts, continuations };
+};
+const baseBullets = bulletGeometry(commonStyle);
+assert.equal(baseBullets.firsts.length, 2);
+assert.ok(baseBullets.continuations.length >= 1, 'fixture wraps a bullet');
+assert.equal(baseBullets.firsts[0].dot, commonStyle.entryIndentPt + DOC_STYLE_DEFAULTS.bulletIndentPt, 'default keeps the historical dot position');
+assert.equal(baseBullets.firsts[1].dot - baseBullets.firsts[0].dot, 36, 'per-bullet indent adds on top');
+for (const bulletIndentPt of [0, 7.5, 36]) {
+  const style = { ...commonStyle, bulletIndentPt };
+  const moved = bulletGeometry(style);
+  const shift = bulletIndentPt - DOC_STYLE_DEFAULTS.bulletIndentPt;
+  assert.deepEqual(moved.heads, baseBullets.heads, 'titles and subtitles ignore bullet indent');
+  moved.firsts.forEach((first, index) => {
+    assert.ok(Math.abs(first.dot - baseBullets.firsts[index].dot - shift) < 1e-9, 'dot shifts by the setting delta');
+    assert.ok(Math.abs(first.text - baseBullets.firsts[index].text - shift) < 1e-9, 'text keeps its gap after the dot');
+  });
+  for (const x of moved.continuations) assert.ok(Math.abs(x - moved.firsts[0].text) < 1e-9, 'wrapped lines align under the text');
+  const right = pageBox(style).textWidth - style.entryEndIndentPt;
+  for (const line of moved.bullets) for (const run of line.runs) assert.ok(run.x + run.width <= right + 1e-6, 'bullets stay inside the entry end edge');
+}
+const flush = bulletGeometry({ ...commonStyle, entryIndentPt: 0, bulletIndentPt: 0 });
+assert.equal(flush.firsts[0].dot, 0, 'zero entry and bullet indent put the dot on the margin');
+console.log('bullet indent geometry checks passed');
 
 await import("./heading-wrap.mjs");
