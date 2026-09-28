@@ -197,7 +197,8 @@ export async function emitPdf(
     if (annots.length) setAnnots(page, annots);
   }
 
-  return pdf.save();
+  // Timer-based serialization yields can stall exports in background tabs.
+  return pdf.save({ objectsPerTick: Infinity });
 }
 
 // A TJ array for one run: the embedded font's shaped glyph ids with its kern

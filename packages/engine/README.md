@@ -30,6 +30,10 @@ PDF hosts call `fetchFontBytes(document, fontAssetBaseUrl)` with their explicit
 deployment-aware public font base. The engine intentionally has no domain-root
 fallback because a consumer may be hosted below a path prefix.
 
+PDF serialization avoids timer-based yields that browsers throttle in background
+tabs. Browser CPU deprioritization or tab suspension can still delay completion;
+the engine does not guarantee uninterrupted background execution.
+
 Standard entry rows retain their four required field keys: paired strings
 represent present title/subtitle rows; paired nulls represent removed rows.
 Existing string-valued `.resume` files retain their output. Older builds reject
@@ -63,6 +67,7 @@ npm run check --workspace packages/engine
 npm run eval:resume-file --workspace packages/engine
 npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
+npm run eval:pdf-export-scheduling --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 ```
 
