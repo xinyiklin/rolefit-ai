@@ -249,6 +249,9 @@ font, size and wrapping changes still reflow the page normally.
   The configured reasoning effort controls the provider reasoning and audit
   breadth; no separate check result is persisted or shown.
 - **WYSIWYG editor + PDF export** — the editor _is_ the preview: it and the exported PDF use the same shared Typeset layout engine, so visible line breaks and page flow match the export exactly. No external toolchain to install — typesetting and PDF generation run in the browser.
+  Firefox on macOS can delay Apply/Update saves and PDF downloads after you
+  switch to another browser tab. Keep RoleFit in the foreground until processing
+  finishes to avoid this known background-scheduling limitation.
 - **`.resume` save/load** — download strict schema-v1 structured resume data,
   including explicit hidden/visible/absent header state, as a `.resume` file
   (lossless JSON, formatting preserved) and reload it later.
