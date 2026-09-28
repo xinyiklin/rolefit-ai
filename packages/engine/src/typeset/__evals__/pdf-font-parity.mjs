@@ -14,7 +14,7 @@
 // the PDF's glyphs land exactly where the editor's do. This asserts that for
 // every family/face over a corpus that exercises ligatures, kerning, accents,
 // punctuation, and digits — catching fontkit applying unmodeled ligatures like
-// `ft`. `pdf-kerning` reads emitted PDFs back to prove the emitter writes that
+// `ft`. RoleFit's `pdf-kerning` eval (pdf.js is an app dependency) reads emitted PDFs back to prove the emitter writes that
 // shaping (kerning and tracking included) rather than bare glyph advances.
 //
 // Run: node --experimental-strip-types src/typeset/__evals__/pdf-font-parity.mjs

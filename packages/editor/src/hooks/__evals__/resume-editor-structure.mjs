@@ -360,9 +360,11 @@ const strictModeSecond = rootReducer(
   strictModeAction,
   strictModeClock
 );
+// coalesceAt is a wall-clock stamp; two calls may straddle a millisecond.
+assert.ok(Math.abs(strictModeSecond.coalesceAt - strictModeFirst.coalesceAt) < 1_000);
 assert.deepEqual(
-  strictModeSecond,
-  strictModeFirst,
+  { ...strictModeSecond, coalesceAt: 0 },
+  { ...strictModeFirst, coalesceAt: 0 },
   "React Strict Mode double invocation allocates one history sequence"
 );
 

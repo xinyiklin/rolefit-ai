@@ -8,15 +8,17 @@
 // from the operator list (glyph widths, TJ adjustments, and Tc) — the numbers a
 // viewer paints with. The text layer must still extract every run intact.
 //
-// Run: node --experimental-strip-types src/typeset/__evals__/pdf-kerning.mjs
+// Lives beside pdf-roundtrip because pdf.js is a RoleFit dependency, not an engine one.
+// Run: node --experimental-strip-types apps/role-fit-ai/src/typeset/__evals__/pdf-kerning.mjs
 
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import fontkit from "@pdf-lib/fontkit";
 
-import { PAGE_HEIGHT_BP } from "../blocks.ts";
-import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "../fontRegistry.ts";
-import { measure, texLigatures } from "../measure.ts";
-import { emitPdf } from "../pdf/emit.ts";
+import { PAGE_HEIGHT_BP } from "@typeset/engine/typeset/blocks.ts";
+import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
+import { measure, texLigatures } from "@typeset/engine/typeset/measure.ts";
+import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
@@ -36,7 +38,7 @@ const SAMPLES = [
 const TRACKING = 0.35; // one tracked sample per face proves Tc still applies
 
 const fontBytes = (family, face) =>
-  new Uint8Array(readFileSync(new URL(`../../../fonts/${sfntAssetFile(family, face)}`, import.meta.url)));
+  new Uint8Array(readFileSync(fileURLToPath(import.meta.resolve(`@typeset/engine/fonts/${sfntAssetFile(family, face)}`))));
 
 let failures = 0;
 let checks = 0;
