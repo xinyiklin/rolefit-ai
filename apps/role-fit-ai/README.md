@@ -471,6 +471,22 @@ verify** with `authState` still `unknown`, not a false signed-in claim. The
 first actual Antigravity provider request verifies the provider-owned session
 and reports actionable guidance if that request fails authentication.
 
+Settings includes GPT-6 Astra, Sol, and Luna for Codex and OpenAI API, plus
+Claude Fable 5.1 and Opus 5.5 for Claude CLI and API. Codex starts at GPT-6 Sol;
+existing supported selections stay selected. The Claude default remains Sonnet 5
+and the OpenAI API default remains GPT-5.6 Terra.
+
+The Codex picker omits retired GPT-5.4/5.4 Mini and the no-longer-listed Codex
+Spark. GPT-5.5 remains selectable and is labeled with its announced October 14,
+2026 Codex retirement; that notice does not retire it from the OpenAI API. Supported older
+Claude models remain available. Saved removed choices move to the same provider's
+default, and effort controls follow each model's capabilities.
+
+Use a current provider CLI. **Claude Opus 5.5 requires Claude Code 2.1.280 or
+newer**; Fable 5.1 requires 2.1.257+. Run `claude update` to upgrade. For Codex, follow the
+[official installation/update guidance](https://learn.chatgpt.com/docs/cli).
+RoleFit does not upgrade CLIs automatically or guarantee account model access.
+
 The CLIs sign in with their own commands, the same ones the companion's **Sign
 in** action runs:
 

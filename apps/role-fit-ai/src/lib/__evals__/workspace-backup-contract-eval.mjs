@@ -290,4 +290,34 @@ assert.equal(isManagedWorkspaceBackupPath("cover-letters/default.cover"), false,
 assert.equal(isManagedWorkspaceBackupPath("secrets.env"), false, "an arbitrary file is not managed");
 assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a traversal path is never managed");
 
+
+
+// Catalog retirement must not make the canonical file or a valid backup unreadable.
+for (const model of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
+  const old = { ...validStoredPrefs, settings: {
+    aiProvider: "codex-cli", selectedModel: model, cliReasoningEffort: "high",
+    coverProvider: "claude-cli", coverSelectedModel: "claude-haiku-4-5", coverCliReasoningEffort: "low",
+    honestContext: "Preserve this synthetic preference."
+  } };
+  const current = parseStoredWorkspacePreferences(old);
+  assert.equal(current.settings.selectedModel, "gpt-6-sol");
+  assert.equal(current.settings.cliReasoningEffort, "high");
+  assert.equal(current.settings.coverCliReasoningEffort, "");
+  assert.equal(current.settings.honestContext, old.settings.honestContext);
+  assert.equal(old.settings.selectedModel, model);
+  assert.deepEqual(parseStoredWorkspacePreferences(current), current, "migration is idempotent");
+  assert.deepEqual(parsePortableWorkspacePreferences({ settings: old.settings, lastBaseResume: "" }).settings, current.settings);
+  for (const patch of [
+    { selectedModel: "made-up-model" },
+    { cliReasoningEffort: "made-up-effort" },
+    { cliReasoningEffort: 7 },
+    { runFitAssessment: "yes" },
+    { secret: "must-not-be-imported" },
+    { aiProvider: "anthropic" }
+  ]) {
+    assert.throws(() => parseStoredWorkspacePreferences({ ...old, settings: { ...old.settings, ...patch } }),
+      "catalog migration cannot excuse unrelated invalid fields or cross-provider model ids");
+  }
+}
+
 console.log("workspace-backup-contract probes passed");

@@ -1,3 +1,4 @@
+import { reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import { defaultCliReasoningEffort, providerOptions } from "../config/aiOptions.ts";
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys } from "../config/aiStages.ts";
 import type { AiProviderValue } from "../config/aiOptions.ts";
@@ -16,11 +17,11 @@ export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig
   const ownKeys = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === stage)!);
   const bag = saved as unknown as Record<string, string | undefined>;
   const provider = (bag[ownKeys.provider] as AiProviderValue | undefined) ?? DEFAULT_PROVIDER;
+  const selectedModel = bag[ownKeys.model] ?? providerOptions.find((option) => option.value === provider)?.model ?? DEFAULT_MODEL;
   return {
     provider,
-    selectedModel:
-      bag[ownKeys.model] ?? providerOptions.find((option) => option.value === provider)?.model ?? DEFAULT_MODEL,
-    cliReasoningEffort: bag[ownKeys.effort] ?? defaultCliReasoningEffort(provider)
+    selectedModel,
+    cliReasoningEffort: reconcileCliReasoningEffort(provider, selectedModel, bag[ownKeys.effort] ?? defaultCliReasoningEffort(provider))
   };
 }
 

@@ -481,6 +481,56 @@ signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured
 provider.
 
+### Model catalog receipt — 2026-09-27
+
+`src/config/aiOptions.ts` owns the curated model choices. The provider-reported
+Codex catalog (client 0.158.0, fetched 2026-09-27) lists GPT-6 Astra/Sol/Luna,
+GPT-5.6 Sol/Terra/Luna, and GPT-5.5. Codex's default is GPT-6 Sol in both the
+browser and server fallback. GPT-5.4 and GPT-5.4 Mini retired from ChatGPT
+sign-in on August 31; Spark is absent from this visible catalog, which is not
+proof of global API retirement. GPT-5.5 is retained with its announced October
+14 retirement in the label. API and subscription catalogs have separate lifecycles.
+The existing Claude legacy choices have no confirmed retirement in this refresh
+and are retained alongside Fable 5.1 and Opus 5.5.
+
+`shared/cliReasoning.ts` owns CLI effort capabilities for the picker, settings,
+request validation, and Claude argv. GPT-6 Astra/Sol and GPT-5.6 Sol/Terra support
+low through ultra; both Luna models stop at max; GPT-5.5 stops at xhigh. Claude
+Haiku has no effort flag, Opus/Sonnet 4.6 omit xhigh, and the other listed Claude
+models expose low through max. CLI modes are not assumed to be API parameters.
+Model changes reconcile effort in the same state update; startup and persisted
+settings use the same helper. Unsupported nonempty efforts are rejected at the
+server boundary, except Haiku's obsolete effort is discarded.
+
+Strict workspace and backup parsing permits only known provider-catalog repairs:
+the three removed Codex ids move to the current Codex default, and previously
+recognized CLI efforts reconcile against a known model. Unknown model ids,
+unknown efforts, invalid provider pairs, extra keys, and unrelated invalid fields
+remain rejected. Reads do not rewrite the canonical file; the next normal save
+persists the repaired selection. Supported choices and independent stages remain
+unchanged, and no migration calls a provider.
+
+Claude Opus 5.5 needs Claude Code 2.1.280+; Fable 5.1 needs 2.1.257+.
+Publication review observed Claude Code 2.1.283 and Codex CLI 0.157.1;
+the Codex shell version is distinct from the app catalog client above. Version
+observations do not prove live compatibility or account access. The app
+provides update guidance without installing or upgrading either CLI.
+
+Verification: RoleFit app/server/landing builds, desktop contracts, all 122
+offline probes, and document-workflow regressions passed. Two independent
+reviews found no blocking provider or settings issues, including a synthetic
+six-stage hook-switching check and strict migration tests. Live provider
+execution and rendered browser QA were
+not run. Publication review did not upgrade local CLI binaries or restart the
+running companion.
+
+Sources: [Codex availability and retirements](https://learn.chatgpt.com/docs/models),
+[GPT-6 API migration](https://developers.openai.com/api/docs/guides/latest-model),
+[Claude models](https://platform.claude.com/docs/en/models/overview),
+[Claude retirements](https://platform.claude.com/docs/en/about-claude/model-deprecations),
+[Claude Code models and effort](https://code.claude.com/docs/en/model-config), and
+[Opus 5.5 migration](https://platform.claude.com/docs/en/models/opus-5-5/migration-guide).
+
 Per-provider rules:
 
 - **Subscription CLIs** (Claude Code `claude-cli`, Codex CLI `codex-cli`, and
@@ -496,16 +546,17 @@ Per-provider rules:
   stable slug from the first column of `agy models`; settings saved by older
   builds migrate their display-name values before dispatch.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
-  The supported GPT-5.6 choices are Sol, Terra, and Luna; the balanced default is
-  `gpt-5.6-terra`.
+  The catalog includes GPT-6 Astra/Sol/Luna and GPT-5.6 Sol/Terra/Luna; the
+  balanced default remains `gpt-5.6-terra`.
 - **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
   trailing assistant prefill because current Claude models reject those patterns.
   JSON is enforced by the strict-output prompt plus `parseAiJson`. The current
-  catalog exposes Fable 5, Opus 5, Sonnet 5, Haiku 4.5, and the still-available
-  Opus 4.8. Sonnet 5 and Opus 5 default to adaptive thinking, so this bounded
-  JSON workflow disables it explicitly; Fable 5 rejects that flag and is left
-  on its supported adaptive-thinking contract at low effort so reasoning does
-  not consume the bounded JSON output budget.
+  catalog includes Fable 5.1 and Opus 5.5 alongside Fable 5, Opus 5, Sonnet 5,
+  Haiku 4.5, and Opus 4.8. Sonnet 5 and Opus 5 default to adaptive thinking, so
+  this bounded JSON workflow disables it explicitly. Fable 5/5.1 and Opus 5.5
+  require adaptive thinking; their requests use low effort to leave room for
+  JSON in the shared reasoning/output budget. Actual model quality and token
+  consumption require separately authorized live evaluation.
 - Managed browser requests accept provider/model/effort identifiers only. The
   server resolves an OpenAI/Claude key from the companion-owned in-memory
   credential snapshot immediately before dispatch; there is no browser

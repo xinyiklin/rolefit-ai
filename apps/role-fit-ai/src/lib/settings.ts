@@ -1,3 +1,4 @@
+import { cliReasoningEffortOptionsByProvider, reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import type { AiProviderValue } from "../config/aiOptions.ts";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
 import { AI_STAGES, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
@@ -111,6 +112,30 @@ const PERSISTED_SETTING_KEYS = [
   "experienceProfile"
 ] as const satisfies readonly (keyof PersistedSettings)[];
 
+// Only known catalog changes may migrate before strict workspace/backup validation.
+// Unknown models, efforts, providers, and unrelated malformed fields still fail closed.
+export function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
+  const migrated = { ...source };
+  for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
+    const provider = migrated[providerKey];
+    const storedModel = migrated[modelKey];
+    if (provider !== "codex-cli" && provider !== "claude-cli") continue;
+    if (typeof storedModel !== "string") continue;
+    let model = storedModel;
+    if (provider === "codex-cli" && ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"].includes(model)) {
+      model = providerOptions.find((option) => option.value === provider)!.model;
+      migrated[modelKey] = model;
+    }
+    const effort = migrated[effortKey];
+    if (modelOptionsByProvider[provider].some((option) => option.value === model)
+      && typeof effort === "string"
+      && (effort === "" || cliReasoningEffortOptionsByProvider[provider]?.some((option) => option.value === effort))) {
+      migrated[effortKey] = reconcileCliReasoningEffort(provider, model, effort);
+    }
+  }
+  return migrated;
+}
+
 // Reconcile persisted values that may be stale (older app version, a renamed
 // provider, a removed model option, or hand-edited storage). An unknown provider
 // would otherwise be shown raw in the menu and rejected only at request time; a
@@ -150,6 +175,9 @@ export function normalizeSettings(value: unknown): PersistedSettings {
         if (fallback) bag[modelKey] = fallback;
         else delete bag[modelKey];
       }
+    }
+    if (bag[providerKey] && bag[modelKey] && bag[effortKey] !== undefined) {
+      bag[effortKey] = reconcileCliReasoningEffort(bag[providerKey]!, bag[modelKey]!, bag[effortKey]!);
     }
     // Each stage now holds a concrete provider + model (the old "" = "same as
     // Resume Polish" sentinel is gone). Drop any stale empty string — for the model too,

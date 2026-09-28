@@ -47,6 +47,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-27
 
+- [CODE+TOOL] Provider catalog publication review: RoleFit adds GPT-6 and
+  Claude Fable 5.1/Opus 5.5 choices, defaults Codex to GPT-6 Sol, and repairs
+  known retired Codex selections within their original stage/provider. One
+  app-owned CLI effort contract serves settings, request validation, and Claude
+  argv; strict preference/backup parsing still rejects unrelated invalid data.
+  Fresh RoleFit builds, desktop contracts, all 122 offline evaluations, and
+  document-workflow regressions passed. Two fresh independent reviews found no
+  actionable issues. Live-provider execution and rendered settings QA remain
+  unverified. No version bump or native release is included.
+
 - [CODE+TOOL] PR #157 Chromium CI failed because the wrapped-header test still
   expected `.cover` headers above 1,000 characters to be rejected after the
   approved limit alignment. The test now requires successful reopen and exact

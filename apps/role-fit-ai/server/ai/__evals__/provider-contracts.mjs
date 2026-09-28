@@ -10,6 +10,7 @@ import {
 } from "../../ai-cli/index.ts";
 import {
   buildAnthropicMessagesBody,
+  buildOpenAiResponsesBody,
   callConfiguredProvider,
   callOpenAiResponsesWithFetch
 } from "../clients.ts";
@@ -51,6 +52,8 @@ try {
   assert.deepEqual(
     modelOptionsByProvider["claude-cli"].map(({ value, label }) => [value, label]),
     [
+      ["claude-fable-5-1", "Fable 5.1"],
+      ["claude-opus-5-5", "Opus 5.5"],
       ["claude-fable-5", "Fable 5"],
       ["claude-sonnet-5", "Sonnet 5"],
       ["claude-sonnet-4-6", "Sonnet 4.6"],
@@ -64,17 +67,17 @@ try {
   );
   assert.deepEqual(
     modelOptionsByProvider.openai.map(({ value }) => value),
-    ["gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"],
-    "OpenAI API exposes the three current GPT-5.6 general-purpose models"
+    ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-terra", "gpt-5.6-sol", "gpt-5.6-luna"],
+    "OpenAI API exposes GPT-6 alongside supported GPT-5.6 models"
   );
   assert.deepEqual(
     modelOptionsByProvider.anthropic.map(({ value }) => value),
-    ["claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
+    ["claude-fable-5-1", "claude-opus-5-5", "claude-fable-5", "claude-opus-5", "claude-sonnet-5", "claude-haiku-4-5-20251001", "claude-opus-4-8"],
     "Claude API exposes the current public model families plus the still-available prior Opus"
   );
   assert.deepEqual(
     modelOptionsByProvider["codex-cli"].map(({ value }) => value),
-    ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"],
+    ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"],
     "Codex CLI matches every list-visible model in the installed cache"
   );
   assert.deepEqual(
@@ -103,9 +106,39 @@ try {
     ["low", "medium", "high", "xhigh", "max"]
   );
   assert.deepEqual(
-    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.3-codex-spark")?.map(({ value }) => value),
+    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.5")?.map(({ value }) => value),
     ["low", "medium", "high", "xhigh"]
   );
+
+  for (const model of ["gpt-6-astra", "gpt-6-sol"]) {
+    assert(cliReasoningEffortOptionsFor("codex-cli", model).some(({ value }) => value === "ultra"));
+    assert.equal(resolveProviderRequest({ provider: "codex-cli", model, reasoningEffort: "ultra" }).reasoningEffort, "ultra");
+  }
+  assert.equal(resolveProviderRequest({ provider: "codex-cli" }).model, "gpt-6-sol");
+  for (const [provider, model, effort] of [
+    ["codex-cli", "gpt-6-luna", "ultra"],
+    ["codex-cli", "gpt-5.5", "max"],
+    ["claude-cli", "claude-sonnet-4-6", "xhigh"],
+    ["claude-cli", "claude-opus-4-6", "xhigh"]
+  ]) {
+    assert(!cliReasoningEffortOptionsFor(provider, model).some(({ value }) => value === effort));
+    assert.throws(() => resolveProviderRequest({ provider, model, reasoningEffort: effort }), /Unsupported reasoning effort/);
+  }
+  for (const model of ["claude-fable-5-1", "claude-opus-5-5"]) {
+    assert.equal(resolveProviderRequest({ provider: "claude-cli", model, reasoningEffort: "max" }).reasoningEffort, "max");
+  }
+  for (const model of ["claude-haiku-4-5", "claude-haiku-4-5-20251001"]) {
+    assert.deepEqual(cliReasoningEffortOptionsFor("claude-cli", model), []);
+    assert.equal(resolveProviderRequest({ provider: "claude-cli", model, reasoningEffort: "high" }).reasoningEffort, "");
+    assert(!buildClaudeCliArgs({ model, reasoningEffort: "high" }).includes("--effort"));
+  }
+  for (const model of ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna"]) {
+    const body = buildOpenAiResponsesBody({ model, systemPrompt: "Return JSON", userPrompt: "Synthetic input" });
+    assert.equal(body.model, model);
+    assert.equal(body.store, false);
+    assert.deepEqual(body.text, { format: { type: "json_object" } });
+    for (const key of ["temperature", "top_p", "top_logprobs"]) assert(!(key in body));
+  }
 
   const defaults = resolveProviderRequest({});
   assert.equal(defaults.provider, "claude-cli");
@@ -359,13 +392,16 @@ try {
     false,
     "Opus 5 stays at the default effort, the only tier that accepts a thinking disable"
   );
-  const fableBody = buildAnthropicMessagesBody({ model: "claude-fable-5", systemPrompt: "system", userPrompt: "user" });
-  assert.equal("thinking" in fableBody, false, "models with always-on adaptive thinking are not sent an invalid disable flag");
-  assert.deepEqual(
-    fableBody.output_config,
-    { effort: "low" },
-    "Fable 5 keeps its required adaptive thinking within the bounded JSON output budget"
-  );
+  for (const model of ["claude-fable-5", "claude-fable-5-1", "claude-opus-5-5"]) {
+    const body = buildAnthropicMessagesBody({ model, systemPrompt: "system", userPrompt: "user" });
+    assert.equal("thinking" in body, false, `${model} cannot disable adaptive thinking`);
+    assert.deepEqual(body.output_config, { effort: "low" }, `${model} uses bounded reasoning`);
+    for (const key of ["temperature", "top_p", "top_k"]) assert(!(key in body));
+    const args = buildClaudeCliArgs({ model, reasoningEffort: "max" });
+    assert.equal(args[args.indexOf("--model") + 1], model);
+    assert.equal(args[args.indexOf("--effort") + 1], "max");
+  }
+
   const opus48Body = buildAnthropicMessagesBody({ model: "claude-opus-4-8", systemPrompt: "system", userPrompt: "user" });
   assert.equal("thinking" in opus48Body, false, "models that already default to no thinking are left untouched");
 
