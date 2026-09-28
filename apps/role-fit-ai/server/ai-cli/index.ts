@@ -4,6 +4,7 @@
 // paid API tokens. Each helper spawns the local CLI binary and returns the model
 // response as a string (the polish route then parses it as JSON).
 
+import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
 import { spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
@@ -288,16 +289,14 @@ export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: Cli
   ];
   if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
   if (model && model !== "default") args.push("--model", model);
-  args.push("--effort", reasoningEffort || "low");
+  if (cliReasoningEffortOptionsFor("claude-cli", model ?? "")?.length) {
+    args.push("--effort", reasoningEffort || "low");
+  }
   return args;
 }
 
 export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs): Promise<string> {
-  // Default to LOW reasoning effort. With no --effort flag the CLI runs at its
-  // session default (high), which spends ~17K thinking tokens on a structured
-  // resume rewrite and pushes a single call past 5 minutes. Polish is a bounded
-  // rewrite/audit, not open-ended reasoning — low effort cuts each call to ~70s
-  // with no loss in suggestion quality. An explicit reasoningEffort still wins.
+  // Keep bounded JSON work at low effort unless the caller chooses another level.
   const args = buildClaudeCliArgs({ model, reasoningEffort, systemPrompt });
 
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-claude-"));

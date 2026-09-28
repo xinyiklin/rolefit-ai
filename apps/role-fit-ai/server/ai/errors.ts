@@ -15,7 +15,7 @@ export class UserSafeAiError extends Error {
 export const CLAUDE_CLI_AUTH_MESSAGE =
   "Claude Code couldn't authenticate (401). Open RoleFit Companion, sign in or reconnect Claude Code, then check providers and retry.";
 export const CLAUDE_CLI_FAILED_MESSAGE =
-  "Claude Code couldn't complete the request. In RoleFit Companion, check the Claude Code connection, confirm the selected model is available, then retry.";
+  "Claude Code couldn't complete the request. In RoleFit Companion, check the connection and model access, update Claude Code with `claude update`, then retry.";
 export const CLAUDE_CLI_TIMEOUT_MESSAGE =
   "Claude Code timed out before finishing. Try again, or switch to a faster model or lower the reasoning effort.";
 

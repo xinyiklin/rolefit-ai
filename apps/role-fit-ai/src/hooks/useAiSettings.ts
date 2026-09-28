@@ -1,10 +1,9 @@
+import { reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  cliReasoningEffortOptionsFor,
   defaultCliReasoningEffort,
   providerOptions
 } from "../config/aiOptions";
-import { AI_STAGE_IDS } from "../config/aiStages";
 import { clearStoredSettings, loadSettings, saveSettings, type PersistedSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
 import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
@@ -175,29 +174,12 @@ export function useAiSettings() {
     experienceProfile
   ]);
 
-  // Keep each stage's reasoning effort valid for its selected model — the tiers
-  // a model exposes vary (Haiku none; Opus/Sonnet 4.6 lack xhigh). When the
-  // current value isn't offered by the model, fall back to the provider default
-  // (always a member of any non-empty tier list). An empty list (Haiku / non-CLI)
-  // hides the control, so the leftover value is inert and left untouched.
-  useEffect(() => {
-    setStages((prev) => {
-      let changed = false;
-      const next = { ...prev };
-      for (const stage of AI_STAGE_IDS) {
-        const config = prev[stage];
-        const options = cliReasoningEffortOptionsFor(config.provider, config.selectedModel);
-        if (options && options.length > 0 && !options.some((option) => option.value === config.cliReasoningEffort)) {
-          next[stage] = { ...config, cliReasoningEffort: defaultCliReasoningEffort(config.provider) };
-          changed = true;
-        }
-      }
-      return changed ? next : prev;
-    });
-  }, [stages]);
-
   function updateStage(stage: StageId, patch: Partial<StageConfig>) {
-    setStages((prev) => ({ ...prev, [stage]: { ...prev[stage], ...patch } }));
+    setStages((prev) => {
+      const next = { ...prev[stage], ...patch };
+      next.cliReasoningEffort = reconcileCliReasoningEffort(next.provider, next.selectedModel, next.cliReasoningEffort);
+      return { ...prev, [stage]: next };
+    });
   }
 
   // Switching a stage's provider resets its model/effort

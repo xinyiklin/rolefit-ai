@@ -1,3 +1,9 @@
+export {
+  cliReasoningEffortOptionsByProvider,
+  cliReasoningEffortOptionsFor,
+  defaultCliReasoningEffort
+} from "../../shared/cliReasoning.ts";
+
 import {
   ANTIGRAVITY_MODEL_OPTIONS,
   DEFAULT_ANTIGRAVITY_MODEL
@@ -49,7 +55,7 @@ export function groupModelOptions(options: readonly ModelOption[]): ModelOptionS
 
 export const providerOptions: readonly ProviderOption[] = [
   { value: "claude-cli", label: "Claude · CLI", model: "claude-sonnet-5" },
-  { value: "codex-cli", label: "Codex · CLI", model: "gpt-5.6-sol" },
+  { value: "codex-cli", label: "Codex · CLI", model: "gpt-6-sol" },
   { value: "antigravity-cli", label: "Antigravity · CLI", model: DEFAULT_ANTIGRAVITY_MODEL },
   { value: "openai", label: "OpenAI · API", model: "gpt-5.6-terra" },
   { value: "anthropic", label: "Claude · API", model: "claude-sonnet-5" }
@@ -57,23 +63,26 @@ export const providerOptions: readonly ProviderOption[] = [
 
 export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOption[]> = {
   openai: [
+    { value: "gpt-6-astra", label: "GPT-6 Astra" },
+    { value: "gpt-6-sol", label: "GPT-6 Sol" },
+    { value: "gpt-6-luna", label: "GPT-6 Luna" },
     { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
     { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
     { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" }
   ],
   anthropic: [
+    { value: "claude-fable-5-1", label: "Claude Fable 5.1" },
+    { value: "claude-opus-5-5", label: "Claude Opus 5.5" },
     { value: "claude-fable-5", label: "Claude Fable 5" },
     { value: "claude-opus-5", label: "Claude Opus 5" },
     { value: "claude-sonnet-5", label: "Claude Sonnet 5" },
     { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5" },
     { value: "claude-opus-4-8", label: "Claude Opus 4.8" }
   ],
-  // Current and still-available concrete ids present in the installed Claude
-  // Code 2.1.220 binary. Labels omit the redundant "Claude" prefix because the
-  // provider control already establishes that context.
-  // The CLI is not signed in on this machine, so account-specific availability
-  // cannot be narrowed further without completing `claude auth login`.
+  // Current and still-supported Claude Code ids; account access can vary.
   "claude-cli": [
+    { value: "claude-fable-5-1", label: "Fable 5.1" },
+    { value: "claude-opus-5-5", label: "Opus 5.5" },
     { value: "claude-fable-5", label: "Fable 5" },
     { value: "claude-sonnet-5", label: "Sonnet 5" },
     { value: "claude-sonnet-4-6", label: "Sonnet 4.6" },
@@ -83,72 +92,21 @@ export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOptio
     { value: "claude-opus-4-6", label: "Opus 4.6" },
     { value: "claude-haiku-4-5", label: "Haiku 4.5" }
   ],
-  // Visible (`visibility: "list"`) models and their order from Codex CLI
-  // 0.145.0's refreshed models cache. Hidden `codex-auto-review` and
-  // `gpt-5.6-sol-wm` are excluded.
+  // Visible models in the provider catalog dated 2026-09-27 (client 0.158.0).
   "codex-cli": [
+    { value: "gpt-6-astra", label: "GPT-6 Astra" },
+    { value: "gpt-6-sol", label: "GPT-6 Sol" },
+    { value: "gpt-6-luna", label: "GPT-6 Luna" },
     { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
     { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
     { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-    { value: "gpt-5.5", label: "GPT-5.5" },
-    { value: "gpt-5.4", label: "GPT-5.4" },
-    { value: "gpt-5.4-mini", label: "GPT-5.4 Mini" },
-    { value: "gpt-5.3-codex-spark", label: "GPT-5.3 Codex Spark" }
+    { value: "gpt-5.5", label: "GPT-5.5 (retires Oct 14, 2026)" }
   ],
   // Full list from `agy models` on 1.1.11. Version 1.1.5 made the stable slugs
   // accepted by `--model`; the shared catalog keeps those request values paired
   // with the display names shown in Settings.
   "antigravity-cli": ANTIGRAVITY_MODEL_OPTIONS
 };
-
-export const cliReasoningEffortOptionsByProvider: Partial<Record<AiProviderValue, readonly ModelOption[]>> = {
-  // Concrete values exposed by each installed CLI. Both helpers always pass a
-  // selected value rather than relying on an ambient CLI default.
-  "claude-cli": [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "Extra high" },
-    { value: "max", label: "Max" }
-  ],
-  "codex-cli": [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "Extra high" },
-    { value: "max", label: "Max" },
-    { value: "ultra", label: "Ultra" }
-  ]
-};
-
-// Narrow Codex to the effort levels reported for the selected model in the
-// installed CLI's models cache. Claude Code 2.1.220 exposes one global
-// low→max set in `claude --help`, so it is returned unchanged.
-export function cliReasoningEffortOptionsFor(
-  provider: string,
-  model: string
-): readonly ModelOption[] | undefined {
-  if (provider === "codex-cli") {
-    const all = cliReasoningEffortOptionsByProvider["codex-cli"] ?? [];
-    if (model === "gpt-5.6-sol" || model === "gpt-5.6-terra") return all;
-    if (model === "gpt-5.6-luna") {
-      return all.filter((option) => option.value !== "ultra");
-    }
-    return all.filter((option) => option.value !== "max" && option.value !== "ultra");
-  }
-  if (provider === "claude-cli") return cliReasoningEffortOptionsByProvider["claude-cli"];
-  return undefined;
-}
-
-// The effort a CLI provider starts at when the user hasn't picked one. Both values
-// are members of every non-empty per-model list above, so a model switch can
-// always fall back to it. claude-cli forces low (speed on a bounded rewrite);
-// codex-cli uses medium (its typical default, now explicit). Non-CLI → "" (ignored).
-export function defaultCliReasoningEffort(provider: string): string {
-  if (provider === "claude-cli") return "low";
-  if (provider === "codex-cli") return "medium";
-  return "";
-}
 
 // Friendly display label for a provider value (falls back to the raw value).
 export function providerLabel(value: string): string {

@@ -29,6 +29,20 @@ try {
   assert.equal(stored.status, "ok", "a missing canonical file accepts its first normalized preferences write");
   assert.deepEqual(stored.status === "ok" ? stored.value.settings : null, initial.settings);
 
+  const legacy = { ...stored.value, settings: {
+    aiProvider: "codex-cli", selectedModel: "gpt-5.4", cliReasoningEffort: "high",
+    honestContext: "Preserve this synthetic preference."
+  } };
+  await writeFile(file, JSON.stringify(legacy), "utf8");
+  const migrated = await readStoredWorkspacePreferences(workspace);
+  assert.equal(migrated.status, "ok", "retired selections remain readable from the canonical workspace");
+  assert.equal(migrated.value.settings.selectedModel, "gpt-6-sol");
+  assert.equal(JSON.parse(await readFile(file, "utf8")).settings.selectedModel, "gpt-5.4", "reading does not rewrite the file");
+  await persistWorkspacePreferences(workspace, {
+    settings: migrated.value.settings, lastBaseResume: migrated.value.lastBaseResume
+  });
+  assert.equal(JSON.parse(await readFile(file, "utf8")).settings.selectedModel, "gpt-6-sol", "the next normal save persists the supported selection");
+
   await writeFile(file, "{not valid json", "utf8");
   await assert.rejects(
     persistWorkspacePreferences(workspace, replacement, new Date("2026-08-09T16:00:00.000Z")),

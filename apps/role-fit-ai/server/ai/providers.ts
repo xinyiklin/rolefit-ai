@@ -2,6 +2,7 @@
 // model/key/reasoning-effort a request resolves to, plus the default
 // provider and the validation shared by every provider-backed route.
 
+import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
 import { UserSafeAiError } from "./errors.ts";
 import {
   DEFAULT_ANTIGRAVITY_MODEL,
@@ -86,17 +87,14 @@ export function isCliProvider(provider: string): boolean {
   return provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
 }
 
-function normalizeCliReasoningEffort(provider: string, effort: unknown): string | null {
+function normalizeCliReasoningEffort(provider: string, model: string, effort: unknown): string | null {
   let normalized = String(effort ?? "").trim().toLowerCase();
   if (!normalized) return "";
   if (provider === "codex-cli" && normalized === "light") normalized = "low";
 
-  const allowed = {
-    "claude-cli": ["low", "medium", "high", "xhigh", "max"],
-    "codex-cli": ["low", "medium", "high", "xhigh", "max", "ultra"]
-  }[provider];
-
-  return allowed?.includes(normalized) ? normalized : null;
+  const options = cliReasoningEffortOptionsFor(provider, model);
+  if (options?.length === 0) return "";
+  return options?.some((option) => option.value === normalized) ? normalized : null;
 }
 
 function providerDefaultModel(provider: string): string {
@@ -105,7 +103,7 @@ function providerDefaultModel(provider: string): string {
       openai: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-5.6-sol",
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6-sol",
       "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? DEFAULT_ANTIGRAVITY_MODEL
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );
@@ -179,7 +177,7 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   if (model.length > 120) {
     throw new UserSafeAiError("Configured model name is too long. Check AI settings and try again.", 400);
   }
-  const reasoningEffort = normalizeCliReasoningEffort(provider, body.reasoningEffort);
+  const reasoningEffort = normalizeCliReasoningEffort(provider, model, body.reasoningEffort);
 
   if (!apiKey && !isCliProvider(provider)) {
     throw new UserSafeAiError(

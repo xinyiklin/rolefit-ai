@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 
-import { AI_STAGES, AI_STAGE_IDS } from "../../config/aiStages.ts";
+import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys } from "../../config/aiStages.ts";
 import { seedStage, seedStages, stageFieldsToPersist } from "../stageSettings.ts";
 import { normalizeSettings } from "../settings.ts";
 import { materializeAiSettings } from "../aiSettingsPersistence.ts";
@@ -272,8 +272,42 @@ assert.deepEqual(
   "a non-boolean bold preference fails closed rather than persisting"
 );
 
-console.log("stage-settings probes passed");
+
 
 assert.deepEqual(seeded["final-review"], seeded["fit-assessment"], "new review stage copies Fit once");
 const persistedReview = stageFieldsToPersist(seeded);
 assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic"})["final-review"],seeded["final-review"],"persisted review does not follow later Fit changes");
+
+// Model retirement and effort repair must stay isolated to each stage.
+for (const stage of AI_STAGES) {
+  const keys = stageSettingsKeys(stage);
+  for (const retired of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
+    const saved = { [keys.provider]: "codex-cli", [keys.model]: retired, [keys.effort]: "high" };
+    const repaired = normalizeSettings(saved);
+    assert.equal(repaired[keys.model], "gpt-6-sol");
+    assert.equal(repaired[keys.provider], "codex-cli");
+    assert.equal(repaired[keys.effort], "high");
+    assert.equal(saved[keys.model], retired, "normalization must not mutate its input");
+    assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
+  }
+  for (const model of ["gpt-5.5", "gpt-5.6-sol", "gpt-6-astra"]) {
+    const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "high" };
+    assert.deepEqual(normalizeSettings(saved), saved, "supported explicit selections survive the refresh");
+  }
+  const luna = normalizeSettings({ [keys.provider]: "codex-cli", [keys.model]: "gpt-6-luna", [keys.effort]: "ultra" });
+  assert.equal(luna[keys.effort], "medium");
+  const haiku = normalizeSettings({ [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-4-5", [keys.effort]: "high" });
+  assert.equal(haiku[keys.effort], "");
+  assert.equal(seedStage(stage.id, haiku).cliReasoningEffort, "");
+  assert.equal(seedStage(stage.id, { [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-4-5" }).cliReasoningEffort, "");
+  assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6-sol");
+}
+const mixedStages = normalizeSettings({
+  aiProvider: "codex-cli", selectedModel: "gpt-5.4", cliReasoningEffort: "high",
+  coverProvider: "claude-cli", coverSelectedModel: "claude-opus-5", coverCliReasoningEffort: "max"
+});
+assert.equal(mixedStages.selectedModel, "gpt-6-sol");
+assert.equal(mixedStages.coverSelectedModel, "claude-opus-5");
+assert.equal(mixedStages.coverCliReasoningEffort, "max");
+
+console.log("stage-settings probes passed");
