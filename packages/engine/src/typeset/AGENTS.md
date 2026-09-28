@@ -156,6 +156,9 @@ it truthfully.
   caps design uses.
 - PDF font loading receives a deployment-aware asset base from each host. Do
   not restore a domain-root `/fonts/` default inside the engine.
+- PDF serialization must not await timer callbacks: browsers throttle them in
+  background tabs. Keep this scheduling choice in the shared emitter; it does
+  not guarantee progress in a fully suspended or discarded tab.
 
 ## Font And Shaping Pipeline
 

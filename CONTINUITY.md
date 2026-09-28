@@ -3,6 +3,48 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-28
+
+- [USER+CODE] Investigated Firefox Apply/download delays when the tab is hidden.
+  The shared PDF emitter now disables pdf-lib's timer-based serialization yields,
+  which can be throttled in background tabs. RoleFit saves the tracker and strict
+  document sources before PDF export; their persistence sequence is unchanged.
+  The fix also covers Typeset and saved-document PDF rendering. Fully suspended
+  or discarded tabs remain outside application control; large documents
+  may spend longer in one uninterrupted serialization task.
+- [TOOL] The new timer-rejecting regression failed with the old setting and passes
+  12 resume/cover cases across six font families. Engine check, RoleFit build,
+  Typeset check, PDF round trip, Apply lifecycle/export probes, and script-path
+  validation passed. All 15 rendered pages from 14 synthetic before/after PDFs
+  are pixel-identical at 96 DPI. Two independent reviews found no actionable
+  issues and independently confirmed the negative control.
+- [USER+TOOL] The user still reported a 10–20 second Firefox background delay
+  after the timer change. An isolated stock Firefox 156.0.1 macOS test with a
+  synthetic 451-record, approximately 5 MB tracker reproduced a smaller but
+  substantial delay: both PDF downloads completed in 0.66 seconds foreground
+  and 5.07 seconds hidden. Saving alone took 0.38 versus 2.23 seconds; the
+  remaining delay preceded PDF handoff to Firefox. Setting only
+  `threads.lower_mainthread_priority_in_background.enabled` to `false` in the
+  isolated test profile reduced hidden-tab completion to 0.79 seconds (saving
+  0.37 seconds). This supports Firefox background main-thread prioritization
+  as a contributor, consistent with Mozilla bug 1960734; the user's exact
+  10–20 second case and original browser profile remain unverified. Playwright
+  Firefox forced pages visible and was rejected as background evidence.
+- [TOOL] A RoleFit PDF-worker prototype improved an isolated warmed render but
+  did not reliably improve the full save/download flow; all prototype app-code
+  changes were removed. Only the earlier shared timer fix remains. No real
+  applications or user Firefox preferences were modified. Synthetic test
+  browsers and servers were stopped.
+- [CODE] Package and RoleFit READMEs document the remaining background-scheduling
+  limitation and the foreground workaround. The Firefox-wide preference remains
+  unchanged; this change removes PDF serialization timers without promising a
+  complete fix for the reported browser delay.
+- [TOOL] Publication verification passed engine, editor, and Typeset checks,
+  dependency/script contracts, and the RoleFit gate (122 offline evaluations).
+  The sandbox initially blocked a desktop test's loopback listener; the complete
+  RoleFit gate passed with loopback access. A fresh PDF round trip and all 15
+  rendered pages again matched the pre-change baseline at 96 DPI.
+
 ## 2026-09-27
 
 - [CODE+TOOL] Provider catalog publication review: RoleFit adds GPT-6 and
