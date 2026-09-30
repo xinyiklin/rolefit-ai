@@ -60,7 +60,7 @@ browser-side effects; components render them and App composes them.
   cannot starve a pending scan. Clusters are never cached as records — the
   merge modal reads current status, dates, artifacts, and attachments.
 - `useAiSettings` owns per-stage provider/model/effort preferences and the
-  candidate-declared About you profile, never API credentials. Browser storage
+  candidate-declared Profile, never API credentials. Browser storage
   is a fail-open cache; `lib/workspacePreferencesSync.ts` makes the owner-only
   workspace preference file canonical across browsers/origins and reconciles
   live hook state after a startup/focus adoption.

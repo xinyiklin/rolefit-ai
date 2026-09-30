@@ -51,6 +51,8 @@ type UsePolishPipelineArgs = {
   currentResumeText: string;
   jobDescription: string;
   requestHonestContext: string;
+  // Set while the Profile Background is over its limit; the stage declines.
+  profileLimitMessage: string | null;
   customInstructionsFor: (stage: StageId) => string;
   boldBulletKeywords: boolean;
   resumePolish: StageConfig;
@@ -100,6 +102,7 @@ export function usePolishPipeline({
   currentResumeText,
   jobDescription,
   requestHonestContext,
+  profileLimitMessage,
   customInstructionsFor,
   boldBulletKeywords,
   resumePolish,
@@ -336,6 +339,17 @@ export function usePolishPipeline({
       runLockRef.current && generationRef.current === startGeneration;
     let context: PolishContext | null = null;
     try {
+      if (profileLimitMessage) {
+        runLockRef.current = false;
+        setIsPolishStarting(false);
+        settleStart("declined");
+        setPolishStatus(profileLimitMessage);
+        setPolishProgress({
+          polish: { status: "failed", errorHeadline: "Profile too long", error: profileLimitMessage }
+        });
+        setPolishProgressVisible(true);
+        return;
+      }
       const provider = await ensureResumePolishProviderReady();
       if (!startIsCurrent()) return;
       if (!provider.ready) {

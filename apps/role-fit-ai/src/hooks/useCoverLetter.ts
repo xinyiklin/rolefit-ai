@@ -34,6 +34,8 @@ type UseCoverLetterArgs = {
   resumeData: ResumeData | null;
   jobText: string;
   honestContext: string;
+  // Set while the Profile Background is over its limit; the stage declines.
+  profileLimitMessage: string | null;
   sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
@@ -88,6 +90,7 @@ export function useCoverLetter({
   resumeData,
   jobText,
   honestContext,
+  profileLimitMessage,
   sourceWarnings,
   customInstructions,
   aiRequest,
@@ -320,6 +323,20 @@ export function useCoverLetter({
             ? "Add your resume first."
             : "Prepare the job on Prepare first."
       );
+      return;
+    }
+    if (profileLimitMessage) {
+      setFailure({
+        kind: "error",
+        headline: "Profile too long",
+        detail: profileLimitMessage,
+      });
+      setCoverStatus(profileLimitMessage);
+      setCoverProgress({
+        status: "failed",
+        errorHeadline: "Profile too long",
+        error: profileLimitMessage,
+      });
       return;
     }
     if (!providerReady) {

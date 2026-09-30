@@ -188,7 +188,7 @@
   line-height: 1.45;
 }
 
-/* About you is a settings list, not a form: label and control share a line, and
+/* Profile facts are a settings list, not a form: label and control share a line, and
    one label column keeps the controls aligned down the panel. Scoped to this
    section because the Stages panel's only inline field is a short "Minimum fit"
    that would gain a wide empty gutter from the same rule. */
@@ -235,90 +235,27 @@
   -webkit-appearance: none;
 }
 
-/* Experience sources are hairline-separated evidence rows, not nested cards.
-   The category label is the row's legend; quantities stay secondary and the
-   factual scope note gets the full line. */
-.experience-profile {
-  display: grid;
-  gap: var(--s2);
+/* The Background count closes its subhead row; the notice below the field
+   shares the count's over-limit tone. */
+.settings-background__count {
+  margin-left: auto;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
 }
 
-.experience-profile__add .field {
-  margin: 0;
-}
-
-.experience-profile__rows {
-  display: grid;
-}
-
-.experience-profile__row {
-  position: relative;
-  display: grid;
-  gap: var(--s2);
-  min-width: 0;
-  margin: 0;
-  padding: var(--s3) 0;
-  border: 0;
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.experience-profile__row legend {
-  max-width: calc(100% - 76px);
-  padding: 0;
-  color: var(--ink-strong);
-  font-size: 0.8rem;
-  font-weight: 620;
-}
-
-.experience-profile__remove {
-  position: absolute;
-  top: var(--s3);
-  right: 0;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 2px 0;
-  color: var(--ink-soft);
-  background: transparent;
-  border: 0;
-  font-family: var(--font-ui);
-  font-size: 0.68rem;
-  cursor: pointer;
-}
-
-.experience-profile__remove:hover {
+.settings-background__count.is-over,
+.settings-background__notice {
   color: var(--danger);
 }
 
-.experience-profile__remove:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: var(--r-sm);
+.settings-background {
+  margin-top: var(--s2);
 }
 
-.experience-profile__metrics {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: var(--s2);
-}
-
-.experience-profile__row .field {
-  min-width: 0;
+.settings-background__notice {
   margin: 0;
-}
-
-.experience-profile__row .field > span {
-  font-size: 0.68rem;
-}
-
-.experience-profile__row .text-input {
-  min-width: 0;
-}
-
-.experience-profile__note {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   line-height: 1.4;
 }
 
@@ -682,10 +619,6 @@
      either way, so the note is the one that goes. */
   .settings-dialog__autosave {
     display: none;
-  }
-
-  .experience-profile__metrics {
-    grid-template-columns: minmax(0, 1fr);
   }
 
 }

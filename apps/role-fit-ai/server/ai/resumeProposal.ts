@@ -1,3 +1,4 @@
+import { CANDIDATE_CONTEXT_CHAR_LIMIT } from "../../shared/candidateProfileContract.ts";
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { jobTerminology, unsupportedTerminology } from "../../src/resume/terminology.ts";
 import { templateHasUnresolvedSlots } from "../../src/lib/coverLetterTemplate.ts";
@@ -164,7 +165,7 @@ ${fenceUntrusted(clipForPrompt(adviceSources, 12_000, "optional advice source re
 </evidence_items>
 
 <candidate_context>
-${fenceUntrusted(clipForPrompt(honestContext, 6_000, "candidate context")) || "Not provided."}
+${fenceUntrusted(clipForPrompt(honestContext, CANDIDATE_CONTEXT_CHAR_LIMIT, "candidate context")) || "Not provided."}
 </candidate_context>
 
 <user_guidance>

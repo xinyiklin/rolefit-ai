@@ -60,13 +60,7 @@ const knownSettingPortable = {
     gpa: 3.86,
     availabilityNotice: "specific-date",
     availabilityDate: "2026-09-14",
-    experienceProfile: [{
-      category: "professional",
-      years: 2.5,
-      count: 2,
-      mostRecentYear: 2026,
-      details: "Production TypeScript services"
-    }]
+    honestContext: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
   },
   lastBaseResume: "fullstack.resume"
 };
@@ -74,6 +68,31 @@ assert.deepEqual(
   parsePortableWorkspacePreferences(knownSettingPortable),
   knownSettingPortable,
   "a settings bag of known, already-normalized keys/values round-trips unchanged"
+);
+const legacyRows = [{
+  category: "professional",
+  years: 2.5,
+  count: 2,
+  mostRecentYear: 2026,
+  details: "Production TypeScript services"
+}];
+const migratedBackground = "## Slotwise (personal project, 2025–present)\nBuilt scheduling services.\n\n" +
+  "## Experience by type\n- Professional employment: 2.5 years; 2 roles or projects; most recent in 2026; scope: Production TypeScript services";
+assert.deepEqual(
+  parsePortableWorkspacePreferences({
+    settings: { ...knownSettingPortable.settings, experienceProfile: legacyRows },
+    lastBaseResume: "fullstack.resume"
+  }),
+  {
+    settings: { ...knownSettingPortable.settings, honestContext: migratedBackground },
+    lastBaseResume: "fullstack.resume"
+  },
+  "a backup with legacy experience rows restores with the rows appended to the Background"
+);
+assert.deepEqual(
+  parsePortableWorkspacePreferences({ settings: { experienceProfile: legacyRows }, lastBaseResume: "" }).settings,
+  { honestContext: migratedBackground.slice(migratedBackground.indexOf("## Experience by type")) },
+  "legacy rows without Background text become the Background"
 );
 assert.throws(
   () => parsePortableWorkspacePreferences({
@@ -127,6 +146,18 @@ assert.deepEqual(
   parseStoredWorkspacePreferences({ ...validStoredPrefs, source: "restore" }),
   { ...validStoredPrefs, source: "restore" },
   "source: 'restore' is the other valid enum value"
+);
+const legacyStoredPrefs = { ...validStoredPrefs, settings: { aiProvider: "openai", honestContext: "Tutor.", experienceProfile: [{ category: "research" }] } };
+const migratedStoredPrefs = parseStoredWorkspacePreferences(legacyStoredPrefs);
+assert.deepEqual(
+  migratedStoredPrefs.settings,
+  { aiProvider: "openai", honestContext: "Tutor.\n\n## Experience by type\n- Research / lab: experience declared" },
+  "a workspace file saved before the Profile change still loads, with its rows migrated"
+);
+assert.deepEqual(
+  parseStoredWorkspacePreferences({ ...legacyStoredPrefs, settings: { ...migratedStoredPrefs.settings, experienceProfile: [{ category: "research" }] } }).settings,
+  migratedStoredPrefs.settings,
+  "re-reading an unsaved file whose Background already holds the block never duplicates it"
 );
 
 for (const [name, bad] of [

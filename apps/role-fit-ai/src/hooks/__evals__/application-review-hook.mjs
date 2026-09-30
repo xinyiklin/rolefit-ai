@@ -58,6 +58,7 @@ const stage = {
 };
 let readyResolve;
 let ensureProviderReady = () => Promise.resolve({ ready: true });
+let profileLimitMessage = null;
 const renderHook = () =>
   render(() =>
     useApplicationReview({
@@ -65,6 +66,7 @@ const renderHook = () =>
       stage,
       preparationIdentity,
       ensureProviderReady,
+      profileLimitMessage,
     }),
   );
 const oldFetch = globalThis.fetch;
@@ -128,10 +130,10 @@ try {
   await fourth;
   input = {
     ...input,
-    evidence: Array.from({ length: 401 }, (_, i) => ({
+    evidence: Array.from({ length: 601 }, (_, i) => ({
       id: `e-${i}`,
       kind: "context",
-      label: "About you",
+      label: "Profile",
       text: "Built Python services.",
     })),
   };
@@ -144,13 +146,22 @@ try {
   await hook.run();
   hook = renderHook();
   assert.equal(hook.status, "failed");
-  assert.match(hook.receipt.result.error, /400 evidence items/);
+  assert.match(hook.receipt.result.error, /600 evidence items/);
   assert.equal(
     readinessChecks,
     0,
     "over-budget evidence fails before provider checks",
   );
   assert.equal(fetched.length, 3, "over-budget evidence never dispatches");
+  input = { ...input, evidence: [] };
+  profileLimitMessage = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Profile.";
+  hook = renderHook();
+  await hook.run();
+  hook = renderHook();
+  assert.equal(hook.status, "failed");
+  assert.match(hook.receipt.result.error, /^Profile too long: Your Profile Background is over 12,000 characters/);
+  assert.equal(readinessChecks, 0, "an over-limit Profile declines before provider checks");
+  assert.equal(fetched.length, 3, "an over-limit Profile never dispatches");
 } finally {
   globalThis.fetch = oldFetch;
   unmount();

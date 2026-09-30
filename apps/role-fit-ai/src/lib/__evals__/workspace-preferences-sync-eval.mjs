@@ -105,6 +105,30 @@ assert.equal(
   "a corrupt canonical record leaves the fail-open browser cache usable"
 );
 
+// A companion server still running pre-Profile code returns experience rows;
+// adopting them must convert, not drop, them before the next write-back.
+globalThis.fetch = async (_url, options) => options?.method === "POST"
+  ? { ok: true }
+  : {
+      ok: true,
+      async json() {
+        return {
+          exists: true,
+          source: "workspace",
+          updatedAt: "2026-09-28T12:00:00.000Z",
+          settings: { honestContext: "Tutor.", experienceProfile: [{ category: "research" }] },
+          lastBaseResume: "",
+          restoreStamp: null
+        };
+      }
+    };
+await adoptWorkspacePreferences();
+assert.deepEqual(
+  loadSettings(),
+  { honestContext: "Tutor.\n\n## Experience by type\n- Research / lab: experience declared" },
+  "adopting pre-Profile server settings migrates their experience rows"
+);
+
 const settingsHook = readFileSync(new URL("../../hooks/useAiSettings.ts", import.meta.url), "utf8");
 const syncSource = readFileSync(new URL("../workspacePreferencesSync.ts", import.meta.url), "utf8");
 assert.match(

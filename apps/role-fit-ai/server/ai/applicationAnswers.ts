@@ -1,3 +1,4 @@
+import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 // Drafts truthful answers to the supplemental free-text questions a job
 // application asks (e.g. "Why do you want to work here?"), plus a short
@@ -325,7 +326,12 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     const body = await readAiJsonBody(req, 1_000_000);
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
+    const honestContext = String(body.honestContext ?? "");
+    const contextLimitError = candidateContextLimitError(honestContext);
+    if (contextLimitError) {
+      sendJson(res, 400, { error: contextLimitError });
+      return;
+    }
     const sourceWarnings = sanitizeContentWarnings(body.sourceWarnings) ?? [];
     const customInstructions = [String(body.customInstructions ?? "").slice(0, 4_000), ...sourceWarnings].join("\n");
     const includeRoleDescriptions = body.includeRoleDescriptions === true;

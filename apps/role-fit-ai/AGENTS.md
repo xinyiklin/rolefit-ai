@@ -336,7 +336,7 @@ Follow root `docs/git-workflow.md`. Work locally unless the user asks for git
 actions. Never stage `.env`, generated outputs/fonts, resumes/PDFs, or private
 workspace data. Stage exact paths in this frequently dirty worktree.
 
-- Fit v6 leaves semantic judgment and the advisory verdict to the model. Return
+- Fit v7 leaves semantic judgment and the advisory verdict to the model. Return
   at most three matches and three gaps; do not add hidden requirement records,
   completeness gates, or deterministic verdict scoring. Check exact excerpts
   and focused explicit conflicts, displaying evidence concerns as unconfirmed

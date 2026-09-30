@@ -17,13 +17,14 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
-- About you stores optional evidence and scheduling facts, never self-scored
-  fit. GPA is a single bounded 4.0-scale value attached to declared education;
-  availability is a bounded notice period or valid exact date. Experience
-  remains divided by source with bounded duration, role/project count, recency,
-  and a factual scope note; job-specific relevance belongs to Fit Assessment.
-  Keep its category rows flat and do not collapse distinct evidence sources
-  into one additive years-of-experience total.
+- Settings > Profile stores optional declared facts and one Background text
+  field, never self-scored fit. GPA is a single bounded 4.0-scale value attached
+  to declared education; availability is a bounded notice period or valid exact
+  date. The Background is free text organised by headings that name each role
+  or project with its type and dates; job-specific relevance belongs to Fit
+  Assessment. Its count shows the shared 12,000-character AI limit; edits past
+  the storage bound are refused, never cut. Drafting preferences stay in
+  Guidance, out of the Background.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.

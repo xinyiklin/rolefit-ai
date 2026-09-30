@@ -171,6 +171,9 @@ type UseJobIntakeArgs = {
   ) => Promise<PreparedResumeSelection | null>;
   cancelPreparedResumeResolution: () => void;
   candidateContext: () => string;
+  // Set while the Profile Background is over its limit; Fit then declines
+  // instead of assessing a cut-down Profile.
+  profileLimitMessage: () => string | null;
   currentResume: () => Pick<PreparedResumeSelection, "text" | "label"> | null;
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
@@ -250,6 +253,7 @@ export function useJobIntake({
   resolvePreparedResume,
   cancelPreparedResumeResolution,
   candidateContext,
+  profileLimitMessage,
   currentResume,
   extensionImportsReady,
   onExtensionPrepareStarted,
@@ -500,6 +504,14 @@ export function useJobIntake({
       }));
       return { selection: null, fitRequest: null, fitRunId: null };
     }
+    const limitMessage = profileLimitMessage();
+    if (limitMessage) {
+      setFitAssessmentState((current) => failFitAssessmentRun(current, null, {
+        resumeLabel: selection.label,
+        message: `Fit Assessment is unavailable: ${limitMessage}`
+      }));
+      return { selection, fitRequest: null, fitRunId: null };
+    }
     const fitRequest: FitAssessmentRequest = {
       resumeText: selection.text,
       resumeLabel: selection.label,
@@ -630,6 +642,18 @@ export function useJobIntake({
       ...(activeRun?.automationToken ? { automationToken: activeRun.automationToken } : {})
     }));
     try {
+      const limitMessage = profileLimitMessage();
+      if (limitMessage) {
+        applyFitAssessmentOutcome({
+          runId,
+          outcome: null,
+          fitRequest,
+          screeningJobText,
+          aiRequest,
+          unavailableMessage: `Fit Assessment is unavailable: ${limitMessage}`
+        });
+        return;
+      }
       const readiness = await ensureFitAssessmentProviderReady(aiRequest);
       if (controller.signal.aborted) return;
       if (!readiness.ready) {

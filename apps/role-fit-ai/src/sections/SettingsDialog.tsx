@@ -1,4 +1,4 @@
-import { useRef, type Ref } from "react";
+import { useRef, useState, type Ref } from "react";
 import { RotateCcw, X } from "lucide-react";
 
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
@@ -10,7 +10,6 @@ import {
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
   type AvailabilityNotice,
-  type CandidateExperience,
   type CitizenshipStatus,
   type DeclaredAnswer,
   type EducationLevel
@@ -22,7 +21,12 @@ import type {
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
 import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
-import { ExperienceProfileFields } from "./ExperienceProfileFields";
+import {
+  PROFILE_BACKGROUND_CHAR_LIMIT,
+  profileBackgroundLimitError,
+  profileTextLength
+} from "../../shared/candidateProfileContract.ts";
+import { PROFILE_BACKGROUND_STORAGE_LIMIT } from "../lib/settings.ts";
 import { SettingsStage } from "./SettingsStage";
 import {
   AUTO_POLISH_THRESHOLD_OPTIONS,
@@ -33,7 +37,7 @@ export type SettingsSection = "stages" | "about" | "guidance";
 
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "stages", label: "AI stages" },
-  { id: "about", label: "About you" },
+  { id: "about", label: "Profile" },
   { id: "guidance", label: "Guidance" }
 ];
 
@@ -62,7 +66,7 @@ type SettingsDialogProps = {
   coverLetterAutoPolishThreshold: AutoPolishThreshold;
   onCoverLetterAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
 
-  // ----- About you -----
+  // ----- Profile -----
   citizenshipStatus: CitizenshipStatus;
   onCitizenshipChange: (value: CitizenshipStatus) => void;
   legallyAuthorizedToWork: DeclaredAnswer;
@@ -79,16 +83,15 @@ type SettingsDialogProps = {
   onAvailabilityNoticeChange: (value: AvailabilityNotice) => void;
   availabilityDate: string;
   onAvailabilityDateChange: (value: string) => void;
-  experienceProfile: CandidateExperience[];
-  onExperienceProfileChange: (value: CandidateExperience[]) => void;
+  // The Profile Background; stored as honestContext.
+  honestContext: string;
+  onHonestContextChange: (value: string) => void;
+  honestContextRef?: Ref<HTMLTextAreaElement>;
   workspacePreferencesStatus: WorkspacePreferencesStatus;
 
   // ----- Guidance -----
   boldBulletKeywords: boolean;
   onBoldBulletKeywordsChange: (value: boolean) => void;
-  honestContext: string;
-  onHonestContextChange: (value: string) => void;
-  honestContextRef?: Ref<HTMLTextAreaElement>;
   customInstructions: string;
   onCustomInstructionsChange: (value: string) => void;
   stageCustomInstructions: Partial<Record<AiStageId, string>>;
@@ -140,14 +143,12 @@ export function SettingsDialog({
   onAvailabilityNoticeChange,
   availabilityDate,
   onAvailabilityDateChange,
-  experienceProfile,
-  onExperienceProfileChange,
-  workspacePreferencesStatus,
-  boldBulletKeywords,
-  onBoldBulletKeywordsChange,
   honestContext,
   onHonestContextChange,
   honestContextRef,
+  workspacePreferencesStatus,
+  boldBulletKeywords,
+  onBoldBulletKeywordsChange,
   customInstructions,
   onCustomInstructionsChange,
   stageCustomInstructions,
@@ -162,6 +163,14 @@ export function SettingsDialog({
     initialFocusRef: closeRef,
     onClose
   });
+  // An edit past the storage bound is refused whole rather than cut on save.
+  const [backgroundRefused, setBackgroundRefused] = useState(false);
+  const backgroundOverLimit = profileBackgroundLimitError(honestContext) !== null;
+  const backgroundNotice = backgroundRefused
+    ? `Background can't exceed ${PROFILE_BACKGROUND_STORAGE_LIMIT.toLocaleString("en-US")} characters.`
+    : backgroundOverLimit
+      ? `Over ${PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")} characters. AI steps won't run until it's shorter.`
+      : "";
 
   return (
     <div
@@ -341,8 +350,8 @@ export function SettingsDialog({
             {section === "about" ? (
               <>
                 <p className="settings-panel__intro">
-                  Optional facts that clarify evidence on or beyond your resume. Nothing here is
-                  sent to the AI until you fill it in.
+                  Optional facts and background beyond your resume. Nothing here is sent to the
+                  AI until you fill it in.
                 </p>
 
                 <label className="field field--inline">
@@ -478,18 +487,37 @@ export function SettingsDialog({
                 ) : null}
 
                 <div className="menu-subhead">
-                  <span className="menu-subhead__title">Experience evidence</span>
+                  <span className="menu-subhead__title" id="profile-background-title">Background</span>
+                  <span className={`settings-background__count${backgroundOverLimit ? " is-over" : ""}`}>
+                    {profileTextLength(honestContext).toLocaleString("en-US")} / {PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")}
+                  </span>
                 </div>
 
-                <p className="settings-panel__supporting-copy">
-                  Break experience down by source so a strict professional-years requirement is not
-                  treated the same as academic or personal work. Relevance remains job-specific.
+                <p className="settings-panel__supporting-copy" id="profile-background-hint">
+                  One heading per role or project, with its type and dates.
                 </p>
 
-                <ExperienceProfileFields
-                  value={experienceProfile}
-                  onChange={onExperienceProfileChange}
+                <textarea
+                  ref={honestContextRef}
+                  className="textarea settings-background"
+                  aria-labelledby="profile-background-title"
+                  aria-describedby={backgroundNotice ? "profile-background-hint profile-background-notice" : "profile-background-hint"}
+                  aria-invalid={backgroundOverLimit || undefined}
+                  value={honestContext}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    const refused = next.length > PROFILE_BACKGROUND_STORAGE_LIMIT;
+                    setBackgroundRefused(refused);
+                    if (!refused) onHonestContextChange(next);
+                  }}
+                  placeholder={"## Inventory tracker (personal project, 2024–present)\nBuilt a Django REST API with role-based access.\n\n## Acme Clinic — Support Specialist (professional, 2021–2023)\nLed the EHR migration for 12 staff."}
+                  rows={14}
                 />
+                {backgroundNotice ? (
+                  <p className="settings-background__notice" id="profile-background-notice" role="status">
+                    {backgroundNotice}
+                  </p>
+                ) : null}
               </>
             ) : null}
 
@@ -499,20 +527,6 @@ export function SettingsDialog({
                   Applies to every AI stage. A stage with its own instructions overrides the
                   custom instructions below.
                 </p>
-
-                <label className="field">
-                  <span>
-                    Honest context <small>(real experience not on your resume — cited as evidence, never invented)</small>
-                  </span>
-                  <textarea
-                    ref={honestContextRef}
-                    className="textarea"
-                    value={honestContext}
-                    onChange={(event) => onHonestContextChange(event.target.value)}
-                    placeholder="e.g., shipped a PostgreSQL migration with zero downtime; led a 3-person hackathon team; merged PR to django-rest-framework."
-                    rows={8}
-                  />
-                </label>
 
                 <label className="field">
                   <span>

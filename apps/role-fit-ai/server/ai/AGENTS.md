@@ -87,7 +87,8 @@ application retain blocking technical guards.
 ## Trust contracts
 
 - Resume Polish prompts require suggestions grounded in the submitted
-  resume/honest context; never instruct JD-only skill insertion or fabrication.
+  resume/Profile context (`honestContext`); never instruct JD-only skill
+  insertion or fabrication.
   Only bullets and actual Skills lists are mutable targets; category labels and standard
   entry role, employer, subtitle, and date fields remain read-only evidence.
   Unknown/duplicate targets and unsafe or unusable mutation structures retain

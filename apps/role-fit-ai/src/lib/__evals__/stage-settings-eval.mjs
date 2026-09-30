@@ -22,7 +22,7 @@ assert.deepEqual(
     "fit-assessment": {
       label: "Fit Assessment",
       title: "Fit Assessment",
-      blurb: "Assesses the selected resume and About you evidence against the captured posting."
+      blurb: "Assesses the selected resume and your Profile against the captured posting."
     },
     "resume-polish": {
       label: "Resume Polish",

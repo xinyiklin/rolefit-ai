@@ -11,14 +11,13 @@ import {
   EDUCATION_LEVEL_OPTIONS,
   normalizeAvailabilityDate,
   normalizeCandidateGpa,
-  normalizeCandidateExperience,
   MAJOR_MAX_LENGTH,
   type AvailabilityNotice,
-  type CandidateExperience,
   type CitizenshipStatus,
   type DeclaredAnswer,
   type EducationLevel
 } from "./candidateFacts.ts";
+import { migrateExperienceEvidence } from "./experienceEvidenceMigration.ts";
 
 // Allowlisted workspace preferences. localStorage is a fail-open browser cache;
 // workspacePreferencesSync.ts makes the owner-only workspace file canonical.
@@ -70,7 +69,6 @@ export type PersistedSettings = {
   gpa?: number;
   availabilityNotice?: AvailabilityNotice;
   availabilityDate?: string;
-  experienceProfile?: CandidateExperience[];
 };
 
 const KEY = "rolefit:settings";
@@ -108,13 +106,22 @@ const PERSISTED_SETTING_KEYS = [
   "major",
   "gpa",
   "availabilityNotice",
-  "availabilityDate",
-  "experienceProfile"
+  "availabilityDate"
 ] as const satisfies readonly (keyof PersistedSettings)[];
 
-// Only known catalog changes may migrate before strict workspace/backup validation.
-// Unknown models, efforts, providers, and unrelated malformed fields still fail closed.
-export function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
+// The Profile Background (stored as honestContext) runs against a much smaller
+// AI limit; this bound only keeps stored settings finite. Settings refuses edits
+// past it, and migrated legacy text always fits.
+export const PROFILE_BACKGROUND_STORAGE_LIMIT = 60_000;
+
+// Only known catalog and settings-shape changes may migrate before strict
+// workspace/backup validation. Unknown models, efforts, providers, and unrelated
+// malformed fields still fail closed.
+export function migrateStoredSettings(source: Record<string, unknown>): Record<string, unknown> {
+  return migrateExperienceEvidence(migrateProviderSettings(source));
+}
+
+function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
   const migrated = { ...source };
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     const provider = migrated[providerKey];
@@ -213,7 +220,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     }
   }
   if (typeof settings.honestContext !== "string") delete settings.honestContext;
-  else settings.honestContext = settings.honestContext.slice(0, 50_000);
+  else settings.honestContext = settings.honestContext.slice(0, PROFILE_BACKGROUND_STORAGE_LIMIT);
   if (typeof settings.customInstructions !== "string") delete settings.customInstructions;
   else settings.customInstructions = settings.customInstructions.slice(0, 50_000);
   if (typeof settings.major !== "string") delete settings.major;
@@ -240,13 +247,6 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   } else {
     delete settings.availabilityDate;
   }
-  if (settings.experienceProfile === undefined) {
-    delete settings.experienceProfile;
-  } else {
-    const experienceProfile = normalizeCandidateExperience(settings.experienceProfile);
-    if (experienceProfile.length) settings.experienceProfile = experienceProfile;
-    else delete settings.experienceProfile;
-  }
   // Per-stage overrides: keep only known stage ids holding strings, and drop the
   // whole field when nothing survives so storage stays clean.
   if (settings.stageCustomInstructions !== null && typeof settings.stageCustomInstructions === "object" && !Array.isArray(settings.stageCustomInstructions)) {
@@ -270,7 +270,9 @@ export function loadSettings(): PersistedSettings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return memorySettings ?? {};
     const parsed = JSON.parse(raw);
-    memorySettings = normalizeSettings(parsed);
+    memorySettings = normalizeSettings(
+      parsed && typeof parsed === "object" && !Array.isArray(parsed) ? migrateStoredSettings(parsed) : parsed
+    );
     return memorySettings;
   } catch {
     return memorySettings ?? {};

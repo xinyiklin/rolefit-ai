@@ -400,9 +400,14 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - Candidate facts reach the model only through `honestContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, field of
-  study, optional 4.0-scale GPA, earliest-start availability, and source-aware
-  experience evidence to the user's honest context, and that combined string is
-  what the grounding allowlist is built from. Every field is therefore opt-in
+  study, optional 4.0-scale GPA, and earliest-start availability to the Profile
+  Background (stored as `honestContext`), and that combined string is
+  what the grounding allowlist is built from. `shared/candidateProfileContract.ts`
+  owns the one length contract, measured as the longer of the raw and
+  NFKC-normalized length: the Background is at most 12,000 characters, every
+  stage that sends candidate context declines above it on the client, and
+  servers reject (never slice) a merged string above 13,000 before any provider
+  call. In a combined Prepare request an oversized Profile skips only Fit. Every field is therefore opt-in
   by construction: an unset value contributes no line, so an undeclared
   citizenship, clearance eligibility, degree, GPA, or start date can never
   become groundable wording. Citizenship, work authorization, and sponsorship
@@ -785,4 +790,4 @@ In the response:
 - Do not make remote API writes unless explicitly requested. Dry-run
   write-oriented remote commands first when possible.
 
-Final review and Fit v6 compact-response and evidence boundaries are specified in the [AI runtime contract](../../server/ai/README.md). The `/api/application-review` endpoint is read-only and uses a single explicit provider dispatch.
+Final review and Fit v7 compact-response and evidence boundaries are specified in the [AI runtime contract](../../server/ai/README.md). The `/api/application-review` endpoint is read-only and uses a single explicit provider dispatch.

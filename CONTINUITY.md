@@ -5,6 +5,45 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-09-28
 
+- [USER+CODE] [TASK candidate-profile-20260928] RoleFit Settings > About you
+  became **Profile**: the basic declared facts plus one **Background** text
+  field (the former Guidance > Honest context, still stored as `honestContext`).
+  The per-source Experience evidence rows were removed. Stored rows migrate
+  once, before strict preference/backup validation, into an appended
+  `## Experience by type` block with every declared value. Custom instructions
+  stay in Guidance, apart from the facts the AI stages treat as evidence.
+- [CODE] `shared/candidateProfileContract.ts` is the one length contract,
+  measured as the longer of the raw and NFKC-normalized length. Every stage that
+  sends candidate context gets the whole Background up to 12,000 characters and
+  declines above it, and servers reject rather than slice merged context above
+  13,000, before any provider call. Those stages are Fit, resume and cover-letter Polish,
+  application answers, and final review. Before this change, Fit refused anything
+  over 4,000 characters, and Polish and answers silently cut it at 8,000/6,000.
+  Cover-letter evidence caps rose to 600 items and 12,000 characters per item,
+  with a 100,000-character prompt corpus. It now declines visibly rather than
+  clipping; this was user-approved. Background lines are grouped into at most
+  200 evidence items, never across a heading while there are at most 200
+  headings. Stored Background may be up to 60,000 characters, and
+  larger edits are refused.
+- [CODE] Fit's deterministic professional-source conflict check now reads a
+  cited Profile line together with the nearest enclosing Markdown heading that
+  names a type (its own line included, fenced code excluded, every occurrence
+  checked), so `## X (personal project, …)` headings keep that protection. The Fit prompt
+  overlap rule now says "entries or types", and the prompt version is
+  `fit-assessment-direct-rubric-v7`.
+- [TOOL] Verification:
+  - Final `npm run check --workspace apps/role-fit-ai` passed with 126/126
+    offline evals; the server type-check passed too.
+  - Two independent reviews followed. Reviewer 1's heading-chain, evidence
+    grouping, NFKC length, pre-dispatch Fit, and sanitizer-cost findings were
+    fixed and re-checked.
+  - The verifier passed 11/12 criteria and killed 24 of 28 mutations; the
+    survivors were later covered by tracked assertions.
+  - A live synthetic Fit probe (`claude-cli`, one run per case) treated a
+    personal-project heading as not meeting a paid-experience requirement, and
+    matched Profile evidence for a source-neutral requirement.
+  - **UNCONFIRMED:** browser QA of Settings > Profile and the add-evidence focus.
+    The in-app preview could not read the project folder (EPERM).
 - [USER+CODE] Investigated Firefox Apply/download delays when the tab is hidden.
   The shared PDF emitter now disables pdf-lib's timer-based serialization yields,
   which can be throttled in background tabs. RoleFit saves the tracker and strict

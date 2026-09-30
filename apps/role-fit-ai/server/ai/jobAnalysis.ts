@@ -6,6 +6,7 @@ import {
   requestAbortSignal,
   sendJson
 } from "../http.ts";
+import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
@@ -455,7 +456,10 @@ export async function analyzeJobToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const fitInput = fitAssessmentInput(body);
+  const requestedFit = fitAssessmentInput(body);
+  // An oversized Profile never reaches the provider; Job analysis still runs.
+  const fitLimitError = requestedFit ? candidateContextLimitError(requestedFit.candidateContext ?? "") : null;
+  const fitInput = fitLimitError ? null : requestedFit;
   const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, fitAssessment: fitInput });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
@@ -465,7 +469,8 @@ export async function analyzeJobToFields({
   const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, fitInput);
   return {
     ...prepared,
-    fitAssessmentRequested: Boolean(fitInput),
+    ...(fitLimitError ? { fitAssessment: null, fitAssessmentError: fitLimitError } : {}),
+    fitAssessmentRequested: Boolean(requestedFit),
     provider,
     model,
     reasoningEffort,
@@ -496,10 +501,16 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
         sendJson(res, 400, { error: "Load a resume before retrying Fit Assessment." });
         return;
       }
+      const candidateContext = String(body.candidateContext ?? "");
+      const contextLimitError = candidateContextLimitError(candidateContext);
+      if (contextLimitError) {
+        sendJson(res, 400, { error: contextLimitError });
+        return;
+      }
       const fit = await analyzeFitAssessment({
         jobText,
         resumeText,
-        candidateContext: String(body.candidateContext ?? ""),
+        candidateContext,
         body,
         signal: request.signal
       });

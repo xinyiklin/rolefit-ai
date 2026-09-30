@@ -24,11 +24,14 @@ export function useApplicationReview({
   stage,
   preparationIdentity,
   ensureProviderReady,
+  profileLimitMessage,
 }: {
   input: ApplicationReviewInput;
   stage: StageConfig;
   preparationIdentity: string;
   ensureProviderReady: () => Promise<ProviderReadiness>;
+  // Set while the Profile Background is over its limit; the AI review declines.
+  profileLimitMessage: string | null;
 }) {
   const settings = buildStageRequestFields(stage);
   const identity = JSON.stringify([preparationIdentity, input, settings]);
@@ -83,6 +86,16 @@ export function useApplicationReview({
     if (!local.reviewedDocuments.length) {
       controller.current = null;
       setStatus("completed");
+      return;
+    }
+    if (profileLimitMessage) {
+      controller.current = null;
+      setReceipt({
+        result: { ...local, error: `Profile too long: ${profileLimitMessage}`, complete: false },
+        identity,
+        dependencies,
+      });
+      setStatus("failed");
       return;
     }
     setStatus("running");

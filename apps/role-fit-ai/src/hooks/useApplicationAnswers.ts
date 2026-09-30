@@ -17,6 +17,8 @@ type UseApplicationAnswersArgs = {
   jobDescription: string;
   jobUrl: string;
   honestContext: string;
+  // Set while the Profile Background is over its limit; the stage declines.
+  profileLimitMessage: string | null;
   sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
@@ -33,6 +35,7 @@ export function useApplicationAnswers({
   jobDescription,
   jobUrl,
   honestContext,
+  profileLimitMessage,
   sourceWarnings,
   customInstructions,
   aiRequest,
@@ -138,6 +141,15 @@ export function useApplicationAnswers({
     setIsGeneratingAnswers(false);
     const submittedQuestions = [...questions];
     lastRequestRef.current = { questions: submittedQuestions, includeRoleDescriptions };
+    if (profileLimitMessage) {
+      setAnswersStatus(profileLimitMessage);
+      setAnswersProgress({
+        status: "failed",
+        errorHeadline: "Profile too long",
+        error: profileLimitMessage
+      });
+      return;
+    }
     if (!providerReady) {
       setAnswersStatus(providerMessage);
       setAnswersProgress({

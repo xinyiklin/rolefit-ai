@@ -430,7 +430,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   an out-of-date result stays visible only as a **Previous preparation** with
   its timestamp plus one compact, hairline-separated **Changed since assessment**
   list. That list names only the changed input groups — job posting, resume
-  content, About you, or assessment setup — before **Reassess fit**. Never add
+  content, Profile, or assessment setup — before **Reassess fit**. Never add
   scores, confidence, evidence ledgers, quotes, or a recommendation to this row.
 - **Automation and assessment boundaries:** keep Fit Assessment and Proposal
   Validation visibly and architecturally distinct. Fit Assessment is the

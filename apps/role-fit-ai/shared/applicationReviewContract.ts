@@ -19,7 +19,7 @@ export type ApplicationReviewEvidence = {
   label: string;
   text: string;
 };
-const MAX_REVIEW_EVIDENCE_ITEMS = 400;
+const MAX_REVIEW_EVIDENCE_ITEMS = 600;
 const MAX_REVIEW_EVIDENCE_TEXT = 60_000;
 const MAX_REVIEW_EVIDENCE_TOTAL = 120_000;
 
@@ -27,13 +27,13 @@ export function applicationReviewEvidenceLimitError(
   evidence: ApplicationReviewEvidence[],
 ): string | null {
   if (evidence.length > MAX_REVIEW_EVIDENCE_ITEMS)
-    return `Final review supports up to ${MAX_REVIEW_EVIDENCE_ITEMS} evidence items. Shorten the resume or personal notes before retrying.`;
+    return `Final review supports up to ${MAX_REVIEW_EVIDENCE_ITEMS} evidence items. Shorten the resume or your Profile Background before retrying.`;
   if (
     evidence.some((item) => item.text.length > MAX_REVIEW_EVIDENCE_TEXT) ||
     evidence.reduce((total, item) => total + item.text.length, 0) >
       MAX_REVIEW_EVIDENCE_TOTAL
   )
-    return "Final review evidence is too large. Shorten the resume or personal notes before retrying.";
+    return "Final review evidence is too large. Shorten the resume or your Profile Background before retrying.";
   return null;
 }
 

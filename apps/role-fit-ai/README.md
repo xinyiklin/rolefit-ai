@@ -135,7 +135,7 @@ font, size and wrapping changes still reflow the page normally.
   and does not depend on material,
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
   with four categorical verdicts, bounded matches and gaps, and a separate
-  eligibility state. Each match shows the returned resume or About you excerpt
+  eligibility state. Each match shows the returned resume or Profile excerpt
   beneath the posting excerpt, with unconfirmed references labelled. The rubric prioritizes decision-critical responsibilities
   and core qualifications, preserves explicit evidence-source boundaries, ignores
   logistics or application-form noise when judging fit, and self-checks every
@@ -426,8 +426,8 @@ the studio tab rail. Every stage section stays expanded together; there is no
 per-section collapse control:
 
 - **Job analysis** — structures the captured posting into the editable job brief.
-- **Fit Assessment** — assesses the selected resume and About you evidence
-  against the captured posting.
+- **Fit Assessment** — assesses the selected resume and your Profile against
+  the captured posting.
 - **Resume Polish** — one evidence-grounded proposal request over selected fields.
 - **Cover letter** — creates one grounded whole-letter proposal for you to
   accept or discard.
@@ -648,10 +648,9 @@ Browser recovery is separate from the on-disk workspace. The active localhost
 origin may cache a serialized recovery resume, optional raw job text, AI usage,
 and allowlisted settings so the app can fail open when the companion is
 temporarily unavailable. The canonical per-stage settings, guidance, selected
-base resume, and facts declared in Settings > About you—including citizenship,
-work authorization, sponsorship, education and optional GPA, earliest-start availability,
-and the source/quantity/recency/scope of optional experience evidence—live in
-the owner-only workspace
+base resume, and your Settings > Profile—declared citizenship, work
+authorization, sponsorship, education and optional GPA, earliest-start
+availability, and the Background text—live in the owner-only workspace
 `workspace-preferences.json`. Every RoleFit client attached to that workspace
 adopts the same preferences at startup and on window focus, regardless of
 browser, origin, port, or incognito mode. The boundary is the current OS user

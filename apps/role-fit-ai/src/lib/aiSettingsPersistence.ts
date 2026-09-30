@@ -24,7 +24,6 @@ export function materializeAiSettings(settings: PersistedSettings): PersistedSet
     major: settings.major ?? "",
     gpa: settings.gpa,
     availabilityNotice: settings.availabilityNotice ?? "unspecified",
-    availabilityDate: settings.availabilityDate ?? "",
-    experienceProfile: settings.experienceProfile ?? []
+    availabilityDate: settings.availabilityDate ?? ""
   });
 }

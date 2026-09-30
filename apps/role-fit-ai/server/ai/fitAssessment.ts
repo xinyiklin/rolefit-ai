@@ -1,6 +1,12 @@
 import { candidateClaimIssue, evidenceSegments } from "./claimEvidence.ts";
 import { hasMarkupTag, sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
-import { explicitEligibilityConflict, hasFitEvidenceConflict, isAffirmativeFitEvidence } from "./fitEvidence.ts";
+import {
+  excerptSourceHeadings,
+  experienceSourceConflict,
+  explicitEligibilityConflict,
+  isAffirmativeFitEvidence,
+  restrictsExperienceSource
+} from "./fitEvidence.ts";
 import {
   INSUFFICIENT_JOB_SUMMARY,
   FIT_ASSESSMENT_ELIGIBILITY,
@@ -17,10 +23,10 @@ import {
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
+import { CANDIDATE_CONTEXT_CHAR_LIMIT } from "../../shared/candidateProfileContract.ts";
 
 const RESUME_CHAR_LIMIT = 28_000;
 const JOB_CHAR_LIMIT = 24_000;
-const CANDIDATE_CONTEXT_CHAR_LIMIT = 4_000;
 const MAX_EXCERPT_LENGTH = 500;
 const MAX_NOTE_LENGTH = 240;
 
@@ -30,7 +36,7 @@ const evidenceSources = new Set<string>(FIT_ASSESSMENT_EVIDENCE_SOURCES);
 type AttemptStats = { attempts?: number };
 
 const FIT_FAILURE_MESSAGES = {
-  "input-limit": "Fit could not review all supplied text because it exceeds the assessment limit. Shorten the posting or candidate context, or select a shorter resume.",
+  "input-limit": "Fit could not review all supplied text because it exceeds the assessment limit. Shorten the posting or your Profile Background, or select a shorter resume.",
   "invalid-response": "The AI returned an assessment in an unsupported format. Retry the assessment or choose another model in Fit settings."
 } as const;
 type FitFailureReason = keyof typeof FIT_FAILURE_MESSAGES;
@@ -81,7 +87,7 @@ Evidence rules:
 - Every match copies an exact contiguous job excerpt and an exact contiguous excerpt from RESUME or CANDIDATE_CONTEXT. Every excerpt in matches, gaps, and eligibility must be at most ${MAX_EXCERPT_LENGTH} characters; choose a shorter contiguous source passage without dropping a condition that changes its meaning. Optional notes must be at most ${MAX_NOTE_LENGTH} characters.
 - A match requires direct candidate evidence for the cited job item. Transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement.
 - Respect the posting's experience source. A requirement for professional, industry, commercial, or paid experience is not satisfied by academic, personal, volunteer, or open-source work unless the posting explicitly accepts that source. When the posting does not constrain the source, judge each declared source by its direct relevance.
-- Candidate-context experience categories may overlap. Never add their years or counts together. A role/project count does not imply duration, and a duration in one category does not transfer to another.
+- Candidate-context experience entries or types may overlap. Never add their years or counts together. A role/project count does not imply duration, and a duration in one entry or type does not transfer to another.
 - Every gap copies an exact contiguous job excerpt and uses status NOT_SHOWN. Absence is a gap, never a contradiction. For affirmative transferable evidence, include relationship "transferable", candidateSource, and an exact candidateExcerpt together; otherwise omit all three fields. STRONG and REASONABLE require at least one direct match. When STRETCH has no direct matches, at least one gap must include this affirmative transferable citation.
 - A job excerpt may appear only once and must never appear in both matches and gaps.
 - Return one gap per underlying missing need; do not count the same missing qualification twice through overlapping posting excerpts.
@@ -147,6 +153,20 @@ function unexplainedCandidateClaim(text: string, sources: PromptSources): boolea
   });
 }
 
+// A Profile line may repeat under entries of different types: a match conflicts
+// only when every occurrence does; a reported contradiction needs just one.
+// Polarity is checked once and each distinct heading once, so a model-chosen
+// excerpt that repeats thousands of times stays cheap.
+function sourceConflicts(
+  requirement: string, source: string | undefined, candidateText: string, candidateExcerpt: string
+): boolean[] {
+  if (!isAffirmativeFitEvidence(candidateExcerpt, candidateText)) return [true];
+  const labels = source === "CANDIDATE_CONTEXT" && restrictsExperienceSource(requirement)
+    ? [...new Set(excerptSourceHeadings(candidateText, candidateExcerpt))]
+    : [""];
+  return labels.map((label) => experienceSourceConflict(requirement, candidateExcerpt, label));
+}
+
 function sanitizeMatches(
   raw: unknown, sources: PromptSources, warnings: string[], reject: (reason: FitFailureReason) => null
 ): FitAssessmentMatch[] | null {
@@ -166,7 +186,7 @@ function sanitizeMatches(
     }
     const key = dedupeKey(jobExcerpt);
     if (seen.has(key)) warnings.push(`Match ${matches.length + 1}: this requirement is repeated.`);
-    if (hasFitEvidenceConflict(jobExcerpt, candidateExcerpt, candidateText)) {
+    if (sourceConflicts(jobExcerpt, candidateSource, candidateText, candidateExcerpt).every(Boolean)) {
       warnings.push(`Match ${matches.length + 1}: not supported by provided evidence; an explicit conflict was detected.`);
     }
     seen.add(key);
@@ -217,7 +237,10 @@ function sanitizeGaps(
         warnings.push(`Gap ${gaps.length}: source reference could not be confirmed. Quoted text is unconfirmed.`);
       } else if (detail.relationship === "transferable" && !isAffirmativeFitEvidence(detail.candidateExcerpt, candidateText)) {
         warnings.push(`Gap ${gaps.length}: the cited text does not establish affirmative transferable support.`);
-      } else if (detail.relationship === "contradictory" && !hasFitEvidenceConflict(jobExcerpt, detail.candidateExcerpt, candidateText)) {
+      } else if (
+        detail.relationship === "contradictory"
+        && !sourceConflicts(jobExcerpt, detail.candidateSource, candidateText, detail.candidateExcerpt).some(Boolean)
+      ) {
         warnings.push(`Gap ${gaps.length}: the reported evidence conflict could not be confirmed.`);
       }
     }

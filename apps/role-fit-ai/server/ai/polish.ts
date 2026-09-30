@@ -6,6 +6,7 @@ import {
   requestAbortSignal,
   sendJson
 } from "../http.ts";
+import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel } from "./providers.ts";
@@ -40,7 +41,12 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const scopeText = resumeScopeToText(resumeScope);
     const editableText = resumeScopeToText(resumeScope, true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
+    const honestContext = String(body.honestContext ?? "");
+    const contextLimitError = candidateContextLimitError(honestContext);
+    if (contextLimitError) {
+      sendJson(res, 400, { error: contextLimitError });
+      return;
+    }
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
     const boldBulletKeywords = resolveBoldBulletKeywords(body.boldBulletKeywords);
     if (boldBulletKeywords === null) {

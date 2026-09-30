@@ -3,7 +3,9 @@
 // instruction while exposing only bounded, display-safe fields after a second
 // failure.
 
+import { PROFILE_BACKGROUND_CHAR_LIMIT } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError } from "./errors.ts";
+import { COVER_EVIDENCE_PROMPT_CHAR_LIMIT, serializeJsonForPrompt } from "./prompts.ts";
 import type {
   CoverLetterBodyParagraph,
   CoverLetterEvidenceItem,
@@ -26,8 +28,9 @@ const EVIDENCE_SOURCES = new Set<CoverLetterEvidenceSource>([
 export const SOURCE_LETTER_EVIDENCE_ID = "source_letter";
 const GENERIC_DRAFT_LANGUAGE =
   /\b(?:I am thrilled to apply|I am excited to apply|perfect fit|deeply impressed by|innovative company|dynamic team|proven track record|results[- ]driven|leverage my skills|passionate about the opportunity|seamless(?:ly)?|cutting[- ]edge)\b/i;
-const MAX_EVIDENCE_ITEMS = 400;
-const MAX_EVIDENCE_TEXT = 4_000;
+const MAX_EVIDENCE_ITEMS = 600;
+// One Profile Background line may be the whole Background.
+const MAX_EVIDENCE_TEXT = PROFILE_BACKGROUND_CHAR_LIMIT;
 const MAX_EVIDENCE_TOTAL = 120_000;
 export const COVER_LETTER_CHAR_LIMIT = 8_000;
 // Quality guidance, not an acceptance gate: a letter outside this band still
@@ -60,6 +63,9 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
     if (!candidate) requestContractError("Each cover-letter evidence item must be an object.");
     const id = text(candidate.id, 140);
     const source = text(candidate.source, 40) as CoverLetterEvidenceSource;
+    if (typeof candidate.text === "string" && candidate.text.trim().length > MAX_EVIDENCE_TEXT) {
+      requestContractError("A cover-letter evidence item is too long. Shorten the resume or your Profile Background.");
+    }
     const evidenceText = text(candidate.text, MAX_EVIDENCE_TEXT);
     if (!EVIDENCE_ID.test(id) || ids.has(id) || id === SOURCE_LETTER_EVIDENCE_ID) {
       requestContractError("Cover-letter evidence ids must be unique and stable.");
@@ -70,7 +76,7 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
     total += evidenceText.length;
     if (total > MAX_EVIDENCE_TOTAL) {
       requestContractError(
-        "Cover-letter evidence is too large. Shorten the resume or personal notes."
+        "Cover-letter evidence is too large. Shorten the resume or your Profile Background."
       );
     }
     ids.add(id);
@@ -85,6 +91,11 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
   }
   if (items.length === 0) {
     requestContractError("Cover-letter evidence must contain at least one completed item.");
+  }
+  if (serializeJsonForPrompt(items, Number.MAX_SAFE_INTEGER).length > COVER_EVIDENCE_PROMPT_CHAR_LIMIT) {
+    requestContractError(
+      "Your resume and Profile are too long together for cover-letter drafting. Shorten one of them."
+    );
   }
   return items;
 }

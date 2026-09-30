@@ -31,7 +31,7 @@ export function buildApplicationReviewInput({
     label:
       item.source === "resume"
         ? `Loaded resume evidence${includeResume ? "" : " (excluded from submission)"}`
-        : "About you",
+        : "Profile",
     text: plain([item.section, item.entry, item.text].filter(Boolean).join("\n"))
   }));
   return {

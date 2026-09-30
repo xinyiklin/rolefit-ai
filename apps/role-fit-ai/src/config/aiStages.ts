@@ -38,7 +38,7 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     id: "fit-assessment",
     label: "Fit Assessment",
     title: "Fit Assessment",
-    blurb: "Assesses the selected resume and About you evidence against the captured posting.",
+    blurb: "Assesses the selected resume and your Profile against the captured posting.",
     settingsPrefix: "fitAssessment",
     // The assessment rubric is fixed. A free-form override could turn advisory
     // screening into a user-authored verdict preference instead of evidence review.

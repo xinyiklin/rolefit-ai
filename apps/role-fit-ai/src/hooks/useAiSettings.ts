@@ -10,7 +10,6 @@ import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type {
   AvailabilityNotice,
-  CandidateExperience,
   CitizenshipStatus,
   DeclaredAnswer,
   EducationLevel
@@ -63,7 +62,6 @@ export function useAiSettings() {
     saved.availabilityNotice ?? "unspecified"
   );
   const [availabilityDate, setAvailabilityDate] = useState(saved.availabilityDate ?? "");
-  const [experienceProfile, setExperienceProfile] = useState<CandidateExperience[]>(saved.experienceProfile ?? []);
   const [workspacePreferencesStatus, setWorkspacePreferencesStatus] = useState<WorkspacePreferencesStatus>("idle");
 
   // A different RoleFit client can update the canonical workspace record while
@@ -93,7 +91,6 @@ export function useAiSettings() {
       setGpa(next.gpa);
       setAvailabilityNotice(next.availabilityNotice ?? "unspecified");
       setAvailabilityDate(next.availabilityDate ?? "");
-      setExperienceProfile(next.experienceProfile ?? []);
     };
     window.addEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
     const updateStatus = (event: Event) => {
@@ -139,8 +136,7 @@ export function useAiSettings() {
       major,
       gpa,
       availabilityNotice,
-      availabilityDate,
-      experienceProfile
+      availabilityDate
     });
     latestSettingsRef.current = nextSettings;
     const adoptedFingerprint = adoptedSettingsFingerprintRef.current;
@@ -170,8 +166,7 @@ export function useAiSettings() {
     major,
     gpa,
     availabilityNotice,
-    availabilityDate,
-    experienceProfile
+    availabilityDate
   ]);
 
   function updateStage(stage: StageId, patch: Partial<StageConfig>) {
@@ -251,7 +246,6 @@ export function useAiSettings() {
     setGpa(undefined);
     setAvailabilityNotice("unspecified");
     setAvailabilityDate("");
-    setExperienceProfile([]);
   }
 
   return {
@@ -289,8 +283,6 @@ export function useAiSettings() {
     setAvailabilityNotice,
     availabilityDate,
     setAvailabilityDate,
-    experienceProfile,
-    setExperienceProfile,
     workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,

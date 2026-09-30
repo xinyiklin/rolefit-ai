@@ -137,7 +137,7 @@ after repair returns bounded issues and leaves the current document untouched.
 Content concerns never trigger a repair or prevent acceptance. Accepted warnings
 remain visible after editing, labelled as referring to the earlier wording;
 Restore remains available only while the editor retains its exact baseline. Neither warnings nor errors expose repair instructions or internal evidence ids.
-An unfinished Guidance prompt never counts as evidence, and spelled-out
+An unfinished Profile evidence prompt never counts as evidence, and spelled-out
 durations receive the same grounding check as digit forms.
 
 The prepared role and company remain necessary operation inputs. A missing
@@ -346,22 +346,30 @@ controls tracker state or workflow. Technically unusable provider output becomes
 unavailable rather than a guessed result; the deterministic local job brief
 remains editable and manual Polish remains available.
 
-Settings > About you may add optional candidate-declared education and
+Settings > Profile may add optional candidate-declared education and
 scheduling facts: a 4.0-scale GPA attached to a declared education level, plus
 an earliest start of immediately, one to four weeks' notice, or a specific
 date. Citizenship, U.S. work authorization, and sponsorship are three
 independent declarations; each defaults to Not specified, and citizenship
-never implies either employment answer or clearance eligibility. It may also
-add experience evidence by source: professional employment,
-internships, freelance/contract work, research, academic projects, personal
-projects, open source, volunteer work, or military/public service. Each source
-may declare duration, number of roles/projects, recency, and a short factual
-scope. These are global facts, not user-authored fit labels: Fit Assessment
-decides relevance per posting, does not sum overlapping categories, and never
-treats a project count as elapsed time.
-When a posting explicitly requires professional, industry, commercial,
-or paid experience, other sources do not satisfy that requirement
-unless the posting says they may.
+never implies either employment answer or clearance eligibility. Its
+**Background** is one free-text field for experience beyond, or in more depth
+than, the resume, organised by headings that name each role or project with its
+type and dates (for example `## Slotwise (personal project, 2025–present)`).
+These are global facts, not user-authored fit labels: Fit Assessment decides
+relevance per posting, does not sum overlapping entries, and never treats a
+project count as elapsed time. When a posting explicitly requires professional,
+industry, commercial, or paid experience, other sources do not satisfy that
+requirement unless the posting says they may. Drafting preferences belong in
+Guidance > Custom instructions, not in the Background.
+
+Every stage that sends candidate context—Fit Assessment, Resume and cover-letter
+Polish, application answers, and final review—receives the whole Background or
+none of it. The Background shows a live count against one 12,000-character
+limit (declared facts do not count); above it those stages decline with a
+message naming the limit instead of sending a cut-down copy, and the saved text
+is never shortened. Experience rows saved by earlier versions are converted
+once into lines under `## Experience by type` at the end of the Background, with
+every declared value kept.
 
 Eligibility is separate from fit and never changes the verdict. **Clear** means
 no stated employment-eligibility condition needs attention. **Check** means the
@@ -392,7 +400,7 @@ provider/model/reasoning setting, or prompt version makes the displayed result
 out of date. Beginning, failing, cancelling, or disabling a later assessment
 never erases the latest completed result. Prepare retains that timestamped
 result as a clearly labeled previous preparation and lists which input groups changed — job posting, resume
-content, About you, or assessment setup — without presenting its verdict as
+content, Profile, or assessment setup — without presenting its verdict as
 current. A successful reassessment supersedes that displayed result. Application
 records retain the latest completed assessment snapshot rather than a versioned
 assessment ledger. Apply saves that snapshot even when later input changes make

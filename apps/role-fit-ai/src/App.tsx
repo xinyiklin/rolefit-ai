@@ -2,6 +2,7 @@ import { buildResumePolishScope } from "./lib/resumePolishScope.ts";
 import { currentResumeConcerns } from "./resume/proposalWarnings.ts";
 import { flattenResumeTargets } from "../shared/resumePolishContract.ts";
 import { jobAnalysisWarningContext } from "../shared/jobAnalysisWarnings.ts";
+import { profileBackgroundLimitError } from "../shared/candidateProfileContract.ts";
 import { useApplicationReview } from "./hooks/useApplicationReview";
 import { buildApplicationReviewInput } from "./lib/applicationReview";
 import { ApplicationReview } from "./sections/tabs/prepare/ApplicationReview";
@@ -84,6 +85,7 @@ import { buildStageRequestFields, type AiRequestFields, type StageId } from "./l
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
 import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
+import { PROFILE_BACKGROUND_STORAGE_LIMIT } from "./lib/settings";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
@@ -467,8 +469,6 @@ function App() {
     setAvailabilityNotice,
     availabilityDate,
     setAvailabilityDate,
-    experienceProfile,
-    setExperienceProfile,
     workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,
@@ -534,10 +534,12 @@ function App() {
     major,
     gpa,
     availabilityNotice,
-    availabilityDate,
-    experienceProfile
+    availabilityDate
   });
   const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
+  // Every AI stage that sends candidate context declines on this instead of
+  // sending a cut-down Profile.
+  const profileLimitMessage = profileBackgroundLimitError(honestContext);
   // Job analysis runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every job analysis entry point
   // (link, paste, extension import, and their retries).
@@ -618,10 +620,10 @@ function App() {
   }, []);
   // The Settings dialog's open state AND its active section in one value: null is
   // closed, a section id is open on that section. "Add evidence" opens it directly
-  // on Guidance, so the section cannot be private to the dialog.
+  // on Profile, so the section cannot be private to the dialog.
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
-  // Ref for the honest-context textarea inside Settings — focused after the dialog
-  // is opened by handleAddHonestContext so the user can type immediately.
+  // Ref for the Profile Background textarea inside Settings — focused after the
+  // dialog is opened by handleAddHonestContext so the user can type immediately.
   const honestContextTextareaRef = useRef<HTMLTextAreaElement>(null);
   // Hidden file input the resume Open menu's "Choose a file" row clicks.
   const resumeFileInputRef = useRef<HTMLInputElement>(null);
@@ -1106,6 +1108,7 @@ function App() {
     jobDescription: draftingJobDescription,
     jobUrl,
     honestContext: requestHonestContext,
+    profileLimitMessage,
     sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("answers"),
     aiRequest: stages.answers,
@@ -1140,6 +1143,7 @@ function App() {
     resumeData: editedResume,
     jobText: draftingJobDescription,
     honestContext: requestHonestContext,
+    profileLimitMessage,
     sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("cover"),
     aiRequest: stages.cover,
@@ -1549,6 +1553,7 @@ function App() {
     resolvePreparedResume,
     cancelPreparedResumeResolution,
     candidateContext: () => requestHonestContext,
+    profileLimitMessage: () => profileLimitMessage,
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,
   });
@@ -1582,6 +1587,7 @@ function App() {
     currentResumeText,
     jobDescription: draftingJobDescription,
     requestHonestContext,
+    profileLimitMessage,
     customInstructionsFor,
     boldBulletKeywords,
     resumePolish: resumePolishStage,
@@ -1934,15 +1940,21 @@ function App() {
   ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
-  // Appends a template line to honestContext (unless the keyword is already there),
-  // then opens Settings on Guidance so the user can fill it in and re-run Polish.
+  // Appends a template line to the Profile Background (unless the keyword is
+  // already there), then opens Settings on Profile so the user can fill it in.
   function handleAddHonestContext(keyword: string) {
     const alreadyPresent = honestContext.toLowerCase().includes(keyword.toLowerCase());
     if (!alreadyPresent) {
-      const template = `${keyword}: [describe your exact experience: what you did, where, and when]`;
-      setHonestContext(honestContext ? `${honestContext}\n${template}` : template);
+      // Its own heading keeps the new fact from inheriting the last entry's type.
+      const template = `## ${keyword} ([type], [dates])\n[describe your exact experience: what you did and where]`;
+      const next = honestContext ? `${honestContext.trimEnd()}\n\n${template}` : template;
+      if (next.length > PROFILE_BACKGROUND_STORAGE_LIMIT) {
+        setPolishStatus("Your Profile Background is full. Shorten it in Settings > Profile first.");
+        return;
+      }
+      setHonestContext(next);
     }
-    setSettingsSection("guidance");
+    setSettingsSection("about");
     // Give the dialog one frame to render before trying to focus the textarea.
     // This deliberately beats the dialog's own initial focus on the close button.
     window.requestAnimationFrame(() => {
@@ -1958,7 +1970,7 @@ function App() {
     const confirmed = await confirm({
       title: "Reset all settings?",
       message:
-        "This clears your AI providers and models, honest context, custom instructions, and the facts in About you. Resumes, cover letters, and tracked applications are not affected.",
+        "This clears your AI providers and models, your Profile, and custom instructions. Resumes, cover letters, and tracked applications are not affected.",
       confirmLabel: "Reset settings",
       tone: "danger"
     });
@@ -2103,7 +2115,8 @@ function App() {
     input: finalReviewInput,
     stage: stages["final-review"],
     preparationIdentity: JSON.stringify([currentPreparationId, preparationSession, coverLetterEditor.sourceRevision, baseResumeName, isApplying, ["prepare", "resume", "cover"].includes(activeOutputTab) ? "draft" : activeOutputTab]),
-    ensureProviderReady: () => providerAvailability.ensureProvider(stages["final-review"].provider)
+    ensureProviderReady: () => providerAvailability.ensureProvider(stages["final-review"].provider),
+    profileLimitMessage
   });
 
   const skipModeAvailable = preparationSession.mode === "new";
@@ -3298,8 +3311,6 @@ function App() {
           onAvailabilityNoticeChange={setAvailabilityNotice}
           availabilityDate={availabilityDate}
           onAvailabilityDateChange={setAvailabilityDate}
-          experienceProfile={experienceProfile}
-          onExperienceProfileChange={setExperienceProfile}
           workspacePreferencesStatus={workspacePreferencesStatus}
           boldBulletKeywords={boldBulletKeywords}
           onBoldBulletKeywordsChange={setBoldBulletKeywords}

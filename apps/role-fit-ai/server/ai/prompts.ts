@@ -145,6 +145,10 @@ function collectJsonSlots(root: { value: PromptJson }): {
   return { strings, arrays };
 }
 
+// The cover-letter route declines a larger corpus rather than letting the
+// serializer below clip it.
+export const COVER_EVIDENCE_PROMPT_CHAR_LIMIT = 100_000;
+
 // JSON prompt payloads must remain parseable under character budgets. Unlike
 // clipForPrompt (which intentionally preserves text head/tail), this serializer
 // clones its input, clips only string VALUES, then omits trailing array items as
@@ -422,7 +426,7 @@ ${fenceUntrusted(serializeJsonForPrompt(sourceContext ?? {}, 30_000))}
 
 Candidate evidence corpus — resume, honest context, and any answers:
 <evidence_items>
-${fenceUntrusted(serializeJsonForPrompt(evidenceItems ?? [], 60_000))}
+${fenceUntrusted(serializeJsonForPrompt(evidenceItems ?? [], COVER_EVIDENCE_PROMPT_CHAR_LIMIT))}
 </evidence_items>
 
 ${customInstructionsPrompt(customInstructions)}

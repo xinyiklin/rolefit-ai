@@ -215,7 +215,7 @@ assert.deepEqual(
 );
 assert.throws(
   () => parseCoverLetterEvidenceItems([]),
-  /1-400 items/,
+  /1-600 items/,
   "an empty corpus is a request error",
 );
 assert.throws(

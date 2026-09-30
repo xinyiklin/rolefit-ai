@@ -106,6 +106,7 @@ function createHarness({
   fitResponseGate,
   fitAssessmentError,
   selection = { text: RESUME, label: "Synthetic resume" },
+  profileLimit = null,
   resolvePreparedResumeImpl,
   analysisBody,
   afterError
@@ -205,6 +206,7 @@ function createHarness({
     },
     cancelPreparedResumeResolution: () => log.push({ event: "cancelPreparedResumeResolution" }),
     candidateContext: () => "Authorized to work in the United States.",
+    profileLimitMessage: () => profileLimit,
     currentResume: () => selection,
     extensionImportsReady: true,
     onExtensionPrepareStarted: () => log.push({ event: "extension:start" }),
@@ -727,5 +729,22 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
   await harness.render().reassessFit();
   assert.equal(harness.state[5].lastError?.message, message);
   assert.equal(harness.requests.filter(({ payload }) => payload.mode === "fit-assessment").length, 0);
+}
+for (const fitProvider of ["codex-cli", "anthropic"]) {
+  const profileLimit = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Profile.";
+  const harness = createHarness({ fitProvider, profileLimit });
+  await runPaste(harness);
+  const providerRequests = harness.requests.filter(({ url }) => url === "/api/job-analysis");
+  assert.equal(providerRequests.length, 1, "an over-limit Profile still runs Job analysis alone");
+  assert.equal(providerRequests[0].payload.fitAssessment, undefined, "Job analysis never carries an over-limit Profile");
+  assert.equal(harness.state[5].activeRun, null, "the declined Fit run is settled");
+  assert.match(harness.state[5].lastError?.message ?? "", /Profile Background is over 12,000 characters/);
+  await harness.render().reassessFit();
+  assert.equal(
+    harness.requests.filter(({ payload }) => payload.mode === "fit-assessment").length,
+    0,
+    "reassessing with an over-limit Profile makes no Fit request"
+  );
+  assert.match(harness.state[5].lastError?.message ?? "", /Profile Background is over 12,000 characters/);
 }
 console.log("Job intake entry-point characterization: passed");

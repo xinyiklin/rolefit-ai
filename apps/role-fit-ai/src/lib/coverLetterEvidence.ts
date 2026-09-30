@@ -105,6 +105,19 @@ function pushEvidence(
   });
 }
 
+// Keeps a within-limit Profile inside the cover-letter and final-review item
+// caps whatever its line shape: past this count, consecutive lines of the same
+// heading section share an item, so no item joins two Profile entries.
+const MAX_CONTEXT_EVIDENCE_ITEMS = 200;
+
+function joinLines(lines: string[], linesPerItem: number): string[] {
+  const grouped: string[] = [];
+  for (let index = 0; index < lines.length; index += linesPerItem) {
+    grouped.push(lines.slice(index, index + linesPerItem).join("\n"));
+  }
+  return grouped;
+}
+
 export function splitHonestContextEvidence(honestContext: string): string[] {
   const lines = honestContext.replace(/\r\n/g, "\n").split("\n");
   const items: string[] = [];
@@ -117,7 +130,22 @@ export function splitHonestContextEvidence(honestContext: string): string[] {
     ) continue;
     items.push(line.replace(/^[-*•]\s+/, "").trim());
   }
-  return items.filter(Boolean);
+  const kept = items.filter(Boolean);
+  if (kept.length <= MAX_CONTEXT_EVIDENCE_ITEMS) return kept;
+  const sections: string[][] = [];
+  for (const line of kept) {
+    if (!sections.length || /^#{1,6}\s/.test(line)) sections.push([]);
+    sections[sections.length - 1].push(line);
+  }
+  // Only a Profile with more headings than items can span a section boundary.
+  if (sections.length > MAX_CONTEXT_EVIDENCE_ITEMS) {
+    return joinLines(kept, Math.ceil(kept.length / MAX_CONTEXT_EVIDENCE_ITEMS));
+  }
+  let linesPerItem = Math.ceil(kept.length / MAX_CONTEXT_EVIDENCE_ITEMS);
+  while (sections.reduce((total, section) => total + Math.ceil(section.length / linesPerItem), 0) > MAX_CONTEXT_EVIDENCE_ITEMS) {
+    linesPerItem += 1;
+  }
+  return sections.flatMap((section) => joinLines(section, linesPerItem));
 }
 
 export function buildCoverLetterEvidence({

@@ -26,7 +26,7 @@ export type PrepareActivity = {
 const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: string; detail: string }> = {
   job: { label: "Job posting", detail: "Replaced" },
   resume: { label: "Resume content", detail: "Edited" },
-  "candidate-context": { label: "About you", detail: "Updated" },
+  "candidate-context": { label: "Profile", detail: "Updated" },
   settings: { label: "Assessment setup", detail: "Changed" }
 };
 
@@ -161,7 +161,7 @@ export function PrepareApplicationRail({
                       <li key={index}>
                         {match.jobExcerpt}
                         <small>
-                          {match.candidateSource === "RESUME" ? "Resume" : "About you"}: {match.candidateExcerpt}
+                          {match.candidateSource === "RESUME" ? "Resume" : "Profile"}: {match.candidateExcerpt}
                         </small>
                       </li>
                     ))}
@@ -192,7 +192,7 @@ export function PrepareApplicationRail({
                   {assessmentSnapshot.result.eligibility.jobExcerpt}
                   {assessmentSnapshot.result.eligibility.note ? <small>{assessmentSnapshot.result.eligibility.note}</small> : null}
                   {assessmentSnapshot.result.eligibility.candidateExcerpt ? (
-                    <small>About you: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
+                    <small>Profile: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
                   ) : null}
                 </p>
               ) : null}

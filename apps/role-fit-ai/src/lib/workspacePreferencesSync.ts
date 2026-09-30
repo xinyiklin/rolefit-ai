@@ -6,6 +6,7 @@
 import {
   hasStoredSettings,
   loadSettings,
+  migrateStoredSettings,
   normalizeSettings,
   saveSettings,
   setSettingsSaveListener,
@@ -299,7 +300,8 @@ export async function adoptWorkspacePreferences(): Promise<void> {
 
   suppressPush = true;
   try {
-    saveSettings(normalizeSettings(server.settings));
+    // An older companion server may still return pre-Profile settings.
+    saveSettings(normalizeSettings(migrateStoredSettings(server.settings)));
     saveLastBaseResumeName(server.lastBaseResume);
     if (decision.clearDrafts) adoptWorkspaceRestoreDrafts();
     if (decision.writeStamp) writeAdoptedRestoreStamp(decision.writeStamp);

@@ -31,16 +31,21 @@ adjacent categories, the rules choose the lower category unless candidate eviden
 meets the higher category's definition. Stretch may rely on meaningful transferable
 core evidence; generic skills or interest alone are insufficient. Transferable evidence may inform the verdict but
 cannot support a direct match; one posting excerpt cannot be both a match and a
-gap, and overlapping excerpts cannot count one missing need twice. Candidate-
-declared experience categories retain their evidence source: professional or
-industry requirements are not satisfied by academic, personal, volunteer, or
-open-source work unless the posting accepts those sources. Categories may
-overlap, so their years/counts are never summed and counts never imply duration.
+gap, and overlapping excerpts cannot count one missing need twice. Candidate
+experience keeps its evidence source: professional or industry requirements are
+not satisfied by academic, personal, volunteer, or open-source work unless the
+posting accepts those sources. The Profile Background carries each entry's type
+on its Markdown heading, so the deterministic explicit-conflict check reads a
+cited Background line together with the nearest enclosing heading (its own line
+included, fenced code excluded) that names a type. A match conflicts only when
+every occurrence of a repeated excerpt does; a reported contradiction needs one.
+Entries and types may overlap, so their years/counts are never summed and counts
+never imply duration.
 The rubric first separates main responsibilities and core qualifications from
 preferred items, logistics, and administrative/form noise, then selects the most
 decision-relevant findings. Existing source and overlap boundaries still prevent
 project evidence from satisfying an explicitly professional source, prevent
-experience categories from being summed, and prevent role/project counts from
+overlapping experience entries from being summed, and prevent role/project counts from
 implying duration. A posting without substantive role content returns `INSUFFICIENT_JOB_INFORMATION`
 without a verdict. Existing snapshots without a status remain readable as ASSESSED. At the Limited/Stretch boundary,
 meaningful direct supporting-core evidence stays Stretch when the role-defining
@@ -75,7 +80,9 @@ copy is the usual display. Missing candidate citations remain visibly
 unconfirmed. Located excerpts establish location, not semantic truth or hiring
 accuracy. Invalid source navigation is unavailable without disabling use.
 
-Fit v6 changes evidence handling and optional warning transport, not the rubric's
+Fit v7 keeps v6's evidence handling and optional warning transport, and
+generalizes the overlap rule from Settings categories to Profile entries; neither
+changes the rubric's
 verdict meanings or scoring. The model still judges materiality, paraphrases,
 durations, alternatives, and strength of experience. There is no requirement
 ledger, posting-completeness gate, match-count score, or deterministic verdict.
