@@ -51,8 +51,9 @@
     "deps:audit:production": "npm audit --omit=dev",
     "types:check": "tsc -p tsconfig.base.json --noEmit && tsc -p packages/engine/tsconfig.json --noEmit && tsc -p packages/editor/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.desktop.json --noEmit && tsc -p apps/typeset/tsconfig.json --noEmit",
     "check:package-scripts": "node scripts/check-package-script-paths.mjs",
+    "test:ci": "node --test scripts/ci-browser-selection.test.mjs scripts/editor-browser-contracts/cdp.test.mjs scripts/editor-browser-contracts/suites.test.mjs scripts/editor-browser-contracts/failure-evidence.test.mjs",
     "test:editor:browser": "node scripts/editor-browser-contracts.mjs",
-    "check": "npm run deps:check && npm run check:package-scripts && npm run check --workspaces --if-present",
+    "check": "npm run deps:check && npm run check:package-scripts && npm run test:ci && npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },
   "devDependencies": {

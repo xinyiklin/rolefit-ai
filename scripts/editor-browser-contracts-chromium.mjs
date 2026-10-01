@@ -1,13 +1,17 @@
+import { parseSuite } from "./editor-browser-contracts/suites.mjs";
+import { captureFailure } from "./editor-browser-contracts/failure-evidence.mjs";
+import { CdpConnection } from "./editor-browser-contracts/cdp.mjs";
 import { runHostAuditContracts } from "./editor-browser-contracts/host-audit.mjs";
 import { runWrappedHeaderContracts } from "./editor-browser-contracts/wrapped-header.mjs";
 import { runWrappedRowContracts } from "./editor-browser-contracts/wrapped-rows.mjs";
 import { runEntryRowContracts } from "./editor-browser-contracts/entry-rows.mjs";
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { access, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
+const suite = parseSuite(process.argv.slice(2));
 const baseUrl = process.env.ROLEFIT_EDITOR_BROWSER_CONTRACT_URL;
 if (!baseUrl) throw new Error("Missing browser contract URL.");
 const strictResumeText = await readFile(
@@ -17,65 +21,6 @@ const strictResumeText = await readFile(
 
 const windows = new Set();
 const pageErrors = [];
-
-class CdpConnection {
-  constructor(socket) {
-    this.socket = socket;
-    this.nextId = 1;
-    this.pending = new Map();
-    this.socket.addEventListener("message", (event) => {
-      const message = JSON.parse(event.data);
-      if (message.id) {
-        const pending = this.pending.get(message.id);
-        if (!pending) return;
-        this.pending.delete(message.id);
-        if (message.error) pending.reject(new Error(message.error.message));
-        else pending.resolve(message.result);
-        return;
-      }
-      if (
-        message.method === "Runtime.exceptionThrown" ||
-        (message.method === "Runtime.consoleAPICalled" &&
-          message.params?.type === "error")
-      ) {
-        pageErrors.push(
-          message.params?.exceptionDetails?.text ??
-            message.params?.args?.map((arg) => arg.value ?? arg.description).join(" ") ??
-            message.method
-        );
-      }
-    });
-  }
-
-  static async connect(url) {
-    const socket = new WebSocket(url);
-    await new Promise((resolve, reject) => {
-      socket.addEventListener("open", resolve, { once: true });
-      socket.addEventListener("error", reject, { once: true });
-    });
-    return new CdpConnection(socket);
-  }
-
-  send(method, params = {}, sessionId) {
-    const id = this.nextId++;
-    const result = new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
-    });
-    this.socket.send(
-      JSON.stringify({
-        id,
-        method,
-        params,
-        ...(sessionId ? { sessionId } : {})
-      })
-    );
-    return result;
-  }
-
-  close() {
-    this.socket.close();
-  }
-}
 
 class ChromiumPage {
   constructor(connection, targetId, sessionId) {
@@ -87,7 +32,7 @@ class ChromiumPage {
     };
   }
 
-  async evaluate(expression) {
+  async evaluate(expression, timeoutMs) {
     const result = await this.connection.send(
       "Runtime.evaluate",
       {
@@ -95,7 +40,8 @@ class ChromiumPage {
         awaitPromise: true,
         returnByValue: true
       },
-      this.sessionId
+      this.sessionId,
+      timeoutMs
     );
     if (result.exceptionDetails) {
       throw new Error(
@@ -107,6 +53,7 @@ class ChromiumPage {
   }
 
   async loadURL(url) {
+    this.contractPhase = url;
     await this.connection.send(
       "Page.navigate",
       { url },
@@ -123,7 +70,7 @@ class ChromiumPage {
     windows.delete(this);
     await this.connection.send("Target.closeTarget", {
       targetId: this.targetId
-    });
+    }, undefined, 5_000);
   }
 }
 
@@ -177,42 +124,53 @@ async function launchChromium() {
     ],
     { stdio: ["ignore", "ignore", "pipe"] }
   );
-  const websocketUrl = await new Promise((resolve, reject) => {
-    let output = "";
-    const timeout = setTimeout(
-      () =>
+  let websocketUrl;
+  try {
+    websocketUrl = await new Promise((resolve, reject) => {
+      let output = "";
+      const timeout = setTimeout(
+        () =>
+          reject(
+            new Error(
+              `Timed out starting Chromium.${
+                output ? `\n${output.slice(-2000)}` : ""
+              }`
+            )
+          ),
+        15_000
+      );
+      child.stderr.setEncoding("utf8");
+      child.stderr.on("data", (chunk) => {
+        output += chunk;
+        const match = /DevTools listening on (ws:\/\/[^\s]+)/.exec(output);
+        if (!match) return;
+        clearTimeout(timeout);
+        resolve(match[1]);
+      });
+      child.once("error", (error) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+      child.once("exit", (code) => {
+        clearTimeout(timeout);
         reject(
           new Error(
-            `Timed out starting Chromium.${
+            `Chromium exited before DevTools was ready (${code}).${
               output ? `\n${output.slice(-2000)}` : ""
             }`
           )
-        ),
-      15_000
-    );
-    child.stderr.setEncoding("utf8");
-    child.stderr.on("data", (chunk) => {
-      output += chunk;
-      const match = /DevTools listening on (ws:\/\/[^\s]+)/.exec(output);
-      if (!match) return;
-      clearTimeout(timeout);
-      resolve(match[1]);
+        );
+      });
     });
-    child.once("error", (error) => {
-      clearTimeout(timeout);
-      reject(error);
-    });
-    child.once("exit", (code) => {
-      clearTimeout(timeout);
-      reject(
-        new Error(
-          `Chromium exited before DevTools was ready (${code}).${
-            output ? `\n${output.slice(-2000)}` : ""
-          }`
-        )
-      );
-    });
-  });
+  } catch (error) {
+    child.kill("SIGKILL");
+    try {
+      await rm(profileDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+    } catch (cleanupError) {
+      console.error(`Chrome startup cleanup failed: ${cleanupError.message}`);
+    }
+    throw error;
+  }
   return { child, profileDir, websocketUrl };
 }
 
@@ -1194,37 +1152,86 @@ async function runDocumentWorkbenchContracts() {
   await win.destroy();
 }
 
-let chromium;
+const startedAt = performance.now();
+const evidence = process.env.ROLEFIT_EDITOR_BROWSER_ARTIFACT_DIR;
+const timings = [];
+let chromium, browserVersion, watchdog;
+let phase = 'launch';
+async function runPhase(label, run) {
+  phase = label;
+  const start = performance.now();
+  console.log(`Chromium contracts: ${label}`);
+  await run();
+  const elapsedMs = Math.round(performance.now() - start);
+  timings.push({ phase: label, elapsedMs });
+  console.log(`Chromium contracts: ${label} passed (${elapsedMs}ms)`);
+}
+async function runSuites() {
+  for (const selected of suite === 'all' ? ['core', 'extended'] : [suite]) {
+    // Separate CI jobs use fresh profiles; full runs must not inherit earlier storage.
+    const blank = await makeWindow();
+    await browserConnection.send('Storage.clearDataForOrigin', {
+      origin: new URL(baseUrl).origin, storageTypes: 'all'
+    }, blank.sessionId);
+    await blank.destroy();
+    const options = { makeWindow, waitFor, baseUrl, suite: selected };
+    if (selected === 'core') {
+      await runPhase('editor behaviors', runEditorContracts);
+      await runPhase('entry rows', () => runEntryRowContracts(options));
+      await runPhase('Typeset save lifecycle', runTypesetSaveContract);
+      await runPhase('two-tab recovery', runRecoveryContracts);
+      await runPhase('workspace replacement races', runWorkspaceResumeContracts);
+      await runPhase('document workbench', runDocumentWorkbenchContracts);
+      await runPhase('host audits', () => runHostAuditContracts(options));
+    }
+    await runPhase(`${selected} wrapped rows and sections`, () => runWrappedRowContracts(options));
+    await runPhase(`${selected} wrapped headers`, () => runWrappedHeaderContracts(options));
+  }
+}
 try {
-  console.log("Chromium contracts: starting headless Chrome");
+  console.log(`Chromium contracts: starting ${suite}`);
   chromium = await launchChromium();
-  browserConnection = await CdpConnection.connect(chromium.websocketUrl);
-  await browserConnection.send("Browser.setDownloadBehavior", {
-    behavior: "deny"
-  });
-  await runWrappedRowContracts({ makeWindow, waitFor, baseUrl });
-  await runWrappedHeaderContracts({ makeWindow, waitFor, baseUrl });
-  await runHostAuditContracts({ makeWindow, waitFor, baseUrl });
-  console.log("Chromium contracts: editor behaviors");
-  await runEditorContracts();
-  await runEntryRowContracts({ makeWindow, waitFor, baseUrl });
-  console.log("Chromium contracts: Typeset save lifecycle");
-  await runTypesetSaveContract();
-  console.log("Chromium contracts: two-tab recovery");
-  await runRecoveryContracts();
-  console.log("Chromium contracts: workspace replacement races");
-  await runWorkspaceResumeContracts();
-  console.log("Chromium contracts: shared document workbench rail");
-  await runDocumentWorkbenchContracts();
+  browserConnection = await CdpConnection.connect(chromium.websocketUrl, { onEvent: message => {
+    if (message.method === "Runtime.exceptionThrown" ||
+        (message.method === "Runtime.consoleAPICalled" && message.params?.type === "error")) {
+      pageErrors.push(message.params?.exceptionDetails?.text ??
+        message.params?.args?.map(arg => arg.value ?? arg.description).join(" ") ?? message.method);
+    }
+  } });
+  browserVersion = await browserConnection.send('Browser.getVersion');
+  console.log(`Chromium version: ${JSON.stringify(browserVersion)}`);
+  await browserConnection.send("Browser.setDownloadBehavior", { behavior: "deny" });
+  await Promise.race([
+    runSuites(),
+    new Promise((_, reject) => {
+      watchdog = setTimeout(() => reject(new Error(`Browser suite exceeded 10 minutes during ${phase}`)), 10 * 60_000);
+    }),
+  ]);
   assert.deepEqual(pageErrors, [], "browser pages must not report console/load errors");
-  console.log(
-    "editor Chromium contracts passed: header marks/link undo, disabled controls, focus, rich paste, Typeset dirty baseline, deduplicated two-tab restore, live resume replacement guards, shared document rail disclosure/layout/persistence/Fit/landmarks/scroll restoration"
-  );
+  console.log(`Editor Chromium contracts passed (${suite})`);
 } catch (error) {
+  clearTimeout(watchdog);
+  try {
+    await captureFailure(windows, evidence, { suite, phase, browserVersion,
+      elapsedMs: Math.round(performance.now() - startedAt), error: error.stack ?? String(error), pageErrors });
+  } catch (captureError) {
+    console.error(`Failure evidence could not be saved: ${captureError.message}`);
+  }
   console.error(pageErrors);
   console.error(error);
   process.exitCode = 1;
 } finally {
+  clearTimeout(watchdog);
+  if (evidence) {
+    try {
+      await mkdir(evidence, { recursive: true });
+      await writeFile(join(evidence, 'run.json'), JSON.stringify({ suite, browserVersion, timings,
+        elapsedMs: Math.round(performance.now() - startedAt), passed: !process.exitCode }, null, 2));
+    } catch (error) {
+      console.error(`Run evidence could not be saved: ${error.message}`);
+      process.exitCode = 1;
+    }
+  }
   await Promise.allSettled([...windows].map((win) => win.destroy()));
   browserConnection?.close();
   if (chromium?.child.exitCode === null) {

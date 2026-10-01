@@ -286,10 +286,11 @@ resume.example.com {
 }
 ```
 
-The GitHub workflow checks the engine, editor, and Typeset workspaces and
-separately builds and HTTP-probes the immutable container for matching pull
-requests. On configured pushes to `main`, both gates must pass before it
-rebuilds and restarts the same static Nginx container on the EC2 host that
+Document workflow CI owns the engine, editor, and Typeset correctness checks.
+The Typeset deployment workflow builds and HTTP-probes the immutable container
+for matching pull requests; its existing `verify` check forwards that result.
+On configured pushes to `main`, successful container verification permits it to
+rebuild and restart the same static Nginx container on the EC2 host that
 serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
 
 ## Viewport support
