@@ -210,7 +210,6 @@ function sanitizeGaps(
     const status = compactText(source.status, 24).toUpperCase();
     const note = compactText(source.note, MAX_NOTE_LENGTH + 1);
     if (!jobExcerpt || status !== "NOT_SHOWN" || note.length > MAX_NOTE_LENGTH || hasMarkupTag(note)) return reject("invalid-response");
-    if (note && unexplainedCandidateClaim(note, sources)) warnings.push(`Gap ${gaps.length + 1}: explanatory claims are not supported by provided evidence.`);
     const key = dedupeKey(jobExcerpt);
     if (seen.has(key)) warnings.push(`Gap ${gaps.length + 1}: this requirement overlaps another finding.`);
     if (!sources.jobText.includes(jobExcerpt)) warnings.push(`Gap ${gaps.length + 1}: source reference could not be confirmed. Quoted text is unconfirmed.`);

@@ -4,7 +4,7 @@ import type { HistoryClock } from "@typeset/editor/hooks/historyClock.ts";
 import { useResumeEditor as useTypesetResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { TextEditOptions } from "@typeset/editor/hooks/useResumeEditor.ts";
 import type { EntryTextField } from "@typeset/engine/lib/styleFieldFormatting.ts";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import type { ResumeBullet, ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { createBlankResumeData } from "../lib/blankResume.ts";
 import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 
@@ -140,14 +140,21 @@ export function useResumeEditor(historyClock?: HistoryClock) {
         markManual();
         shared.clearAlignmentOverrides(...args);
       },
-      addBullet: (sectionId: string, entryId: string) => { markManual(); shared.addBullet(sectionId, entryId); },
+      // Accepting or undoing a reviewed bullet addition, removal, or reorder is not a free edit.
+      addBullet: (sectionId: string, entryId: string, bullet?: ResumeBullet, viaSuggestion = false) => {
+        if (viaSuggestion) clearPendingManual();
+        else markManual();
+        shared.addBullet(sectionId, entryId, bullet);
+      },
       insertBullet: (...args: Parameters<typeof shared.insertBullet>) => { markManual(); shared.insertBullet(...args); },
-      removeBullet: (sectionId: string, entryId: string, bulletId: string) => {
-        markManual();
+      removeBullet: (sectionId: string, entryId: string, bulletId: string, viaSuggestion = false) => {
+        if (viaSuggestion) clearPendingManual();
+        else markManual();
         shared.removeBullet(sectionId, entryId, bulletId);
       },
-      reorderBullets: (sectionId: string, entryId: string, from: number, to: number) => {
-        markManual();
+      reorderBullets: (sectionId: string, entryId: string, from: number, to: number, viaSuggestion = false) => {
+        if (viaSuggestion) clearPendingManual();
+        else markManual();
         shared.reorderBullets(sectionId, entryId, from, to);
       },
       updateBullet: (

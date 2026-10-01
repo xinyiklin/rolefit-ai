@@ -11,10 +11,10 @@ import { ApiError, classifyFailure } from "../failures.ts";
 
 assert.equal(AI_WORKFLOW_TITLE["job-analysis"], "Job analysis", "Job analysis owns its card title");
 assert.equal(AI_WORKFLOW_TITLE["resume-polish"], "Resume Polish", "Resume Polish owns its card title");
-assert.equal(AI_WORKFLOW_TITLE.cover, "Cover letter", "Cover Letter Polish owns a document-specific card title");
-assert.equal(AI_WORKFLOW_TITLE.answers, "Application answers", "answer drafting owns its card title");
+assert.equal(AI_WORKFLOW_TITLE["cover-polish"], "Cover letter Polish", "Cover letter Polish owns its card title");
+assert.equal(AI_WORKFLOW_TITLE["application-answers"], "Application answers", "answer drafting owns its card title");
 assert.equal(AI_STAGE_COPY["job-analysis"].running, "Analyzing job", "progress uses Job analysis vocabulary");
-assert.equal(AI_STAGE_COPY.cover.running, "Polishing cover letter", "cover progress matches the Polish action");
+assert.equal(AI_STAGE_COPY["cover-polish"].running, "Polishing cover letter", "cover progress matches the Polish action");
 
 const storedUsage = {
   "job-analysis": { source: "ai", provider: "anthropic", model: "analysis-model" },

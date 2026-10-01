@@ -1,5 +1,3 @@
-import { jobAnalysisWarningMessages } from "../../../shared/jobAnalysisWarnings.ts";
-import { ContentWarnings } from "../../components/ContentWarnings";
 import { useEffect, useState, type ReactNode, type KeyboardEvent } from "react";
 import { ArrowRight, Check, Circle, LoaderCircle } from "lucide-react";
 
@@ -747,27 +745,6 @@ export function PrepareTab({
 
                   <PreparedJobBriefSections sections={BRIEF_SECTIONS} brief={brief} onChange={onJobBriefChange} />
                 </fieldset>
-
-                {displayedJob?.jobWarnings?.length ? (
-                  <div className="prepare-note">
-                    <p>Checks describe the generated job fields. Later edits have not been verified.</p>
-                    <ContentWarnings warnings={jobAnalysisWarningMessages(displayedJob.jobWarnings)} />
-                  </div>
-                ) : null}
-
-                {(displayedJob?.conditionIssues?.length ?? 0) > 0 ? (
-                  <details className="prepare-note">
-                    <summary>Review extracted conditions</summary>
-                    <ul>
-                      {displayedJob?.conditionIssues?.map((issue, index) => (
-                        <li key={`${issue.field}:${index}`}>
-                          <p>{issue.reason}</p>
-                          <blockquote>{issue.sourceExcerpt}</blockquote>
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                ) : null}
 
                 <div className="prepare-gaps">
                   <div>

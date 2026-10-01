@@ -648,14 +648,17 @@ resume decides individual edits, the letter decides one replacement — and that
 difference stays; nothing else about the act does. One decision bar in the rail
 footer states what is left, then offers a primary accept beside a secondary
 discard, in that order, for both: Accept all / Discard all on the resume,
-Accept proposal / Discard proposal on the letter. One diff treatment marks
+Accept proposal / Discard proposal on the letter. The resume's rows group by
+operation (Rewrite, Add, Remove, Reorder); when several groups show, each
+group header repeats the same Accept / Discard pair scoped to that group. One diff treatment marks
 changed words in both: the resume's Now and Proposed lines, and the letter's
 Changes view behind a Changes / Full letter switch that opens on Changes. One
 chip vocabulary reports a settled resume row (Accepted, Discarded, Changed in
 editor), each row carries Undo, and each names the section and entry it edits so
 the list reads on its own. A decided row de-emphasizes so the queue shows what is
-still waiting. Do not give either document a second commit location, a third
-verb, or a private way of showing what changed.
+still waiting. Do not give either document a commit location beyond its footer
+bar and the resume's group headers, a third verb, or a private way of showing
+what changed.
 A usable draft keeps its proposal controls and displays compact content warnings
 before acceptance. Technically unusable responses show bounded recovery issues;
 Cover retries structure once, without repairing content-only concerns. Do not badge ordinary readiness gaps or provider errors as evidence
@@ -749,6 +752,8 @@ desk; rebuild it from hairlines, paper tones, and ledger vocabulary.
 ### Content warnings
 
 Follow the [system-wide product policy](PRODUCT.md#content-and-evidence-warning-policy).
+Job analysis shows editable extracted fields without evidence warnings or a
+condition-review disclosure, including when reopening saved jobs.
 Use one compact "Review before use" note beside affected generated content or
 assessment findings, visible before acceptance, listing specific concerns;
 evidence concerns use **Not supported by provided evidence**, with a short

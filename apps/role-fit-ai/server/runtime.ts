@@ -3,11 +3,11 @@ import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
-import { handlePolish } from "./ai/polish.ts";
+import { handleResumePolish } from "./ai/resumePolish.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
 import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
-import { handleCoverLetter } from "./ai/coverLetter.ts";
+import { handleCoverPolish } from "./ai/coverLetter.ts";
 import { isApiPathname, sendJson } from "./http.ts";
 import {
   ensureJobWorkspace,
@@ -410,8 +410,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/polish") {
-      void handlePolish(req, res);
+    if (pathname === "/api/resume-polish") {
+      void handleResumePolish(req, res);
       return;
     }
 
@@ -430,8 +430,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    if (pathname === "/api/cover-letter") {
-      void handleCoverLetter(req, res);
+    if (pathname === "/api/cover-polish") {
+      void handleCoverPolish(req, res);
       return;
     }
 

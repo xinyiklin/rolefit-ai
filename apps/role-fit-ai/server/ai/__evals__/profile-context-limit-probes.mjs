@@ -17,13 +17,13 @@ import {
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
   buildCandidateFactsContext,
-  mergeHonestContext
+  buildCandidateContext
 } from "../../../src/lib/candidateFacts.ts";
 import { handleApplicationAnswers } from "../applicationAnswers.ts";
 import { buildFitAssessmentPrompts, evaluateFitAssessmentResponse } from "../fitAssessment.ts";
 import { parseCoverLetterEvidenceItems } from "../coverLetterContracts.ts";
 import { analyzeJobToFields, handleJobAnalysis } from "../jobAnalysis.ts";
-import { handlePolish } from "../polish.ts";
+import { handleResumePolish } from "../resumePolish.ts";
 import { buildResumeProposalPrompts } from "../resumeProposal.ts";
 
 const CLIP_MARKER = /clipped: middle omitted/;
@@ -116,7 +116,7 @@ const fitResponse = {
 
 for (const [shape, background] of Object.entries(BACKGROUND_SHAPES)) {
   assert.equal(profileTextLength(background), PROFILE_BACKGROUND_CHAR_LIMIT, `${shape}: fixture sits on the boundary`);
-  const merged = mergeHonestContext(background, maxFacts);
+  const merged = buildCandidateContext(background, maxFacts);
   assert.equal(candidateContextLimitError(merged), null, `${shape}: merged context stays within the server bound`);
 
   const fit = buildFitAssessmentPrompts({ jobText, resumeText, candidateContext: merged });
@@ -132,7 +132,7 @@ for (const [shape, background] of Object.entries(BACKGROUND_SHAPES)) {
     jobText,
     targets: flattenResumeTargets(scope),
     scopeText: resumeText,
-    honestContext: merged,
+    candidateContext: merged,
     customInstructions: ""
   });
   assert.ok(proposal.userPrompt.includes(merged), `${shape}: Resume Polish receives the whole Background verbatim`);
@@ -161,18 +161,18 @@ async function postTo(handler, body) {
     await new Promise((resolve) => server.close(resolve));
   }
 }
-const atLimit = mergeHonestContext(BACKGROUND_SHAPES.headed, maxFacts);
+const atLimit = buildCandidateContext(BACKGROUND_SHAPES.headed, maxFacts);
 
-const polishOver = await postTo(handlePolish, { mode: "resume-proposal", jobText: "x", resumeScope: {}, honestContext: oversized });
+const polishOver = await postTo(handleResumePolish, { mode: "resume-proposal", jobText: "x", resumeScope: {}, candidateContext: oversized });
 assert.equal(polishOver.status, 400);
 assert.equal(polishOver.error, PROFILE_BACKGROUND_LIMIT_MESSAGE, "Resume Polish declines oversized context by name");
-const polishAt = await postTo(handlePolish, { mode: "resume-proposal", jobText: "x", resumeScope: {}, honestContext: atLimit });
+const polishAt = await postTo(handleResumePolish, { mode: "resume-proposal", jobText: "x", resumeScope: {}, candidateContext: atLimit });
 assert.match(polishAt.error, /Select at least one editable resume section/, "a boundary-sized Profile passes the context guard");
 
-const answersOver = await postTo(handleApplicationAnswers, { resumeText: "", jobText: "", honestContext: oversized });
+const answersOver = await postTo(handleApplicationAnswers, { resumeText: "", jobText: "", candidateContext: oversized });
 assert.equal(answersOver.status, 400);
 assert.equal(answersOver.error, PROFILE_BACKGROUND_LIMIT_MESSAGE, "application answers decline oversized context by name");
-const answersAt = await postTo(handleApplicationAnswers, { resumeText: "", jobText: "", honestContext: atLimit });
+const answersAt = await postTo(handleApplicationAnswers, { resumeText: "", jobText: "", candidateContext: atLimit });
 assert.match(answersAt.error, /Add your resume/, "a boundary-sized Profile passes the answers context guard");
 
 const fitOver = await postTo(handleJobAnalysis, {
@@ -187,13 +187,13 @@ assert.equal(fitOver.error, PROFILE_BACKGROUND_LIMIT_MESSAGE, "Fit declines over
 // Cover evidence items are accepted whole or rejected, never cut.
 const wholeItem = parseCoverLetterEvidenceItems([
   { id: "resume-1", source: "resume", text: "Built Python services." },
-  { id: "profile-1", source: "honest_context", text: "p".repeat(PROFILE_BACKGROUND_CHAR_LIMIT) }
+  { id: "profile-1", source: "profile", text: "p".repeat(PROFILE_BACKGROUND_CHAR_LIMIT) }
 ]);
 assert.equal(wholeItem[1].text.length, PROFILE_BACKGROUND_CHAR_LIMIT, "a 12,000-character item is accepted whole");
 assert.throws(
   () => parseCoverLetterEvidenceItems([
     { id: "resume-1", source: "resume", text: "Built Python services." },
-    { id: "profile-1", source: "honest_context", text: "p".repeat(PROFILE_BACKGROUND_CHAR_LIMIT + 1) }
+    { id: "profile-1", source: "profile", text: "p".repeat(PROFILE_BACKGROUND_CHAR_LIMIT + 1) }
   ]),
   /evidence item is too long/,
   "an over-long item is rejected rather than sliced"
@@ -213,11 +213,11 @@ globalThis.fetch = async (url, options) => {
 };
 try {
   for (const [route, handler, body] of [
-    ["Resume Polish", handlePolish, { mode: "resume-proposal", resumeScope: scope, jobText }],
+    ["Resume Polish", handleResumePolish, { mode: "resume-proposal", resumeScope: scope, jobText }],
     ["application answers", handleApplicationAnswers, { resumeText, jobText, questions: ["Why do you want this role?"] }]
   ]) {
     providerBodies.length = 0;
-    await postTo(handler, { ...body, provider: "openai", model: "synthetic-model", honestContext: atLimit });
+    await postTo(handler, { ...body, provider: "openai", model: "synthetic-model", candidateContext: atLimit });
     assert.ok(providerBodies.length >= 1, `${route}: the stubbed provider is called`);
     const sent = providerBodies.join("\n");
     assert.ok(sent.includes(JSON.stringify(atLimit).slice(1, -1)), `${route}: the provider request carries the whole Profile`);

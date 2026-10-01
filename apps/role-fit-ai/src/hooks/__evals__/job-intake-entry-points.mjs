@@ -87,7 +87,7 @@ function createHarness({
   routeUrl = JOB_URL,
   jobDescription = POSTING,
   jobRawText = "",
-  runFitAssessment = true,
+  fitAssessmentAuto = true,
   readiness = { ready: true },
   beforeProceed = true,
   beforeHandled = false,
@@ -197,7 +197,7 @@ function createHarness({
       log.push({ event: "provider:fit-ready", value: request });
       return fitReadinessImpl ? fitReadinessImpl(request) : fitReadiness;
     },
-    runFitAssessment,
+    fitAssessmentAuto,
     resolvePreparedResume: async (jobText, controls) => {
       log.push({ event: "resolvePreparedResume", value: jobText });
       return resolvePreparedResumeImpl
@@ -617,7 +617,7 @@ const sharedCommitOrder = [
 }
 
 {
-  const harness = createHarness({ runFitAssessment: false });
+  const harness = createHarness({ fitAssessmentAuto: false });
   await runPaste(harness);
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
   const request = harness.requests.find(({ url }) => url === "/api/job-analysis");

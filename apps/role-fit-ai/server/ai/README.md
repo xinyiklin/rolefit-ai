@@ -71,7 +71,10 @@ and affirmative transferable support for Stretch without a direct match.
 
 Source checks produce warnings for unlocated excerpts, repeated/overlapping
 findings, explicit evidence conflicts, unsupported summaries, missing supporting
-findings, and unclear eligibility conflicts. Safe prose and conclusions survive,
+findings, and unclear eligibility conflicts. Gap notes describe what is not
+shown, so they are not checked as candidate claims. A finding's warning is
+labelled `Match N:`, `Gap N:`, or `Eligibility:`, and surfaces that show that
+finding display it beside the finding. Safe prose and conclusions survive,
 except that a `BLOCKED` without located, explicitly conflicting posting and
 candidate excerpts is downgraded to `CHECK` with a neutral note and a warning; code does not remove usable gap details or
 replace a usable model summary with fixed copy. Fixed summary copy remains the fallback
@@ -192,7 +195,7 @@ advice, not replacement document text; numbers in instructions or references to
 missing skills are not candidate claims. Explicit first-person candidate claims
 still require supporting candidate evidence.
 
-The `final-review` stage copies the current Fit configuration once when absent,
+The `application-review` stage copies the current Fit configuration once when absent,
 then persists independently. Exact serialized content/selection/settings identity
 and a generation token protect completion. Findings track relevant dependencies;
 provider findings conservatively depend on both documents. Applying/navigation,
@@ -211,11 +214,11 @@ source. Percentages use local clauses, and recognized count units permit modifie
 without borrowing a noun across a preposition or conjunction. These bounded guards
 are not a general parser. Explicit experience denial or learning intent cannot
 authorize new skills; unrelated reliability negation does not remove experience.
-Extracted job conditions retain source wording when a qualifier, alternative, negation, or
-number could change meaning. Classification concerns are advisory, including
-explicit preferred wording in a required list; the original qualification wording remains visible. Words such as
-must or bonus do not veto the model's duty classification;
-ordinary duties retain concise model wording rather than duplicate whole clauses.
+Job analysis is structured JD extraction, with concise summaries and paraphrases
+allowed by the prompt. Its response parser validates types, enums, markup, and
+bounds without source matching, condition replacement, or evidence warnings.
+Fit Assessment retains its independent evidence checks. Historical job-warning
+metadata remains readable in saved records, without display or drafting context.
 Cover-letter factual guards use paragraph-cited sources and explicitly named entry
 identity in one typed factual pass; employer facts use the posting. Explicit prior
 affiliations need candidate evidence, while generic acronyms are not employer names.
@@ -225,9 +228,13 @@ placeholders produce warnings; Resume Polish withholds placeholder edits. Only t
 withhold operations;
 Cover may repair technically unusable output once.
 Resume Polish protects actual education/credential records, enumerates all bounded
-targets, and sends selected entry evidence once alongside target references. The
-existing wider resume context still supports Skills and Summary. Optional structural
+targets, and sends selected entry evidence once alongside target references. An
+experience or project entry is grounded only by its own text and the Profile text
+its heading links; the wider resume and Profile still support Skills and Summary. Optional structural
 advice keeps bounded source references and never becomes a replacement.
+Resume Polish's "Proposed improvements" summary is bounded editorial feedback
+without candidate-evidence checks. Proposed resume text and cited advice keep
+separate content warnings; response-limit disclosures remain available.
 Application answers and role descriptions preserve content concerns with item
 warnings. Question/role identity binding stays strict, while a warned item does
 not erase its usable siblings. Earlier Resume source uncertainty accompanies

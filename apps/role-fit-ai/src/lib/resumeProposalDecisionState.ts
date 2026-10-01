@@ -19,13 +19,25 @@ function normalize(value: string): string {
   return stripInlineMarks(value).replace(/\s+/g, " ").trim().toLowerCase();
 }
 
+// What a row compares with the live document: its text, or a reorder's bullet ids.
+export function proposalBaseline(suggestion: ResumeProposalSuggestion): string {
+  return suggestion.kind === "reorder" ? (suggestion.originalOrder ?? []).join("\n") : suggestion.currentText;
+}
+
+export function proposalValue(suggestion: ResumeProposalSuggestion): string {
+  return suggestion.kind === "reorder" ? (suggestion.proposedOrder ?? []).join("\n") : suggestion.proposedText;
+}
+
 export function resumeProposalKey(result: PolishedResume | null): string {
   return JSON.stringify({
     runId: result?.runId ?? "",
     outcome: result?.polishOutcome ?? "",
     changes: (result?.suggestedChanges ?? []).map((suggestion) => ({
       targetId: suggestion.id,
+      kind: suggestion.kind ?? "",
       target: suggestion.target,
+      originalOrder: suggestion.originalOrder ?? [],
+      proposedOrder: suggestion.proposedOrder ?? [],
       originalText: suggestion.currentText,
       proposedText: suggestion.proposedText,
       reason: suggestion.reason || ""
@@ -81,14 +93,15 @@ export function resumeProposalEditState(
   decision?: ResumeProposalDecision
 ): ResumeProposalEditState {
   if (currentText === null) return "changed";
-  const current = normalize(currentText);
+  const key = suggestion.kind === "reorder" ? (value: string) => value : normalize;
+  const current = key(currentText);
   if (decision?.kind === "accepted") {
-    return current === normalize(decision.text) ? "accepted" : "changed";
+    return current === key(decision.text) ? "accepted" : "changed";
   }
   if (decision?.kind === "discarded") {
-    return current === normalize(suggestion.currentText) ? "discarded" : "changed";
+    return current === key(proposalBaseline(suggestion)) ? "discarded" : "changed";
   }
-  if (current === normalize(suggestion.currentText)) return "pending";
-  if (current === normalize(suggestion.proposedText)) return "accepted";
+  if (current === key(proposalBaseline(suggestion))) return "pending";
+  if (current === key(proposalValue(suggestion))) return "accepted";
   return "changed";
 }

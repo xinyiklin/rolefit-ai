@@ -25,10 +25,10 @@ export type FitAssessmentPersistenceDecision =
   | { action: "clear" };
 
 export function fitAssessmentCanRun(
-  runFitAssessment: boolean,
+  fitAssessmentAuto: boolean,
   preparedJob: PreparedFitAssessmentJob | null
 ): boolean {
-  return runFitAssessment && preparedJob !== null;
+  return fitAssessmentAuto && preparedJob !== null;
 }
 
 export function fitAssessmentMayTriggerAutoPolish(
@@ -149,12 +149,12 @@ export function consumeFitAssessmentAutomationToken(
 }
 
 export function restoredFitAssessmentState(
-  runFitAssessment: boolean,
+  fitAssessmentAuto: boolean,
   prepareRunId: string,
   snapshot?: FitAssessmentSnapshot
 ): FitAssessmentState {
   return {
-    enabled: runFitAssessment,
+    enabled: fitAssessmentAuto,
     latestCompleted: snapshot
       ? {
           snapshot,
@@ -165,7 +165,7 @@ export function restoredFitAssessmentState(
         }
       : null,
     activeRun: null,
-    lastError: runFitAssessment && !snapshot
+    lastError: fitAssessmentAuto && !snapshot
       ? {
           resumeLabel: "",
           message: "No Fit Assessment is saved for this preparation. Run it against the restored resume."

@@ -1,5 +1,6 @@
 import { UserSafeAiError } from "./errors.ts";
-import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
+import { normalizeOmittedEntryNames } from "../../shared/candidateProfileContract.ts";
+import { stripStructuralInlineMarks } from "../../shared/resumePolishContract.ts";
 
 type ScopeBullet = { id: string; text: string };
 type ScopeEntry = {
@@ -18,7 +19,9 @@ type ScopeSection = {
 };
 export type NormalizedResumeScope = {
   version: number;
-  locked: { omittedIdentity: boolean; omittedContact: boolean; omittedSections: string[] };
+  // omittedEntryNames only keeps a Profile heading from linking to a name an
+  // omitted entry shares; it never reaches a prompt.
+  locked: { omittedIdentity: boolean; omittedContact: boolean; omittedSections: string[]; omittedEntryNames: string[][] };
   sections: ScopeSection[];
   contextSections: ScopeSection[];
 };
@@ -29,15 +32,6 @@ function trimText(value: unknown, max = 20_000): string {
   return text;
 }
 
-const INLINE_MARK_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
-
-export function stripStructuralInlineMarks(value: unknown): string {
-  INLINE_MARK_RE.lastIndex = 0;
-  return String(value ?? "").replace(
-    INLINE_MARK_RE,
-    (tag) => /^<\/?(?:b|i|u)>$/i.test(tag) ? tag : ""
-  );
-}
 
 function trimScopeText(value: unknown, max = 20_000): string {
   return trimText(stripStructuralInlineMarks(value), max);
@@ -112,7 +106,8 @@ export function normalizeResumeScope(raw: unknown): NormalizedResumeScope {
       omittedSections: (Array.isArray(locked.omittedSections) ? locked.omittedSections : [])
         .map((item) => trimScopeText(item, 120))
         .filter(Boolean)
-        .slice(0, 20)
+        .slice(0, 20),
+      omittedEntryNames: normalizeOmittedEntryNames(locked.omittedEntryNames)
     },
     sections,
     contextSections

@@ -51,8 +51,9 @@ provider-backed job analysis. Start the app
 
 ## Install (unpacked)
 
-**Desktop release:** In the RoleFit companion, open **Browser extension** and
-select **Open extension folder**. The companion materializes its allowlisted
+**Desktop release:** In the RoleFit companion, open **Browser extension**, pick
+your browser under **Install the extension**, and select **Open folder**. The
+companion materializes its allowlisted
 extension files inside app data and writes the resolved local port into
 `runtime-config.js` as the first-install seed so Chrome, Edge, and Firefox can
 load it outside Electron's packaged archive. **Copy path** copies that
@@ -75,14 +76,18 @@ the browser-specific steps below apply to either folder.
   `extension/` folder during source development).
 - **Firefox** — open `about:debugging#/runtime/this-firefox`, click
   **Load Temporary Add-on…**, and select `manifest.json` in that folder.
+  Firefox removes temporary add-ons when it quits, so load it again after a
+  restart.
 
 After loading the extension, start the RoleFit companion and open the popup on
 a job page. The first request is intentionally blocked and appears in the
-companion under **Browser extension**. Select **Approve** once, allow the
-companion to restart its local service, and reopen the popup. If you later
+companion's **Access** card under **Browser extension**, and the sidebar item
+shows a pending count. Select **Approve & restart** once, let the companion
+restart its local service, and reopen the popup. If you later
 change RoleFit's port, copy the active port from the companion and save it in
 the popup's inline **Settings** view; it reconnects without an extension reload.
-Remove the paired origin from the companion to revoke access. Unpacked Chrome
+To revoke access, select **Remove** and then **Confirm removal** for the paired
+origin in the companion. Unpacked Chrome
 ids can change if the extension is
 moved or reloaded under a different identity; Firefox origins are
 browser/profile-specific, so each distinct installation requires its own

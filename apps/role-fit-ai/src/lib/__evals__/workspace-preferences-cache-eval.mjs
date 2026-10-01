@@ -23,16 +23,16 @@ setSettingsSaveListener((settings) => {
   savedSettings = settings;
 });
 saveSettings({
-  runFitAssessment: true,
+  fitAssessmentAuto: true,
   gpa: 3.86,
   availabilityNotice: "two-weeks",
-  honestContext: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
+  profileBackground: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
 });
 assert.deepEqual(savedSettings, {
-  runFitAssessment: true,
+  fitAssessmentAuto: true,
   gpa: 3.86,
   availabilityNotice: "two-weeks",
-  honestContext: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
+  profileBackground: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
 }, "a missing browser cache does not suppress the normalized workspace settings notification");
 assert.deepEqual(loadSettings(), savedSettings, "the live app can read adopted settings from memory when localStorage is unavailable");
 
@@ -61,11 +61,11 @@ globalThis.localStorage = {
   removeItem: (key) => cache.delete(key)
 };
 cache.set("rolefit:settings", JSON.stringify({
-  honestContext: "Led a campus tutoring program.",
+  profileBackground: "Led a campus tutoring program.",
   experienceProfile: [{ category: "professional", years: 2.5, count: 2 }]
 }));
 assert.deepEqual(loadSettings(), {
-  honestContext: "Led a campus tutoring program.\n\n## Experience by type\n- Professional employment: 2.5 years; 2 roles or projects"
+  profileBackground: "Led a campus tutoring program.\n\n## Experience by type\n- Professional employment: 2.5 years; 2 roles or projects"
 }, "the browser cache path migrates legacy experience rows into the Background");
 delete globalThis.localStorage;
 

@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.7.0** (preview).
+Current desktop source version: **0.8.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -167,8 +167,9 @@ font, size and wrapping changes still reflow the page normally.
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper), with
   Greenhouse-wrapper resolution and a generic HTML→text fallback for other
-  boards. The configured Job analysis provider runs before the server's grounding
-  and sanitization checks.
+  boards. The configured Job analysis provider extracts the posting into structured
+  fields and concise summaries. The server validates response shape and bounds;
+  extraction has no additional fact checks or evidence-review warnings.
   A deterministic parser publishes a usable local brief immediately, so URL and
   paste preparation remain available even before a provider is configured. Job analysis
   can improve it, but provider failure leaves the local fields editable and does
@@ -197,8 +198,10 @@ font, size and wrapping changes still reflow the page normally.
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
   unchanged edits are no-ops. Unsupported wording stays reviewable with a warning,
   and one concern does not erase usable siblings. Only bullets and Skills lists are mutable;
-  role, employer, subtitle, date, identity, contact, and education fields remain
-  read-only evidence. Large resumes prioritize material, job-relevant
+  Polish may also remove or reorder an entry's bullets and add up to two bullets
+  from a Profile Background heading that names the entry. The review groups rows
+  as Rewrite, Add, Remove, and Reorder; role, employer, subtitle, date, identity,
+  contact, and education fields remain read-only evidence. Large resumes prioritize material, job-relevant
   fields inside the prompt budget, validate replies only against fields actually
   sent, and show how many editable fields were outside that pass. Unsupported
   ownership or wrong-entry attribution receives a warning. A separate advisory
@@ -471,10 +474,12 @@ verify** with `authState` still `unknown`, not a false signed-in claim. The
 first actual Antigravity provider request verifies the provider-owned session
 and reports actionable guidance if that request fails authentication.
 
-Settings includes GPT-6 Astra, Sol, and Luna for Codex and OpenAI API, plus
-Claude Fable 5.1 and Opus 5.5 for Claude CLI and API. Codex starts at GPT-6 Sol;
-existing supported selections stay selected. The Claude default remains Sonnet 5
-and the OpenAI API default remains GPT-5.6 Terra.
+Settings includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna for Codex
+and OpenAI API, plus Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 for Claude CLI
+and API. New stages start at GPT-6.1 Sol for Codex and Sonnet 5.5 for Claude;
+existing supported selections stay selected. The OpenAI API default remains
+GPT-5.6 Terra. GPT-6.1 Sol may need a newer Codex CLI (0.159 lists it), and
+Sonnet 5.5 needs Claude Code 2.1.284 or later.
 
 The Codex picker omits retired GPT-5.4/5.4 Mini and the no-longer-listed Codex
 Spark. GPT-5.5 remains selectable and is labeled with its announced October 14,
@@ -538,8 +543,9 @@ verdict silently stands in.
 The unpacked Chrome/Firefox extension uses an explicit first-use approval in
 the local companion. On a job page, open the popup; if the browser is not yet
 approved, it sends a bounded local request. Open the companion and select
-**Approve** under **Browser extension**, then reopen the popup. That exact
-origin remains paired until removed. Once approved, the popup brings RoleFit
+**Approve & restart** in the **Access** card under **Browser extension**, then
+reopen the popup. That exact origin remains paired until removed (**Remove**,
+then **Confirm removal**). Once approved, the popup brings RoleFit
 preparation and duplicate checking to the job board. On any posting, click the
 **RoleFit AI** toolbar icon to see:
 
@@ -598,9 +604,10 @@ the popup a suggested Cmd/Ctrl+Shift+Y shortcut; browser shortcut settings stay
 authoritative.
 
 The installed desktop companion includes an app-owned unpacked extension
-folder. In the companion, open **Browser extension** and choose **Open extension
-folder**; use that folder when your browser asks where to load the extension.
-The same section includes **Copy path** and click-to-copy controls for the exact
+folder. In the companion, open **Browser extension**, pick your browser under
+**Install the extension**, and choose **Open folder**; use that folder when your
+browser asks where to load the extension. The same section includes **Copy
+path** and click-to-copy controls for the exact
 Chrome (`chrome://extensions`), Edge (`edge://extensions`), and Firefox
 (`about:debugging#/runtime/this-firefox`) setup addresses, plus **Copy port** for
 the active validated numeric port. These bounded actions are part of desktop
@@ -715,7 +722,7 @@ __evals__/                      # contracts for artifacts that cannot host their
 server.ts                       # thin local web-server launcher
 server/
   runtime.ts                    # reusable HTTP/Vite lifecycle + route composition
-  ai/                            # /api/polish + /api/job-analysis: routes, providers,
+  ai/                            # /api/resume-polish + /api/job-analysis: routes, providers,
                                  #   clients, prompts, sanitize, grounding, eligibilityLexicon,
                                  #   json, errors, coverLetter + applicationAnswers
   ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out

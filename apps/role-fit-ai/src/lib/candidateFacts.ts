@@ -1,7 +1,7 @@
 // "unspecified" is the neutral default: the app asserts NOTHING about
 // citizenship, work authorization, or education until the user explicitly opts
 // in from Settings. This matters because buildCandidateFactsContext() output is
-// fed into the AI request's honestContext, which the server folds into the
+// fed into the AI request's candidateContext, which the server folds into the
 // keyword-grounding allowlist (server/ai/sanitize.ts) — so a concrete default
 // like "U.S. citizen, clearance-eligible" or "Bachelor's degree" would let an
 // unverified citizenship, clearance, work-auth, or credential claim survive into
@@ -188,7 +188,7 @@ export function buildCandidateFactsContext(facts: CandidateFacts): string {
   return `Candidate facts:\n${declared.map((line) => `- ${line}`).join("\n")}`;
 }
 
-export function mergeHonestContext(honestContext: string, candidateFactsContext: string): string {
-  const parts = [candidateFactsContext.trim(), honestContext.trim()].filter(Boolean);
+export function buildCandidateContext(profileBackground: string, candidateFactsContext: string): string {
+  const parts = [candidateFactsContext.trim(), profileBackground.trim()].filter(Boolean);
   return parts.join("\n\n");
 }

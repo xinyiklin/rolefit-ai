@@ -26,7 +26,7 @@ function serverRestore(updatedAt) {
     exists: true,
     source: "restore",
     updatedAt,
-    settings: { aiProvider: "openai" },
+    settings: { resumePolishProvider: "openai" },
     lastBaseResume: "default.resume",
     restoreStamp: updatedAt
   };
@@ -36,7 +36,7 @@ function serverWorkspace(updatedAt = RESTORE_STAMP) {
     exists: true,
     source: "workspace",
     updatedAt,
-    settings: { aiProvider: "anthropic" },
+    settings: { resumePolishProvider: "anthropic" },
     lastBaseResume: "",
     restoreStamp: null
   };
@@ -132,7 +132,7 @@ const validRestore = {
   exists: true,
   source: "restore",
   updatedAt: RESTORE_STAMP,
-  settings: { aiProvider: "openai" },
+  settings: { resumePolishProvider: "openai" },
   lastBaseResume: "default.resume",
   restoreStamp: RESTORE_STAMP
 };

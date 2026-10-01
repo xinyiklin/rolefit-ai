@@ -13,7 +13,7 @@
  *
  * Everything this cluster reads or mutates OUTSIDE its own state (the resume
  * editor, export status, autosave draft, dialogs) stays owned by App and
- * arrives via args, mirroring usePolishPipeline's pattern.
+ * arrives via args, mirroring useResumePolishPipeline's pattern.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";

@@ -22,6 +22,8 @@ import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts"
 import {
   clearProposalDecision,
   decisionsForProposal,
+  proposalBaseline,
+  proposalValue,
   recordProposalDecision,
   resumeProposalEditState,
   resumeProposalEditIsPending,
@@ -38,20 +40,81 @@ function findEntry(resume: ResumeData, suggestion: ResumeProposalSuggestion): Re
   return section?.items.find((entry) => entry.id === suggestion.target.entryId) ?? null;
 }
 
+// A new bullet that is not in the entry reads as its empty original, so an
+// unaccepted or removed addition is pending again; a missing bullet reads as
+// an accepted removal. A reorder reads the live order of its original bullets.
 export function currentTargetText(resume: ResumeData, suggestion: ResumeProposalSuggestion): string | null {
   const entry = findEntry(resume, suggestion);
   if (!entry) return null;
+  if (suggestion.kind === "reorder") {
+    const original = suggestion.originalOrder ?? [];
+    return entry.bullets.map((bullet) => bullet.id).filter((id) => original.includes(id)).join("\n");
+  }
   if (suggestion.target.field === "bullet") {
-    return entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text ?? null;
+    const text = entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId)?.text;
+    return text ?? (suggestion.kind === "add" || suggestion.kind === "remove" ? "" : null);
   }
   return entry.subtitleLeft;
 }
 
-function applyTarget(actions: ResumeEditorActions, suggestion: ResumeProposalSuggestion, value: string): void {
+// Moves the listed bullets into `order` within the slots they occupy, leaving
+// any other bullet (an accepted addition) where it is.
+function reorderEntryBullets(entry: ResumeEntry, order: string[], move: (from: number, to: number) => void): void {
+  const ids = entry.bullets.map((bullet) => bullet.id);
+  const present = order.filter((id) => ids.includes(id));
+  let next = 0;
+  const desired = ids.map((id) => present.includes(id) ? present[next++] : id);
+  for (let index = 0; index < desired.length; index += 1) {
+    const from = ids.indexOf(desired[index]);
+    if (from === index) continue;
+    move(from, index);
+    ids.splice(index, 0, ...ids.splice(from, 1));
+  }
+}
+
+// Every step of a bulk decision reads the pre-batch document. Reorders move by
+// index, so they run first; every other change addresses its bullet by id.
+function applyRank(suggestion: ResumeProposalSuggestion): number {
+  return suggestion.kind === "reorder" ? 0 : 1;
+}
+
+function applyTarget(
+  resume: ResumeData,
+  actions: ResumeEditorActions,
+  suggestion: ResumeProposalSuggestion,
+  value: string
+): void {
   const { sectionId, entryId, bulletId, field } = suggestion.target;
   if (!entryId) return;
+  const entry = findEntry(resume, suggestion);
+  if (suggestion.kind === "reorder") {
+    if (entry) reorderEntryBullets(entry, value.split("\n"), (from, to) => actions.reorderBullets(sectionId, entryId, from, to, true));
+    return;
+  }
+  if (suggestion.kind === "remove") {
+    if (!bulletId || !entry) return;
+    const exists = entry.bullets.some((bullet) => bullet.id === bulletId);
+    if (!value) {
+      if (exists) actions.removeBullet(sectionId, entryId, bulletId, true);
+      return;
+    }
+    if (exists) return;
+    // Restore after the nearest original predecessor still in the entry.
+    const original = suggestion.originalOrder ?? [];
+    const before = original.slice(0, original.indexOf(bulletId)).reverse()
+      .map((id) => entry.bullets.findIndex((bullet) => bullet.id === id))
+      .find((index) => index >= 0);
+    actions.addBullet(sectionId, entryId, { id: bulletId, text: value }, true);
+    const to = before === undefined ? 0 : before + 1;
+    if (to !== entry.bullets.length) actions.reorderBullets(sectionId, entryId, entry.bullets.length, to, true);
+    return;
+  }
   if (field === "bullet") {
-    if (bulletId) actions.updateBullet(sectionId, entryId, bulletId, value, true);
+    if (!bulletId) return;
+    const exists = findEntry(resume, suggestion)?.bullets.some((bullet) => bullet.id === bulletId);
+    if (suggestion.kind === "add" && !exists) actions.addBullet(sectionId, entryId, { id: bulletId, text: value }, true);
+    else if (suggestion.kind === "add" && !value) actions.removeBullet(sectionId, entryId, bulletId, true);
+    else actions.updateBullet(sectionId, entryId, bulletId, value, true);
     return;
   }
   actions.updateEntry(sectionId, entryId, "subtitleLeft", value, true);
@@ -100,9 +163,10 @@ export function useResumeProposalDecisions({
   );
 
   const accept = useCallback(
-    (suggestion: ResumeProposalSuggestion, value = suggestion.proposedText) => {
-      if (!value.trim() || !isPending(suggestion)) return;
-      applyTarget(actions, suggestion, value);
+    (suggestion: ResumeProposalSuggestion, value = proposalValue(suggestion)) => {
+      if ((!suggestion.kind || suggestion.kind === "add") && !value.trim()) return;
+      if (!isPending(suggestion)) return;
+      applyTarget(resume, actions, suggestion, value);
       setDecisionState((current) => recordProposalDecision(
         current,
         proposalKey,
@@ -110,7 +174,7 @@ export function useResumeProposalDecisions({
         { kind: "accepted", text: value }
       ));
     },
-    [actions, proposalKey, isPending]
+    [actions, proposalKey, isPending, resume]
   );
 
   const discard = useCallback((suggestion: ResumeProposalSuggestion) => {
@@ -131,30 +195,31 @@ export function useResumeProposalDecisions({
     const state = resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decision);
     if (state !== "accepted" && state !== "discarded") return;
     if (decision?.kind === "accepted") {
-      applyTarget(actions, suggestion, suggestion.currentText);
+      applyTarget(resume, actions, suggestion, proposalBaseline(suggestion));
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
   }, [actions, decisions, proposalKey, resume, isDocumentReplaced]);
 
-  const applyAll = useCallback(() => {
-    const pending = suggestions.filter(isPending);
-    for (const suggestion of pending) applyTarget(actions, suggestion, suggestion.proposedText);
+  // Accept every pending row, or only `subset` (one operation group).
+  const applyAll = useCallback((subset: readonly ResumeProposalSuggestion[] = suggestions) => {
+    const pending = subset.filter(isPending).sort((left, right) => applyRank(left) - applyRank(right));
+    for (const suggestion of pending) applyTarget(resume, actions, suggestion, proposalValue(suggestion));
     setDecisionState((current) => pending.reduce(
       (next, suggestion) => recordProposalDecision(
         next,
         proposalKey,
         suggestion.id,
-        { kind: "accepted", text: suggestion.proposedText }
+        { kind: "accepted", text: proposalValue(suggestion) }
       ),
       current
     ));
-  }, [actions, isPending, proposalKey, suggestions]);
+  }, [actions, isPending, proposalKey, resume, suggestions]);
 
   // The counterpart to Accept all, and the reason the resume's bulk pair now
   // reads like the letter's: both documents can decline a whole proposal in one
   // move. It mutates nothing — every discarded row still offers Undo.
-  const discardAll = useCallback(() => {
-    const pending = suggestions.filter(isPending);
+  const discardAll = useCallback((subset: readonly ResumeProposalSuggestion[] = suggestions) => {
+    const pending = subset.filter(isPending);
     setDecisionState((current) => pending.reduce(
       (next, suggestion) => recordProposalDecision(next, proposalKey, suggestion.id, { kind: "discarded" }),
       current
@@ -166,7 +231,7 @@ export function useResumeProposalDecisions({
     const accepted = suggestions.flatMap((suggestion) => {
       const decision = decisions[suggestion.id];
       const current = currentTargetText(resume, suggestion);
-      return decision?.kind === "accepted" && current === decision.text
+      return decision?.kind === "accepted" && current === decision.text && suggestion.kind !== "reorder"
         ? [{ original: suggestion.currentText, current }] : [];
     });
     if (!accepted.length) return [];

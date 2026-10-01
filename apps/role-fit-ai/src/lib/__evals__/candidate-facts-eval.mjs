@@ -1,8 +1,8 @@
 // Probes for src/lib/candidateFacts.ts — buildCandidateFactsContext() output
-// feeds the AI request's honestContext, which the server folds into the
+// feeds the AI request's candidateContext, which the server folds into the
 // keyword-grounding allowlist (server/ai/sanitize.ts). "unspecified" MUST stay
 // the neutral default (asserts nothing) and every concrete line MUST match the
-// exact wording the sanitizer/model sees. mergeHonestContext's ordering is
+// exact wording the sanitizer/model sees. buildCandidateContext's ordering is
 // load-bearing too: candidate facts lead, freeform honest context follows.
 //
 //   node src/lib/__evals__/candidate-facts-eval.mjs
@@ -11,7 +11,7 @@ import assert from "node:assert/strict";
 
 import {
   buildCandidateFactsContext,
-  mergeHonestContext,
+  buildCandidateContext,
   normalizeAvailabilityDate,
   normalizeCandidateGpa
 } from "../candidateFacts.ts";
@@ -72,26 +72,26 @@ assert.match(
   "not-authorized + requires-sponsorship combination renders the negative pair"
 );
 
-// ── mergeHonestContext precedence: candidate facts first, then honest context ─
+// ── buildCandidateContext precedence: candidate facts first, then the Profile Background ─
 assert.equal(
-  mergeHonestContext("Freeform notes about my background.", "Candidate facts:\n- Citizenship: U.S. citizen."),
+  buildCandidateContext("Freeform notes about my background.", "Candidate facts:\n- Citizenship: U.S. citizen."),
   "Candidate facts:\n- Citizenship: U.S. citizen.\n\nFreeform notes about my background.",
-  "candidate facts always lead, freeform honestContext always follows, joined by a blank line"
+  "candidate facts always lead, freeform Profile Background always follows, joined by a blank line"
 );
 assert.equal(
-  mergeHonestContext("", "Candidate facts:\n- Citizenship: U.S. citizen."),
+  buildCandidateContext("", "Candidate facts:\n- Citizenship: U.S. citizen."),
   "Candidate facts:\n- Citizenship: U.S. citizen.",
-  "empty honestContext leaves just the candidate-facts block, no trailing separator"
+  "empty Profile Background leaves just the candidate-facts block, no trailing separator"
 );
 assert.equal(
-  mergeHonestContext("Freeform notes.", ""),
+  buildCandidateContext("Freeform notes.", ""),
   "Freeform notes.",
-  "empty candidateFactsContext (unspecified citizenship) leaves just the freeform honestContext"
+  "empty candidateFactsContext (unspecified citizenship) leaves just the freeform Profile Background"
 );
-assert.equal(mergeHonestContext("", ""), "", "both empty merges to empty");
-assert.equal(mergeHonestContext("   ", "   "), "", "whitespace-only inputs trim to empty on both sides");
+assert.equal(buildCandidateContext("", ""), "", "both empty merges to empty");
+assert.equal(buildCandidateContext("   ", "   "), "", "whitespace-only inputs trim to empty on both sides");
 assert.equal(
-  mergeHonestContext("  leading/trailing space  ", "  candidate block  "),
+  buildCandidateContext("  leading/trailing space  ", "  candidate block  "),
   "candidate block\n\nleading/trailing space",
   "each side is trimmed before joining"
 );

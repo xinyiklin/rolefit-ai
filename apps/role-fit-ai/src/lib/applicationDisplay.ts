@@ -152,6 +152,28 @@ export function fitAssessmentRunLabel(snapshot: FitAssessmentSnapshot): string {
   return parts.join(" · ");
 }
 
+// fitAssessment.ts labels finding warnings "Match N: ", "Gap N: ", or "Eligibility: ".
+// Warnings for findings this surface does not show stay general with their label.
+export function splitFitWarnings(
+  warnings: readonly string[] | undefined,
+  shown: { matches?: number; gaps: number; eligibility?: boolean }
+) {
+  const matches: string[][] = Array.from({ length: shown.matches ?? 0 }, () => []);
+  const gaps: string[][] = Array.from({ length: shown.gaps }, () => []);
+  const eligibility: string[] = [];
+  const general: string[] = [];
+  for (const warning of warnings ?? []) {
+    const parsed = /^(?:(Match|Gap) ([1-9]\d*)|Eligibility): (.+)$/.exec(warning);
+    const finding = !parsed ? undefined
+      : parsed[1] === "Match" ? matches[Number(parsed[2]) - 1]
+      : parsed[1] === "Gap" ? gaps[Number(parsed[2]) - 1]
+      : shown.eligibility ? eligibility : undefined;
+    if (parsed && finding) finding.push(parsed[3].charAt(0).toUpperCase() + parsed[3].slice(1));
+    else general.push(warning);
+  }
+  return { general, matches, gaps, eligibility };
+}
+
 export function nextAction(app: Application) {
   if (app.status === "not_applying") return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;

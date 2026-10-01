@@ -1133,8 +1133,18 @@ assert.match(
 );
 assert.match(
   companionRendererSource,
-  /canManageExtension = liveConnectionStatus\?\.serverState === "owned"[\s\S]*approve\.disabled = extensionPairingPending \|\| !canManageExtension[\s\S]*remove\.disabled = extensionPairingPending \|\| !canManageExtension/,
+  /function extensionOriginRow\(origin, kind, canManageExtension\)[\s\S]*action\.disabled = extensionPairingPending \|\| !canManageExtension/,
   "extension access mutations stay disabled unless this companion owns the server"
+);
+assert.match(
+  companionRendererSource,
+  /canManageExtension = liveConnectionStatus\?\.serverState === "owned"[\s\S]*extensionOriginRow\(origin, "pending", canManageExtension\)[\s\S]*extensionOriginRow\(origin, "paired", canManageExtension\)/,
+  "approve and remove rows both receive the server-ownership gate"
+);
+assert.match(
+  companionRendererSource,
+  /const renderKey = JSON\.stringify\(\[[^\]]*canManageExtension, extensionPairingPending\]\)/,
+  "pairing rows rebuild when server ownership or an in-flight mutation changes their enabled state"
 );
 assert.match(
   companionRendererSource,
@@ -1365,9 +1375,19 @@ assert.doesNotMatch(companionHtmlSource, /extension-install__status/);
 assert.match(companionCssSource, /\.extension-install__copy::after[\s\S]*content:\s*attr\(data-copy-feedback\)/);
 assert.match(
   companionCssSource,
+  /\.extension-install__copy::after[^}]*content:\s*attr\(data-copy-feedback\) \/ ""/,
+  "copy feedback tooltips stay out of the control's accessible name; the live region announces results"
+);
+assert.match(
+  companionCssSource,
   /\.extension-install__copy:hover:not\(:disabled\):not\(\[data-copy-state\]\)::after[\s\S]*\.extension-install__copy:focus-visible:not\(\[data-copy-state\]\)::after/
 );
 assert.match(companionRendererSource, /pointerleave[\s\S]*resetExtensionSetupCopyFeedback[\s\S]*blur[\s\S]*resetExtensionSetupCopyFeedback/);
+assert.match(
+  companionRendererSource,
+  /extensionPairingList\.addEventListener\("keydown"[\s\S]{0,120}event\.repeat && \(event\.key === "Enter"[\s\S]{0,40}event\.preventDefault\(\)/,
+  "held Enter cannot auto-repeat into Confirm removal"
+);
 assert.match(
   companionCssSource,
   /@media \(prefers-reduced-motion: reduce\)[\s\S]*transition-duration:\s*\.01ms\s*!important/

@@ -3,10 +3,11 @@
 // decides the AI payload: POLISH sections are the only editable targets (the
 // sanitizer's target map comes from `sections` alone), INCLUDE sections are
 // read-only Resume Polish evidence, and OFF
-// sections are omitted from the payload entirely (heading noted only, for
-// audit). Getting this partition wrong either leaks an OFF section into the AI
-// payload or makes an INCLUDE section silently editable — both anti-fabrication
-// relevant, hence a locked eval.
+// sections are omitted from the AI payload entirely (the local scope notes the
+// heading, plus standard entry names used only for Profile linking). Getting
+// this partition wrong either leaks an OFF section into the AI payload or makes
+// an INCLUDE section silently editable — both anti-fabrication relevant, hence
+// a locked eval.
 //
 //   node src/lib/__evals__/resume-polish-scope-eval.mjs
 
@@ -81,11 +82,16 @@ const resume = {
 };
 
 const scope = buildResumePolishScope(resume, ["sum", "exp"], ["edu"]);
-assert.deepEqual(scope.locked, { omittedIdentity: true, omittedContact: true, omittedSections: ["Awards", "Hobbies"] }, "identity/contact are always locked-omitted; unassigned sections land in omittedSections by heading only");
+assert.deepEqual(
+  scope.locked,
+  { omittedIdentity: true, omittedContact: true, omittedSections: ["Awards", "Hobbies"], omittedEntryNames: [["Hackathon winner", ""], ["Chess", ""]] },
+  "identity/contact are always locked-omitted; unassigned sections land in omittedSections by heading, with entry names kept only for Profile linking"
+);
 assert.deepEqual(scope.sections.map((s) => s.id), ["sum", "exp"], "Polish ids populate the editable `sections` array, in resume order");
 assert.deepEqual(scope.contextSections.map((s) => s.id), ["edu"], "context ids populate the read-only `contextSections` array, disjoint from `sections`");
-// Structural fail-safe: an omitted section carries ONLY its heading — no items/bullets leak.
-assert.deepEqual(scope.locked.omittedSections, ["Awards", "Hobbies"], "omitted sections are headings only, never entry/bullet content");
+// Structural fail-safe: an omitted section carries its heading and entry names,
+// never bullets; the names stay on the local server (see the Profile-polish probes).
+assert.deepEqual(scope.locked.omittedSections, ["Awards", "Hobbies"], "omitted sections are headings only, never bullet content");
 
 // A section id in neither set, with a blank heading, is omitted silently (not even a heading recorded).
 const blankHeadingResume = { ...resume, sections: [...resume.sections, section("blank", "", "standard", [entry("b-1", { titleLeft: "x" })])] };
@@ -101,7 +107,7 @@ assert.deepEqual(scopeAllOff.locked.omittedSections, ["Summary", "Experience", "
 // Empty resume (no sections at all).
 const emptyResume = { header: null, sections: [] };
 const scopeEmpty = buildResumePolishScope(emptyResume, ["sum"], ["edu"]);
-assert.deepEqual(scopeEmpty, { version: 1, locked: { omittedIdentity: true, omittedContact: true, omittedSections: [] }, sections: [], contextSections: [] }, "an empty resume yields an empty (but well-formed) scope, ignoring ids that don't exist");
+assert.deepEqual(scopeEmpty, { version: 1, locked: { omittedIdentity: true, omittedContact: true, omittedSections: [], omittedEntryNames: [] }, sections: [], contextSections: [] }, "an empty resume yields an empty (but well-formed) scope, ignoring ids that don't exist");
 
 // contextSectionIds defaults to empty when omitted.
 const scopeNoContextArg = buildResumePolishScope(resume, ["sum"]);
@@ -158,7 +164,7 @@ const { serializeResumeData } = await import('../resumeText.ts');
 assert.match(serializeResumeData(absentRows), /Built accessible tooling/);
 assert(!serializeResumeData(absentRows).includes('null'));
 const { buildCoverLetterEvidence } = await import('../coverLetterEvidence.ts');
-assert(buildCoverLetterEvidence({ resumeData: absentRows, honestContext: '' }).some(item => item.text.includes('Built accessible tooling')));
+assert(buildCoverLetterEvidence({ resumeData: absentRows, candidateContext: '' }).some(item => item.text.includes('Built accessible tooling')));
 const { currentTargetText } = await import('../../hooks/useResumeProposalDecisions.ts');
 const { resumeProposalEditIsPending } = await import('../resumeProposalDecisionState.ts');
 const staleRowProposal = { target: { sectionId: 'absent-section', entryId: 'absent-entry', field: 'skills' }, currentText: '', proposedText: 'Recreated subtitle' };

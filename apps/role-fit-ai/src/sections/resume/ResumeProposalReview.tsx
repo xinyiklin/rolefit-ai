@@ -31,7 +31,44 @@ function editLocation(resume: ResumeData, suggestion: ResumeProposalSuggestion):
   const entry = section?.items.find((item) => item.id === suggestion.target.entryId);
   const heading = stripInlineMarks(suggestion.sectionHeading || section?.heading || "Resume").trim();
   const title = stripInlineMarks(entry?.titleLeft ?? "").trim();
-  return title ? `${heading} · ${title}` : heading;
+  const where = title ? `${heading} · ${title}` : heading;
+  return suggestion.kind === "add" ? `${where} · New bullet` : where;
+}
+
+// Rows group by what accepting them does to the document.
+const PROPOSAL_GROUPS = [
+  { kind: undefined, label: "Rewrite" },
+  { kind: "add", label: "Add" },
+  { kind: "remove", label: "Remove" },
+  { kind: "reorder", label: "Reorder" }
+] as const;
+
+// A reorder has no single field; it points at the bullet it moves to the top.
+function highlightTarget(suggestion: ResumeProposalSuggestion): ResumeProposalTarget {
+  return suggestion.kind === "reorder"
+    ? { ...suggestion.target, bulletId: suggestion.proposedOrder?.[0] }
+    : suggestion.target;
+}
+
+function ProposedOrder({ resume, suggestion }: { resume: ResumeData; suggestion: ResumeProposalSuggestion }) {
+  const bullets = resume.sections.find((section) => section.id === suggestion.target.sectionId)
+    ?.items.find((entry) => entry.id === suggestion.target.entryId)?.bullets ?? [];
+  const original = suggestion.originalOrder ?? [];
+  return (
+    <ol className="resume-proposal__order">
+      {(suggestion.proposedOrder ?? []).map((id, index) => {
+        const bullet = bullets.find((item) => item.id === id);
+        if (!bullet) return null;
+        const was = original.indexOf(id);
+        return (
+          <li key={id}>
+            <span>{stripInlineMarks(bullet.text)}</span>
+            {was !== index ? <span className="resume-proposal__moved">was {was + 1}</span> : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
 }
 
 export function ResumeProposalReview({
@@ -43,7 +80,10 @@ export function ResumeProposalReview({
 }: ResumeProposalReviewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const { suggestions, decisions, decided, isPending, accept, discard, revert } = proposal;
+  const { suggestions, decisions, decided, isPending, accept, discard, revert, applyAll, discardAll } = proposal;
+  const groups = PROPOSAL_GROUPS
+    .map((group) => ({ ...group, items: suggestions.filter((suggestion) => suggestion.kind === group.kind) }))
+    .filter((group) => group.items.length);
   const omittedNote = result.omittedTargetCount ? (
     <p className="resume-proposal__omitted">
       {result.omittedTargetCount} other editable field{result.omittedTargetCount === 1 ? " was" : "s were"} outside this Polish pass.
@@ -56,7 +96,11 @@ export function ResumeProposalReview({
       <ul>{result.advice.map((item, index) => {
         const section = resume.sections.find((section) => section.id === item.sectionId);
         const entry = section?.items.find((entry) => entry.id === item.entryId);
-        return <li key={index}><strong>{section?.heading} · {stripInlineMarks(entry?.titleLeft ?? "")}</strong><p>{item.rationale}</p><ContentWarnings warnings={item.warnings} />{item.warnings?.length ? <p>Unconfirmed references: {item.jobExcerpt} / {item.candidateExcerpt}</p> : <><blockquote>{item.jobExcerpt}</blockquote><blockquote>{item.candidateExcerpt}</blockquote></>}</li>;
+        const where = item.kind === "add-from-profile"
+          ? "Profile · Not on this resume"
+          : `${section?.heading} · ${stripInlineMarks(entry?.titleLeft ?? "")}`;
+        const references = [item.jobExcerpt, item.candidateExcerpt, item.profileExcerpt].filter(Boolean);
+        return <li key={index}><strong>{where}</strong><p>{item.rationale}</p><ContentWarnings warnings={item.warnings} />{item.warnings?.length ? <p>Unconfirmed references: {references.join(" / ")}</p> : <><blockquote>{item.jobExcerpt}</blockquote>{item.candidateExcerpt ? <blockquote>{item.candidateExcerpt}</blockquote> : null}{item.profileExcerpt ? <><p className="resume-proposal__label">Profile</p><blockquote>{item.profileExcerpt}</blockquote></> : null}</>}</li>;
       })}</ul>
     </details>
   ) : null;
@@ -71,7 +115,7 @@ export function ResumeProposalReview({
   }
 
   const feedback = <>
-    <ContentWarnings warnings={result.warnings} />
+    <ContentWarnings warnings={result.warnings?.filter((warning) => warning !== "Summary feedback is not supported by provided evidence.")} />
     <ContentWarnings warnings={proposal.terminologyWarnings} />
     <ProposalFeedbackList title="Proposed improvements" items={result.changeSummary?.slice(0, 3) ?? []} />
   </>;
@@ -95,86 +139,132 @@ export function ResumeProposalReview({
           <summary>
             {suggestions.length} proposed edit{suggestions.length === 1 ? "" : "s"}
           </summary>
-          <div className="resume-proposal__edit-list">
-            {suggestions.map((suggestion) => {
-              const decision = decisions[suggestion.id];
-              const current = currentTargetText(resume, suggestion);
-              const pending = isPending(suggestion);
-              const editing = editingId === suggestion.id;
-              const state = resumeProposalEditState(current, suggestion, decision);
-              const proposedText = decision?.kind === "accepted" ? decision.text : suggestion.proposedText;
-              return (
-                <article
-                  className="resume-proposal__edit"
-                  data-state={state}
-                  key={suggestion.id}
-                  onMouseEnter={() => onHighlight(suggestion.target)}
-                  onMouseLeave={() => onHighlight(null)}
-                  onFocus={() => onHighlight(suggestion.target)}
-                  onBlur={(event) => {
-                    if (!event.currentTarget.contains(event.relatedTarget)) onHighlight(null);
-                  }}
-                >
-                  <header className="resume-proposal__edit-head">
-                    <p className="resume-proposal__where">{editLocation(resume, suggestion)}</p>
-                    {state === "pending" ? null : (
-                      <span className="proposal-chip" data-state={state}>
-                        {state === "accepted" ? "Accepted" : state === "discarded" ? "Discarded" : "Changed in editor"}
-                      </span>
-                    )}
-                  </header>
-                  <p className="resume-proposal__label">Now</p>
-                  <p className="resume-proposal__original">
-                    <ProposalDiff original={suggestion.currentText} proposed={proposedText} mode="removed" />
-                  </p>
-                  <p className="resume-proposal__label">Proposed</p>
-                  {editing ? (
-                    <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={4} />
-                  ) : (
-                    <p className="resume-proposal__replacement">
-                      <ProposalDiff original={suggestion.currentText} proposed={proposedText} mode="added" />
-                    </p>
-                  )}
-                  {suggestion.reason && !editing ? <p className="resume-proposal__reason">{suggestion.reason}</p> : null}
-                  {suggestion.warnings?.length && (editing || proposedText !== suggestion.proposedText || state === "changed") ? <p className="resume-proposal__reason">Concerns below describe the original proposed wording; edits are not verification.</p> : null}
-                  <ContentWarnings warnings={suggestion.warnings} />
-                  <div className="resume-proposal__actions">
-                    {editing ? (
-                      <>
-                        <button className="primary-button is-compact" type="button" onClick={() => acceptEdit(suggestion.id, draft)} disabled={proposalStale || !draft.trim()}>
-                          <Check size={13} aria-hidden="true" /> Accept edited
-                        </button>
-                        <button className="ghost-button is-compact" type="button" onClick={() => setEditingId(null)}>Cancel</button>
-                      </>
-                    ) : pending ? (
-                      <>
-                        <button className="primary-button is-compact" type="button" onClick={() => accept(suggestion)} disabled={proposalStale}>
-                          <Check size={13} aria-hidden="true" /> Accept
-                        </button>
-                        <button className="ghost-button is-compact" type="button" disabled={proposalStale} onClick={() => {
-                          setEditingId(suggestion.id);
-                          setDraft(suggestion.proposedText);
-                        }}>
-                          <Pencil size={13} aria-hidden="true" /> Edit
-                        </button>
-                        <button className="ghost-button is-compact" type="button" onClick={() => discard(suggestion)}>
-                          <X size={13} aria-hidden="true" /> Discard
-                        </button>
-                      </>
-                    ) : state === "changed" ? (
-                      // The document moved on its own — there is no recorded
-                      // decision to take back, so Undo would have nothing to do.
-                      <span className="resume-proposal__decision">Edited in the document since this proposal</span>
-                    ) : (
-                      <button className="ghost-button is-compact" type="button" onClick={() => revert(suggestion)}>
-                        <Undo2 size={13} aria-hidden="true" /> Undo
+          {groups.map((group) => {
+            const pendingCount = group.items.filter(isPending).length;
+            const headingId = `resume-proposal-group-${group.label.toLowerCase()}`;
+            return (
+              <section className="resume-proposal__group" key={group.label} aria-labelledby={headingId}>
+                <header className="resume-proposal__group-head">
+                  <h3 id={headingId}>{group.label} <span>{group.items.length}</span></h3>
+                  {groups.length > 1 && pendingCount ? (
+                    <span className="resume-proposal__group-actions">
+                      <button className="ghost-button is-compact" type="button" disabled={proposalStale} onClick={() => applyAll(group.items)}>
+                        <Check size={13} aria-hidden="true" /> Accept {pendingCount}
+                        <span className="sr-only"> {group.label.toLowerCase()}</span>
                       </button>
-                    )}
-                  </div>
-                </article>
-              );
-            })}
-          </div>
+                      <button className="ghost-button is-compact" type="button" onClick={() => discardAll(group.items)}>
+                        <X size={13} aria-hidden="true" /> Discard
+                        <span className="sr-only"> {group.label.toLowerCase()}</span>
+                      </button>
+                    </span>
+                  ) : null}
+                </header>
+                <div className="resume-proposal__edit-list">
+                  {group.items.map((suggestion) => {
+                    const decision = decisions[suggestion.id];
+                    const current = currentTargetText(resume, suggestion);
+                    const pending = isPending(suggestion);
+                    const editing = editingId === suggestion.id;
+                    const state = resumeProposalEditState(current, suggestion, decision);
+                    const proposedText = decision?.kind === "accepted" ? decision.text : suggestion.proposedText;
+                    return (
+                      <article
+                        className="resume-proposal__edit"
+                        data-state={state}
+                        key={suggestion.id}
+                        onMouseEnter={() => onHighlight(highlightTarget(suggestion))}
+                        onMouseLeave={() => onHighlight(null)}
+                        onFocus={() => onHighlight(highlightTarget(suggestion))}
+                        onBlur={(event) => {
+                          if (!event.currentTarget.contains(event.relatedTarget)) onHighlight(null);
+                        }}
+                      >
+                        <header className="resume-proposal__edit-head">
+                          <p className="resume-proposal__where">{editLocation(resume, suggestion)}</p>
+                          <span className="resume-proposal__chips">
+                            {suggestion.evidence === "profile" ? <span className="proposal-chip">Profile</span> : null}
+                            {state === "pending" ? null : (
+                              <span className="proposal-chip" data-state={state}>
+                                {state === "accepted" ? "Accepted" : state === "discarded" ? "Discarded" : "Changed in editor"}
+                              </span>
+                            )}
+                          </span>
+                        </header>
+                        {suggestion.kind === "reorder" ? (
+                          <>
+                            <p className="resume-proposal__label">Proposed order</p>
+                            <ProposedOrder resume={resume} suggestion={suggestion} />
+                          </>
+                        ) : suggestion.kind === "remove" ? (
+                          <p className="resume-proposal__original is-removed">
+                            <ProposalDiff original={suggestion.currentText} proposed="" mode="removed" />
+                          </p>
+                        ) : (
+                          <>
+                            {suggestion.kind === "add" ? null : (
+                              <>
+                                <p className="resume-proposal__label">Now</p>
+                                <p className="resume-proposal__original">
+                                  <ProposalDiff original={suggestion.currentText} proposed={proposedText} mode="removed" />
+                                </p>
+                              </>
+                            )}
+                            <p className="resume-proposal__label">Proposed</p>
+                            {editing ? (
+                              <textarea value={draft} onChange={(event) => setDraft(event.target.value)} rows={4} />
+                            ) : (
+                              <p className="resume-proposal__replacement">
+                                <ProposalDiff original={suggestion.currentText} proposed={proposedText} mode="added" />
+                              </p>
+                            )}
+                          </>
+                        )}
+                        {suggestion.reason && !editing ? <p className="resume-proposal__reason">{suggestion.reason}</p> : null}
+                        {suggestion.profileSource ? <p className="resume-proposal__reason">From Profile: {suggestion.profileSource}</p> : null}
+                        {suggestion.warnings?.length && (editing || proposedText !== suggestion.proposedText || state === "changed") ? <p className="resume-proposal__reason">Concerns below describe the original proposed wording; edits are not verification.</p> : null}
+                        <ContentWarnings warnings={suggestion.warnings} />
+                        <div className="resume-proposal__actions">
+                          {editing ? (
+                            <>
+                              <button className="primary-button is-compact" type="button" onClick={() => acceptEdit(suggestion.id, draft)} disabled={proposalStale || !draft.trim()}>
+                                <Check size={13} aria-hidden="true" /> Accept edited
+                              </button>
+                              <button className="ghost-button is-compact" type="button" onClick={() => setEditingId(null)}>Cancel</button>
+                            </>
+                          ) : pending ? (
+                            <>
+                              <button className="primary-button is-compact" type="button" onClick={() => accept(suggestion)} disabled={proposalStale}>
+                                <Check size={13} aria-hidden="true" /> Accept
+                              </button>
+                              {suggestion.kind === "remove" || suggestion.kind === "reorder" ? null : (
+                                <button className="ghost-button is-compact" type="button" disabled={proposalStale} onClick={() => {
+                                  setEditingId(suggestion.id);
+                                  setDraft(suggestion.proposedText);
+                                }}>
+                                  <Pencil size={13} aria-hidden="true" /> Edit
+                                </button>
+                              )}
+                              <button className="ghost-button is-compact" type="button" onClick={() => discard(suggestion)}>
+                                <X size={13} aria-hidden="true" /> Discard
+                              </button>
+                            </>
+                          ) : state === "changed" ? (
+                            // The document moved on its own — there is no recorded
+                            // decision to take back, so Undo would have nothing to do.
+                            <span className="resume-proposal__decision">Edited in the document since this proposal</span>
+                          ) : (
+                            <button className="ghost-button is-compact" type="button" onClick={() => revert(suggestion)}>
+                              <Undo2 size={13} aria-hidden="true" /> Undo
+                            </button>
+                          )}
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </section>
+            );
+          })}
           {decided > 0 ? (
             <p className="resume-proposal__decided-note">
               {decided} of {suggestions.length} decided. Undo returns an edit to this queue.

@@ -13,7 +13,7 @@ const bundled = await build({
       import { SettingsDialog, SETTINGS_SECTIONS } from "../SettingsDialog.tsx";
       export { SETTINGS_SECTIONS };
       const noop = () => {};
-      export function render(section, honestContext) {
+      export function render(section, profileBackground) {
         return renderToStaticMarkup(
           <SettingsDialog
             section={section}
@@ -27,16 +27,16 @@ const bundled = await build({
             availabilityStatus="ready"
             availabilityMessage=""
             onRefreshProviders={noop}
-            runFitAssessment={true}
-            onRunFitAssessmentChange={noop}
-            autoPolishResume={false}
-            onAutoPolishResumeChange={noop}
-            resumeAutoPolishThreshold="REASONABLE"
-            onResumeAutoPolishThresholdChange={noop}
-            autoPolishCoverLetter={false}
-            onAutoPolishCoverLetterChange={noop}
-            coverLetterAutoPolishThreshold="STRONG"
-            onCoverLetterAutoPolishThresholdChange={noop}
+            fitAssessmentAuto={true}
+            onFitAssessmentAutoChange={noop}
+            resumePolishAuto={false}
+            onResumePolishAutoChange={noop}
+            resumePolishAutoThreshold="REASONABLE"
+            onResumePolishAutoThresholdChange={noop}
+            coverPolishAuto={false}
+            onCoverPolishAutoChange={noop}
+            coverPolishAutoThreshold="STRONG"
+            onCoverPolishAutoThresholdChange={noop}
             citizenshipStatus="unspecified"
             onCitizenshipChange={noop}
             legallyAuthorizedToWork="unspecified"
@@ -53,8 +53,8 @@ const bundled = await build({
             onAvailabilityNoticeChange={noop}
             availabilityDate=""
             onAvailabilityDateChange={noop}
-            honestContext={honestContext}
-            onHonestContextChange={noop}
+            profileBackground={profileBackground}
+            onProfileBackgroundChange={noop}
             workspacePreferencesStatus="idle"
             boldBulletKeywords={true}
             onBoldBulletKeywordsChange={noop}

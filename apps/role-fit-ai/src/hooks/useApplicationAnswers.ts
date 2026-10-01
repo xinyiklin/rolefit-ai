@@ -16,7 +16,7 @@ type UseApplicationAnswersArgs = {
   resumeData: ResumeData | null;
   jobDescription: string;
   jobUrl: string;
-  honestContext: string;
+  candidateContext: string;
   // Set while the Profile Background is over its limit; the stage declines.
   profileLimitMessage: string | null;
   sourceWarnings?: string[];
@@ -34,7 +34,7 @@ export function useApplicationAnswers({
   resumeData,
   jobDescription,
   jobUrl,
-  honestContext,
+  candidateContext,
   profileLimitMessage,
   sourceWarnings,
   customInstructions,
@@ -78,14 +78,14 @@ export function useApplicationAnswers({
     resumeData,
     jobDescription,
     jobUrl,
-    honestContext,
+    candidateContext,
     sourceWarnings,
     customInstructions,
     aiRequest: buildStageRequestFields(aiRequest)
   });
   const inputFingerprintRef = useRef(inputFingerprint);
   inputFingerprintRef.current = inputFingerprint;
-  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl, honestContext, customInstructions, sourceWarnings });
+  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl, candidateContext, customInstructions, sourceWarnings });
   const previousContentFingerprintRef = useRef(contentFingerprint);
 
   // Any request-input change invalidates only an IN-FLIGHT generation. Completed
@@ -190,7 +190,7 @@ export function useApplicationAnswers({
           ...buildStageRequestFields(aiRequest),
           resumeText,
           jobText: jobDescription,
-          honestContext,
+          candidateContext,
           customInstructions,
           sourceWarnings,
           questions: submittedQuestions,

@@ -22,7 +22,7 @@ export function resolveBoldBulletKeywords(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
-export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleResumePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -41,8 +41,8 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const scopeText = resumeScopeToText(resumeScope);
     const editableText = resumeScopeToText(resumeScope, true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const honestContext = String(body.honestContext ?? "");
-    const contextLimitError = candidateContextLimitError(honestContext);
+    const candidateContext = String(body.candidateContext ?? "");
+    const contextLimitError = candidateContextLimitError(candidateContext);
     if (contextLimitError) {
       sendJson(res, 400, { error: contextLimitError });
       return;
@@ -67,7 +67,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       resumeScope,
       scopeText,
       jobText,
-      honestContext,
+      candidateContext,
       customInstructions,
       boldBulletKeywords,
       signal: request.signal
@@ -93,7 +93,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       sendJson(res, 400, { error: configMessage });
       return;
     }
-    console.warn("[ai] polish failed", {
+    console.warn("[ai] resume polish failed", {
       provider,
       errorName: error instanceof Error ? error.name : typeof error
     });

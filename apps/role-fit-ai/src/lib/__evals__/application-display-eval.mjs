@@ -12,7 +12,8 @@ import {
   postingIdIndex,
   postingIdentity,
   safeExternalUrl,
-  safeExternalUrls
+  safeExternalUrls,
+  splitFitWarnings
 } from "../applicationDisplay.ts";
 
 function application(overrides = {}) {
@@ -211,5 +212,29 @@ assert.equal(
   null,
   "identity search excludes descriptions and notes"
 );
+
+const fitWarnings = [
+  "Match 1: this requirement is repeated.",
+  "Gap 2: source reference could not be confirmed. Quoted text is unconfirmed.",
+  "Eligibility: reported conflict was downgraded to Check; the supplied context does not establish a clear conflict.",
+  "Verdict: not supported by provided evidence; no supporting candidate finding was supplied.",
+  "Gap 3: this requirement overlaps another finding."
+];
+assert.deepEqual(
+  splitFitWarnings(fitWarnings, { matches: 1, gaps: 2, eligibility: true }),
+  {
+    general: [fitWarnings[3], fitWarnings[4]],
+    matches: [["This requirement is repeated."]],
+    gaps: [[], ["Source reference could not be confirmed. Quoted text is unconfirmed."]],
+    eligibility: ["Reported conflict was downgraded to Check; the supplied context does not establish a clear conflict."]
+  },
+  "finding warnings move beside their finding; unshown findings and verdict warnings stay general"
+);
+assert.deepEqual(
+  splitFitWarnings(fitWarnings, { gaps: 2 }).general,
+  [fitWarnings[0], fitWarnings[2], fitWarnings[3], fitWarnings[4]],
+  "a gaps-only surface keeps match and eligibility warnings, labels intact"
+);
+assert.deepEqual(splitFitWarnings(undefined, { gaps: 0 }), { general: [], matches: [], gaps: [], eligibility: [] });
 
 console.log("application display probes: passed");

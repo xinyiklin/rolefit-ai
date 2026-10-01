@@ -14,7 +14,7 @@ import { applicationReviewEvidenceLimitError } from "../../../shared/application
 import { parseCoverLetterEvidenceItems } from "../../../server/ai/coverLetterContracts.ts";
 import { COVER_EVIDENCE_PROMPT_CHAR_LIMIT, serializeJsonForPrompt } from "../../../server/ai/prompts.ts";
 import { buildApplicationReviewInput } from "../applicationReview.ts";
-import { buildCandidateFactsContext, mergeHonestContext } from "../candidateFacts.ts";
+import { buildCandidateFactsContext, buildCandidateContext } from "../candidateFacts.ts";
 import { buildCoverLetterEvidence } from "../coverLetterEvidence.ts";
 import { serializeResumeData } from "../resumeText.ts";
 import { loadSettings, normalizeSettings, saveSettings, setSettingsSaveListener } from "../settings.ts";
@@ -88,12 +88,12 @@ const resumes = {
 for (const [shape, background] of Object.entries(shapes)) {
   assert.equal(background.length, PROFILE_BACKGROUND_CHAR_LIMIT, `${shape}: boundary-sized`);
   assert.equal(profileBackgroundLimitError(background), null, `${shape}: exactly 12,000 runs`);
-  const merged = mergeHonestContext(background, facts);
+  const merged = buildCandidateContext(background, facts);
   const expected = keptLines(merged);
 
   for (const [resumeName, resumeData] of Object.entries(resumes)) {
-    const evidence = buildCoverLetterEvidence({ resumeData, honestContext: merged });
-    const profileItems = evidence.filter((item) => item.source === "honest_context");
+    const evidence = buildCoverLetterEvidence({ resumeData, candidateContext: merged });
+    const profileItems = evidence.filter((item) => item.source === "profile");
     assert.ok(profileItems.length <= 200, `${shape}/${resumeName}: the Profile uses at most 200 cover items`);
     assert.deepEqual(
       profileItems.flatMap((item) => item.text.split("\n")),
@@ -137,9 +137,9 @@ for (const [entries, bullets] of [[25, 8], [60, 8], [150, 2]]) {
     ...Array.from({ length: bullets }, (_, bullet) => `- Did ${entry}.${bullet}.`)
   ].join("\n")).join("\n\n");
   assert.ok(background.length <= PROFILE_BACKGROUND_CHAR_LIMIT, `${entries}x${bullets}: within the limit`);
-  const merged = mergeHonestContext(background, facts);
-  const items = buildCoverLetterEvidence({ resumeData: null, honestContext: merged })
-    .filter((item) => item.source === "honest_context")
+  const merged = buildCandidateContext(background, facts);
+  const items = buildCoverLetterEvidence({ resumeData: null, candidateContext: merged })
+    .filter((item) => item.source === "profile")
     .map((item) => item.text);
   assert.ok(items.length <= 200, `${entries}x${bullets}: at most 200 Profile items (${items.length})`);
   assert.deepEqual(items.flatMap((text) => text.split("\n")), keptLines(merged), `${entries}x${bullets}: every line survives in order`);
@@ -155,16 +155,16 @@ for (const [entries, bullets] of [[25, 8], [60, 8], [150, 2]]) {
 let workspaceSettings = null;
 setSettingsSaveListener((settings) => { workspaceSettings = settings; });
 for (const length of [PROFILE_BACKGROUND_CHAR_LIMIT + 1, 30_000]) {
-  const honestContext = "## Legacy (professional, 2019–2024)\n" + "p".repeat(length - 36);
-  assert.equal(honestContext.length, length);
-  assert.ok(profileBackgroundLimitError(honestContext), `${length}: runs decline`);
-  assert.equal(normalizeSettings({ honestContext }).honestContext, honestContext, `${length}: normalization keeps it`);
-  saveSettings({ honestContext });
-  assert.equal(workspaceSettings.honestContext, honestContext, `${length}: the workspace write keeps it`);
-  assert.equal(loadSettings().honestContext, honestContext, `${length}: reload keeps it`);
+  const profileBackground = "## Legacy (professional, 2019–2024)\n" + "p".repeat(length - 36);
+  assert.equal(profileBackground.length, length);
+  assert.ok(profileBackgroundLimitError(profileBackground), `${length}: runs decline`);
+  assert.equal(normalizeSettings({ profileBackground }).profileBackground, profileBackground, `${length}: normalization keeps it`);
+  saveSettings({ profileBackground });
+  assert.equal(workspaceSettings.profileBackground, profileBackground, `${length}: the workspace write keeps it`);
+  assert.equal(loadSettings().profileBackground, profileBackground, `${length}: reload keeps it`);
   assert.equal(
-    parsePortableWorkspacePreferences({ settings: { honestContext }, lastBaseResume: "" }).settings.honestContext,
-    honestContext,
+    parsePortableWorkspacePreferences({ settings: { profileBackground }, lastBaseResume: "" }).settings.profileBackground,
+    profileBackground,
     `${length}: backup restore keeps it`
   );
   assert.equal(
@@ -173,10 +173,10 @@ for (const length of [PROFILE_BACKGROUND_CHAR_LIMIT + 1, 30_000]) {
       schemaVersion: WORKSPACE_PREFERENCES_SCHEMA_VERSION,
       updatedAt: "2026-09-28T00:00:00.000Z",
       source: "workspace",
-      settings: { honestContext },
+      settings: { profileBackground },
       lastBaseResume: ""
-    }).settings.honestContext,
-    honestContext,
+    }).settings.profileBackground,
+    profileBackground,
     `${length}: the workspace file keeps it`
   );
 }

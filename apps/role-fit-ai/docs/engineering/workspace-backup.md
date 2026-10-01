@@ -44,14 +44,47 @@ are canonical in the active OS-user workspace. Origin-scoped browser storage is
 only a fail-open cache. Every Drafting Desk client attached to the workspace
 uses the same server contract:
 
-- `POST /api/workspace/preferences` — debounced push after any preference save.
-  The server validates the allowlisted shape and atomically writes
+- `POST /api/workspace/preferences` — debounced push after a save that
+  actually changed a preference. The body is `{ settings, lastBaseResume,
+  baseRevision }`. `baseRevision` is the revision the tab last adopted or wrote,
+  or `null` when it knows none. A revision is the SHA-256 of the stored file
+  bytes, so any writer's change counts, including one that leaves `updatedAt`
+  untouched. The server validates the allowlisted shape. Under the workspace
+  lock, an existing record with a different revision gets `409 { stale: true,
+  current }` and no write. Otherwise the server atomically writes
   `workspace-preferences.json` (owner-only permissions) in the workspace root
-  with `source: "workspace"` and a fresh `updatedAt`.
+  with `source: "workspace"` and a fresh `updatedAt`, and returns
+  `{ saved: true, revision }`.
 - `GET /api/workspace/preferences` — returns the stored file (`exists`,
-  `source`, `updatedAt`, `settings`, `lastBaseResume`) or `exists: false`.
-  Clients adopt it before first render and refresh it on window focus, so
-  browser, port, and incognito boundaries do not fork the profile.
+  `source`, `updatedAt`, `revision`, `settings`, `lastBaseResume`) or
+  `exists: false`. Clients adopt it before first render and refresh it on window
+  focus, so browser, port, and incognito boundaries do not fork the profile.
+
+Each tab keeps its own view of the settings it last saved or adopted, because
+the origin's browser cache is shared by every tab. Writes and rebases use that
+view, never a fresh cache read.
+
+A tab tracks which preferences its user changed since its baseline revision. A
+save that changes nothing, such as a page exit or first render, neither pushes
+nor leaves a pending marker. Unpushed edits, with their values, are recorded in
+one origin-wide pending record that merges every tab's entries. A write
+releases only the entries that still hold the value it sent. On the next boot,
+recovered edits are restored into the tab's view and cache, then sent without a
+base revision, so they always rebase onto whatever record exists then.
+
+When a push is refused as stale, the tab rebases onto the returned record: its
+user's changed settings keep their local values, and every other setting takes
+the newer record's value. Per-stage instructions merge per stage, including
+removals. It then shows the merged result, keeping edits still inside the
+settings UI's debounce on top, and retries once; a second refusal leaves the
+edit pending until the next focus. A restore that carries preferences replaces
+every pending edit, as it clears pre-restore drafts. Each tab tracks the restore
+its own baseline includes, so another tab acknowledging a restore does not make
+a suspended tab's pre-restore edits current. The pending record carries the restore it
+follows, and a record from before the latest adopted restore is discarded. A restore without preferences leaves no file to compare against, so the
+next write seeds it from the pending edits and cache, the same result as
+first-run seeding. A pending marker without a valid edit record, which older
+builds left after every page exit, names no edit and is discarded.
 
 Backup embeds valid preferences as the envelope's `preferences` field. A
 corrupt preferences file never blocks backing up resumes; the envelope simply

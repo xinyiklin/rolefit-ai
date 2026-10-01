@@ -24,7 +24,7 @@ export function buildApplicationReviewInput({
 }): ApplicationReviewInput {
   const evidence = buildCoverLetterEvidence({
     resumeData: originalResumeText.trim() ? parseResumeData(originalResumeText) : null,
-    honestContext: candidateContext
+    candidateContext
   }).map((item) => ({
     id: item.id,
     kind: item.source === "resume" ? ("resume" as const) : ("context" as const),

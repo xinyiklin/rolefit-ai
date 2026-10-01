@@ -1,23 +1,7 @@
 import assert from "node:assert/strict";
-import { sanitizeJobAnalysis } from "../jobAnalysis.ts";
 import { reviewProviderFindings } from "../applicationReview.ts";
 import { localApplicationReview } from "../../../shared/applicationReviewContract.ts";
 import { coverLetterParagraphClaims } from "../coverLetterParagraphEvidence.ts";
-
-for (const prefix of ["Responsibilities\nBuild Python services.", "Benefits\nHealth insurance."]) {
-  const result = sanitizeJobAnalysis({ requiredQualifications: ["Python experience."] }, `${prefix}\nWhat you bring\nPython experience.`);
-  assert.deepEqual(result.requiredQualifications, ["Python experience."]);
-}
-const concise = sanitizeJobAnalysis({ responsibilities: ["Build Python services.", "Maintain SQL databases."] }, "Responsibilities\nBuild Python services and maintain SQL databases.");
-assert.deepEqual(concise.responsibilities, ["Build Python services.", "Maintain SQL databases."]);
-assert.deepEqual(concise.conditionIssues, []);
-for (const original of ["Python or Java experience is required.", "Python experience is not required.", "Python experience is required unless equivalent experience is demonstrated."]) {
-  const result = sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, original);
-  assert.deepEqual(result.requiredQualifications, [original]);
-  if (original !== "Python experience is required.") assert.ok(result.jobWarnings?.length);
-}
-assert.deepEqual(sanitizeJobAnalysis({requiredQualifications:["Python experience is required."]}, "Python experience is preferred.").requiredQualifications, ["Python experience is preferred."]);
-assert.equal(sanitizeJobAnalysis({workAuth:"Visa sponsorship is available."}, "We do not offer visa sponsorship.").workAuth, "We do not offer visa sponsorship.");
 
 const input = {jobText:"Build Python services.", company:"Acme", role:"Engineer", includeResume:true, includeCoverLetter:false, resumeText:"Built Python services with Kubernetes.", coverLetterText:"", evidence:[{id:"original",kind:"resume",label:"Loaded resume evidence",text:"Built Python services."}]};
 for (const recovery of ["Remove Kubernetes; the source only shows Python.", "Use 2 bullets to explain the Python work."]) {

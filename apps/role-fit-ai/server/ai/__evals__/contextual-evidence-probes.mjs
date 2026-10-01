@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { findUngroundedNumericClaim } from "../sanitize.ts";
-import { sanitizeJobAnalysis } from "../jobAnalysis.ts";
 import { affirmativeEvidenceForTerm, candidateClaimIssue } from "../claimEvidence.ts";
 import { extractJobPosting } from "../../../src/lib/jobExtract.ts";
 
@@ -64,20 +63,6 @@ const numericCases = [
 for (const [name, claim, evidence, rejected] of numericCases) {
   assert.equal(findUngroundedNumericClaim(claim, evidence) !== null, rejected, name);
 }
-assert.equal(
-  sanitizeJobAnalysis(
-    { workAuth: "Visa sponsorship is available." },
-    "We do not offer visa sponsorship."
-  ).workAuth,
-  "We do not offer visa sponsorship."
-);
-assert.equal(
-  sanitizeJobAnalysis(
-    { workAuth: "We do not offer visa sponsorship." },
-    "We do not offer visa sponsorship."
-  ).workAuth,
-  "We do not offer visa sponsorship."
-);
 for (const [term, evidence, expected] of [
   ["Kubernetes", "I would use Kubernetes if given the opportunity.", false],
   ["Kubernetes", "I am currently learning Kubernetes.", false],
@@ -96,35 +81,17 @@ for (const [term, evidence, expected] of [
 ])
   assert.equal(affirmativeEvidenceForTerm(term, evidence), expected, evidence);
 assert.ok(candidateClaimIssue("I built Terraform workflows.", "Built Python scripts."));
-const classified = sanitizeJobAnalysis(
-  { requiredQualifications: ["Python experience is preferred."] },
-  "Preferred qualifications\nPython experience is preferred."
-);
-assert.deepEqual(classified.requiredQualifications, ["Python experience is preferred."]);
-assert.equal(classified.conditionIssues[0]?.sourceExcerpt, "Python experience is preferred.");
-const alternative =
-  "Python or Java experience is required unless equivalent experience is demonstrated.";
-assert.deepEqual(
-  sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, alternative)
-    .requiredQualifications,
-  [alternative]
-);
-assert.ok(sanitizeJobAnalysis({ requiredQualifications: ["Python experience is required."] }, alternative).jobWarnings?.length);
 const fallback = extractJobPosting(
   "Software Developer\nExample Company\nResponsibilities\nBuild Python services and support our product.\nWe do not offer visa sponsorship."
 );
 assert.match(fallback.tracking.workAuth, /do not offer/);
-console.log("Contextual numeric, affirmative evidence, condition, and fallback checks passed");
+console.log("Contextual numeric, affirmative evidence and fallback checks passed");
 
 assert.ok(findUngroundedNumericClaim("Managed €20 million.", "Managed $20 million."));
 assert.equal(
   affirmativeEvidenceForTerm("Python", "Built machine learning pipelines using Python."),
   true
 );
-
-for (const duty of ["You must build Python services.", "Build bonus calculation services in Python."]) {
-  assert.deepEqual(sanitizeJobAnalysis({ responsibilities: [duty] }, `Responsibilities\n${duty}`).responsibilities, [duty]);
-}
 
 assert.ok(candidateClaimIssue("Built Kubernetes services.", "Built Kubernetes services. I have never used Kubernetes."));
 assert.equal(candidateClaimIssue("Built Python services.", "Built Python services. I have never used Terraform."), null);

@@ -1,3 +1,4 @@
+import { profileHeadings, type ProfileHeading } from "../../shared/candidateProfileContract.ts";
 import { evidencePolarity, evidenceSegments } from "./claimEvidence.ts";
 
 export function isAffirmativeFitEvidence(evidence: string, corpus = evidence): boolean {
@@ -11,28 +12,21 @@ const EXPERIENCE_SOURCE_TERMS = /\b(?:personal|academic|volunteer|coursework|pro
 // Profile entries carry their experience type on Markdown headings, e.g.
 // "## Slotwise (personal project, 2025)". For each occurrence of the excerpt,
 // returns the nearest enclosing heading (its own line included) that names a
-// type, or "" when none does. Closed fenced code is not prose.
+// type, or "" when none does.
 export function excerptSourceHeadings(corpus: string, excerpt: string): string[] {
   const starts: number[] = [];
   for (let at = excerpt ? corpus.indexOf(excerpt) : -1; at >= 0; at = corpus.indexOf(excerpt, at + 1)) starts.push(at);
   if (!starts.length) return [""];
-  const lines = corpus.split("\n");
-  const fences = lines.flatMap((line, index) => (/^ {0,3}(?:```|~~~)/.test(line) ? [index] : []));
-  // An unclosed fence must not hide every later heading.
-  const pairedFences = new Set(fences.length % 2 ? fences.slice(0, -1) : fences);
+  const headings = profileHeadings(corpus);
   const labels: string[] = [];
-  const open: Array<{ level: number; text: string }> = [];
-  let inFence = false;
+  const open: ProfileHeading[] = [];
+  let next = 0;
   let lineStart = 0;
-  for (const [index, line] of lines.entries()) {
-    if (pairedFences.has(index)) inFence = !inFence;
-    else if (!inFence) {
-      const heading = /^ {0,3}(#{1,6})[ \t]+(\S.*)$/.exec(line);
-      if (heading) {
-        const level = heading[1].length;
-        while (open.length && open[open.length - 1].level >= level) open.pop();
-        open.push({ level, text: heading[2].trim() });
-      }
+  for (const [index, line] of corpus.split("\n").entries()) {
+    for (; next < headings.length && headings[next].line === index; next += 1) {
+      const heading = headings[next];
+      while (open.length && open[open.length - 1].level >= heading.level) open.pop();
+      open.push(heading);
     }
     const lineEnd = lineStart + line.length;
     while (labels.length < starts.length && starts[labels.length] <= lineEnd) {

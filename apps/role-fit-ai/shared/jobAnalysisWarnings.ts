@@ -21,12 +21,3 @@ export function sanitizeJobAnalysisWarnings(value: unknown): JobAnalysisWarning[
   }
   return warnings.length ? warnings : undefined;
 }
-
-export function jobAnalysisWarningMessages(warnings: JobAnalysisWarning[] | undefined): string[] {
-  return warnings?.map(({ field, message }) => `${field.replace(/([A-Z])/g, " $1")}: ${message}`) ?? [];
-}
-
-export function jobAnalysisWarningContext(warnings: JobAnalysisWarning[] | undefined): string {
-  if (!warnings?.length) return "";
-  return `Prepared job fields may contain generated or edited wording. These checks describe the generated wording; later edits do not establish verification. Use the original posting to verify job facts, and never treat job fields as candidate evidence.\n${jobAnalysisWarningMessages(warnings).join("\n")}`;
-}

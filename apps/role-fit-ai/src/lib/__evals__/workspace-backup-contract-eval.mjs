@@ -52,15 +52,15 @@ assert.deepEqual(parsePortableWorkspacePreferences(emptyPortable), emptyPortable
 
 const knownSettingPortable = {
   settings: {
-    aiProvider: "openai",
-    selectedModel: "gpt-5.6-terra",
-    autoPolishResume: true,
-    resumeAutoPolishThreshold: "REASONABLE",
+    resumePolishProvider: "openai",
+    resumePolishSelectedModel: "gpt-5.6-terra",
+    resumePolishAuto: true,
+    resumePolishAutoThreshold: "REASONABLE",
     citizenshipStatus: "us-citizen",
     gpa: 3.86,
     availabilityNotice: "specific-date",
     availabilityDate: "2026-09-14",
-    honestContext: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
+    profileBackground: "## Slotwise (personal project, 2025–present)\nBuilt scheduling services."
   },
   lastBaseResume: "fullstack.resume"
 };
@@ -84,14 +84,14 @@ assert.deepEqual(
     lastBaseResume: "fullstack.resume"
   }),
   {
-    settings: { ...knownSettingPortable.settings, honestContext: migratedBackground },
+    settings: { ...knownSettingPortable.settings, profileBackground: migratedBackground },
     lastBaseResume: "fullstack.resume"
   },
   "a backup with legacy experience rows restores with the rows appended to the Background"
 );
 assert.deepEqual(
   parsePortableWorkspacePreferences({ settings: { experienceProfile: legacyRows }, lastBaseResume: "" }).settings,
-  { honestContext: migratedBackground.slice(migratedBackground.indexOf("## Experience by type")) },
+  { profileBackground: migratedBackground.slice(migratedBackground.indexOf("## Experience by type")) },
   "legacy rows without Background text become the Background"
 );
 assert.throws(
@@ -120,9 +120,9 @@ for (const [name, bad] of [
   // normalizeSettings silently drops an unrecognized provider value, so the
   // input/normalized key sets diverge and the strict round-trip check throws
   // — this is how the module catches "unsupported or invalid" settings values.
-  ["an unsupported provider value normalizeSettings would strip", { settings: { aiProvider: "not-a-real-provider" }, lastBaseResume: "" }],
+  ["an unsupported provider value normalizeSettings would strip", { settings: { resumePolishProvider: "not-a-real-provider" }, lastBaseResume: "" }],
   ["an unrecognized settings key normalizeSettings would strip", { settings: { notARealSetting: true }, lastBaseResume: "" }],
-  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { runFitAssessment: "yes" }, lastBaseResume: "" }],
+  ["a wrong-typed known setting value normalizeSettings would strip", { settings: { fitAssessmentAuto: "yes" }, lastBaseResume: "" }],
   ["settings JSON over the 100,000-byte cap", { settings: { customInstructions: "x".repeat(150_000) }, lastBaseResume: "" }],
   ["lastBaseResume over 200 chars", { settings: {}, lastBaseResume: `base-resume-${"a".repeat(200)}.resume` }],
   ["lastBaseResume not matching the base-resume filename contract", { settings: {}, lastBaseResume: "../../etc/passwd" }],
@@ -138,7 +138,7 @@ const validStoredPrefs = {
   schemaVersion: WORKSPACE_PREFERENCES_SCHEMA_VERSION,
   updatedAt: RESTORED_AT,
   source: "workspace",
-  settings: { aiProvider: "openai" },
+  settings: { resumePolishProvider: "openai" },
   lastBaseResume: ""
 };
 assert.deepEqual(parseStoredWorkspacePreferences(validStoredPrefs), validStoredPrefs, "a well-formed workspace preferences record parses through unchanged");
@@ -151,8 +151,8 @@ const legacyStoredPrefs = { ...validStoredPrefs, settings: { aiProvider: "openai
 const migratedStoredPrefs = parseStoredWorkspacePreferences(legacyStoredPrefs);
 assert.deepEqual(
   migratedStoredPrefs.settings,
-  { aiProvider: "openai", honestContext: "Tutor.\n\n## Experience by type\n- Research / lab: experience declared" },
-  "a workspace file saved before the Profile change still loads, with its rows migrated"
+  { resumePolishProvider: "openai", profileBackground: "Tutor.\n\n## Experience by type\n- Research / lab: experience declared" },
+  "a workspace file saved before the Profile change and the naming pass still loads, with its rows migrated"
 );
 assert.deepEqual(
   parseStoredWorkspacePreferences({ ...legacyStoredPrefs, settings: { ...migratedStoredPrefs.settings, experienceProfile: [{ category: "research" }] } }).settings,
@@ -239,7 +239,7 @@ assert.throws(
 
 const withPreferences = {
   ...validEnvelope,
-  preferences: { settings: { aiProvider: "openai" }, lastBaseResume: "" }
+  preferences: { settings: { resumePolishProvider: "openai" }, lastBaseResume: "" }
 };
 assert.deepEqual(parseWorkspaceBackupEnvelope(withPreferences), withPreferences, "the optional preferences field delegates to parsePortableWorkspacePreferences and round-trips");
 
@@ -331,10 +331,10 @@ for (const model of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
     honestContext: "Preserve this synthetic preference."
   } };
   const current = parseStoredWorkspacePreferences(old);
-  assert.equal(current.settings.selectedModel, "gpt-6-sol");
-  assert.equal(current.settings.cliReasoningEffort, "high");
-  assert.equal(current.settings.coverCliReasoningEffort, "");
-  assert.equal(current.settings.honestContext, old.settings.honestContext);
+  assert.equal(current.settings.resumePolishSelectedModel, "gpt-6.1-sol");
+  assert.equal(current.settings.resumePolishCliReasoningEffort, "high");
+  assert.equal(current.settings.coverPolishCliReasoningEffort, "");
+  assert.equal(current.settings.profileBackground, old.settings.honestContext);
   assert.equal(old.settings.selectedModel, model);
   assert.deepEqual(parseStoredWorkspacePreferences(current), current, "migration is idempotent");
   assert.deepEqual(parsePortableWorkspacePreferences({ settings: old.settings, lastBaseResume: "" }).settings, current.settings);
@@ -342,7 +342,7 @@ for (const model of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
     { selectedModel: "made-up-model" },
     { cliReasoningEffort: "made-up-effort" },
     { cliReasoningEffort: 7 },
-    { runFitAssessment: "yes" },
+    { fitAssessmentAuto: "yes" },
     { secret: "must-not-be-imported" },
     { aiProvider: "anthropic" }
   ]) {

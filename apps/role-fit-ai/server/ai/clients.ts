@@ -1,7 +1,7 @@
 // Provider API clients + the dispatch that routes a built {systemPrompt,
 // userPrompt} pair to the configured provider (hosted API or subscription CLI)
 // and returns parsed JSON. Single source of truth for outbound AI calls,
-// shared by /api/polish and /api/application-answers.
+// shared by /api/resume-polish and /api/application-answers.
 
 import { callAntigravityCli, callClaudeCli, callCodexCli } from "../ai-cli/index.ts";
 import { fetchWithTimeout } from "../http.ts";
@@ -202,6 +202,9 @@ const EXPLICIT_NO_THINKING_MODELS: ReadonlySet<string> = new Set([
   "claude-sonnet-5",
   "claude-opus-5"
 ]);
+// Sonnet 5.5 rejects `disabled`; `between_tools` is its lowest setting and is
+// accepted at its default high effort.
+const BETWEEN_TOOLS_THINKING_MODELS: ReadonlySet<string> = new Set(["claude-sonnet-5-5"]);
 const BOUNDED_ADAPTIVE_THINKING_MODELS: ReadonlySet<string> = new Set([
   "claude-fable-5",
   "claude-fable-5-1",
@@ -216,6 +219,7 @@ export function buildAnthropicMessagesBody({ model, systemPrompt, userPrompt }: 
     messages: [{ role: "user", content: userPrompt }],
     // Opus 5 permits a disable at its default high effort; xhigh/max reject it.
     ...(EXPLICIT_NO_THINKING_MODELS.has(model) ? { thinking: { type: "disabled" } } : {}),
+    ...(BETWEEN_TOOLS_THINKING_MODELS.has(model) ? { thinking: { type: "between_tools" } } : {}),
     // Always-on thinking shares the output budget with JSON; keep effort bounded.
     ...(BOUNDED_ADAPTIVE_THINKING_MODELS.has(model)
       ? { output_config: { effort: "low" } }
@@ -260,7 +264,7 @@ async function dispatchProvider({ provider, model, reasoningEffort, apiKey, syst
 
 // Dispatch a built {systemPrompt, userPrompt} pair to the configured provider
 // (API or CLI) and return the parsed JSON. Single source of truth for provider
-// routing, shared by /api/polish and /api/application-answers.
+// routing, shared by /api/resume-polish and /api/application-answers.
 //
 // Retry policy: exactly one retry, and only for unreadable model OUTPUT (the
 // "AI returned ..." 502s from parseAiJson — empty reply or JSON the repair

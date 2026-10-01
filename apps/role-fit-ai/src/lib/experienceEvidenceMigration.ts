@@ -66,12 +66,12 @@ export function migrateExperienceEvidence(settings: Record<string, unknown>): Re
   if (!Object.prototype.hasOwnProperty.call(settings, "experienceProfile")) return settings;
   const { experienceProfile, ...migrated } = settings;
   const block = experienceEvidenceText(experienceProfile);
-  const background = typeof migrated.honestContext === "string" ? migrated.honestContext : "";
+  const background = typeof migrated.profileBackground === "string" ? migrated.profileBackground : "";
   // A stored file keeps its rows until the next save, so a re-read must not
   // append the same block twice.
   if (block && !background.includes(block)) {
     const separator = !background || background.endsWith("\n\n") ? "" : background.endsWith("\n") ? "\n" : "\n\n";
-    migrated.honestContext = `${background}${separator}${block}`;
+    migrated.profileBackground = `${background}${separator}${block}`;
   }
   return migrated;
 }

@@ -1,5 +1,8 @@
 import type { ResumeData, ResumeEntry, ResumeSectionData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 
+import { normalizeOmittedEntryNames, profileTextOnResume } from "../../shared/candidateProfileContract.ts";
+import type { ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
+
 export type ResumePolishScopeBullet = {
   id: string;
   text: string;
@@ -32,6 +35,9 @@ export type ResumePolishScope = {
     omittedIdentity: true;
     omittedContact: true;
     omittedSections: string[];
+    // Title and subtitle of each omitted standard entry, so a Profile heading
+    // naming one is ambiguous rather than linked to a same-named visible entry.
+    omittedEntryNames: string[][];
   };
   // POLISH sections — the editable targets (this is the ONLY editable set, by
   // construction: the sanitizer builds its target map from `sections` alone).
@@ -90,7 +96,8 @@ function scopeSection(section: ResumeSectionData): ResumePolishScopeSection {
 
 // Partition the resume into three disjoint buckets: polishIds -> editable
 // `sections`, contextIds -> read-only `contextSections`, everything else ->
-// `omittedSections` (heading only). A section in neither id set is omitted.
+// `omittedSections` (heading only, plus standard entry names for Profile
+// linking). A section in neither id set is omitted.
 export function buildResumePolishScope(
   data: ResumeData,
   polishSectionIds: Iterable<string>,
@@ -101,18 +108,22 @@ export function buildResumePolishScope(
   const sections: ResumePolishScopeSection[] = [];
   const contextSections: ResumePolishScopeSection[] = [];
   const omittedSections: string[] = [];
+  const omittedEntryNames: string[][] = [];
   for (const section of data.sections) {
     if (polish.has(section.id)) sections.push(scopeSection(section));
     else if (context.has(section.id)) contextSections.push(scopeSection(section));
     else {
       const heading = section.heading.trim();
       if (heading) omittedSections.push(heading);
+      if (section.type === "standard") {
+        for (const entry of section.items) omittedEntryNames.push([entry.titleLeft ?? "", entry.subtitleLeft ?? ""]);
+      }
     }
   }
 
   return {
     version: 1,
-    locked: { omittedIdentity: true, omittedContact: true, omittedSections },
+    locked: { omittedIdentity: true, omittedContact: true, omittedSections, omittedEntryNames: normalizeOmittedEntryNames(omittedEntryNames) },
     sections,
     contextSections
   };
@@ -154,4 +165,18 @@ export function resumePolishScopeToText(scope: ResumePolishScope, editableOnly =
     for (const section of scope.contextSections) appendScopeSectionLines(lines, section);
   }
   return lines.join("\n").trim();
+}
+
+// Polish sends only its sections, so the server cannot tell that an
+// add-from-profile item is already elsewhere on this resume; drop those here.
+export function adviceNotOnResume(
+  advice: ResumePolishAdvice[] | undefined,
+  resume: ResumeData,
+  candidateContext: string
+): ResumePolishAdvice[] | undefined {
+  const everywhere = buildResumePolishScope(resume, resume.sections.map((section) => section.id), []);
+  const onResume = profileTextOnResume(everywhere, candidateContext);
+  return advice?.filter((item) => item.kind !== "add-from-profile"
+    || !item.profileExcerpt
+    || !onResume.some((text) => text.includes(item.profileExcerpt!)));
 }

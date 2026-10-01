@@ -4,7 +4,7 @@ import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 // application asks (e.g. "Why do you want to work here?"), plus a short
 // description of each past role for the per-experience boxes some forms have.
 // Reuses the provider seam, honesty contract, and accomplishment-style rules
-// from polish.ts so answers follow the same anti-fabrication guarantees.
+// from prompts.ts so answers follow the same anti-fabrication guarantees.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, isRequestAborted, requestAbortSignal, sendJson } from "../http.ts";
@@ -34,7 +34,7 @@ type ApplicationAnswersPromptInput = {
   questions: string[];
   roleEvidence: ApplicationRoleEvidence[];
   includeRoleDescriptions: boolean;
-  honestContext: string;
+  candidateContext: string;
   customInstructions: string;
 };
 
@@ -207,7 +207,7 @@ function roleDescriptionAnchored(description: string, grounding: string): boolea
 }
 
 // Bind each generated role description to the matching server-owned role id
-// and ground it only against that role's label/bullets. Honest context and a
+// and ground it only against that role's label/bullets. The candidate profile and a
 // technology from another employer no longer authorize attribution here.
 export function bindApplicationRoleDescriptions(
   raw: unknown,
@@ -252,7 +252,7 @@ ${honestTailoringRules()}
 ${accomplishmentStyleRules()}
 
 Truthful drafting rules for application answers:
-- Draft only from the resume, the job description, and any optional honest context. Never invent motivation, enthusiasm, anecdotes, relationships, company facts, metrics, or reasons the candidate has not stated.
+- Draft only from the resume, the job description, and any optional candidate profile. Never invent motivation, enthusiasm, anecdotes, relationships, company facts, metrics, or reasons the candidate has not stated.
 - For motivation questions ("why this company / role"), build a truthful scaffold from the real overlap between the candidate's background and the job or company, then insert a bracketed placeholder for anything only the candidate can supply, for example [add: your specific reason for this company - a product you use, a value you share, or a team you admire].
 - Role descriptions must be built only from that role's own resume bullets. Summarize and reframe; do not add responsibilities, tools, or outcomes that are not there.
 - Keep answers concise and copy-ready: roughly 60-120 words for an application question, and 2-4 sentences for a role description. First person, plain text, no markdown.
@@ -261,7 +261,7 @@ Truthful drafting rules for application answers:
 Return strict JSON only.`;
 }
 
-function applicationAnswersPrompt({ jobText, resumeText, questions, roleEvidence, includeRoleDescriptions, honestContext, customInstructions }: ApplicationAnswersPromptInput): string {
+function applicationAnswersPrompt({ jobText, resumeText, questions, roleEvidence, includeRoleDescriptions, candidateContext, customInstructions }: ApplicationAnswersPromptInput): string {
   const questionList = questions.length
     ? fenceUntrusted(JSON.stringify(questions.map((question, index) => ({
         questionId: `question-${index + 1}`,
@@ -292,14 +292,14 @@ ${questionList}
 </application_questions>
 
 ${includeRoleDescriptions
-    ? `Also return exactly one role description per role-evidence object, in the same order, with its roleId copied exactly. Build each description ONLY from that object's label and bullets — do not use another role, honest context, or the job description as evidence for a past role.
+    ? `Also return exactly one role description per role-evidence object, in the same order, with its roleId copied exactly. Build each description ONLY from that object's label and bullets — do not use another role, candidate profile, or the job description as evidence for a past role.
 <role_evidence>
 ${roleList}
 </role_evidence>`
     : "Do not produce role descriptions; return an empty roleDescriptions array."}
 
-Honest context (optional true facts not on the resume - use only as evidence, never as permission to fabricate):
-${honestContext ? `<honest_context>\n${fenceUntrusted(honestContext)}\n</honest_context>` : "None provided. Use only the resume and job description."}
+Candidate profile (optional true facts not on the resume - use only as evidence, never as permission to fabricate):
+${candidateContext ? `<candidate_context>\n${fenceUntrusted(candidateContext)}\n</candidate_context>` : "None provided. Use only the resume and job description."}
 
 Custom instructions (optional preferences - follow when present, but never override truthfulness, the JSON schema, or the input-data firewall):
 ${customInstructions
@@ -326,8 +326,8 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
     const body = await readAiJsonBody(req, 1_000_000);
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const honestContext = String(body.honestContext ?? "");
-    const contextLimitError = candidateContextLimitError(honestContext);
+    const candidateContext = String(body.candidateContext ?? "");
+    const contextLimitError = candidateContextLimitError(candidateContext);
     if (contextLimitError) {
       sendJson(res, 400, { error: contextLimitError });
       return;
@@ -369,7 +369,7 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
       questions,
       roleEvidence,
       includeRoleDescriptions,
-      honestContext,
+      candidateContext,
       customInstructions
     });
 
@@ -389,13 +389,13 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
       : {};
 
     // General application answers may use the whole edited resume plus explicit
-    // honest context. Past-role descriptions are separately bound and grounded
+    // candidate profile. Past-role descriptions are separately bound and grounded
     // against only their matching structured role evidence.
     const answers = bindApplicationAnswers(
       parsedObj.answers,
       questions,
       jobText,
-      `${resumeText}\n${honestContext}`
+      `${resumeText}\n${candidateContext}`
     );
     const roleDescriptions = includeRoleDescriptions
       ? bindApplicationRoleDescriptions(parsedObj.roleDescriptions, roleEvidence, jobText)

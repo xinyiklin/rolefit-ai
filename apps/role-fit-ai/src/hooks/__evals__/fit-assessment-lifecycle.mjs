@@ -352,7 +352,7 @@ assert.equal(
 
 const intakeSource = readFileSync(new URL("../useJobIntake.ts", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
-const polishSource = readFileSync(new URL("../usePolishPipeline.ts", import.meta.url), "utf8");
+const polishSource = readFileSync(new URL("../useResumePolishPipeline.ts", import.meta.url), "utf8");
 const preparedCoverSource = readFileSync(
   new URL("../usePreparedCoverLetter.ts", import.meta.url),
   "utf8"
@@ -367,7 +367,7 @@ const railSource = readFileSync(
 );
 assert.match(
   intakeSource,
-  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(runFitAssessment, prepareRunId, snapshot\)/,
+  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(fitAssessmentAuto, prepareRunId, snapshot\)/,
   "application restore hydrates the hook-owned prepared-job receipt and historical assessment atomically"
 );
 assert.match(

@@ -60,4 +60,10 @@ assert.match(
   "saved cover letters are not labeled as an empty workspace"
 );
 
-console.log("Prepare application rail layout eval: 9/9 checks passed");
+assert.match(
+  prepareStyles,
+  /\.fit-assessment-list > ul > li,\s*\.fit-assessment-list > li\s*\{\s*overflow-wrap:\s*anywhere/,
+  "Fit findings (div wrapper) and Final review findings (ul.fit-assessment-list) both wrap long excerpts"
+);
+
+console.log("Prepare application rail layout eval: 10/10 checks passed");

@@ -56,11 +56,11 @@ for (const empty of [[], [null], [{ category: "bogus" }], "rows", null]) {
 
 // Background text is never rewritten, only appended to.
 const background = "## Slotwise (personal project, 2025–present)\nBuilt scheduling services.  ";
-const withoutRows = { honestContext: background, gpa: 3.5 };
+const withoutRows = { profileBackground: background, gpa: 3.5 };
 assert.equal(migrateExperienceEvidence(withoutRows), withoutRows, "settings without rows pass through untouched");
 assert.deepEqual(
-  migrateExperienceEvidence({ honestContext: background, experienceProfile: [] }),
-  { honestContext: background },
+  migrateExperienceEvidence({ profileBackground: background, experienceProfile: [] }),
+  { profileBackground: background },
   "empty rows are dropped without touching the Background"
 );
 const block = experienceEvidenceText(allRows);
@@ -70,8 +70,8 @@ for (const [before, after] of [
   [`${background}\n`, `${background}\n\n${block}`],
   [`${background}\n\n`, `${background}\n\n${block}`]
 ]) {
-  const migrated = migrateExperienceEvidence({ honestContext: before, experienceProfile: allRows });
-  assert.deepEqual(migrated, { honestContext: after }, `rows append after ${JSON.stringify(before.slice(-4))}`);
+  const migrated = migrateExperienceEvidence({ profileBackground: before, experienceProfile: allRows });
+  assert.deepEqual(migrated, { profileBackground: after }, `rows append after ${JSON.stringify(before.slice(-4))}`);
   assert.deepEqual(migrateExperienceEvidence(migrated), migrated, "migrating twice changes nothing");
   assert.deepEqual(
     migrateExperienceEvidence({ ...migrated, experienceProfile: allRows }),
@@ -81,7 +81,7 @@ for (const [before, after] of [
 }
 assert.deepEqual(
   migrateExperienceEvidence({ experienceProfile: allRows }),
-  { honestContext: block },
+  { profileBackground: block },
   "rows without Background text become the Background"
 );
 
@@ -96,14 +96,14 @@ const maxRows = allRows.map((row) => ({
 const maxBackground = "b".repeat(50_000);
 const maxMigrated = migrateStoredSettings({ honestContext: maxBackground, experienceProfile: maxRows });
 assert.ok(
-  maxMigrated.honestContext.length <= PROFILE_BACKGROUND_STORAGE_LIMIT,
-  `largest migrated Background (${maxMigrated.honestContext.length}) fits storage`
+  maxMigrated.profileBackground.length <= PROFILE_BACKGROUND_STORAGE_LIMIT,
+  `largest migrated Background (${maxMigrated.profileBackground.length}) fits storage`
 );
-assert.equal(normalizeSettings(maxMigrated).honestContext, maxMigrated.honestContext, "normalization keeps the whole migrated Background");
+assert.equal(normalizeSettings(maxMigrated).profileBackground, maxMigrated.profileBackground, "normalization keeps the whole migrated Background");
 assert.equal(
-  parsePortableWorkspacePreferences({ settings: { honestContext: maxBackground, experienceProfile: maxRows }, lastBaseResume: "" }).settings.honestContext,
-  maxMigrated.honestContext,
+  parsePortableWorkspacePreferences({ settings: { honestContext: maxBackground, experienceProfile: maxRows }, lastBaseResume: "" }).settings.profileBackground,
+  maxMigrated.profileBackground,
   "a maximal legacy backup restores without loss"
 );
 
-console.log(`experience-evidence migration probes passed (max migrated Background ${maxMigrated.honestContext.length} chars)`);
+console.log(`experience-evidence migration probes passed (max migrated Background ${maxMigrated.profileBackground.length} chars)`);

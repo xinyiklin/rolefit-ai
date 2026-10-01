@@ -44,7 +44,7 @@ assert(
 assert(
   fixtures.some((fixture) =>
     fixture.evidence.some(
-      (item) => item.source === "honest_context" && /AI assistance/i.test(item.text)
+      (item) => item.source === "profile" && /AI assistance/i.test(item.text)
     )
   ),
   "one fixture makes an AI-workflow honest-context item relevant"

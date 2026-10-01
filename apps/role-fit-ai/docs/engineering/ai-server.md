@@ -126,7 +126,7 @@ owns:
 - `/api/providers`, a shape-only same-origin registry of configured/readiness
   state. It never returns keys, account identifiers, executable paths, versions,
   raw CLI output, operation ids, or workspace details
-- `/api/polish` AI provider routing — subscription CLIs (Claude Code,
+- `/api/resume-polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
   plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
   `mode: "resume-proposal"` and performs one provider operation. The server
@@ -144,15 +144,38 @@ owns:
   substitutions in a list target, and other content concerns produce warnings.
   Unknown/duplicate targets and malformed or unsafe mutations remain blocked;
   unchanged text is a no-op. Optional feedback concerns do not erase safe siblings.
-  Only bullets and actual Skills lists are mutable targets. Identity, contact,
+  Only bullets, actual Skills lists, two `new-bullet` slots per in-scope
+  standard entry with linked Profile text, and one `bullet-order` target
+  (`order-N`, listing its bullet `target-N` ids) per standard entry with two or
+  more bullets are mutable targets. A standard bullet change may carry
+  `action: "remove"` instead of a replacement; an order change carries `order`,
+  a complete permutation. The server withholds a removal of an entry's last
+  bullet, a remove on a non-standard target, a remove of a bullet it also
+  rewrites, a non-permutation, and a reorder of an entry that also loses
+  bullets; an unchanged order is a no-op. An order target is sent only when all
+  of its bullets are, and never counts as an omitted field. Identity, contact,
   education, and standard-entry role/employer/subtitle/date fields remain
-  read-only evidence; omitted sections are absent.
-  `/api/polish` accepts only the one-pass `resume-proposal` contract. Its prompt
+  read-only evidence; omitted sections are absent. `shared/resumePolishContract.ts`
+  derives the same positional `target-N`, `order-N`, and `add-N` ids on server and client from
+  the scope plus `candidateContext`. New-bullet slots use only the prompt budget
+  that existing targets leave, and linked Profile text travels in a separate
+  fenced `entry_profiles` block outside that budget, so a linked Profile never
+  changes which existing fields a pass can edit. Changes that rely on linked
+  text carry `evidence: "profile"`; advice may quote `profileExcerpt`, and
+  `add-from-profile` advice names a heading block that names no resume entry.
+  Every change echoes its server `target`, and the client fails the proposal
+  when an echo differs from its own target. A new-bullet change must repeat its
+  slot's `entryId`. Both sides reduce structural marks the same way before
+  numbering targets, and `locked.omittedEntryNames` (never sent to a provider)
+  keeps a heading that also names an omitted entry unlinked. A heading links by
+  an entry's title or subtitle; every enclosing heading must name that entry or
+  be a grouping heading (resume section names or `GROUPING_HEADINGS`).
+  `/api/resume-polish` accepts only the one-pass `resume-proposal` contract. Its prompt
   includes a silent self-audit before the provider returns JSON; the selected
   reasoning effort controls provider reasoning and the audit's breadth, while
   the audit remains internal and never becomes a second route or response.
   Cover letters and application answers use their own routes.
-  `/api/cover-letter` is **one operation**, not a staged workflow. It takes
+  `/api/cover-polish` is **one operation**, not a staged workflow. It takes
   `sourceCoverLetterText`, the whole `evidenceItems` corpus, the job
   description, `resolvedContext` hints, any `slotAnswers`, and optional
   app-supplied `employerContext`; there is no mode, plan, or selection field.
@@ -216,14 +239,14 @@ owns:
   raw (tag-stripped) posting text to the Job analysis provider and returns
   the SAME structured fields the deterministic engine emits, resolved
   semantically so novel ATS layouts, inline-prose duties, and unusual
-  headings parse where the regex heading tables can't. Server-side grounding
-  checks supplement the prompt: scalar facts (including title, company,
-  location, salary, `roleDescription`, `jobType`, and tech) and content-list
-  items (responsibilities, required/preferred qualifications) are checked
-  against the source. Safe fields remain visible with field/item warnings when
-  support cannot be confirmed; their generated wording does not replace the retained
-  posting as source evidence. A technically usable partial result is not replaced
-  by local fallback because a content check failed. The source URL is never sent
+  headings parse where the regex heading tables can't. The model owns extraction,
+  summaries, and qualification classification. The server normalizes strings,
+  lists, enums, and finite salary numbers, strips markup, and enforces bounds.
+  It does not compare fields against the posting, replace generated conditions,
+  or produce evidence warnings. Missing currency or salary-period metadata stays
+  unspecified. Historical job-warning metadata remains readable in saved records
+  but is not displayed or included in drafting context. The original captured
+  posting remains separate from the editable brief. The source URL is never sent
   to the model (it can carry private ATS tokens, so only posting text is forwarded).
   The client (`src/lib/aiJobAnalysis.ts`) always calls the configured Job analysis
   provider after publishing the deterministic local brief. Combined analysis and
@@ -326,7 +349,7 @@ one large route.
 The resume AI flows follow that rule — they are split across focused
 modules under `server/ai/` so no single file carries the whole pipeline:
 
-- `polish.ts` — the `handlePolish` route for the sole
+- `resumePolish.ts` — the `handleResumePolish` route for the sole
   `mode: "resume-proposal"` request. It normalizes the editable scope and
   dispatches `resumeProposal.ts`; cover letters and answers have dedicated
   routes and cannot enter this handler.
@@ -345,7 +368,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 - `prompts.ts` — every system/user prompt and the shared
   honest-tailoring / anti-fabrication rule helpers (also imported by
   `applicationAnswers.ts`). Untrusted text (job description, resume,
-  honest context, custom instructions, pass-1 output) is interpolated
+  candidate Profile, custom instructions, pass-1 output) is interpolated
   through `fenceUntrusted`, which neutralizes literal fence-tag
   look-alikes so pasted content cannot escape its `<job_description>`-style
   delimiters; the input-firewall rule tells the model fenced content is
@@ -391,17 +414,17 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   baseline, and the current job/document identity. Required/preferred terminology
   uses prepared-job distinctions before flat keyword limits. True aliases differ
   from related concepts, and negated or uncertain text does not establish support.
-- `eligibilityLexicon.ts` — work-authorization and credential stems used by the
-  job analyzer's `workAuth` grounding. It does not select a fit verdict.
+- `eligibilityLexicon.ts` — work-authorization and credential stems used by
+  Fit Assessment and candidate-claim checks. It does not select a fit verdict.
 - `fitAssessment.ts` — executable prompt, response schema, and bounded source/relationship validation
   for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
   Safe model summary text is retained with evidence warnings when needed; fixed
   summary copy is used only when no model summary was supplied.
-- Candidate facts reach the model only through `honestContext`. The client's
+- Candidate facts reach the model only through `candidateContext`. The client's
   `buildCandidateFactsContext` (`src/lib/candidateFacts.ts`) prepends declared
   citizenship, work authorization, sponsorship, education level, field of
   study, optional 4.0-scale GPA, and earliest-start availability to the Profile
-  Background (stored as `honestContext`), and that combined string is
+  Background (stored as `profileBackground`), and that combined string is
   what the grounding allowlist is built from. `shared/candidateProfileContract.ts`
   owns the one length contract, measured as the longer of the raw and
   NFKC-normalized length: the Background is at most 12,000 characters, every
@@ -418,7 +441,7 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   allowlist and needs the grounding/sanitizer probes re-run.
 - `grounding.ts` — deterministic JD-term grounding helpers used by the
   sanitizers. Proposed-text checks compare normalized JD terms against the
-  submitted resume scope and honest context; unsupported JD-only terms produce
+  submitted resume scope and candidate Profile; unsupported JD-only terms produce
   visible warnings without preventing acceptance. Treat the
   current normalization/matching rules as implementation detail and keep their
   behavior locked by grounding/sanitizer probes rather than documenting one
@@ -453,10 +476,14 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 The provider is chosen per request from the companion-managed configured
 registry. Settings > AI stages holds a separate config per stage and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
-`/api/polish` receives the Resume Polish config as `provider` / `model` /
+`/api/resume-polish` receives the Resume Polish config as `provider` / `model` /
 `reasoningEffort`,
-`/api/cover-letter` receives the Cover config, and
-`/api/application-answers` receives the Answers config. Missing stage fields use
+`/api/cover-polish` receives the Cover letter Polish config, and
+`/api/application-answers` receives the Application questions config. Each stage
+uses one name for its stage id, settings prefix, and route (for example
+`cover-polish`, `coverPolishProvider`, `/api/cover-polish`); settings saved
+under the pre-2026-09-29 names convert once in `migrateStoredSettings` before
+strict validation. Missing stage fields use
 that stage's own product default; no stage inherits another stage's persisted
 provider/model/effort triple. Workspace settings drop retired preview keys during
 strict normalization, and portable workspace preferences carrying them fail
@@ -486,7 +513,38 @@ signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured
 provider.
 
-### Model catalog receipt — 2026-09-27
+### Model catalog receipt — 2026-09-30
+
+GPT-6.1 Sol (`gpt-6.1-sol`) joins Codex and OpenAI API, and Claude Sonnet 5.5
+(`claude-sonnet-5-5`, released 2026-09-28) joins Claude CLI and API. They become
+the Codex and Claude defaults for new or unset stages and the server fallback.
+Saved selections, including GPT-6 Sol and Sonnet 5, stay selected; no
+migration moves them. Retired Codex ids now repair to GPT-6.1 Sol.
+
+- GPT-6.1 Sol is list-visible in the provider-reported Codex catalog (client
+  0.159.0, fetched 2026-09-30) with low through ultra, which the picker follows.
+  The Codex models page still calls Ultra "coming later", and older Codex
+  clients do not list the model. It is rolling out to Plus, Pro, Business,
+  Enterprise, and Edu, and is off by default for Enterprise and Edu until an
+  administrator enables it. On the API, GPT-6.1 Sol succeeds GPT-6 Sol and keeps
+  GPT-5.6's API capabilities; RoleFit's Responses body is unchanged.
+- Sonnet 5.5 supports low through max in Claude Code, which requires 2.1.284+;
+  Claude Code 2.1.285 and Codex CLI 0.159.2 were observed on 2026-09-30. Without
+  tools, `between_tools` returns only text, as `disabled` did on Sonnet 5. On
+  the API it rejects
+  `thinking: {type: "disabled"}`, so RoleFit sends `between_tools`, its lowest
+  setting. That setting is accepted at the model's default `high` effort, and
+  RoleFit sends no effort for it. Non-default `temperature`/`top_p`/`top_k` are
+  rejected; RoleFit sends none.
+
+Sources: [Codex models](https://learn.chatgpt.com/docs/models),
+[GPT-6.1 Sol API guide](https://developers.openai.com/api/docs/guides/latest-model),
+[Claude models](https://platform.claude.com/docs/en/models/overview),
+[What's new in Sonnet 5.5](https://platform.claude.com/docs/en/models/sonnet-5-5/whats-new-sonnet-5-5), and
+[Claude Code model config](https://code.claude.com/docs/en/model-config).
+Live provider execution was not run.
+
+### Model catalog receipt — 2026-09-27 (defaults superseded 2026-09-30)
 
 `src/config/aiOptions.ts` owns the curated model choices. The provider-reported
 Codex catalog (client 0.158.0, fetched 2026-09-27) lists GPT-6 Astra/Sol/Luna,
@@ -551,14 +609,16 @@ Per-provider rules:
   stable slug from the first column of `agy models`; settings saved by older
   builds migrate their display-name values before dispatch.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
-  The catalog includes GPT-6 Astra/Sol/Luna and GPT-5.6 Sol/Terra/Luna; the
-  balanced default remains `gpt-5.6-terra`.
+  The catalog includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol/Luna, and GPT-5.6
+  Sol/Terra/Luna; the balanced default remains `gpt-5.6-terra`.
 - **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
   trailing assistant prefill because current Claude models reject those patterns.
   JSON is enforced by the strict-output prompt plus `parseAiJson`. The current
-  catalog includes Fable 5.1 and Opus 5.5 alongside Fable 5, Opus 5, Sonnet 5,
-  Haiku 4.5, and Opus 4.8. Sonnet 5 and Opus 5 default to adaptive thinking, so
-  this bounded JSON workflow disables it explicitly. Fable 5/5.1 and Opus 5.5
+  catalog includes Fable 5.1, Opus 5.5, and Sonnet 5.5 (the default) alongside
+  Fable 5, Opus 5, Sonnet 5, Haiku 4.5, and Opus 4.8. Sonnet 5 and Opus 5 default
+  to adaptive thinking, so this bounded JSON workflow disables it explicitly.
+  Sonnet 5.5 rejects a disable, so it sends `between_tools`, its lowest
+  setting, at the default effort. Fable 5/5.1 and Opus 5.5
   require adaptive thinking; their requests use low effort to leave room for
   JSON in the shared reasoning/output budget. Actual model quality and token
   consumption require separately authorized live evaluation.
@@ -593,11 +653,13 @@ The AI must:
 - preserve truthfulness — never invent employers, dates, metrics,
   education, tools, or outcomes
 - never edit identity, contact, education, standard-entry role/employer/subtitle/date
-  fields, Skills category labels, or omitted sections; only bullets and actual Skills lists are mutable
-- treat honest context as optional evidence; when it is blank, rely only
+  fields, Skills category labels, or omitted sections; only bullets (rewrite or
+  remove), actual Skills lists, standard-entry bullet orders, and new-bullet
+  slots for entries with linked Profile text are mutable
+- treat the candidate Profile as optional evidence; when it is blank, rely only
   on the resume
 - never import a JD-only skill/tool into the resume or skills section
-  without exact evidence in the resume or optional honest context
+  without exact evidence in the resume or optional candidate Profile
 - omit an edit when material support is missing; do not add drafting
   placeholders or ungrounded gap judgments to the resume workflow
 - return up to three concise improvements. The server derives

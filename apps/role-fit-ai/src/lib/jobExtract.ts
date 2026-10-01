@@ -1,5 +1,4 @@
 import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
-import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 
 // Local, dependency-free analyzer for imported job postings.
 //
@@ -38,7 +37,6 @@ export type ExtractedJobPosting = {
   roleDescription: string;
   tracking: ExtractedJobTracking;
   manualReviewFields: string[];
-  conditionIssues?: JobConditionIssue[];
   jobWarnings?: JobAnalysisWarning[];
   sourceTextLength: number;
 };

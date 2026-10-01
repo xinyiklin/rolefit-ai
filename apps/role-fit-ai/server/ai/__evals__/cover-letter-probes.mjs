@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 
-import { handleCoverLetter, tailorCoverLetter } from "../coverLetter.ts";
+import { handleCoverPolish, tailorCoverLetter } from "../coverLetter.ts";
 import {
   assembleCoverLetterText,
   coverLetterLengthWarnings,
@@ -49,7 +49,7 @@ class FakeRes extends EventEmitter {
 async function runHandler(method, body) {
   const req = new FakeReq(method);
   const res = new FakeRes();
-  const done = handleCoverLetter(req, res);
+  const done = handleCoverPolish(req, res);
   if (method === "POST") {
     queueMicrotask(() => {
       if (body != null) req.emit("data", Buffer.from(body));
@@ -125,7 +125,7 @@ const evidence = [
   },
   {
     id: "context:collaboration",
-    source: "honest_context",
+    source: "profile",
     text: "I enjoy close collaboration with product and design partners.",
   },
 ];
@@ -135,7 +135,7 @@ assert.deepEqual(
     {
       code: "unsupported_job_term",
       category: "evidence",
-      detail: "Kubernetes is not present in the resume or personal context.",
+      detail: "Kubernetes is not present in the resume or Profile.",
       recovery: "add_evidence",
       repairMessage: 'The letter claims "Kubernetes" for the candidate.',
       claim: "I have run Kubernetes clusters in production.",
@@ -144,7 +144,7 @@ assert.deepEqual(
     {
       code: "unsupported_number",
       category: "evidence",
-      detail: "three years is not present in the resume or personal context.",
+      detail: "three years is not present in the resume or Profile.",
       recovery: "add_evidence",
       repairMessage: "Remove the unsupported duration.",
       unsupportedValue: "three years",
@@ -235,7 +235,7 @@ assert.deepEqual(
     { id: "resume:a", source: "resume", text: "Shipped a reliable service." },
     {
       id: "context:kubernetes",
-      source: "honest_context",
+      source: "profile",
       text: "Kubernetes: [describe your exact experience: what you did, where, and when]",
     },
   ]),

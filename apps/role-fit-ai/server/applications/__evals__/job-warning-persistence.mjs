@@ -6,7 +6,6 @@ import { sanitizeApplications } from "../schema.ts";
 import { readApplications, writeApplications } from "../storage.ts";
 import { preparedApplicationRecord } from "../../../src/lib/preparedApplicationRecord.ts";
 import { preparationCommitIdentity, newPreparationSession } from "../../../src/lib/preparationSession.ts";
-import { jobAnalysisWarningContext } from "../../../shared/jobAnalysisWarnings.ts";
 
 const jobWarnings = [{ field: "roleDescription", message: "Not supported by provided evidence. Check this generated field against the original posting." }];
 const base = { id: "synthetic-warning", title: "Engineer", jobUrl: "", jobDescription: "Prepared description", status: "applied", createdAt: "2026-09-18T00:00:00.000Z", updatedAt: "2026-09-18T00:00:00.000Z" };
@@ -23,8 +22,6 @@ const cleared = preparedApplicationRecord({ ...args, jobWarnings: undefined, exi
 assert.ok(cleared.clearFields.includes("jobWarnings"), "new analysis can clear prior output checks explicitly");
 const identityArgs = { session: newPreparationSession(), preparationId: "synthetic", jobUrl: "", preparedJobDescription: "Generated description", jobRawText: "Original source" };
 assert.notEqual(preparationCommitIdentity(identityArgs), preparationCommitIdentity({ ...identityArgs, jobWarnings }), "a warning-only replacement invalidates a captured save");
-assert.match(jobAnalysisWarningContext(jobWarnings), /original posting/);
-assert.match(jobAnalysisWarningContext(jobWarnings), /never treat job fields as candidate evidence/);
 const dir = await mkdtemp(join(tmpdir(), "rolefit-job-warnings-"));
 try {
   await writeApplications(dir, [stored, { ...legacy, id: "legacy" }]);

@@ -37,7 +37,9 @@ own a second resume model, editor, layout engine, or PDF implementation.
 ## Content and evidence policy
 
 Follow [PRODUCT.md's warning policy](PRODUCT.md#content-and-evidence-warning-policy)
-for every RoleFit generation and assessment surface. Preserve otherwise usable output,
+for RoleFit generation and assessment surfaces. Job analysis is the exception:
+structured JD extraction uses basic response validation, without post-extraction
+fact checks or evidence warnings. Preserve otherwise usable output,
 show warnings before acceptance, and keep current actions enabled without added
 evidence, dismissal, or confirmation. Acceptance is not verification. Retain
 truthful prompts and technical protections; an unknown citation can be
@@ -76,10 +78,16 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
   Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
   education, standard-entry role/employer/subtitle/date fields, and omitted
-  sections and Skills category labels stay locked; only bullets and actual
-  Skills lists are proposal targets. The live resume
-  changes only through explicit Accept all, Accept, or edited acceptance, and
-  Undo on a settled row restores exactly the text that row replaced. Category substitutions and job-only skill insertions remain reviewable with
+  sections and Skills category labels stay locked; only bullets, actual
+  Skills lists, two new-bullet slots per in-scope standard entry with
+  linked Profile text, and the bullet order of in-scope standard entries are
+  proposal targets. A standard-entry bullet may be removed (never an entry's
+  last bullet) or rewritten, not both; an entry may be reordered or lose
+  bullets, not both. The live resume changes only through explicit Accept
+  all, a group's Accept, Accept, or edited acceptance, and Undo on a settled
+  row restores exactly the text that row replaced, removes exactly the bullet
+  an accepted addition inserted, restores a removed bullet in place, or
+  restores a reordered entry's original order. Category substitutions and job-only skill insertions remain reviewable with
   warnings; invalid targets remain blocked. Supported job terminology loss is a
   separate advisory derived from actual acceptance and the current document.
   When all editable targets do
@@ -243,7 +251,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   application ownership, saves, and manual selection still block replacement.
   Do not add persisted variant metadata or another schema for either choice.
 - Proposal decisions are keyed by proposal run and outcome plus each target's id,
-  original text, proposed text, and reason. A mismatched key derives an empty decision map
+  kind, original text, proposed text, bullet orders, and reason. A mismatched key derives an empty decision map
   without setting state during render; the first decision initializes the new
   key. A complete proposal payload forms its identity, so reused target ids
   cannot carry decisions into a new response.

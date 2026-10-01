@@ -159,15 +159,15 @@ try {
   const withPreferences = parseWorkspaceBackupEnvelope({
     ...backup,
     preferences: {
-      settings: { autoPolishResume: true, honestContext: "Grounded experience only" },
+      settings: { resumePolishAuto: true, profileBackground: "Grounded experience only" },
       lastBaseResume: "default.resume"
     }
   });
-  assert.equal(withPreferences.preferences?.settings.autoPolishResume, true, "portable workspace preferences survive contract parsing");
+  assert.equal(withPreferences.preferences?.settings.resumePolishAuto, true, "portable workspace preferences survive contract parsing");
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      preferences: { settings: { autoPolishResume: true, credential: "must-not-travel" }, lastBaseResume: "default.resume" }
+      preferences: { settings: { resumePolishAuto: true, credential: "must-not-travel" }, lastBaseResume: "default.resume" }
     }),
     /unsupported or invalid values/,
     "portable preferences reject settings outside the owned allowlist"
@@ -175,7 +175,7 @@ try {
   assert.throws(
     () => parseWorkspaceBackupEnvelope({
       ...backup,
-      preferences: { settings: { autoPolishResume: true }, lastBaseResume: "../private.resume" }
+      preferences: { settings: { resumePolishAuto: true }, lastBaseResume: "../private.resume" }
     }),
     /selected base resume is invalid/,
     "portable preferences reject non-managed base-resume names"
@@ -218,7 +218,7 @@ try {
   assert.equal(restoredPreferences.source, "restore", "restore writes workspace preferences with source:restore");
   assert.equal(restoredPreferences.format, "rolefit-workspace-preferences");
   assert.equal(restoredPreferences.schemaVersion, 1);
-  assert.equal(restoredPreferences.settings.autoPolishResume, true, "restored preferences carry the envelope settings");
+  assert.equal(restoredPreferences.settings.resumePolishAuto, true, "restored preferences carry the envelope settings");
   assert.equal(restoredPreferences.lastBaseResume, "default.resume");
   const restoredMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(targetDir, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
@@ -403,12 +403,12 @@ try {
   // Valid preferences are folded into the envelope but still excluded from files.
   await writeStoredWorkspacePreferences(
     prefsDir,
-    { settings: { autoPolishCoverLetter: true, honestContext: "" }, lastBaseResume: "default.resume" },
+    { settings: { coverPolishAuto: true, profileBackground: "" }, lastBaseResume: "default.resume" },
     "workspace",
     fixedDate
   );
   const withStoredPreferences = await createWorkspaceBackup(prefsDir, fixedDate);
-  assert.equal(withStoredPreferences.preferences?.settings.autoPolishCoverLetter, true, "valid preferences are folded into the envelope");
+  assert.equal(withStoredPreferences.preferences?.settings.coverPolishAuto, true, "valid preferences are folded into the envelope");
   assert.equal(withStoredPreferences.preferences?.lastBaseResume, "default.resume");
   assert.ok(
     !withStoredPreferences.files.some((file) => file.path === WORKSPACE_PREFERENCES_FILE_NAME),

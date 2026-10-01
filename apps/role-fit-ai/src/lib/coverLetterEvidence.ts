@@ -3,7 +3,7 @@ import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts"
 
 import { templateHasUnresolvedSlots } from "./coverLetterTemplate.ts";
 
-export type CoverLetterEvidenceSource = "resume" | "honest_context" | "user_answer";
+export type CoverLetterEvidenceSource = "resume" | "profile" | "user_answer";
 
 export type CoverLetterEvidenceItem = {
   id: string;
@@ -36,7 +36,7 @@ export type CoverLetterTailorResult = {
 
 type BuildCoverLetterEvidenceInput = {
   resumeData?: ResumeData | null;
-  honestContext: string;
+  candidateContext: string;
   // Answers to the few template slots that name a private fact RoleFit cannot
   // infer. They enter the corpus as candidate evidence like anything else.
   slotAnswers?: Record<string, string>;
@@ -105,7 +105,7 @@ function pushEvidence(
   });
 }
 
-// Keeps a within-limit Profile inside the cover-letter and final-review item
+// Keeps a within-limit Profile inside the cover-letter and final application review item
 // caps whatever its line shape: past this count, consecutive lines of the same
 // heading section share an item, so no item joins two Profile entries.
 const MAX_CONTEXT_EVIDENCE_ITEMS = 200;
@@ -118,8 +118,8 @@ function joinLines(lines: string[], linesPerItem: number): string[] {
   return grouped;
 }
 
-export function splitHonestContextEvidence(honestContext: string): string[] {
-  const lines = honestContext.replace(/\r\n/g, "\n").split("\n");
+export function splitProfileEvidence(candidateContext: string): string[] {
+  const lines = candidateContext.replace(/\r\n/g, "\n").split("\n");
   const items: string[] = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
@@ -150,7 +150,7 @@ export function splitHonestContextEvidence(honestContext: string): string[] {
 
 export function buildCoverLetterEvidence({
   resumeData,
-  honestContext,
+  candidateContext,
   slotAnswers = {},
   slotLabels = {}
 }: BuildCoverLetterEvidenceInput): CoverLetterEvidenceItem[] {
@@ -202,8 +202,8 @@ export function buildCoverLetterEvidence({
     }
   }
 
-  for (const text of splitHonestContextEvidence(honestContext)) {
-    pushEvidence(items, occurrences, { source: "honest_context", text });
+  for (const text of splitProfileEvidence(candidateContext)) {
+    pushEvidence(items, occurrences, { source: "profile", text });
   }
 
   for (const [slotId, answer] of Object.entries(slotAnswers)) {

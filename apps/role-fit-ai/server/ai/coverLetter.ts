@@ -196,7 +196,7 @@ function parseEmployerContext(value: unknown): CoverLetterEmployerFact[] {
   return facts;
 }
 
-export async function handleCoverLetter(
+export async function handleCoverPolish(
   req: IncomingMessage,
   res: ServerResponse
 ): Promise<void> {

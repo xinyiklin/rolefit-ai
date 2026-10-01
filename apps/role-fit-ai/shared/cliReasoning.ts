@@ -19,14 +19,15 @@ export const cliReasoningEffortOptionsByProvider: Partial<Record<string, readonl
   ]
 };
 
-// Provider-reported capabilities, verified 2026-09-27; sources live in ai-server.md.
+// Provider-reported capabilities, verified 2026-09-27 and 2026-09-30; sources
+// live in ai-server.md.
 export function cliReasoningEffortOptionsFor(
   provider: string,
   model: string
 ): readonly EffortOption[] | undefined {
   if (provider === "codex-cli") {
     const all = cliReasoningEffortOptionsByProvider["codex-cli"] ?? [];
-    if (["gpt-6-astra", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra"].includes(model)) return all;
+    if (["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra"].includes(model)) return all;
     if (model === "gpt-6-luna" || model === "gpt-5.6-luna") {
       return all.filter((option) => option.value !== "ultra");
     }

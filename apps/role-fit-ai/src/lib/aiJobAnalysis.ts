@@ -1,5 +1,3 @@
-import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
-import { sanitizeJobConditionIssues } from "../../shared/jobConditionContract.ts";
 // Client-side Job analysis orchestrator. Tries the AI analyzer (POST /api/job-analysis,
 // keys stay server-side) and falls back to the deterministic engine on ANY
 // failure — no key, timeout, network error, or an unusable model reply — so
@@ -24,8 +22,8 @@ import {
   type FitAssessmentResult
 } from "../../shared/fitAssessmentContract.ts";
 
-// The structured fields /api/job-analysis returns (checked for evidence concerns on the
-// server). Every field is optional at runtime — the model output is untrusted.
+// The server bounds structured fields without checking them against the posting.
+// Every field is optional at runtime — the model output is untrusted.
 // provider/model/reasoningEffort/attempts are the resolved-request echo the
 // server adds alongside the analyzed content, used only for aiUsage attribution.
 export type AiJobAnalysisFields = {
@@ -53,8 +51,6 @@ export type AiJobAnalysisFields = {
   fitAssessment?: unknown;
   fitAssessmentStatus?: unknown;
   fitAssessmentError?: unknown;
-  conditionIssues?: unknown;
-  jobWarnings?: unknown;
 };
 
 const PERIODS: ExtractedSalaryPeriod[] = ["yr", "mo", "hr"];
@@ -108,8 +104,6 @@ function buildExtractedFromAi(fields: Partial<AiJobAnalysisFields>, sourceText: 
     roleDescription,
     tracking,
     manualReviewFields: [],
-    conditionIssues: sanitizeJobConditionIssues(fields.conditionIssues, sourceText),
-    jobWarnings: sanitizeJobAnalysisWarnings(fields.jobWarnings),
     sourceTextLength: sourceText.length
   };
   result.manualReviewFields = manualReviewFields(result);

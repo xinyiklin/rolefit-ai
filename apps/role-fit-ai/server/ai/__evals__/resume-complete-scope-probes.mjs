@@ -24,7 +24,8 @@ const sections = Array.from({ length: 14 }, (_, s) => ({
 }));
 const scope = normalizeResumeScope({ sections });
 const targets = flattenResumeTargets(scope);
-assert.equal(targets.length, 294);
+assert.equal(targets.filter((target) => target.kind !== "bullet-order").length, 294);
+assert.equal(targets.filter((target) => target.kind === "bullet-order").length, 14, "one bullet order per multi-bullet entry");
 assert.equal(resumePolishSectionIsLocked("Academic Projects"), false);
 assert.equal(resumePolishSectionIsLocked("Academic Background"), true);
 assert.equal(resumePolishSectionIsLocked("Education & Training"), true);
@@ -43,7 +44,7 @@ assert.doesNotMatch(
     targets,
     jobText: "Kubernetes",
     scopeText: "",
-    honestContext: "",
+    candidateContext: "",
     customInstructions: ""
   }).userPrompt,
   /\[add metric/
@@ -97,7 +98,7 @@ const crowdedScope = normalizeResumeScope({ sections: [{
 }] });
 const crowdedTargets = flattenResumeTargets(crowdedScope);
 const crowdedSelection = selectPromptTargets(crowdedTargets, 'Python services');
-assert.equal(crowdedSelection.selectedTargets.length, 25, 'entry context must not crowd out comfortably fitting targets');
+assert.equal(crowdedSelection.selectedTargets.length, 26, 'entry context must not crowd out comfortably fitting targets (25 bullets plus their order)');
 assert.equal(crowdedSelection.omittedCount, 0);
 assert.deepEqual(crowdedSelection.selectedTargets.map((item) => item.targetId), crowdedTargets.map((item) => item.targetId));
 const crowdedPayload = JSON.parse(crowdedSelection.serialized);

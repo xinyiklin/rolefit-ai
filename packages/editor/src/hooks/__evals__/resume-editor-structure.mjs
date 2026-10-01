@@ -1285,6 +1285,18 @@ assert.equal(
   "a skills row with one changed column still applies"
 );
 
+// A host-supplied bullet keeps its id so the host can later remove exactly it.
+const suppliedBullet = { id: "host-bullet", text: "Shipped release automation." };
+const withSupplied = reduceResumeData(noOpBase, { type: "addBullet", sectionId: "exp", entryId: "e1", bullet: suppliedBullet });
+assert.deepEqual(withSupplied.sections[0].items[0].bullets.at(-1), suppliedBullet, "a supplied bullet is appended as given");
+assert.equal(
+  reduceResumeData(withSupplied, { type: "addBullet", sectionId: "exp", entryId: "e1", bullet: suppliedBullet }),
+  withSupplied,
+  "re-adding a bullet id the entry already holds is a no-op"
+);
+const withDefault = reduceResumeData(noOpBase, { type: "addBullet", sectionId: "exp", entryId: "e1" });
+assert.equal(withDefault.sections[0].items[0].bullets.at(-1).text, "", "without a supplied bullet the action still appends an empty one");
+
 console.log("resume editor structure eval: all checks passed");
 
 await import('./entry-rows.mjs');

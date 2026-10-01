@@ -145,6 +145,70 @@
   border-top: 1px solid var(--hairline-soft);
 }
 
+.resume-proposal__group {
+  margin-top: var(--s3);
+}
+
+.resume-proposal__group-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+}
+
+.resume-proposal__group-head h3 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.resume-proposal__group-head h3 span {
+  margin-left: var(--s1);
+  color: var(--ink-faint);
+  font-weight: 600;
+}
+
+.resume-proposal__group-actions {
+  display: inline-flex;
+  gap: var(--s1);
+}
+
+.resume-proposal__group-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.resume-proposal__order {
+  display: grid;
+  gap: var(--s1);
+  margin: 0;
+  padding-left: 1.2rem;
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.resume-proposal__edit:not([data-state="pending"]) .resume-proposal__order {
+  color: var(--ink-soft);
+}
+
+/* Marked text renders without diff spans, so the row strikes itself. */
+.resume-proposal__original.is-removed {
+  text-decoration: line-through;
+  text-decoration-color: var(--hairline-strong);
+}
+
+.resume-proposal__moved {
+  margin-left: var(--s2);
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .resume-proposal__edit {
   display: grid;
   gap: var(--s2);
@@ -179,6 +243,12 @@
   font-size: 0.72rem;
   font-weight: 600;
   overflow-wrap: anywhere;
+}
+
+.resume-proposal__chips {
+  display: inline-flex;
+  flex-shrink: 0;
+  gap: var(--s1);
 }
 
 .resume-proposal__decided-note {

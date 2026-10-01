@@ -22,7 +22,7 @@ import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 const EVIDENCE_ID = /^[A-Za-z0-9:_-]{1,140}$/;
 const EVIDENCE_SOURCES = new Set<CoverLetterEvidenceSource>([
   "resume",
-  "honest_context",
+  "profile",
   "user_answer"
 ]);
 export const SOURCE_LETTER_EVIDENCE_ID = "source_letter";

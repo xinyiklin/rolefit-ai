@@ -7,9 +7,11 @@ sanitizer code is executable product behavior and anti-fabrication-critical.
 
 The [canonical product policy](../../PRODUCT.md#content-and-evidence-warning-policy)
 requires content/evidence failures to preserve otherwise usable output with
-warnings across all RoleFit generation, analysis, assessment, and review paths.
-Keep truthful prompts and existing checks; do not add an AI analysis stage or
-policy engine. Unknown source references or unconfirmed excerpts are evidence
+warnings across RoleFit generation, assessment, and review paths. Job analysis
+is structured JD extraction: retain truthful prompts and basic shape/markup/size
+validation, but no post-extraction fact checks, source matching, condition
+replacement, or evidence warnings. Other stages retain their existing checks;
+do not add an AI analysis stage or policy engine. Unknown source references or unconfirmed excerpts are evidence
 warnings, never verified citations or links to unrelated sources. Invalid edit
 targets, unsafe markup, unusable structures, unauthorized mutations, and stale
 application retain blocking technical guards.
@@ -31,7 +33,7 @@ application retain blocking technical guards.
   and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
   are ranked by materiality and job relevance into complete JSON; the response
   is validated only against that selected set and reports the omitted count.
-- `polish.ts` accepts only `mode: "resume-proposal"` and routes it to that
+- `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
 - `jobAnalysis.ts`, `fitAssessment.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
@@ -87,16 +89,24 @@ application retain blocking technical guards.
 ## Trust contracts
 
 - Resume Polish prompts require suggestions grounded in the submitted
-  resume/Profile context (`honestContext`); never instruct JD-only skill
+  resume/Profile context (`candidateContext`); never instruct JD-only skill
   insertion or fabrication.
-  Only bullets and actual Skills lists are mutable targets; category labels and standard
+  Only bullets (rewrite or remove), actual Skills lists, new-bullet slots for
+  entries with linked Profile text, and standard-entry bullet orders are
+  mutable targets; category labels and standard
   entry role, employer, subtitle, and date fields remain read-only evidence.
+  An experience or project entry is grounded only by its own text and the
+  Profile text its heading links (`linkProfileBlocks`); Skills and Summary may
+  use the whole resume and Profile.
   Unknown/duplicate targets and unsafe or unusable mutation structures retain
   technical guards, and edits with unresolved template placeholders are
   withheld as malformed; unchanged text remains a no-op. Unsupported edits,
-  category-like text in actual Skills targets, and feedback concerns remain
+  category-like text in actual Skills targets, and cited-advice concerns remain
   reviewable with warnings. Withheld counts describe
   invalid/unusable operations, never content concerns or unchanged echoes.
+  The "Proposed improvements" summary is editorial feedback: normalize and bound
+  it without candidate-claim checks or generic evidence warnings. Proposed resume
+  text and cited advice retain their checks.
   Changes beyond the bounded response window remain disclosed as malformed.
   Proposal decisions include run identity; supported-term preservation compares
   actual accepted edits with the current document, job, and supported baseline.
@@ -149,8 +159,8 @@ application retain blocking technical guards.
 - `shared/evidencePolarity.ts` owns clause-level polarity for client and server.
   `shared/contentWarnings.ts` bounds every warning list (8 items, 500
   characters, markup stripped); `shared/jobAnalysisWarnings.ts` owns field-keyed
-  job warnings, including saved-record sanitization.
-  `claimEvidence.ts` and `jobConditionEvidence.ts` own claim and job-condition checks. `fitEvidence.ts` catches focused explicit conflicts;
+  historical job-warning metadata for saved-record compatibility only.
+  `claimEvidence.ts` owns candidate-claim checks. `fitEvidence.ts` catches focused explicit conflicts;
   do not expand it into a lexical proof of semantic support or a second classifier.
   Fit is advisory: leave tool coverage and responsibility/ownership judgments to
   the model. Retain citation integrity, polarity, and explicit experience-source
@@ -169,9 +179,9 @@ application retain blocking technical guards.
   explicit affiliations need candidate evidence, but generic capitalization is
   not proof of an invented name. Do not require sentence bindings or literal
   wording for paraphrases; ambiguous attribution is advisory, not repair.
-- Job headings and category concerns inform source-linked advice, never a second
-  semantic classifier. Preserve explicit conditions and negation; ordinary duties
-  may remain concise even when they contain must or bonus.
+- Job analysis delegates summaries and qualification classification to the model.
+  Its prompt preserves alternatives, negation, thresholds, and required versus
+  preferred qualifications; the response parser does not verify those judgments.
 - `applicationReview.ts` permits exactly one dispatch, local findings on failure,
   and no persistence. Posting-only evidence cannot authorize candidate revisions;
   current-document references expose conflicts, not independent factual support.

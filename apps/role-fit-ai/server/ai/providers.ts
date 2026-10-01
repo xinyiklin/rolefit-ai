@@ -101,9 +101,9 @@ function providerDefaultModel(provider: string): string {
   return (
     {
       openai: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
-      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5",
-      "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6-sol",
+      anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
+      "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5-5",
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.1-sol",
       "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? DEFAULT_ANTIGRAVITY_MODEL
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );

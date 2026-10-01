@@ -21,7 +21,7 @@ export const CLAUDE_CLI_TIMEOUT_MESSAGE =
 
 // Provider/CLI configuration errors that carry their own actionable, already
 // user-safe wording. Routes map these to a 400 (not a generic 500) so the user
-// sees the precise remediation. Shared by /api/polish and /api/application-answers.
+// sees the precise remediation. Shared by /api/resume-polish and /api/application-answers.
 const SAFE_CONFIG_MESSAGES = new Set([
   "codex is not installed or not on PATH.",
   "claude is not installed or not on PATH.",
