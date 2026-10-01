@@ -11,9 +11,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - Fit's source-type check: a type named in the cited Profile line now wins
     over its heading, so a personal line under a professional heading still
     conflicts with a professional requirement (regression from 2026-09-28).
+    Accepted tradeoff: a type word used as an adjective ("academic medical
+    center") also overrides the heading and can warn, as on resume lines.
   - Unsent Profile new-bullet slots no longer inflate the omitted-fields count.
   - Group Accept/Discard skip the row open for editing, and a decided row
-    closes its editor, so a draft is no longer silently replaced.
+    closes its editor. The footer Accept all/Discard all still settle that row
+    (pre-existing; Undo reopens the editor with the draft).
   - The Settings Background status region stays mounted for screen readers.
   - Dead code from the job-analysis simplification (`eligibilityLexicon.ts`,
     `LIST_STOPWORDS`) and stale docs removed; release notes and README cover

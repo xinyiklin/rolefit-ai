@@ -93,6 +93,7 @@ const profile = [
   "## Acme Clinic — Support Engineer (professional, 2021–2023)",
   "Automated patient intake reports with Python.",
   "Built a personal Python budgeting app on weekends.",
+  "Integrated Python reporting with an academic medical center.",
   "",
   "## Experience by type",
   "- Personal / independent projects: 3 roles or projects."
@@ -124,6 +125,9 @@ assert.ok(!(assessProfile(professionalRequirement, personalLine, {
   verdict: "STRETCH", matches: [],
   gaps: [{ jobExcerpt: professionalRequirement, status: "NOT_SHOWN", relationship: "contradictory", candidateSource: "CANDIDATE_CONTEXT", candidateExcerpt: personalLine }]
 })?.warnings ?? []).some((warning) => /could not be confirmed/.test(warning)), "a contradiction citing a personal line under a professional heading is confirmed");
+// Accepted tradeoff: the keyword test cannot tell an adjective from a type, so
+// such a line is judged on its own words, as resume lines are.
+assert.equal(conflictWarnings(assessProfile(professionalRequirement, "Integrated Python reporting with an academic medical center.")).length, 1, "a type word used as an adjective still overrides its heading");
 assert.equal(conflictWarnings(assessProfile(professionalRequirement, "- Personal / independent projects: 3 roles or projects.")).length, 1, "migrated experience-type lines still carry their own type");
 assert.equal(conflictWarnings(assessProfile("Python experience.", "Built Python services with conflict checks.")).length, 0, "a source-neutral requirement accepts personal work");
 // Reverse-chronological order puts the professional entry first; a cited

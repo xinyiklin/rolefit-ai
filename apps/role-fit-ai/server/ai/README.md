@@ -38,8 +38,10 @@ posting accepts those sources. The Profile Background carries each entry's type
 on its Markdown heading, so the deterministic explicit-conflict check reads a
 cited Background line together with the nearest enclosing heading (its own line
 included, fenced code excluded) that names a type; a type named in the cited line
-itself takes precedence over its heading. A match conflicts only when
-every occurrence of a repeated excerpt does; a reported contradiction needs one.
+itself takes precedence over its heading, even when used as an adjective
+("academic medical center"), which can raise an advisory warning. A match
+conflicts only when every occurrence of a repeated excerpt does; a reported
+contradiction needs one.
 Entries and types may overlap, so their years/counts are never summed and counts
 never imply duration.
 The rubric first separates main responsibilities and core qualifications from
