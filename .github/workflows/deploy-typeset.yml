@@ -154,8 +154,9 @@ jobs:
             exit 1
           fi
 
-          # Image prune never clears build cache; reclaim it before unpacking and building.
-          "${docker_cmd[@]}" builder prune -af
+          # Image prune never clears build cache; cap it (least recently used goes
+          # first) before unpacking and building, so recent layers still reuse.
+          "${docker_cmd[@]}" builder prune -af --keep-storage 1gb
 
           build_dir="$(mktemp -d)"
           tar -xzf "/tmp/typeset-${RELEASE_SHA}.tar.gz" -C "$build_dir"
