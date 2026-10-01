@@ -44,8 +44,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
     recently used 1 GB of build cache and drops the rest. Deploys still run
     only for Typeset-relevant paths. `--keep-storage` is used because it
     parses on both older Docker and current buildx (hidden alias there).
-    Merging the workflow change starts a new deploy on `main`. UNCONFIRMED
-    until that post-merge Typeset deploy succeeds.
+    Merging the workflow change starts a new deploy on `main`.
+  - [TOOL] Merged as #163 (`74f5b67`). Its deploy run 36865789743 succeeded:
+    the prune reclaimed 4.42 GB of build cache (confirming the cause), the
+    image built, and typeset.xinyiklin.com answered 200 afterward.
 
 ## 2026-09-30
 
