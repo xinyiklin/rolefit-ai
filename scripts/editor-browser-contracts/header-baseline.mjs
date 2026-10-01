@@ -1,3 +1,4 @@
+import { includesSuite } from './suites.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -61,7 +62,7 @@ async function exercise(h, api, host, scenario, evidence) {
   return { label: scenario.label, characters: scenario.characters ?? 'hdjklpq', before, after: await geometry(h, api) };
 }
 
-export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl }) {
+export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl, suite = 'all' }) {
   const evidence = process.env.ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR;
   for (const host of ['typeset', 'rolefit', 'cover']) {
     const page = await makeWindow();
@@ -71,34 +72,36 @@ export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl 
     await waitFor(page, `window.${api}?.data?.header && document.querySelector('[contenteditable=true] [data-tsdf="name"]')`, `${host} baseline fixture`);
     const h = await wrappedHarness(page, waitFor, api);
     const report = { host, cases: [], limitations: ['Isolated Chromium fixture; native CDP text/key input, not OS IME', 'Cases deliberately fit one line; wrap changes are verified by wrapped-header contracts'] };
-    report.cases.push(await exercise(h, api, host, { label: 'baseline-default', name: 'aceonmzx' }, evidence));
-    if (host !== 'cover') {
-      const style = await h.evaluate(api => window[api].style, api);
-      for (const font of await h.evaluate(api => window[api].fonts, api)) {
-        if (font.value === style.fontFamily) continue;
-        await h.evaluate((api, style) => window[api].applyStyle(style), api, { ...style, fontFamily: font.value });
-        report.cases.push(await exercise(h, api, host, { label: `baseline-${font.value}`, name: 'aceonmzx' }));
+    if (includesSuite(suite, 'core')) report.cases.push(await exercise(h, api, host, { label: 'baseline-default', name: 'aceonmzx' }, evidence));
+    if (includesSuite(suite, 'extended')) {
+      if (host !== 'cover') {
+        const style = await h.evaluate(api => window[api].style, api);
+        for (const font of await h.evaluate(api => window[api].fonts, api)) {
+          if (font.value === style.fontFamily) continue;
+          await h.evaluate((api, style) => window[api].applyStyle(style), api, { ...style, fontFamily: font.value });
+          report.cases.push(await exercise(h, api, host, { label: `baseline-${font.value}`, name: 'aceonmzx' }));
+        }
+        await h.evaluate((api, style) => window[api].applyStyle(style), api, style);
       }
-      await h.evaluate((api, style) => window[api].applyStyle(style), api, style);
+      for (const name of ['', 'ACEONMZX', 'gypqj', 'éàöñç']) {
+        report.cases.push(await exercise(h, api, host, { label: name ? `variant-${name}` : 'empty-first-character', name }));
+      }
+      report.cases.push(await exercise(h, api, host, { label: 'uppercase-diacritic-insertion', name: 'aceonmzx', characters: 'HÉÜÅÇ' }));
+      const mixed = value => `<size=32><font=source-sans>${value}X</font></size><size=16> Small</size>`;
+      // Use an interior caret so this geometry check does not depend on mark-boundary affinity.
+      report.cases.push(await exercise(h, api, host, {
+        label: 'baseline-mixed', name: mixed('aceonmzx'), display: 'aceonmzx', sourceWith: mixed
+      }, evidence));
+      const oversized = value => `<size=32><font=source-sans>${value}X</font></size>`;
+      report.cases.push(await exercise(h, api, host, {
+        label: 'no-name-oversized-contact', name: null, key: 'contact|0', contact: oversized('aceonmzx'), display: 'aceonmzx', sourceWith: oversized
+      }));
     }
-    for (const name of ['', 'ACEONMZX', 'gypqj', 'éàöñç']) {
-      report.cases.push(await exercise(h, api, host, { label: name ? `variant-${name}` : 'empty-first-character', name }));
-    }
-    report.cases.push(await exercise(h, api, host, { label: 'uppercase-diacritic-insertion', name: 'aceonmzx', characters: 'HÉÜÅÇ' }));
-    const mixed = value => `<size=32><font=source-sans>${value}X</font></size><size=16> Small</size>`;
-    // Use an interior caret so this geometry check does not depend on mark-boundary affinity.
-    report.cases.push(await exercise(h, api, host, {
-      label: 'baseline-mixed', name: mixed('aceonmzx'), display: 'aceonmzx', sourceWith: mixed
-    }, evidence));
-    const oversized = value => `<size=32><font=source-sans>${value}X</font></size>`;
-    report.cases.push(await exercise(h, api, host, {
-      label: 'no-name-oversized-contact', name: null, key: 'contact|0', contact: oversized('aceonmzx'), display: 'aceonmzx', sourceWith: oversized
-    }));
     if (evidence) {
       await mkdir(evidence, { recursive: true });
-      await writeFile(join(evidence, `${host}-baseline-report.json`), JSON.stringify(report, null, 2));
+      await writeFile(join(evidence, `${host}-${suite}-baseline-report.json`), JSON.stringify(report, null, 2));
     }
-    console.log(`Header baseline ${host}: ${report.cases.length} cases passed native character insertion/Backspace/Undo, exact source/reopen, engine baselines and DOM tops`);
+    console.log(`Header baseline ${host}/${suite}: ${report.cases.length} cases passed native character insertion/Backspace/Undo, exact source/reopen, engine baselines and DOM tops`);
     await page.destroy();
   }
 }

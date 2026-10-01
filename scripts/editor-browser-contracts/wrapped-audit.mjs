@@ -1,3 +1,4 @@
+import { contextCommand } from './context-command.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -97,7 +98,7 @@ async function pasteAndRepeatedEdits(h) {
   assert.equal((await h.entry()).titleLeft, text+left, '25 native repeated insert/delete pairs lose no pasted text');
   assert.equal((await h.entry()).titleRight, fixture.sections[0].items[0].titleRight);
   const elapsedMs = Math.round(performance.now()-start);
-  assert(elapsedMs < 30_000, 'bounded large-paste/repeated-edit run finishes before watchdog');
+  console.log(`Wrapped paste/edit workload: ${JSON.stringify({ elapsedMs, pastedCharacters: text.length, editPairs: 25 })}`);
   return { pastedCharacters: text.length, editPairs: 25, elapsedMs, pages: await h.evaluate(() => document.querySelector('[contenteditable=true]').querySelectorAll('.tsd-page').length) };
 }
 
@@ -163,24 +164,7 @@ async function alignmentAndLinks(h) {
   return reports;
 }
 
-async function contextCommand(h, key, label) {
-  await h.evaluate(key => {
-    const span = [...document.querySelectorAll('[contenteditable=true] [data-tsdf]')].find(span => span.getAttribute('data-tsdf') === key);
-    if (!span) throw new Error(`Missing context target ${key}`);
-    span.scrollIntoView({ block: 'center' });
-    const rect = span.getBoundingClientRect();
-    span.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: rect.left+2, clientY: rect.top+2, button: 2 }));
-  }, key);
-  await h.waitFor(h.page, 'document.querySelector(".ts-context-menu")', 'wrapped structure menu');
-  await h.evaluate(label => {
-    const button = [...document.querySelectorAll('.ts-context-menu button')].find(button => button.textContent.trim() === label);
-    if (!button || button.disabled) throw new Error(`Unavailable wrapped structure command ${label}`);
-    button.click();
-  }, label);
-  await h.settle();
-}
-
-async function structureAndHistory(h) {
+export async function structureAndHistory(h) {
   const fixture = h.fixture();
   fixture.sections.push({ ...structuredClone(fixture.sections[0]), id: 'second-section', heading: 'Other section', items: [{ ...structuredClone(fixture.sections[0].items[1]), id: 'second-entry' }] });
   for (const [key, label, check] of [
@@ -190,7 +174,8 @@ async function structureAndHistory(h) {
     ['heading|section', 'Delete section', value => value.sections.length === 1 && value.sections[0].id === 'second-section']
   ]) {
     await h.reset(fixture);
-    await contextCommand(h, key, label);
+    assert.deepEqual(await data(h), fixture, 'structure fixture reset preserves expected entry order');
+    await contextCommand(h, key, label, check);
     assert(check(await data(h)), `${label} changes the intended wrapped structure`);
     await h.key('z', 90, 4);
     assert.deepEqual(await data(h), fixture, `${label} Undo restores every wrapped field and neighbor`);
@@ -203,7 +188,7 @@ async function structureAndHistory(h) {
   await h.select('titleLeft', 0, 5); await h.key('i', 73, 4);
   const formatted = await data(h);
   assert.notDeepEqual(formatted, typed, 'mixed history includes an actual formatting change');
-  await contextCommand(h, fieldKey('titleLeft'), 'Move entry down');
+  await contextCommand(h, fieldKey('titleLeft'), 'Move entry down', value => value.sections[0].items[1].id === 'entry');
   for (const expected of [formatted, typed, fixture]) {
     await h.key('z', 90, 4);
     assert.deepEqual(await data(h), expected, 'mixed structure, formatting, and content Undo preserves chronological history');

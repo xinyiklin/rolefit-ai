@@ -3,6 +3,41 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-09-30
+
+- [USER+CODE] Approved a minimal browser-reliability/CI refinement after waiving
+  Product Partner. Browser contracts retain all content, layout, persistence,
+  and history assertions. Core and extended groups own disjoint cases; the
+  default command runs their union. The existing Chromium check aggregates both
+  results, so extended failures remain blocking without duplicate test runs.
+- [CODE+TOOL] Independent review caught and resolved a section-style leak:
+  fixtures now await persisted restoration before closing, and groups clear the
+  synthetic origin before starting. Focused browser probes verify both boundaries.
+- [TOOL] A synthetic pre-fix trace reproduced menu open → delayed outside scroll
+  → menu close in 10/10 attempts per resume host. The helper now settles scroll
+  and geometry before one native right-click, checks the enabled command, and
+  waits for the model mutation. Ten repaired structure/history repetitions per
+  host passed; missing-target, absent-command, and disabled-command controls fail.
+- [CODE] CDP owns named response deadlines and disconnect cleanup. A 10-minute
+  suite watchdog replaces no correctness assertion; the two completed-workload
+  speed assertions became timing reports. CI retains Chrome identity, phase
+  timings, and bounded synthetic failure JSON/screenshots for seven days.
+- [CODE] Document CI owns app correctness and the seven automatically discovered
+  document-workflow probes. Pages retains its landing artifact/release checks;
+  Typeset retains its container build/HTTP probe and existing result check.
+  Duplicate full app checks, server probes, and the extra server typecheck were
+  removed. Native platform coverage, release gates, and the small landing-catalog
+  overlap remain. Extended skips only Markdown/backend AI-only changes; mixed,
+  shared, configuration, manual, and uncertain comparisons run it.
+- [TOOL] Local checks passed: full macOS Chromium coverage, 11 harness/routing
+  tests, RoleFit's complete gate (122 offline probes), 13 release-contract tests,
+  dependency/script contracts, workflow YAML/dependency validation, and a Linux
+  ARM64 Typeset container build/HTTP probe. Deliberate browser failure produced
+  the expected error, target/menu/selection/scroll state, and PNG. AST comparison
+  retained every old functional assertion; only the two timing assertions were
+  removed. At local verification, hosted Linux Chromium/Actions, artifact upload,
+  and deployment remained unverified. No version/dependency or product UI change.
+
 ## 2026-09-28
 
 - [USER+CODE] Investigated Firefox Apply/download delays when the tab is hidden.

@@ -48,6 +48,8 @@ npm run test:rolefit:desktop   # explicit companion integration smoke
 npm run make:rolefit:desktop   # native, non-publicly-trusted test artifacts (Node 24)
 npm run test:rolefit:desktop:packaged
 npm run test:editor:browser
+npm run test:editor:browser -- --suite=core  # focused behavior/representative wrapping
+npm run test:ci  # browser harness and CI routing contracts
 npm run test:document-workflows --workspace apps/role-fit-ai
 npm run deps:check
 npm run check --workspace packages/engine
@@ -83,8 +85,10 @@ Use the named root command or an explicit workspace command.
   `rolefit-preview-vX.Y.Z-beta.N` tags and publishes a clearly labeled unsigned
   GitHub prerelease after the same native packaging, smoke, installer, artifact,
   checksum, and atomic-publication gates. It never receives signing secrets.
-- `.github/workflows/deploy-typeset.yml` verifies the engine, editor, and
-  Typeset app, then builds and HTTP-probes the digest-pinned
+- `.github/workflows/document-workflows.yml` owns package/app correctness and
+  non-overlapping core/extended browser contracts. See the
+  [verification guide](docs/development.md#which-workflow-owns-which-check).
+- `.github/workflows/deploy-typeset.yml` builds and HTTP-probes the digest-pinned
   `apps/typeset/Dockerfile` before the configured EC2 deployment. The public
   Typeset runtime is static Nginx content.
 

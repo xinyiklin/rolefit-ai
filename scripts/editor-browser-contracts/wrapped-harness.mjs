@@ -4,16 +4,8 @@ import { join } from 'node:path';
 
 export const rowKey = (field) => `entry|section|entry|${field}`;
 export async function wrappedHarness(page, waitFor, api = "__rowContract") {
-  const bounded = async (operation, milliseconds = 10_000) => {
-    let timer;
-    try {
-      return await Promise.race([operation, new Promise((_, reject) => {
-        timer = setTimeout(() => reject(new Error(`Wrapped browser operation exceeded ${milliseconds}ms`)), milliseconds);
-      })]);
-    } finally { clearTimeout(timer); }
-  };
-  const evaluate = (fn, ...args) => bounded(page.evaluate(`(${fn})(${args.map(arg => JSON.stringify(arg)).join(',')})`));
-  const settle = () => bounded(page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))'), 30_000);
+  const evaluate = (fn, ...args) => page.evaluate(`(${fn})(${args.map(arg => JSON.stringify(arg)).join(',')})`, 10_000);
+  const settle = () => page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))', 30_000);
   const original = await page.evaluate(`window.${api}.data`);
   const reset = async (data = original) => {
     await evaluate((data, api) => window[api].reset(data), data, api);
@@ -40,6 +32,7 @@ export async function wrappedHarness(page, waitFor, api = "__rowContract") {
 }
 
 export async function assertWrappedBounds(h, fixture, label) {
+  h.page.contractPhase = label;
   await h.reset(fixture);
   const result = await h.evaluate(() => {
     const root = document.querySelector('[contenteditable=true]');
