@@ -154,13 +154,14 @@ jobs:
             exit 1
           fi
 
+          # Image prune never clears build cache; reclaim it before unpacking and building.
+          "${docker_cmd[@]}" builder prune -af
+
           build_dir="$(mktemp -d)"
           tar -xzf "/tmp/typeset-${RELEASE_SHA}.tar.gz" -C "$build_dir"
           rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
 
           cd "$build_dir"
-          # Image prune below never clears BuildKit cache, which filled the host disk.
-          "${docker_cmd[@]}" builder prune -af
           "${docker_cmd[@]}" build -f apps/typeset/Dockerfile -t "$IMAGE_NAME:latest" .
           cd /
           rm -rf "$build_dir"
