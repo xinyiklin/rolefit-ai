@@ -25,8 +25,20 @@ bounded; app-only operational detail belongs in the affected app documentation.
     pending-edits record does not name its tab, so a narrow race can let a new
     tab write a live sibling's older value. Not fixed in this pass.
   - [TOOL] New probes fail against the old logic. Root `npm run check` and
-    `types:check` passed on the merged tree before the fixes; see the PR for
-    the final gate. Browser QA skipped (flag-first); no live-provider calls.
+    `types:check` passed on the merged tree; after the fixes the RoleFit gate
+    passed (137/137 offline) and a fresh exact-head review found no high/medium
+    issues. Browser QA skipped (flag-first); no live-provider calls.
+  - [TOOL] Squash-merged as #161 (`d7f12a0`) with all 17 PR checks green on
+    the reviewed head. `rolefit-preview-v0.8.0-beta.1` (annotated, on
+    `d7f12a0`) ran the preview release workflow (run 36862392970: validate,
+    macOS arm64/x64, Windows x64, publish all succeeded). The prerelease
+    published 2026-10-01T12:41Z with five installers and `SHA256SUMS.txt`.
+    Document CI and the product-site deploy passed on `d7f12a0`.
+  - **Open:** the Typeset deploy for `d7f12a0` failed with "no space left on
+    device" while building the image on the EC2 host; verify and container
+    jobs passed and the site still serves the previous build. The remote
+    script prunes dangling images but not Docker build cache. Needs host
+    cleanup (user decision) and a rerun.
 
 ## 2026-09-30
 
@@ -99,8 +111,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [TOOL] RoleFit check 134/134 offline, 13/13 release-contract tests, landing
     build and boundary guard pass. Two independent reviews: no high findings;
     their release-note fixes are applied.
-  - **The tag and release workflow have NOT run; this versioned change is
-    incomplete until `rolefit-preview-v0.8.0-beta.1` publishes successfully.**
+  - [TOOL] Superseded 2026-10-01: `rolefit-preview-v0.8.0-beta.1` published
+    successfully (see the 2026-10-01 entry).
 
 - [USER+CODE] [TASK companion-ux-20260930] Desktop companion UX pass, with
   the Browser extension section first. Renderer-only (`desktop/companion.*`);
