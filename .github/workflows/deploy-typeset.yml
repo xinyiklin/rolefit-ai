@@ -159,6 +159,8 @@ jobs:
           rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
 
           cd "$build_dir"
+          # Image prune below never clears BuildKit cache, which filled the host disk.
+          "${docker_cmd[@]}" builder prune -af
           "${docker_cmd[@]}" build -f apps/typeset/Dockerfile -t "$IMAGE_NAME:latest" .
           cd /
           rm -rf "$build_dir"

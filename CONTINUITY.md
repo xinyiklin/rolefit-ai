@@ -37,8 +37,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - **Open:** the Typeset deploy for `d7f12a0` failed with "no space left on
     device" while building the image on the EC2 host; verify and container
     jobs passed and the site still serves the previous build. The remote
-    script prunes dangling images but not Docker build cache. Needs host
-    cleanup (user decision) and a rerun.
+    script prunes dangling images but not Docker build cache.
+  - [USER+CODE] Fix (user-approved): the remote deploy script now runs
+    `docker builder prune -af` before `docker build`, so each deploy first
+    reclaims BuildKit cache. Merging that workflow change re-runs the deploy.
+    UNCONFIRMED until that post-merge Typeset deploy succeeds.
 
 ## 2026-09-30
 
