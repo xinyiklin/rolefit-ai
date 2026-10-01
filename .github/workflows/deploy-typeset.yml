@@ -44,27 +44,16 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Keep the existing check name without rebuilding what the container already checks.
   verify:
+    needs: container
+    if: always()
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: 24.18.0
-          package-manager-cache: false
-
-      - run: npm ci
-
-      # Build what this workflow deploys. Package correctness (codec, editor,
-      # PDF font parity) belongs to Document workflow CI, which runs on the
-      # same triggers; duplicating it here only repeated the engine's upstream
-      # font downloads, and each extra download is an independent chance to
-      # time out. The app build still compiles both packages from source, so
-      # type and integration breakage still fails this job.
-      - run: npm run check --workspace apps/typeset
+      - name: Require the Typeset container build and HTTP probe
+        env:
+          CONTAINER_RESULT: ${{ needs.container.result }}
+        run: test "$CONTAINER_RESULT" = success
 
   container:
     name: Typeset container

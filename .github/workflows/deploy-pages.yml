@@ -61,16 +61,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # Package correctness belongs to Document workflow CI, which runs on the
-      # same triggers. Re-running the engine suite here only duplicated its
-      # upstream font downloads, and each extra download is an independent
-      # chance to time out. The RoleFit build below still compiles both shared
-      # packages from source, so type and integration breakage is still caught.
-      - name: Check RoleFit and build the isolated product site
-        run: npm run check --workspace apps/role-fit-ai
-
-      - name: Probe RoleFit server lifecycle
-        run: npm run test:server-lifecycle --workspace apps/role-fit-ai
+      # App correctness belongs to Document CI; this workflow builds its artifact.
+      - name: Build and validate the isolated product site
+        run: npm run build:landing --workspace apps/role-fit-ai
 
       - name: Probe desktop release contracts
         run: npm run test:desktop:release --workspace apps/role-fit-ai

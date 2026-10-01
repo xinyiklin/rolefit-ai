@@ -1,3 +1,4 @@
+import { parseSuite } from "./editor-browser-contracts/suites.mjs";
 import { spawn } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -5,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import react from "@vitejs/plugin-react";
 import { createServer } from "vite";
 
+const suite = parseSuite(process.argv.slice(2));
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = join(repoRoot, "scripts", "editor-browser-contracts");
 const server = await createServer({
@@ -32,7 +34,7 @@ try {
     "scripts",
     "editor-browser-contracts-chromium.mjs"
   );
-  const child = spawn(process.execPath, [chromiumDriver], {
+  const child = spawn(process.execPath, [chromiumDriver, `--suite=${suite}`], {
     cwd: repoRoot,
     env: {
       ...process.env,

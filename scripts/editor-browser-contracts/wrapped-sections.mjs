@@ -1,3 +1,4 @@
+import { includesSuite, wrappingCases } from './suites.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -138,7 +139,7 @@ async function continuationControls(h, text) {
   return receipts;
 }
 
-export async function runWrappedSectionContracts({ makeWindow, waitFor, baseUrl }) {
+export async function runWrappedSectionContracts({ makeWindow, waitFor, baseUrl, suite = 'all' }) {
   const evidence = process.env.ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR;
   for (const host of ['typeset', 'rolefit']) {
     const page = await makeWindow();
@@ -148,52 +149,57 @@ export async function runWrappedSectionContracts({ makeWindow, waitFor, baseUrl 
     const h = await wrappedHarness(page, waitFor);
     const style = await h.evaluate(() => window.__rowContract.style);
     const report = { host, cases: [], native: [], limitations: ['Synthetic clipboard events', 'window.find is not native Find UI', 'AX tree is not an actual screen-reader session'] };
-    for (const length of [80, 512, 4096]) {
-      for (const spaced of [false, true]) {
-        const text = spaced ? 'Section words '.repeat(Math.ceil(length/14)).slice(0,length) : 'W'.repeat(length);
-        const label = `${host} section/${length}/${spaced ? 'spaced' : 'token'}`;
-        const result = await sectionBounds(h, text, label);
-        if (length >= 512) assert(result.geometry.lines > 1, `${label}: section heading wraps`);
-        await h.evaluate(() => window.__rowContract.reopen()); await h.settle(); await h.settle();
-        assert.equal(await heading(h), text, `${label}: file round trip preserves exact source`);
-        report.cases.push({ length, spaced, ...result });
-      }
+    for (const { length, spaced } of wrappingCases(suite)) {
+      const text = spaced ? 'Section words '.repeat(Math.ceil(length/14)).slice(0,length) : 'W'.repeat(length);
+      const label = `${host} section/${length}/${spaced ? 'spaced' : 'token'}`;
+      const result = await sectionBounds(h, text, label);
+      if (length >= 512) assert(result.geometry.lines > 1, `${label}: section heading wraps`);
+      await h.evaluate(() => window.__rowContract.reopen()); await h.settle(); await h.settle();
+      assert.equal(await heading(h), text, `${label}: file round trip preserves exact source`);
+      report.cases.push({ length, spaced, ...result });
     }
     const wrapped = Array.from({ length: 75 }, (_, index) => `Section${index}`).join(' ');
-    for (const headingCase of ['smallcaps', 'uppercase', 'none']) {
-      for (const headingAlign of ['left', 'center', 'right']) {
-        await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, headingCase, headingAlign });
-        const result = await sectionBounds(h, wrapped, `${host} section ${headingCase}/${headingAlign}`);
-        report.cases.push({ headingCase, headingAlign, ...result });
+    if (includesSuite(suite, 'extended')) {
+      for (const headingCase of ['smallcaps', 'uppercase', 'none']) {
+        for (const headingAlign of ['left', 'center', 'right']) {
+          await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, headingCase, headingAlign });
+          const result = await sectionBounds(h, wrapped, `${host} section ${headingCase}/${headingAlign}`);
+          report.cases.push({ headingCase, headingAlign, ...result });
+        }
       }
     }
     await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, headingCase: 'none' });
-    report.native.push(await nativeLifecycle(h, wrapped));
-    const tall = Array.from({ length: 650 }, (_, index) => `Heading${index}`).join(' ');
-    const tallResult = await sectionBounds(h, tall, `${host} section taller than page`);
-    assert(tallResult.pages > 1, 'tall section paginates');
-    report.native.push(await nativeLifecycle(h, tall));
-    report.continuationControls = await continuationControls(h, tall);
-    await h.evaluate(style => window.__rowContract.applyStyle(style), style);
-    for (const [label, text] of [
-      ['section-short', 'Experience'], ['section-wrapped', wrapped], ['section-tall', tall],
-      ['section-mixed', '<size=18><u>Mixed section heading </u></size><i>smaller words </i>'.repeat(14)]
-    ]) {
-      await sectionBounds(h, text, `${host} ${label}`);
-      if (evidence) await captureWrappedEvidence(h, evidence, host, label);
-    }
-    if (host === 'typeset') {
-      for (const font of await h.evaluate(() => window.__rowContract.fonts)) {
-        await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, fontFamily: font.value });
-        await sectionBounds(h, wrapped, `${host} section font ${font.value}`);
-        if (evidence) await captureWrappedEvidence(h, evidence, host, `section-font-${font.value}`);
+    if (includesSuite(suite, 'core')) report.native.push(await nativeLifecycle(h, wrapped));
+    if (includesSuite(suite, 'extended')) {
+      const tall = Array.from({ length: 650 }, (_, index) => `Heading${index}`).join(' ');
+      const tallResult = await sectionBounds(h, tall, `${host} section taller than page`);
+      assert(tallResult.pages > 1, 'tall section paginates');
+      report.native.push(await nativeLifecycle(h, tall));
+      report.continuationControls = await continuationControls(h, tall);
+      await h.evaluate(style => window.__rowContract.applyStyle(style), style);
+      for (const [label, text] of [
+        ['section-short', 'Experience'], ['section-wrapped', wrapped], ['section-tall', tall],
+        ['section-mixed', '<size=18><u>Mixed section heading </u></size><i>smaller words </i>'.repeat(14)]
+      ]) {
+        await sectionBounds(h, text, `${host} ${label}`);
+        if (evidence) await captureWrappedEvidence(h, evidence, host, label);
       }
+      if (host === 'typeset') {
+        for (const font of await h.evaluate(() => window.__rowContract.fonts)) {
+          await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, fontFamily: font.value });
+          await sectionBounds(h, wrapped, `${host} section font ${font.value}`);
+          if (evidence) await captureWrappedEvidence(h, evidence, host, `section-font-${font.value}`);
+        }
+      }
+      await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, sectionRule: false });
+      await sectionBounds(h, wrapped, `${host} section without rule`);
     }
-    await h.evaluate(style => window.__rowContract.applyStyle(style), { ...style, sectionRule: false });
-    await sectionBounds(h, wrapped, `${host} section without rule`);
     await h.evaluate(style => window.__rowContract.applyStyle(style), style);
-    if (evidence) { await mkdir(evidence, { recursive: true }); await writeFile(join(evidence, `${host}-sections.json`), JSON.stringify(report, null, 2)); }
-    console.log(`Wrapped sections ${host}: 80/512/4096 spaced/token geometry and exact file round trips, case/alignment, native continuation/Shift range/typing/Undo, search/AX order, tall pagination, rule placement and outputs passed`);
+    await waitFor(page,
+      `localStorage.getItem('typeset-resume.docStyle.v1') === ${JSON.stringify(JSON.stringify(style))}`,
+      `${host} section style restored before closing`);
+    if (evidence) { await mkdir(evidence, { recursive: true }); await writeFile(join(evidence, `${host}-${suite}-sections.json`), JSON.stringify(report, null, 2)); }
+    console.log(`Wrapped sections ${host}/${suite}: ${report.cases.length} matrix cases, ${report.native.length} native lifecycles passed`);
     await page.destroy();
   }
 }

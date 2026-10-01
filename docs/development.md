@@ -55,7 +55,10 @@ npm run deps:check        # runtime, dependency contracts, undeclared imports
 npm run deps:tree         # full resolved-tree validity
 npm run deps:audit:production  # production advisories (gates CI)
 npm run types:check       # root probe plus every workspace/server/desktop config
-npm run test:editor:browser  # headless Chrome editor/lifecycle contracts
+npm run test:ci              # browser transport, suite selection, CI routing
+npm run test:editor:browser  # all headless Chrome contracts, core then extended
+npm run test:editor:browser -- --suite=core
+npm run test:editor:browser -- --suite=extended
 ```
 
 For a clean machine, prepare the deterministic font tools before running the
@@ -152,20 +155,50 @@ whose public package contract changed.
 
 ### Which workflow owns which check
 
-`Document workflow CI` (`document-workflows.yml`) is the correctness gate and
-the sole per-push owner of the package suites: it runs the dependency
-contracts, the six-platform TypeScript matrix, the engine codec/layout/PDF/font
-suite, the shared editor, both app checks, RoleFit server transactions, and the
-Chromium editor contracts.
+`Document workflow CI` (`document-workflows.yml`) owns ordinary correctness:
+root dependency/script/harness contracts, the five-platform native TypeScript
+matrix, engine codec/layout/PDF/font checks, shared editor checks, both app
+checks, server lifecycle, and core/extended Chromium contracts. RoleFit's app
+check automatically discovers the seven document-workflow probes; the server
+job runs only the separate `.test.mjs` lifecycle suite. The standalone
+`test:document-workflows` command remains available for focused local work.
 
-The two deploy workflows build and ship only their own app. They deliberately
-do **not** re-run the package suites: those run on the same triggers in
-Document workflow CI, and each duplicate run repeated the engine's upstream
-font downloads — an independent chance to fail on a socket timeout. An app
-build still compiles both shared packages from source, so type and integration
-breakage still fails the deploy. Treat `Document workflow CI` as the gate that
-must stay green on `main`; a deploy workflow passing alone does not prove the
-package suites passed.
+`Chromium core editor contracts` runs core behavior, persistence/recovery,
+host audits, and representative wrapping for both resume hosts and cover headers.
+`Chromium extended rendering` runs the remaining length/font/style/pagination
+and header-baseline combinations. They are disjoint; the default local browser
+command runs core then extended once, clearing synthetic origin storage before
+each group. Section fixtures wait for restored styles to persist before closing.
+Extended runs alongside core unless every changed path is Markdown or under
+RoleFit's backend-only `server/ai/` or
+`server/ai-cli/`. Shared/configuration/unknown paths, mixed changes, manual runs,
+and unavailable Git comparisons run extended. Skipping its test steps still
+reports the extended job's selection and successful status. The existing
+`Chromium editor contracts` check requires both jobs to succeed, preserving its
+blocking behavior without re-running tests.
+
+The browser harness sends one native right-click after target scrolling settles,
+then checks the exact enabled command and resulting model mutation. It bounds
+CDP responses to 30 seconds and a suite to 10 minutes; CI jobs have a 15-minute
+limit. Paste/edit and document-size timings are reported measurements, not
+calibrated performance budgets. Every run prints Chrome's version. CI uploads
+phase timings and, on failure, synthetic state/menu diagnostics and screenshots
+when the browser responds. Artifacts are scoped to `.agent-work/browser-core`
+or `.agent-work/browser-extended`, with seven-day retention. Locally set
+`ROLEFIT_EDITOR_BROWSER_ARTIFACT_DIR` to an ignored output directory for the
+same evidence. The separate `ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR` setting still
+opts into exhaustive successful-case screen/print/PDF captures.
+
+Deploy workflows retain checks for their artifacts instead of repeating full
+app suites. Pages runs the landing build/boundary check and desktop release
+contracts. Typeset's container builds the app and probes its HTTP runtime; its
+existing `verify` check forwards that result without another install/build.
+Small intentional overlap remains: landing builds retain their release-catalog
+probe, native compiler jobs check different installations, and artifact builds
+compile their inputs. Signed/preview release workflows retain their own gates.
+No new dependencies, browser retries, or nonblocking correctness jobs are used.
+A passing deployment job alone still does not establish that all Document CI
+checks passed; Document CI must remain green on `main`.
 
 Only `generate_font_assets.py` reaches the network. Every job that runs it
 caches `/tmp/typeset-fonts`, keyed on the scripts that name the pinned upstream

@@ -1,3 +1,4 @@
+import { includesSuite, wrappingCases } from './suites.mjs';
 import assert from 'node:assert/strict';
 import { assertWrappedBounds, captureWrappedEvidence, wrappedHarness } from './wrapped-harness.mjs';
 import { runHeaderBaselineContracts } from './header-baseline.mjs';
@@ -49,8 +50,8 @@ export async function captureWrappedHeaderEvidence(h, host, evidence, api = '__r
   await captureWrappedEvidence(h, evidence, host, 'long-header', api);
 }
 
-export async function runWrappedHeaderContracts({ makeWindow, waitFor, baseUrl }) {
-  await runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl });
+export async function runWrappedHeaderContracts({ makeWindow, waitFor, baseUrl, suite = 'all' }) {
+  await runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl, suite });
   for (const host of ['typeset', 'rolefit', 'cover']) {
     const page = await makeWindow();
     await page.connection.send('Emulation.setDeviceMetricsOverride', { width: 1400, height: 1000, deviceScaleFactor: 1, mobile: false }, page.sessionId);
@@ -64,59 +65,59 @@ export async function runWrappedHeaderContracts({ makeWindow, waitFor, baseUrl }
       await h.settle();
     };
     for (const key of ['name', 'contact|0']) {
-      for (const length of [80, 512, 4096]) {
-        for (const spaced of [false, true]) {
-          const data = structuredClone(h.original);
-          const text = spaced ? 'Header words '.repeat(Math.ceil(length/13)).slice(0,length) : 'W'.repeat(length);
-          data.header = { visible: true, name: 'Header contract', contact: ['contact@example.test'] };
-          if (key === 'name') data.header.name = text; else data.header.contact[0] = text;
-          const result = await assertWrappedBounds(h, data, `${host} ${key}/${length}/${spaced ? 'spaced' : 'token'}`);
-          const value = key === 'name' ? (await header()).name : (await header()).contact[0];
-          assert.equal(value, text, 'header layout preserves authored source');
-          if (length >= 512) assert(new Set(result.fields[key].map(span => span.y)).size > 1, `${key} creates continuation lines`);
-          await nativeHeaderLifecycle(h, api, key, text);
+      for (const { length, spaced } of wrappingCases(suite)) {
+        const data = structuredClone(h.original);
+        const text = spaced ? 'Header words '.repeat(Math.ceil(length/13)).slice(0,length) : 'W'.repeat(length);
+        data.header = { visible: true, name: 'Header contract', contact: ['contact@example.test'] };
+        if (key === 'name') data.header.name = text; else data.header.contact[0] = text;
+        const result = await assertWrappedBounds(h, data, `${host} ${key}/${length}/${spaced ? 'spaced' : 'token'}`);
+        const value = key === 'name' ? (await header()).name : (await header()).contact[0];
+        assert.equal(value, text, 'header layout preserves authored source');
+        if (length >= 512) assert(new Set(result.fields[key].map(span => span.y)).size > 1, `${key} creates continuation lines`);
+        await nativeHeaderLifecycle(h, api, key, text);
+      }
+    }
+    if (includesSuite(suite, 'core')) {
+      for (const key of ['name', 'contact|0']) {
+        const text = 'Editable header words '.repeat(28);
+        const data = structuredClone(h.original);
+        data.header = { visible: true, name: 'Header contract', contact: ['contact@example.test'] };
+        if (key === 'name') data.header.name = text; else data.header.contact[0] = text;
+        for (const reverse of [false, true]) {
+          await h.reset(data);
+          await select(key, reverse ? 160 : 5, reverse ? 5 : 160);
+          const copied = await h.evaluate(() => {
+            const clipboardData = new DataTransfer();
+            document.querySelector('[contenteditable=true]').dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData }));
+            return clipboardData.getData('text/plain');
+          });
+          assert.equal(copied, text.slice(5,160), 'wrapped header copy matches logical selection');
+          await h.key('Backspace', 8);
+          assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text.slice(0,5)+text.slice(160));
+          await h.key('z', 90, 4);
+          assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text, 'Undo restores wrapped header selection');
         }
+        await select(key, 140);
+        await h.insert('X');
+        assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text.slice(0,140)+'X'+text.slice(140), 'native continuation typing preserves header source');
       }
+      const linked = structuredClone(h.original);
+      const destination = 'https://example.test/profile';
+      const label = 'Linked contact words '.repeat(28);
+      linked.header = { visible: true, name: 'Linked header', contact: [`<link=${encodeURIComponent(destination)}>${label}</link>`, 'Neighbor contact'] };
+      await h.reset(linked);
+      const links = () => h.evaluate(() => [...document.querySelectorAll('[contenteditable=true] [data-tsdf="contact|0"]')].map(el => el.closest('a')?.getAttribute('href') ?? el.querySelector('a')?.getAttribute('href')).filter(Boolean));
+      assert((await links()).length > 1, 'wrapped contact paints linked continuation fragments');
+      assert((await links()).every(href => href === destination), 'all contact fragments retain one link destination');
+      await select('contact|0', 140); await h.insert('X');
+      assert((await header()).contact[0].includes(`<link=${encodeURIComponent(destination)}>`));
+      assert.equal((await header()).contact[1], 'Neighbor contact');
+      await h.key('z', 90, 4);
+      assert.equal((await header()).contact[0], linked.header.contact[0]);
+      const evidence = process.env.ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR;
+      if (evidence) await captureWrappedHeaderEvidence(h, host, evidence, api);
     }
-    for (const key of ['name', 'contact|0']) {
-      const text = 'Editable header words '.repeat(28);
-      const data = structuredClone(h.original);
-      data.header = { visible: true, name: 'Header contract', contact: ['contact@example.test'] };
-      if (key === 'name') data.header.name = text; else data.header.contact[0] = text;
-      for (const reverse of [false, true]) {
-        await h.reset(data);
-        await select(key, reverse ? 160 : 5, reverse ? 5 : 160);
-        const copied = await h.evaluate(() => {
-          const clipboardData = new DataTransfer();
-          document.querySelector('[contenteditable=true]').dispatchEvent(new ClipboardEvent('copy', { bubbles: true, cancelable: true, clipboardData }));
-          return clipboardData.getData('text/plain');
-        });
-        assert.equal(copied, text.slice(5,160), 'wrapped header copy matches logical selection');
-        await h.key('Backspace', 8);
-        assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text.slice(0,5)+text.slice(160));
-        await h.key('z', 90, 4);
-        assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text, 'Undo restores wrapped header selection');
-      }
-      await select(key, 140);
-      await h.insert('X');
-      assert.equal(key === 'name' ? (await header()).name : (await header()).contact[0], text.slice(0,140)+'X'+text.slice(140), 'native continuation typing preserves header source');
-    }
-    const linked = structuredClone(h.original);
-    const destination = 'https://example.test/profile';
-    const label = 'Linked contact words '.repeat(28);
-    linked.header = { visible: true, name: 'Linked header', contact: [`<link=${encodeURIComponent(destination)}>${label}</link>`, 'Neighbor contact'] };
-    await h.reset(linked);
-    const links = () => h.evaluate(() => [...document.querySelectorAll('[contenteditable=true] [data-tsdf="contact|0"]')].map(el => el.closest('a')?.getAttribute('href') ?? el.querySelector('a')?.getAttribute('href')).filter(Boolean));
-    assert((await links()).length > 1, 'wrapped contact paints linked continuation fragments');
-    assert((await links()).every(href => href === destination), 'all contact fragments retain one link destination');
-    await select('contact|0', 140); await h.insert('X');
-    assert((await header()).contact[0].includes(`<link=${encodeURIComponent(destination)}>`));
-    assert.equal((await header()).contact[1], 'Neighbor contact');
-    await h.key('z', 90, 4);
-    assert.equal((await header()).contact[0], linked.header.contact[0]);
-    const evidence = process.env.ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR;
-    if (evidence) await captureWrappedHeaderEvidence(h, host, evidence, api);
-    console.log(`Wrapped header ${host}: name/contact 80/512/4096 spaced/token bounds, logical copy/delete/Undo, native continuation edits, linked destinations passed`);
+    console.log(`Wrapped header ${host}/${suite} passed`);
     await page.destroy();
   }
 }
