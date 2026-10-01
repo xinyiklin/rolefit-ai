@@ -33,7 +33,9 @@ type UseCoverLetterArgs = {
   currentResumeText: string;
   resumeData: ResumeData | null;
   jobText: string;
-  honestContext: string;
+  candidateContext: string;
+  // Set while the Profile Background is over its limit; the stage declines.
+  profileLimitMessage: string | null;
   sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
@@ -87,7 +89,8 @@ export function useCoverLetter({
   currentResumeText,
   resumeData,
   jobText,
-  honestContext,
+  candidateContext,
+  profileLimitMessage,
   sourceWarnings,
   customInstructions,
   aiRequest,
@@ -151,11 +154,11 @@ export function useCoverLetter({
     () =>
       buildCoverLetterEvidence({
         resumeData,
-        honestContext,
+        candidateContext,
         slotAnswers,
         slotLabels,
       }),
-    [honestContext, resumeData, slotAnswers, slotLabels],
+    [candidateContext, resumeData, slotAnswers, slotLabels],
   );
   const inputSourceWarnings = sanitizeContentWarnings([
     ...(sourceWarnings ?? []),
@@ -322,6 +325,20 @@ export function useCoverLetter({
       );
       return;
     }
+    if (profileLimitMessage) {
+      setFailure({
+        kind: "error",
+        headline: "Profile too long",
+        detail: profileLimitMessage,
+      });
+      setCoverStatus(profileLimitMessage);
+      setCoverProgress({
+        status: "failed",
+        errorHeadline: "Profile too long",
+        error: profileLimitMessage,
+      });
+      return;
+    }
     if (!providerReady) {
       setFailure({
         kind: "error",
@@ -347,7 +364,7 @@ export function useCoverLetter({
       noteTone: "info",
     });
     try {
-      const response = await fetch("/api/cover-letter", {
+      const response = await fetch("/api/cover-polish", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

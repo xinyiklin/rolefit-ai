@@ -1,4 +1,4 @@
-// Job analysis preserves safe generated fields and attaches evidence warnings.
+// Job analysis extracts a posting into bounded structured fields.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
@@ -6,19 +6,12 @@ import {
   requestAbortSignal,
   sendJson
 } from "../http.ts";
+import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { callConfiguredProvider } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule } from "./prompts.ts";
-import { groundedJobCondition } from "./jobConditionEvidence.ts";
-import { sanitizeJobAnalysisWarnings, type JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
-import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
-import {
-  LIST_STOPWORDS,
-  distinctiveTokenKeys,
-  findUngroundedCuratedClaimTerm
-} from "./grounding.ts";
 import {
   FIT_ASSESSMENT_RULES,
   FIT_ASSESSMENT_RESPONSE_SCHEMA,
@@ -50,16 +43,16 @@ export function buildJobAnalysisPrompts({
   jobText: unknown;
   fitAssessment?: FitAssessmentInput | null;
 }): { systemPrompt: string; userPrompt: string } {
-  const systemPrompt = `You are a precise job-posting parser. You read one job posting and return ONLY a structured JSON object of facts that are EXPLICITLY present in it.
+  const systemPrompt = `You are a precise job-posting parser. Extract and organize one job posting into a concise structured JSON object using only the information it provides.
 
 ${inputFirewallRule()}
 
 ABSOLUTE RULES (anti-fabrication — this is the whole job):
 1. Extract only what the posting actually states. If a field is not stated, return "" (empty string), null, or [] — never guess, infer, or fill from typical postings.
-2. Never invent a company, title, location, salary, technology, or requirement. Copy facts as written (you may fix casing/whitespace and trim, nothing more).
+2. Never invent a company, title, location, salary, technology, or requirement. You may summarize and paraphrase while preserving the stated facts, alternatives, negation, thresholds, and required versus preferred qualifications.
 3. Do NOT put benefits, perks, pay/compensation prose, EEO/legal/diversity statements, application instructions, recruiter marketing, or "about the company" fluff into responsibilities or qualifications.
 4. techKeywords are ONLY concrete technologies/languages/frameworks/tools/platforms NAMED in the posting (e.g. "Python", "React", "AWS", "Kubernetes"). Never a generic skill ("communication") and never a tool the posting does not name.
-5. roleDescription is a neutral extract or light trim of the posting's own role/company description. Do not synthesize a new summary, combine unrelated claims, or add implied context.
+5. roleDescription is a concise neutral summary of the posting's role/company description. Do not add implied context.
 6. Each list item is one concise duty/qualification (no numbering, no bullets).
 7. Output exactly one JSON object and nothing else — no markdown fences, no commentary.${fitAssessment ? `
 
@@ -76,7 +69,7 @@ ${FIT_ASSESSMENT_RULES}` : ""}`;
   "salaryMax": <integer, or null>,
   "salaryCurrency": "USD, GBP, EUR, CAD, AUD, JPY, or \\"\\"",
   "salaryPeriod": "yr, mo, hr, or \\"\\"",
-  "roleDescription": "a neutral 1-3 sentence extract/light trim of the stated role/company description, or \\"\\"",
+  "roleDescription": "a concise neutral 1-3 sentence summary of the stated role/company description, or \\"\\"",
   "responsibilities": ["one duty per item"],
   "requiredQualifications": ["one required qualification per item"],
   "preferredQualifications": ["one preferred/nice-to-have qualification per item"],
@@ -124,10 +117,6 @@ function fitAssessmentInput(body: Record<string, unknown>): FitAssessmentInput |
   };
 }
 
-// --- sanitizing + grounding ------------------------------------------------
-
-const norm = (s: unknown): string => String(s ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-
 function str(value: unknown, max = 200): string {
   return typeof value === "string" ? value.replace(/<\/?[a-z][^>]*>/gi, "").replace(/\s+/g, " ").trim().slice(0, max) : "";
 }
@@ -148,121 +137,6 @@ function strList(value: unknown, { maxItems, maxLen = 240, minLen = 3 }: StrList
   return out;
 }
 
-// Case/spacing-insensitive source matching supplies advisory evidence checks.
-function grounded(value: unknown, sourceNorm: string): boolean {
-  const v = norm(value);
-  return Boolean(v) && v.length >= 2 && sourceNorm.includes(v);
-}
-
-const ROLE_DESCRIPTION_STOPWORDS = new Set([
-  ...LIST_STOPWORDS,
-  "company", "business", "position", "candidate", "candidates", "looking", "seeking",
-  "help", "helps", "helping", "join", "joining", "opportunity"
-]);
-
-// Free-text fields need the same symbol/case-aware protection as techKeywords.
-// Otherwise generic token overlap lets clearance/business phrases ground an
-// invented technology claim (TS/SCI -> TypeScript, net-zero -> .NET, etc.).
-function atomicTechClaimsGrounded(claim: unknown, sourceText: string): boolean {
-  const text = String(claim ?? "");
-  // Generic token overlap is not enough for concrete tools: a mostly copied
-  // duty could smuggle one invented technology (for example, adding Kubernetes
-  // to an otherwise grounded API sentence) and still clear the 60% list-item
-  // threshold below. Reuse the central curated technology lexicons so every
-  // known concept/tool/short token in extraction prose must occur in the source.
-  if (findUngroundedCuratedClaimTerm(text, sourceText)) return false;
-  const claimsTypeScript = /\bTypeScript\b/i.test(text)
-    || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(text);
-  if (claimsTypeScript && !groundedTech("ts", sourceText)) return false;
-  if (/\.net\b/i.test(text) && !groundedTech(".net", sourceText)) return false;
-  if ((/\bGolang\b/i.test(text) || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#])/.test(text))
-    && !groundedTech("go", sourceText)) return false;
-  if (/(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(text) && !groundedTech("c", sourceText)) return false;
-  if (/(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#])/.test(text) && !groundedTech("r", sourceText)) return false;
-  return true;
-}
-
-// A novel domain or technology inside copied prose remains an evidence concern.
-function groundedRoleDescription(value: unknown, sourceText: string): string {
-  const description = str(value, 900);
-  if (!description) return "";
-  if (!atomicTechClaimsGrounded(description, sourceText)) return "";
-  const tokens = distinctiveTokenKeys(description, ROLE_DESCRIPTION_STOPWORDS);
-  if (!tokens.length) return "";
-  const sourceTokens = new Set(distinctiveTokenKeys(sourceText, new Set()));
-  const hits = tokens.filter((token) => sourceTokens.has(token)).length;
-  return hits === tokens.length ? description : "";
-}
-
-// Detect weak source overlap separately from preserving usable list text.
-function listItemGrounded(item: unknown, sourceTokens: Set<string>, sourceText: string): boolean {
-  if (!atomicTechClaimsGrounded(item, sourceText)) return false;
-  const tokens = norm(item)
-    .split(" ")
-    .filter((t) => t.length >= 3 && !LIST_STOPWORDS.has(t));
-  if (tokens.length === 0) return true;
-  let hits = 0;
-  for (const t of tokens) if (sourceTokens.has(t)) hits += 1;
-  return hits * 5 >= tokens.length * 3; // hits / tokens >= 0.6, integer-safe
-}
-
-// Tech grounding is symbol-aware (C#, C++, .NET, Go) — norm() would strip the
-// symbols and "go"/"c" would false-match inside words. Require the term as a
-// whole token in the raw lowercased source: a non-token char (or start) before
-// it, and no alphanumeric immediately after.
-function groundedTech(tech: unknown, sourceText: string): boolean {
-  const t = String(tech ?? "").toLowerCase().trim();
-  if (t.length < 2 && t !== "c" && t !== "r") return false;
-  // Keep clearance/business phrases from being reclassified as technologies.
-  // These short/symbolic names need stricter boundaries than the generic token
-  // matcher below.
-  if (t === "ts") {
-    return /\bTypeScript\b/i.test(sourceText)
-      || /(?:^|[^A-Za-z0-9/])TS(?!\s*\/\s*SCI\b|[A-Za-z0-9])/i.test(sourceText);
-  }
-  if (t === ".net") return /(?:^|[^a-z0-9])\.net(?![-a-z0-9])/i.test(sourceText);
-  if (t === "go") {
-    return /\bGolang\b/i.test(sourceText)
-      || /(?:^|[^A-Za-z0-9])Go(?![-&A-Za-z0-9+#]|\s+to\s+market)/.test(sourceText);
-  }
-  if (t === "c") return /(?:^|[^A-Za-z0-9])C(?![-&A-Za-z0-9+#])/.test(sourceText);
-  if (t === "r") return /(?:^|[^A-Za-z0-9])R(?![-&A-Za-z0-9+#]|\s*&\s*D\b)/.test(sourceText);
-  const esc = t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  // Whole-token match: a hyphen counts as a boundary char on BOTH sides too, so a
-  // short term ("go"/"ai") can't false-ground inside hyphenated prose
-  // ("go-getter", "retail-ai", "let-go").
-  return new RegExp(String.raw`(?:^|[^a-z0-9.+#-])${esc}(?![a-z0-9-])`, "i").test(sourceText);
-}
-
-function salaryContextFromSource(sourceText: string): string {
-  return sourceText
-    .split(/\r?\n|(?<=[.!?])\s+/)
-    .filter((part) =>
-      /\b(?:salary|compensation|base pay|pay range|hourly rate|annual pay|remuneration)\b/i.test(part)
-      || /(?:[$£€¥]|\b(?:USD|GBP|EUR|CAD|AUD|JPY)\b)\s*\d/i.test(part)
-    )
-    .join("\n");
-}
-
-// Derive currency only from the explicit salary/pay context, never from a
-// plausible default. Bare salary numbers therefore keep currency empty.
-function currencyFromSalaryContext(salaryContext: string): string {
-  if (/\bGBP\b|£/.test(salaryContext)) return "GBP";
-  if (/\bEUR\b|€/.test(salaryContext)) return "EUR";
-  if (/\bJPY\b|¥/.test(salaryContext)) return "JPY";
-  if (/\bCAD\b|CA\$|C\$/.test(salaryContext)) return "CAD";
-  if (/\bAUD\b|A\$/.test(salaryContext)) return "AUD";
-  if (/\bUSD\b|US\$|\$/.test(salaryContext)) return "USD";
-  return "";
-}
-
-function periodFromSalaryContext(salaryContext: string): string {
-  if (/\b(?:per\s+year|annually|annual|yearly)\b|\/\s*(?:yr|year)\b/i.test(salaryContext)) return "yr";
-  if (/\b(?:per\s+month|monthly)\b|\/\s*(?:mo|month)\b/i.test(salaryContext)) return "mo";
-  if (/\b(?:per\s+hour|hourly)\b|\/\s*(?:hr|hour)\b/i.test(salaryContext)) return "hr";
-  return "";
-}
-
 function normalizeJobType(value: unknown): string {
   const t = str(value, 40);
   if (/full[-\s]?time/i.test(t)) return "Full-time";
@@ -273,140 +147,33 @@ function normalizeJobType(value: unknown): string {
   return "";
 }
 
-// A normalized employment type is still a claim. Require the corresponding
-// phrase in the posting instead of accepting a plausible model classification
-// (for example, turning an unspecified role into "Full-time"). Contract uses
-// employment-context patterns so ordinary prose such as "manage contracts" does
-// not become an employment type.
-function groundedJobType(value: unknown, sourceText: string): string {
-  const normalized = normalizeJobType(value);
-  if (!normalized) return "";
-  const patterns: Record<string, RegExp[]> = {
-    "Full-time": [
-      /\b(?:employment|job|position|role)\s+type\s*[:\-]?\s*full[-\s]?time\b/i,
-      /\bfull[-\s]?time\s+(?:role|position|job|employment)\b/i,
-      /\b(?:role|position|job)\s+(?:is\s+)?full[-\s]?time\b/i,
-      /^\s*full[-\s]?time\s*$/i
-    ],
-    "Part-time": [
-      /\b(?:employment|job|position|role)\s+type\s*[:\-]?\s*part[-\s]?time\b/i,
-      /\bpart[-\s]?time\s+(?:role|position|job|employment)\b/i,
-      /\b(?:role|position|job)\s+(?:is\s+)?part[-\s]?time\b/i,
-      /^\s*part[-\s]?time\s*$/i
-    ],
-    Contract: [
-      /\b(?:employment|job)\s+type\s*[:\-]?\s*contract\b/i,
-      /\bcontract(?:[-\s]+(?:role|position|job|employment|basis|opportunity|to[-\s]hire))\b/i,
-      /\b(?:role|position|job)\s+(?:is\s+)?(?:a\s+)?contract\b/i,
-      /\b\d+[-\s]?(?:month|year)\s+contract\b/i,
-      /(?:^|\n)\s*contract\s*(?:$|\n)/im
-    ],
-    Internship: [
-      /\bintern\s+(?:role|position|job|program)\b/i,
-      /\b(?:employment|job)\s+type\s*[:\-]?\s*intern(?:ship)?\b/i,
-      /\b(?:internship|intern)\s+(?:role|position|job|program|opportunity)\b/i,
-      /\b(?:role|position|job)\s+(?:is\s+)?(?:an?\s+)?internship\b/i,
-      /^\s*[^.!?\n]{0,60}\b(?:internship|intern)\b\s*$/i
-    ],
-    Temporary: [
-      /\btemporary\s+(?:role|position|job|employment|assignment)\b/i,
-      /\b(?:employment|job)\s+type\s*[:\-]?\s*temporary\b/i
-    ]
-  };
-  const segments = sourceText.split(/\r?\n|(?<=[.!?])\s+/);
-  const affirmative = segments.some((segment) => {
-    if (!patterns[normalized]?.some((pattern) => pattern.test(segment))) return false;
-    // A historical qualification, benefit rule, or explicit negation does not
-    // describe this role's employment type.
-    if (/\b(?:benefits?|employees?|eligibility)\b/i.test(segment)) return false;
-    if (/\b(?:prior|previous|past)\b.{0,45}\b(?:experience|employment|work|internship)\b/i.test(segment)) return false;
-    if (/\b(?:not|isn['’]?t|is\s+not|no)\b.{0,45}\b(?:full[-\s]?time|part[-\s]?time|contract|intern(?:ship)?|temporary)\b/i.test(segment)) return false;
-    return true;
-  });
-  return affirmative ? normalized : "";
-}
-
-// Numeric source matching detects invented salary figures without withholding them.
-function groundedAmount(value: unknown, sourceText: string): number | null {
-  const n = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : null;
-  if (n == null || n <= 0) return null;
-  const digits = String(n);
-  const k = n % 1000 === 0 ? String(n / 1000) : null;
-  const plain = sourceText.replace(/,/g, "");
-  // Digit-BOUNDARY match, not substring: 20000 must not "ground" inside 120000,
-  // and a zip/count digit run must not pass as a salary figure.
-  if (new RegExp(String.raw`(?<!\d)${digits}(?!\d)`).test(plain)) return n;
-  if (k && new RegExp(String.raw`(?<!\d)${k}\s*k\b`, "i").test(sourceText)) return n;
-  return null;
-}
-
-export function sanitizeJobAnalysis(parsed: unknown, sourceText: string) {
+export function sanitizeJobAnalysis(parsed: unknown) {
   const obj = (parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {}) as Record<string, unknown>;
-  const sourceNorm = norm(sourceText);
-  const conditionIssues: JobConditionIssue[] = [];
-  const warnings: JobAnalysisWarning[] = [];
-  const sourceTokens = new Set(sourceNorm.split(" ").filter(Boolean));
-  const warn = (field: JobAnalysisWarning["field"], supported: boolean, value: unknown) => {
-    if (value !== "" && value !== null && !supported && !warnings.some((item) => item.field === field && item.message.startsWith("Not supported"))) warnings.push({
-      field, message: "Not supported by provided evidence. Check this generated field against the original posting."
-    });
-  };
-  const scalar = (field: "title" | "company" | "location") => {
-    const value = str(obj[field]);
-    warn(field, grounded(value, sourceNorm), value);
-    return value;
-  };
-  const list = (field: "responsibilities" | "requiredQualifications" | "preferredQualifications" | "senioritySignals" | "domainSignals", maxItems: number, maxLen: number) => {
-    if (Array.isArray(obj[field]) && obj[field].length > maxItems) warnings.push({ field, message: "Additional generated items were omitted at the display limit. Review the original posting for complete requirements." });
-    return strList(obj[field], { maxItems, maxLen, minLen: 1 }).map((item) => {
-      warn(field, listItemGrounded(item, sourceTokens, sourceText), item);
-      return field === "senioritySignals" || field === "domainSignals"
-        ? item : groundedJobCondition(item, field, sourceText, conditionIssues, warnings);
-    });
-  };
-  const salaryContext = salaryContextFromSource(sourceText);
-  const salary = (field: "salaryMin" | "salaryMax") => {
-    const raw = obj[field];
-    const value = typeof raw === "number" && Number.isFinite(raw) && raw > 0 ? Math.round(raw) : null;
-    warn(field, groundedAmount(value, salaryContext) === value, value);
-    return value;
-  };
-  const salaryMin = salary("salaryMin");
-  const salaryMax = salary("salaryMax");
-  if (salaryMin !== null && salaryMax !== null && salaryMin > salaryMax) {
-    warnings.push({ field: "salaryMin", message: "The generated minimum exceeds the maximum. Review the salary range." });
-  }
-  const salaryCurrencyRaw = str(obj.salaryCurrency, 20).toUpperCase();
+  const amount = (value: unknown): number | null =>
+    typeof value === "number" && Number.isFinite(value) && value > 0 ? Math.round(value) : null;
+  const salaryMin = amount(obj.salaryMin);
+  const salaryMax = amount(obj.salaryMax);
   const hasSalary = salaryMin !== null || salaryMax !== null;
-  const salaryCurrency = !hasSalary ? "" : ["USD", "GBP", "EUR", "CAD", "AUD", "JPY"].includes(salaryCurrencyRaw)
-    ? salaryCurrencyRaw : currencyFromSalaryContext(salaryContext);
-  const salaryPeriodRaw = str(obj.salaryPeriod, 20);
-  const salaryPeriod = !hasSalary ? "" : ["yr", "mo", "hr"].includes(salaryPeriodRaw)
-    ? salaryPeriodRaw : periodFromSalaryContext(salaryContext);
-  warn("salaryCurrency", salaryCurrency === currencyFromSalaryContext(salaryContext), salaryCurrency);
-  warn("salaryPeriod", salaryPeriod === periodFromSalaryContext(salaryContext), salaryPeriod);
-  const jobType = normalizeJobType(obj.jobType);
-  warn("jobType", jobType === groundedJobType(obj.jobType, sourceText), jobType);
-  const roleDescription = str(obj.roleDescription, 900);
-  warn("roleDescription", Boolean(groundedRoleDescription(roleDescription, sourceText)), roleDescription);
-  const techKeywords = strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 1 });
-  if (Array.isArray(obj.techKeywords) && obj.techKeywords.length > 24) warnings.push({ field: "techKeywords", message: "Additional generated terms were omitted at the display limit. Review the original posting for complete requirements." });
-  for (const term of techKeywords) warn("techKeywords", groundedTech(term, sourceText), term);
-  const result = {
-    title: scalar("title"), company: scalar("company"), location: scalar("location"),
-    jobType,
-    workAuth: groundedJobCondition(str(obj.workAuth, 1000), "workAuth", sourceText, conditionIssues, warnings),
-    salaryMin, salaryMax, salaryCurrency, salaryPeriod, roleDescription,
-    responsibilities: list("responsibilities", 12, 1000),
-    requiredQualifications: list("requiredQualifications", 12, 1000),
-    preferredQualifications: list("preferredQualifications", 12, 1000),
-    techKeywords,
-    senioritySignals: list("senioritySignals", 8, 60),
-    domainSignals: list("domainSignals", 8, 40),
-    conditionIssues
+  const currency = str(obj.salaryCurrency, 20).toUpperCase();
+  const period = str(obj.salaryPeriod, 20);
+  return {
+    title: str(obj.title),
+    company: str(obj.company),
+    location: str(obj.location),
+    jobType: normalizeJobType(obj.jobType),
+    workAuth: str(obj.workAuth, 1000),
+    salaryMin,
+    salaryMax,
+    salaryCurrency: hasSalary && ["USD", "GBP", "EUR", "CAD", "AUD", "JPY"].includes(currency) ? currency : "",
+    salaryPeriod: hasSalary && ["yr", "mo", "hr"].includes(period) ? period : "",
+    roleDescription: str(obj.roleDescription, 900),
+    responsibilities: strList(obj.responsibilities, { maxItems: 12, maxLen: 1000, minLen: 1 }),
+    requiredQualifications: strList(obj.requiredQualifications, { maxItems: 12, maxLen: 1000, minLen: 1 }),
+    preferredQualifications: strList(obj.preferredQualifications, { maxItems: 12, maxLen: 1000, minLen: 1 }),
+    techKeywords: strList(obj.techKeywords, { maxItems: 24, maxLen: 40, minLen: 1 }),
+    senioritySignals: strList(obj.senioritySignals, { maxItems: 8, maxLen: 60, minLen: 1 }),
+    domainSignals: strList(obj.domainSignals, { maxItems: 8, maxLen: 40, minLen: 1 })
   };
-  const jobWarnings = sanitizeJobAnalysisWarnings(warnings);
-  return { ...result, ...(jobWarnings ? { jobWarnings } : {}) };
 }
 
 export function sanitizePrepareAnalysisResponse(
@@ -424,7 +191,7 @@ export function sanitizePrepareAnalysisResponse(
     ? source.job
     : source;
   return {
-    fields: sanitizeJobAnalysis(rawJob, jobText),
+    fields: sanitizeJobAnalysis(rawJob),
     ...(fitInput
       ? {
           ...evaluateFitAssessmentResponse(source.fitAssessment, {
@@ -455,7 +222,10 @@ export async function analyzeJobToFields({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
-  const fitInput = fitAssessmentInput(body);
+  const requestedFit = fitAssessmentInput(body);
+  // An oversized Profile never reaches the provider; Job analysis still runs.
+  const fitLimitError = requestedFit ? candidateContextLimitError(requestedFit.candidateContext ?? "") : null;
+  const fitInput = fitLimitError ? null : requestedFit;
   const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, fitAssessment: fitInput });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(
@@ -465,7 +235,8 @@ export async function analyzeJobToFields({
   const prepared = sanitizePrepareAnalysisResponse(parsed, jobText, fitInput);
   return {
     ...prepared,
-    fitAssessmentRequested: Boolean(fitInput),
+    ...(fitLimitError ? { fitAssessment: null, fitAssessmentError: fitLimitError } : {}),
+    fitAssessmentRequested: Boolean(requestedFit),
     provider,
     model,
     reasoningEffort,
@@ -496,10 +267,16 @@ export async function handleJobAnalysis(req: IncomingMessage, res: ServerRespons
         sendJson(res, 400, { error: "Load a resume before retrying Fit Assessment." });
         return;
       }
+      const candidateContext = String(body.candidateContext ?? "");
+      const contextLimitError = candidateContextLimitError(candidateContext);
+      if (contextLimitError) {
+        sendJson(res, 400, { error: contextLimitError });
+        return;
+      }
       const fit = await analyzeFitAssessment({
         jobText,
         resumeText,
-        candidateContext: String(body.candidateContext ?? ""),
+        candidateContext,
         body,
         signal: request.signal
       });

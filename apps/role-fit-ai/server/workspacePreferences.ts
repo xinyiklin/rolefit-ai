@@ -3,6 +3,7 @@
 // this owner-only file, so changing browser, origin, or incognito mode does not
 // create a separate candidate profile.
 
+import { createHash } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -42,16 +43,28 @@ async function readPreferencesFile(path: string): Promise<{ status: "missing" } 
   }
 }
 
-export async function readStoredWorkspacePreferences(workspaceDir: string): Promise<StoredWorkspacePreferencesRead> {
+// A preference revision is the hash of the stored bytes, so any writer's change
+// counts, including one that leaves `updatedAt` untouched.
+function preferencesRevision(text: string): string {
+  return createHash("sha256").update(text).digest("hex");
+}
+
+// Content and revision come from one read, so they always describe the same version.
+async function readPreferencesRecord(workspaceDir: string): Promise<{ read: StoredWorkspacePreferencesRead; revision: string | null }> {
   const current = await readPreferencesFile(join(workspaceDir, WORKSPACE_PREFERENCES_FILE_NAME));
-  if (current.status === "ok") {
-    try {
-      return { status: "ok", value: parseStoredWorkspacePreferences(JSON.parse(current.raw) as unknown) };
-    } catch {
-      return { status: "invalid" };
-    }
+  if (current.status !== "ok") return { read: current, revision: null };
+  try {
+    return {
+      read: { status: "ok", value: parseStoredWorkspacePreferences(JSON.parse(current.raw) as unknown) },
+      revision: preferencesRevision(current.raw)
+    };
+  } catch {
+    return { read: { status: "invalid" }, revision: null };
   }
-  return current;
+}
+
+export async function readStoredWorkspacePreferences(workspaceDir: string): Promise<StoredWorkspacePreferencesRead> {
+  return (await readPreferencesRecord(workspaceDir)).read;
 }
 
 export type StoredWorkspaceRestoreMarkerRead =
@@ -120,16 +133,14 @@ async function writePreferencesAtomic(
   workspaceDir: string,
   preferences: PortableWorkspacePreferences,
   now: Date
-): Promise<void> {
+): Promise<string> {
   const filePath = join(workspaceDir, WORKSPACE_PREFERENCES_FILE_NAME);
   const temporaryPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  const serialized = serializeStoredWorkspacePreferences(preferences, "workspace", now);
   try {
-    await writeFile(
-      temporaryPath,
-      serializeStoredWorkspacePreferences(preferences, "workspace", now),
-      { mode: 0o600 }
-    );
+    await writeFile(temporaryPath, serialized, { mode: 0o600 });
     await rename(temporaryPath, filePath);
+    return preferencesRevision(serialized);
   } finally {
     await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
@@ -142,30 +153,63 @@ export class InvalidWorkspacePreferencesError extends Error {
   }
 }
 
+export class StaleWorkspacePreferencesError extends Error {
+  constructor() {
+    super("The workspace preferences changed since this window last loaded them.");
+    this.name = "StaleWorkspacePreferencesError";
+  }
+}
+
 // Refuse to turn an ordinary browser-cache save into an implicit repair. The
 // validity check and replacement share the workspace lock so a concurrent
-// restore cannot change the file between them.
+// restore cannot change the file between them. A client save passes the
+// revision it last saw; any other stored revision rejects it instead of being
+// replaced. Returns the written revision.
 export async function persistWorkspacePreferences(
   workspaceDir: string,
   preferences: PortableWorkspacePreferences,
-  now = new Date()
-): Promise<void> {
-  await withWorkspaceLock(async () => {
-    const current = await readStoredWorkspacePreferences(workspaceDir);
+  now = new Date(),
+  baseRevision?: string | null
+): Promise<string> {
+  return withWorkspaceLock(async () => {
+    const { read: current, revision } = await readPreferencesRecord(workspaceDir);
     if (current.status === "invalid") throw new InvalidWorkspacePreferencesError();
+    if (baseRevision !== undefined && current.status === "ok" && revision !== baseRevision) {
+      throw new StaleWorkspacePreferencesError();
+    }
     await ensureJobWorkspace(workspaceDir);
-    await writePreferencesAtomic(workspaceDir, preferences, now);
+    return writePreferencesAtomic(workspaceDir, preferences, now);
   });
 }
 
+// The GET payload; a stale save returns the same shape so the client can rebase.
+async function readPreferencesSnapshot(workspaceDir: string): Promise<Record<string, unknown>> {
+  const [{ read, revision }, marker] = await withWorkspaceLock(() => Promise.all([
+    readPreferencesRecord(workspaceDir),
+    readStoredWorkspaceRestoreMarker(workspaceDir)
+  ]));
+  const restoreStamp = marker.status === "ok"
+    ? marker.value.restoredAt
+    : read.status === "ok" && read.value.source === "restore"
+      ? read.value.updatedAt
+      : null;
+  if (read.status === "missing") return { exists: false, restoreStamp };
+  if (read.status === "invalid") return { exists: false, invalid: true, restoreStamp };
+  return {
+    exists: true,
+    source: read.value.source,
+    updatedAt: read.value.updatedAt,
+    revision,
+    settings: read.value.settings,
+    lastBaseResume: read.value.lastBaseResume,
+    restoreStamp
+  };
+}
+
 async function handleGet(res: ServerResponse, workspaceDir: string): Promise<void> {
-  let read: StoredWorkspacePreferencesRead;
-  let marker: StoredWorkspaceRestoreMarkerRead;
+  let snapshot: Record<string, unknown>;
   try {
-    [read, marker] = await withWorkspaceLock(() => Promise.all([
-      readStoredWorkspacePreferences(workspaceDir),
-      readStoredWorkspaceRestoreMarker(workspaceDir)
-    ]));
+    snapshot = await readPreferencesSnapshot(workspaceDir);
   } catch (error) {
     if (error instanceof WorkspaceRestoreConflictError) {
       sendJson(res, 409, { error: error.message });
@@ -174,34 +218,20 @@ async function handleGet(res: ServerResponse, workspaceDir: string): Promise<voi
     sendJson(res, 500, { error: "The workspace preferences could not be read." });
     return;
   }
-  const restoreStamp = marker.status === "ok"
-    ? marker.value.restoredAt
-    : read.status === "ok" && read.value.source === "restore"
-      ? read.value.updatedAt
-      : null;
-  if (read.status === "missing") {
-    sendJson(res, 200, { exists: false, restoreStamp });
-    return;
-  }
-  if (read.status === "invalid") {
-    sendJson(res, 200, { exists: false, invalid: true, restoreStamp });
-    return;
-  }
-  sendJson(res, 200, {
-    exists: true,
-    source: read.value.source,
-    updatedAt: read.value.updatedAt,
-    settings: read.value.settings,
-    lastBaseResume: read.value.lastBaseResume,
-    restoreStamp
-  });
+  sendJson(res, 200, snapshot);
 }
 
 async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDir: string): Promise<void> {
   let preferences: PortableWorkspacePreferences;
+  let baseRevision: string | null;
   try {
     const raw = await readBody(req, MAX_WORKSPACE_PREFERENCES_JSON_BYTES);
-    preferences = parsePortableWorkspacePreferences(JSON.parse(raw) as unknown);
+    const body = JSON.parse(raw) as unknown;
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("invalid");
+    const { baseRevision: base, ...portable } = body as Record<string, unknown>;
+    if (base !== null && (typeof base !== "string" || !/^[0-9a-f]{64}$/.test(base))) throw new Error("invalid");
+    baseRevision = base;
+    preferences = parsePortableWorkspacePreferences(portable);
   } catch (error) {
     const tooLarge = error instanceof Error && error.message === "Request is too large.";
     sendJson(res, tooLarge ? 413 : 400, {
@@ -211,9 +241,15 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDi
     });
     return;
   }
+  let revision: string;
   try {
-    await persistWorkspacePreferences(workspaceDir, preferences);
+    revision = await persistWorkspacePreferences(workspaceDir, preferences, new Date(), baseRevision);
   } catch (error) {
+    if (error instanceof StaleWorkspacePreferencesError) {
+      const current = await readPreferencesSnapshot(workspaceDir).catch(() => null);
+      sendJson(res, 409, { stale: true, error: error.message, ...(current ? { current } : {}) });
+      return;
+    }
     if (error instanceof WorkspaceRestoreConflictError) {
       sendJson(res, 409, { error: error.message });
       return;
@@ -227,7 +263,7 @@ async function handlePost(req: IncomingMessage, res: ServerResponse, workspaceDi
     sendJson(res, 500, { error: "The workspace preferences could not be saved." });
     return;
   }
-  sendJson(res, 200, { saved: true });
+  sendJson(res, 200, { saved: true, revision });
 }
 
 export async function handleWorkspacePreferences(

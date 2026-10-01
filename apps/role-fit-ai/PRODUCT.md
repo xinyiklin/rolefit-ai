@@ -32,8 +32,11 @@ never a hosted copy of the workbench.
 **Content checks are advisory (2026-09-18).**
 Content and evidence checks inform the user; they do not decide what the user
 may accept. This applies throughout RoleFit: resume tailoring/Polish,
-cover-letter generation/Polish, application answers, role descriptions, Job
-analysis, Fit Assessment, and review feedback.
+cover-letter generation/Polish, application answers, candidate role descriptions,
+Fit Assessment, and review feedback. Job analysis is structured JD extraction: it
+allows concise summaries and paraphrases, with basic response validation and no
+post-extraction fact checks, source matching, wording replacement, or evidence
+review warnings. The prompt still requires fidelity to the supplied posting.
 
 Keep checks for unsupported claims, missing evidence, attribution, metrics,
 content quality, and ATS terminology. Shortness, style, wording, and
@@ -69,9 +72,10 @@ separate workstream governed by this same policy.
 
 Warnings stay attached to the output they describe. Editing labels retained
 concerns as referring to earlier wording; acceptance does not clear uncertainty.
-Saved Fit and prepared-job receipts retain optional warning metadata. Older records
-remain readable without inventing verification; older app versions may reject
-new warning-bearing records, so downgrade compatibility is not guaranteed.
+Saved Fit receipts retain optional warning metadata. Historical prepared-job
+warning metadata remains readable but is not displayed or used in drafting; new
+extractions produce none. Older records remain readable without inventing
+verification; older app versions may reject new warning-bearing records, so downgrade compatibility is not guaranteed.
 Known uncertainty from accepted Resume text also accompanies Cover and answer
 requests and results instead of becoming independently verified evidence.
 
@@ -96,7 +100,9 @@ Otherwise usable suggestions retain detected concerns as warnings. Normal Resume
 operation that stages a proposal for human decisions; oversized documents
 prioritize material, job-relevant fields and disclose the fields outside that
 pass. It does not automatically run a second assessment over edits the user may
-never accept.
+never accept. "Proposed improvements" is a bounded editorial summary of the
+changes, without candidate-evidence checks or the generic unsupported-summary
+warning. Proposed resume text and cited suggestions keep their own checks.
 
 Settings > Guidance owns **Bold keywords in bullets**, on by default. Turned
 off, a bullet Resume Polish rewrites arrives unbolded: the prompt forbids
@@ -122,7 +128,7 @@ accepting would rewrite, with the full proposed letter one click away.
 The cover letter is **one Polish click**. RoleFit resolves the date, candidate
 name, role, company, greeting, and sign-off itself, sends the whole candidate
 evidence corpus with the source letter, and lets the model choose which
-experiences and honest-context notes this particular posting warrants. Bracketed
+experiences and Profile notes this particular posting warrants. Bracketed
 text in a base variant is a drafting instruction, never candidate evidence.
 Grounding, placeholder, and quality checks run on the server and produce
 warnings alongside usable text. Only technically unusable output receives a
@@ -137,7 +143,7 @@ after repair returns bounded issues and leaves the current document untouched.
 Content concerns never trigger a repair or prevent acceptance. Accepted warnings
 remain visible after editing, labelled as referring to the earlier wording;
 Restore remains available only while the editor retains its exact baseline. Neither warnings nor errors expose repair instructions or internal evidence ids.
-An unfinished Guidance prompt never counts as evidence, and spelled-out
+An unfinished Profile evidence prompt never counts as evidence, and spelled-out
 durations receive the same grounding check as digit forms.
 
 The prepared role and company remain necessary operation inputs. A missing
@@ -346,22 +352,58 @@ controls tracker state or workflow. Technically unusable provider output becomes
 unavailable rather than a guessed result; the deterministic local job brief
 remains editable and manual Polish remains available.
 
-Settings > About you may add optional candidate-declared education and
+Settings > Profile may add optional candidate-declared education and
 scheduling facts: a 4.0-scale GPA attached to a declared education level, plus
 an earliest start of immediately, one to four weeks' notice, or a specific
 date. Citizenship, U.S. work authorization, and sponsorship are three
 independent declarations; each defaults to Not specified, and citizenship
-never implies either employment answer or clearance eligibility. It may also
-add experience evidence by source: professional employment,
-internships, freelance/contract work, research, academic projects, personal
-projects, open source, volunteer work, or military/public service. Each source
-may declare duration, number of roles/projects, recency, and a short factual
-scope. These are global facts, not user-authored fit labels: Fit Assessment
-decides relevance per posting, does not sum overlapping categories, and never
-treats a project count as elapsed time.
-When a posting explicitly requires professional, industry, commercial,
-or paid experience, other sources do not satisfy that requirement
-unless the posting says they may.
+never implies either employment answer or clearance eligibility. Its
+**Background** is one free-text field for experience beyond, or in more depth
+than, the resume, organised by headings that name each role or project with its
+type and dates (for example `## Slotwise (personal project, 2025–present)`). A
+heading that uses the name shown on the resume links its text to that entry.
+These are global facts, not user-authored fit labels: Fit Assessment decides
+relevance per posting, does not sum overlapping entries, and never treats a
+project count as elapsed time. When a posting explicitly requires professional,
+industry, commercial, or paid experience, other sources do not satisfy that
+requirement unless the posting says they may. Drafting preferences belong in
+Guidance > Custom instructions, not in the Background.
+
+Every stage that sends candidate context—Fit Assessment, Resume and cover-letter
+Polish, application answers, and final review—receives the whole Background or
+none of it. The Background shows a live count against one 12,000-character
+limit (declared facts do not count); above it those stages decline with a
+message naming the limit instead of sending a cut-down copy, and the saved text
+is never shortened. Experience rows saved by earlier versions are converted
+once into lines under `## Experience by type` at the end of the Background, with
+every declared value kept.
+
+A Background heading links the text beneath it to the one standard resume entry
+whose title or subtitle it names (the employer, project, or role as written on
+the resume), ignoring case, punctuation, and a trailing parenthesised type or
+dates. A heading naming no entry, or several, stays unlinked. Every enclosing
+heading must name the same entry or be a grouping heading such as `# Experience`
+or one of the resume's section names; any other enclosing heading blocks links
+beneath it; a grouping word never names an entry itself. Profile rows list every
+whole heading linked to that entry, for example "From Profile: Acme Corp
+(internship, 2024)". Resume Polish may rewrite a linked entry's bullets from that text and
+propose up to two new bullets at the end of the entry, and Profile-based rows
+are labelled **Profile**. Accepting a new bullet inserts it; Undo removes exactly
+that bullet. Another entry's linked text, and text above the first heading, are
+never evidence for an experience or project entry; an edit that leans on them is
+flagged before acceptance. Suggestions may quote the Profile and may point out a
+Profile item that fits the posting but is not on the resume; they never edit.
+Swapping resume content for Profile content, and removing or reordering whole
+entries, is not part of Polish.
+
+Polish may also propose cutting a project or experience bullet that does not
+serve the posting, or reordering an entry's bullets to lead with the most
+relevant evidence. It never removes an entry's last bullet, and never both
+reorders an entry and cuts from it. The review groups rows as **Rewrite**,
+**Add**, **Remove**, and **Reorder**; when more than one group is present, each
+group has its own Accept and Discard beside the footer's Accept all / Discard
+all. Undo restores a removed bullet in its original place and a reordered entry
+in its original order.
 
 Eligibility is separate from fit and never changes the verdict. **Clear** means
 no stated employment-eligibility condition needs attention. **Check** means the
@@ -392,7 +434,7 @@ provider/model/reasoning setting, or prompt version makes the displayed result
 out of date. Beginning, failing, cancelling, or disabling a later assessment
 never erases the latest completed result. Prepare retains that timestamped
 result as a clearly labeled previous preparation and lists which input groups changed — job posting, resume
-content, About you, or assessment setup — without presenting its verdict as
+content, Profile, or assessment setup — without presenting its verdict as
 current. A successful reassessment supersedes that displayed result. Application
 records retain the latest completed assessment snapshot rather than a versioned
 assessment ledger. Apply saves that snapshot even when later input changes make
@@ -608,9 +650,9 @@ credential metadata, dates, and identity. All bounded targets compete for the pr
 budget; each selected entry is sent once with its target references, and omitted
 counts are explicit. Legitimate role/project names such as Scrum Master or Degree
 audit app remain editable. Optional Suggestions cite existing content
-and the job and never reorder or remove content. Job-condition disclosures retain
-original conditions when shortened wording would change meaning. Classification
-concerns are advisory; modal verbs and domain nouns do not erase valid duties. Cover-letter citations identify supplied
+and the job and never reorder or remove content. Job analysis delegates wording
+and qualification classification to the model without condition-review disclosures.
+Cover-letter citations identify supplied
 sources; they do not independently verify those sources. Ordinary paraphrases
 never require hidden sentence records or literal wording checks. Editorial advice
 may mention missing skills or suggest a bullet count without asserting those as

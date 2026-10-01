@@ -17,13 +17,14 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
-- About you stores optional evidence and scheduling facts, never self-scored
-  fit. GPA is a single bounded 4.0-scale value attached to declared education;
-  availability is a bounded notice period or valid exact date. Experience
-  remains divided by source with bounded duration, role/project count, recency,
-  and a factual scope note; job-specific relevance belongs to Fit Assessment.
-  Keep its category rows flat and do not collapse distinct evidence sources
-  into one additive years-of-experience total.
+- Settings > Profile stores optional declared facts and one Background text
+  field, never self-scored fit. GPA is a single bounded 4.0-scale value attached
+  to declared education; availability is a bounded notice period or valid exact
+  date. The Background is free text organised by headings that name each role
+  or project with its type and dates; job-specific relevance belongs to Fit
+  Assessment. Its count shows the shared 12,000-character AI limit; edits past
+  the storage bound are refused, never cut. Drafting preferences stay in
+  Guidance, out of the Background.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.
@@ -163,15 +164,19 @@ and `docs/engineering/ui-principles.md`.
   commits: it renders in the rail's sticky footer, states what remains in that
   document's own unit, and puts a primary accept before a secondary discard —
   Accept all / Discard all for the resume's edits, Accept proposal / Discard
-  proposal for the letter's single replacement. Only a multi-decision proposal
+  proposal for the letter's single replacement. The resume list groups rows by
+  operation (Rewrite, Add, Remove, Reorder); with more than one group, each
+  group header carries a scoped Accept / Discard of the same verbs — the only
+  other bulk commit, never a new verb pair. Only a multi-decision proposal
   gets its `progressbar`, and the rail description must not repeat the counts the
   bar owns. `ProposalDiff` marks every changed word: `removed` and `added` for
   the resume's Now/Proposed pair, `merged` for the letter's Changes view behind
   its Changes / Full letter switch. It falls back to the plain rendered side when
   either text carries inline marks, because a word diff can split a tag pair.
   Resume decisions are individually reversible — `revert` restores an accepted
-  edit's original text before returning the row to the queue — and `discardAll`
-  is a decision record, never a mutation. Do not add a second commit location, a
+  edit's original text, bullet position, or bullet order before returning the
+  row to the queue — and `discardAll` is a decision record, never a mutation.
+  Do not add another commit location beyond the footer and group headers, a
   third verb pair, or a document-private way of showing what changed.
   Typed post-draft issues render as one flat failure list with recovery beside
   each claim. When that rail is collapsed, its edge tab may show only the

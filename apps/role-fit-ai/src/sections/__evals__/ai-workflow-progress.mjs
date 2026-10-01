@@ -10,7 +10,7 @@ const shellStyles = readFileSync(new URL("../../styles/shell.css", import.meta.u
 
 assert.doesNotMatch(progressSource, /workflowStepLabel|Step \$\{|Step \d+ of \d+/, "single-task cards omit step counters");
 
-for (const stageKey of ["job-analysis", "resume-polish", "cover", "answers"]) {
+for (const stageKey of ["job-analysis", "resume-polish", "cover-polish", "application-answers"]) {
   assert.match(appSource, new RegExp(`stageKey=["']${stageKey}["']`), `${stageKey} renders as its own progress card`);
 }
 

@@ -26,24 +26,19 @@
 
         <nav class="companion-nav" aria-label="RoleFit sections">
           <button class="companion-nav__item is-active" type="button" data-companion-tab="overview" aria-current="page">Overview</button>
-          <button class="companion-nav__item" type="button" data-companion-tab="providers">Providers</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="providers">Providers<span class="companion-nav__dot" id="nav-providers-attention" hidden><span class="visually-hidden">, needs attention</span></span></button>
           <button class="companion-nav__item" type="button" data-companion-tab="workspace">Workspace</button>
-          <button class="companion-nav__item" type="button" data-companion-tab="extension">Browser extension</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="extension">Browser extension<span class="companion-nav__badge" id="nav-extension-badge" hidden></span></button>
           <button class="companion-nav__item" type="button" data-companion-tab="settings">Settings</button>
         </nav>
 
         <div class="companion-sidebar__footer">
           <div class="companion-sidebar__local">
             <span id="runtime-version">RoleFit</span>
-            <strong id="sidebar-runtime-status">Starting service</strong>
+            <strong class="sidebar-service" id="sidebar-runtime-status" data-state="unknown">Checking service</strong>
           </div>
-          <button
-            class="sidebar-open-app"
-            id="open-rolefit-browser"
-            type="button"
-            aria-label="Open RoleFit in your browser"
-            title="Open RoleFit in your browser"
-          >
+          <button class="sidebar-open-app" id="open-rolefit-browser" type="button">
+            <span>Open RoleFit</span>
             <svg aria-hidden="true" viewBox="0 0 16 16">
               <path d="M6 3h7v7M13 3 6.25 9.75M11 9.5V13H3V5h3.5" />
             </svg>
@@ -55,34 +50,34 @@
         <main id="main-content">
           <section class="companion-panel is-active" data-companion-panel="overview" aria-labelledby="overview-title">
             <div class="panel-intro">
-              <h1 id="overview-title">Your workbench is ready.</h1>
+              <h1 id="overview-title">Checking your workbench&#8230;</h1>
               <p>Set up providers and extensions here. Your work stays on this device.</p>
             </div>
 
             <div class="overview-grid">
-              <article class="overview-card overview-card--service">
+              <article class="overview-card overview-card--service" id="overview-card-service">
                 <span class="overview-card__label">Browser workspace</span>
                 <strong id="overview-site-origin">localhost:5181</strong>
                 <p>Open the tracker and resume workspace in your browser.</p>
-                <button class="text-button" type="button" data-tab-target="settings">Browser address <span aria-hidden="true">&#8594;</span></button>
+                <button class="text-button" id="overview-open-rolefit" type="button">Open RoleFit <span aria-hidden="true">&#8599;</span></button>
               </article>
-              <article class="overview-card">
+              <article class="overview-card" id="overview-card-providers">
                 <span class="overview-card__label">Providers</span>
                 <strong id="overview-provider-summary">Checking connections</strong>
                 <p>Connect the CLI plans or API keys you want to use.</p>
                 <button class="text-button" type="button" data-tab-target="providers">Manage providers <span aria-hidden="true">&#8594;</span></button>
               </article>
-              <article class="overview-card">
+              <article class="overview-card" id="overview-card-workspace">
                 <span class="overview-card__label">Workspace</span>
                 <strong id="overview-workspace-summary">Checking workspace</strong>
                 <p>Back up or restore your app-managed workspace.</p>
                 <button class="text-button" type="button" data-tab-target="workspace">Manage workspace <span aria-hidden="true">&#8594;</span></button>
               </article>
-              <article class="overview-card">
+              <article class="overview-card" id="overview-card-extension">
                 <span class="overview-card__label">Extension</span>
-                <strong id="overview-extension-summary">Browser extension not paired</strong>
+                <strong id="overview-extension-summary">Checking extension access</strong>
                 <p>Import job posts from your browser.</p>
-                <button class="text-button" type="button" data-tab-target="extension">Set up extension <span aria-hidden="true">&#8594;</span></button>
+                <button class="text-button" type="button" data-tab-target="extension"><span id="overview-extension-action">Set up extension</span> <span aria-hidden="true">&#8594;</span></button>
               </article>
             </div>
 
@@ -148,6 +143,7 @@
               >Restore backup&#8230;</button>
             </div>
 
+            <p class="workspace-restore-note" id="workspace-restore-note" hidden>Close RoleFit's browser tabs to restore.</p>
             <p class="workspace-status" id="workspace-status" role="status" aria-live="polite"></p>
             <p class="workspace-hint">Plain JSON &#8212; provider keys and unsaved edits stay out.</p>
           </section>
@@ -156,51 +152,66 @@
             <header class="panel-heading">
               <div>
                 <h1 id="extension-title">Browser extension</h1>
-                <p>RoleFit is currently running on <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="port" data-copy-feedback="Copy port" aria-label="Copy active RoleFit port"><code id="extension-site-origin">localhost:5181</code></button>. Set the same port in the extension Settings menu.</p>
-              </div>
-              <div class="extension-pairing-control">
-                <button
-                  class="panel-count"
-                  id="extension-pairing-count"
-                  type="button"
-                  aria-controls="extension-pairing-popover"
-                  aria-expanded="false"
-                  aria-haspopup="dialog"
-                >Checking</button>
-                <section
-                  class="extension-pairing-popover"
-                  id="extension-pairing-popover"
-                  role="dialog"
-                  aria-labelledby="extension-pairing-title"
-                  hidden
-                >
-                  <div class="extension-pairing-form__heading">
-                    <span id="extension-pairing-title">Extension access</span>
-                  </div>
-                  <ul class="extension-request-list" id="extension-request-list" aria-label="Extension access requests"></ul>
-                  <ul class="extension-pairing-list" id="extension-pairing-list" aria-label="Paired browser extensions"></ul>
-                  <p id="extension-pairing-status" role="status" aria-live="polite">Loading extension pairing&#8230;</p>
-                </section>
+                <p id="extension-summary">Checking extension access.</p>
               </div>
             </header>
 
             <div class="extension-layout">
-              <section class="extension-install" aria-labelledby="extension-install-title">
-                <h2 id="extension-install-title">Get the extension</h2>
-                <p class="extension-install__supported">Chrome, Microsoft Edge, and Firefox.</p>
-                <p class="extension-install__source">Included with the desktop app. Load it unpacked; there is no store listing yet.</p>
-                <div class="extension-install__actions">
-                  <button class="extension-install__open" id="open-extension-directory" type="button">Open extension folder <span aria-hidden="true">&#8599;</span></button>
-                  <button class="extension-install__copy extension-install__copy--path" id="copy-extension-directory" type="button" data-extension-copy-target="directory" data-copy-feedback="Copy path" aria-label="Copy extension folder path">Copy path</button>
+              <section class="extension-access" aria-labelledby="extension-access-title">
+                <h2 id="extension-access-title">Access</h2>
+                <ul class="extension-origin-list extension-origin-list--requests" id="extension-request-list" aria-label="Access requests"></ul>
+                <ul class="extension-origin-list" id="extension-pairing-list" aria-label="Paired extensions"></ul>
+                <p class="extension-access__status" id="extension-pairing-status" role="status" aria-live="polite">Loading extension access&#8230;</p>
+                <div class="extension-access__port">
+                  <span class="extension-access__port-label">Port</span>
+                  <button class="extension-install__copy copy-field" type="button" data-extension-copy-target="port" data-copy-feedback="Copy port"><span class="visually-hidden">Copy port </span><code class="copy-field__value" id="extension-site-origin">localhost:5181</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button>
+                  <span class="extension-access__port-hint">Must match the port in the extension's Settings.</span>
                 </div>
-                <ol class="extension-steps">
-                  <li><span>1</span><p><strong>Open the folder</strong><br />Use <em>Open extension folder</em> above and keep that folder in place.</p></li>
-                  <li><span>2</span><p><strong>Chrome or Edge</strong><br />Copy <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="chrome" data-copy-feedback="Copy address" aria-label="Copy Chrome extensions address"><code>chrome://extensions</code></button> or <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="edge" data-copy-feedback="Copy address" aria-label="Copy Edge extensions address"><code>edge://extensions</code></button>, paste it into your browser's address bar, enable Developer mode, then choose <em>Load unpacked</em>.</p></li>
-                  <li><span>3</span><p><strong>Firefox</strong><br />Copy <button class="extension-install__copy extension-install__copy--inline" type="button" data-extension-copy-target="firefox" data-copy-feedback="Copy address" aria-label="Copy Firefox debugging address"><code>about:debugging#/runtime/this-firefox</code></button>, paste it into Firefox's address bar, choose <em>Load Temporary Add-on&#8230;</em>, then select <code>manifest.json</code>.</p></li>
-                </ol>
-                <p class="extension-install__note">After RoleFit changes ports, update the port in the extension popup's Settings menu. No extension reload is required.</p>
               </section>
 
+              <details class="extension-install" id="extension-install" open>
+                <summary class="extension-install__summary">
+                  <h2 id="extension-install-title">Install the extension</h2>
+                  <span class="extension-install__meta">Chrome, Edge, or Firefox</span>
+                </summary>
+                <div class="extension-install__body">
+                  <div class="extension-browser-switch" id="extension-browser-switch" role="tablist" aria-label="Browser">
+                    <button class="extension-browser-switch__tab" type="button" role="tab" id="extension-browser-tab-chrome" aria-controls="extension-browser-panel-chrome" aria-selected="true" data-extension-browser="chrome">Chrome</button>
+                    <button class="extension-browser-switch__tab" type="button" role="tab" id="extension-browser-tab-edge" aria-controls="extension-browser-panel-edge" aria-selected="false" tabindex="-1" data-extension-browser="edge">Edge</button>
+                    <button class="extension-browser-switch__tab" type="button" role="tab" id="extension-browser-tab-firefox" aria-controls="extension-browser-panel-firefox" aria-selected="false" tabindex="-1" data-extension-browser="firefox">Firefox</button>
+                  </div>
+
+                  <div class="extension-browser-panel" role="tabpanel" id="extension-browser-panel-chrome" aria-labelledby="extension-browser-tab-chrome" data-extension-browser-panel="chrome">
+                    <ol class="extension-steps">
+                      <li><span class="extension-steps__number" aria-hidden="true">1</span><div><p>Paste this address into Chrome, then turn on <em>Developer mode</em>.</p><div class="extension-steps__field"><button class="extension-install__copy copy-field copy-field--block" type="button" data-extension-copy-target="chrome" data-copy-feedback="Copy address"><span class="visually-hidden">Copy </span><code class="copy-field__value">chrome://extensions</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">2</span><div><p>Choose <em>Load unpacked</em> and select the RoleFit extension folder.</p><div class="extension-steps__slot" data-extension-folder-slot>
+                        <div class="extension-folder-actions" id="extension-folder-actions">
+                          <button class="extension-install__open" id="open-extension-directory" type="button">Open folder <span aria-hidden="true">&#8599;</span></button>
+                          <button class="extension-install__copy extension-install__copy--path" id="copy-extension-directory" type="button" data-extension-copy-target="directory" data-copy-feedback="Copy path"><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span><span>Copy path</span></button>
+                        </div>
+                      </div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                    </ol>
+                  </div>
+
+                  <div class="extension-browser-panel" role="tabpanel" id="extension-browser-panel-edge" aria-labelledby="extension-browser-tab-edge" data-extension-browser-panel="edge" hidden>
+                    <ol class="extension-steps">
+                      <li><span class="extension-steps__number" aria-hidden="true">1</span><div><p>Paste this address into Edge, then turn on <em>Developer mode</em>.</p><div class="extension-steps__field"><button class="extension-install__copy copy-field copy-field--block" type="button" data-extension-copy-target="edge" data-copy-feedback="Copy address"><span class="visually-hidden">Copy </span><code class="copy-field__value">edge://extensions</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">2</span><div><p>Choose <em>Load unpacked</em> and select the RoleFit extension folder.</p><div class="extension-steps__slot" data-extension-folder-slot></div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                    </ol>
+                  </div>
+
+                  <div class="extension-browser-panel" role="tabpanel" id="extension-browser-panel-firefox" aria-labelledby="extension-browser-tab-firefox" data-extension-browser-panel="firefox" hidden>
+                    <ol class="extension-steps">
+                      <li><span class="extension-steps__number" aria-hidden="true">1</span><div><p>Paste this address into Firefox.</p><div class="extension-steps__field"><button class="extension-install__copy copy-field copy-field--block" type="button" data-extension-copy-target="firefox" data-copy-feedback="Copy address"><span class="visually-hidden">Copy </span><code class="copy-field__value">about:debugging#/runtime/this-firefox</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">2</span><div><p>Choose <em>Load Temporary Add-on&#8230;</em> and select <code>manifest.json</code> in the RoleFit extension folder.</p><div class="extension-steps__slot" data-extension-folder-slot></div></div></li>
+                      <li><span class="extension-steps__number" aria-hidden="true">3</span><div><p>Open the RoleFit AI extension on a job page, then approve it under <em>Access</em>.</p></div></li>
+                    </ol>
+                    <p class="extension-install__note">Firefox removes temporary add-ons when it quits. Load it again after a restart.</p>
+                  </div>
+                </div>
+              </details>
             </div>
           </section>
 

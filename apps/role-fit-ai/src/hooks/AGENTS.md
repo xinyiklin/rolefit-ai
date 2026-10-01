@@ -37,7 +37,7 @@ browser-side effects; components render them and App composes them.
   assessment-setup change list. An out-of-date state retains the timestamped
   snapshot for display as a previous assessment, while its non-ready status keeps
   it out of automation. Do not replace that receipt with a generic stale string.
-- `usePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
+- `useResumePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
   stale-request cancellation, and progress. It must not dispatch the Review
   provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
   edits and outcome metadata without seeding or replacing the editor.
@@ -60,10 +60,11 @@ browser-side effects; components render them and App composes them.
   cannot starve a pending scan. Clusters are never cached as records — the
   merge modal reads current status, dates, artifacts, and attachments.
 - `useAiSettings` owns per-stage provider/model/effort preferences and the
-  candidate-declared About you profile, never API credentials. Browser storage
+  candidate-declared Profile, never API credentials. Browser storage
   is a fail-open cache; `lib/workspacePreferencesSync.ts` makes the owner-only
   workspace preference file canonical across browsers/origins and reconciles
-  live hook state after a startup/focus adoption.
+  live hook state after a startup/focus adoption or a visible stale-write rebase.
+  Adoption keeps rendered edits still inside the 400 ms save debounce.
 - `useAvailableProviders` owns the one same-origin provider-registry fetch and
   reconciliation lifecycle. It keeps the closed catalog metadata separate from
   configured/readiness state and must not silently select a paid replacement.

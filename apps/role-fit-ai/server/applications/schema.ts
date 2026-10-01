@@ -67,12 +67,12 @@ export function duplicateApplicationId(applications: { id: string }[]): string |
 const APPLICATION_SOURCES = ["LinkedIn", "Company site", "Referral", "Job board", "Recruiter", "Other"] as const;
 const SALARY_PERIODS = ["yr", "mo", "hr"] as const;
 // Per-stage AI-usage provenance: which model produced each pipeline stage's
-// output (job-analysis / resume-polish / cover / answers). `source` is required and
+// output (job-analysis / resume-polish / cover-polish / application-answers). `source` is required and
 // enumerated; a stage whose source is not one of these is dropped entirely so a
 // malformed entry can never persist a half-recorded provenance row.
 const AI_USAGE_SOURCES = ["ai", "local", "none"] as const;
 // A stage key is a short lowercase slug (e.g. "job-analysis", "resume-polish",
-// "cover", "answers"). Keep the shape narrow so the map can't be used as an
+// "cover-polish", "application-answers"). Keep the shape narrow so the map can't be used as an
 // arbitrary key/value store.
 const AI_USAGE_STAGE_RE = /^[a-z][a-z0-9-]{0,23}$/;
 const AI_USAGE_MAX_STAGES = 12;

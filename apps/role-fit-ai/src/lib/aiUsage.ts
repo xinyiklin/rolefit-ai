@@ -3,7 +3,7 @@
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.
 //
-// Stage keys are plain strings ("job-analysis" | "resume-polish" | "cover" today)
+// Stage keys are plain strings ("job-analysis" | "resume-polish" | "cover-polish" today)
 // so a future stage can be added without a schema migration; the server sanitizer
 // constrains keys to /^[a-z][a-z0-9-]{0,23}$/.
 
@@ -29,9 +29,11 @@ export type StageAiUsage = {
 export type ApplicationAiUsage = Record<string, StageAiUsage>;
 
 // Copy at read/merge boundaries so callers can add current stage receipts
-// without mutating a stored application or recovery draft.
+// without mutating a stored application or recovery draft. Records saved before
+// the 2026-09-29 stage rename keep cover-letter usage under "cover".
 export function copyAiUsage(
   usage: ApplicationAiUsage | undefined
 ): ApplicationAiUsage {
-  return { ...(usage ?? {}) };
+  const { cover, ...copy } = usage ?? {};
+  return cover && !copy["cover-polish"] ? { ...copy, "cover-polish": cover } : copy;
 }

@@ -31,16 +31,24 @@ adjacent categories, the rules choose the lower category unless candidate eviden
 meets the higher category's definition. Stretch may rely on meaningful transferable
 core evidence; generic skills or interest alone are insufficient. Transferable evidence may inform the verdict but
 cannot support a direct match; one posting excerpt cannot be both a match and a
-gap, and overlapping excerpts cannot count one missing need twice. Candidate-
-declared experience categories retain their evidence source: professional or
-industry requirements are not satisfied by academic, personal, volunteer, or
-open-source work unless the posting accepts those sources. Categories may
-overlap, so their years/counts are never summed and counts never imply duration.
+gap, and overlapping excerpts cannot count one missing need twice. Candidate
+experience keeps its evidence source: professional or industry requirements are
+not satisfied by academic, personal, volunteer, or open-source work unless the
+posting accepts those sources. The Profile Background carries each entry's type
+on its Markdown heading, so the deterministic explicit-conflict check reads a
+cited Background line together with the nearest enclosing heading (its own line
+included, fenced code excluded) that names a type; a type named in the cited line
+itself takes precedence over its heading, even when used as an adjective
+("academic medical center"), which can raise an advisory warning. A match
+conflicts only when every occurrence of a repeated excerpt does; a reported
+contradiction needs one.
+Entries and types may overlap, so their years/counts are never summed and counts
+never imply duration.
 The rubric first separates main responsibilities and core qualifications from
 preferred items, logistics, and administrative/form noise, then selects the most
 decision-relevant findings. Existing source and overlap boundaries still prevent
 project evidence from satisfying an explicitly professional source, prevent
-experience categories from being summed, and prevent role/project counts from
+overlapping experience entries from being summed, and prevent role/project counts from
 implying duration. A posting without substantive role content returns `INSUFFICIENT_JOB_INFORMATION`
 without a verdict. Existing snapshots without a status remain readable as ASSESSED. At the Limited/Stretch boundary,
 meaningful direct supporting-core evidence stays Stretch when the role-defining
@@ -66,7 +74,10 @@ and affirmative transferable support for Stretch without a direct match.
 
 Source checks produce warnings for unlocated excerpts, repeated/overlapping
 findings, explicit evidence conflicts, unsupported summaries, missing supporting
-findings, and unclear eligibility conflicts. Safe prose and conclusions survive,
+findings, and unclear eligibility conflicts. Gap notes describe what is not
+shown, so they are not checked as candidate claims. A finding's warning is
+labelled `Match N:`, `Gap N:`, or `Eligibility:`, and surfaces that show that
+finding display it beside the finding. Safe prose and conclusions survive,
 except that a `BLOCKED` without located, explicitly conflicting posting and
 candidate excerpts is downgraded to `CHECK` with a neutral note and a warning; code does not remove usable gap details or
 replace a usable model summary with fixed copy. Fixed summary copy remains the fallback
@@ -75,7 +86,9 @@ copy is the usual display. Missing candidate citations remain visibly
 unconfirmed. Located excerpts establish location, not semantic truth or hiring
 accuracy. Invalid source navigation is unavailable without disabling use.
 
-Fit v6 changes evidence handling and optional warning transport, not the rubric's
+Fit v7 keeps v6's evidence handling and optional warning transport, and
+generalizes the overlap rule from Settings categories to Profile entries; neither
+changes the rubric's
 verdict meanings or scoring. The model still judges materiality, paraphrases,
 durations, alternatives, and strength of experience. There is no requirement
 ledger, posting-completeness gate, match-count score, or deterministic verdict.
@@ -185,7 +198,7 @@ advice, not replacement document text; numbers in instructions or references to
 missing skills are not candidate claims. Explicit first-person candidate claims
 still require supporting candidate evidence.
 
-The `final-review` stage copies the current Fit configuration once when absent,
+The `application-review` stage copies the current Fit configuration once when absent,
 then persists independently. Exact serialized content/selection/settings identity
 and a generation token protect completion. Findings track relevant dependencies;
 provider findings conservatively depend on both documents. Applying/navigation,
@@ -204,11 +217,11 @@ source. Percentages use local clauses, and recognized count units permit modifie
 without borrowing a noun across a preposition or conjunction. These bounded guards
 are not a general parser. Explicit experience denial or learning intent cannot
 authorize new skills; unrelated reliability negation does not remove experience.
-Extracted job conditions retain source wording when a qualifier, alternative, negation, or
-number could change meaning. Classification concerns are advisory, including
-explicit preferred wording in a required list; the original qualification wording remains visible. Words such as
-must or bonus do not veto the model's duty classification;
-ordinary duties retain concise model wording rather than duplicate whole clauses.
+Job analysis is structured JD extraction, with concise summaries and paraphrases
+allowed by the prompt. Its response parser validates types, enums, markup, and
+bounds without source matching, condition replacement, or evidence warnings.
+Fit Assessment retains its independent evidence checks. Historical job-warning
+metadata remains readable in saved records, without display or drafting context.
 Cover-letter factual guards use paragraph-cited sources and explicitly named entry
 identity in one typed factual pass; employer facts use the posting. Explicit prior
 affiliations need candidate evidence, while generic acronyms are not employer names.
@@ -218,9 +231,13 @@ placeholders produce warnings; Resume Polish withholds placeholder edits. Only t
 withhold operations;
 Cover may repair technically unusable output once.
 Resume Polish protects actual education/credential records, enumerates all bounded
-targets, and sends selected entry evidence once alongside target references. The
-existing wider resume context still supports Skills and Summary. Optional structural
+targets, and sends selected entry evidence once alongside target references. An
+experience or project entry is grounded only by its own text and the Profile text
+its heading links; the wider resume and Profile still support Skills and Summary. Optional structural
 advice keeps bounded source references and never becomes a replacement.
+Resume Polish's "Proposed improvements" summary is bounded editorial feedback
+without candidate-evidence checks. Proposed resume text and cited advice keep
+separate content warnings; response-limit disclosures remain available.
 Application answers and role descriptions preserve content concerns with item
 warnings. Question/role identity binding stays strict, while a warned item does
 not erase its usable siblings. Earlier Resume source uncertainty accompanies

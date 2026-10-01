@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildCoverLetterEvidence,
   evidenceEntryName,
-  splitHonestContextEvidence
+  splitProfileEvidence
 } from "../coverLetterEvidence.ts";
 
 const resumeData = {
@@ -45,11 +45,11 @@ const resumeData = {
   ]
 };
 
-const honestContext =
+const candidateContext =
   "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.";
 
 assert.deepEqual(
-  splitHonestContextEvidence(
+  splitProfileEvidence(
     "Candidate facts:\n- Work authorization: authorized.\n\nC++ was my primary college language.\nMicrosoft Office."
   ),
   [
@@ -61,7 +61,7 @@ assert.deepEqual(
 );
 
 assert.deepEqual(
-  splitHonestContextEvidence(
+  splitProfileEvidence(
     "Kubernetes: [describe your exact experience: what you did, where, and when]\n" +
       "Kubernetes: Operated a small production cluster for Acme."
   ),
@@ -69,7 +69,7 @@ assert.deepEqual(
   "unfinished Guidance prompts never become candidate evidence"
 );
 
-const evidence = buildCoverLetterEvidence({ resumeData, honestContext });
+const evidence = buildCoverLetterEvidence({ resumeData, candidateContext });
 assert.equal(
   evidence.length,
   5,
@@ -97,13 +97,13 @@ assert(
 // The whole corpus is offered every time. Choosing from it is the model's job,
 // so nothing here filters, ranks, or pre-selects.
 assert(
-  evidence.some((item) => item.source === "honest_context"),
+  evidence.some((item) => item.source === "profile"),
   "honest context is offered as optional evidence, never withheld"
 );
 
 const reloaded = buildCoverLetterEvidence({
   resumeData: JSON.parse(JSON.stringify(resumeData)),
-  honestContext
+  candidateContext
 });
 assert.deepEqual(
   reloaded.map((item) => item.id),
@@ -114,7 +114,7 @@ assert.deepEqual(
 // Answers to private template slots enter the corpus like any other evidence.
 const withPrivateAnswer = buildCoverLetterEvidence({
   resumeData,
-  honestContext,
+  candidateContext,
   slotAnswers: { "slot:3:1:abc": "Morgan Rivera referred me." },
   slotLabels: { "slot:3:1:abc": "Referral name" }
 });
@@ -125,7 +125,7 @@ assert.equal(answer.entry, "Referral name");
 assert.equal(
   buildCoverLetterEvidence({
     resumeData,
-    honestContext,
+    candidateContext,
     slotAnswers: { "slot:3:1:abc": "   " }
   }).length,
   evidence.length,
@@ -149,7 +149,7 @@ const markedResume = {
     }]
   }]
 };
-const [marked] = buildCoverLetterEvidence({ resumeData: markedResume, honestContext: "" });
+const [marked] = buildCoverLetterEvidence({ resumeData: markedResume, candidateContext: "" });
 assert.ok(marked, "a marked-up entry still produces evidence");
 assert.doesNotMatch(marked.entry, /<\/?[bi]>/, "no inline-mark syntax reaches the prompt's entry context");
 assert.doesNotMatch(marked.section, /<\/?[bi]>/, "or its section context");
@@ -177,7 +177,7 @@ const fieldOnly = buildCoverLetterEvidence({
       }]
     }]
   },
-  honestContext: ""
+  candidateContext: ""
 });
 assert.ok(fieldOnly.length > 1, "a bulletless entry contributes its fields");
 for (const item of fieldOnly) {

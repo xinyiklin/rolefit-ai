@@ -1267,7 +1267,7 @@ button.table-sort svg {
   list-style: none;
 }
 
-.application-gap-list li {
+.application-gap-list > li {
   display: grid;
   grid-template-columns: 4px minmax(0, 1fr);
   gap: var(--s2);
@@ -1279,7 +1279,7 @@ button.table-sort svg {
   overflow-wrap: anywhere;
 }
 
-.application-gap-list li::before {
+.application-gap-list > li::before {
   width: 4px;
   height: 4px;
   margin-top: 0.52em;
@@ -1288,8 +1288,13 @@ button.table-sort svg {
   content: "";
 }
 
-.application-gap-list li + li {
+.application-gap-list > li + li {
   border-top: 1px solid var(--hairline-soft);
+}
+
+.application-gap-list > li > .content-warnings {
+  grid-column: 2;
+  margin-block: 0;
 }
 
 .application-side-actions {

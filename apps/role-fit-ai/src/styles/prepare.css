@@ -790,7 +790,7 @@
   font-weight: 650;
 }
 
-.fit-assessment-list ul {
+.fit-assessment-list > ul {
   display: grid;
   gap: 4px;
   margin: 0;
@@ -800,7 +800,8 @@
   line-height: 1.4;
 }
 
-.fit-assessment-list li {
+.fit-assessment-list > ul > li,
+.fit-assessment-list > li {
   overflow-wrap: anywhere;
 }
 

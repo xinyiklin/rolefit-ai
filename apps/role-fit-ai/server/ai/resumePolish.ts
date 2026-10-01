@@ -6,6 +6,7 @@ import {
   requestAbortSignal,
   sendJson
 } from "../http.ts";
+import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel } from "./providers.ts";
@@ -21,7 +22,7 @@ export function resolveBoldBulletKeywords(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
-export async function handlePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
+export async function handleResumePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -40,7 +41,12 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
     const scopeText = resumeScopeToText(resumeScope);
     const editableText = resumeScopeToText(resumeScope, true);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
-    const honestContext = String(body.honestContext ?? "").slice(0, 8_000);
+    const candidateContext = String(body.candidateContext ?? "");
+    const contextLimitError = candidateContextLimitError(candidateContext);
+    if (contextLimitError) {
+      sendJson(res, 400, { error: contextLimitError });
+      return;
+    }
     const customInstructions = String(body.customInstructions ?? "").slice(0, 4_000);
     const boldBulletKeywords = resolveBoldBulletKeywords(body.boldBulletKeywords);
     if (boldBulletKeywords === null) {
@@ -61,7 +67,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       resumeScope,
       scopeText,
       jobText,
-      honestContext,
+      candidateContext,
       customInstructions,
       boldBulletKeywords,
       signal: request.signal
@@ -87,7 +93,7 @@ export async function handlePolish(req: IncomingMessage, res: ServerResponse): P
       sendJson(res, 400, { error: configMessage });
       return;
     }
-    console.warn("[ai] polish failed", {
+    console.warn("[ai] resume polish failed", {
       provider,
       errorName: error instanceof Error ? error.name : typeof error
     });

@@ -94,7 +94,7 @@ export function coverLetterGroundingIssues({
       category: "evidence",
       claim,
       unsupportedValue: displayTerm,
-      detail: `${displayTerm} is not present in the resume or personal context.`,
+      detail: `${displayTerm} is not present in the resume or Profile.`,
       recovery: "add_evidence",
       repairMessage:
         `The letter claims "${ungroundedTerm}" for the candidate, but no supplied evidence supports it. Remove the claim or ground it in real evidence.`,
@@ -111,7 +111,7 @@ export function coverLetterGroundingIssues({
       category: "evidence",
       claim: sentenceIndex >= 0 ? sentences[sentenceIndex] : claims,
       unsupportedValue: ungroundedNumber,
-      detail: `${ungroundedNumber} is not present in the resume or personal context.`,
+      detail: `${ungroundedNumber} is not present in the resume or Profile.`,
       recovery: "add_evidence",
       repairMessage:
         "The letter states a number, scale, or duration that no supplied evidence contains. Remove it or use a figure the evidence states.",
@@ -129,7 +129,7 @@ export function coverLetterGroundingIssues({
       category: "evidence",
       claim: sentenceIndex >= 0 ? sentences[sentenceIndex] : claims,
       unsupportedValue: outcome,
-      detail: `The claimed ${outcome} outcome is not supported by the resume or personal context.`,
+      detail: `The claimed ${outcome} outcome is not supported by the resume or Profile.`,
       recovery: "add_evidence",
       repairMessage:
         `The letter claims an outcome no evidence supports: "${outcome}". Describe only what the evidence records.`,

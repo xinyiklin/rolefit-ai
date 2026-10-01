@@ -76,14 +76,15 @@ Good server verification covers:
 - the affected route returns the expected JSON shape and HTTP status
 - advisory-warning contracts stay covered by
   `server/ai/__evals__/assessment-warning-contracts.mjs` (Fit and application
-  review), `server/applications/__evals__/job-warning-persistence.mjs` (saved
-  job warnings), `src/lib/__evals__/application-answer-warnings-eval.mjs`, and
+  review), `server/applications/__evals__/job-warning-persistence.mjs` (historical
+  job-warning compatibility), `src/lib/__evals__/application-answer-warnings-eval.mjs`, and
   `src/lib/__evals__/terminology-warnings-eval.mjs` (supported-term
   preservation and unsupported-term warnings)
-- normal `/api/polish` accepts `mode: "resume-proposal"` plus a structured
+- normal `/api/resume-polish` accepts `mode: "resume-proposal"` plus a structured
   `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
-  provider dispatch. It prompts with flat `target-N` IDs only; only bullets and
-  actual Skills lists are mutable, while category labels, standard role/employer/subtitle/date,
+  provider dispatch. It prompts with flat `target-N` IDs plus `order-N` bullet
+  orders and `add-N` new-bullet slots for entries with linked Profile text; only
+  bullets, actual Skills lists, and those orders and slots are mutable, while category labels, standard role/employer/subtitle/date,
   education, and omitted sections never become targets. Oversized fixtures prove complete
   JSON stays within budget, later job-relevant targets survive, response ids
   outside the selected set are withheld, and the omitted count round-trips
@@ -99,7 +100,7 @@ Good server verification covers:
 - the bold-in-bullets preference is enforced in both layers: the route rejects a
   present non-boolean with 400 and treats an absent flag as bold-on, and the
   sanitizer strips `<b>` from every bullet replacement when the preference is off
-- the browser makes one `/api/polish` request per normal Resume Polish run,
+- the browser makes one `/api/resume-polish` request per normal Resume Polish run,
   exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
   result as validation rather than `Parsing error`
 - Resume and Cover Letter Polish prompts include a silent pre-response audit of
@@ -109,7 +110,7 @@ Good server verification covers:
 - positive Fit Assessment starts enabled Resume and Cover proposals independently;
   neither automatic request awaits or suppresses the other, and each failure is
   confined to its own document workflow
-- `/api/polish` rejects every mode except `resume-proposal` and carries no cover,
+- `/api/resume-polish` rejects every mode except `resume-proposal` and carries no cover,
   Review, score, or multi-stage request fields
 - missing/unready configured providers and missing managed credentials surface
   a clear, user-safe error rather than a silent fallback
@@ -132,9 +133,9 @@ Good server verification covers:
   serialized JSON must never be truncated by raw character count. Resume target
   selection must also prove it avoids prefix-order bias and sanitizes against
   only the selected targets
-- job-analysis grounding changes must cover `roleDescription` and `jobType`
-  alongside title/company/location, including negated, benefits-only, and
-  qualification-only wording that must not false-ground tracking metadata
+- Job analysis probes cover structured field preservation, concise summaries,
+  no source checks or review metadata, malformed types, unsafe markup, bounded
+  lists, and independent Fit Assessment response handling
 - the Job analysis rename contract must keep current code and docs free of the
   retired term except for explicit rejection probes and intentional historical
   release/continuity records
@@ -212,7 +213,7 @@ Good server verification covers:
   as a warning, never a gate. The thirteen-fixture synthetic corpus spans
   general full-stack, frontend, backend/platform, healthcare, applied AI, a
   role whose strongest lead is not the most prominent project, relevant
-  AI-workflow honest context, and honest context that must be omitted; it
+  AI-workflow Profile context, and Profile context that must be omitted; it
   grades evidence grounding, resume-dump behavior, generic language, exact
   correspondence, role/company specificity, word range, and page count. It is
   offline by default; run the real-provider harness deliberately with
@@ -323,7 +324,21 @@ Good frontend verification covers:
   before adoption, a protected document, and a refused adoption with no stale
   recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
   pins content-derived proposal identity, keyed resets, undo, and manual-match
-  behavior. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
+  behavior; `src/hooks/__evals__/resume-proposal-add-hook.mjs` runs the real
+  decision hook for Profile-linked new bullets (Accept inserts with the assigned
+  id, Undo removes exactly it, Discard never touches the document);
+  `src/hooks/__evals__/resume-proposal-structure-hook.mjs` runs it for bullet
+  removals and reorders (in-place restore, order Undo, group-scoped bulk
+  decisions), `server/ai/__evals__/resume-proposal-structure-probes.mjs` pins
+  their targets, budgeting, prompt rules, and withholding, and
+  `src/sections/resume/__evals__/resume-proposal-groups.mjs` renders the
+  grouped review.
+  `src/lib/__evals__/profile-links-eval.mjs` pins Profile heading-to-entry
+  linking, and `server/ai/__evals__/resume-profile-polish-probes.mjs` pins
+  same-entry grounding, new-bullet slots, the Profile label, and Profile
+  suggestion references. `src/lib/__evals__/settings-legacy-names-eval.mjs`
+  converts every pre-2026-09-29 settings name through the cache, workspace
+  file, and backup readers. `src/lib/__evals__/variant-candidate-reads-eval.mjs` pins ONE
   request per candidate read at 1, 5, and 20 variants for both document kinds,
   and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
   routes' name guards, bounded size, skip-on-corrupt behavior, and that they
@@ -349,7 +364,25 @@ Good frontend verification covers:
   `server/__evals__/workspace-preferences-probes.mjs` also refuses later ordinary
   settings writes until that invalid record is explicitly repaired or restored.
   The client probe keeps an unchanged focus adoption from consuming the user's
-  next real save;
+  next real save. `server/__evals__/workspace-preferences-precondition-probes.mjs`
+  refuses a save whose base revision (a hash of the stored bytes) differs from,
+  or is unaware of, the stored record, even when an outside edit left `updatedAt`
+  unchanged, and returns that record.
+  `src/lib/__evals__/workspace-preferences-conflict-eval.mjs` drives the real
+  sync module against the real route. It proves that:
+  - no-edit page exits never write;
+  - an interrupted edit survives reload even after another tab rewrote the
+    shared cache;
+  - a push sends the tab's own view;
+  - stale pending, ordinary, and last-base-resume saves rebase onto a newer
+    record;
+  - an in-flight edit stays pending;
+  - a contended write stops after one retry;
+  - a reset and the hook's default re-save leave nothing pending, so a later
+    reload cannot delete newer outside values;
+  - a failed boot write still restores the recovered edit into the cache;
+  - an unseen restore wins;
+  - legacy pending markers are discarded;
   `src/hooks/__evals__/application-persistence-guards.mjs` keeps tracker conflict,
   explicit create/update commit ordering, recovery clearing, and modal-save
   failure contracts covered after the retired monolithic workflow guard was

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { evaluateFitAssessmentResponse, sanitizeFitAssessmentResponse } from "../fitAssessment.ts";
-import { sanitizeJobAnalysis, sanitizePrepareAnalysisResponse } from "../jobAnalysis.ts";
+import { sanitizePrepareAnalysisResponse } from "../jobAnalysis.ts";
 
 const requirement = "Build Python services.";
 const evidence = "Built Python services.";
@@ -94,14 +94,5 @@ for (const [patch, reason] of [
 }
 
 const benefits = "Health insurance and paid time off.";
-for (const field of ["responsibilities", "requiredQualifications", "preferredQualifications"]) {
-  const extracted = sanitizeJobAnalysis({ [field]: [benefits] }, `${input.jobText}\nBenefits\n${benefits}`);
-  assert.deepEqual(extracted[field], [benefits], "heading-only classification is advisory, not a second classifier");
-  assert.equal(extracted.conditionIssues[0]?.sourceExcerpt, benefits);
-}
-const explicit = "Python experience is required.";
-assert.deepEqual(sanitizeJobAnalysis({ requiredQualifications: [explicit] }, `Benefits\n${explicit}`).requiredQualifications, [explicit]);
-const workAuth = "We do not offer visa sponsorship.";
-assert.equal(sanitizeJobAnalysis({ workAuth }, `Benefits\n${workAuth}`).workAuth, workAuth);
 assert.ok(sanitizeFitAssessmentResponse(response, { ...input, jobText: `Benefits\n${benefits}\nAbout the role\n${requirement}` }));
 console.log("Fit posting format, section-boundary and rejection-reason probes passed");

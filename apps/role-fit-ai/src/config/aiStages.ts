@@ -7,10 +7,16 @@
 // hardcoded to Resume Polish's provider in another — which is exactly the state the
 // cover letter and Q&A stages were in before they were added here.
 //
-// `settingsPrefix` is the persisted key prefix. Resume Polish keeps its original
-// unprefixed fields; the other stages use explicit names.
+// `settingsPrefix` is the persisted key prefix: `<prefix>Provider`,
+// `<prefix>SelectedModel`, and `<prefix>CliReasoningEffort`.
 
-export type AiStageId = "job-analysis" | "fit-assessment" | "resume-polish" | "cover" | "answers" | "final-review";
+export type AiStageId =
+  | "job-analysis"
+  | "fit-assessment"
+  | "resume-polish"
+  | "cover-polish"
+  | "application-answers"
+  | "application-review";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -19,7 +25,13 @@ export type AiStageDescriptor = {
   /** Settings-dialog heading: names the work, not the pipeline position. */
   readonly title: string;
   readonly blurb: string;
-  readonly settingsPrefix: "" | "jobAnalysis" | "fitAssessment" | "cover" | "answers" | "finalReview";
+  readonly settingsPrefix:
+    | "jobAnalysis"
+    | "fitAssessment"
+    | "resumePolish"
+    | "coverPolish"
+    | "applicationAnswers"
+    | "applicationReview";
   readonly supportsInstructions: boolean;
 };
 
@@ -38,7 +50,7 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     id: "fit-assessment",
     label: "Fit Assessment",
     title: "Fit Assessment",
-    blurb: "Assesses the selected resume and About you evidence against the captured posting.",
+    blurb: "Assesses the selected resume and your Profile against the captured posting.",
     settingsPrefix: "fitAssessment",
     // The assessment rubric is fixed. A free-form override could turn advisory
     // screening into a user-authored verdict preference instead of evidence review.
@@ -49,31 +61,31 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     label: "Resume Polish",
     title: "Resume Polish",
     blurb: "Creates one grounded proposal for the resume sections marked Polish.",
-    settingsPrefix: "",
+    settingsPrefix: "resumePolish",
     supportsInstructions: true
   },
   {
-    id: "cover",
-    label: "Cover letter",
-    title: "Cover letter",
+    id: "cover-polish",
+    label: "Cover letter Polish",
+    title: "Cover letter Polish",
     blurb: "Creates a grounded whole-letter proposal for you to accept or discard.",
-    settingsPrefix: "cover",
+    settingsPrefix: "coverPolish",
     supportsInstructions: true
   },
   {
-    id: "answers",
+    id: "application-answers",
     label: "Application questions",
     title: "Application questions",
     blurb: "Drafts grounded answers to an application's written questions.",
-    settingsPrefix: "answers",
+    settingsPrefix: "applicationAnswers",
     supportsInstructions: true
   },
   {
-    id: "final-review",
+    id: "application-review",
     label: "Final application review",
     title: "Final application review",
     blurb: "Reviews the current included materials when you request it; never changes or submits them.",
-    settingsPrefix: "finalReview",
+    settingsPrefix: "applicationReview",
     supportsInstructions: false
   }
 ];
@@ -87,11 +99,6 @@ export function stageSettingsKeys(stage: AiStageDescriptor): {
   effort: string;
 } {
   const prefix = stage.settingsPrefix;
-  // Resume Polish's unprefixed keys are the original names, not a pattern the other
-  // stages follow: `aiProvider`/`selectedModel`/`cliReasoningEffort`.
-  if (prefix === "") {
-    return { provider: "aiProvider", model: "selectedModel", effort: "cliReasoningEffort" };
-  }
   return {
     provider: `${prefix}Provider`,
     model: `${prefix}SelectedModel`,

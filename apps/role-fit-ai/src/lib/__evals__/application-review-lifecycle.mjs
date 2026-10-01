@@ -80,20 +80,33 @@ assert.equal(
   null,
   "65 records fit the server evidence contract",
 );
-const tooMany = buildApplicationReviewInput({
+const manyLines = Array.from(
+  { length: 401 },
+  (_, i) => `Built Python service number ${i}.`,
+);
+const grouped = buildApplicationReviewInput({
   ...base,
   originalResumeText: "",
-  candidateContext: Array.from(
-    { length: 401 },
-    (_, i) => `Built Python service number ${i}.`,
-  ).join("\n"),
+  candidateContext: manyLines.join("\n"),
 });
-assert.equal(
-  tooMany.evidence.length,
-  401,
-  "oversized input is never silently truncated",
+assert.ok(
+  grouped.evidence.length <= 200,
+  "a many-line Profile is grouped into at most 200 evidence items",
 );
+assert.deepEqual(
+  grouped.evidence.flatMap((item) => item.text.split("\n")),
+  manyLines,
+  "grouping never silently truncates: every line survives in order",
+);
+assert.equal(applicationReviewEvidenceLimitError(grouped.evidence), null);
 assert.match(
-  applicationReviewEvidenceLimitError(tooMany.evidence),
-  /400 evidence items/,
+  applicationReviewEvidenceLimitError(
+    Array.from({ length: 601 }, (_, i) => ({
+      id: `e-${i}`,
+      kind: "resume",
+      label: "Loaded resume evidence",
+      text: "Built Python services.",
+    })),
+  ),
+  /600 evidence items/,
 );

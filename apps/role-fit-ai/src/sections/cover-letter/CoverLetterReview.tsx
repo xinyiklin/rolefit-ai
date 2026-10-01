@@ -44,7 +44,7 @@ type CoverLetterReviewProps = {
   onAcceptProposal: () => void;
   onDiscardProposal: () => void;
   onRestore: () => void;
-  onAddHonestContext?: (keyword: string) => void;
+  onAddProfileEvidence?: (keyword: string) => void;
   status: string;
 };
 
@@ -74,7 +74,7 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
       item.id,
       evidenceEntryName(item.entry)
         || evidenceEntryName(item.section)
-        || (item.source === "honest_context" ? "Personal context" : "Resume evidence")
+        || (item.source === "profile" ? "Profile" : "Resume evidence")
     ])
   );
   return evidenceIds
@@ -85,7 +85,7 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
 
 function issueRecovery(issue: CoverLetterIssue): string {
   if (issue.recovery === "add_evidence") {
-    return "Add factual experience in Settings > Guidance, then Polish again.";
+    return "Add factual experience in Settings > Profile, then Polish again.";
   }
   if (issue.recovery === "edit_source") {
     return "Edit the source letter, then Polish again.";
@@ -113,7 +113,7 @@ export function CoverLetterReview({
   onAcceptProposal,
   onDiscardProposal,
   onRestore,
-  onAddHonestContext,
+  onAddProfileEvidence,
   status
 }: CoverLetterReviewProps) {
   // The letter is decided whole, so "what changed" is a view of the proposal
@@ -168,11 +168,11 @@ export function CoverLetterReview({
             <p className="cover-letter-review__claim">“{issue.claim}”</p>
           ) : null}
           <p className="cover-letter-review__issue-detail">{issue.detail}</p>
-          {issue.recovery === "add_evidence" && issue.unsupportedValue && onAddHonestContext ? (
+          {issue.recovery === "add_evidence" && issue.unsupportedValue && onAddProfileEvidence ? (
             <button
               type="button"
               className="secondary-button is-compact cover-letter-review__issue-action"
-              onClick={() => onAddHonestContext(issue.unsupportedValue!)}
+              onClick={() => onAddProfileEvidence(issue.unsupportedValue!)}
             >
               Add evidence
             </button>

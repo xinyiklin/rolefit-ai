@@ -362,7 +362,7 @@ designed and signed custom protocol/pairing contract; it is not part of D4.
 | --- | --- | --- |
 | Resume, tracker, application artifacts | RoleFit server | ignored local workspace |
 | Recovery resume/job drafts, sessions, and view preferences | browser | origin-scoped browser storage, no API keys |
-| Stage settings, guidance, selected base resume, and About you facts | RoleFit server | owner-only `workspace-preferences.json`; browser storage is a fail-open cache |
+| Stage settings, guidance, selected base resume, and Profile | RoleFit server | owner-only `workspace-preferences.json`; browser storage is a fail-open cache |
 | API credential | Electron main | `safeStorage` encrypted bytes under `userData` |
 | Configured provider ids | Electron main | versioned non-secret registry under `userData` |
 | Local site port | Electron main | versioned non-secret settings under `userData` |

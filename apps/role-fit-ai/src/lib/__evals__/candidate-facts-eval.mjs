@@ -1,8 +1,8 @@
 // Probes for src/lib/candidateFacts.ts — buildCandidateFactsContext() output
-// feeds the AI request's honestContext, which the server folds into the
+// feeds the AI request's candidateContext, which the server folds into the
 // keyword-grounding allowlist (server/ai/sanitize.ts). "unspecified" MUST stay
 // the neutral default (asserts nothing) and every concrete line MUST match the
-// exact wording the sanitizer/model sees. mergeHonestContext's ordering is
+// exact wording the sanitizer/model sees. buildCandidateContext's ordering is
 // load-bearing too: candidate facts lead, freeform honest context follows.
 //
 //   node src/lib/__evals__/candidate-facts-eval.mjs
@@ -11,10 +11,9 @@ import assert from "node:assert/strict";
 
 import {
   buildCandidateFactsContext,
-  mergeHonestContext,
+  buildCandidateContext,
   normalizeAvailabilityDate,
-  normalizeCandidateGpa,
-  normalizeCandidateExperience
+  normalizeCandidateGpa
 } from "../candidateFacts.ts";
 
 const base = {
@@ -73,26 +72,26 @@ assert.match(
   "not-authorized + requires-sponsorship combination renders the negative pair"
 );
 
-// ── mergeHonestContext precedence: candidate facts first, then honest context ─
+// ── buildCandidateContext precedence: candidate facts first, then the Profile Background ─
 assert.equal(
-  mergeHonestContext("Freeform notes about my background.", "Candidate facts:\n- Citizenship: U.S. citizen."),
+  buildCandidateContext("Freeform notes about my background.", "Candidate facts:\n- Citizenship: U.S. citizen."),
   "Candidate facts:\n- Citizenship: U.S. citizen.\n\nFreeform notes about my background.",
-  "candidate facts always lead, freeform honestContext always follows, joined by a blank line"
+  "candidate facts always lead, freeform Profile Background always follows, joined by a blank line"
 );
 assert.equal(
-  mergeHonestContext("", "Candidate facts:\n- Citizenship: U.S. citizen."),
+  buildCandidateContext("", "Candidate facts:\n- Citizenship: U.S. citizen."),
   "Candidate facts:\n- Citizenship: U.S. citizen.",
-  "empty honestContext leaves just the candidate-facts block, no trailing separator"
+  "empty Profile Background leaves just the candidate-facts block, no trailing separator"
 );
 assert.equal(
-  mergeHonestContext("Freeform notes.", ""),
+  buildCandidateContext("Freeform notes.", ""),
   "Freeform notes.",
-  "empty candidateFactsContext (unspecified citizenship) leaves just the freeform honestContext"
+  "empty candidateFactsContext (unspecified citizenship) leaves just the freeform Profile Background"
 );
-assert.equal(mergeHonestContext("", ""), "", "both empty merges to empty");
-assert.equal(mergeHonestContext("   ", "   "), "", "whitespace-only inputs trim to empty on both sides");
+assert.equal(buildCandidateContext("", ""), "", "both empty merges to empty");
+assert.equal(buildCandidateContext("   ", "   "), "", "whitespace-only inputs trim to empty on both sides");
 assert.equal(
-  mergeHonestContext("  leading/trailing space  ", "  candidate block  "),
+  buildCandidateContext("  leading/trailing space  ", "  candidate block  "),
   "candidate block\n\nleading/trailing space",
   "each side is trimmed before joining"
 );
@@ -268,45 +267,12 @@ assert.match(
   "education renders with NO citizenship declared — it is not gated behind citizenship"
 );
 
-// ── Experience evidence: source, quantity, recency, and scope ───────────────
-const experienceOnly = buildCandidateFactsContext({
-  ...base,
-  experienceProfile: [
-    { category: "personal", count: 4, mostRecentYear: 2026, details: "browser extensions and local-first tools" },
-    { category: "professional", years: 2.5, count: 2, details: "production TypeScript and PostgreSQL services" },
-    { category: "academic", years: 1, count: 1 }
-  ]
-});
+// Experience now lives in the Profile Background as text; a stale row field on
+// the facts object must never render.
 assert.equal(
-  experienceOnly,
-  "Candidate facts:\n" +
-    "- Experience inventory: candidate-declared evidence sources; determine relevance to this posting and do not add durations or counts across categories because entries may overlap.\n" +
-    "- Professional employment: 2.5 years; 2 roles or projects; scope: production TypeScript and PostgreSQL services.\n" +
-    "- Academic / coursework projects: 1 year; 1 role or project.\n" +
-    "- Personal / independent projects: 4 roles or projects; most recent in 2026; scope: browser extensions and local-first tools.",
-  "experience renders in the canonical evidence-source order and explicitly prevents overlap from becoming inflated total experience"
-);
-
-assert.deepEqual(
-  normalizeCandidateExperience([
-    { category: "professional", years: 200, count: 0, mostRecentYear: 2200, details: `  ${"x".repeat(300)}  `, extra: true },
-    { category: "professional", years: 3 },
-    { category: "bogus", years: 4 },
-    null
-  ]),
-  [{
-    category: "professional",
-    details: "x".repeat(240)
-  }],
-  "experience normalization drops out-of-range quantities, caps prompt text, drops unknown categories, and keeps one record per category"
-);
-
-assert.equal(
-  buildCandidateFactsContext({ ...base, experienceProfile: [{ category: "research" }] }),
-  "Candidate facts:\n" +
-    "- Experience inventory: candidate-declared evidence sources; determine relevance to this posting and do not add durations or counts across categories because entries may overlap.\n" +
-    "- Research / lab: category declared without a quantity.",
-  "selecting a category alone declares its existence without inventing duration, count, recency, or scope"
+  buildCandidateFactsContext({ ...base, experienceProfile: [{ category: "professional", years: 3 }] }),
+  "",
+  "legacy experience rows are not candidate facts"
 );
 
 console.log("candidate-facts probes passed");

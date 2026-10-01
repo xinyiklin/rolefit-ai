@@ -75,7 +75,30 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   `src/lib/workspaceBackupContract.ts`; `ipc-probes.mjs` cross-checks them
   against that source. Companion copy is state-first: statuses report state in
   one short line, caveats live in `title` tooltips or native dialogs, and no
-  panel carries an explainer paragraph.
+  panel carries an explainer paragraph. The exceptions are one-line caveats
+  that block or complete a step: the extension port hint, Firefox's
+  temporary-add-on line, and the Restore-blocked note.
+- The Browser extension section leads with an inline **Access** card:
+  - Pending requests come first, each with **Approve & restart**; paired
+    origins follow, with a two-step **Remove** → **Confirm removal** that
+    Escape or blur cancels. A confirm within 500 ms of arming, from a
+    double-click, or from an auto-repeated Enter is ignored. Rows are labelled Firefox or "Chrome or Edge" by
+    scheme.
+  - A failed approve or remove keeps its error until the pairing data changes
+    or the user acts again, and returns focus to that row's button.
+  - Polls rebuild rows only when their data changes, so focus and an armed
+    removal survive.
+  - The per-browser install guide collapses once an extension is paired, until
+    the user toggles it. Its single folder-action group moves into the selected
+    browser's steps, so each of the five copy targets exists exactly once.
+  - Pending approvals badge the sidebar item and tone the Overview card.
+  - Copy controls are copy fields: the value plus a clipboard segment that
+    shows a check on success. Their accessible name is "Copy" plus the visible
+    value. Step-control feedback sits beside the control so it never covers
+    the instruction text.
+- The sidebar service line and Overview heading derive from the last
+  connection-status probe (startup, window re-show, and Settings' poll), never
+  a fixed "ready".
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,
@@ -246,7 +269,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.7.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.8.0-windows-x64.exe
 npm run test:rolefit:release
 ```
 

@@ -126,7 +126,7 @@ for (let run = 1; run <= RUNS; run += 1) {
         resumeScope: fixture.resumeScope,
         scopeText: fixture.scopeText,
         jobText: fixture.jobText,
-        honestContext: "",
+        candidateContext: "",
         customInstructions: fixture.customInstructions
       });
       const passed = independentlySafe(fixture, result);

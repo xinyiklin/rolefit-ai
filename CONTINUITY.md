@@ -3,7 +3,205 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-01
+
+- [USER+CODE] Pre-merge review of `feature/rolefit-candidate-profile` (the
+  user asked to review, fix, push, and merge). Two fresh independent reviews
+  (server/AI + shared; client/desktop/editor) found no high findings. Fixed:
+  - Fit's source-type check: a type named in the cited Profile line now wins
+    over its heading, so a personal line under a professional heading still
+    conflicts with a professional requirement (regression from 2026-09-28).
+    Accepted tradeoff: a type word used as an adjective ("academic medical
+    center") also overrides the heading and can warn, as on resume lines.
+  - Unsent Profile new-bullet slots no longer inflate the omitted-fields count.
+  - Group Accept/Discard skip the row open for editing, and a decided row
+    closes its editor. The footer Accept all/Discard all still settle that row
+    (pre-existing; Undo reopens the editor with the draft).
+  - The Settings Background status region stays mounted for screen readers.
+  - Dead code from the job-analysis simplification (`eligibilityLexicon.ts`,
+    `LIST_STOPWORDS`) and stale docs removed; release notes and README cover
+    bullet remove/reorder and extraction without warnings.
+  - Known limitation, documented in `workspace-backup.md`: the origin-wide
+    pending-edits record does not name its tab, so a narrow race can let a new
+    tab write a live sibling's older value. Not fixed in this pass.
+  - [TOOL] New probes fail against the old logic. Root `npm run check` and
+    `types:check` passed on the merged tree before the fixes; see the PR for
+    the final gate. Browser QA skipped (flag-first); no live-provider calls.
+
 ## 2026-09-30
+
+- [USER+CODE] Resume Polish keeps its "Proposed improvements" summary but no
+  longer claim-checks that editorial feedback or emits the generic unsupported
+  summary warning. Existing proposal displays omit that old message without a
+  new provider call. Proposed resume text, cited advice, and response-limit
+  warnings retain their checks and displays.
+  - [TOOL] Full RoleFit gate passed (137/137 offline, application/landing builds,
+    desktop checks). Two independent reviews and synthetic rendered-proposal
+    checks passed, including checks on actual resume Summary content. Companion
+    reloaded; `/api/health` is healthy on port 5181 with the same workspace.
+    Browser QA skipped for this passive-message removal; no live-provider calls.
+
+- [USER+CODE] Job analysis is simple structured JD extraction. The user trusts
+  the selected model for this task and requested no fact checking. The prompt
+  permits concise summaries/paraphrases while preserving stated conditions;
+  the parser retains type, enum, markup, and size guards without source matching,
+  condition replacement, or evidence warnings. Prepare and saved-job views no
+  longer display extraction warnings. Historical warning metadata remains
+  readable without rewriting saved files and is not included in drafting context.
+  Fit Assessment and candidate/document evidence checks are unchanged.
+  - [TOOL] Full RoleFit gate passed (137/137 offline, application/landing builds,
+    desktop checks); final prompt wording rechecked with server TypeScript and
+    137/137 offline tests. Two independent reviews found no substantive issues;
+    their prompt/schema wording consistency note is fixed. Browser QA skipped:
+    only passive warning blocks were removed. No live-provider calls ran.
+
+- [USER+CODE] [TASK tailor-grouped-proposals-20260930] Resume Polish proposes
+  bullet removals and per-entry bullet reorders, and the review groups rows as
+  Rewrite / Add / Remove / Reorder. The user delegated the scope ("your call")
+  and approved Brief v1 and Plan v1 by chat instruction without line-by-line
+  review.
+  - Shared `order-N` flat targets list an entry's bullet `target-N` ids. A
+    removal is `action: "remove"` on a standard bullet target. The server
+    withholds:
+    - removal of an entry's last bullet;
+    - remove plus rewrite of one bullet;
+    - reorder plus removal in one entry;
+    - non-permutation orders.
+  - Undo restores a removed bullet's id and text after its nearest surviving
+    original predecessor, and restores a reordered entry's order. Bulk apply
+    runs index-based reorders before id-based changes.
+  - Group headers carry scoped Accept / Discard when several groups show.
+    `DESIGN.md` and `src/sections/AGENTS.md` were amended: the footer is no
+    longer the only bulk commit location.
+  - Entry-level removal/reorder and Profile swap remain out of scope.
+  - [TOOL] `npm run check --workspace apps/role-fit-ai` exit 0 (offline
+    137/137, uncommitted on `feature/rolefit-candidate-profile`).
+    **UNCONFIRMED:** browser QA of the grouped rail, and live-provider use of
+    the new prompt rules.
+
+- [USER+CODE+TOOL] **RoleFit is prepared as 0.8.0 with browser extension 1.2.1
+  and desktop bridge API 13** (unchanged since 0.7.0). It covers everything
+  after the `rolefit-preview-v0.7.0-beta.1` tag (#135–#159) plus this branch.
+  The minor bump follows the 0.x policy of 2026-08-10. Extension 1.2.1 exists
+  because `popup.js` changed after 1.2.0 shipped.
+  - Disclosed break in `docs/releases/0.8.0-beta.1.md`: `.resume` files
+    without `bulletIndentPt` are rejected. This covers workspace and
+    application resumes, backup creation, and restoring a 0.7.0 backup. The
+    documented workaround is adding `"bulletIndentPt": 14.73` to `style`.
+  - The companion screenshot was retaken at 0.8.0 via the smoke screenshot hook
+    (isolated user data, empty workspace, `--force-device-scale-factor=2`, macOS,
+    1800x1176) on the default port 5181, with the user's companion quit. The empty workspace departs from
+    `landing/AGENTS.md`'s synthetic-pack rule; the Overview shows no workspace
+    content. No landing browser QA ran for this image-only swap.
+  - Notes also disclose the `.resume`/`.cover`-only Open change (#140), the
+    12,000-character Background limit, required CLI versions, and that 0.8.0
+    resumes and backups do not open in 0.7.0.
+  - [TOOL] RoleFit check 134/134 offline, 13/13 release-contract tests, landing
+    build and boundary guard pass. Two independent reviews: no high findings;
+    their release-note fixes are applied.
+  - **The tag and release workflow have NOT run; this versioned change is
+    incomplete until `rolefit-preview-v0.8.0-beta.1` publishes successfully.**
+
+- [USER+CODE] [TASK companion-ux-20260930] Desktop companion UX pass, with
+  the Browser extension section first. Renderer-only (`desktop/companion.*`);
+  IPC, preload, main, and the five copy targets are unchanged.
+  - An inline Access card replaced the header pill and popover. Pending
+    requests come first, labelled Firefox or "Chrome or Edge", with
+    **Approve & restart**. Paired origins get a two-step Remove (**Confirm
+    removal**; Escape or blur cancels).
+  - Install is a per-browser (Chrome/Edge/Firefox) numbered guide that ends in
+    the approve step. It collapses once paired.
+  - The sidebar has a pending badge, a Providers attention dot, a labeled
+    **Open RoleFit**, and a service line from live connection status. The
+    Overview heading and card tones follow state. Workspace shows a visible
+    reason when Restore is blocked by open tabs.
+  - Polls no longer rebuild unchanged pairing rows, so focus is kept.
+  - Contract: `apps/role-fit-ai/desktop/AGENTS.md`.
+  - [TOOL] `check:desktop` and the Electron companion smoke pass (Node
+    24.18). One `ipc-probes` ownership-gate regex was rewritten for the new
+    row builder (mutation-checked), and a render-key assertion was added.
+  - [TOOL] Mock-bridge offscreen Electron screenshots and scripted
+    keyboard/confirm/focus/error checks replaced browser QA. Real Electron
+    mouse input confirmed that a click focuses and arms Remove, blur cancels,
+    and a double-click cannot confirm.
+  - [TOOL] One independent review found no high issues. Fixed: the
+    double-click confirm bypass, focus loss and poll-wiped errors after a failed
+    approve/remove, an always-rendered status live region, the Restore note
+    requiring transfer readiness, a disabled `.text-button`, forced-colors
+    attention dot, and AA contrast on the new hint lines.
+  - [USER+CODE] Follow-up (plan amendment v2): copy controls became copy
+    fields (value plus a clipboard segment that shows a check on success),
+    browser addresses got their own field under each step, and accessible
+    names read "Copy <value>". Desktop checks, smoke, and harness re-passed.
+  - Known limitation: the `<h2>` inside `<summary>` may be flattened by
+    VoiceOver heading navigation.
+  - UNCONFIRMED: a live install of the extension against the real companion,
+    and screen-reader or forced-colors rendering.
+
+- [USER+CODE] Fit gap notes are no longer claim-checked. Their ordinary
+  absence wording ("does not mention Kubernetes", the posting's "5+ years")
+  raised "Gap N: explanatory claims are not supported" warnings.
+  - User-accepted tradeoff: an invented candidate claim in a gap note now shows
+    unflagged. Gap notes are display-only in Prepare. Summary and
+    eligibility-note claim checks, excerpt location checks, and
+    transferable/contradictory citation checks remain.
+  - Warnings labelled `Match N:`, `Gap N:`, or `Eligibility:` now render beside
+    that finding in Prepare, the application modal, and the tracker inspector
+    (`splitFitWarnings`). Findings a surface doesn't show keep their warnings in
+    the top note.
+  - Prompt, rubric v7, and schemas are unchanged. Saved results keep their old
+    warnings until reassessed. Contract: `apps/role-fit-ai/server/ai/README.md`.
+  - [TOOL] RoleFit gate exit 0, 134/134 offline. Restoring the old check fails
+    the new eval. Two independent reviews led to fixes for list-selector
+    leakage, duplicate gap keys, and a Final review wrap regression. Browser QA
+    was skipped (flag-first). Approval gates were compressed through chat
+    replies.
+
+- [USER+CODE+TOOL] Provider catalog: GPT-6.1 Sol (`gpt-6.1-sol`) added to Codex
+  and OpenAI API, and Claude Sonnet 5.5 (`claude-sonnet-5-5`) to Claude CLI and
+  API. Both became the Codex and Claude defaults for new or unset stages and the
+  server fallback; saved selections are not moved.
+  - GPT-6.1 Sol effort follows the provider-reported Codex catalog (client
+    0.159.0: low–ultra); the Codex models page still calls Ultra "coming later".
+  - Sonnet 5.5 on the API sends `thinking: {type: "between_tools"}` because it
+    rejects `disabled`.
+  - Retired Codex ids now repair to GPT-6.1 Sol.
+  - Receipt and sources: `apps/role-fit-ai/docs/engineering/ai-server.md`.
+  - Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and Codex CLI
+    0.159.2, whose catalog lists GPT-6.1 Sol. Older Codex clients fail it with
+    the generic Codex error (no update hint).
+  - UNCONFIRMED: live provider calls.
+
+- [USER+CODE] [TASK prefs-clobber-20260929] Workspace preferences no longer
+  lose newer records to stale clients. On 2026-09-29 the desktop client twice
+  replaced an externally updated `workspace-preferences.json` with its cached
+  copy: page exit always saved and left a pending marker, and the next boot
+  pushed that copy before reading the file.
+  - `POST /api/workspace/preferences` now requires `baseRevision`, the SHA-256
+    of the stored file bytes that GET and a successful POST report. A different
+    stored revision returns `409 { stale, current }`, so edits that leave
+    `updatedAt` untouched are also detected.
+  - Each tab writes its own settings snapshot, never the shared browser cache.
+    It pushes only saves that change a setting, and records unpushed edits with
+    their values in an origin-wide pending record.
+  - On a stale reply the tab rebases: user-changed settings keep local values,
+    the rest take the newer record's. It retries once. An unseen restore drops
+    pre-restore edits. Legacy `"1"` markers without a valid edit record are
+    discarded.
+  - Contract: `apps/role-fit-ai/docs/engineering/workspace-backup.md`. Evals:
+    `workspace-preferences-precondition-probes.mjs`,
+    `workspace-preferences-conflict-eval.mjs`.
+  - [CODE] Review follow-up (2026-09-30): adoption keeps settings-hook edits
+    still inside its 400 ms debounce; per-stage instructions rebase per stage,
+    including removals; each tab tracks the restore its baseline includes, and
+    the shared pending record carries its restore stamp, so a restore another
+    tab acknowledged still drops pre-restore edits; a saved edit that resolves
+    against a sibling setting (model, effort, date) is released. Companion
+    Remove ignores auto-repeated Enter.
+  - [TOOL] RoleFit gate 134/134, `check:desktop` pass; new conflict probes
+    fail against the old logic (mutation-checked). One independent review plus
+    re-review: two defects fixed, then no findings. Browser/Electron QA and a
+    real key-hold test were not run.
 
 - [USER+CODE] Approved a minimal browser-reliability/CI refinement after waiving
   Product Partner. Browser contracts retain all content, layout, persistence,
@@ -38,8 +236,123 @@ bounded; app-only operational detail belongs in the affected app documentation.
   removed. At local verification, hosted Linux Chromium/Actions, artifact upload,
   and deployment remained unverified. No version/dependency or product UI change.
 
+## 2026-09-29
+
+- [USER+CODE] [TASK profile-tailor-naming-20260929] Naming pass: one name per
+  RoleFit concept.
+  - AI stages are `job-analysis`, `fit-assessment`, `resume-polish`,
+    `cover-polish`, `application-answers`, `application-review`; settings keys
+    are `<camelCase stage id>Provider|SelectedModel|CliReasoningEffort`.
+  - Routes are `/api/resume-polish` and `/api/cover-polish`.
+  - The stored Background is `profileBackground`; the facts plus Background
+    sent to every stage is `candidateContext`.
+  - The auto-run keys are `fitAssessmentAuto` and `resumePolishAuto`/
+    `coverPolishAuto` plus `…AutoThreshold`.
+  - Cover evidence from the Profile is labelled Profile.
+  - Only the cover stage label changed ("Cover letter Polish").
+- [CODE] Old settings names convert once in `migrateStoredSettings` (browser
+  cache, workspace file, backups); a stored new name wins; unknown keys still
+  fail closed. Tracker `aiUsage.cover` reads as `cover-polish` in
+  `copyAiUsage`; stored records are not rewritten.
+- [ASSUMPTION] Residual risks:
+  - A browser tab still running the previous build can read new-name settings
+    as unknown and, after a Settings edit there, push a reduced file. Reload
+    open tabs after upgrading.
+  - Rolling back this change after new-name files are saved drops those
+    settings in the older build. Back up the workspace first.
+- [USER+CODE] Profile-aware Resume Polish:
+  - A Background heading that names exactly one standard resume entry by title
+    or subtitle links its text to that entry (`linkProfileBlocks`, shared with
+    Fit's heading scan). Resumes put the employer on either line; the
+    plain-text parser writes "Role | Company" role-first.
+    - Every enclosing heading must name the same entry or be a grouping heading
+      (resume section names or a fixed list); any other enclosing heading blocks
+      links beneath it (CR002 v2, pending user confirmation).
+    - Text under a nested heading that names another entry is cut out.
+    - A grouping word never names an entry; blank section names are ignored.
+    - Profile rows list every whole heading linked to the entry
+      ("From Profile: …").
+    - A name an omitted entry shares stays unlinked
+      (`locked.omittedEntryNames`, never sent to a provider).
+  - Polish may rewrite that entry's bullets from the linked text and fill two
+    `new-bullet` slots per linked in-scope entry; the client assigns the
+    bullet id so Undo removes exactly it.
+    - A new bullet must echo its slot's `entryId`.
+    - A bullet change repeating another bullet change to the same entry in
+      one response is a no-op; edits to existing bullets win over new ones.
+    - Inline marks (even bold) never unlock an Education or contact heading.
+    - Every change echoes its server target; a mismatch fails the proposal.
+    - Client and server reduce structural marks identically before numbering,
+      which also closes an older mismatch for alignment-marked
+      Education headings.
+  - Grounding and ownership for experience/project entries use only the entry
+    plus its linked text; failures stay warnings (CR001 Option A).
+  - Advice may quote the Profile. `add-from-profile` must quote a heading
+    block that names no resume entry, and it is hidden when that item is
+    already on the resume.
+  - Settings > Profile's hint says to name headings as on the resume.
+  - `@typeset/editor` `addBullet` accepts an optional prebuilt bullet
+    (duplicate id is a no-op).
+- [USER] Deferred: Profile-driven swapping of resume content. Superseded in
+  part on 2026-09-30: Polish now removes and reorders bullets (see that date);
+  entry-level removal/reorder and Profile swap stay deferred.
+- [TOOL] Verification, uncommitted on `feature/rolefit-candidate-profile`:
+  - Editor and Typeset checks passed.
+  - The RoleFit build, landing, desktop, and server type-checks passed.
+  - Offline evals: 134/134, together with the concurrent
+    workspace-preferences fix in the same worktree.
+  - Two independent reviewers ran five rounds. All confirmed defects are
+    fixed with tests. The verifier killed 19/20 mutations; the survivor is
+    now covered. Client/server target-id fuzz: 4,000 random scopes, 0
+    mismatches.
+  - **UNCONFIRMED:**
+    - browser QA of the review rail (the preview launcher cannot read the
+      project folder: EPERM);
+    - live-provider behaviour of the Tailor prompt;
+    - the user's decisions on CR002 v2 and the stricter ownership check.
+
 ## 2026-09-28
 
+- [USER+CODE] [TASK candidate-profile-20260928] RoleFit Settings > About you
+  became **Profile**: the basic declared facts plus one **Background** text
+  field (the former Guidance > Honest context; stored as `profileBackground`
+  since the 2026-09-29 naming pass).
+  The per-source Experience evidence rows were removed. Stored rows migrate
+  once, before strict preference/backup validation, into an appended
+  `## Experience by type` block with every declared value. Custom instructions
+  stay in Guidance, apart from the facts the AI stages treat as evidence.
+- [CODE] `shared/candidateProfileContract.ts` is the one length contract,
+  measured as the longer of the raw and NFKC-normalized length. Every stage that
+  sends candidate context gets the whole Background up to 12,000 characters and
+  declines above it, and servers reject rather than slice merged context above
+  13,000, before any provider call. Those stages are Fit, resume and cover-letter Polish,
+  application answers, and final review. Before this change, Fit refused anything
+  over 4,000 characters, and Polish and answers silently cut it at 8,000/6,000.
+  Cover-letter evidence caps rose to 600 items and 12,000 characters per item,
+  with a 100,000-character prompt corpus. It now declines visibly rather than
+  clipping; this was user-approved. Background lines are grouped into at most
+  200 evidence items, never across a heading while there are at most 200
+  headings. Stored Background may be up to 60,000 characters, and
+  larger edits are refused.
+- [CODE] Fit's deterministic professional-source conflict check now reads a
+  cited Profile line together with the nearest enclosing Markdown heading that
+  names a type (its own line included, fenced code excluded, every occurrence
+  checked), so `## X (personal project, …)` headings keep that protection. The Fit prompt
+  overlap rule now says "entries or types", and the prompt version is
+  `fit-assessment-direct-rubric-v7`.
+- [TOOL] Verification:
+  - Final `npm run check --workspace apps/role-fit-ai` passed with 126/126
+    offline evals; the server type-check passed too.
+  - Two independent reviews followed. Reviewer 1's heading-chain, evidence
+    grouping, NFKC length, pre-dispatch Fit, and sanitizer-cost findings were
+    fixed and re-checked.
+  - The verifier passed 11/12 criteria and killed 24 of 28 mutations; the
+    survivors were later covered by tracked assertions.
+  - A live synthetic Fit probe (`claude-cli`, one run per case) treated a
+    personal-project heading as not meeting a paid-experience requirement, and
+    matched Profile evidence for a source-neutral requirement.
+  - **UNCONFIRMED:** browser QA of Settings > Profile and the add-evidence focus.
+    The in-app preview could not read the project folder (EPERM).
 - [USER+CODE] Investigated Firefox Apply/download delays when the tab is hidden.
   The shared PDF emitter now disables pdf-lib's timer-based serialization yields,
   which can be throttled in background tabs. RoleFit saves the tracker and strict

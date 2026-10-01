@@ -6,7 +6,7 @@ import {
 } from "./coverLetterTemplate.ts";
 
 // Only facts RoleFit genuinely cannot resolve on its own. Everything a model can
-// derive from the posting, the resume, or honest context is generated, not asked.
+// derive from the posting, the resume, or the Profile is generated, not asked.
 export type CoverLetterDetailKey = "candidate_name" | "role" | "company";
 
 export type CoverLetterDetailValues = Partial<Record<CoverLetterDetailKey, string>>;

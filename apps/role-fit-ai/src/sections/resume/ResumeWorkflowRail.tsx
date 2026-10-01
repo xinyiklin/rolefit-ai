@@ -125,7 +125,7 @@ export function ResumeWorkflowRail({
         type="button"
         className="primary-button is-compact"
         disabled={Boolean(proposalStale) || !decisions.outstanding}
-        onClick={decisions.applyAll}
+        onClick={() => decisions.applyAll()}
       >
         Accept all{decisions.outstanding ? ` (${decisions.outstanding})` : ""}
       </button>
@@ -133,7 +133,7 @@ export function ResumeWorkflowRail({
         type="button"
         className="secondary-button is-compact"
         disabled={!decisions.outstanding}
-        onClick={decisions.discardAll}
+        onClick={() => decisions.discardAll()}
       >
         Discard all
       </button>

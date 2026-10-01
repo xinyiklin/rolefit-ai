@@ -1,5 +1,4 @@
 import { ContentWarnings } from "../../components/ContentWarnings";
-import { jobAnalysisWarningMessages } from "../../../shared/jobAnalysisWarnings";
 import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Files, History } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import { NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
@@ -16,7 +15,8 @@ import {
   hostLabel,
   nextAction,
   postingIdentity,
-  safeExternalUrls
+  safeExternalUrls,
+  splitFitWarnings
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { copyAiUsage } from "../../lib/aiUsage";
@@ -25,7 +25,7 @@ import { ApplicationFitSummary } from "../application/ApplicationFitSummary";
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
   { key: "resume-polish", label: "Resume Polish" },
-  { key: "cover", label: "Cover letter" }
+  { key: "cover-polish", label: "Cover letter Polish" }
 ];
 
 type TrackerInspectorProps = {
@@ -62,6 +62,7 @@ export function TrackerInspector({
 
   const verdict = appFitVerdict(selected);
   const fitAssessmentMeta = selected.fitAssessment ? fitAssessmentRunLabel(selected.fitAssessment) : "";
+  const fitWarnings = splitFitWarnings(selected.fitAssessment?.result.warnings, { gaps: selected.fitAssessment?.result.gaps.length ?? 0 });
   const foundOnUrls = safeExternalUrls([
     selected.jobUrl,
     ...(selected.sourceUrls ?? []).map((source) => source.url)
@@ -160,7 +161,7 @@ export function TrackerInspector({
         <ApplicationFitSummary
           label={verdict?.label ?? "Not checked"}
           tone={verdict?.tone ?? "neutral"}
-          warnings={selected.fitAssessment?.result.warnings}
+          warnings={fitWarnings.general}
           summary={selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
         />
         {fitAssessmentMeta ? <p className="application-inspector-fit__meta">{fitAssessmentMeta}</p> : null}
@@ -170,8 +171,8 @@ export function TrackerInspector({
         <section className="side-section">
           <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Top gaps</p>
           <ul className="application-gap-list">
-            {selected.fitAssessment.result.gaps.map((gap) => (
-              <li key={gap}>{gap}</li>
+            {selected.fitAssessment.result.gaps.map((gap, index) => (
+              <li key={index}>{gap}<ContentWarnings warnings={fitWarnings.gaps[index]} /></li>
             ))}
           </ul>
         </section>
@@ -318,8 +319,6 @@ export function TrackerInspector({
         </section>
       ) : null}
 
-      {selected.jobWarnings?.length ? <p className="prepare-note">Warnings describe generated wording. Later edits do not establish verification.</p> : null}
-      <ContentWarnings warnings={jobAnalysisWarningMessages(selected.jobWarnings)} />
       {selected.roleDescription ? (
         <section className="side-section">
           <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Role summary</p>

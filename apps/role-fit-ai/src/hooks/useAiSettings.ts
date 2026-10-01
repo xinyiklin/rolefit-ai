@@ -10,7 +10,6 @@ import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type {
   AvailabilityNotice,
-  CandidateExperience,
   CitizenshipStatus,
   DeclaredAnswer,
   EducationLevel
@@ -22,6 +21,7 @@ import {
   WORKSPACE_PREFERENCES_STATUS_EVENT,
   type WorkspacePreferencesStatus
 } from "../lib/workspacePreferencesSync.ts";
+import { changedSettingKeys, rebaseSettings } from "../lib/workspacePreferencesRebase.ts";
 
 // Owns every auto-saved AI preference: each stage's provider/model/reasoning-effort
 // config, the shared and per-stage guidance, and candidate facts. These share
@@ -31,23 +31,26 @@ export function useAiSettings() {
   const saved = useMemo(() => loadSettings(), []);
   const adoptedSettingsFingerprintRef = useRef<string | null>(null);
   const latestSettingsRef = useRef<PersistedSettings>(materializeAiSettings(saved));
+  // The settings last saved or adopted; rendered changes beyond it are still
+  // inside the UI debounce.
+  const committedSettingsRef = useRef<PersistedSettings>(latestSettingsRef.current);
 
   const [stages, setStages] = useState<Record<StageId, StageConfig>>(() => seedStages(saved));
 
-  const [honestContext, setHonestContext] = useState(saved.honestContext ?? "");
+  const [profileBackground, setProfileBackground] = useState(saved.profileBackground ?? "");
   const [customInstructions, setCustomInstructions] = useState(saved.customInstructions ?? "");
   const [stageCustomInstructions, setStageCustomInstructions] = useState<Partial<Record<StageId, string>>>(
     () => saved.stageCustomInstructions ?? {}
   );
   const [boldBulletKeywords, setBoldBulletKeywords] = useState(saved.boldBulletKeywords ?? true);
-  const [runFitAssessment, setRunFitAssessment] = useState(saved.runFitAssessment ?? true);
-  const [autoPolishResume, setAutoPolishResume] = useState(saved.autoPolishResume ?? false);
-  const [resumeAutoPolishThreshold, setResumeAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.resumeAutoPolishThreshold ?? "REASONABLE"
+  const [fitAssessmentAuto, setFitAssessmentAuto] = useState(saved.fitAssessmentAuto ?? true);
+  const [resumePolishAuto, setResumePolishAuto] = useState(saved.resumePolishAuto ?? false);
+  const [resumePolishAutoThreshold, setResumePolishAutoThreshold] = useState<AutoPolishThreshold>(
+    saved.resumePolishAutoThreshold ?? "REASONABLE"
   );
-  const [autoPolishCoverLetter, setAutoPolishCoverLetter] = useState(saved.autoPolishCoverLetter ?? false);
-  const [coverLetterAutoPolishThreshold, setCoverLetterAutoPolishThreshold] = useState<AutoPolishThreshold>(
-    saved.coverLetterAutoPolishThreshold ?? "STRONG"
+  const [coverPolishAuto, setCoverPolishAuto] = useState(saved.coverPolishAuto ?? false);
+  const [coverPolishAutoThreshold, setCoverPolishAutoThreshold] = useState<AutoPolishThreshold>(
+    saved.coverPolishAutoThreshold ?? "STRONG"
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState<DeclaredAnswer>(
@@ -63,28 +66,31 @@ export function useAiSettings() {
     saved.availabilityNotice ?? "unspecified"
   );
   const [availabilityDate, setAvailabilityDate] = useState(saved.availabilityDate ?? "");
-  const [experienceProfile, setExperienceProfile] = useState<CandidateExperience[]>(saved.experienceProfile ?? []);
   const [workspacePreferencesStatus, setWorkspacePreferencesStatus] = useState<WorkspacePreferencesStatus>("idle");
 
   // A different RoleFit client can update the canonical workspace record while
   // this tab is open. workspacePreferencesSync refreshes it on focus and emits
   // this event after updating the browser cache; reconcile the hook's live
-  // state so the UI does not immediately write an older snapshot back.
+  // state so the UI does not immediately write an older snapshot back. Edits
+  // still inside the debounce stay on top and are saved after adoption.
   useEffect(() => {
     if (typeof window === "undefined") return;
     const adopt = () => {
-      const next = loadSettings();
-      adoptedSettingsFingerprintRef.current = JSON.stringify(materializeAiSettings(next));
+      const adopted = loadSettings();
+      const unsaved = changedSettingKeys(committedSettingsRef.current, latestSettingsRef.current);
+      const next = unsaved.length ? rebaseSettings(adopted, latestSettingsRef.current, unsaved) : adopted;
+      committedSettingsRef.current = materializeAiSettings(adopted);
+      adoptedSettingsFingerprintRef.current = JSON.stringify(committedSettingsRef.current);
       setStages(seedStages(next));
-      setHonestContext(next.honestContext ?? "");
+      setProfileBackground(next.profileBackground ?? "");
       setCustomInstructions(next.customInstructions ?? "");
       setStageCustomInstructions(next.stageCustomInstructions ?? {});
       setBoldBulletKeywords(next.boldBulletKeywords ?? true);
-      setRunFitAssessment(next.runFitAssessment ?? true);
-      setAutoPolishResume(next.autoPolishResume ?? false);
-      setResumeAutoPolishThreshold(next.resumeAutoPolishThreshold ?? "REASONABLE");
-      setAutoPolishCoverLetter(next.autoPolishCoverLetter ?? false);
-      setCoverLetterAutoPolishThreshold(next.coverLetterAutoPolishThreshold ?? "STRONG");
+      setFitAssessmentAuto(next.fitAssessmentAuto ?? true);
+      setResumePolishAuto(next.resumePolishAuto ?? false);
+      setResumePolishAutoThreshold(next.resumePolishAutoThreshold ?? "REASONABLE");
+      setCoverPolishAuto(next.coverPolishAuto ?? false);
+      setCoverPolishAutoThreshold(next.coverPolishAutoThreshold ?? "STRONG");
       setCitizenshipStatus(next.citizenshipStatus ?? "unspecified");
       setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? "unspecified");
       setRequiresSponsorship(next.requiresSponsorship ?? "unspecified");
@@ -93,7 +99,6 @@ export function useAiSettings() {
       setGpa(next.gpa);
       setAvailabilityNotice(next.availabilityNotice ?? "unspecified");
       setAvailabilityDate(next.availabilityDate ?? "");
-      setExperienceProfile(next.experienceProfile ?? []);
     };
     window.addEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
     const updateStatus = (event: Event) => {
@@ -112,26 +117,29 @@ export function useAiSettings() {
   // synchronously when a reload or tab close interrupts the 400 ms UI debounce.
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const persistLatestSettings = () => saveSettings(latestSettingsRef.current);
+    const persistLatestSettings = () => {
+      committedSettingsRef.current = latestSettingsRef.current;
+      saveSettings(latestSettingsRef.current);
+    };
     window.addEventListener("pagehide", persistLatestSettings);
     return () => window.removeEventListener("pagehide", persistLatestSettings);
   }, []);
 
   // Auto-save preferences so they survive reloads. Debounced so the free-text
-  // fields (honest context, custom instructions) do not rewrite the cache and
+  // fields (Profile Background, custom instructions) do not rewrite the cache and
   // canonical workspace record on every keystroke.
   useEffect(() => {
     const nextSettings: PersistedSettings = materializeAiSettings({
       ...stageFieldsToPersist(stages),
-      honestContext,
+      profileBackground,
       customInstructions,
       stageCustomInstructions,
       boldBulletKeywords,
-      runFitAssessment: runFitAssessment,
-      autoPolishResume,
-      resumeAutoPolishThreshold,
-      autoPolishCoverLetter,
-      coverLetterAutoPolishThreshold,
+      fitAssessmentAuto,
+      resumePolishAuto,
+      resumePolishAutoThreshold,
+      coverPolishAuto,
+      coverPolishAutoThreshold,
       citizenshipStatus,
       legallyAuthorizedToWork,
       requiresSponsorship,
@@ -139,8 +147,7 @@ export function useAiSettings() {
       major,
       gpa,
       availabilityNotice,
-      availabilityDate,
-      experienceProfile
+      availabilityDate
     });
     latestSettingsRef.current = nextSettings;
     const adoptedFingerprint = adoptedSettingsFingerprintRef.current;
@@ -149,20 +156,21 @@ export function useAiSettings() {
       return;
     }
     const id = setTimeout(() => {
+      committedSettingsRef.current = nextSettings;
       saveSettings(nextSettings);
     }, 400);
     return () => clearTimeout(id);
   }, [
     stages,
-    honestContext,
+    profileBackground,
     customInstructions,
     stageCustomInstructions,
     boldBulletKeywords,
-    runFitAssessment,
-    autoPolishResume,
-    resumeAutoPolishThreshold,
-    autoPolishCoverLetter,
-    coverLetterAutoPolishThreshold,
+    fitAssessmentAuto,
+    resumePolishAuto,
+    resumePolishAutoThreshold,
+    coverPolishAuto,
+    coverPolishAutoThreshold,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -170,8 +178,7 @@ export function useAiSettings() {
     major,
     gpa,
     availabilityNotice,
-    availabilityDate,
-    experienceProfile
+    availabilityDate
   ]);
 
   function updateStage(stage: StageId, patch: Partial<StageConfig>) {
@@ -234,15 +241,15 @@ export function useAiSettings() {
   function resetSettings() {
     clearStoredSettings();
     setStages(seedStages({}));
-    setHonestContext("");
+    setProfileBackground("");
     setCustomInstructions("");
     setStageCustomInstructions({});
     setBoldBulletKeywords(true);
-    setRunFitAssessment(true);
-    setAutoPolishResume(false);
-    setResumeAutoPolishThreshold("REASONABLE");
-    setAutoPolishCoverLetter(false);
-    setCoverLetterAutoPolishThreshold("STRONG");
+    setFitAssessmentAuto(true);
+    setResumePolishAuto(false);
+    setResumePolishAutoThreshold("REASONABLE");
+    setCoverPolishAuto(false);
+    setCoverPolishAutoThreshold("STRONG");
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork("unspecified");
     setRequiresSponsorship("unspecified");
@@ -251,7 +258,6 @@ export function useAiSettings() {
     setGpa(undefined);
     setAvailabilityNotice("unspecified");
     setAvailabilityDate("");
-    setExperienceProfile([]);
   }
 
   return {
@@ -259,20 +265,20 @@ export function useAiSettings() {
     updateStage,
     changeStageProvider,
     copyStage,
-    honestContext,
-    setHonestContext,
+    profileBackground,
+    setProfileBackground,
     boldBulletKeywords,
     setBoldBulletKeywords,
-    runFitAssessment,
-    setRunFitAssessment,
-    autoPolishResume,
-    setAutoPolishResume,
-    resumeAutoPolishThreshold,
-    setResumeAutoPolishThreshold,
-    autoPolishCoverLetter,
-    setAutoPolishCoverLetter,
-    coverLetterAutoPolishThreshold,
-    setCoverLetterAutoPolishThreshold,
+    fitAssessmentAuto,
+    setFitAssessmentAuto,
+    resumePolishAuto,
+    setResumePolishAuto,
+    resumePolishAutoThreshold,
+    setResumePolishAutoThreshold,
+    coverPolishAuto,
+    setCoverPolishAuto,
+    coverPolishAutoThreshold,
+    setCoverPolishAutoThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -289,8 +295,6 @@ export function useAiSettings() {
     setAvailabilityNotice,
     availabilityDate,
     setAvailabilityDate,
-    experienceProfile,
-    setExperienceProfile,
     workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,

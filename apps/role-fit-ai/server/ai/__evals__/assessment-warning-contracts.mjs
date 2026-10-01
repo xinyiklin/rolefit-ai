@@ -28,6 +28,12 @@ for (const [label, raw] of [
 const supportedSources = { jobText: "Python experience.", resumeText: "Built Python services." };
 const supported = { ...base, matches: [{ ...match, candidateExcerpt: supportedSources.resumeText }] };
 if (sanitizeFitAssessmentResponse(supported, supportedSources)?.warnings?.length) counters.falseWarnings++;
+// Gap notes describe absence, so naming the missing tool or the posting's duration is not a candidate claim.
+const gapSources = { jobText: "Python experience. 5+ years of Kubernetes.", resumeText: supportedSources.resumeText };
+for (const note of ["The resume does not mention Kubernetes or 5+ years of it.", "Candidate lacks Kubernetes experience."]) {
+  const gap = { jobExcerpt: "5+ years of Kubernetes.", status: "NOT_SHOWN", note };
+  if (sanitizeFitAssessmentResponse({ ...supported, verdict: "REASONABLE", gaps: [gap] }, gapSources)?.warnings?.length) counters.falseWarnings++;
+}
 for (const raw of [
   { ...base, verdict: "UNKNOWN" },
   { ...base, matches: [{ ...match, candidateSource: "UNKNOWN" }] },

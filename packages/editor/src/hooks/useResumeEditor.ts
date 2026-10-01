@@ -8,6 +8,7 @@ import {
   newSkillEntry,
   newSummaryEntry,
   newSection,
+  type ResumeBullet,
   type ResumeData,
   type DocumentHeader,
   type ResumeEntry,
@@ -186,7 +187,8 @@ type Action =
   | { type: "setStyleFieldSize"; field: StyleTextField; sizePt: number | "default" }
   | { type: "resetStyleFieldFormatting" }
   | { type: "clearAlignmentOverrides"; scope: AlignmentScope }
-  | { type: "addBullet"; sectionId: string; entryId: string }
+  // A host may supply the new bullet so it can track what it inserted.
+  | { type: "addBullet"; sectionId: string; entryId: string; bullet?: ResumeBullet }
   | { type: "insertBullet"; sectionId: string; entryId: string; afterBulletId: string; position?: "above" | "below" }
   | { type: "removeBullet"; sectionId: string; entryId: string; bulletId: string }
   | { type: "reorderBullets"; sectionId: string; entryId: string; from: number; to: number }
@@ -477,7 +479,9 @@ export function reduceResumeData(data: ResumeData, action: Action): ResumeData {
 
     case "addBullet":
       return mapSection(data, action.sectionId, (section) =>
-        mapEntry(section, action.entryId, (entry) => ({ ...entry, bullets: [...entry.bullets, newBullet()] }))
+        mapEntry(section, action.entryId, (entry) => action.bullet && entry.bullets.some((bullet) => bullet.id === action.bullet!.id)
+          ? entry
+          : { ...entry, bullets: [...entry.bullets, action.bullet ?? newBullet()] })
       );
     case "insertBullet":
       // Insert above or below the given bullet (the per-row "+", Enter, and the
@@ -912,7 +916,8 @@ export function useResumeEditor(
         dispatch({ type: "setStyleFieldSize", field, sizePt }),
       resetStyleFieldFormatting: () => dispatch({ type: "resetStyleFieldFormatting" }),
       clearAlignmentOverrides: (scope: AlignmentScope) => dispatch({ type: "clearAlignmentOverrides", scope }),
-      addBullet: (sectionId: string, entryId: string) => dispatch({ type: "addBullet", sectionId, entryId }),
+      addBullet: (sectionId: string, entryId: string, bullet?: ResumeBullet) =>
+        dispatch({ type: "addBullet", sectionId, entryId, bullet }),
       insertBullet: (sectionId: string, entryId: string, afterBulletId: string, position?: "above" | "below") =>
         dispatch({ type: "insertBullet", sectionId, entryId, afterBulletId, position }),
       removeBullet: (sectionId: string, entryId: string, bulletId: string) =>

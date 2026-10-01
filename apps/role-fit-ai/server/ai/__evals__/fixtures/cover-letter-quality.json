@@ -50,7 +50,7 @@
     "evidence": [
       { "id": "resume:scheduling", "source": "resume", "text": "Built privacy-conscious scheduling workflows for service teams." },
       { "id": "resume:intake", "source": "resume", "text": "Digitized paper intake forms for a small medical practice." },
-      { "id": "context:no-clinical", "source": "honest_context", "text": "I have not worked on a certified clinical system." }
+      { "id": "context:no-clinical", "source": "profile", "text": "I have not worked on a certified clinical system." }
     ]
   },
   {
@@ -63,7 +63,7 @@
     "evidence": [
       { "id": "resume:evals", "source": "resume", "text": "Built offline regression evaluations for a grounded generation pipeline." },
       { "id": "resume:api", "source": "resume", "text": "Built dependable API services for reporting workflows." },
-      { "id": "context:ai-workflow", "source": "honest_context", "text": "I develop with AI assistance daily and review every generated change against real evidence before merging." }
+      { "id": "context:ai-workflow", "source": "profile", "text": "I develop with AI assistance daily and review every generated change against real evidence before merging." }
     ]
   },
   {
@@ -75,9 +75,9 @@
     "company": "Maple",
     "evidence": [
       { "id": "resume:pipeline", "source": "resume", "text": "Built Python APIs and data pipelines for reporting." },
-      { "id": "context:relevant", "source": "honest_context", "text": "I prefer backend work that stays close to operational users." },
-      { "id": "context:commute", "source": "honest_context", "text": "I am available to commute on Tuesdays." },
-      { "id": "context:languages", "source": "honest_context", "text": "I studied conversational Portuguese for two years." }
+      { "id": "context:relevant", "source": "profile", "text": "I prefer backend work that stays close to operational users." },
+      { "id": "context:commute", "source": "profile", "text": "I am available to commute on Tuesdays." },
+      { "id": "context:languages", "source": "profile", "text": "I studied conversational Portuguese for two years." }
     ]
   },
   {
@@ -101,7 +101,7 @@
     "company": "Beacon",
     "evidence": [
       { "id": "resume:internal", "source": "resume", "text": "Maintained internal applications and incorporated support feedback." },
-      { "id": "context:small-team", "source": "honest_context", "text": "I prefer small teams where engineers stay close to the people using internal tools." }
+      { "id": "context:small-team", "source": "profile", "text": "I prefer small teams where engineers stay close to the people using internal tools." }
     ]
   },
   {
@@ -126,7 +126,7 @@
     "company": "Orbit",
     "evidence": [
       { "id": "resume:tooling", "source": "resume", "text": "Built service tooling and documented incident workflows." },
-      { "id": "context:service", "source": "honest_context", "text": "I like tools that help engineers understand and respond to service behavior." }
+      { "id": "context:service", "source": "profile", "text": "I like tools that help engineers understand and respond to service behavior." }
     ]
   },
   {

@@ -1,7 +1,7 @@
 // "unspecified" is the neutral default: the app asserts NOTHING about
 // citizenship, work authorization, or education until the user explicitly opts
 // in from Settings. This matters because buildCandidateFactsContext() output is
-// fed into the AI request's honestContext, which the server folds into the
+// fed into the AI request's candidateContext, which the server folds into the
 // keyword-grounding allowlist (server/ai/sanitize.ts) — so a concrete default
 // like "U.S. citizen, clearance-eligible" or "Bachelor's degree" would let an
 // unverified citizenship, clearance, work-auth, or credential claim survive into
@@ -108,81 +108,6 @@ export function normalizeAvailabilityDate(value: unknown): string | undefined {
   return value;
 }
 
-// Experience is recorded by evidence source, because employers do not treat a
-// year of paid production work, a research appointment, and an academic
-// project as interchangeable. These are global candidate facts; the model
-// still decides which entries are relevant to the current posting.
-export const EXPERIENCE_CATEGORY_OPTIONS = [
-  { value: "professional", label: "Professional employment" },
-  { value: "internship", label: "Internship / co-op / apprenticeship" },
-  { value: "freelance", label: "Freelance / contract / consulting" },
-  { value: "research", label: "Research / lab" },
-  { value: "academic", label: "Academic / coursework projects" },
-  { value: "personal", label: "Personal / independent projects" },
-  { value: "open-source", label: "Open-source contributions" },
-  { value: "volunteer", label: "Volunteer / community work" },
-  { value: "military", label: "Military / public service" }
-] as const;
-
-export type ExperienceCategory = (typeof EXPERIENCE_CATEGORY_OPTIONS)[number]["value"];
-
-export type CandidateExperience = {
-  category: ExperienceCategory;
-  years?: number;
-  count?: number;
-  mostRecentYear?: number;
-  details?: string;
-};
-
-export const EXPERIENCE_DETAILS_MAX_LENGTH = 240;
-export const EXPERIENCE_MAX_YEARS = 80;
-export const EXPERIENCE_MAX_COUNT = 99;
-export const EXPERIENCE_MIN_YEAR = 1950;
-export const EXPERIENCE_MAX_YEAR = 2100;
-
-const EXPERIENCE_LABELS = new Map<ExperienceCategory, string>(
-  EXPERIENCE_CATEGORY_OPTIONS.map((option) => [option.value, option.label])
-);
-
-export function normalizeCandidateExperience(value: unknown): CandidateExperience[] {
-  if (!Array.isArray(value)) return [];
-  const source = new Map<ExperienceCategory, Record<string, unknown>>();
-  for (const item of value) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) continue;
-    const raw = item as Record<string, unknown>;
-    const category = raw.category as ExperienceCategory;
-    if (!EXPERIENCE_LABELS.has(category) || source.has(category)) continue;
-    source.set(category, raw);
-  }
-
-  const normalized: CandidateExperience[] = [];
-  for (const option of EXPERIENCE_CATEGORY_OPTIONS) {
-    const raw = source.get(option.value);
-    if (!raw) continue;
-    const item: CandidateExperience = { category: option.value };
-    if (typeof raw.years === "number" && Number.isFinite(raw.years) && raw.years >= 0 && raw.years <= EXPERIENCE_MAX_YEARS) {
-      item.years = Math.round(raw.years * 100) / 100;
-    }
-    if (typeof raw.count === "number" && Number.isSafeInteger(raw.count) && raw.count >= 1 && raw.count <= EXPERIENCE_MAX_COUNT) {
-      item.count = raw.count;
-    }
-    if (
-      typeof raw.mostRecentYear === "number"
-      && Number.isSafeInteger(raw.mostRecentYear)
-      && raw.mostRecentYear >= EXPERIENCE_MIN_YEAR
-      && raw.mostRecentYear <= EXPERIENCE_MAX_YEAR
-    ) {
-      item.mostRecentYear = raw.mostRecentYear;
-    }
-    if (typeof raw.details === "string") {
-      const details = raw.details.trim().slice(0, EXPERIENCE_DETAILS_MAX_LENGTH);
-      if (details) item.details = details;
-    }
-    normalized.push(item);
-  }
-  return normalized;
-}
-
 export type CandidateFacts = {
   citizenshipStatus: CitizenshipStatus;
   legallyAuthorizedToWork: DeclaredAnswer;
@@ -192,7 +117,6 @@ export type CandidateFacts = {
   gpa?: number;
   availabilityNotice?: AvailabilityNotice;
   availabilityDate?: string;
-  experienceProfile?: CandidateExperience[];
 };
 
 const CITIZENSHIP_CONTEXT: Record<CitizenshipStatus, string> = {
@@ -259,31 +183,12 @@ export function buildCandidateFactsContext(facts: CandidateFacts): string {
     const availabilityLine = AVAILABILITY_CONTEXT[availabilityNotice];
     if (availabilityLine) lines.push(availabilityLine);
   }
-  const experience = normalizeCandidateExperience(facts.experienceProfile);
-  if (experience.length) {
-    lines.push(
-      "Experience inventory: candidate-declared evidence sources; determine relevance to this posting and do not add durations or counts across categories because entries may overlap."
-    );
-    for (const item of experience) {
-      const factsForCategory: string[] = [];
-      if (item.years !== undefined) {
-        factsForCategory.push(`${item.years} ${item.years === 1 ? "year" : "years"}`);
-      }
-      if (item.count !== undefined) {
-        factsForCategory.push(`${item.count} ${item.count === 1 ? "role or project" : "roles or projects"}`);
-      }
-      if (item.mostRecentYear !== undefined) factsForCategory.push(`most recent in ${item.mostRecentYear}`);
-      if (item.details) factsForCategory.push(`scope: ${item.details}`);
-      const summary = factsForCategory.length ? factsForCategory.join("; ") : "category declared without a quantity";
-      lines.push(`${EXPERIENCE_LABELS.get(item.category)}: ${summary}.`);
-    }
-  }
   const declared = lines.filter(Boolean);
   if (!declared.length) return "";
   return `Candidate facts:\n${declared.map((line) => `- ${line}`).join("\n")}`;
 }
 
-export function mergeHonestContext(honestContext: string, candidateFactsContext: string): string {
-  const parts = [candidateFactsContext.trim(), honestContext.trim()].filter(Boolean);
+export function buildCandidateContext(profileBackground: string, candidateFactsContext: string): string {
+  const parts = [candidateFactsContext.trim(), profileBackground.trim()].filter(Boolean);
   return parts.join("\n\n");
 }

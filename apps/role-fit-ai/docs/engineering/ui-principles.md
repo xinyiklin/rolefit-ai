@@ -417,7 +417,7 @@ Never show:
   Antigravity CLI) plus the native OpenAI and Claude APIs. Do not expose an
   adapter until its current request contract and a live smoke are verified.
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
-  of the studio tab rail. Its three sections are AI stages, About you, and
+  of the studio tab rail. Its three sections are AI stages, Profile, and
   Guidance, with Reset pinned below them at the foot of the section rail. The
   masthead keeps only the RoleFit identity and Apply. Read-only Sessions
   belongs immediately above Settings in the bottom studio-rail utilities group,

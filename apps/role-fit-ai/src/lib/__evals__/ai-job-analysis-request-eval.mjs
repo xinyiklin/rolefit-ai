@@ -147,3 +147,10 @@ const summaryOnly = await analyzeJobPosting(POSTING);
 assert.equal(summaryOnly.source, "local", "metadata without requirement lists falls back to the local engine");
 nextResponse = response({ source: "ai", title: "Generated uncertain title.", jobWarnings: [{ field: "title", message: "Not supported by provided evidence." }] });
 assert.equal((await analyzeJobPosting(POSTING)).source, "local", "a bare scalar is not a tailoring brief");
+
+nextResponse = response({ source: "ai", title: "Engineer", roleDescription: "Concise role summary.", requiredQualifications: ["React, C#, Java, or another object-oriented language."], preferredQualifications: ["Python 3 scripting with pandas/numpy."], jobWarnings, conditionIssues: [{ field: "requiredQualifications", sourceExcerpt: "Original wording", reason: "Check wording" }] });
+const extractedOnly = await analyzeJobPosting(POSTING);
+assert.equal(extractedOnly.source, "ai");
+assert.match(extractedOnly.extracted.tailoringText, /React, C#, Java, or another object-oriented language/);
+assert.equal(extractedOnly.extracted.jobWarnings, undefined, "legacy response warnings do not enter a fresh preparation");
+assert.equal(extractedOnly.extracted.conditionIssues, undefined, "legacy response checks do not enter a fresh preparation");

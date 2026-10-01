@@ -38,7 +38,7 @@ export function ApplicationReview({
         <AiWorkflowProgress
           title="Final application review"
           busy
-          stages={[{ key: "final-review", state: { status: "running" }, onStop: review.stop }]}
+          stages={[{ key: "application-review", state: { status: "running" }, onStop: review.stop }]}
           onDismiss={() => setProgressHidden(true)}
           suspendExpiry
         />

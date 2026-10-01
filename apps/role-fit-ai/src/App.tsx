@@ -1,7 +1,7 @@
 import { buildResumePolishScope } from "./lib/resumePolishScope.ts";
 import { currentResumeConcerns } from "./resume/proposalWarnings.ts";
 import { flattenResumeTargets } from "../shared/resumePolishContract.ts";
-import { jobAnalysisWarningContext } from "../shared/jobAnalysisWarnings.ts";
+import { profileBackgroundLimitError } from "../shared/candidateProfileContract.ts";
 import { useApplicationReview } from "./hooks/useApplicationReview";
 import { buildApplicationReviewInput } from "./lib/applicationReview";
 import { ApplicationReview } from "./sections/tabs/prepare/ApplicationReview";
@@ -83,7 +83,8 @@ import {
 import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
-import { buildCandidateFactsContext, mergeHonestContext } from "./lib/candidateFacts";
+import { buildCandidateFactsContext, buildCandidateContext } from "./lib/candidateFacts";
+import { PROFILE_BACKGROUND_STORAGE_LIMIT } from "./lib/settings";
 import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
@@ -100,7 +101,7 @@ import {
   type ImportedJobSnapshot,
   type PreparedSourceReplacementResolution
 } from "./hooks/useJobIntake";
-import { usePolishPipeline, type PolishRunOptions } from "./hooks/usePolishPipeline";
+import { useResumePolishPipeline, type PolishRunOptions } from "./hooks/useResumePolishPipeline";
 import { useResumeProposalDecisions } from "./hooks/useResumeProposalDecisions";
 import { useWorkspaceResume } from "./hooks/useWorkspaceResume";
 import { useApplyFlow } from "./hooks/useApplyFlow";
@@ -437,20 +438,20 @@ function App() {
     updateStage,
     changeStageProvider,
     copyStage,
-    honestContext,
-    setHonestContext,
+    profileBackground,
+    setProfileBackground,
     boldBulletKeywords,
     setBoldBulletKeywords,
-    runFitAssessment,
-    setRunFitAssessment,
-    autoPolishResume,
-    setAutoPolishResume,
-    resumeAutoPolishThreshold,
-    setResumeAutoPolishThreshold,
-    autoPolishCoverLetter,
-    setAutoPolishCoverLetter,
-    coverLetterAutoPolishThreshold,
-    setCoverLetterAutoPolishThreshold,
+    fitAssessmentAuto,
+    setFitAssessmentAuto,
+    resumePolishAuto,
+    setResumePolishAuto,
+    resumePolishAutoThreshold,
+    setResumePolishAutoThreshold,
+    coverPolishAuto,
+    setCoverPolishAuto,
+    coverPolishAutoThreshold,
+    setCoverPolishAutoThreshold,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -467,8 +468,6 @@ function App() {
     setAvailabilityNotice,
     availabilityDate,
     setAvailabilityDate,
-    experienceProfile,
-    setExperienceProfile,
     workspacePreferencesStatus,
     customInstructions,
     setCustomInstructions,
@@ -507,12 +506,12 @@ function App() {
   const resumePolishStage = stages["resume-polish"];
   const jobAnalysisProviderReady = providerReady(jobAnalysisStage.provider);
   const resumePolishProviderReady = providerReady(resumePolishStage.provider);
-  const coverProviderReady = providerReady(stages.cover.provider);
-  const answersProviderReady = providerReady(stages.answers.provider);
+  const coverProviderReady = providerReady(stages["cover-polish"].provider);
+  const answersProviderReady = providerReady(stages["application-answers"].provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
   const resumePolishProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
-  const coverProviderMessage = providerRecoveryMessage(stages.cover.provider);
-  const answersProviderMessage = providerRecoveryMessage(stages.answers.provider);
+  const coverProviderMessage = providerRecoveryMessage(stages["cover-polish"].provider);
+  const answersProviderMessage = providerRecoveryMessage(stages["application-answers"].provider);
   const ensureJobAnalysisProvider = useCallback(
     (request: AiRequestFields) => providerAvailability.ensureProvider(request.provider),
     [providerAvailability.ensureProvider]
@@ -534,10 +533,12 @@ function App() {
     major,
     gpa,
     availabilityNotice,
-    availabilityDate,
-    experienceProfile
+    availabilityDate
   });
-  const requestHonestContext = mergeHonestContext(honestContext, candidateFactsContext);
+  const candidateContext = buildCandidateContext(profileBackground, candidateFactsContext);
+  // Every AI stage that sends candidate context declines on this instead of
+  // sending a cut-down Profile.
+  const profileLimitMessage = profileBackgroundLimitError(profileBackground);
   // Job analysis runs on its own concrete provider config (synced to other stages via
   // the copy buttons, not a live link). Shared by every job analysis entry point
   // (link, paste, extension import, and their retries).
@@ -618,11 +619,11 @@ function App() {
   }, []);
   // The Settings dialog's open state AND its active section in one value: null is
   // closed, a section id is open on that section. "Add evidence" opens it directly
-  // on Guidance, so the section cannot be private to the dialog.
+  // on Profile, so the section cannot be private to the dialog.
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
-  // Ref for the honest-context textarea inside Settings — focused after the dialog
-  // is opened by handleAddHonestContext so the user can type immediately.
-  const honestContextTextareaRef = useRef<HTMLTextAreaElement>(null);
+  // Ref for the Profile Background textarea inside Settings — focused after the
+  // dialog is opened by handleAddProfileEvidence so the user can type immediately.
+  const profileBackgroundTextareaRef = useRef<HTMLTextAreaElement>(null);
   // Hidden file input the resume Open menu's "Choose a file" row clicks.
   const resumeFileInputRef = useRef<HTMLInputElement>(null);
   // The PDF rename prompt is opened from the Save menu's PDF row; ExportMenu
@@ -1086,11 +1087,6 @@ function App() {
     resumeEditorActions.getDocumentGeneration()).length
       ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
 
-  const jobWarningContext = jobAnalysisWarningContext(importedJob?.jobWarnings);
-  const draftingJobDescription = jobWarningContext
-    ? `Prepared job fields (generated or edited):\n${jobDescription}\n\nKnown concerns:\n${jobWarningContext}\n\nOriginal captured posting:\n${importedJob?.sourceText || jobRawText}`
-    : jobDescription;
-
   const {
     answersResult,
     answersStatus,
@@ -1103,12 +1099,13 @@ function App() {
   } = useApplicationAnswers({
     resumeText: currentResumeText || resumeText,
     resumeData: editedResume,
-    jobDescription: draftingJobDescription,
+    jobDescription,
     jobUrl,
-    honestContext: requestHonestContext,
+    candidateContext,
+    profileLimitMessage,
     sourceWarnings: resumeSourceWarnings,
-    customInstructions: customInstructionsFor("answers"),
-    aiRequest: stages.answers,
+    customInstructions: customInstructionsFor("application-answers"),
+    aiRequest: stages["application-answers"],
     providerReady: answersProviderReady,
     providerMessage: answersProviderMessage
   });
@@ -1138,11 +1135,12 @@ function App() {
     currentCoverLetterText: coverLetterEditor.text,
     currentResumeText,
     resumeData: editedResume,
-    jobText: draftingJobDescription,
-    honestContext: requestHonestContext,
+    jobText: jobDescription,
+    candidateContext,
+    profileLimitMessage,
     sourceWarnings: resumeSourceWarnings,
-    customInstructions: customInstructionsFor("cover"),
-    aiRequest: stages.cover,
+    customInstructions: customInstructionsFor("cover-polish"),
+    aiRequest: stages["cover-polish"],
     providerReady: coverProviderReady,
     providerMessage: coverProviderMessage,
     resumeText,
@@ -1157,7 +1155,7 @@ function App() {
       company: jobTracking.company
     },
     onApplyTailored: coverLetterEditor.applyTailoredText,
-    onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, cover: usage }))
+    onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, "cover-polish": usage }))
   });
 
   // ----- Effects -----
@@ -1545,10 +1543,11 @@ function App() {
     fitAssessmentRequestFields,
     ensureProviderReady: ensureJobAnalysisProvider,
     ensureFitAssessmentProviderReady: ensureFitAssessmentProvider,
-    runFitAssessment,
+    fitAssessmentAuto,
     resolvePreparedResume,
     cancelPreparedResumeResolution,
-    candidateContext: () => requestHonestContext,
+    candidateContext: () => candidateContext,
+    profileLimitMessage: () => profileLimitMessage,
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,
   });
@@ -1561,7 +1560,7 @@ function App() {
   // ----- Resume Polish -----
   // Proposal generation, retry, cancellation, and stale-response protection are
   // extracted to
-  // src/hooks/usePolishPipeline.ts. The hook owns the pre-dispatch and active
+  // src/hooks/useResumePolishPipeline.ts. The hook owns the pre-dispatch and active
   // phases plus progress state; App only reads them for orchestration, render,
   // presence, and unload protection.
   const {
@@ -1574,14 +1573,15 @@ function App() {
     retryStage,
     stopPolish,
     terminologyInputKey
-  } = usePolishPipeline({
+  } = useResumePolishPipeline({
     editedResume,
     getDocumentGeneration: resumeEditorActions.getDocumentGeneration,
     previousResult: result,
     polishScopeModes,
     currentResumeText,
-    jobDescription: draftingJobDescription,
-    requestHonestContext,
+    jobDescription,
+    candidateContext,
+    profileLimitMessage,
     customInstructionsFor,
     boldBulletKeywords,
     resumePolish: resumePolishStage,
@@ -1634,7 +1634,7 @@ function App() {
       setIsManuallySelectingResumeVariant(true);
       try {
         const loaded = await loadBaseResumeVersion(fileName);
-        if (loaded && runFitAssessment && jobPrepared) {
+        if (loaded && fitAssessmentAuto && jobPrepared) {
           assessFitForResume(loaded);
         }
       } finally {
@@ -1647,7 +1647,7 @@ function App() {
       jobPrepared,
       loadBaseResumeVersion,
       assessFitForResume,
-      runFitAssessment
+      fitAssessmentAuto
     ]
   );
 
@@ -1822,7 +1822,7 @@ function App() {
 
   useEffect(() => {
     const pendingToken = fitAssessmentState.latestCompleted?.automationToken;
-    const candidate = runFitAssessment
+    const candidate = fitAssessmentAuto
       ? fitAssessmentMayTriggerAutoPolish(fitAssessmentState)
       : null;
     if (!candidate) {
@@ -1852,10 +1852,10 @@ function App() {
       !isManuallySelectingResumeVariant &&
       !isResolvingPreparedResume;
     const resumeDecision = automaticPolishActionDecision({
-      enabled: autoPolishResume,
+      enabled: resumePolishAuto,
       thresholdMet: fitAssessmentMeetsThreshold(
         fit.verdict,
-        resumeAutoPolishThreshold
+        resumePolishAutoThreshold
       ),
       automationBlocked,
       prerequisitePending: false,
@@ -1883,10 +1883,10 @@ function App() {
       !isGeneratingCover &&
       !coverLetterSelectionPending;
     const coverDecision = automaticPolishActionDecision({
-      enabled: autoPolishCoverLetter,
+      enabled: coverPolishAuto,
       thresholdMet: fitAssessmentMeetsThreshold(
         fit.verdict,
-        coverLetterAutoPolishThreshold
+        coverPolishAutoThreshold
       ),
       automationBlocked,
       prerequisitePending: coverLetterSelectionPending,
@@ -1905,12 +1905,12 @@ function App() {
       acknowledgeFitAutomation(candidate.automationToken);
     }
   }, [
-    autoPolishCoverLetter,
-    autoPolishResume,
+    coverPolishAuto,
+    resumePolishAuto,
     autoProposalSettlementRevision,
     canPolish,
     coverLetterPreflight.canTailor,
-    coverLetterAutoPolishThreshold,
+    coverPolishAutoThreshold,
     coverProviderReady,
     coverLetterSelectionPending,
     currentResumeText,
@@ -1927,26 +1927,32 @@ function App() {
     jobPrepared,
     jobRawText,
     fitAssessmentState,
-    resumeAutoPolishThreshold,
+    resumePolishAutoThreshold,
     resumeReady,
     resumeText,
-    runFitAssessment
+    fitAssessmentAuto
   ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
-  // Appends a template line to honestContext (unless the keyword is already there),
-  // then opens Settings on Guidance so the user can fill it in and re-run Polish.
-  function handleAddHonestContext(keyword: string) {
-    const alreadyPresent = honestContext.toLowerCase().includes(keyword.toLowerCase());
+  // Appends a template line to the Profile Background (unless the keyword is
+  // already there), then opens Settings on Profile so the user can fill it in.
+  function handleAddProfileEvidence(keyword: string) {
+    const alreadyPresent = profileBackground.toLowerCase().includes(keyword.toLowerCase());
     if (!alreadyPresent) {
-      const template = `${keyword}: [describe your exact experience: what you did, where, and when]`;
-      setHonestContext(honestContext ? `${honestContext}\n${template}` : template);
+      // Its own heading keeps the new fact from inheriting the last entry's type.
+      const template = `## ${keyword} ([type], [dates])\n[describe your exact experience: what you did and where]`;
+      const next = profileBackground ? `${profileBackground.trimEnd()}\n\n${template}` : template;
+      if (next.length > PROFILE_BACKGROUND_STORAGE_LIMIT) {
+        setPolishStatus("Your Profile Background is full. Shorten it in Settings > Profile first.");
+        return;
+      }
+      setProfileBackground(next);
     }
-    setSettingsSection("guidance");
+    setSettingsSection("about");
     // Give the dialog one frame to render before trying to focus the textarea.
     // This deliberately beats the dialog's own initial focus on the close button.
     window.requestAnimationFrame(() => {
-      honestContextTextareaRef.current?.focus();
+      profileBackgroundTextareaRef.current?.focus();
     });
     setPolishStatus(`Added an evidence prompt for "${keyword}". Fill it in, then Polish again.`);
   }
@@ -1958,7 +1964,7 @@ function App() {
     const confirmed = await confirm({
       title: "Reset all settings?",
       message:
-        "This clears your AI providers and models, honest context, custom instructions, and the facts in About you. Resumes, cover letters, and tracked applications are not affected.",
+        "This clears your AI providers and models, your Profile, and custom instructions. Resumes, cover letters, and tracked applications are not affected.",
       confirmLabel: "Reset settings",
       tone: "danger"
     });
@@ -2097,13 +2103,14 @@ function App() {
     resumeText: currentResumeText,
     coverLetterText: coverLetterEditor.text,
     originalResumeText: ["saved", "uploaded", "authored"].includes(resumeOrigin) ? resumeText : "",
-    candidateContext: requestHonestContext
-  }), [jobRawText, jobTracking.company, jobTracking.role, jobTracking.title, materialSelection, currentResumeText, coverLetterEditor.text, resumeOrigin, resumeText, requestHonestContext]);
+    candidateContext
+  }), [jobRawText, jobTracking.company, jobTracking.role, jobTracking.title, materialSelection, currentResumeText, coverLetterEditor.text, resumeOrigin, resumeText, candidateContext]);
   const finalReview = useApplicationReview({
     input: finalReviewInput,
-    stage: stages["final-review"],
+    stage: stages["application-review"],
     preparationIdentity: JSON.stringify([currentPreparationId, preparationSession, coverLetterEditor.sourceRevision, baseResumeName, isApplying, ["prepare", "resume", "cover"].includes(activeOutputTab) ? "draft" : activeOutputTab]),
-    ensureProviderReady: () => providerAvailability.ensureProvider(stages["final-review"].provider)
+    ensureProviderReady: () => providerAvailability.ensureProvider(stages["application-review"].provider),
+    profileLimitMessage
   });
 
   const skipModeAvailable = preparationSession.mode === "new";
@@ -2630,7 +2637,7 @@ function App() {
             />
           ) : null}
           <TaskProgress
-            stageKey="cover"
+            stageKey="cover-polish"
             state={coverProgress}
             onRetry={handleTailorCoverLetter}
             onStop={stopCoverPolish}
@@ -2639,7 +2646,7 @@ function App() {
             suspendExpiry={dock.dragging}
           />
           <TaskProgress
-            stageKey="answers"
+            stageKey="application-answers"
             state={answersProgress}
             onRetry={retryAnswers}
             onStop={stopAnswers}
@@ -2693,7 +2700,7 @@ function App() {
           {activeOutputTab === "prepare" ? (
             <PrepareTab
               finalReview={<ApplicationReview review={finalReview}
-                providerLabel={`${stages["final-review"].provider} · ${stages["final-review"].selectedModel}`}
+                providerLabel={`${stages["application-review"].provider} · ${stages["application-review"].selectedModel}`}
                 onSettings={() => setSettingsSection("stages")}
                 onOpenDocument={(document) => { setActiveOutputTab(document === "resume" ? "resume" : "cover"); requestAnimationFrame(() => (document === "resume" ? typesetEditorRef : coverLetterEditorRef).current?.focusDocumentStart()); }}
                 pendingProposals={Boolean(resumeProposalDecisions.outstanding || coverLetterProposal)}
@@ -3183,7 +3190,7 @@ function App() {
               onSlotAnswerChange={updateCoverLetterSlotAnswer}
               onAcceptProposal={acceptCoverLetterProposal}
               onDiscardProposal={discardCoverLetterProposal}
-              onAddHonestContext={handleAddHonestContext}
+              onAddProfileEvidence={handleAddProfileEvidence}
               onRestorePreTailor={() => {
                 preemptPreparedCoverLetterResolution();
                 coverLetterEditor.restorePreTailor();
@@ -3272,16 +3279,16 @@ function App() {
           availabilityStatus={providerAvailability.status}
           availabilityMessage={providerAvailability.message}
           onRefreshProviders={providerAvailability.refresh}
-          runFitAssessment={runFitAssessment}
-          onRunFitAssessmentChange={setRunFitAssessment}
-          autoPolishResume={autoPolishResume}
-          onAutoPolishResumeChange={setAutoPolishResume}
-          resumeAutoPolishThreshold={resumeAutoPolishThreshold}
-          onResumeAutoPolishThresholdChange={setResumeAutoPolishThreshold}
-          autoPolishCoverLetter={autoPolishCoverLetter}
-          onAutoPolishCoverLetterChange={setAutoPolishCoverLetter}
-          coverLetterAutoPolishThreshold={coverLetterAutoPolishThreshold}
-          onCoverLetterAutoPolishThresholdChange={setCoverLetterAutoPolishThreshold}
+          fitAssessmentAuto={fitAssessmentAuto}
+          onFitAssessmentAutoChange={setFitAssessmentAuto}
+          resumePolishAuto={resumePolishAuto}
+          onResumePolishAutoChange={setResumePolishAuto}
+          resumePolishAutoThreshold={resumePolishAutoThreshold}
+          onResumePolishAutoThresholdChange={setResumePolishAutoThreshold}
+          coverPolishAuto={coverPolishAuto}
+          onCoverPolishAutoChange={setCoverPolishAuto}
+          coverPolishAutoThreshold={coverPolishAutoThreshold}
+          onCoverPolishAutoThresholdChange={setCoverPolishAutoThreshold}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}
@@ -3298,14 +3305,12 @@ function App() {
           onAvailabilityNoticeChange={setAvailabilityNotice}
           availabilityDate={availabilityDate}
           onAvailabilityDateChange={setAvailabilityDate}
-          experienceProfile={experienceProfile}
-          onExperienceProfileChange={setExperienceProfile}
           workspacePreferencesStatus={workspacePreferencesStatus}
           boldBulletKeywords={boldBulletKeywords}
           onBoldBulletKeywordsChange={setBoldBulletKeywords}
-          honestContext={honestContext}
-          onHonestContextChange={setHonestContext}
-          honestContextRef={honestContextTextareaRef}
+          profileBackground={profileBackground}
+          onProfileBackgroundChange={setProfileBackground}
+          profileBackgroundRef={profileBackgroundTextareaRef}
           customInstructions={customInstructions}
           onCustomInstructionsChange={setCustomInstructions}
           stageCustomInstructions={stageCustomInstructions}

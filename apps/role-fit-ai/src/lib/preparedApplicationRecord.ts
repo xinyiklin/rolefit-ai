@@ -51,8 +51,8 @@ export function preparedApplicationRecord({
       aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
     }
     if (usage.includeCoverLetter) {
-      if (pipelineAiUsage.cover) aiUsage.cover = pipelineAiUsage.cover;
-      else delete aiUsage.cover;
+      if (pipelineAiUsage["cover-polish"]) aiUsage["cover-polish"] = pipelineAiUsage["cover-polish"];
+      else delete aiUsage["cover-polish"];
     }
   }
 

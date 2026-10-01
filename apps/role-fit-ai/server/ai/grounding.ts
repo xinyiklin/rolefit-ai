@@ -1,7 +1,7 @@
 // JD-term grounding for Resume Polish suggestions: a term that appears in the job
 // description may be written into a proposedText ONLY if it already exists in
 // the grounding corpus (every current field text in the resume scope plus the
-// user's honest context). The evidence field is model prose and can launder an
+// user's Profile). The evidence field is model prose and can launder an
 // inferred fact ("clinics run Windows"); the source text cannot.
 //
 // Three complementary detectors:
@@ -641,21 +641,7 @@ export function isClaimTermGroundedInSource(term: unknown, source: unknown): boo
 }
 
 // ---------------------------------------------------------------------------
-// Distinctive-token anchoring. Owned here rather than by the job analyzer
-// because Fit Assessment anchors its gaps against the posting with exactly the
-// same rule; two copies of a stopword list would drift into two definitions of
-// "grounded".
-
-// Generic connective tissue that appears in almost every posting — matching one
-// of these does NOT count toward a list item being anchored in the source.
-export const LIST_STOPWORDS = new Set([
-  "and", "the", "for", "with", "you", "your", "our", "are", "will", "that", "this",
-  "have", "from", "they", "their", "has", "was", "were", "into", "than", "then",
-  "other", "using", "use", "used", "including", "include", "includes", "such",
-  "across", "within", "via", "ability", "able", "experience", "experienced",
-  "strong", "excellent", "good", "work", "working", "role", "team", "teams",
-  "years", "year", "plus", "etc", "required", "preferred", "must", "should", "who"
-]);
+// Distinctive-token anchoring for ownership support.
 
 const ROLE_TOKEN_CANONICAL = new Map([
   ["postgresql", "postgres"], ["postgres", "postgres"],
@@ -675,12 +661,10 @@ function tokenKey(token: string): string {
   return ROLE_TOKEN_CANONICAL.get(key) ?? key;
 }
 
-// Lowercase, strip everything but alphanumerics — the same normalization the
-// job analyzer's list grounding uses.
 const normalizeForTokens = (value: unknown): string =>
   String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
-export function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
+function distinctiveTokenKeys(value: unknown, stopwords: Set<string>): string[] {
   return [...new Set(normalizeForTokens(value)
     .split(" ")
     .filter((token: string) => token.length >= 3 && !stopwords.has(token))

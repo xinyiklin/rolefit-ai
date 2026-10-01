@@ -1,4 +1,4 @@
-import { useRef, type Ref } from "react";
+import { useRef, useState, type Ref } from "react";
 import { RotateCcw, X } from "lucide-react";
 
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
@@ -10,7 +10,6 @@ import {
   EDUCATION_LEVEL_OPTIONS,
   MAJOR_MAX_LENGTH,
   type AvailabilityNotice,
-  type CandidateExperience,
   type CitizenshipStatus,
   type DeclaredAnswer,
   type EducationLevel
@@ -22,7 +21,12 @@ import type {
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
 import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
-import { ExperienceProfileFields } from "./ExperienceProfileFields";
+import {
+  PROFILE_BACKGROUND_CHAR_LIMIT,
+  profileBackgroundLimitError,
+  profileTextLength
+} from "../../shared/candidateProfileContract.ts";
+import { PROFILE_BACKGROUND_STORAGE_LIMIT } from "../lib/settings.ts";
 import { SettingsStage } from "./SettingsStage";
 import {
   AUTO_POLISH_THRESHOLD_OPTIONS,
@@ -33,7 +37,7 @@ export type SettingsSection = "stages" | "about" | "guidance";
 
 export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "stages", label: "AI stages" },
-  { id: "about", label: "About you" },
+  { id: "about", label: "Profile" },
   { id: "guidance", label: "Guidance" }
 ];
 
@@ -51,18 +55,18 @@ type SettingsDialogProps = {
   availabilityStatus: ProviderAvailabilityStatus;
   availabilityMessage: string;
   onRefreshProviders: () => void | Promise<void>;
-  runFitAssessment: boolean;
-  onRunFitAssessmentChange: (value: boolean) => void;
-  autoPolishResume: boolean;
-  onAutoPolishResumeChange: (value: boolean) => void;
-  resumeAutoPolishThreshold: AutoPolishThreshold;
-  onResumeAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
-  autoPolishCoverLetter: boolean;
-  onAutoPolishCoverLetterChange: (value: boolean) => void;
-  coverLetterAutoPolishThreshold: AutoPolishThreshold;
-  onCoverLetterAutoPolishThresholdChange: (value: AutoPolishThreshold) => void;
+  fitAssessmentAuto: boolean;
+  onFitAssessmentAutoChange: (value: boolean) => void;
+  resumePolishAuto: boolean;
+  onResumePolishAutoChange: (value: boolean) => void;
+  resumePolishAutoThreshold: AutoPolishThreshold;
+  onResumePolishAutoThresholdChange: (value: AutoPolishThreshold) => void;
+  coverPolishAuto: boolean;
+  onCoverPolishAutoChange: (value: boolean) => void;
+  coverPolishAutoThreshold: AutoPolishThreshold;
+  onCoverPolishAutoThresholdChange: (value: AutoPolishThreshold) => void;
 
-  // ----- About you -----
+  // ----- Profile -----
   citizenshipStatus: CitizenshipStatus;
   onCitizenshipChange: (value: CitizenshipStatus) => void;
   legallyAuthorizedToWork: DeclaredAnswer;
@@ -79,16 +83,14 @@ type SettingsDialogProps = {
   onAvailabilityNoticeChange: (value: AvailabilityNotice) => void;
   availabilityDate: string;
   onAvailabilityDateChange: (value: string) => void;
-  experienceProfile: CandidateExperience[];
-  onExperienceProfileChange: (value: CandidateExperience[]) => void;
+  profileBackground: string;
+  onProfileBackgroundChange: (value: string) => void;
+  profileBackgroundRef?: Ref<HTMLTextAreaElement>;
   workspacePreferencesStatus: WorkspacePreferencesStatus;
 
   // ----- Guidance -----
   boldBulletKeywords: boolean;
   onBoldBulletKeywordsChange: (value: boolean) => void;
-  honestContext: string;
-  onHonestContextChange: (value: string) => void;
-  honestContextRef?: Ref<HTMLTextAreaElement>;
   customInstructions: string;
   onCustomInstructionsChange: (value: string) => void;
   stageCustomInstructions: Partial<Record<AiStageId, string>>;
@@ -114,16 +116,16 @@ export function SettingsDialog({
   availabilityStatus,
   availabilityMessage,
   onRefreshProviders,
-  runFitAssessment,
-  onRunFitAssessmentChange,
-  autoPolishResume,
-  onAutoPolishResumeChange,
-  resumeAutoPolishThreshold,
-  onResumeAutoPolishThresholdChange,
-  autoPolishCoverLetter,
-  onAutoPolishCoverLetterChange,
-  coverLetterAutoPolishThreshold,
-  onCoverLetterAutoPolishThresholdChange,
+  fitAssessmentAuto,
+  onFitAssessmentAutoChange,
+  resumePolishAuto,
+  onResumePolishAutoChange,
+  resumePolishAutoThreshold,
+  onResumePolishAutoThresholdChange,
+  coverPolishAuto,
+  onCoverPolishAutoChange,
+  coverPolishAutoThreshold,
+  onCoverPolishAutoThresholdChange,
   citizenshipStatus,
   onCitizenshipChange,
   legallyAuthorizedToWork,
@@ -140,14 +142,12 @@ export function SettingsDialog({
   onAvailabilityNoticeChange,
   availabilityDate,
   onAvailabilityDateChange,
-  experienceProfile,
-  onExperienceProfileChange,
+  profileBackground,
+  onProfileBackgroundChange,
+  profileBackgroundRef,
   workspacePreferencesStatus,
   boldBulletKeywords,
   onBoldBulletKeywordsChange,
-  honestContext,
-  onHonestContextChange,
-  honestContextRef,
   customInstructions,
   onCustomInstructionsChange,
   stageCustomInstructions,
@@ -162,6 +162,14 @@ export function SettingsDialog({
     initialFocusRef: closeRef,
     onClose
   });
+  // An edit past the storage bound is refused whole rather than cut on save.
+  const [backgroundRefused, setBackgroundRefused] = useState(false);
+  const backgroundOverLimit = profileBackgroundLimitError(profileBackground) !== null;
+  const backgroundNotice = backgroundRefused
+    ? `Background can't exceed ${PROFILE_BACKGROUND_STORAGE_LIMIT.toLocaleString("en-US")} characters.`
+    : backgroundOverLimit
+      ? `Over ${PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")} characters. AI steps won't run until it's shorter.`
+      : "";
 
   return (
     <div
@@ -244,8 +252,8 @@ export function SettingsDialog({
                     <label className="check-row">
                       <input
                         type="checkbox"
-                        checked={runFitAssessment}
-                        onChange={(event) => onRunFitAssessmentChange(event.target.checked)}
+                        checked={fitAssessmentAuto}
+                        onChange={(event) => onFitAssessmentAutoChange(event.target.checked)}
                       />
                       <span>
                         <strong>Run Fit Assessment after Prepare</strong>
@@ -259,9 +267,9 @@ export function SettingsDialog({
                       <label className="check-row">
                         <input
                           type="checkbox"
-                          checked={autoPolishResume}
-                          disabled={!runFitAssessment}
-                          onChange={(event) => onAutoPolishResumeChange(event.target.checked)}
+                          checked={resumePolishAuto}
+                          disabled={!fitAssessmentAuto}
+                          onChange={(event) => onResumePolishAutoChange(event.target.checked)}
                         />
                         <span><strong>Automatically Polish resume</strong></span>
                       </label>
@@ -269,9 +277,9 @@ export function SettingsDialog({
                         <span>Minimum fit</span>
                         <select
                           className="select--compact"
-                          value={resumeAutoPolishThreshold}
-                          disabled={!runFitAssessment || !autoPolishResume}
-                          onChange={(event) => onResumeAutoPolishThresholdChange(
+                          value={resumePolishAutoThreshold}
+                          disabled={!fitAssessmentAuto || !resumePolishAuto}
+                          onChange={(event) => onResumePolishAutoThresholdChange(
                             event.target.value as AutoPolishThreshold
                           )}
                         >
@@ -285,9 +293,9 @@ export function SettingsDialog({
                       <label className="check-row">
                         <input
                           type="checkbox"
-                          checked={autoPolishCoverLetter}
-                          disabled={!runFitAssessment}
-                          onChange={(event) => onAutoPolishCoverLetterChange(event.target.checked)}
+                          checked={coverPolishAuto}
+                          disabled={!fitAssessmentAuto}
+                          onChange={(event) => onCoverPolishAutoChange(event.target.checked)}
                         />
                         <span><strong>Automatically Polish cover letter</strong></span>
                       </label>
@@ -295,9 +303,9 @@ export function SettingsDialog({
                         <span>Minimum fit</span>
                         <select
                           className="select--compact"
-                          value={coverLetterAutoPolishThreshold}
-                          disabled={!runFitAssessment || !autoPolishCoverLetter}
-                          onChange={(event) => onCoverLetterAutoPolishThresholdChange(
+                          value={coverPolishAutoThreshold}
+                          disabled={!fitAssessmentAuto || !coverPolishAuto}
+                          onChange={(event) => onCoverPolishAutoThresholdChange(
                             event.target.value as AutoPolishThreshold
                           )}
                         >
@@ -341,8 +349,8 @@ export function SettingsDialog({
             {section === "about" ? (
               <>
                 <p className="settings-panel__intro">
-                  Optional facts that clarify evidence on or beyond your resume. Nothing here is
-                  sent to the AI until you fill it in.
+                  Optional facts and background beyond your resume. Nothing here is sent to the
+                  AI until you fill it in.
                 </p>
 
                 <label className="field field--inline">
@@ -478,18 +486,35 @@ export function SettingsDialog({
                 ) : null}
 
                 <div className="menu-subhead">
-                  <span className="menu-subhead__title">Experience evidence</span>
+                  <span className="menu-subhead__title" id="profile-background-title">Background</span>
+                  <span className={`settings-background__count${backgroundOverLimit ? " is-over" : ""}`}>
+                    {profileTextLength(profileBackground).toLocaleString("en-US")} / {PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")}
+                  </span>
                 </div>
 
-                <p className="settings-panel__supporting-copy">
-                  Break experience down by source so a strict professional-years requirement is not
-                  treated the same as academic or personal work. Relevance remains job-specific.
+                <p className="settings-panel__supporting-copy" id="profile-background-hint">
+                  One heading per role or project, named as on your resume, with its type and dates.
                 </p>
 
-                <ExperienceProfileFields
-                  value={experienceProfile}
-                  onChange={onExperienceProfileChange}
+                <textarea
+                  ref={profileBackgroundRef}
+                  className="textarea settings-background"
+                  aria-labelledby="profile-background-title"
+                  aria-describedby={backgroundNotice ? "profile-background-hint profile-background-notice" : "profile-background-hint"}
+                  aria-invalid={backgroundOverLimit || undefined}
+                  value={profileBackground}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    const refused = next.length > PROFILE_BACKGROUND_STORAGE_LIMIT;
+                    setBackgroundRefused(refused);
+                    if (!refused) onProfileBackgroundChange(next);
+                  }}
+                  placeholder={"## Inventory tracker (personal project, 2024–present)\nBuilt a Django REST API with role-based access.\n\n## Acme Clinic — Support Specialist (professional, 2021–2023)\nLed the EHR migration for 12 staff."}
+                  rows={14}
                 />
+                <p className="settings-background__notice" id="profile-background-notice" role="status">
+                  {backgroundNotice}
+                </p>
               </>
             ) : null}
 
@@ -499,20 +524,6 @@ export function SettingsDialog({
                   Applies to every AI stage. A stage with its own instructions overrides the
                   custom instructions below.
                 </p>
-
-                <label className="field">
-                  <span>
-                    Honest context <small>(real experience not on your resume — cited as evidence, never invented)</small>
-                  </span>
-                  <textarea
-                    ref={honestContextRef}
-                    className="textarea"
-                    value={honestContext}
-                    onChange={(event) => onHonestContextChange(event.target.value)}
-                    placeholder="e.g., shipped a PostgreSQL migration with zero downtime; led a 3-person hackathon team; merged PR to django-rest-framework."
-                    rows={8}
-                  />
-                </label>
 
                 <label className="field">
                   <span>

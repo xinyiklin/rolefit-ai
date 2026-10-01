@@ -8,15 +8,15 @@ import { seedStages, stageFieldsToPersist } from "./stageSettings.ts";
 export function materializeAiSettings(settings: PersistedSettings): PersistedSettings {
   return normalizeSettings({
     ...stageFieldsToPersist(seedStages(settings)),
-    honestContext: settings.honestContext ?? "",
+    profileBackground: settings.profileBackground ?? "",
     customInstructions: settings.customInstructions ?? "",
     stageCustomInstructions: settings.stageCustomInstructions ?? {},
     boldBulletKeywords: settings.boldBulletKeywords ?? true,
-    runFitAssessment: settings.runFitAssessment ?? true,
-    autoPolishResume: settings.autoPolishResume ?? false,
-    resumeAutoPolishThreshold: settings.resumeAutoPolishThreshold ?? "REASONABLE",
-    autoPolishCoverLetter: settings.autoPolishCoverLetter ?? false,
-    coverLetterAutoPolishThreshold: settings.coverLetterAutoPolishThreshold ?? "STRONG",
+    fitAssessmentAuto: settings.fitAssessmentAuto ?? true,
+    resumePolishAuto: settings.resumePolishAuto ?? false,
+    resumePolishAutoThreshold: settings.resumePolishAutoThreshold ?? "REASONABLE",
+    coverPolishAuto: settings.coverPolishAuto ?? false,
+    coverPolishAutoThreshold: settings.coverPolishAutoThreshold ?? "STRONG",
     citizenshipStatus: settings.citizenshipStatus ?? "unspecified",
     legallyAuthorizedToWork: settings.legallyAuthorizedToWork ?? "unspecified",
     requiresSponsorship: settings.requiresSponsorship ?? "unspecified",
@@ -24,7 +24,6 @@ export function materializeAiSettings(settings: PersistedSettings): PersistedSet
     major: settings.major ?? "",
     gpa: settings.gpa,
     availabilityNotice: settings.availabilityNotice ?? "unspecified",
-    availabilityDate: settings.availabilityDate ?? "",
-    experienceProfile: settings.experienceProfile ?? []
+    availabilityDate: settings.availabilityDate ?? ""
   });
 }

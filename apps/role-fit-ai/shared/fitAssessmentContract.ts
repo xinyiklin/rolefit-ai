@@ -3,7 +3,7 @@ export const FIT_ASSESSMENT_VERDICTS = ["STRONG", "REASONABLE", "STRETCH", "LIMI
 export const FIT_ASSESSMENT_ELIGIBILITY = ["CLEAR", "CHECK", "BLOCKED"] as const;
 export const FIT_ASSESSMENT_EVIDENCE_SOURCES = ["RESUME", "CANDIDATE_CONTEXT"] as const;
 export const FIT_ASSESSMENT_INPUT_CHANGES = ["job", "resume", "candidate-context", "settings"] as const;
-export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v6";
+export const FIT_ASSESSMENT_PROMPT_VERSION = "fit-assessment-direct-rubric-v7";
 
 export type FitAssessmentVerdict = (typeof FIT_ASSESSMENT_VERDICTS)[number];
 export type FitAssessmentEligibilityStatus = (typeof FIT_ASSESSMENT_ELIGIBILITY)[number];

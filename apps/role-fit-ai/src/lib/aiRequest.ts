@@ -19,8 +19,8 @@ export type AiRequestFields = {
 };
 
 // Resolve the provider/model fields shared by every AI request
-// body (`/api/polish`'s Resume Polish stage, `/api/job-analysis`, `/api/application-answers`,
-// `/api/cover-letter`): uses the exact field names the server expects, so the
+// body (`/api/resume-polish`'s Resume Polish stage, `/api/job-analysis`, `/api/application-answers`,
+// `/api/cover-polish`): uses the exact field names the server expects, so the
 // call sites cannot drift apart.
 // Spread the result into the request body and add the route-specific fields
 // alongside it.

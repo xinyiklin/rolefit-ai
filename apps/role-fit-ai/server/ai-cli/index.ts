@@ -332,7 +332,7 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
 // Map a claude CLI failure to an actionable, SAFE message: a 401 / auth failure
 // points at sign-in; a timeout (no CLI stdout to classify) points at a faster
 // model; anything else is the generic "couldn't complete" hint. All three are in
-// errors.ts' SAFE set so /api/polish surfaces them verbatim instead of "did not
+// errors.ts' SAFE set so /api/resume-polish surfaces them verbatim instead of "did not
 // return a usable draft". `stdout` is claude's JSON result (present on a non-zero
 // exit); `sourceError` is the rejected runCli error (carries the timeout flag).
 export function classifyClaudeFailure(stdout: string, sourceError?: CliError): Error {

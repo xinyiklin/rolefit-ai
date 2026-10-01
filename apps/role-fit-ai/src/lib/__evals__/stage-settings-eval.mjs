@@ -13,7 +13,6 @@ const fresh = seedStages({});
 assert.deepEqual(
   Object.fromEntries(AI_STAGES.map(({ id, label, title, blurb }) => [id, { label, title, blurb }])),
   {
-    "final-review": {label:"Final application review",title:"Final application review",blurb:"Reviews the current included materials when you request it; never changes or submits them."},
     "job-analysis": {
       label: "Job analysis",
       title: "Job analysis",
@@ -22,41 +21,62 @@ assert.deepEqual(
     "fit-assessment": {
       label: "Fit Assessment",
       title: "Fit Assessment",
-      blurb: "Assesses the selected resume and About you evidence against the captured posting."
+      blurb: "Assesses the selected resume and your Profile against the captured posting."
     },
     "resume-polish": {
       label: "Resume Polish",
       title: "Resume Polish",
       blurb: "Creates one grounded proposal for the resume sections marked Polish."
     },
-    cover: {
-      label: "Cover letter",
-      title: "Cover letter",
+    "cover-polish": {
+      label: "Cover letter Polish",
+      title: "Cover letter Polish",
       blurb: "Creates a grounded whole-letter proposal for you to accept or discard."
     },
-    answers: {
+    "application-answers": {
       label: "Application questions",
       title: "Application questions",
       blurb: "Drafts grounded answers to an application's written questions."
+    },
+    "application-review": {
+      label: "Final application review",
+      title: "Final application review",
+      blurb: "Reviews the current included materials when you request it; never changes or submits them."
     }
   },
   "AI stage copy describes current user-visible requests"
 );
 assert.deepEqual(Object.keys(fresh).sort(), [...AI_STAGE_IDS].sort(), "every declared stage is seeded");
+for (const stage of AI_STAGES) {
+  assert.deepEqual(
+    stageSettingsKeys(stage),
+    {
+      provider: `${stage.settingsPrefix}Provider`,
+      model: `${stage.settingsPrefix}SelectedModel`,
+      effort: `${stage.settingsPrefix}CliReasoningEffort`
+    },
+    `${stage.id} persists under its own prefix`
+  );
+  assert.equal(
+    stage.settingsPrefix,
+    stage.id.replace(/-(\w)/g, (_, letter) => letter.toUpperCase()),
+    `${stage.id} uses the same name for its stage id and settings prefix`
+  );
+}
 assert.deepEqual(
   AI_STAGES.filter((stage) => stage.supportsInstructions).map((stage) => stage.id),
-  ["resume-polish", "cover", "answers"],
+  ["resume-polish", "cover-polish", "application-answers"],
   "only drafting stages expose custom-instruction controls"
 );
 for (const stage of AI_STAGE_IDS) {
   assert.equal(fresh[stage].provider, "claude-cli", `${stage} defaults to the account-backed CLI`);
-  assert.equal(fresh[stage].selectedModel, "claude-sonnet-5", `${stage} defaults to the CLI model`);
+  assert.equal(fresh[stage].selectedModel, "claude-sonnet-5-5", `${stage} defaults to the CLI model`);
 }
 
 const partialSettings = {
-  aiProvider: "openai",
-  selectedModel: "gpt-5.6-terra",
-  cliReasoningEffort: "medium",
+  resumePolishProvider: "openai",
+  resumePolishSelectedModel: "gpt-5.6-terra",
+  resumePolishCliReasoningEffort: "medium",
   jobAnalysisProvider: "anthropic",
   jobAnalysisSelectedModel: "claude-opus-4-8",
   fitAssessmentProvider: "codex-cli",
@@ -68,12 +88,12 @@ assert.equal(seeded["resume-polish"].provider, "openai", "Resume Polish keeps it
 assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps its own persisted provider");
 assert.equal(seeded["fit-assessment"].provider, "codex-cli", "Fit Assessment keeps its own persisted provider");
 assert.equal(seeded["fit-assessment"].selectedModel, "gpt-5.6-terra", "Fit Assessment keeps its own model");
-for (const stage of ["cover", "answers"]) {
+for (const stage of ["cover-polish", "application-answers"]) {
   assert.equal(seeded[stage].provider, "claude-cli", `${stage} uses its own default when absent`);
-  assert.equal(seeded[stage].selectedModel, "claude-sonnet-5", `${stage} uses the default model when absent`);
+  assert.equal(seeded[stage].selectedModel, "claude-sonnet-5-5", `${stage} uses the default model when absent`);
 }
 assert.equal(
-  seedStage("cover", { aiProvider: "openai" }).provider,
+  seedStage("cover-polish", { resumePolishProvider: "openai" }).provider,
   "claude-cli",
   "Cover never inherits Resume Polish's provider"
 );
@@ -85,13 +105,13 @@ assert.equal(
 
 const explicitCover = seedStages({
   ...partialSettings,
-  coverProvider: "anthropic",
-  coverSelectedModel: "claude-opus-4-8",
-  coverCliReasoningEffort: "low"
+  coverPolishProvider: "anthropic",
+  coverPolishSelectedModel: "claude-opus-4-8",
+  coverPolishCliReasoningEffort: "low"
 });
-assert.equal(explicitCover.cover.provider, "anthropic", "an explicit cover provider is preserved");
-assert.equal(explicitCover.cover.selectedModel, "claude-opus-4-8", "an explicit cover model is preserved");
-assert.equal(explicitCover.answers.provider, "claude-cli", "Answers remains independent from Cover");
+assert.equal(explicitCover["cover-polish"].provider, "anthropic", "an explicit cover provider is preserved");
+assert.equal(explicitCover["cover-polish"].selectedModel, "claude-opus-4-8", "an explicit cover model is preserved");
+assert.equal(explicitCover["application-answers"].provider, "claude-cli", "Answers remains independent from Cover");
 
 assert.deepEqual(
   normalizeSettings({
@@ -118,12 +138,12 @@ assert.deepEqual(
     stageCustomInstructions: {
       "job-analysis": "Prefer a shorter brief.",
       "resume-polish": "Keep the resume to one page.",
-      cover: "Use a direct tone."
+      "cover-polish": "Use a direct tone."
     }
   }).stageCustomInstructions,
   {
     "resume-polish": "Keep the resume to one page.",
-    cover: "Use a direct tone."
+    "cover-polish": "Use a direct tone."
   },
   "normalization drops hidden analysis-stage guidance and keeps drafting overrides"
 );
@@ -133,11 +153,11 @@ assert.deepEqual(normalizeSettings(flattened), flattened, "canonical five-stage 
 assert.deepEqual(normalizeSettings(partialSettings), partialSettings, "normalization does not seed absent stages");
 assert.deepEqual(seedStages(flattened), seeded, "persist/normalize/seed is idempotent");
 
-const adoptedSparseSettings = materializeAiSettings({ honestContext: "Keep this workspace fact." });
-assert.equal(adoptedSparseSettings.honestContext, "Keep this workspace fact.");
-assert.equal(adoptedSparseSettings.runFitAssessment, true);
-assert.equal(adoptedSparseSettings.autoPolishResume, false);
-assert.equal(adoptedSparseSettings.coverLetterAutoPolishThreshold, "STRONG");
+const adoptedSparseSettings = materializeAiSettings({ profileBackground: "Keep this workspace fact." });
+assert.equal(adoptedSparseSettings.profileBackground, "Keep this workspace fact.");
+assert.equal(adoptedSparseSettings.fitAssessmentAuto, true);
+assert.equal(adoptedSparseSettings.resumePolishAuto, false);
+assert.equal(adoptedSparseSettings.coverPolishAutoThreshold, "STRONG");
 assert.equal(adoptedSparseSettings.legallyAuthorizedToWork, "unspecified");
 assert.equal(adoptedSparseSettings.requiresSponsorship, "unspecified");
 assert.deepEqual(
@@ -147,31 +167,31 @@ assert.deepEqual(
 );
 
 const retiredAntigravityNames = normalizeSettings({
-  aiProvider: "antigravity-cli",
-  selectedModel: "Gemini 3.5 Flash (Medium)",
-  coverProvider: "antigravity-cli",
-  coverSelectedModel: "Claude Opus 4.6 (Thinking)"
+  resumePolishProvider: "antigravity-cli",
+  resumePolishSelectedModel: "Gemini 3.5 Flash (Medium)",
+  coverPolishProvider: "antigravity-cli",
+  coverPolishSelectedModel: "Claude Opus 4.6 (Thinking)"
 });
-assert.equal(retiredAntigravityNames.selectedModel, "gemini-3.6-flash-high");
-assert.equal(retiredAntigravityNames.coverSelectedModel, "gemini-3.6-flash-high");
+assert.equal(retiredAntigravityNames.resumePolishSelectedModel, "gemini-3.6-flash-high");
+assert.equal(retiredAntigravityNames.coverPolishSelectedModel, "gemini-3.6-flash-high");
 
 assert.deepEqual(
   normalizeSettings({
-    runFitAssessment: false,
+    fitAssessmentAuto: false,
     autoCreateResumeProposal: true,
     autoCreateCoverLetterProposal: false
   }),
   {
-    runFitAssessment: false
+    fitAssessmentAuto: false
   },
   "retired workflow preferences are dropped instead of migrated"
 );
 assert.deepEqual(
   normalizeSettings({
-    runFitAssessment: "always",
-    autoPolishResume: 1,
-    autoPolishCoverLetter: null,
-    resumeAutoPolishThreshold: "MOSTLY"
+    fitAssessmentAuto: "always",
+    resumePolishAuto: 1,
+    coverPolishAuto: null,
+    resumePolishAutoThreshold: "MOSTLY"
   }),
   {},
   "invalid workflow preferences are dropped"
@@ -202,16 +222,16 @@ assert.deepEqual(
 );
 assert.deepEqual(
   normalizeSettings({
-    autoPolishResume: true,
-    resumeAutoPolishThreshold: "STRETCH",
-    autoPolishCoverLetter: true,
-    coverLetterAutoPolishThreshold: "STRONG"
+    resumePolishAuto: true,
+    resumePolishAutoThreshold: "STRETCH",
+    coverPolishAuto: true,
+    coverPolishAutoThreshold: "STRONG"
   }),
   {
-    autoPolishResume: true,
-    resumeAutoPolishThreshold: "STRETCH",
-    autoPolishCoverLetter: true,
-    coverLetterAutoPolishThreshold: "STRONG"
+    resumePolishAuto: true,
+    resumePolishAutoThreshold: "STRETCH",
+    coverPolishAuto: true,
+    coverPolishAutoThreshold: "STRONG"
   },
   "the two categorical thresholds persist independently"
 );
@@ -274,9 +294,9 @@ assert.deepEqual(
 
 
 
-assert.deepEqual(seeded["final-review"], seeded["fit-assessment"], "new review stage copies Fit once");
+assert.deepEqual(seeded["application-review"], seeded["fit-assessment"], "new review stage copies Fit once");
 const persistedReview = stageFieldsToPersist(seeded);
-assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic"})["final-review"],seeded["final-review"],"persisted review does not follow later Fit changes");
+assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic"})["application-review"],seeded["application-review"],"persisted review does not follow later Fit changes");
 
 // Model retirement and effort repair must stay isolated to each stage.
 for (const stage of AI_STAGES) {
@@ -284,13 +304,13 @@ for (const stage of AI_STAGES) {
   for (const retired of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
     const saved = { [keys.provider]: "codex-cli", [keys.model]: retired, [keys.effort]: "high" };
     const repaired = normalizeSettings(saved);
-    assert.equal(repaired[keys.model], "gpt-6-sol");
+    assert.equal(repaired[keys.model], "gpt-6.1-sol");
     assert.equal(repaired[keys.provider], "codex-cli");
     assert.equal(repaired[keys.effort], "high");
     assert.equal(saved[keys.model], retired, "normalization must not mutate its input");
     assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
   }
-  for (const model of ["gpt-5.5", "gpt-5.6-sol", "gpt-6-astra"]) {
+  for (const model of ["gpt-5.5", "gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"]) {
     const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "high" };
     assert.deepEqual(normalizeSettings(saved), saved, "supported explicit selections survive the refresh");
   }
@@ -300,14 +320,18 @@ for (const stage of AI_STAGES) {
   assert.equal(haiku[keys.effort], "");
   assert.equal(seedStage(stage.id, haiku).cliReasoningEffort, "");
   assert.equal(seedStage(stage.id, { [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-4-5" }).cliReasoningEffort, "");
-  assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6-sol");
+  assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6.1-sol");
+  const solUltra = { [keys.provider]: "codex-cli", [keys.model]: "gpt-6-sol", [keys.effort]: "ultra" };
+  assert.deepEqual(normalizeSettings(solUltra), solUltra, "a saved GPT-6 Sol Ultra stage stays valid");
+  const sonnet5 = { [keys.provider]: "claude-cli", [keys.model]: "claude-sonnet-5", [keys.effort]: "low" };
+  assert.deepEqual(normalizeSettings(sonnet5), sonnet5, "a saved Sonnet 5 selection is not moved to the new default");
 }
 const mixedStages = normalizeSettings({
-  aiProvider: "codex-cli", selectedModel: "gpt-5.4", cliReasoningEffort: "high",
-  coverProvider: "claude-cli", coverSelectedModel: "claude-opus-5", coverCliReasoningEffort: "max"
+  resumePolishProvider: "codex-cli", resumePolishSelectedModel: "gpt-5.4", resumePolishCliReasoningEffort: "high",
+  coverPolishProvider: "claude-cli", coverPolishSelectedModel: "claude-opus-5", coverPolishCliReasoningEffort: "max"
 });
-assert.equal(mixedStages.selectedModel, "gpt-6-sol");
-assert.equal(mixedStages.coverSelectedModel, "claude-opus-5");
-assert.equal(mixedStages.coverCliReasoningEffort, "max");
+assert.equal(mixedStages.resumePolishSelectedModel, "gpt-6.1-sol");
+assert.equal(mixedStages.coverPolishSelectedModel, "claude-opus-5");
+assert.equal(mixedStages.coverPolishCliReasoningEffort, "max");
 
 console.log("stage-settings probes passed");

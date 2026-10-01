@@ -13,11 +13,23 @@ export type ResumeProposalTarget = {
 export type ResumeProposalSuggestion = {
   id: string;
   target: ResumeProposalTarget;
+  // No kind rewrites text. "add" appends a new bullet whose id the client
+  // assigned (currentText ""); "remove" cuts the target bullet (proposedText "");
+  // "reorder" rearranges an entry's bullets (both texts "").
+  kind?: "add" | "remove" | "reorder";
   sectionHeading: string;
   currentText: string;
   proposedText: string;
   reason: string;
+  // Set when the edit relies on the entry's linked Profile text.
+  evidence?: "profile";
+  // The Profile heading that text came from, so a surprising link is visible.
+  profileSource?: string;
   warnings?: string[];
+  // remove/reorder: the entry's bullet ids when proposed, so Undo can restore
+  // a removed bullet's position and a reorder's original order.
+  originalOrder?: string[];
+  proposedOrder?: string[];
 };
 
 export type PolishedResume = {

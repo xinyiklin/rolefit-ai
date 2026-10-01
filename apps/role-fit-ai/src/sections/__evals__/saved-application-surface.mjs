@@ -54,7 +54,8 @@ assert.ok(!modal.includes("form.priority"));
 for (const surface of [modal, inspector]) {
   assert.ok(surface.includes("<ApplicationFitSummary"), "saved views share the Fit advisory");
   assert.ok(surface.includes('<ul className="application-gap-list">'));
-  assert.ok(surface.includes("<li key={gap}>{gap}</li>"));
+  assert.ok(surface.includes("warnings={fitWarnings.general}"), "Fit summary keeps only warnings no shown finding owns");
+  assert.ok(surface.includes("<li key={index}>{gap}<ContentWarnings warnings={fitWarnings.gaps[index]} /></li>"), "gap warnings sit beside their gap");
   assert.ok(surface.includes('<ul className="application-related-records">'));
   assert.ok(surface.includes('className="application-related-records__marker"'));
 }

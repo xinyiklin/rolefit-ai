@@ -221,7 +221,7 @@ assert.match(FIT_ASSESSMENT_RULES, /judge only the evidence currently supplied/i
 assert.match(FIT_ASSESSMENT_RULES, /Missing evidence is a gap, not proof that the candidate is incapable/i);
 assert.match(FIT_ASSESSMENT_RULES, /transferable or adjacent experience may inform the verdict but cannot prove an unshown specific requirement/i);
 assert.match(FIT_ASSESSMENT_RULES, /professional, industry, commercial, or paid experience is not satisfied by academic, personal, volunteer, or open-source work/i);
-assert.match(FIT_ASSESSMENT_RULES, /experience categories may overlap\. Never add their years or counts together/i);
+assert.match(FIT_ASSESSMENT_RULES, /experience entries or types may overlap\. Never add their years or counts together/i);
 assert.match(FIT_ASSESSMENT_RULES, /role\/project count does not imply duration/i);
 assert.match(
   FIT_ASSESSMENT_RULES,
@@ -289,7 +289,7 @@ assert.doesNotMatch(
 );
 
 // Provider instructions and accepted response shapes must agree in both paths.
-assert.equal(FIT_ASSESSMENT_PROMPT_VERSION, "fit-assessment-direct-rubric-v6");
+assert.equal(FIT_ASSESSMENT_PROMPT_VERSION, "fit-assessment-direct-rubric-v7");
 assert.equal(JSON.parse(FIT_ASSESSMENT_RESPONSE_SCHEMA).status, "ASSESSED");
 const insufficientShape = { status: "INSUFFICIENT_JOB_INFORMATION" };
 for (const prompt of [prompts, combinedPrompts]) {

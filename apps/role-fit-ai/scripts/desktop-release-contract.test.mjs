@@ -29,10 +29,9 @@ import {
 } from "../desktop/runtime-versions.mjs";
 
 const VERSION = "0.1.0";
-const RELEASE_VERSION = "0.7.0";
-const EXTENSION_VERSION = "1.2.0";
-// 0.6.0 shipped API 12 while the source had already moved to 13. This release
-// publishes that 13, so the released and current API are the same number again.
+const RELEASE_VERSION = "0.8.0";
+const EXTENSION_VERSION = "1.2.1";
+// 0.8.0 keeps 0.7.0's desktop API; a released/current split must be deliberate.
 const RELEASED_DESKTOP_API_VERSION = 13;
 const CURRENT_DESKTOP_API_VERSION = 13;
 const PREVIEW_LABEL = "beta.1";
@@ -53,7 +52,7 @@ function readDesktopApiVersion() {
   return Number(match[1]);
 }
 
-test("0.7.0 beta.1 release tuple stays frozen and publishes the current desktop API", () => {
+test("0.8.0 beta.1 release tuple stays frozen and publishes the current desktop API", () => {
   const appPackage = readJson(new URL("../package.json", import.meta.url));
   const extensionManifest = readJson(new URL("../extension/manifest.json", import.meta.url));
   const releaseNotes = readFileSync(

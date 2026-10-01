@@ -1,5 +1,4 @@
 import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
-import type { JobConditionIssue } from "../../shared/jobConditionContract.ts";
 /**
  * useJobIntake — the job-analysis/import flows, extracted from App.tsx:
  * It owns link analysis, pasted-posting analysis, the browser-extension inbox
@@ -80,7 +79,6 @@ export type ImportedJobSnapshot = {
   tracking: ExtractedJobTracking;
   brief: PreparedJobBrief;
   manualReviewFields: string[];
-  conditionIssues?: JobConditionIssue[];
   jobWarnings?: JobAnalysisWarning[];
 };
 
@@ -97,7 +95,6 @@ function importedJobSnapshot(
     tailoringText: tailoringText.trim(),
     tracking: extracted.tracking,
     brief,
-    conditionIssues: extracted.conditionIssues ?? [],
     jobWarnings: extracted.jobWarnings,
     manualReviewFields: reconcilePreparedJobManualReviewFields(
       extracted.tracking,
@@ -160,7 +157,7 @@ type UseJobIntakeArgs = {
   fitAssessmentRequestFields: () => AiRequestFields;
   ensureProviderReady: (request: AiRequestFields) => Promise<ProviderReadiness>;
   ensureFitAssessmentProviderReady: (request: AiRequestFields) => Promise<ProviderReadiness>;
-  runFitAssessment: boolean;
+  fitAssessmentAuto: boolean;
   // The one authoritative resume resolution, ranked against the local
   // job-analysis brief and adopted into the editor BEFORE the provider request.
   // It runs on every preparation, not only when Fit Assessment is on: which resume
@@ -171,6 +168,9 @@ type UseJobIntakeArgs = {
   ) => Promise<PreparedResumeSelection | null>;
   cancelPreparedResumeResolution: () => void;
   candidateContext: () => string;
+  // Set while the Profile Background is over its limit; Fit then declines
+  // instead of assessing a cut-down Profile.
+  profileLimitMessage: () => string | null;
   currentResume: () => Pick<PreparedResumeSelection, "text" | "label"> | null;
   extensionImportsReady: boolean;
   onExtensionPrepareStarted: () => void;
@@ -246,10 +246,11 @@ export function useJobIntake({
   fitAssessmentRequestFields,
   ensureProviderReady,
   ensureFitAssessmentProviderReady,
-  runFitAssessment,
+  fitAssessmentAuto,
   resolvePreparedResume,
   cancelPreparedResumeResolution,
   candidateContext,
+  profileLimitMessage,
   currentResume,
   extensionImportsReady,
   onExtensionPrepareStarted,
@@ -264,7 +265,7 @@ export function useJobIntake({
   const [jobAnalysisProgress, setJobAnalysisProgress] = useState<StageState>({ status: "idle" });
   const [jobAnalysisProgressVisible, setJobAnalysisProgressVisible] = useState(false);
   const [fitAssessmentState, setFitAssessmentState] = useState<FitAssessmentState>(
-    () => emptyFitAssessmentState(runFitAssessment)
+    () => emptyFitAssessmentState(fitAssessmentAuto)
   );
   // Which job analysis action the card's Retry should re-run (link, paste, or a
   // reanalyze of an extension import). Stored as a tag, not a captured closure,
@@ -310,9 +311,9 @@ export function useJobIntake({
   const jobAnalysisInputFingerprint = workflowInputFingerprint({
     jobUrl,
     jobDescription,
-    runFitAssessment,
+    fitAssessmentAuto,
     jobAnalysisRequest: jobAnalysisRequestFields(),
-    fitAssessmentRequest: runFitAssessment ? fitAssessmentRequestFields() : null
+    fitAssessmentRequest: fitAssessmentAuto ? fitAssessmentRequestFields() : null
   });
   const jobAnalysisInputFingerprintRef = useRef(jobAnalysisInputFingerprint);
   jobAnalysisInputFingerprintRef.current = jobAnalysisInputFingerprint;
@@ -412,7 +413,7 @@ export function useJobIntake({
     setJobAnalysisProgress({ status: "idle" });
     setJobAnalysisProgressVisible(false);
     setJobAnalysisRetrySource(null);
-    setFitAssessmentState(restoredFitAssessmentState(runFitAssessment, prepareRunId, snapshot));
+    setFitAssessmentState(restoredFitAssessmentState(fitAssessmentAuto, prepareRunId, snapshot));
   }
 
   useEffect(() => {
@@ -443,14 +444,14 @@ export function useJobIntake({
   }, []);
 
   useEffect(() => {
-    if (runFitAssessment) {
+    if (fitAssessmentAuto) {
       setFitAssessmentState((current) => setFitAssessmentEnabled(current, true));
       return;
     }
     fitAssessmentAbortRef.current?.abort();
     fitAssessmentAbortRef.current = null;
     setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
-  }, [runFitAssessment]);
+  }, [fitAssessmentAuto]);
 
   function claimJobAnalysisRun(): () => void {
     jobAnalysisBusyRef.current = true;
@@ -487,7 +488,7 @@ export function useJobIntake({
       isCurrent: request.isCurrent
     });
     if (!request.isCurrent()) return null;
-    if (!runFitAssessment) {
+    if (!fitAssessmentAuto) {
       setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
       return { selection, fitRequest: null, fitRunId: null };
     }
@@ -499,6 +500,14 @@ export function useJobIntake({
         message: "Fit Assessment needs your own resume. Open or save one, then retry the assessment."
       }));
       return { selection: null, fitRequest: null, fitRunId: null };
+    }
+    const limitMessage = profileLimitMessage();
+    if (limitMessage) {
+      setFitAssessmentState((current) => failFitAssessmentRun(current, null, {
+        resumeLabel: selection.label,
+        message: `Fit Assessment is unavailable: ${limitMessage}`
+      }));
+      return { selection, fitRequest: null, fitRunId: null };
     }
     const fitRequest: FitAssessmentRequest = {
       resumeText: selection.text,
@@ -523,7 +532,7 @@ export function useJobIntake({
     status: "too-short" | "failed" | "stopped" | "inputs-changed";
     fitRequest?: FitAssessmentRequest | null;
   }) {
-    if (!runFitAssessment) return;
+    if (!fitAssessmentAuto) return;
     const message = status === "stopped"
       ? "Fit Assessment stopped with Job analysis. Prepare again or retry the assessment."
       : status === "inputs-changed"
@@ -561,7 +570,7 @@ export function useJobIntake({
     automationEligible?: boolean;
     unavailableMessage?: string;
   }) {
-    if (!runFitAssessment) {
+    if (!fitAssessmentAuto) {
       setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
       return;
     }
@@ -613,7 +622,7 @@ export function useJobIntake({
       aiRequest?: AiRequestFields;
     } = {}
   ) {
-    if (!runFitAssessment) {
+    if (!fitAssessmentAuto) {
       setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
       return;
     }
@@ -630,6 +639,18 @@ export function useJobIntake({
       ...(activeRun?.automationToken ? { automationToken: activeRun.automationToken } : {})
     }));
     try {
+      const limitMessage = profileLimitMessage();
+      if (limitMessage) {
+        applyFitAssessmentOutcome({
+          runId,
+          outcome: null,
+          fitRequest,
+          screeningJobText,
+          aiRequest,
+          unavailableMessage: `Fit Assessment is unavailable: ${limitMessage}`
+        });
+        return;
+      }
       const readiness = await ensureFitAssessmentProviderReady(aiRequest);
       if (controller.signal.aborted) return;
       if (!readiness.ready) {
@@ -677,7 +698,7 @@ export function useJobIntake({
   ): void {
     const committed = committedPreparationRef.current;
     if (
-      !runFitAssessment
+      !fitAssessmentAuto
       || !committed
       || jobAnalysisBusyRef.current
       || committed.draft.url !== draftInputRef.current.url
@@ -695,7 +716,7 @@ export function useJobIntake({
 
   async function reassessFit() {
     const committed = committedPreparationRef.current;
-    if (!runFitAssessment || !committed || jobAnalysisBusyRef.current || fitAssessmentState.activeRun) return;
+    if (!fitAssessmentAuto || !committed || jobAnalysisBusyRef.current || fitAssessmentState.activeRun) return;
     await dispatchFitAssessment({
       preparedJob: committed.preparedJob,
       currentResume,
@@ -992,9 +1013,9 @@ export function useJobIntake({
     request.expectInputFingerprint(workflowInputFingerprint({
       jobUrl: source === "extension" || source === "retry" ? url : jobUrl,
       jobDescription: relevant,
-      runFitAssessment,
+      fitAssessmentAuto,
       jobAnalysisRequest: execution.jobRequest,
-      fitAssessmentRequest: runFitAssessment ? execution.fitRequest : null
+      fitAssessmentRequest: fitAssessmentAuto ? execution.fitRequest : null
     }));
     commitPreparation({
       id: prepareIdentity.prepareRunId,
@@ -1271,7 +1292,7 @@ export function useJobIntake({
       note: "Raw description retained for duplicate review",
       noteTone: "info"
     });
-    if (runFitAssessment) {
+    if (fitAssessmentAuto) {
       setFitAssessmentState((current) => failFitAssessmentRun(current, null, {
         resumeLabel: "",
         message: "Fit Assessment did not run because duplicate review stopped Prepare."
@@ -1489,7 +1510,7 @@ export function useJobIntake({
     // Assessment is offered whenever a prepared posting exists, even when no
     // resume resolved and the unavailable state therefore has no label.
     canAssessFit: fitAssessmentCanRun(
-      runFitAssessment,
+      fitAssessmentAuto,
       committedPreparation?.preparedJob ?? null
     ) && !jobAnalysisBusyRef.current && !preparationDraftDiverged && fitAssessmentState.activeRun === null,
     preparationDraftDiverged,

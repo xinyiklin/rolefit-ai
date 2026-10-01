@@ -7,7 +7,8 @@ import {
   displayCompany,
   displayRole,
   fitAssessmentRunLabel,
-  fitAssessmentVerdictLabel
+  fitAssessmentVerdictLabel,
+  splitFitWarnings
 } from "../../../lib/applicationDisplay";
 import type { PreparationReadiness } from "../../../lib/preparationReadiness";
 import type { PreparationPrimaryAction } from "../../../lib/preparationSession";
@@ -26,7 +27,7 @@ export type PrepareActivity = {
 const FIT_ASSESSMENT_CHANGE_COPY: Record<FitAssessmentInputChange, { label: string; detail: string }> = {
   job: { label: "Job posting", detail: "Replaced" },
   resume: { label: "Resume content", detail: "Edited" },
-  "candidate-context": { label: "About you", detail: "Updated" },
+  "candidate-context": { label: "Profile", detail: "Updated" },
   settings: { label: "Assessment setup", detail: "Changed" }
 };
 
@@ -90,6 +91,11 @@ export function PrepareApplicationRail({
   const completedAssessment = fitAssessment.latestCompleted;
   const assessmentSnapshot = completedAssessment?.snapshot ?? null;
   const assessmentRunLabel = assessmentSnapshot ? fitAssessmentRunLabel(assessmentSnapshot) : "";
+  const fitWarnings = assessmentSnapshot ? splitFitWarnings(assessmentSnapshot.result.warnings, {
+    matches: assessmentSnapshot.result.matches.length,
+    gaps: assessmentSnapshot.result.gaps.length,
+    eligibility: Boolean(assessmentSnapshot.result.eligibility && assessmentSnapshot.result.eligibility.status !== "CLEAR")
+  }) : null;
   const assessmentIsPrevious = Boolean(
     completedAssessment && (
       completedAssessment.changes.length > 0
@@ -151,7 +157,7 @@ export function PrepareApplicationRail({
                 </strong>
               </div>
               <p>{assessmentSnapshot.result.summary}</p>
-              <ContentWarnings warnings={assessmentSnapshot.result.warnings} />
+              <ContentWarnings warnings={fitWarnings?.general} />
               {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
               {assessmentSnapshot.result.matches.length ? (
                 <div className="fit-assessment-list">
@@ -161,8 +167,9 @@ export function PrepareApplicationRail({
                       <li key={index}>
                         {match.jobExcerpt}
                         <small>
-                          {match.candidateSource === "RESUME" ? "Resume" : "About you"}: {match.candidateExcerpt}
+                          {match.candidateSource === "RESUME" ? "Resume" : "Profile"}: {match.candidateExcerpt}
                         </small>
+                        <ContentWarnings warnings={fitWarnings?.matches[index]} />
                       </li>
                     ))}
                   </ul>
@@ -177,6 +184,7 @@ export function PrepareApplicationRail({
                       return <li key={index}>{gap}
                         {detail?.note ? <small>{detail.note}</small> : null}
                         {detail?.candidateExcerpt ? <small>{detail.relationship === "transferable" ? "Reported transferable evidence" : "Candidate reference"}: {detail.candidateExcerpt}</small> : null}
+                        <ContentWarnings warnings={fitWarnings?.gaps[index]} />
                       </li>;
                     })}
                   </ul>
@@ -192,10 +200,11 @@ export function PrepareApplicationRail({
                   {assessmentSnapshot.result.eligibility.jobExcerpt}
                   {assessmentSnapshot.result.eligibility.note ? <small>{assessmentSnapshot.result.eligibility.note}</small> : null}
                   {assessmentSnapshot.result.eligibility.candidateExcerpt ? (
-                    <small>About you: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
+                    <small>Profile: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
                   ) : null}
                 </p>
               ) : null}
+              <ContentWarnings warnings={fitWarnings?.eligibility} />
               {completedAssessment?.changes.length ? (
                 <div className="fit-assessment-changes" role="status">
                   <strong>Changed since assessment</strong>

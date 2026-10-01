@@ -377,14 +377,14 @@ assert.equal(
     .length,
   65,
 );
-const maxEvidence = Array.from({ length: 400 }, (_, i) => ({
+const maxEvidence = Array.from({ length: 600 }, (_, i) => ({
   ...input.evidence[0],
   id: `source-${i}`,
 }));
 assert.equal(
   parseApplicationReviewInput({ ...input, evidence: maxEvidence }).evidence
     .length,
-  400,
+  600,
 );
 assert.throws(
   () =>
@@ -392,7 +392,7 @@ assert.throws(
       ...input,
       evidence: [...maxEvidence, { ...input.evidence[0], id: "extra" }],
     }),
-  /400 evidence items/,
+  /600 evidence items/,
 );
 const exactBudget = [0, 1].map((i) => ({
   ...input.evidence[0],

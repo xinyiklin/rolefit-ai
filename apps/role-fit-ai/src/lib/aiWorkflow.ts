@@ -1,4 +1,7 @@
-export type AiStageKey = "job-analysis" | "resume-polish" | "cover" | "answers" | "final-review";
+import type { AiStageId } from "../config/aiStages.ts";
+
+// Fit Assessment reports its progress through Prepare, not this workflow strip.
+export type AiStageKey = Exclude<AiStageId, "fit-assessment">;
 
 export type AiStageStatus = "idle" | "running" | "done" | "failed" | "stopped";
 
@@ -22,19 +25,19 @@ export type AiWorkflowStage = {
 };
 
 export const AI_STAGE_COPY: Record<AiStageKey, Record<"idle" | "running" | "done" | "failed" | "stopped", string>> = {
-  "final-review": {idle:"Final review",running:"Reviewing application",done:"Application review finished",failed:"Application review failed",stopped:"Application review stopped"},
+  "application-review": { idle: "Final review", running: "Reviewing application", done: "Application review finished", failed: "Application review failed", stopped: "Application review stopped" },
   "job-analysis": { idle: "Job analysis", running: "Analyzing job", done: "Job analyzed", failed: "Job analysis failed", stopped: "Job analysis stopped" },
   "resume-polish": { idle: "Resume Polish", running: "Polishing resume", done: "Resume Polish complete", failed: "Resume Polish failed", stopped: "Resume Polish stopped" },
-  cover: { idle: "Cover letter", running: "Polishing cover letter", done: "Cover letter proposal ready", failed: "Cover letter failed", stopped: "Cover letter stopped" },
-  answers: { idle: "Application answers", running: "Drafting answers", done: "Answers ready", failed: "Answers failed", stopped: "Answers stopped" }
+  "cover-polish": { idle: "Cover letter Polish", running: "Polishing cover letter", done: "Cover letter proposal ready", failed: "Cover letter Polish failed", stopped: "Cover letter Polish stopped" },
+  "application-answers": { idle: "Application answers", running: "Drafting answers", done: "Answers ready", failed: "Answers failed", stopped: "Answers stopped" }
 };
 
 export const AI_WORKFLOW_TITLE: Record<AiStageKey, string> = {
-  "final-review": "Final application review",
+  "application-review": "Final application review",
   "job-analysis": "Job analysis",
   "resume-polish": "Resume Polish",
-  cover: "Cover letter",
-  answers: "Application answers"
+  "cover-polish": "Cover letter Polish",
+  "application-answers": "Application answers"
 };
 
 // Stable-enough identity for one client workflow request. Inputs are plain

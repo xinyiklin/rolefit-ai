@@ -95,7 +95,7 @@ assert.match(
 );
 assert.match(
   css,
-  /\.application-gap-list li\s*\{[\s\S]{0,300}?min-width:\s*0;[\s\S]{0,300}?overflow-wrap:\s*anywhere/,
+  /\.application-gap-list > li\s*\{[\s\S]{0,300}?min-width:\s*0;[\s\S]{0,300}?overflow-wrap:\s*anywhere/,
   "semantic assessment gap rows wrap instead of widening the inspector"
 );
 assert.ok(

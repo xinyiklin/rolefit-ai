@@ -40,6 +40,8 @@ const CONNECTION_POLL_INTERVAL_MS = 5_000;
 const EXTENSION_COPY_FEEDBACK_HOLD_MS = 1_100;
 const EXTENSION_COPY_FEEDBACK_FADE_MS = 120;
 const ACTIVE_TAB_STORAGE_KEY = "rolefit:desktop:active-tab";
+const EXTENSION_BROWSER_STORAGE_KEY = "rolefit:desktop:extension-browser";
+const REMOVE_CONFIRM_GUARD_MS = 500;
 const bridge = window.roleFitDesktop;
 const EXTENSION_COPY_ACTIONS = Object.freeze({
   directory: Object.freeze({
@@ -99,6 +101,7 @@ const elements = Object.freeze({
   openWorkspaceFolder: document.getElementById("open-workspace-folder"),
   backupWorkspace: document.getElementById("backup-workspace"),
   restoreWorkspace: document.getElementById("restore-workspace"),
+  workspaceRestoreNote: document.getElementById("workspace-restore-note"),
   workspaceStatus: document.getElementById("workspace-status"),
   statBaseResume: document.getElementById("stat-base-resume"),
   statApplications: document.getElementById("stat-applications"),
@@ -110,18 +113,32 @@ const elements = Object.freeze({
   sitePortInput: document.getElementById("local-site-port"),
   sitePortApply: document.getElementById("apply-local-site-port"),
   sitePortStatus: document.getElementById("local-site-port-status"),
-  extensionPairingCount: document.getElementById("extension-pairing-count"),
-  extensionPairingPopover: document.getElementById("extension-pairing-popover"),
+  extensionSummary: document.getElementById("extension-summary"),
   extensionRequestList: document.getElementById("extension-request-list"),
   extensionPairingList: document.getElementById("extension-pairing-list"),
   extensionPairingStatus: document.getElementById("extension-pairing-status"),
   extensionSiteOrigin: document.getElementById("extension-site-origin"),
   openExtensionDirectory: document.getElementById("open-extension-directory"),
+  extensionFolderActions: document.getElementById("extension-folder-actions"),
+  extensionInstall: document.getElementById("extension-install"),
+  extensionInstallSummary: document.querySelector("#extension-install > summary"),
+  extensionBrowserSwitch: document.getElementById("extension-browser-switch"),
+  extensionBrowserTabs: [...document.querySelectorAll("[data-extension-browser]")],
+  extensionBrowserPanels: [...document.querySelectorAll("[data-extension-browser-panel]")],
   extensionCopyButtons: [...document.querySelectorAll("button[data-extension-copy-target]")],
   extensionSetupStatus: document.getElementById("extension-setup-status"),
+  overviewTitle: document.getElementById("overview-title"),
   overviewSiteOrigin: document.getElementById("overview-site-origin"),
   overviewProviderSummary: document.getElementById("overview-provider-summary"),
   overviewExtensionSummary: document.getElementById("overview-extension-summary"),
+  overviewExtensionAction: document.getElementById("overview-extension-action"),
+  overviewServiceCard: document.getElementById("overview-card-service"),
+  overviewProvidersCard: document.getElementById("overview-card-providers"),
+  overviewWorkspaceCard: document.getElementById("overview-card-workspace"),
+  overviewExtensionCard: document.getElementById("overview-card-extension"),
+  overviewOpenRoleFit: document.getElementById("overview-open-rolefit"),
+  navProvidersAttention: document.getElementById("nav-providers-attention"),
+  navExtensionBadge: document.getElementById("nav-extension-badge"),
   sidebarRuntimeStatus: document.getElementById("sidebar-runtime-status"),
   openRoleFit: document.getElementById("open-rolefit-browser"),
   providerList: document.getElementById("provider-list"),
@@ -143,10 +160,16 @@ let siteSettings = null;
 let sitePortApplyPending = false;
 let sitePortConfirmValue = null;
 let extensionPairingSettings = null;
+let extensionPairingLoadState = "loading";
 let extensionPairingPending = false;
+let extensionPairingRenderKey = "";
+let renderingExtensionPairings = false;
+let armedRemoveOrigin = "";
+let removeArmedAt = 0;
+let extensionPairingError = "";
+let installDisclosureTouched = false;
 let extensionCopyPending = false;
 const extensionCopyFeedbackTimers = new WeakMap();
-let extensionPairingPopoverOpen = false;
 let activeTabId = "overview";
 let workspaceOverview = null;
 let workspaceOverviewLoaded = false;
@@ -191,7 +214,6 @@ function activateTab(value, { persist = true, refresh = true } = {}) {
     if (active) button.setAttribute("aria-current", "page");
     else button.removeAttribute("aria-current");
   }
-  if (tab !== "extension") setExtensionPairingPopover(false);
   if (!refresh) return;
   if (tab === "workspace") {
     if (hasUsableBridge()) void refreshWorkspaceOverview();
@@ -207,13 +229,45 @@ function activateTab(value, { persist = true, refresh = true } = {}) {
   }
 }
 
-function setExtensionPairingPopover(open) {
-  extensionPairingPopoverOpen = Boolean(open);
-  elements.extensionPairingPopover.hidden = !extensionPairingPopoverOpen;
-  elements.extensionPairingCount.setAttribute(
-    "aria-expanded",
-    String(extensionPairingPopoverOpen)
-  );
+function storedExtensionBrowser() {
+  try {
+    return window.sessionStorage.getItem(EXTENSION_BROWSER_STORAGE_KEY) || "chrome";
+  } catch {
+    return "chrome";
+  }
+}
+
+function selectExtensionBrowser(value, { focus = false, persist = true } = {}) {
+  const tab = elements.extensionBrowserTabs.find((candidate) => candidate.dataset.extensionBrowser === value) ??
+    elements.extensionBrowserTabs[0];
+  if (!tab) return;
+  const browser = tab.dataset.extensionBrowser;
+  for (const candidate of elements.extensionBrowserTabs) {
+    const active = candidate === tab;
+    candidate.setAttribute("aria-selected", String(active));
+    candidate.tabIndex = active ? 0 : -1;
+  }
+  for (const panel of elements.extensionBrowserPanels) {
+    const active = panel.dataset.extensionBrowserPanel === browser;
+    panel.hidden = !active;
+    // One folder control group serves every browser, so copy targets stay unique.
+    const slot = active ? panel.querySelector("[data-extension-folder-slot]") : null;
+    if (slot && elements.extensionFolderActions.parentElement !== slot) {
+      slot.append(elements.extensionFolderActions);
+    }
+  }
+  if (focus) tab.focus();
+  if (!persist) return;
+  try {
+    window.sessionStorage.setItem(EXTENSION_BROWSER_STORAGE_KEY, browser);
+  } catch {
+    // The browser choice still works when session storage is unavailable.
+  }
+}
+
+function setCardTone(card, attention) {
+  if (attention) card.dataset.tone = "attention";
+  else delete card.dataset.tone;
 }
 
 function hasUsableBridge() {
@@ -420,7 +474,27 @@ function normalizeExtensionOriginInput(value) {
   return "";
 }
 
+function extensionOriginLists() {
+  const origins = Array.isArray(extensionPairingSettings?.origins)
+    ? extensionPairingSettings.origins
+    : [];
+  const pendingOrigins = Array.isArray(extensionPairingSettings?.pendingOrigins)
+    ? extensionPairingSettings.pendingOrigins.filter((origin) => !origins.includes(origin))
+    : [];
+  return { origins, pendingOrigins };
+}
+
+function extensionBrowserLabel(origin) {
+  // Chrome and Edge share the chrome-extension scheme and cannot be told apart.
+  return String(origin).startsWith("moz-extension://") ? "Firefox" : "Chrome or Edge";
+}
+
 function extensionPairingMessage() {
+  if (extensionPairingLoadState === "error") {
+    return "Extension pairing unavailable. Restart RoleFit and try again.";
+  }
+  if (extensionPairingLoadState === "loading") return "Loading extension access…";
+  if (extensionPairingError) return extensionPairingError;
   if (!siteSettings) return "Local site settings are unavailable.";
   if (!connectionStatusLoaded) return "Checking whether this companion can manage extension access.";
   if (liveConnectionStatus?.serverState !== "owned") {
@@ -428,69 +502,173 @@ function extensionPairingMessage() {
       ? "The local service is unavailable. Restart RoleFit before changing extension access."
       : "Extension access is read-only while using a service this companion did not start.";
   }
-  const count = extensionPairingSettings?.origins?.length ?? 0;
-  const pendingCount = extensionPairingSettings?.pendingOrigins?.length ?? 0;
-  if (pendingCount > 0) return "Approve the extension request to enable job preparation.";
-  return count === 0
-    ? "Open the RoleFit browser extension once to request access."
-    : `${count} browser extension${count === 1 ? "" : "s"} paired.`;
+  if (armedRemoveOrigin) return "Removing access restarts RoleFit.";
+  const { origins, pendingOrigins } = extensionOriginLists();
+  if (pendingOrigins.length > 0) return "Approving restarts RoleFit so the extension can connect.";
+  return origins.length === 0
+    ? "No extension connected. Install it below, then open it on a job page."
+    : "";
+}
+
+function extensionOriginRow(origin, kind, canManageExtension) {
+  const pending = kind === "pending";
+  const label = extensionBrowserLabel(origin);
+  const item = document.createElement("li");
+  item.className = "extension-origin";
+  item.dataset.state = kind;
+  const dot = createTextElement("span", "extension-origin__dot", "");
+  dot.setAttribute("aria-hidden", "true");
+  const name = document.createElement("span");
+  name.className = "extension-origin__name";
+  name.append(
+    createTextElement("strong", "", label),
+    createTextElement("span", "extension-origin__state", pending ? "Waiting for approval" : "Paired")
+  );
+  const value = createTextElement("code", "extension-origin__id", origin);
+  value.title = origin;
+  const text = document.createElement("div");
+  text.className = "extension-origin__text";
+  text.append(name, value);
+  const action = createTextElement(
+    "button",
+    `extension-origin__action extension-origin__action--${pending ? "approve" : "remove"}`,
+    pending ? "Approve & restart" : "Remove"
+  );
+  action.type = "button";
+  if (pending) {
+    action.dataset.extensionRequestOrigin = origin;
+    action.setAttribute("aria-label", `Approve & restart for ${label} extension ${origin}`);
+  } else {
+    action.dataset.extensionOrigin = origin;
+  }
+  action.disabled = extensionPairingPending || !canManageExtension;
+  item.append(dot, text, action);
+  return item;
+}
+
+function applyRemoveArming() {
+  for (const button of elements.extensionPairingList.querySelectorAll("button[data-extension-origin]")) {
+    const origin = button.dataset.extensionOrigin;
+    const armed = origin === armedRemoveOrigin;
+    const label = extensionBrowserLabel(origin);
+    button.classList.toggle("is-armed", armed);
+    button.textContent = armed ? "Confirm removal" : "Remove";
+    button.setAttribute(
+      "aria-label",
+      armed ? `Confirm removal of ${label} extension ${origin}` : `Remove ${label} extension ${origin}`
+    );
+  }
+}
+
+function extensionPairingButton(attribute, origin) {
+  return [
+    ...elements.extensionRequestList.querySelectorAll("button"),
+    ...elements.extensionPairingList.querySelectorAll("button")
+  ].find((button) => button.dataset[attribute] === origin) ?? null;
 }
 
 function renderExtensionPairings() {
-  const pendingFragment = document.createDocumentFragment();
-  const pairedFragment = document.createDocumentFragment();
-  const origins = Array.isArray(extensionPairingSettings?.origins)
-    ? extensionPairingSettings.origins
-    : [];
-  const pendingOrigins = Array.isArray(extensionPairingSettings?.pendingOrigins)
-    ? extensionPairingSettings.pendingOrigins.filter((origin) => !origins.includes(origin))
-    : [];
+  const { origins, pendingOrigins } = extensionOriginLists();
   const canManageExtension = liveConnectionStatus?.serverState === "owned";
-  for (const origin of pendingOrigins) {
-    const item = document.createElement("li");
-    const value = createTextElement("code", "", origin);
-    value.title = origin;
-    const approve = createTextElement("button", "", "Approve");
-    approve.type = "button";
-    approve.dataset.extensionRequestOrigin = origin;
-    approve.disabled = extensionPairingPending || !canManageExtension;
-    approve.setAttribute("aria-label", `Approve browser extension ${origin}`);
-    item.append(value, approve);
-    pendingFragment.append(item);
+  if (armedRemoveOrigin && (!canManageExtension || !origins.includes(armedRemoveOrigin))) {
+    armedRemoveOrigin = "";
   }
-  for (const origin of origins) {
-    const item = document.createElement("li");
-    const value = createTextElement("code", "", origin);
-    value.title = origin;
-    const remove = createTextElement("button", "", "Remove");
-    remove.type = "button";
-    remove.dataset.extensionOrigin = origin;
-    remove.disabled = extensionPairingPending || !canManageExtension;
-    remove.setAttribute("aria-label", `Remove paired extension ${origin}`);
-    item.append(value, remove);
-    pairedFragment.append(item);
+  // Polls repeat unchanged data every few seconds; rebuilding the rows would
+  // drop keyboard focus, so only replace them when their content changes.
+  const renderKey = JSON.stringify([origins, pendingOrigins, canManageExtension, extensionPairingPending]);
+  if (renderKey !== extensionPairingRenderKey) {
+    extensionPairingRenderKey = renderKey;
+    extensionPairingError = "";
+    const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const focusAttribute = focused?.dataset.extensionRequestOrigin
+      ? "extensionRequestOrigin"
+      : focused?.dataset.extensionOrigin ? "extensionOrigin" : "";
+    renderingExtensionPairings = true;
+    try {
+      elements.extensionRequestList.replaceChildren(
+        ...pendingOrigins.map((origin) => extensionOriginRow(origin, "pending", canManageExtension))
+      );
+      elements.extensionPairingList.replaceChildren(
+        ...origins.map((origin) => extensionOriginRow(origin, "paired", canManageExtension))
+      );
+      if (focusAttribute) extensionPairingButton(focusAttribute, focused.dataset[focusAttribute])?.focus();
+    } finally {
+      renderingExtensionPairings = false;
+    }
   }
-  elements.extensionRequestList.replaceChildren(pendingFragment);
-  elements.extensionPairingList.replaceChildren(pairedFragment);
-  elements.extensionPairingCount.textContent = pendingOrigins.length > 0
-    ? `${pendingOrigins.length} awaiting approval`
-    : origins.length > 0
-      ? `${origins.length} paired`
-      : "Not paired";
-  elements.extensionPairingCount.setAttribute(
-    "aria-label",
-    `${elements.extensionPairingCount.textContent}. Manage extension access.`
-  );
-  elements.overviewExtensionSummary.textContent = pendingOrigins.length > 0
-    ? `${pendingOrigins.length} approval${pendingOrigins.length === 1 ? "" : "s"} waiting`
-    : origins.length > 0
-      ? `${origins.length} extension${origins.length === 1 ? "" : "s"} paired`
-      : "Browser extension not paired";
+  applyRemoveArming();
+  renderExtensionSummary(origins.length, pendingOrigins.length);
+}
+
+function renderExtensionSummary(pairedCount, pendingCount) {
+  const failed = extensionPairingLoadState === "error";
+  const loading = extensionPairingLoadState === "loading";
+  const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
+  elements.extensionSummary.textContent = failed
+    ? "Extension access unavailable."
+    : loading
+      ? "Checking extension access."
+      : pendingCount > 0
+        ? `${plural(pendingCount, "request")} waiting for approval.`
+        : pairedCount > 0
+          ? `Paired with ${plural(pairedCount, "extension")}.`
+          : "No extension paired yet.";
+  elements.overviewExtensionSummary.textContent = failed
+    ? "Extension pairing unavailable"
+    : loading
+      ? "Checking extension access"
+      : pendingCount > 0
+        ? `${plural(pendingCount, "approval")} waiting`
+        : pairedCount > 0
+          ? `${plural(pairedCount, "extension")} paired`
+          : "Browser extension not paired";
+  elements.overviewExtensionAction.textContent = pendingCount > 0
+    ? pendingCount === 1 ? "Review request" : "Review requests"
+    : pairedCount > 0 ? "Manage extension" : "Set up extension";
+  setCardTone(elements.overviewExtensionCard, failed || pendingCount > 0);
+  elements.navExtensionBadge.hidden = pendingCount === 0;
+  if (pendingCount > 0) {
+    const count = createTextElement("span", "", String(pendingCount));
+    count.setAttribute("aria-hidden", "true");
+    elements.navExtensionBadge.replaceChildren(
+      count,
+      createTextElement("span", "visually-hidden", `, ${plural(pendingCount, "approval")} waiting`)
+    );
+  } else {
+    elements.navExtensionBadge.replaceChildren();
+  }
 }
 
 function updateExtensionPairingControls({ preserveStatus = false } = {}) {
   renderExtensionPairings();
-  if (!preserveStatus) elements.extensionPairingStatus.textContent = extensionPairingMessage();
+  if (!preserveStatus && !extensionPairingPending) {
+    elements.extensionPairingStatus.textContent = extensionPairingMessage();
+  }
+}
+
+function syncInstallDisclosure() {
+  if (installDisclosureTouched || extensionPairingLoadState !== "ok") return;
+  if (elements.extensionInstall.contains(document.activeElement)) return;
+  const { origins, pendingOrigins } = extensionOriginLists();
+  elements.extensionInstall.open = !(origins.length > 0 && pendingOrigins.length === 0);
+}
+
+function failExtensionPairingAction(error, attribute, origin, hadFocus) {
+  extensionPairingPending = false;
+  updateExtensionPairingControls({ preserveStatus: true });
+  // Set after the rebuild above, which clears errors for changed data.
+  extensionPairingError = extensionPairingErrorMessage(error);
+  elements.extensionPairingStatus.textContent = extensionPairingError;
+  if (hadFocus && (!document.activeElement || document.activeElement === document.body)) {
+    extensionPairingButton(attribute, origin)?.focus();
+  }
+}
+
+function disarmExtensionRemove() {
+  if (!armedRemoveOrigin) return;
+  armedRemoveOrigin = "";
+  applyRemoveArming();
+  if (!extensionPairingPending) elements.extensionPairingStatus.textContent = extensionPairingMessage();
 }
 
 async function loadExtensionPairingSettings() {
@@ -501,16 +679,13 @@ async function loadExtensionPairingSettings() {
       throw new Error("Invalid extension pairing settings.");
     }
     extensionPairingSettings = settings;
-    updateExtensionPairingControls();
+    extensionPairingLoadState = "ok";
   } catch {
     extensionPairingSettings = null;
-    elements.extensionPairingCount.textContent = "Unavailable";
-    elements.extensionPairingCount.setAttribute("aria-label", "Extension access unavailable");
-    elements.extensionRequestList.replaceChildren();
-    elements.extensionPairingList.replaceChildren();
-    elements.extensionPairingStatus.textContent = "Extension pairing unavailable. Restart RoleFit and try again.";
-    elements.overviewExtensionSummary.textContent = "Extension pairing unavailable";
+    extensionPairingLoadState = "error";
   }
+  updateExtensionPairingControls();
+  syncInstallDisclosure();
 }
 
 function extensionPairingErrorMessage(error) {
@@ -682,6 +857,9 @@ function renderProviders() {
   elements.overviewProviderSummary.textContent = configuredCount === 0
     ? "No providers connected"
     : `${readyCount} ready of ${configuredCount} connected`;
+  const providerAttention = configuredCount > 0 && readyCount === 0;
+  elements.navProvidersAttention.hidden = !providerAttention;
+  setCardTone(elements.overviewProvidersCard, providerAttention);
   return false;
 }
 
@@ -743,6 +921,7 @@ async function refreshProviders({ announceResult = true } = {}) {
     renderProviders();
     elements.providerSummary.textContent = "Provider status could not be checked. Try again.";
     elements.overviewProviderSummary.textContent = "Provider status unavailable";
+    setCardTone(elements.overviewProvidersCard, true);
     if (announceResult) announce("Provider status could not be checked.");
   } finally {
     if (generation === refreshGeneration) {
@@ -834,6 +1013,10 @@ function renderWorkspaceOverview() {
       : "Checking workspace";
   elements.workspaceSummary.textContent = summary;
   elements.overviewWorkspaceSummary.textContent = summary;
+  setCardTone(
+    elements.overviewWorkspaceCard,
+    workspaceOverviewLoaded && !(overviewUsable && overview.workspaceTransferReady)
+  );
   elements.workspacePath.textContent = overview
     ? overview.workspaceDisplayPath
     : workspaceOverviewLoaded
@@ -852,6 +1035,7 @@ function renderWorkspaceOverview() {
   elements.backupWorkspace.disabled = busy;
   const restoreBlocked = activeTabs !== null && activeTabs > 0;
   elements.restoreWorkspace.disabled = busy || restoreBlocked;
+  elements.workspaceRestoreNote.hidden = !(restoreBlocked && overviewUsable && overview.workspaceTransferReady);
   if (restoreBlocked) {
     elements.restoreWorkspace.title = "Close the open RoleFit browser tabs before restoring.";
   } else {
@@ -902,8 +1086,45 @@ async function refreshWorkspaceOverview() {
   }
 }
 
+function renderServiceIndicators(status) {
+  let state = "unknown";
+  let text = "Checking service";
+  let title = "Checking your workbench…";
+  if (!status) {
+    if (connectionStatusLoaded) {
+      state = "error";
+      text = "Service status unavailable";
+      title = "Local service status unavailable.";
+    }
+  } else if (status.serverState === "owned") {
+    state = "ok";
+    text = `Running on ${status.port}`;
+    title = "Your workbench is ready.";
+  } else if (status.serverState === "reused-standalone") {
+    state = "warn";
+    text = `Dev server on ${status.port}`;
+    title = "Your workbench is ready.";
+  } else if (status.serverState === "reused-companion") {
+    state = "warn";
+    text = `Other session on ${status.port}`;
+    title = "Your workbench is ready.";
+  } else if (status.serverState === "unreachable") {
+    state = "error";
+    text = "Not responding";
+    title = "The local service isn't responding.";
+  } else {
+    text = "Starting service";
+    title = "Starting your workbench…";
+  }
+  elements.sidebarRuntimeStatus.dataset.state = state;
+  elements.sidebarRuntimeStatus.textContent = text;
+  elements.overviewTitle.textContent = title;
+  setCardTone(elements.overviewServiceCard, state === "error");
+}
+
 function renderConnectionStatus() {
   const status = liveConnectionStatus;
+  renderServiceIndicators(status);
   if (!status) {
     renderActiveExtensionPort();
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
@@ -1046,17 +1267,15 @@ async function loadRuntimeInfo() {
 function initializeUnavailableState() {
   elements.companionRoot.dataset.status = "error";
   elements.openRoleFit.disabled = true;
+  elements.overviewOpenRoleFit.disabled = true;
+  elements.openExtensionDirectory.disabled = true;
   elements.refreshProviders.disabled = true;
   for (const button of elements.extensionCopyButtons) button.disabled = true;
   elements.sitePortInput.disabled = true;
   elements.sitePortApply.disabled = true;
   elements.sitePortStatus.textContent = "Port setting unavailable.";
-  elements.extensionPairingCount.textContent = "Unavailable";
-  elements.extensionPairingCount.setAttribute("aria-label", "Extension access unavailable");
-  elements.extensionPairingStatus.textContent = "Extension pairing unavailable.";
-  elements.overviewExtensionSummary.textContent = "Extension pairing unavailable";
-  elements.overviewProviderSummary.textContent = "Provider status unavailable";
-  elements.sidebarRuntimeStatus.textContent = "Service unavailable";
+  extensionPairingSettings = null;
+  extensionPairingLoadState = "error";
   elements.runtimeVersion.textContent = "RoleFit";
   workspaceOverview = null;
   workspaceOverviewLoaded = true;
@@ -1065,8 +1284,11 @@ function initializeUnavailableState() {
   liveConnectionStatus = null;
   connectionStatusLoaded = true;
   renderConnectionStatus();
+  updateExtensionPairingControls();
   renderProviders();
   elements.providerSummary.textContent = "Restart RoleFit to manage providers.";
+  elements.overviewProviderSummary.textContent = "Provider status unavailable";
+  setCardTone(elements.overviewProvidersCard, true);
 }
 
 elements.providerList.addEventListener("submit", (event) => {
@@ -1134,21 +1356,39 @@ for (const button of elements.tabTargets) {
   button.addEventListener("click", () => activateTab(button.dataset.tabTarget));
 }
 
-elements.extensionPairingCount.addEventListener("click", () => {
-  setExtensionPairingPopover(!extensionPairingPopoverOpen);
+for (const tab of elements.extensionBrowserTabs) {
+  tab.addEventListener("click", () => selectExtensionBrowser(tab.dataset.extensionBrowser));
+}
+
+elements.extensionBrowserSwitch.addEventListener("keydown", (event) => {
+  const tabs = elements.extensionBrowserTabs;
+  const current = tabs.findIndex((tab) => tab.getAttribute("aria-selected") === "true");
+  const next = event.key === "ArrowRight"
+    ? (current + 1) % tabs.length
+    : event.key === "ArrowLeft"
+      ? (current - 1 + tabs.length) % tabs.length
+      : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
+  if (next < 0) return;
+  event.preventDefault();
+  selectExtensionBrowser(tabs[next].dataset.extensionBrowser, { focus: true });
 });
 
-document.addEventListener("click", (event) => {
-  if (!extensionPairingPopoverOpen || !(event.target instanceof Node)) return;
-  if (elements.extensionPairingCount.contains(event.target) ||
-      elements.extensionPairingPopover.contains(event.target)) return;
-  setExtensionPairingPopover(false);
+elements.extensionInstallSummary.addEventListener("click", () => {
+  installDisclosureTouched = true;
+});
+
+elements.extensionPairingList.addEventListener("focusout", (event) => {
+  if (renderingExtensionPairings || !armedRemoveOrigin) return;
+  const next = event.relatedTarget;
+  if (next instanceof HTMLElement && next.dataset.extensionOrigin === armedRemoveOrigin) return;
+  disarmExtensionRemove();
 });
 
 document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape" || !extensionPairingPopoverOpen) return;
-  setExtensionPairingPopover(false);
-  elements.extensionPairingCount.focus();
+  if (event.key !== "Escape" || !armedRemoveOrigin) return;
+  const origin = armedRemoveOrigin;
+  disarmExtensionRemove();
+  extensionPairingButton("extensionOrigin", origin)?.focus();
 });
 
 document.addEventListener("visibilitychange", () => {
@@ -1164,8 +1404,8 @@ document.addEventListener("visibilitychange", () => {
   if (hasUsableBridge()) {
     void loadExtensionPairingSettings();
     void refreshProviders({ announceResult: false });
+    void refreshConnectionStatus();
     if (activeTabId === "workspace") void refreshWorkspaceOverview();
-    if (activeTabId === "settings") void refreshConnectionStatus();
   }
 });
 
@@ -1200,18 +1440,26 @@ elements.extensionRequestList.addEventListener("click", async (event) => {
   if (!(button instanceof HTMLButtonElement) || button.disabled || extensionPairingPending) return;
   const origin = normalizeExtensionOriginInput(button.dataset.extensionRequestOrigin);
   if (!origin) return;
+  const requestOrigin = button.dataset.extensionRequestOrigin;
+  const hadFocus = document.activeElement === button;
+  disarmExtensionRemove();
+  extensionPairingError = "";
   extensionPairingPending = true;
   updateExtensionPairingControls({ preserveStatus: true });
   elements.extensionPairingStatus.textContent = "Approving extension…";
   try {
     extensionPairingSettings = await bridge.saveExtensionOrigin(origin);
     updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = "Paired. Restarting the local service…";
+    elements.extensionPairingStatus.textContent = "Approved. Restarting RoleFit…";
   } catch (error) {
-    extensionPairingPending = false;
-    updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = extensionPairingErrorMessage(error);
+    failExtensionPairingAction(error, "extensionRequestOrigin", requestOrigin, hadFocus);
   }
+});
+
+// Auto-repeated Enter clicks the focused button again; confirming Remove needs a
+// fresh key press, however long the key is held.
+elements.extensionPairingList.addEventListener("keydown", (event) => {
+  if (event.repeat && (event.key === "Enter" || event.key === " ")) event.preventDefault();
 });
 
 elements.extensionPairingList.addEventListener("click", async (event) => {
@@ -1221,17 +1469,28 @@ elements.extensionPairingList.addEventListener("click", async (event) => {
   if (!(button instanceof HTMLButtonElement) || button.disabled || extensionPairingPending) return;
   const origin = normalizeExtensionOriginInput(button.dataset.extensionOrigin);
   if (!origin) return;
+  const pairedOrigin = button.dataset.extensionOrigin;
+  if (armedRemoveOrigin !== pairedOrigin) {
+    armedRemoveOrigin = pairedOrigin;
+    removeArmedAt = event.timeStamp;
+    extensionPairingError = "";
+    applyRemoveArming();
+    elements.extensionPairingStatus.textContent = extensionPairingMessage();
+    return;
+  }
+  // A double-click or held Enter must not arm and confirm in one gesture.
+  if (event.detail > 1 || event.timeStamp - removeArmedAt < REMOVE_CONFIRM_GUARD_MS) return;
+  const hadFocus = document.activeElement === button;
+  armedRemoveOrigin = "";
   extensionPairingPending = true;
   updateExtensionPairingControls({ preserveStatus: true });
-  elements.extensionPairingStatus.textContent = "Removing pairing…";
+  elements.extensionPairingStatus.textContent = "Removing access…";
   try {
     extensionPairingSettings = await bridge.removeExtensionOrigin(origin);
     updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = "Removed. Restarting the local service…";
+    elements.extensionPairingStatus.textContent = "Removed. Restarting RoleFit…";
   } catch (error) {
-    extensionPairingPending = false;
-    updateExtensionPairingControls({ preserveStatus: true });
-    elements.extensionPairingStatus.textContent = extensionPairingErrorMessage(error);
+    failExtensionPairingAction(error, "extensionOrigin", pairedOrigin, hadFocus);
   }
 });
 
@@ -1274,18 +1533,24 @@ elements.sitePortForm.addEventListener("submit", async (event) => {
   }
 });
 
-elements.openRoleFit.addEventListener("click", async () => {
+async function openRoleFitInBrowser(button) {
   if (!hasUsableBridge()) return;
-  elements.openRoleFit.disabled = true;
+  button.disabled = true;
   try {
     await bridge.openBrowserApp();
     announce("RoleFit opened in your default browser.");
   } catch {
     announce("RoleFit could not be opened. Keep the desktop app running and try again.");
   } finally {
-    elements.openRoleFit.disabled = false;
+    button.disabled = false;
   }
-});
+}
+
+for (const button of [elements.openRoleFit, elements.overviewOpenRoleFit]) {
+  button.addEventListener("click", () => {
+    void openRoleFitInBrowser(button);
+  });
+}
 
 elements.openExtensionDirectory.addEventListener("click", async () => {
   if (!hasUsableBridge()) return;
@@ -1313,9 +1578,9 @@ for (const button of elements.extensionCopyButtons) {
 }
 
 renderCheckingProviders();
+selectExtensionBrowser(storedExtensionBrowser(), { persist: false });
 activateTab(storedTab(), { persist: false, refresh: false });
 if (hasUsableBridge()) {
-  elements.sidebarRuntimeStatus.textContent = "Service ready";
   void loadRuntimeInfo();
   void loadLocalSiteSettings();
   void loadExtensionPairingSettings();

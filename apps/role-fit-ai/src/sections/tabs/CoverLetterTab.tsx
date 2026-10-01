@@ -68,7 +68,7 @@ type CoverLetterTabProps = {
   onSlotAnswerChange: (slotId: string, value: string) => void;
   onAcceptProposal: () => void;
   onDiscardProposal: () => void;
-  onAddHonestContext?: (keyword: string) => void;
+  onAddProfileEvidence?: (keyword: string) => void;
   onRestorePreTailor: () => void;
 };
 
@@ -107,7 +107,7 @@ export function CoverLetterTab({
   onSlotAnswerChange,
   onAcceptProposal,
   onDiscardProposal,
-  onAddHonestContext,
+  onAddProfileEvidence,
   onRestorePreTailor
 }: CoverLetterTabProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -205,7 +205,7 @@ export function CoverLetterTab({
             onAcceptProposal={onAcceptProposal}
             onDiscardProposal={onDiscardProposal}
             onRestore={onRestorePreTailor}
-            onAddHonestContext={onAddHonestContext}
+            onAddProfileEvidence={onAddProfileEvidence}
             status={railStatus}
           />
         }}

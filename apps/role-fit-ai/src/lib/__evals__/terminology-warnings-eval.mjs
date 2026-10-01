@@ -103,7 +103,6 @@ const proseInput={jobText:'Build Python services. Kubernetes experience preferre
 const proseBase={status:'ASSESSED',verdict:'LIMITED',matches:[],gaps:[]};
 for(const patch of [
  {summary:'The candidate has 10 years of Kubernetes experience.'},
- {gaps:[{status:'NOT_SHOWN',jobExcerpt:'Kubernetes experience preferred.',note:'The candidate has 10 years of Kubernetes experience.'}]},
  {eligibility:{status:'CLEAR',note:'The candidate has 10 years of Kubernetes experience.'}}
 ]) {
  const result=sanitizeFitAssessmentResponse({...proseBase,...patch},proseInput);

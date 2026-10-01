@@ -11,42 +11,39 @@ import {
   EDUCATION_LEVEL_OPTIONS,
   normalizeAvailabilityDate,
   normalizeCandidateGpa,
-  normalizeCandidateExperience,
   MAJOR_MAX_LENGTH,
   type AvailabilityNotice,
-  type CandidateExperience,
   type CitizenshipStatus,
   type DeclaredAnswer,
   type EducationLevel
 } from "./candidateFacts.ts";
+import { migrateExperienceEvidence } from "./experienceEvidenceMigration.ts";
 
 // Allowlisted workspace preferences. localStorage is a fail-open browser cache;
 // workspacePreferencesSync.ts makes the owner-only workspace file canonical.
 // Credentials are absent by construction and stay in the local companion.
 export type PersistedSettings = {
-  aiProvider?: AiProviderValue;
-  selectedModel?: string;
-  cliReasoningEffort?: string;
-  // Independent analyzer for the /api/job-analysis pass — its own concrete provider
-  // config (synced to other stages via the copy buttons, not a live link).
+  // Each AI stage keeps its own concrete [provider, model, effort] triple, named
+  // `<settingsPrefix>Provider` etc. from config/aiStages.ts.
   jobAnalysisProvider?: AiProviderValue;
   jobAnalysisSelectedModel?: string;
   jobAnalysisCliReasoningEffort?: string;
-  // Fit Assessment, cover-letter polish, and application Q&A keep independent
-  // concrete configs.
-  finalReviewProvider?: AiProviderValue;
-  finalReviewSelectedModel?: string;
-  finalReviewCliReasoningEffort?: string;
   fitAssessmentProvider?: AiProviderValue;
   fitAssessmentSelectedModel?: string;
   fitAssessmentCliReasoningEffort?: string;
-  coverProvider?: AiProviderValue;
-  coverSelectedModel?: string;
-  coverCliReasoningEffort?: string;
-  answersProvider?: AiProviderValue;
-  answersSelectedModel?: string;
-  answersCliReasoningEffort?: string;
-  honestContext?: string;
+  resumePolishProvider?: AiProviderValue;
+  resumePolishSelectedModel?: string;
+  resumePolishCliReasoningEffort?: string;
+  coverPolishProvider?: AiProviderValue;
+  coverPolishSelectedModel?: string;
+  coverPolishCliReasoningEffort?: string;
+  applicationAnswersProvider?: AiProviderValue;
+  applicationAnswersSelectedModel?: string;
+  applicationAnswersCliReasoningEffort?: string;
+  applicationReviewProvider?: AiProviderValue;
+  applicationReviewSelectedModel?: string;
+  applicationReviewCliReasoningEffort?: string;
+  profileBackground?: string;
   // Guidance applied to every instruction-enabled drafting stage that has no
   // override of its own. Fixed analysis stages never receive it.
   customInstructions?: string;
@@ -55,13 +52,11 @@ export type PersistedSettings = {
   // Whether Resume Polish may bold keywords inside a bullet it rewrites. The
   // prompt asks and the server sanitizer enforces.
   boldBulletKeywords?: boolean;
-  // Current persisted name; preview data is rewritten explicitly when this
-  // contract changes rather than accepted through runtime aliases.
-  runFitAssessment?: boolean;
-  autoPolishResume?: boolean;
-  resumeAutoPolishThreshold?: AutoPolishThreshold;
-  autoPolishCoverLetter?: boolean;
-  coverLetterAutoPolishThreshold?: AutoPolishThreshold;
+  fitAssessmentAuto?: boolean;
+  resumePolishAuto?: boolean;
+  resumePolishAutoThreshold?: AutoPolishThreshold;
+  coverPolishAuto?: boolean;
+  coverPolishAutoThreshold?: AutoPolishThreshold;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: DeclaredAnswer;
   requiresSponsorship?: DeclaredAnswer;
@@ -70,7 +65,6 @@ export type PersistedSettings = {
   gpa?: number;
   availabilityNotice?: AvailabilityNotice;
   availabilityDate?: string;
-  experienceProfile?: CandidateExperience[];
 };
 
 const KEY = "rolefit:settings";
@@ -92,15 +86,15 @@ const STAGE_FIELD_GROUPS: Array<[keyof PersistedSettings, keyof PersistedSetting
 
 const PERSISTED_SETTING_KEYS = [
   ...STAGE_FIELD_GROUPS.flat(),
-  "honestContext",
+  "profileBackground",
   "customInstructions",
   "stageCustomInstructions",
   "boldBulletKeywords",
-  "runFitAssessment",
-  "autoPolishResume",
-  "resumeAutoPolishThreshold",
-  "autoPolishCoverLetter",
-  "coverLetterAutoPolishThreshold",
+  "fitAssessmentAuto",
+  "resumePolishAuto",
+  "resumePolishAutoThreshold",
+  "coverPolishAuto",
+  "coverPolishAutoThreshold",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -108,13 +102,67 @@ const PERSISTED_SETTING_KEYS = [
   "major",
   "gpa",
   "availabilityNotice",
-  "availabilityDate",
-  "experienceProfile"
+  "availabilityDate"
 ] as const satisfies readonly (keyof PersistedSettings)[];
 
-// Only known catalog changes may migrate before strict workspace/backup validation.
-// Unknown models, efforts, providers, and unrelated malformed fields still fail closed.
-export function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
+// The Profile Background runs against a much smaller AI limit; this bound only keeps stored settings finite. Settings refuses edits
+// past it, and migrated legacy text always fits.
+export const PROFILE_BACKGROUND_STORAGE_LIMIT = 60_000;
+
+// Only known catalog and settings-shape changes may migrate before strict
+// workspace/backup validation. Unknown models, efforts, providers, and unrelated
+// malformed fields still fail closed.
+export function migrateStoredSettings(source: Record<string, unknown>): Record<string, unknown> {
+  return migrateProviderSettings(migrateExperienceEvidence(renameLegacySettings(source)));
+}
+
+// Settings names before the 2026-09-29 naming pass. A stored new name wins
+// over its old name, so a repeated or mixed-version load cannot regress a value.
+const LEGACY_SETTING_NAMES: Readonly<Record<string, keyof PersistedSettings>> = {
+  aiProvider: "resumePolishProvider",
+  selectedModel: "resumePolishSelectedModel",
+  cliReasoningEffort: "resumePolishCliReasoningEffort",
+  coverProvider: "coverPolishProvider",
+  coverSelectedModel: "coverPolishSelectedModel",
+  coverCliReasoningEffort: "coverPolishCliReasoningEffort",
+  answersProvider: "applicationAnswersProvider",
+  answersSelectedModel: "applicationAnswersSelectedModel",
+  answersCliReasoningEffort: "applicationAnswersCliReasoningEffort",
+  finalReviewProvider: "applicationReviewProvider",
+  finalReviewSelectedModel: "applicationReviewSelectedModel",
+  finalReviewCliReasoningEffort: "applicationReviewCliReasoningEffort",
+  honestContext: "profileBackground",
+  runFitAssessment: "fitAssessmentAuto",
+  autoPolishResume: "resumePolishAuto",
+  resumeAutoPolishThreshold: "resumePolishAutoThreshold",
+  autoPolishCoverLetter: "coverPolishAuto",
+  coverLetterAutoPolishThreshold: "coverPolishAutoThreshold"
+};
+const LEGACY_STAGE_IDS: Readonly<Record<string, AiStageId>> = {
+  cover: "cover-polish",
+  answers: "application-answers"
+};
+
+function renameKeys(source: Record<string, unknown>, names: Readonly<Record<string, string>>): Record<string, unknown> {
+  const renamed = { ...source };
+  for (const [legacy, current] of Object.entries(names)) {
+    if (!Object.prototype.hasOwnProperty.call(renamed, legacy)) continue;
+    if (!Object.prototype.hasOwnProperty.call(renamed, current)) renamed[current] = renamed[legacy];
+    delete renamed[legacy];
+  }
+  return renamed;
+}
+
+function renameLegacySettings(source: Record<string, unknown>): Record<string, unknown> {
+  const renamed = renameKeys(source, LEGACY_SETTING_NAMES);
+  const overrides = renamed.stageCustomInstructions;
+  if (overrides && typeof overrides === "object" && !Array.isArray(overrides)) {
+    renamed.stageCustomInstructions = renameKeys(overrides as Record<string, unknown>, LEGACY_STAGE_IDS);
+  }
+  return renamed;
+}
+
+function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
   const migrated = { ...source };
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     const provider = migrated[providerKey];
@@ -187,11 +235,11 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["boldBulletKeywords", "runFitAssessment", "autoPolishResume", "autoPolishCoverLetter"] as const) {
+  for (const key of ["boldBulletKeywords", "fitAssessmentAuto", "resumePolishAuto", "coverPolishAuto"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);
-  for (const key of ["resumeAutoPolishThreshold", "coverLetterAutoPolishThreshold"] as const) {
+  for (const key of ["resumePolishAutoThreshold", "coverPolishAutoThreshold"] as const) {
     if (settings[key] !== undefined && !validAutoPolishThresholds.has(settings[key] as string)) delete settings[key];
   }
   // "unspecified" is the neutral default (not a selectable option), so add it
@@ -212,8 +260,8 @@ export function normalizeSettings(value: unknown): PersistedSettings {
       delete settings[key];
     }
   }
-  if (typeof settings.honestContext !== "string") delete settings.honestContext;
-  else settings.honestContext = settings.honestContext.slice(0, 50_000);
+  if (typeof settings.profileBackground !== "string") delete settings.profileBackground;
+  else settings.profileBackground = settings.profileBackground.slice(0, PROFILE_BACKGROUND_STORAGE_LIMIT);
   if (typeof settings.customInstructions !== "string") delete settings.customInstructions;
   else settings.customInstructions = settings.customInstructions.slice(0, 50_000);
   if (typeof settings.major !== "string") delete settings.major;
@@ -240,13 +288,6 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   } else {
     delete settings.availabilityDate;
   }
-  if (settings.experienceProfile === undefined) {
-    delete settings.experienceProfile;
-  } else {
-    const experienceProfile = normalizeCandidateExperience(settings.experienceProfile);
-    if (experienceProfile.length) settings.experienceProfile = experienceProfile;
-    else delete settings.experienceProfile;
-  }
   // Per-stage overrides: keep only known stage ids holding strings, and drop the
   // whole field when nothing survives so storage stays clean.
   if (settings.stageCustomInstructions !== null && typeof settings.stageCustomInstructions === "object" && !Array.isArray(settings.stageCustomInstructions)) {
@@ -270,7 +311,9 @@ export function loadSettings(): PersistedSettings {
     const raw = localStorage.getItem(KEY);
     if (!raw) return memorySettings ?? {};
     const parsed = JSON.parse(raw);
-    memorySettings = normalizeSettings(parsed);
+    memorySettings = normalizeSettings(
+      parsed && typeof parsed === "object" && !Array.isArray(parsed) ? migrateStoredSettings(parsed) : parsed
+    );
     return memorySettings;
   } catch {
     return memorySettings ?? {};
