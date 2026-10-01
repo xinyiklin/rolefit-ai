@@ -259,6 +259,11 @@
   line-height: 1.4;
 }
 
+/* The status region stays mounted so screen readers announce new text; empty, it takes no gap. */
+.settings-background__notice:empty {
+  position: absolute;
+}
+
 /* Automation controls are one labelled group, not a stack of framed cards. */
 .settings-automation-group {
   display: grid;

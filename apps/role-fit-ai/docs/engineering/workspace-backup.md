@@ -70,7 +70,10 @@ nor leaves a pending marker. Unpushed edits, with their values, are recorded in
 one origin-wide pending record that merges every tab's entries. A write
 releases only the entries that still hold the value it sent. On the next boot,
 recovered edits are restored into the tab's view and cache, then sent without a
-base revision, so they always rebase onto whatever record exists then.
+base revision, so they always rebase onto whatever record exists then. Known
+limitation: the record does not name its tab, so a tab that opens while a live
+sibling's edit is still unpushed adopts that edit too; if the new tab's push then
+fails and the sibling saves a newer value, the new tab can later write the older one.
 
 When a push is refused as stale, the tab rebases onto the returned record: its
 user's changed settings keep their local values, and every other setting takes

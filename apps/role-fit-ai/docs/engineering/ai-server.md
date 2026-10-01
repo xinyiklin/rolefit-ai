@@ -414,8 +414,6 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   baseline, and the current job/document identity. Required/preferred terminology
   uses prepared-job distinctions before flat keyword limits. True aliases differ
   from related concepts, and negated or uncertain text does not establish support.
-- `eligibilityLexicon.ts` — work-authorization and credential stems used by
-  Fit Assessment and candidate-claim checks. It does not select a fit verdict.
 - `fitAssessment.ts` — executable prompt, response schema, and bounded source/relationship validation
   for the [Fit Assessment technical contract](../../server/ai/README.md#fit-assessment-technical-contract).
   Safe model summary text is retained with evidence warnings when needed; fixed

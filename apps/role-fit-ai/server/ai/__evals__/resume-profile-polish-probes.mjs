@@ -227,6 +227,7 @@ assert.deepEqual(
   crowdedWithout.selectedTargets.map((target) => target.targetId),
   "a linked Profile never displaces an existing target under budget pressure"
 );
+assert.equal(crowdedWith.omittedCount, crowdedWithout.omittedCount, "unsent new-bullet slots never count as omitted fields");
 
 // The client flattens the raw scope it sent; the server flattens its
 // normalized copy. Both must number every target the same way.

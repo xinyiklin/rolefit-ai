@@ -37,7 +37,8 @@ not satisfied by academic, personal, volunteer, or open-source work unless the
 posting accepts those sources. The Profile Background carries each entry's type
 on its Markdown heading, so the deterministic explicit-conflict check reads a
 cited Background line together with the nearest enclosing heading (its own line
-included, fenced code excluded) that names a type. A match conflicts only when
+included, fenced code excluded) that names a type; a type named in the cited line
+itself takes precedence over its heading. A match conflicts only when
 every occurrence of a repeated excerpt does; a reported contradiction needs one.
 Entries and types may overlap, so their years/counts are never summed and counts
 never imply duration.

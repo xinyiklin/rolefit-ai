@@ -92,6 +92,7 @@ const profile = [
   "",
   "## Acme Clinic — Support Engineer (professional, 2021–2023)",
   "Automated patient intake reports with Python.",
+  "Built a personal Python budgeting app on weekends.",
   "",
   "## Experience by type",
   "- Personal / independent projects: 3 roles or projects."
@@ -117,6 +118,12 @@ assert.equal(conflictWarnings(assessProfile(professionalRequirement, "Built Pyth
 assert.equal(conflictWarnings(assessProfile(professionalRequirement, "Ranked #1 in a C# code review.")).length, 1, "heading-like prose does not break the chain");
 assert.equal(conflictWarnings(assessProfile(professionalRequirement, "Automated patient intake reports with Python.")).length, 0, "a professional heading clears the source test");
 assert.equal(conflictWarnings(assessProfile(professionalRequirement, "Delivered a paid contract integration for a local clinic in Python.")).length, 0, "paid work stated in the line itself clears a personal heading");
+const personalLine = "Built a personal Python budgeting app on weekends.";
+assert.equal(conflictWarnings(assessProfile(professionalRequirement, personalLine)).length, 1, "personal work stated in the line itself is not cleared by a professional heading");
+assert.ok(!(assessProfile(professionalRequirement, personalLine, {
+  verdict: "STRETCH", matches: [],
+  gaps: [{ jobExcerpt: professionalRequirement, status: "NOT_SHOWN", relationship: "contradictory", candidateSource: "CANDIDATE_CONTEXT", candidateExcerpt: personalLine }]
+})?.warnings ?? []).some((warning) => /could not be confirmed/.test(warning)), "a contradiction citing a personal line under a professional heading is confirmed");
 assert.equal(conflictWarnings(assessProfile(professionalRequirement, "- Personal / independent projects: 3 roles or projects.")).length, 1, "migrated experience-type lines still carry their own type");
 assert.equal(conflictWarnings(assessProfile("Python experience.", "Built Python services with conflict checks.")).length, 0, "a source-neutral requirement accepts personal work");
 // Reverse-chronological order puts the professional entry first; a cited

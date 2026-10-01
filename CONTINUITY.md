@@ -3,6 +3,28 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-01
+
+- [USER+CODE] Pre-merge review of `feature/rolefit-candidate-profile` (the
+  user asked to review, fix, push, and merge). Two fresh independent reviews
+  (server/AI + shared; client/desktop/editor) found no high findings. Fixed:
+  - Fit's source-type check: a type named in the cited Profile line now wins
+    over its heading, so a personal line under a professional heading still
+    conflicts with a professional requirement (regression from 2026-09-28).
+  - Unsent Profile new-bullet slots no longer inflate the omitted-fields count.
+  - Group Accept/Discard skip the row open for editing, and a decided row
+    closes its editor, so a draft is no longer silently replaced.
+  - The Settings Background status region stays mounted for screen readers.
+  - Dead code from the job-analysis simplification (`eligibilityLexicon.ts`,
+    `LIST_STOPWORDS`) and stale docs removed; release notes and README cover
+    bullet remove/reorder and extraction without warnings.
+  - Known limitation, documented in `workspace-backup.md`: the origin-wide
+    pending-edits record does not name its tab, so a narrow race can let a new
+    tab write a live sibling's older value. Not fixed in this pass.
+  - [TOOL] New probes fail against the old logic. Root `npm run check` and
+    `types:check` passed on the merged tree before the fixes; see the PR for
+    the final gate. Browser QA skipped (flag-first); no live-provider calls.
+
 ## 2026-09-30
 
 - [USER+CODE] Resume Polish keeps its "Proposed improvements" summary but no

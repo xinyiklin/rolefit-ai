@@ -512,11 +512,9 @@ export function SettingsDialog({
                   placeholder={"## Inventory tracker (personal project, 2024–present)\nBuilt a Django REST API with role-based access.\n\n## Acme Clinic — Support Specialist (professional, 2021–2023)\nLed the EHR migration for 12 staff."}
                   rows={14}
                 />
-                {backgroundNotice ? (
-                  <p className="settings-background__notice" id="profile-background-notice" role="status">
-                    {backgroundNotice}
-                  </p>
-                ) : null}
+                <p className="settings-background__notice" id="profile-background-notice" role="status">
+                  {backgroundNotice}
+                </p>
               </>
             ) : null}
 

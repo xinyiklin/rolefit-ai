@@ -54,10 +54,9 @@ application retain blocking technical guards.
   also requires resume evidence; a missing candidate name or private fact is
   advisory. Safe placeholders
   remain usable text with warnings. No additional evidence-planning stage exists.
-- `grounding.ts` and `eligibilityLexicon.ts` provide deterministic evidence
-  checks. The direct category rubric in `fitAssessment.ts` is provider-applied; do
-  not add a deterministic fit classifier, numeric scores, or a visible/persisted
-  ledger.
+- `grounding.ts` provides deterministic evidence checks. The direct category
+  rubric in `fitAssessment.ts` is provider-applied; do not add a deterministic
+  fit classifier, numeric scores, or a visible/persisted ledger.
 - Evidence selection belongs to the model, not to the candidate and not to a
   prompt-enforced count. The server sends the whole corpus, verifies the ids
   that come back, and reports provenance. Do not reintroduce a preparation plan,

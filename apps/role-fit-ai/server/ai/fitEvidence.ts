@@ -44,9 +44,10 @@ export function restrictsExperienceSource(requirement: string): boolean {
     && (!/\b(?:personal|academic|volunteer|coursework)\b/i.test(requirement) || personalSourceExcluded);
 }
 
-// sourceLabel (a Profile heading) informs only this source test, never polarity.
+// sourceLabel (a Profile heading) informs only this source test, never polarity,
+// and only when the excerpt names no type itself.
 export function experienceSourceConflict(requirement: string, evidence: string, sourceLabel = ""): boolean {
-  const sourced = sourceLabel ? `${sourceLabel}\n${evidence}` : evidence;
+  const sourced = sourceLabel && !EXPERIENCE_SOURCE_TERMS.test(evidence) ? `${sourceLabel}\n${evidence}` : evidence;
   return restrictsExperienceSource(requirement)
     && /\b(?:personal|academic|volunteer|coursework)\b/i.test(sourced)
     && !/\b(?:professional|paid|industry|commercial|employment|employed)\b/i.test(sourced);

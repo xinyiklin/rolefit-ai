@@ -140,7 +140,9 @@ export function ResumeProposalReview({
             {suggestions.length} proposed edit{suggestions.length === 1 ? "" : "s"}
           </summary>
           {groups.map((group) => {
-            const pendingCount = group.items.filter(isPending).length;
+            // A row open for editing stays out of group actions so its draft survives.
+            const bulkItems = group.items.filter((item) => item.id !== editingId);
+            const pendingCount = bulkItems.filter(isPending).length;
             const headingId = `resume-proposal-group-${group.label.toLowerCase()}`;
             return (
               <section className="resume-proposal__group" key={group.label} aria-labelledby={headingId}>
@@ -148,11 +150,11 @@ export function ResumeProposalReview({
                   <h3 id={headingId}>{group.label} <span>{group.items.length}</span></h3>
                   {groups.length > 1 && pendingCount ? (
                     <span className="resume-proposal__group-actions">
-                      <button className="ghost-button is-compact" type="button" disabled={proposalStale} onClick={() => applyAll(group.items)}>
+                      <button className="ghost-button is-compact" type="button" disabled={proposalStale} onClick={() => applyAll(bulkItems)}>
                         <Check size={13} aria-hidden="true" /> Accept {pendingCount}
                         <span className="sr-only"> {group.label.toLowerCase()}</span>
                       </button>
-                      <button className="ghost-button is-compact" type="button" onClick={() => discardAll(group.items)}>
+                      <button className="ghost-button is-compact" type="button" onClick={() => discardAll(bulkItems)}>
                         <X size={13} aria-hidden="true" /> Discard
                         <span className="sr-only"> {group.label.toLowerCase()}</span>
                       </button>
@@ -164,7 +166,7 @@ export function ResumeProposalReview({
                     const decision = decisions[suggestion.id];
                     const current = currentTargetText(resume, suggestion);
                     const pending = isPending(suggestion);
-                    const editing = editingId === suggestion.id;
+                    const editing = editingId === suggestion.id && pending;
                     const state = resumeProposalEditState(current, suggestion, decision);
                     const proposedText = decision?.kind === "accepted" ? decision.text : suggestion.proposedText;
                     return (

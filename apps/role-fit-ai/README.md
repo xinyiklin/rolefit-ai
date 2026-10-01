@@ -723,7 +723,7 @@ server.ts                       # thin local web-server launcher
 server/
   runtime.ts                    # reusable HTTP/Vite lifecycle + route composition
   ai/                            # /api/resume-polish + /api/job-analysis: routes, providers,
-                                 #   clients, prompts, sanitize, grounding, eligibilityLexicon,
+                                 #   clients, prompts, sanitize, grounding,
                                  #   json, errors, coverLetter + applicationAnswers
   ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out
   applications/                  # pipeline tracker storage (index) + HTTP routes

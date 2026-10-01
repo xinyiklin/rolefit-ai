@@ -125,8 +125,9 @@ export function selectPromptTargets(targets: FlatResumeTarget[], jobText: string
     selectedTargets.push(target);
     serialized = nextSerialized;
   }
-  // An unsent order target is not an editable field, so it never counts as omitted.
-  const fieldCount = (list: FlatResumeTarget[]) => list.filter((target) => target.kind !== "bullet-order").length;
+  // Unsent order targets and new-bullet slots are not existing fields, so they never count as omitted.
+  const fieldCount = (list: FlatResumeTarget[]) =>
+    list.filter((target) => target.kind !== "bullet-order" && target.kind !== "new-bullet").length;
   return { selectedTargets, omittedCount: fieldCount(targets) - fieldCount(selectedTargets), serialized };
 }
 

@@ -99,6 +99,7 @@ assert.match(empty, /0 \/ 12,000/, "the empty Background shows its count");
 assert.match(empty, /placeholder="## [^"]*\(personal project, [^"]*\)[^"]*## [^"]*\(professional, /, "the placeholder is a heading example with type and dates");
 assert.doesNotMatch(empty, /Experience evidence|experience-profile|Add experience source/i, "the experience rows are gone");
 assert.doesNotMatch(empty, /aria-invalid|role="status">Over/, "a short Background is not over the limit");
+assert.match(empty, /id="profile-background-notice" role="status"><\/p>/, "the empty status region stays mounted so later notices are announced");
 
 const over = render("about", "x".repeat(12_001));
 assert.match(over, /12,001 \/ 12,000/);
