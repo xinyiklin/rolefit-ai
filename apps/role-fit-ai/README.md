@@ -165,11 +165,15 @@ font, size and wrapping changes still reflow the page normally.
   Neither document persists parallel variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and fetch the
   description: Workday-aware through CXS JSON, Ashby-aware through
-  its public posting API (including Handshake's branded wrapper), with
-  Greenhouse-wrapper resolution and a generic HTML→text fallback for other
-  boards. The configured Job analysis provider extracts the posting into structured
-  fields and concise summaries. The server validates response shape and bounds;
-  extraction has no additional fact checks or evidence-review warnings.
+  its public posting API (including Handshake's branded wrapper and embedded
+  boards), with Greenhouse-wrapper resolution; Oracle, iCIMS, Dayforce,
+  Workable, and UKG job pages; structured JobPosting data; and a generic
+  HTML→text fallback for other boards. Each source must yield the exact linked
+  job; a missing posting or sign-in page fails with a prompt to paste or use the
+  extension rather than importing unrelated text. The configured Job analysis
+  provider extracts the posting into structured fields and concise summaries.
+  The server validates response shape and bounds; extraction has no additional
+  fact checks or evidence-review warnings.
   A deterministic parser publishes a usable local brief immediately, so URL and
   paste preparation remain available even before a provider is configured. Job analysis
   can improve it, but provider failure leaves the local fields editable and does
@@ -730,7 +734,8 @@ server/
   base64.ts                     # base64 <-> Buffer helpers (base-resume / PDF artifact I/O)
   extension/                     # browser-extension API routes, duplicate status, inbox handoff
   http.ts                       # JSON/body/fetch utilities
-  jobImport.ts                  # /api/import-job: ATS resolvers (Workday/Ashby/Greenhouse/LinkedIn → text)
+  jobImport.ts                  # /api/import-job: recognized job sources, fetch sequencing, outcomes
+  jobImportContent.ts           # HTML→text + exact-posting parsers (ATS data, JobPosting JSON-LD)
   network.ts                    # job-link fetch + SSRF guards
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
   workspace.ts                  # resume variants, migration, and shared workspace snapshot

@@ -20,7 +20,7 @@ import assert from "node:assert/strict";
 import { Readable } from "node:stream";
 import { EventEmitter } from "node:events";
 
-import { fetchPublicHtml, BlockedHostError } from "../network.ts";
+import { fetchPublicHtml, BlockedHostError, ResponseTooLargeError } from "../network.ts";
 
 // A lookup that always resolves to a fixed set of addresses (LookupAddress[]).
 const lookupTo = (...addresses) => async (_hostname, options) => {
@@ -91,7 +91,7 @@ await expectRejects(
     lookup: PUBLIC_LOOKUP,
     request: fakeRequest({ status: 302, headers: { location: "http://169.254.169.254/latest/meta-data/" } }).request
   }),
-  (e) => e instanceof BlockedHostError && /public http or https/i.test(e.message)
+  (e) => e instanceof BlockedHostError && !(e instanceof ResponseTooLargeError) && /public http or https/i.test(e.message)
 );
 
 // 1b) The private redirect target can also be an IPv6 mapped-loopback literal.
@@ -136,14 +136,14 @@ await expectRejects(
 
 // 4) A body over MAX_FETCH_BYTES (5 MB) trips the real streaming byte cap in
 // pinnedFetch — the fake transport streams an oversized body, the real
-// byte-counting logic aborts it.
+// byte-counting logic aborts it. Only this rejection carries the size subtype.
 await expectRejects(
   "an over-limit response body is rejected by the streaming byte cap",
   () => fetchPublicHtml(new URL("http://jobs.example.com/huge"), {}, {
     lookup: PUBLIC_LOOKUP,
     request: fakeRequest({ status: 200, body: "x".repeat(5_000_001) }).request
   }),
-  (e) => e instanceof BlockedHostError && /too large/i.test(e.message)
+  (e) => e instanceof ResponseTooLargeError && /too large/i.test(e.message)
 );
 
 // 5) DNS-rebinding pin: a public-LOOKING hostname that RESOLVES to a private IP

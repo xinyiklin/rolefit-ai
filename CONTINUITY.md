@@ -5,6 +5,34 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-01
 
+- [USER+CODE] Job-link import audit and repair (task `jd-import-audit-20261001`;
+  Product Brief v1 and Delivery Plan v1 user-approved). A 201-link audit (latest
+  200 submitted applications plus one supplied link) found 72 consistent JDs,
+  20 successes that imported unrelated board/login/careers text, and 104 errors.
+  RoleFit's importer now selects the exact posting from embedded Ashby boards,
+  bound JobPosting JSON-LD, Oracle requisition details, iCIMS job frames,
+  Dayforce page data, Workable, and UKG data. An oversized Ashby board may fall
+  back to its exact job page; that fallback catches only the new
+  `ResponseTooLargeError`. Missing LinkedIn, Greenhouse, Ashby, and Jobvite jobs
+  now fail with paste/extension guidance instead of importing unrelated text.
+  Generic pages that already show their JD are kept. Extension enrichment
+  shares source resolution but keeps captured text on failure.
+  - [TOOL] Repeat audit on the same frozen corpus: all 21 confirmed recoveries
+    and both partial improvements imported. Of the 19 other false successes, 17
+    now fail (one or two per run through LinkedIn HTTP 429 rather than a source
+    rule). One deferred
+    careers wrapper still passes, and one Greenhouse job became available again.
+    Separate source drift: one Greenhouse job was removed, one careers page now
+    serves a shell that still passes the generic gate, and LinkedIn rate limits
+    changed. The tracker
+    corpus hash was unchanged and no AI call ran. The RoleFit gate passed
+    (138/138 offline). Browser QA was skipped (server-only change).
+  - [TOOL] Independent review: all acceptance criteria passed. Fixed findings:
+    tracked probes reused real job identifiers (now invented), JSON-LD could
+    bind through slug fragments or a conflicting same-host URL, and provider
+    rate limits were reported as missing jobs. Known limit: a non-Greenhouse
+    URL with `gh_jid` plus `for`/`board` fails instead of falling back.
+
 - [USER+CODE] Pre-merge review of `feature/rolefit-candidate-profile` (the
   user asked to review, fix, push, and merge). Two fresh independent reviews
   (server/AI + shared; client/desktop/editor) found no high findings. Fixed:

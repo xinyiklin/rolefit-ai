@@ -215,12 +215,18 @@ owns:
 - job posting import (`/api/import-job`, `server/jobImport.ts`): fetch a public posting URL —
   Workday CXS JSON when the host is recognized (`*.myworkdayjobs.com`,
   `/job/` and `/details/` links), Ashby's public posting API for direct board
-  URLs and approved branded `ashby_jid` wrappers, Greenhouse canonical job HTML for direct
+  URLs, approved branded `ashby_jid` wrappers, and branded pages that embed
+  exactly one Ashby board, Greenhouse canonical job HTML for direct
   board URLs and branded wrappers that expose a numeric `gh_jid` plus a
-  validated board slug in their HTML, LinkedIn visible job body + criteria
-  rows when present, otherwise a generic HTML→text scrape — behind SSRF
+  validated board slug in their HTML, Oracle candidate-experience requisition
+  details, the iCIMS job frame, Dayforce page data, Workable's public posting
+  API, UKG opportunity data, LinkedIn visible job body + criteria rows,
+  otherwise generic HTML→text, replaced by a bound schema.org JobPosting when
+  that text is unreadable or lacks the posting — behind SSRF
   guards that re-validate the host and resolved IP on every redirect hop
-  and reject private / loopback / link-local targets. Job-analysis calls use
+  and reject private / loopback / link-local targets. A recognized source
+  whose selected job is missing fails with paste/extension guidance instead
+  of importing a board, login, or careers page. Job-analysis calls use
   `/api/job-analysis` (below); the deterministic `src/lib/jobExtract.ts` engine
   supplies the local parsing baseline and the inspectable failure brief. RoleFit then splits the result
   into compact model-facing tailoring text and tracking-only facts (role
@@ -705,10 +711,46 @@ substitutes; no locally generated draft, score, review, or verdict stands in.
 
 Keep the import pipeline split by responsibility:
 
-- `server/jobImport.ts` selects constrained Workday CXS, Ashby public-posting,
-  Greenhouse, LinkedIn, or generic HTML extraction. `server/network.ts` performs
-  each public fetch, enforces timeouts, and applies SSRF checks on the original
-  URL and every redirect hop.
+- `server/jobImport.ts` recognizes sources, builds fixed public targets, and
+  sequences fetches, caches, and HTTP outcomes; `server/jobImportContent.ts`
+  is the pure HTML→text converter and exact-posting parser for every source.
+  `server/network.ts` performs each public fetch, enforces timeouts and the
+  byte cap, and applies SSRF checks on the original URL and every redirect hop.
+- Selection is exact: an API item, page-data object, or JobPosting must match
+  the requested job id, URL selector (whole path segment or selector value, not
+  a slug fragment), or canonical requisition, and ambiguity fails. The
+  Greenhouse embed and iCIMS frame are bound by their request target (board +
+  token, same-origin same-id frame), not re-checked in their content.
+  Structured page data is parsed with `JSON.parse` only — never evaluated.
+  Follow-up targets are fixed same-origin or provider API URLs, never
+  page-supplied endpoints.
+- A direct Ashby board that omits the job, answers 404/410, or exceeds the
+  byte cap falls back to that exact job page's bound JobPosting. Only the
+  byte-cap error (`ResponseTooLargeError`) is caught; every other network
+  rejection propagates. A provider's other non-OK status (rate limit, outage)
+  is reported as that HTTP status rather than as a missing job.
+- URL import fails a recognized source without its selected JD. Extension
+  enrichment uses the same recognized-source resolution but keeps the
+  captured page text on any failure and never substitutes a generic scrape.
+  A source-reported closed opportunity keeps its public JD with a
+  `Status: Closed` line; JD presence does not imply the opening is active.
+- Known import limits (2026-10-01 audit), all of which fall back to paste or
+  extension capture:
+  - Unrecognized pages are accepted on readable text alone (≥200 chars, not
+    code-shaped). A careers or cookie/navigation shell without a bound
+    JobPosting can still pass; there is no universal page classifier.
+  - A branded `gh_jid` page without Greenhouse board evidence stays a generic
+    import, so a careers shell there is not detected.
+  - A non-Greenhouse URL carrying `gh_jid` plus `for`/`board` fails when the
+    embed lacks the job instead of falling back to the page.
+  - Not imported: LinkedIn sign-in pages and rate limits (no guest endpoints
+    or authentication), Workday tenants whose CXS API answers 403, sites that
+    serve challenge shells or 403 (for example IBM and Indeed), client-rendered
+    boards without a constrained public source (for example Gem, Eightfold,
+    TEKsystems), JobPosting data on a 404 page or bound to another posting,
+    and postings removed from their board.
+  - Oracle recognition covers `*.oraclecloud.com` plus one observed branded
+    origin; other branded Oracle origins stay generic.
 - `src/lib/jobExtract.ts` is the dependency-free analyzer. It should keep
   résumé-tailoring content (role intro, seniority/employment metadata,
   responsibilities, requirements, preferred qualifications) in a compact

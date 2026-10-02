@@ -9,6 +9,9 @@ import { createBrotliDecompress, createGunzip, createInflate } from "node:zlib";
 import { FetchTimeoutError } from "./http.ts";
 
 export class BlockedHostError extends Error {}
+// Thrown only at the byte cap, so a caller can recover from size alone without
+// treating private-host or redirect rejections as recoverable.
+export class ResponseTooLargeError extends BlockedHostError {}
 export class DnsError extends Error {}
 
 // A minimal fetch-like response returned by pinnedFetch — just the surface the
@@ -263,7 +266,7 @@ function pinnedFetch(
           total += chunk.length;
           if (total > MAX_FETCH_BYTES) {
             req.destroy();
-            finish(reject, new BlockedHostError("The job page was too large to read."));
+            finish(reject, new ResponseTooLargeError("The job page was too large to read."));
             return;
           }
           chunks.push(chunk);
@@ -297,7 +300,7 @@ function pinnedFetch(
 // default (via `undefined`) to the real DNS resolver and node http/https client,
 // so production callers that omit `deps` get byte-identical behavior; the probes
 // pass fakes to drive redirect/rebinding/byte-cap logic without a socket or DNS.
-type FetchPublicHtmlDeps = {
+export type FetchPublicHtmlDeps = {
   lookup?: typeof dnsLookup;
   request?: typeof httpsRequest;
 };
