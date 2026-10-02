@@ -1,105 +1,71 @@
-// Job-posting import + ATS scraping: the /api/import-job route plus the HTML→text
-// helpers and the Workday CXS / Greenhouse embedded-job resolvers. Split out of
-// server.ts. The safe public-URL fetch, SSRF guards, and timeout handling live in
-// ./network.ts; readBody/sendJson and the FetchTimeoutError type come from
-// ./http.ts. resolveImportedJobText is exported for the browser-extension route,
-// which resolves a captured known-ATS link into the full posting body.
+// Job-posting import: the /api/import-job route and the extension resolver.
+// This module owns recognized-source URL targets, fetch sequencing, caches, and
+// HTTP outcomes; ./jobImportContent.ts owns HTML→text and exact-posting parsing,
+// and ./network.ts performs every public fetch behind its SSRF guards.
+// resolveImportedJobText is exported for the browser-extension routes, which
+// keep the captured page text whenever a recognized source cannot resolve.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "./http.ts";
-import { BlockedHostError, DnsError, fetchPublicHtml, isPublicHttpUrl } from "./network.ts";
+import {
+  BlockedHostError,
+  DnsError,
+  ResponseTooLargeError,
+  fetchPublicHtml,
+  isPublicHttpUrl
+} from "./network.ts";
+import type { FetchPublicHtmlDeps } from "./network.ts";
+import {
+  ashbyPostingText,
+  dayforceJobText,
+  decodeEntities,
+  greenhouseEmbeddedJobText,
+  htmlAttr,
+  htmlToText,
+  icimsJobText,
+  isMostlyCodeShaped,
+  jobPostingJsonLdText,
+  jobviteMissingJob,
+  linkedInJobText,
+  oracleRequisitionText,
+  pageShowsPosting,
+  ukgOpportunityText,
+  workablePostingText
+} from "./jobImportContent.ts";
 
-// Decode a numeric character reference, clamping control chars (which could
-// inject fake structure into the prompt) and rejecting out-of-range values.
-// fromCodePoint (not fromCharCode) so astral code points aren't truncated.
-function fromCharRef(code: number): string {
-  if (!Number.isFinite(code) || code <= 0 || code > 0x10ffff) return "";
-  if (code < 0x20 || (code >= 0x7f && code <= 0x9f)) return " ";
-  try {
-    return String.fromCodePoint(code);
-  } catch {
-    return "";
-  }
+type FetchHtml = (url: URL, headers?: Record<string, string>) => ReturnType<typeof fetchPublicHtml>;
+type Page = { status: number; ok: boolean; html: string };
+type LoadPage = () => Promise<Page>;
+// missing: a recognized source whose selected JD is unavailable. null: not recognized.
+type Outcome = { text: string } | { missing: string } | { httpStatus: number };
+type SourceOutcome = Outcome | null;
+
+const MISSING_JOB = "Could not find this job's description on its job board. " +
+  "Paste it instead, or capture the page with the browser extension.";
+const MISSING_LINKEDIN = "LinkedIn did not expose this job's description. " +
+  "Paste it instead, or capture the page with the browser extension.";
+const found = (text: string): Outcome => (text ? { text } : { missing: MISSING_JOB });
+
+// A provider answering 404/410 has no such posting; any other non-OK status
+// (rate limit, outage) is reported as that status, not as a missing job.
+class SourceHttpError extends Error {}
+
+function sourceOk(response: { ok: boolean; status: number }): boolean {
+  if (response.ok) return true;
+  if (response.status === 404 || response.status === 410) return false;
+  throw new SourceHttpError(`The job board returned HTTP ${response.status}.`);
 }
 
-// Convert posting HTML to readable text while keeping paragraph/bullet breaks
-// (the front-end job analyzer and the description box both read better with them).
-function htmlToText(html: unknown): string {
-  return String(html || "")
-    .replace(/<script[\s\S]*?<\/script>/gi, " ")
-    .replace(/<style[\s\S]*?<\/style>/gi, " ")
-    .replace(/<li[^>]*>/gi, "\n• ")
-    .replace(/<br\s*\/?>/gi, "\n")
-    .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
-    .replace(/<[^>]+>/g, " ")
-    .replace(/&nbsp;/gi, " ")
-    .replace(/&amp;/gi, "&")
-    .replace(/&lt;/gi, "<")
-    .replace(/&gt;/gi, ">")
-    .replace(/&quot;|&ldquo;|&rdquo;/gi, '"')
-    .replace(/&#39;|&rsquo;|&lsquo;|&apos;/gi, "'")
-    .replace(/&mdash;/gi, "—")
-    .replace(/&ndash;/gi, "–")
-    .replace(/&#(\d+);/g, (_, n) => fromCharRef(Number(n)))
-    .replace(/&#x([0-9a-fA-F]+);/g, (_, n) => fromCharRef(parseInt(n, 16)))
-    .replace(/&[a-z]+;/gi, " ")
-    .replace(/[ \t]+/g, " ")
-    .split("\n")
-    .map((line) => line.trim())
-    .join("\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+function pageLoader(fetchHtml: FetchHtml, url: URL): LoadPage {
+  let pending: Promise<Page> | undefined;
+  return () => (pending ??= fetchHtml(url).then(async (response) => ({
+    status: response.status,
+    ok: response.ok,
+    html: response.ok ? await response.text() : ""
+  })));
 }
 
-function htmlAttr(tag: string, attr: string): string {
-  const match = String(tag || "").match(new RegExp(`${attr}=["']([^"']*)["']`, "i"));
-  return match?.[1] ?? "";
-}
-
-function metaContent(html: string, name: string): string {
-  const meta = String(html || "")
-    .match(/<meta\b[^>]*>/gi)
-    ?.find((tag) => {
-      const key = htmlAttr(tag, "name") || htmlAttr(tag, "property");
-      return key.toLowerCase() === name.toLowerCase();
-    });
-  return meta ? htmlToText(htmlAttr(meta, "content")) : "";
-}
-
-function linkedInHeaderLines(html: string): string[] {
-  const title = metaContent(html, "og:title") || metaContent(html, "twitter:title");
-  const match = title.match(/^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn\b/i);
-  if (!match) return [];
-  return [
-    `Company: ${match[1].trim()}`,
-    `Role: ${match[2].trim()}`,
-    `Location: ${match[3].trim()}`
-  ];
-}
-
-function linkedInCriteriaLines(html: string): string[] {
-  const items = [...String(html || "").matchAll(/<li[^>]*class=["'][^"']*description__job-criteria-item[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi)];
-  return items
-    .map((item) => htmlToText(item[1]).split("\n").map((line) => line.trim()).filter(Boolean))
-    .map((parts) => {
-      if (parts.length < 2) return "";
-      return `${parts[0].replace(/:$/, "")}: ${parts.slice(1).join(" ")}`;
-    })
-    .filter(Boolean);
-}
-
-function linkedInJobText(html: string): string {
-  if (!/(\bshow-more-less-html__markup\b|\bdescription__job-criteria-item\b)/i.test(String(html || ""))) {
-    return "";
-  }
-  const body = [...String(html || "").matchAll(/<div[^>]*class=["'][^"']*show-more-less-html__markup[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)]
-    .map((match) => htmlToText(match[1]))
-    .filter((text) => text.length > 80);
-  if (!body.length) return "";
-
-  const lines = [...linkedInHeaderLines(html), ...linkedInCriteriaLines(html), body.join("\n\n")];
-  return htmlToText(lines.join("\n\n"));
-}
+// --- Greenhouse --------------------------------------------------------------
 
 function greenhouseParam(value: unknown, pattern: RegExp): string {
   const param = String(value ?? "").trim();
@@ -150,40 +116,6 @@ export function greenhouseJobAppUrl(u: URL, wrapperHtml = ""): URL | null {
   return appUrl;
 }
 
-function firstHtmlText(html: string, pattern: RegExp): string {
-  const match = String(html || "").match(pattern);
-  return match ? htmlToText(match[1]) : "";
-}
-
-function greenhouseEmbeddedJobText(html: string): string {
-  const source = String(html || "");
-  if (!/\bjob__description\b/i.test(source)) return "";
-
-  const title = firstHtmlText(source, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i);
-  const location = firstHtmlText(
-    source,
-    /<div\b[^>]*class=["'][^"']*\bjob__location\b[^"']*["'][^>]*>[\s\S]*?<div\b[^>]*>([\s\S]*?)<\/div>\s*<\/div>/i
-  );
-
-  const descriptionStart = source.search(/<div\b[^>]*class=["'][^"']*\bjob__description\b[^"']*["'][^>]*>/i);
-  if (descriptionStart < 0) return "";
-  const rest = source.slice(descriptionStart);
-  const endMarkers = [
-    rest.search(/<div\b[^>]*class=["'][^"']*\bjob-alert\b/i),
-    rest.search(/<div\b[^>]*class=["'][^"']*\bapplication--container\b/i),
-    rest.search(/<div\b[^>]*class=["'][^"']*\bdivider\b/i)
-  ].filter((index) => index > 0);
-  const descriptionHtml = rest.slice(0, endMarkers.length ? Math.min(...endMarkers) : rest.length);
-  const description = htmlToText(descriptionHtml);
-  if (description.length < 200) return "";
-
-  return htmlToText([
-    title ? `Role: ${title}` : "",
-    location ? `Location: ${location}` : "",
-    description
-  ].filter(Boolean).join("\n\n"));
-}
-
 // One extension import resolves the same posting TWICE within seconds —
 // /api/extension/analyze (popup preview) and /api/extension/import
 // (runExtensionPrepare) both land in resolveImportedJobText — so a successful
@@ -200,13 +132,11 @@ const ASHBY_CACHE_TTL_MS = 120_000;
 const ASHBY_CACHE_MAX = 8;
 const ashbyTextCache = new Map<string, { text: string; at: number }>();
 
-async function importFromGreenhouse(jobUrl: URL, wrapperHtml = ""): Promise<string> {
-  const appUrl = greenhouseJobAppUrl(jobUrl, wrapperHtml);
-  if (!appUrl) return "";
+async function importFromGreenhouse(fetchHtml: FetchHtml, appUrl: URL): Promise<string> {
   const cached = greenhouseTextCache.get(appUrl.href);
   if (cached && Date.now() - cached.at < GREENHOUSE_CACHE_TTL_MS) return cached.text;
-  const response = await fetchPublicHtml(appUrl, { Accept: "text/html" });
-  if (!response.ok) return "";
+  const response = await fetchHtml(appUrl, { Accept: "text/html" });
+  if (!sourceOk(response)) return "";
   const html = await response.text();
   const text = greenhouseEmbeddedJobText(html);
   if (text) {
@@ -219,51 +149,9 @@ async function importFromGreenhouse(jobUrl: URL, wrapperHtml = ""): Promise<stri
   return text;
 }
 
-export async function resolveImportedJobText(text: unknown, url: unknown): Promise<string> {
-  const fallbackText = String(text || "");
-  let jobUrl: URL;
-  try {
-    jobUrl = new URL(String(url || ""));
-  } catch {
-    return fallbackText;
-  }
-  if (!isPublicHttpUrl(jobUrl)) return fallbackText;
+// --- Ashby -------------------------------------------------------------------
 
-  try {
-    const ashbyTarget = ashbyPostingApiTarget(jobUrl);
-    if (ashbyTarget) {
-      const ashbyText = await importFromAshby(ashbyTarget);
-      return ashbyText || fallbackText;
-    }
-
-    const workdayApi = workdayCxsUrl(jobUrl);
-    if (workdayApi) {
-      const workdayText = await importFromWorkday(workdayApi);
-      return workdayText || fallbackText;
-    }
-
-    // Direct Greenhouse links already carry the board and token. Branded
-    // careers wrappers often expose only gh_jid in the URL and keep the board
-    // slug in their HTML, so fetch that wrapper once and resolve its canonical
-    // Greenhouse job before falling back to captured page text.
-    if (greenhouseJobAppUrl(jobUrl)) {
-      const greenhouseText = await importFromGreenhouse(jobUrl);
-      return greenhouseText || fallbackText;
-    }
-    const wrapperToken = greenhouseParam(
-      jobUrl.searchParams.get("gh_jid") || jobUrl.searchParams.get("token"),
-      /^\d{3,20}$/
-    );
-    if (!wrapperToken) return fallbackText;
-    const wrapperResponse = await fetchPublicHtml(jobUrl, { Accept: "text/html" });
-    if (!wrapperResponse.ok) return fallbackText;
-    const wrapperHtml = await wrapperResponse.text();
-    const greenhouseText = await importFromGreenhouse(jobUrl, wrapperHtml);
-    return greenhouseText || fallbackText;
-  } catch {
-    return fallbackText;
-  }
-}
+type AshbyTarget = { apiUrl: URL; jobId: string };
 
 const ASHBY_JOB_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const ASHBY_BOARD_PATTERN = /^[a-z0-9][a-z0-9_-]{0,80}$/i;
@@ -272,17 +160,7 @@ const ASHBY_WRAPPER_BOARDS = new Map([
   ["www.joinhandshake.com", "handshake"]
 ]);
 
-export function ashbyPostingApiTarget(u: URL): { apiUrl: URL; jobId: string } | null {
-  let board = "";
-  let jobId = "";
-  if (u.hostname.toLowerCase() === "jobs.ashbyhq.com") {
-    const parts = u.pathname.split("/").filter(Boolean);
-    board = parts[0] ?? "";
-    jobId = parts[1] ?? "";
-  } else {
-    board = ASHBY_WRAPPER_BOARDS.get(u.hostname.toLowerCase()) ?? "";
-    jobId = u.searchParams.get("ashby_jid") ?? "";
-  }
+function ashbyBoardTarget(board: string, jobId: string): AshbyTarget | null {
   if (!ASHBY_BOARD_PATTERN.test(board) || !ASHBY_JOB_ID_PATTERN.test(jobId)) return null;
   return {
     apiUrl: new URL(
@@ -292,52 +170,32 @@ export function ashbyPostingApiTarget(u: URL): { apiUrl: URL; jobId: string } | 
   };
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+export function ashbyPostingApiTarget(u: URL): AshbyTarget | null {
+  if (u.hostname.toLowerCase() === "jobs.ashbyhq.com") {
+    const parts = u.pathname.split("/").filter(Boolean);
+    return ashbyBoardTarget(parts[0] ?? "", parts[1] ?? "");
+  }
+  return ashbyBoardTarget(ASHBY_WRAPPER_BOARDS.get(u.hostname.toLowerCase()) ?? "", u.searchParams.get("ashby_jid") ?? "");
 }
 
-function ashbyLine(value: unknown): string {
-  return typeof value === "string" ? htmlToText(value).replace(/\s+/g, " ").trim().slice(0, 500) : "";
+// A branded careers page with ashby_jid may embed its Ashby board. Exactly one
+// valid board across recognized embed URLs resolves; conflicting or malformed
+// evidence is reported as ambiguous rather than guessed.
+function ashbyEmbedTarget(u: URL, html: string): AshbyTarget | "ambiguous" | null {
+  const jobId = u.searchParams.get("ashby_jid") ?? "";
+  if (!ASHBY_JOB_ID_PATTERN.test(jobId)) return null;
+  const boards = [...html.matchAll(/(?:https?:)?\/\/jobs\.ashbyhq\.com\/([^/?#"'<>\s]+)\/embed\b/gi)].map((m) => m[1]);
+  if (!boards.length) return null;
+  const distinct = new Set(boards.map((board) => board.toLowerCase()));
+  return (distinct.size === 1 && ashbyBoardTarget(boards[0], jobId)) || "ambiguous";
 }
 
-export function ashbyPostingText(value: unknown, jobId: string): string {
-  if (!isRecord(value) || !Array.isArray(value.jobs)) return "";
-  const posting = value.jobs.find((candidate) =>
-    isRecord(candidate) &&
-    typeof candidate.id === "string" &&
-    candidate.id.toLowerCase() === jobId.toLowerCase()
-  );
-  if (!isRecord(posting)) return "";
-  const description = typeof posting.descriptionPlain === "string"
-    ? htmlToText(posting.descriptionPlain)
-    : htmlToText(posting.descriptionHtml);
-  if (description.length < 200) return "";
-  const compensation = isRecord(posting.compensation)
-    ? ashbyLine(posting.compensation.compensationTierSummary)
-    : "";
-  const header = [
-    ["Role", posting.title],
-    ["Location", posting.location],
-    ["Employment type", posting.employmentType],
-    ["Workplace", posting.workplaceType],
-    ["Department", posting.department],
-    ["Team", posting.team],
-    ["Compensation", compensation]
-  ].map(([label, field]) => {
-    const line = ashbyLine(field);
-    return line ? `${label}: ${line}` : "";
-  }).filter(Boolean);
-  return htmlToText([...header, "", description].join("\n"));
-}
-
-async function importFromAshby(
-  target: { apiUrl: URL; jobId: string }
-): Promise<string> {
+async function importFromAshby(fetchHtml: FetchHtml, target: AshbyTarget): Promise<string> {
   const cacheKey = `${target.apiUrl.href}#${target.jobId}`;
   const cached = ashbyTextCache.get(cacheKey);
   if (cached && Date.now() - cached.at < ASHBY_CACHE_TTL_MS) return cached.text;
-  const response = await fetchPublicHtml(target.apiUrl, { Accept: "application/json" });
-  if (!response.ok) return "";
+  const response = await fetchHtml(target.apiUrl, { Accept: "application/json" });
+  if (!sourceOk(response)) return "";
   let value: unknown;
   try {
     value = JSON.parse(await response.text()) as unknown;
@@ -354,6 +212,28 @@ async function importFromAshby(
   }
   return text;
 }
+
+// A board can omit the job or exceed the byte cap; a direct Ashby job page may
+// still carry that exact posting's JobPosting data. Only the size-cap error is
+// recoverable — every other network rejection propagates.
+async function resolveAshby(
+  fetchHtml: FetchHtml,
+  jobUrl: URL,
+  target: AshbyTarget,
+  loadPage: LoadPage
+): Promise<SourceOutcome> {
+  let text = "";
+  try {
+    text = await importFromAshby(fetchHtml, target);
+  } catch (error) {
+    if (!(error instanceof ResponseTooLargeError)) throw error;
+  }
+  if (text || jobUrl.hostname.toLowerCase() !== "jobs.ashbyhq.com") return found(text);
+  const page = await loadPage();
+  return found(page.ok ? jobPostingJsonLdText(page.html, jobUrl) : "");
+}
+
+// --- Workday -----------------------------------------------------------------
 
 // Workday job pages render the description client-side, but expose it via their
 // CXS JSON API. Rewrite a public job URL to that endpoint when we recognize the
@@ -375,8 +255,8 @@ export function workdayCxsUrl(u: URL): URL | null {
   }
 }
 
-async function importFromWorkday(apiUrl: URL): Promise<string> {
-  const response = await fetchPublicHtml(apiUrl, { Accept: "application/json" });
+async function importFromWorkday(fetchHtml: FetchHtml, apiUrl: URL): Promise<string> {
+  const response = await fetchHtml(apiUrl, { Accept: "application/json" });
   if (!response.ok) return "";
   // Workday CXS JSON is boundary data — keep each field `unknown` and coerce.
   let info: { jobDescription?: unknown; title?: unknown; location?: unknown } | undefined;
@@ -392,32 +272,183 @@ async function importFromWorkday(apiUrl: URL): Promise<string> {
   return (header ? `${header}\n\n` : "") + body;
 }
 
-// Mirrors isLikelyProse in src/lib/jobExtract.ts. "$" stays out of the char
-// class so salary lines like "$90k-$110k" are not penalized; "$(...)" jQuery
-// calls are still caught by the JS-pattern test.
-function isCodeShapedLine(t: string): boolean {
-  const codeChars = (t.match(/[{}();=<>|]/g) ?? []).length;
-  if (codeChars / t.length > 0.08) return true;
-  return /function\s*\(|=>|==|\bvar\s|\$\(/.test(t);
+// --- Page-configured sources -------------------------------------------------
+
+function oracleJobId(u: URL): string {
+  const host = u.hostname.toLowerCase();
+  if (!host.endsWith(".oraclecloud.com") && host !== "enterpriseplatform.dell.com") return "";
+  return u.pathname.match(
+    /^\/hcmUI\/CandidateExperience\/[a-z]{2}(?:-[a-z]{2})?\/sites\/[a-z0-9_-]{1,80}\/job\/(\d{1,20})(?:\/|$)/i
+  )?.[1] ?? "";
 }
 
-// JS-only ATS pages (e.g. UltiPro) can clear the length gate with script and
-// template junk. Weigh by characters, not lines: such pages hide a few huge
-// code lines among dozens of one-char bullet/punctuation lines, so a
-// line-count majority misses them. Letter-free lines count as unreadable too.
-function isMostlyCodeShaped(text: string): boolean {
-  let readable = 0;
-  let unreadable = 0;
-  for (const line of text.split("\n")) {
-    const t = line.trim();
-    if (!t) continue;
-    if (isCodeShapedLine(t) || !/[a-zA-Z]/.test(t)) unreadable += t.length;
-    else readable += t.length;
+function oracleSiteNumber(html: string): string {
+  const sites = new Set([...html.matchAll(/\bdata-sitenumber=["']([^"']*)["']/gi)].map((m) => m[1]));
+  const [site = ""] = sites;
+  return sites.size === 1 && /^[a-z0-9_]{1,40}$/i.test(site) ? site : "";
+}
+
+async function resolveOracle(fetchHtml: FetchHtml, jobUrl: URL, jobId: string, html: string): Promise<SourceOutcome> {
+  const site = oracleSiteNumber(html);
+  if (!site) return found("");
+  const apiUrl = new URL("/hcmRestApi/resources/latest/recruitingCEJobRequisitionDetails", jobUrl.origin);
+  apiUrl.searchParams.set("onlyData", "true");
+  apiUrl.searchParams.set("expand", "all");
+  apiUrl.searchParams.set("finder", `ById;Id="${jobId}",siteNumber=${site}`);
+  const response = await fetchHtml(apiUrl, { Accept: "application/json" });
+  if (!sourceOk(response)) return found("");
+  try {
+    return found(oracleRequisitionText(JSON.parse(await response.text()), jobId));
+  } catch {
+    return found("");
   }
-  return unreadable >= readable;
 }
 
-export async function handleImportJob(req: IncomingMessage, res: ServerResponse): Promise<void> {
+function icimsJobId(u: URL): string {
+  if (!/^[a-z0-9-]+\.icims\.com$/i.test(u.hostname)) return "";
+  return u.pathname.match(/^\/jobs\/(\d{1,12})(?:\/|$)/)?.[1] ?? "";
+}
+
+// The careers page frames its job body; take the first same-origin frame for
+// the same job id (attribute entities decoded), and never crawl further.
+async function resolveIcims(fetchHtml: FetchHtml, jobUrl: URL, jobId: string, html: string): Promise<SourceOutcome> {
+  const direct = icimsJobText(html);
+  if (direct) return found(direct);
+  const frame = (html.match(/<iframe\b[^>]*>/gi) ?? [])
+    .flatMap((tag) => {
+      try {
+        return [new URL(decodeEntities(htmlAttr(tag, "src")), jobUrl)];
+      } catch {
+        return [];
+      }
+    })
+    .find((url) => url.origin === jobUrl.origin && icimsJobId(url) === jobId);
+  if (!frame) return found("");
+  const response = await fetchHtml(frame, { Accept: "text/html" });
+  return found(sourceOk(response) ? icimsJobText(await response.text()) : "");
+}
+
+function dayforceJobId(u: URL): string {
+  if (u.hostname.toLowerCase() !== "jobs.dayforcehcm.com") return "";
+  return u.pathname.match(/\/jobs\/(\d{1,12})(?:\/|$)/)?.[1] ?? "";
+}
+
+function ukgOpportunityId(u: URL): string {
+  if (!/^recruiting\d*\.ultipro\.com$/i.test(u.hostname) || !/\/OpportunityDetail\/?$/i.test(u.pathname)) return "";
+  const id = u.searchParams.get("opportunityId") ?? "";
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : "";
+}
+
+function workableTarget(u: URL): { apiUrl: URL; shortcode: string } | null {
+  if (u.hostname.toLowerCase() !== "apply.workable.com") return null;
+  const [account = "", marker, shortcode = ""] = u.pathname.split("/").filter(Boolean);
+  if (marker !== "j" || !/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(account) || !/^[a-z0-9]{6,20}$/i.test(shortcode)) return null;
+  return { apiUrl: new URL(`https://apply.workable.com/api/v2/accounts/${account}/jobs/${shortcode}`), shortcode };
+}
+
+async function resolveWorkable(fetchHtml: FetchHtml, target: { apiUrl: URL; shortcode: string }): Promise<SourceOutcome> {
+  const response = await fetchHtml(target.apiUrl, { Accept: "application/json" });
+  if (!sourceOk(response)) return found("");
+  try {
+    return found(workablePostingText(JSON.parse(await response.text()), target.shortcode));
+  } catch {
+    return found("");
+  }
+}
+
+// --- Source resolution -------------------------------------------------------
+
+// Resolves a recognized public job source to its exact selected posting. Shared
+// by URL import and extension enrichment; the page is fetched lazily and once.
+async function resolveKnownSource(fetchHtml: FetchHtml, jobUrl: URL, loadPage: LoadPage): Promise<SourceOutcome> {
+  const ashbyTarget = ashbyPostingApiTarget(jobUrl);
+  if (ashbyTarget) return resolveAshby(fetchHtml, jobUrl, ashbyTarget, loadPage);
+
+  // A CXS miss continues to the page: some tenants serve a readable page.
+  const workdayApi = workdayCxsUrl(jobUrl);
+  if (workdayApi) {
+    const text = await importFromWorkday(fetchHtml, workdayApi);
+    return text ? { text } : null;
+  }
+
+  const greenhouseDirect = greenhouseJobAppUrl(jobUrl);
+  if (greenhouseDirect) return found(await importFromGreenhouse(fetchHtml, greenhouseDirect));
+
+  const workable = workableTarget(jobUrl);
+  if (workable) return resolveWorkable(fetchHtml, workable);
+
+  const oracleId = oracleJobId(jobUrl);
+  const icimsId = icimsJobId(jobUrl);
+  const dayforceId = dayforceJobId(jobUrl);
+  const ukgId = ukgOpportunityId(jobUrl);
+  const wrapperToken = /^\d{3,20}$/.test(jobUrl.searchParams.get("gh_jid") || jobUrl.searchParams.get("token") || "");
+  const wrapperAshby = ASHBY_JOB_ID_PATTERN.test(jobUrl.searchParams.get("ashby_jid") ?? "");
+  if (!oracleId && !icimsId && !dayforceId && !ukgId && !wrapperToken && !wrapperAshby) return null;
+
+  const page = await loadPage();
+  if (!page.ok) return { httpStatus: page.status };
+  if (oracleId) return resolveOracle(fetchHtml, jobUrl, oracleId, page.html);
+  if (icimsId) return resolveIcims(fetchHtml, jobUrl, icimsId, page.html);
+  if (dayforceId) return found(dayforceJobText(page.html, dayforceId));
+  if (ukgId) return found(ukgOpportunityText(page.html, ukgId));
+
+  // Branded wrappers resolve only with board evidence in their HTML; without
+  // it, an unfamiliar page stays a generic import.
+  const greenhouseWrapped = greenhouseJobAppUrl(jobUrl, page.html);
+  if (greenhouseWrapped) return found(await importFromGreenhouse(fetchHtml, greenhouseWrapped));
+  const ashbyEmbed = ashbyEmbedTarget(jobUrl, page.html);
+  if (ashbyEmbed === "ambiguous") return found("");
+  if (ashbyEmbed) return found(await importFromAshby(fetchHtml, ashbyEmbed));
+  return null;
+}
+
+// Generic pages keep readable text that already shows the JD; a bound
+// JobPosting replaces text that is unreadable or lacks it. Recognized shells
+// without a JD fail.
+function genericPageOutcome(jobUrl: URL, html: string): Outcome {
+  const host = jobUrl.hostname.toLowerCase();
+  if (/(^|\.)linkedin\.com$/.test(host) && /^\/jobs\/view\//i.test(jobUrl.pathname)) {
+    const text = linkedInJobText(html) || jobPostingJsonLdText(html, jobUrl);
+    return text ? { text } : { missing: MISSING_LINKEDIN };
+  }
+  if (host === "jobs.jobvite.com" && jobviteMissingJob(html)) return found("");
+  const text = linkedInJobText(html) || htmlToText(html);
+  const readable = text.length >= 200 && !isMostlyCodeShaped(text);
+  // Workday pages carry boilerplate JobPosting data; CXS is their structured source.
+  const structured = workdayCxsUrl(jobUrl) ? "" : jobPostingJsonLdText(html, jobUrl);
+  if (structured && !(readable && pageShowsPosting(text, structured))) return { text: structured };
+  if (!readable) return { missing: "Job page did not expose enough readable text. Paste it instead." };
+  return { text };
+}
+
+export async function resolveImportedJobText(
+  text: unknown,
+  url: unknown,
+  deps: FetchPublicHtmlDeps = {}
+): Promise<string> {
+  const fallbackText = String(text || "");
+  let jobUrl: URL;
+  try {
+    jobUrl = new URL(String(url || ""));
+  } catch {
+    return fallbackText;
+  }
+  if (!isPublicHttpUrl(jobUrl)) return fallbackText;
+
+  const fetchHtml: FetchHtml = (target, headers = {}) => fetchPublicHtml(target, headers, deps);
+  try {
+    const outcome = await resolveKnownSource(fetchHtml, jobUrl, pageLoader(fetchHtml, jobUrl));
+    return outcome && "text" in outcome ? outcome.text : fallbackText;
+  } catch {
+    return fallbackText;
+  }
+}
+
+export async function handleImportJob(
+  req: IncomingMessage,
+  res: ServerResponse,
+  deps: FetchPublicHtmlDeps = {}
+): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
     return;
@@ -437,59 +468,28 @@ export async function handleImportJob(req: IncomingMessage, res: ServerResponse)
     return;
   }
 
+  const fetchHtml: FetchHtml = (target, headers = {}) => fetchPublicHtml(target, headers, deps);
   try {
-    // Prefer known ATS endpoints since their rendered pages are often JS-only;
-    // fall back to a generic HTML scrape for everything else.
-    const workdayApi = workdayCxsUrl(jobUrl);
-    if (workdayApi) {
-      const workdayText = await importFromWorkday(workdayApi);
-      if (workdayText) {
-        sendJson(res, 200, { text: workdayText.slice(0, 16_000) });
-        return;
-      }
+    const loadPage = pageLoader(fetchHtml, jobUrl);
+    let outcome = await resolveKnownSource(fetchHtml, jobUrl, loadPage);
+    if (!outcome) {
+      const page = await loadPage();
+      outcome = page.ok ? genericPageOutcome(jobUrl, page.html) : { httpStatus: page.status };
     }
-
-    const ashbyTarget = ashbyPostingApiTarget(jobUrl);
-    if (ashbyTarget) {
-      const ashbyText = await importFromAshby(ashbyTarget);
-      if (ashbyText) {
-        sendJson(res, 200, { text: ashbyText.slice(0, 16_000) });
-        return;
-      }
-    }
-
-    const greenhouseText = await importFromGreenhouse(jobUrl);
-    if (greenhouseText) {
-      sendJson(res, 200, { text: greenhouseText.slice(0, 16_000) });
-      return;
-    }
-
-    const response = await fetchPublicHtml(jobUrl);
-
-    if (!response.ok) {
+    if ("text" in outcome) {
+      sendJson(res, 200, { text: outcome.text.slice(0, 16_000) });
+    } else if ("missing" in outcome) {
+      sendJson(res, 400, { error: outcome.missing });
+    } else {
       sendJson(res, 400, {
-        error: `The job page returned HTTP ${response.status}. Paste the job description text instead.`
+        error: `The job page returned HTTP ${outcome.httpStatus}. Paste the job description text instead.`
       });
-      return;
     }
-
-    const html = await response.text();
-    // A branded careers page can carry only gh_jid in its visible URL while an
-    // embed script identifies the Greenhouse board. Resolve that canonical job
-    // before the generic scraper accepts navigation/company chrome as a JD.
-    const wrappedGreenhouseText = await importFromGreenhouse(jobUrl, html);
-    if (wrappedGreenhouseText) {
-      sendJson(res, 200, { text: wrappedGreenhouseText.slice(0, 16_000) });
-      return;
-    }
-    const text = linkedInJobText(html) || htmlToText(html);
-
-    if (text.length < 200 || isMostlyCodeShaped(text)) {
-      sendJson(res, 400, { error: "Job page did not expose enough readable text. Paste it instead." });
-      return;
-    }
-    sendJson(res, 200, { text: text.slice(0, 16_000) });
   } catch (error) {
+    if (error instanceof SourceHttpError) {
+      sendJson(res, 400, { error: `${error.message} Paste the job description text instead.` });
+      return;
+    }
     if (error instanceof BlockedHostError) {
       sendJson(res, 400, { error: `${error.message} Paste the job description text instead.` });
       return;

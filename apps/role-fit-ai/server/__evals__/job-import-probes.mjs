@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 
 import {
   ashbyPostingApiTarget,
-  ashbyPostingText,
   greenhouseJobAppUrl,
   workdayCxsUrl
 } from "../jobImport.ts";
+import { ashbyPostingText } from "../jobImportContent.ts";
 import { fenceUntrusted } from "../ai/prompts.ts";
 
 const handshakeAshbyUrl = new URL(
@@ -106,9 +106,9 @@ assert.equal(
 console.log("PASS known ATS job resolution");
 
 // --- htmlToText / fromCharRef adversarial coverage --------------------------
-// htmlToText + fromCharRef (jobImport.ts) turn fetched attacker HTML into the
-// text that becomes model-prompt input. Neither is exported, so they are driven
-// through ashbyPostingText — the real production path that funnels an Ashby
+// htmlToText + fromCharRef (jobImportContent.ts) turn fetched attacker HTML into the
+// text that becomes model-prompt input. They are driven through
+// ashbyPostingText — a real production path that funnels an Ashby
 // posting's attacker-controlled `descriptionPlain` JSON through htmlToText. The
 // description gate requires >=200 post-strip chars, so each case is padded.
 const PAD = "The engineer builds reliable backend services and REST APIs for the platform. ".repeat(4);

@@ -17,7 +17,10 @@ for provider, prompt, sanitizer, and review work.
   replace their old dispatch paths; do not retain compatibility aliases.
 - `http.ts` owns body/JSON/fetch utilities and request limits.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
-- `jobImport.ts` owns ATS/public job-text resolution.
+- `jobImport.ts` owns recognized job-source targets, fetch sequencing, caches,
+  and import outcomes; `jobImportContent.ts` owns the pure HTML→text converter
+  and exact-posting parsers. Both stay near 500 lines by design: splitting
+  per source would scatter one shared selection contract.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
   cover-letter storage separate from strict `.resume` storage and starter
