@@ -275,7 +275,10 @@ email and web destinations are detected automatically, while explicit edit and
 remove actions remain available. A spell-check toggle sits with the inline
 formatting group; its underlines are editor-only view state and never reach
 print or PDF output. Resume-wide line height and physical document gaps live
-together in Spacing.
+together in Spacing. Its preset section shows the fixed Compact, Balanced, and
+Spacious presets as one segmented row, then up to eight saved preset rows. Any
+preset applies on click; saved rows add icon actions to update, rename inline,
+or delete after an inline confirmation.
 Global alignment reflects the effective fields in its scope and clears
 conflicting local overrides when applied; any later local divergence clears
 that global active state. Entry start and end indents and the bullet indent

@@ -12,7 +12,7 @@
     "eval:editor": "node --experimental-strip-types src/sections/editor/__evals__/typeset-editing.mjs",
     "eval:clipboard": "node --experimental-strip-types src/sections/editor/__evals__/clipboard-html-metadata.mjs && node --experimental-strip-types src/sections/editor/__evals__/clipboard-html-whitespace.mjs",
     "eval:link-card": "node src/sections/editor/__evals__/link-card-escape.mjs",
-    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs && node --experimental-strip-types src/hooks/__evals__/modal-focus-contract.mjs",
+    "eval:hooks": "node --experimental-strip-types src/hooks/__evals__/resume-editor-structure.mjs && node --experimental-strip-types src/hooks/__evals__/modal-focus-contract.mjs && node --experimental-strip-types src/hooks/__evals__/spacing-presets.mjs",
     "eval:components": "node src/components/__evals__/style-range.mjs && node --experimental-strip-types src/components/__evals__/toolbar-contracts.mjs",
     "eval": "npm run eval:fonts && npm run eval:editor && npm run eval:clipboard && npm run eval:hooks && npm run eval:components && npm run eval:link-card",
     "test": "npm run eval",

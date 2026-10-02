@@ -5,6 +5,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-01
 
+- [USER+CODE] Spacing presets: the single saved "Custom" preset became up to
+  eight named saved presets, listed in the same section under the fixed
+  Compact/Balanced/Spacious segmented row (the user delegated the design with
+  no Product Partner, then asked to merge built-in and saved presets; one row
+  per built-in wasted space). Built-ins stay
+  fixed engine values so Reset and the layout snapshots keep their meaning.
+  Saved rows reapply, update with current spacing, rename inline, or delete
+  after inline confirmation. A rename commits on Enter, blur, or the popover
+  closing; an empty name keeps the old one. Save is disabled when the current
+  spacing already matches any preset. The list is a shared-editor local
+  preference (`typeset-resume.docStyle.spacingPresets.v1`), re-read before each
+  write and synced across tabs by the `storage` event; it never enters
+  `.resume` files or history. The old `typeset-resume.docStyle.custom.v1`
+  preset migrates in as "Custom". The cover-letter adapter stubs the new
+  controls.
+
 - [USER+CODE] Job-link import audit and repair (task `jd-import-audit-20261001`;
   Product Brief v1 and Delivery Plan v1 user-approved). A 201-link audit (latest
   200 submitted applications plus one supplied link) found 72 consistent JDs,

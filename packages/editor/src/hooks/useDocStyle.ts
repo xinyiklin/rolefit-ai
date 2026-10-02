@@ -6,17 +6,27 @@ import {
   coerceDocStyle,
   pickDocSpacing,
   toDocumentStyle,
-  type DocSpacingPreset,
   type DocStyle,
   type DocStyleFields,
   type DocumentStyle
 } from "@typeset/engine/lib/documentStyle.ts";
 import { createHistoryClock, type HistoryClock } from "./historyClock.ts";
+import {
+  addSpacingPreset,
+  loadSavedSpacingPresets,
+  nextSpacingPresetName,
+  parseSavedSpacingPresets,
+  removeSpacingPreset,
+  renameSpacingPreset,
+  updateSpacingPresetValues,
+  type SavedSpacingPreset
+} from "./spacingPresets.ts";
 
 const STORAGE_KEY = "typeset-resume.docStyle.v1";
-// User-saved spacing preset (the point-gap sliders only, like the built-in
-// presets). Stored separately so it survives Reset and live edits.
-const CUSTOM_STORAGE_KEY = "typeset-resume.docStyle.custom.v1";
+// Saved spacing presets live outside the style so they survive Reset and edits.
+const PRESETS_STORAGE_KEY = "typeset-resume.docStyle.spacingPresets.v1";
+// The former single "Custom" preset, migrated into the list on first load.
+const LEGACY_CUSTOM_STORAGE_KEY = "typeset-resume.docStyle.custom.v1";
 const HISTORY_CAP = 100;
 const COALESCE_MS = 700;
 
@@ -174,14 +184,40 @@ export function styleReducer(
   };
 }
 
-function loadCustomPreset(): DocSpacingPreset | null {
+function loadSpacingPresets(): SavedSpacingPreset[] | null {
   try {
-    const raw = window.localStorage.getItem(CUSTOM_STORAGE_KEY);
-    if (raw) return pickDocSpacing(coerceDocStyle(JSON.parse(raw)));
+    return loadSavedSpacingPresets(
+      window.localStorage.getItem(PRESETS_STORAGE_KEY),
+      window.localStorage.getItem(LEGACY_CUSTOM_STORAGE_KEY)
+    );
   } catch {
-    // A corrupt saved preset falls back to no custom preset.
+    return null;
   }
-  return null;
+}
+
+// Another tab's latest list, or null when the key is absent or unreadable.
+function readStoredSpacingPresets(): SavedSpacingPreset[] | null {
+  try {
+    const raw = window.localStorage.getItem(PRESETS_STORAGE_KEY);
+    return raw === null ? null : parseSavedSpacingPresets(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+function storeSpacingPresets(presets: SavedSpacingPreset[]): boolean {
+  try {
+    window.localStorage.setItem(PRESETS_STORAGE_KEY, JSON.stringify(presets));
+    window.localStorage.removeItem(LEGACY_CUSTOM_STORAGE_KEY);
+    return true;
+  } catch {
+    // Storage unavailable; the presets still apply for this session.
+    return false;
+  }
+}
+
+function createSpacingPresetId() {
+  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 function loadStyle(): DocStyle {
@@ -215,7 +251,11 @@ export function useDocStyle(historyClock?: HistoryClock) {
   });
   const style = state.style;
   const [cleanDocumentStyle, setCleanDocumentStyle] = useState(() => toDocumentStyle(style));
-  const [customPreset, setCustomPreset] = useState<DocSpacingPreset | null>(loadCustomPreset);
+  // Corrupt saved presets fall back to none.
+  const [spacingPresets, setSpacingPresets] = useState<SavedSpacingPreset[]>(() => loadSpacingPresets() ?? []);
+  const spacingPresetsRef = useRef(spacingPresets);
+  // After a failed write, storage is behind this tab and must not be re-read.
+  const presetsStoredRef = useRef(true);
   const saveTimer = useRef<number | undefined>(undefined);
   // Read through a ref where a stable callback needs the current style.
   const styleRef = useRef(style);
@@ -253,15 +293,63 @@ export function useDocStyle(historyClock?: HistoryClock) {
   const undo = useCallback(() => dispatch({ type: "undo" }), []);
   const redo = useCallback(() => dispatch({ type: "redo" }), []);
 
-  const saveCustomPreset = useCallback(() => {
-    const snapshot = pickDocSpacing(styleRef.current);
-    setCustomPreset(snapshot);
-    try {
-      window.localStorage.setItem(CUSTOM_STORAGE_KEY, JSON.stringify(snapshot));
-    } catch {
-      // Storage unavailable; the preset still applies for this session.
-    }
+  // Another tab of the same app may edit the presets; adopt its list.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (event.key !== PRESETS_STORAGE_KEY || event.newValue === null) return;
+      try {
+        const next = parseSavedSpacingPresets(JSON.parse(event.newValue));
+        spacingPresetsRef.current = next;
+        setSpacingPresets(next);
+      } catch {
+        // Ignore a corrupt write from another tab; this tab keeps its list.
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, []);
+
+  const commitSpacingPresets = useCallback(
+    (change: (presets: SavedSpacingPreset[]) => SavedSpacingPreset[]) => {
+      // Re-read storage so a concurrent edit from another tab is not overwritten.
+      const stored = presetsStoredRef.current ? readStoredSpacingPresets() : null;
+      const next = change(stored ?? spacingPresetsRef.current);
+      spacingPresetsRef.current = next;
+      setSpacingPresets(next);
+      presetsStoredRef.current = storeSpacingPresets(next);
+    },
+    []
+  );
+
+  // Saves the current spacing under a generated name; null at the cap.
+  const saveSpacingPreset = useCallback((): SavedSpacingPreset | null => {
+    let saved: SavedSpacingPreset | null = null;
+    commitSpacingPresets((presets) => {
+      const preset = {
+        id: createSpacingPresetId(),
+        name: nextSpacingPresetName(presets),
+        values: pickDocSpacing(styleRef.current)
+      };
+      const next = addSpacingPreset(presets, preset);
+      if (next.length > presets.length) saved = preset;
+      return next;
+    });
+    return saved;
+  }, [commitSpacingPresets]);
+
+  const updateSpacingPreset = useCallback((id: string) => {
+    commitSpacingPresets((presets) =>
+      updateSpacingPresetValues(presets, id, pickDocSpacing(styleRef.current))
+    );
+  }, [commitSpacingPresets]);
+
+  const renameSavedSpacingPreset = useCallback((id: string, name: string) => {
+    commitSpacingPresets((presets) => renameSpacingPreset(presets, id, name));
+  }, [commitSpacingPresets]);
+
+  const deleteSpacingPreset = useCallback((id: string) => {
+    commitSpacingPresets((presets) => removeSpacingPreset(presets, id));
+  }, [commitSpacingPresets]);
 
   const isStyleDefault = useMemo(
     () =>
@@ -297,8 +385,11 @@ export function useDocStyle(historyClock?: HistoryClock) {
       applyStyle,
       replaceDocumentStyle,
       markClean,
-      saveCustomPreset,
-      customPreset,
+      spacingPresets,
+      saveSpacingPreset,
+      updateSpacingPreset,
+      renameSpacingPreset: renameSavedSpacingPreset,
+      deleteSpacingPreset,
       isStyleDefault,
       canUndo: undoEntry !== undefined,
       canRedo: redoEntry !== undefined,
@@ -309,14 +400,16 @@ export function useDocStyle(historyClock?: HistoryClock) {
     }),
     [
       applyStyle,
-      customPreset,
+      deleteSpacingPreset,
       dirty,
       isStyleDefault,
       markClean,
       redo,
+      renameSavedSpacingPreset,
       replaceDocumentStyle,
-      saveCustomPreset,
+      saveSpacingPreset,
       set,
+      spacingPresets,
       state.future,
       state.past,
       historyBranch,
@@ -324,7 +417,8 @@ export function useDocStyle(historyClock?: HistoryClock) {
       redoEntry,
       undoEntry,
       style,
-      undo
+      undo,
+      updateSpacingPreset
     ]
   );
 }

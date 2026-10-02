@@ -37,8 +37,8 @@ static assets, and your resume content never leaves your device.
 - **Flexible page margins** — switch between Narrow and Normal, or enter
   independent custom top, right, bottom, and left margins from 0.25–3 inches.
 - **Focused spacing controls** — set line and paragraph spacing for the selected
-  paragraphs, independently from Compact, Balanced, Spacious, and custom
-  document-gap presets.
+  paragraphs, independently from Compact, Balanced, Spacious, and up to eight
+  saved, renamable document-gap presets.
 - **Portable source files** — `.resume` preserves editable content and every
   print-affecting style setting. Older builds cannot open files containing
   removed entry rows; existing string-valued files remain valid.
@@ -108,7 +108,10 @@ columns, skill labels, and contact text. Those field controls reflect manual
 inline changes and can reapply or remove formatting across every matching
 field. The Spacing menu owns resume-wide unitless line height together with
 document-level structural gaps. Its preset and physical values remain visible
-together, so a preset is inspectable and any adjusted value becomes Custom.
+together, so a preset is inspectable. The built-in presets are fixed; the
+current spacing can be saved as up to eight named presets that can be
+reapplied, updated, renamed, or deleted. Saved presets are local browser
+preferences and never enter `.resume` files.
 Cover-letter hosts may instead use the shared selection-scoped line-spacing
 control for their paragraph grammar.
 

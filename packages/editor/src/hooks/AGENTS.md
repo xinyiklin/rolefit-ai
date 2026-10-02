@@ -9,7 +9,9 @@ style state; app lifecycle and persistence policy remain in the apps.
   bounded history, dirty state, typing coalescing, and public editor actions.
 - `useDocStyle.ts` owns persisted document-style state plus local view controls
   required by the shared toolbar/editor. The engine's document-style contract
-  remains the canonical model.
+  remains the canonical model. It also persists the saved spacing-preset list
+  (pure list rules in `spacingPresets.ts`), which is a local preference that
+  never enters document files or history.
 - `useModalFocus.ts` owns the cross-host modal keyboard/stacking contract:
   focus entry and restoration, Tab containment, topmost-only Escape handling,
   and background-scroll locking. Hosts retain their own dialog markup/styles.

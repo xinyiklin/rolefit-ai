@@ -16,7 +16,6 @@ import {
   type DocStyle,
   type HeadingCase
 } from "@typeset/engine/lib/documentStyle.ts";
-import type { DocStyleControls } from "../../hooks/useDocStyle";
 
 export type AlignmentOption = {
   value: BodyAlign;
@@ -132,27 +131,14 @@ export function spacingMatches(style: DocStyle, values: DocSpacingPreset) {
   return DOC_SPACING_KEYS.every((key) => Math.abs(style[key] - values[key]) < 0.005);
 }
 
-export function activeSpacingPresetId(docStyle: DocStyleControls): string | null {
-  const builtIn = Object.entries(DOC_SPACING_PRESETS).find(([, preset]) =>
-    spacingMatches(docStyle.style, preset.values)
-  )?.[0];
-  if (builtIn) return builtIn;
-  if (docStyle.customPreset && spacingMatches(docStyle.style, docStyle.customPreset)) return "custom";
-  return null;
-}
+export type BuiltInSpacingPresetId = keyof typeof DOC_SPACING_PRESETS;
 
-export function spacingPresetOptions() {
-  return [
-    ...Object.entries(DOC_SPACING_PRESETS).map(([value, preset]) => ({ value, label: preset.label })),
-    { value: "custom", label: "Custom" }
-  ];
-}
+export const BUILT_IN_SPACING_PRESET_OPTIONS = (
+  Object.entries(DOC_SPACING_PRESETS) as [BuiltInSpacingPresetId, { label: string }][]
+).map(([value, preset]) => ({ value, label: preset.label }));
 
-export function applySpacingPreset(docStyle: DocStyleControls, presetId: string) {
-  if (presetId === "custom") {
-    if (docStyle.customPreset) docStyle.applyStyle(docStyle.customPreset);
-    return;
-  }
-  const preset = DOC_SPACING_PRESETS[presetId as keyof typeof DOC_SPACING_PRESETS];
-  if (preset) docStyle.applyStyle(preset.values);
+export function activeBuiltInSpacingPresetId(style: DocStyle): BuiltInSpacingPresetId | null {
+  return BUILT_IN_SPACING_PRESET_OPTIONS.find(({ value }) =>
+    spacingMatches(style, DOC_SPACING_PRESETS[value].values)
+  )?.value ?? null;
 }
