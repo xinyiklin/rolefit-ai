@@ -26,14 +26,15 @@ function PresetNameInput({
   const [draft, setDraft] = useState(name);
   const draftRef = useRef(draft);
   draftRef.current = draft;
-  const nameRef = useRef(name);
-  nameRef.current = name;
+  // The name when editing began, so an untouched draft never reverts a rename
+  // made meanwhile in another tab.
+  const initialNameRef = useRef(name);
   const onCommitRef = useRef(onCommit);
   onCommitRef.current = onCommit;
 
   useEffect(() => () => {
     const next = normalizeSpacingPresetName(draftRef.current);
-    if (next && next !== nameRef.current) onCommitRef.current(next);
+    if (next && next !== initialNameRef.current) onCommitRef.current(next);
   }, []);
 
   return (

@@ -3,7 +3,7 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
-## 2026-10-01
+## 2026-10-02
 
 - [USER+CODE] Spacing presets: the single saved "Custom" preset became up to
   eight named saved presets, listed in the same section under the fixed
@@ -20,6 +20,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   `.resume` files or history. The old `typeset-resume.docStyle.custom.v1`
   preset migrates in as "Custom". The cover-letter adapter stubs the new
   controls.
+
+## 2026-10-01
 
 - [USER+CODE] Job-link import audit and repair (task `jd-import-audit-20261001`;
   Product Brief v1 and Delivery Plan v1 user-approved). A 201-link audit (latest

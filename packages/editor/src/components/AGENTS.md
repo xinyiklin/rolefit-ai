@@ -94,8 +94,9 @@ paints).
   stay expanded together. Built-in spacing presets are fixed engine values;
   `SpacingPresets` renders built-in and saved presets in one section from
   `DocStyleControls` and never touches storage. A host with no
-  document-spacing popover passes `headerSpacing` to `DocumentStructureControls` so the header's own gaps stay
-  reachable from the Header menu; both surfaces read `HEADER_SPACING_CONTROLS`,
+  document-spacing popover passes `headerSpacing` to
+  `DocumentStructureControls` so the header's own gaps stay reachable from the
+  Header menu; both surfaces read `HEADER_SPACING_CONTROLS`,
   which is where a per-surface label for the same gap belongs.
 - Committing a font-family or font-size menu choice returns focus through the
   host-provided editor callback to the saved page caret or range. Escape still

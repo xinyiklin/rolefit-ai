@@ -680,7 +680,7 @@
   white-space: nowrap;
 }
 
-.style-popover__segmented button:hover:not(.is-selected) {
+.style-popover__segmented button:hover:not(.is-selected, :disabled) {
   color: var(--ink-strong);
   background: var(--card-hover);
 }
@@ -782,6 +782,8 @@
   background: var(--card-hover);
 }
 
+.style-popover__segmented button:disabled,
+.style-popover__preset-apply:disabled,
 .style-popover__preset-icon:disabled {
   color: var(--ink-faint);
   cursor: not-allowed;
