@@ -5,13 +5,12 @@ import { Popover } from "../Popover";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { DOC_SPACING_PRESETS } from "@typeset/engine/lib/documentStyle.ts";
 import { ToolbarButton } from "./ToolbarButton";
+import { SpacingPresets } from "./SpacingPresets";
 import { StyleRange } from "./StyleRange";
 import {
   SPACING_CONTROL_GROUPS,
-  activeSpacingPresetId,
-  applySpacingPreset,
-  formatSpacingValue,
-  spacingPresetOptions
+  activeBuiltInSpacingPresetId,
+  formatSpacingValue
 } from "./styleOptions";
 
 export type SpacingStylePopoverProps = {
@@ -21,9 +20,7 @@ export type SpacingStylePopoverProps = {
 
 export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStylePopoverProps) {
   const idPrefix = `spacing-style-${useId()}`;
-  const activePreset = activeSpacingPresetId(docStyle);
-  const presetOptions = spacingPresetOptions();
-  const spacingIsCustom = activePreset === null || activePreset === "custom";
+  const activePreset = activeBuiltInSpacingPresetId(docStyle.style);
 
   return (
     <Popover
@@ -46,29 +43,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
       {() => (
         <div className="style-popover style-popover--spacing">
           <div className="style-popover__body">
-            <section className="style-popover__section" aria-labelledby={`${idPrefix}-preset`}>
-              <h3 id={`${idPrefix}-preset`} className="style-popover__section-title">Spacing preset</h3>
-              <div className="style-popover__segmented" role="group" aria-label="Spacing preset">
-                {presetOptions.map((option) => {
-                  const selected = option.value === "custom"
-                    ? spacingIsCustom
-                    : !spacingIsCustom && activePreset === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={selected ? "is-selected" : ""}
-                      aria-pressed={selected}
-                      onClick={() => {
-                        applySpacingPreset(docStyle, option.value);
-                      }}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
+            <SpacingPresets docStyle={docStyle} idPrefix={idPrefix} disabled={disabled} />
 
             <section className="style-popover__advanced" aria-labelledby={`${idPrefix}-values`}>
               <h3 id={`${idPrefix}-values`} className="style-popover__section-title">Spacing values</h3>
@@ -114,10 +89,7 @@ export function SpacingStylePopover({ docStyle, disabled = false }: SpacingStyle
             </section>
           </div>
 
-          <div className="style-popover__footer style-popover__footer--split">
-            <button type="button" className="style-popover__secondary" onClick={docStyle.saveCustomPreset}>
-              {docStyle.customPreset ? "Update Custom" : "Save as Custom"}
-            </button>
+          <div className="style-popover__footer">
             <button
               type="button"
               className="style-popover__reset"

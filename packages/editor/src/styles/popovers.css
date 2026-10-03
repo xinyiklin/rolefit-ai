@@ -680,7 +680,7 @@
   white-space: nowrap;
 }
 
-.style-popover__segmented button:hover:not(.is-selected) {
+.style-popover__segmented button:hover:not(.is-selected, :disabled) {
   color: var(--ink-strong);
   background: var(--card-hover);
 }
@@ -694,6 +694,150 @@
 .style-popover__segmented button:focus-visible {
   position: relative;
   z-index: 1;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.style-popover__section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  margin-bottom: 7px;
+}
+
+.style-popover__section-head .style-popover__section-title {
+  margin-bottom: 0;
+}
+
+.style-popover__section-head .style-popover__secondary {
+  min-height: 24px;
+  padding: 2px 8px;
+}
+
+.style-popover__preset-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.style-popover__segmented + .style-popover__preset-list {
+  margin-top: 4px;
+}
+
+.style-popover__preset-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.style-popover__preset-apply,
+.style-popover__preset-icon,
+.style-popover__preset-danger,
+.style-popover__preset-cancel {
+  min-height: 24px;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  outline: none;
+  font-size: 0.7rem;
+  font-weight: 570;
+}
+
+.style-popover__preset-apply {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 8px;
+  overflow: hidden;
+  color: var(--ink);
+  background: transparent;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-popover__preset-apply.is-selected {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  border-color: var(--accent-veil);
+}
+
+.style-popover__preset-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  color: var(--ink-muted);
+  background: transparent;
+}
+
+.style-popover__preset-apply:hover:not(.is-selected, :disabled),
+.style-popover__preset-icon:hover:not(:disabled),
+.style-popover__preset-cancel:hover {
+  color: var(--ink-strong);
+  background: var(--card-hover);
+}
+
+.style-popover__segmented button:disabled,
+.style-popover__preset-apply:disabled,
+.style-popover__preset-icon:disabled {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+  opacity: 0.56;
+}
+
+.style-popover__preset-confirm {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0 4px;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 0.7rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.style-popover__preset-danger,
+.style-popover__preset-cancel {
+  flex: 0 0 auto;
+  padding: 2px 9px;
+  font-weight: 600;
+}
+
+.style-popover__preset-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border-color: var(--danger-line);
+}
+
+.style-popover__preset-cancel {
+  color: var(--ink-muted);
+  background: var(--card);
+  border-color: var(--hairline);
+}
+
+.style-popover__preset-name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 24px;
+  padding: 0 7px;
+  color: var(--ink);
+  background: var(--card);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-veil);
+  font: 500 0.72rem/1 var(--font-ui);
+}
+
+.style-popover__preset-apply:focus-visible,
+.style-popover__preset-icon:focus-visible,
+.style-popover__preset-danger:focus-visible,
+.style-popover__preset-cancel:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 2px var(--accent-veil);
 }
@@ -1136,10 +1280,6 @@
   border-top: 1px solid var(--hairline);
 }
 
-.style-popover__footer--split {
-  justify-content: space-between;
-}
-
 .style-popover__reset,
 .style-popover__secondary {
   display: inline-flex;
@@ -1246,8 +1386,21 @@
   .style-popover__alignment-picker button,
   .style-popover__custom-glyph input,
   .style-popover__reset,
-  .style-popover__secondary {
+  .style-popover__secondary,
+  .style-popover__section-head .style-popover__secondary,
+  .style-popover__preset-apply,
+  .style-popover__preset-danger,
+  .style-popover__preset-cancel {
     min-height: 40px;
+  }
+
+  .style-popover__preset-icon {
+    width: 40px;
+    min-height: 40px;
+  }
+
+  .style-popover__preset-name-input {
+    height: 40px;
   }
 
   .style-popover__range input[type="range"] {

@@ -274,7 +274,7 @@ applies 0.5 inches on all sides and Normal applies 1 inch; only the resulting
 physical values persist in editable files. Custom supports 0.25 through
 3 inches per side, and all four inch values stay visible under every preset.
 The resume keeps global line height inside Spacing, alongside inspectable
-Compact, Balanced, Spacious, and Custom structural values.
+Compact, Balanced, Spacious, and up to eight saved, renamable structural presets.
 Cover-letter line spacing is a vertical, selection-scoped menu: Single, 1.15, 1.5, Double,
 paragraph space before/after, and Custom spacing. The menu is compact and uses
 a line-list icon; Custom spacing opens a focused modal with Cancel and Apply.
