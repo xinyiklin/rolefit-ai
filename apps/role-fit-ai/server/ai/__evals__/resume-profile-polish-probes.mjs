@@ -5,7 +5,7 @@
 
 import assert from "node:assert/strict";
 
-import { flattenResumeTargets, resumePolishSectionIsLocked, sanitizeResumePolishWireResult } from "../../../shared/resumePolishContract.ts";
+import { NEW_BULLETS_PER_ENTRY, flattenResumeTargets, resumePolishSectionIsLocked, sanitizeResumePolishWireResult } from "../../../shared/resumePolishContract.ts";
 import { buildResumePolishScope } from "../../../src/lib/resumePolishScope.ts";
 import { buildResumeProposalPrompts, sanitizeResumeAdvice, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 import { normalizeResumeScope } from "../resumeScope.ts";
@@ -117,6 +117,8 @@ assert.match(prompts.userPrompt, /<entry_profiles>[\s\S]*"entryId":"careflow"[\s
 assert.doesNotMatch(prompts.userPrompt.match(/<entry_profiles>[\s\S]*<\/entry_profiles>/)[0], /Slotwise|Terraform/,
   "only linked Profile text is listed per entry");
 assert.match(prompts.userPrompt, /A new-bullet target adds one bullet at the end of its entry/);
+assert.ok(prompts.userPrompt.includes(`Use only the add targets whose target.entryId is that entry (at most ${NEW_BULLETS_PER_ENTRY} per entry)`),
+  "each add slot belongs to its own entry; the count follows NEW_BULLETS_PER_ENTRY");
 assert.match(prompts.userPrompt, /another entry's profile text and the rest of candidate_context are never evidence for it/);
 assert.match(prompts.userPrompt, /add-from-profile/);
 assert.match(prompts.systemPrompt, /<entry_profiles>/, "entry_profiles is fenced as untrusted data");

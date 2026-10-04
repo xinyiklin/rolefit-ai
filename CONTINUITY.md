@@ -3,6 +3,48 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-04
+
+- [USER+CODE] Resume Polish prompt update (benchmark variant v5; unrelated to
+  the Fit v5 rubric). The user asked for the review, benchmark, and
+  implementation. Rewrites keep each bullet's existing tense; a
+  materiality rule omits churn (tense-only changes, synonym swaps, rephrasing
+  already-strong bullets); separate facts and broader posting terms never become
+  a new claim; an entry gets removals or one reorder; each add slot belongs to
+  its own entry. The old current-role present-tense rule (shared
+  `accomplishmentStyleRules`, also used by Application Answers) is gone. No
+  schema, sanitizer, request, or UI change. The user declined a page-impact
+  line or any warning in the review rail.
+  - [TOOL] Live benchmark, prompt held out from tuning where noted: synthetic
+    fixtures plus 40 real applications and a disjoint 22-application holdout,
+    six models, low through xhigh effort, judges GPT-6 Astra, Opus 5.5 and
+    GPT-6.1 Sol. v5 beat the previous prompt with every judge (real data, Opus
+    medium +0.8 and Sol medium +1.9 of 10; held-out fixtures +1.2 to +1.6) and
+    cut tense-only rewrites from about a quarter of rewrites to near zero.
+    Judges showed family self-preference, so cross-model comparisons rest on
+    where they agree. Results stay in ignored
+    `apps/role-fit-ai/workspace/tailor-benchmark/`.
+  - [USER] Resume Polish setting is now Claude Code / Opus 5.5 / high (on the
+    holdout it beat the previous Sonnet 5.5 medium setup 17 to 1 where both
+    judges agreed). App provider defaults are unchanged.
+  - [TOOL] Open, not started: grounding warnings flag mostly honest paraphrases
+    (sentence-initial verbs read as posting terms, "Built" on own projects,
+    unit-word changes); Accept-all often overflows a full one-page resume.
+  - [TOOL] Two independent reviews found no high/medium issues. Both flagged
+    that "keep every number" contradicted the vanity-count trim rule, so the
+    shipped clause reads "keep any number you retain with the noun it counts".
+    Besides the slot count now read from `NEW_BULLETS_PER_ENTRY`, that is the
+    only wording difference from the benchmarked variant. Remaining accepted
+    lows: "keep accurate verbs" sits beside the AI-tell verb list, and a
+    present-tense bullet in a past role is fixed only alongside a material edit.
+  - [TOOL] Server TypeScript gate and the full RoleFit check passed (138/138
+    offline). New prompt assertions in the resume proposal, structure, Profile,
+    and complete-scope probes fail on the previous wording. A live smoke of the
+    shipped prompt (Opus 5.5 high, GPT-6.1 Sol medium, 12 synthetic fixtures)
+    had no trap hits, merged claims, tense flips, or withheld edits, and an
+    independent fact check found no unsupported edits. No browser QA
+    (prompt-only).
+
 ## 2026-10-02
 
 - [USER+CODE] Spacing presets: the single saved "Custom" preset became up to

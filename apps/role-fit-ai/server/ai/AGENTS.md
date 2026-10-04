@@ -111,6 +111,11 @@ application retain blocking technical guards.
   actual accepted edits with the current document, job, and supported baseline.
   True aliases can preserve a mention; related tools never establish support.
   Keep this advisory separate from Fit, without a score or coverage guarantee.
+- Resume Polish restraint rules are benchmark-backed: rewrites keep
+  each bullet's existing tense, tense-only and synonym edits are churn, and
+  separate facts or a broader posting term never become a new claim. Do not
+  restore the current-role present-tense rule: it made a quarter of rewrites
+  tense-only churn that the grounding checks then flagged.
 - Polish failures fail plainly without changing the document.
   Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither

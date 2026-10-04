@@ -4,6 +4,7 @@ import { jobTerminology, unsupportedTerminology } from "../../src/resume/termino
 import { templateHasUnresolvedSlots } from "../../src/lib/coverLetterTemplate.ts";
 import { affirmativeEvidenceForTerm, candidateClaimIssue, explicitAdviceClaims } from "./claimEvidence.ts";
 import {
+  NEW_BULLETS_PER_ENTRY,
   RESUME_POLISH_STATUSES,
   sanitizeResumePolishAdvice,
   type FlatResumeTarget,
@@ -214,17 +215,20 @@ ${boldBulletKeywords
 - A new skill may come only from the resume or candidate context, never merely from the job description.
 - A real skill may be added to a skill-list or Summary target from the whole resume/context. A project or experience rewrite may use only facts grounded in that same entry or its entry_profiles text; another entry's profile text and the rest of candidate_context are never evidence for it.
 - Preserve same-entry attribution; negative or aspirational text is not evidence.
+- Never combine separate facts into a new claim: a database and a pipeline mentioned separately are not a database-backed pipeline, helping a team is not doing its work, and a broader posting term (CI/CD for CI) is a new claim. Keep a project's listed tools when they matter for this job, without adding how they were used.
 - Prefer posting terminology when supported. Preserve clear mentions of important supported requirements somewhere in the resume. True aliases are equivalent; related tools or partial composites are not. Never stuff keywords or copy posting sentences.
 <terminology_priorities>
 ${fenceUntrusted(JSON.stringify(jobTerminology(jobText).terms.map(({ keyword, category }) => ({ keyword, category }))))}
 </terminology_priorities>
+- Every change must change what a screener learns or how quickly they find it: surface buried job-relevant evidence, rewrite filler or a feature tour into the one claim that matters, or use the posting's term when it names exactly what the same entry shows. Omit churn: tense-only changes, synonym swaps (Cut to Reduced, Moved to Migrated), and rephrasing a bullet that is already specific and relevant. Leave strong bullets unchanged; NO_CHANGES is correct when nothing material remains.
+- Keep the candidate's accurate verbs, and keep any number you retain with the noun it counts, exactly as written.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
 ${removableBullets ? `- To cut a project or experience bullet, return its targetId with "action": "remove" and a reason instead of a replacement. Remove only a bullet clearly irrelevant to this job or redundant with a stronger bullet, never the only evidence of a job requirement, and never every bullet of an entry. A bullet is rewritten or removed, not both.
-` : ""}${orderTargets ? `- A bullet-order target lists its entry's bullet targetIds in current order. To lead with the most job-relevant evidence, return its targetId with "order": the same targetIds in the new order, and a reason. Never reorder for cosmetic reasons, and never both reorder an entry and remove one of its bullets.
+` : ""}${orderTargets ? `- A bullet-order target lists its entry's bullet targetIds in current order. To lead with the most job-relevant evidence, return its targetId with "order": the same targetIds in the new order, and a reason. Never reorder for cosmetic reasons. An entry gets removals or one reorder, never both: if you remove any bullet from an entry, omit that entry's bullet-order target.
 ` : ""}
 - summary is optional concise feedback, maximum 3 items.
 - advice is optional editorial guidance about emphasis, order, space, or missing evidence. Cite exact job and entry excerpts. Advice never supplies replacement text or asserts new candidate facts.
-${entryProfiles.length ? `- A new-bullet target adds one bullet at the end of its entry. Write it only from that entry's entry_profiles text, only when it adds material job-relevant evidence the entry does not already show, and never repeat an existing bullet. Copy the target's entryId into the change. Omit unused new-bullet targets.
+${entryProfiles.length ? `- A new-bullet target adds one bullet at the end of its entry. Write it only from that entry's entry_profiles text, only when it adds material job-relevant evidence the entry does not already show, and never repeat an existing bullet. Use only the add targets whose target.entryId is that entry (at most ${NEW_BULLETS_PER_ENTRY} per entry), and copy that entryId into the change. Omit unused new-bullet targets.
 - Set "evidence": "profile" on any change that relies on entry_profiles text.
 ` : ""}${profileHasHeadings ? `- advice may add profileExcerpt, an exact candidate_context excerpt. Use kind add-from-profile, with empty sectionId and entryId, only for a candidate_context heading block that matches the job and names no resume entry.
 ` : ""}

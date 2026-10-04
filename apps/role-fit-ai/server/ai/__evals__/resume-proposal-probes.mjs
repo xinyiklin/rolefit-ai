@@ -102,6 +102,17 @@ assert.match(prompts.userPrompt, /Skill category labels are locked/i);
 assert.match(prompts.userPrompt, /deep self-audit/i, "high effort requests a deeper internal Polish audit");
 assert.match(prompts.userPrompt, /Do not include audit notes or scratch work/i);
 assert.doesNotMatch(prompts.userPrompt, /evidenceType|risk|hits/);
+// Benchmarked restraint rules (2026-10-04): tense flips and synonym swaps were churn.
+assert.match(prompts.userPrompt, /Keep each bullet's existing tense/, "rewrites keep the bullet's tense");
+assert.doesNotMatch(prompts.userPrompt, /present tense for bullets in the candidate's current role/, "the current-role present-tense rule is gone");
+assert.match(prompts.userPrompt, /Omit churn: tense-only changes, synonym swaps/);
+assert.match(prompts.userPrompt, /NO_CHANGES is correct when nothing material remains/);
+assert.match(prompts.userPrompt, /Keep the candidate's accurate verbs, and keep any number you retain with the noun it counts/);
+assert.match(prompts.userPrompt, /Never combine separate facts into a new claim/);
+assert.match(prompts.userPrompt, /helping a team is not doing its work/);
+assert.match(prompts.userPrompt, /a broader posting term \(CI\/CD for CI\) is a new claim/);
+assert.match(prompts.userPrompt, /listed tools when they matter for this job, without adding how they were used/);
+assert.match(prompts.userPrompt, /Never change a date or employment status to fit a tense/);
 for (const tag of ["editable_targets", "resume_context"]) {
   assert.match(
     prompts.systemPrompt,
