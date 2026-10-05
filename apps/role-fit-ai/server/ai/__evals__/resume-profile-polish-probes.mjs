@@ -10,7 +10,7 @@ import { buildResumePolishScope } from "../../../src/lib/resumePolishScope.ts";
 import { buildResumeProposalPrompts, sanitizeResumeAdvice, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 import { normalizeResumeScope } from "../resumeScope.ts";
 
-const UNSUPPORTED = "Not supported by provided evidence. Review tools, metrics, outcomes and attribution in this edit.";
+const unsupported = (warnings) => warnings?.some((warning) => warning.startsWith("Not supported by provided evidence. "));
 const UNCONFIRMED = "Source reference could not be confirmed.";
 
 const scope = {
@@ -151,7 +151,7 @@ for (const [label, bulletId, replacement] of [
 ]) {
   const flagged = review([{ targetId: idFor(bulletId), replacement }]);
   assert.equal(flagged.status, "PROPOSAL", `${label}: stays reviewable`);
-  assert.ok(flagged.changes[0].warnings?.includes(UNSUPPORTED), `${label}: carries the support warning`);
+  assert.ok(unsupported(flagged.changes[0].warnings), `${label}: carries the support warning`);
 }
 
 const resumeOnly = review([{ targetId: idFor("b-acme"), replacement: "Built JavaScript tools used by internal support teams." }]);
@@ -177,7 +177,7 @@ assert.deepEqual(adds.changes[0].target, { sectionId: "experience", entryId: "ac
 assert.ok(adds.changes.every((change) => change.evidence === "profile"), "every new bullet is labelled Profile");
 assert.equal(adds.changes[0].warnings, undefined, "a grounded Acme bullet has no warning");
 assert.equal(adds.changes[1].warnings, undefined, "a grounded CareFlow bullet has no warning");
-assert.ok(adds.changes[2].warnings?.includes(UNSUPPORTED), "an ungrounded tool and number stay reviewable with a warning");
+assert.ok(unsupported(adds.changes[2].warnings), "an ungrounded tool and number stay reviewable with a warning");
 assert.deepEqual(adds.withheld.reasons.sort(), ["INVALID_TARGET", "MALFORMED", "UNCHANGED"],
   "a repeated bullet is a no-op, a third slot is invalid, and a reused slot is malformed");
 assert.equal(adds.withheld.count, 2, "only the invalid and malformed adds count as withheld");

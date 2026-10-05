@@ -27,9 +27,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [USER] Resume Polish setting is now Claude Code / Opus 5.5 / high (on the
     holdout it beat the previous Sonnet 5.5 medium setup 17 to 1 where both
     judges agreed). App provider defaults are unchanged.
-  - [TOOL] Open, not started: grounding warnings flag mostly honest paraphrases
-    (sentence-initial verbs read as posting terms, "Built" on own projects,
-    unit-word changes); Accept-all often overflows a full one-page resume.
+  - [TOOL] Superseded below: with the user's one-page instruction and the
+    round-2 prompt, Accept-all still overflowed in 4 of 48 runs; page length
+    stays human review. The grounding-warning item is also superseded below.
   - [TOOL] Two independent reviews found no high/medium issues. Both flagged
     that "keep every number" contradicted the vanity-count trim rule, so the
     shipped clause reads "keep any number you retain with the noun it counts".
@@ -44,6 +44,111 @@ bounded; app-only operational detail belongs in the affected app documentation.
     had no trap hits, merged claims, tense flips, or withheld edits, and an
     independent fact check found no unsupported edits. No browser QA
     (prompt-only).
+- [USER+CODE] Resume Polish follow-ups (user-chosen items 1–4).
+  - Warning precision: the shared evidence checks (also used by cover letters,
+    application answers/review, and Fit) now treat sentence-initial verbs as
+    grammar, let a verbless own-work line support authorship of that thing,
+    flag "Assisted … in migrating" rewritten as "Migrated", entail categories
+    from specific evidence (PostgreSQL→database, ARIA labels→accessibility),
+    and validate Skills labels/parentheticals more exactly. With the user's
+    agreement, Python frameworks (Django, pytest…) count as Python evidence.
+    Rationale and rules live in `server/ai/AGENTS.md`.
+  - [TOOL] Replaying stored benchmark proposals against independent per-edit
+    fact checks (real data, v5 prompt): flagged edits 19.1%→3.2%, precision
+    5.6%→27.5%, recall 41.8%→34.5% (the drop is coincidental flags). Three
+    review rounds found recall holes in early relaxations; reduction-verb
+    equivalence and count-modifier tolerance showed no real benefit and were
+    reverted to base behavior.
+  - Supporting-role prompt sentence (round 2 widened it to team wording).
+    The opt-in `eval:live:resume-proposal` benchmark now holds 34 invented
+    fixtures with traps and GPT-6 Astra fact checks.
+  - [TOOL] 34-fixture baseline: Sol 6.1 medium passed 34/34 with no
+    unsupported edits; Opus 5.5 high passed 63/68 (present-tense flip,
+    capstone team promoted to "Built", an inferred "8+ years"; the checker
+    warned on each) with 3 of 131 edits unsupported. Supporting-role wording
+    held on both models.
+  - [TOOL] Prompt slimming rejected: removing duplicated resume/Profile text
+    (−20% to −40% characters) lost or tied on blinded Astra and Opus pairwise
+    judging over 24 fresh real applications and saved little time (Opus high
+    ~35s per run either way). Only `<earlier_output_concerns>` and
+    `<terminology_priorities>` were added to the shared injection-firewall
+    tag list.
+- [USER+CODE] Resume Polish round 2. The prompt now tells the model
+  to follow user_guidance preferences within its rules, keeps "part of a team"
+  wording, and forbids computed totals such as years from dates. Skills "Name
+  API/SDK/CLI" items count only when the evidence attaches that interface to
+  the name; hyphenated practices carry no ownership level.
+  - [TOOL] 48 untouched real applications, Opus 5.5 high, blinded Astra +
+    Opus judging: the user's new custom instruction (with a static one-page
+    space rule) beat the old one 44–0 where judges agreed and kept one page
+    after Accept-all in 35/48 runs vs 0/48; the shipped prompt raised that to
+    44/48 at equal judged quality. Sol 6.1 medium improved +0.16 on a 10-point
+    weighted score (95% CI +0.03 to +0.29). The 34-fixture eval: Opus 67/68 trap checks (was 63/68),
+    Sol 34/34.
+  - [TOOL] Warning replay with corrected labels (an earlier fact-check
+    misread the linked Typeset Profile block): flagged edits 2.7%, precision
+    32.2%, recall 45.2%. Most remaining misses are merged facts or added
+    "how", which deterministic checks cannot catch reliably.
+  - [USER] The user's base resume and Profile were tightened from benchmark
+    evidence (private workspace data; edits backed up locally).
+- [USER+CODE] Resume Polish round 3. [USER] One page is a soft
+  target: page length must never block an edit or decide materiality.
+  - [CODE] Evidence warnings name up to three concerns (term, number,
+    ownership, outcome) instead of one generic sentence; written-out
+    "object-oriented" evidence grounds "OOP"; tense-only or sub-15% no-new-word
+    rewrites and Skills reorders that move no posting skill forward settle as
+    `UNCHANGED`. The benchmark judge's "material" definition no longer
+    considers length. Rules live in `server/ai/AGENTS.md`.
+  - [TOOL] Replay of 1,146 stored round-2 edits: warned edits 63 -> 42 (21 were
+    OOP), older labelled set unchanged at 32.8% precision / 45.2% recall; the
+    no-op filter removed 3 edits, none judged material. 43 of 45 Astra
+    "unsupported" labels in round 2 were the true CI-runs-all-tests claim, so
+    real unsupported edits were near zero and the planned Profile-excerpt
+    citation was dropped as unmeasurable. Two independent reviews; findings
+    fixed. `npm run check --workspace apps/role-fit-ai`: 140/140. No browser
+    QA (server-side text only).
+  - [TOOL] Guidance wording, 48 real applications, Opus 5.5 high, same shipped
+    prompt, judges told page count is not a criterion: a soft one-page
+    paragraph beat the "must be paid for" paragraph 40-4 where Astra and Opus
+    agreed (+0.36 and +0.53 of 10). Removed bullets 33 -> 11, trim-only
+    rewrites 26 -> 6, added bullets 34 -> 50, immaterial edits 5.0% -> 2.8%;
+    Accept-all stayed on one page in 6/48 instead of 44/48, 41 of the 42
+    overflows by a single line. [USER] approved applying the better
+    outcome, so the saved Resume Polish instruction now carries the soft
+    paragraph (private workspace data; previous file backed up locally).
+- [CODE] Resume Polish round 4 (2026-10-05): warning precision
+  and recall, no prompt change.
+  - [CODE] Solo-project authorship (every linked Profile heading must declare
+    it), a count-purpose merge warning, shared-interface Skills items, REST =
+    RESTful, plural multi-word terms, AWS/Azure/GCP -> cloud, CI -> continuous
+    integration, and "one <participle> <noun>" counting the noun. Rules,
+    thresholds, and accepted gaps live in `server/ai/AGENTS.md`.
+  - [TOOL] Replay of stored real proposals against independent labels:
+    precision 32.8% -> 51.1%, recall 45.2% -> 54.8% (2,145 edits); round-2
+    edits warned 42 -> 23 of 1,143. On 32 untouched real applications (live
+    resume, Profile, and guidance; Opus 5.5 high and Sol 6.1 medium; 636
+    textual edits across six arms) 9 edits warn and Astra found 2 unsupported,
+    1 of them warned.
+  - [TOOL] Prompt candidates rejected on those 32 applications with blinded
+    Astra + Opus pairwise judging. "Keep concrete facts" plus "a count keeps
+    its line's scope": Opus 12-12 where judges agreed, Sol 10-14. Count-scope
+    alone: Opus 10-15, Sol 5-20 (-0.21 and -0.30 of 10, both CIs below zero).
+    The shipped prompt is unchanged.
+  - [TOOL] Two independent reviews found two must-fix holes (a team heading
+    beside a solo heading; "one failed build" losing its count) and several
+    should-fix items; all fixed with probes that fail when each guard is
+    removed. No browser QA (server-side text only).
+  - [USER] Approved grounding "AI-assisted <activity>" Skills items from a
+    line naming an AI coding tool and that activity. [TOOL] After it: labelled
+    precision 53.5%, recall 54.8%; 4 of 636 fresh edits warn (1 correct). A
+    third independent review added a denial veto, a coding-context
+    requirement for ambiguous tool names, and two probes.
+  - [TOOL] Rejected: extending the count check to "for <scope>" phrases caught
+    the one fresh-sample miss but added about seven false alarms across the
+    replays (1 correct of 8 new warnings); reverted.
+  - [USER] An unrecorded local CLI usage-receipt feature found uncommitted in
+    the same tree was removed at the user's request before this commit.
+  - [TOOL] `npm run check --workspace apps/role-fit-ai`: 140/140.
 
 ## 2026-10-02
 

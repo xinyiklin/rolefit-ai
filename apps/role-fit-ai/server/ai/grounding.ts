@@ -6,9 +6,9 @@
 //
 // Three complementary detectors:
 // 1. Capitalized tokens of 3+ chars (Windows, Flask, EKS) — proper-noun and
-//    product names. The first word of the text is checked too unless it is a
-//    normal résumé action verb, so "Kubernetes deployments…" can't slip in at
-//    position 0. 1-2 char tokens (Go, ML, C#) are a known coverage gap.
+//    product names. Sentence-initial words are checked too, except an action
+//    verb the posting does not use as a name, so "Kubernetes deployments…" can't
+//    slip in at position 0. 1-2 char tokens (Go, ML, C#) are a known coverage gap.
 // 2. A lowercase tech-concept lexicon (microservices, devsecops, machine
 //    learning…) — concept terms models insert without capitalization. This is
 //    a deliberately curated mirror of the concept-class entries in
@@ -59,6 +59,19 @@ const LOWERCASE_TECH_CONCEPTS = [
   "grpc", "message broker", "object storage", "relational database",
   "security clearance", "golang"
 ];
+
+// Specific evidence that establishes a concept or language (ARIA labels are
+// accessibility work; Django is Python), or the written-out form of an abbreviation.
+// Only specific-to-general holds: CI never implies CI/CD. Ambiguous lowercase names
+// (flask, pandas) are left out.
+const CONCEPT_EVIDENCE = new Map([
+  ["oop", /(?<!\b(?:no|not|non|without|never)[\s-]+)\bobject[- ]oriented\b/i],
+  ["accessibility", /\b(?:aria-[a-z]+|aria\s+(?:labels?|attributes?|roles?)|wcag|a11y|screen[- ]readers?)\b/i],
+  ["observability", /\b(?:prometheus|grafana|datadog|opentelemetry)\b/i],
+  ["containerization", /\b(?:docker(?:ized|file)?|podman)\b/i],
+  ["python", /\b(?:django|fastapi|numpy|pytorch|pytest|scikit-learn)\b/i],
+  ["continuous integration", /(?<!%\s?)\bci\b(?![/-]?cd\b)/i]
+]);
 
 // Curated lowercase-WRITTEN tool/product/library names for detector 3. These
 // are single-token, distinctive product names that detector 1 (capitalized,
@@ -131,6 +144,50 @@ const LEADING_ACTION_VERBS = new Set([
   "resolved", "analyzed", "evaluated", "researched", "prototyped"
 ]);
 
+// Further past-tense resume verbs. With LEADING_ACTION_VERBS they let
+// actionVerbPast read base and gerund forms ("Build", "Optimizes", "Fixing").
+const MORE_ACTION_VERBS = new Set([
+  "added", "fixed", "removed", "replaced", "rewrote", "rebuilt", "ran", "made", "cut", "sped",
+  "assisted", "helped", "contributed", "participated", "worked", "identified", "instrumented",
+  "stabilized", "measured", "defined", "moved", "scaled", "secured", "validated", "exposed",
+  "packaged", "published", "trained", "processed", "scheduled", "extended", "ported",
+  "converted", "redesigned", "reviewed", "mentored", "triaged", "investigated", "profiled",
+  "benchmarked", "indexed", "parsed", "simplified", "unified", "accelerated", "boosted",
+  "decreased", "eliminated", "generated", "increased", "lowered", "prevented", "protected",
+  "saved", "shortened", "strengthened", "upgraded", "adopted", "applied", "used", "handled",
+  "tracked", "reported", "enabled", "achieved", "grew", "taught", "answered", "containerized",
+  "planned", "guided", "covered", "backed", "verified", "kept", "set", "switched", "rolled", "backfilled"
+]);
+
+const IRREGULAR_PAST = new Map([
+  ["build", "built"], ["rebuild", "rebuilt"], ["write", "wrote"], ["rewrite", "rewrote"],
+  ["run", "ran"], ["lead", "led"], ["drive", "drove"], ["make", "made"], ["speed", "sped"],
+  ["cut", "cut"], ["grow", "grew"], ["teach", "taught"], ["keep", "kept"], ["set", "set"]
+]);
+
+// Product names that are also resume verbs stay claims at the start of a sentence.
+const VERB_NAMED_PRODUCTS = new Set(["boost", "drive", "make", "parse", "scale"]);
+
+// The canonical past form of any inflection of a listed resume action verb, or null.
+export function actionVerbPast(word: string): string | null {
+  const w = word.toLowerCase();
+  const isPast = (form: string | undefined) => form !== undefined && (LEADING_ACTION_VERBS.has(form) || MORE_ACTION_VERBS.has(form));
+  if (isPast(w)) return w;
+  const bases = [w, w.replace(/s$/, ""), w.replace(/es$/, ""), w.replace(/ies$/, "y"), w.replace(/ing$/, ""), w.replace(/ing$/, "e"), w.replace(/(.)\1ing$/, "$1")];
+  for (const base of bases) {
+    const past = [IRREGULAR_PAST.get(base), `${base}ed`, `${base}d`, base.replace(/y$/, "ied"), base.replace(/([^aeiou][aeiou])([bgmnpt])$/, "$1$2$2ed")].find(isPast);
+    if (past) return past;
+  }
+  return null;
+}
+
+// "Build", "Helped": a sentence-initial verb in any tense is capitalized by grammar.
+// Acronyms ("RAN", "SET") are names, not verbs.
+function isSentenceInitialVerb(text: string, index: number, word: string): boolean {
+  const token = word.toLowerCase();
+  return /^[A-Z][a-z]+$/.test(word) && !VERB_NAMED_PRODUCTS.has(token) && Boolean(actionVerbPast(token)) && isProseSentenceStart(text, index);
+}
+
 const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
   { level: 3, pattern: /\b(?:architect(?:ed|ing)?|led|lead|leading|owned|owning|drove|driven|directed|headed|spearheaded|oversaw|orchestrated)\b/i },
   { level: 2, pattern: /\b(?:built|designed|implemented|developed|delivered|created|engineered|managed)\b/i },
@@ -170,22 +227,137 @@ function ownershipSupportIsTied(targetText: string, supportText: string): boolea
   return overlap >= Math.min(2, targetTokens.length) && overlap * 2 >= targetTokens.length;
 }
 
+function leadingWord(value: string): string {
+  return value.replace(/<\/?(?:b|i|u)>/gi, "").replace(/^[\s\u2022\u00b7*\-]+/, "").replace(/^I\s+/, "").match(/^[A-Za-z-]+/)?.[0] ?? "";
+}
+
+const SHARED_WORK_LEAD = /^(?:assist|support|contribut|help|collaborat|coordinat|participat|partner|pair|work|join|shadow)/i;
+
+// "Assisted engineers in migrating…" credits others; "…by automating…" is the
+// candidate's own means. Bare "Supported" usually means operating something.
+function assistsOthersWork(value: string): boolean {
+  const lead = leadingWord(value);
+  if (/\bby\s+[a-z]+ing\b/i.test(value)) return false;
+  return /^(?:assist|help|contribut|participat)(?:e|es|s|ed|ing)?$/i.test(lead)
+    || (/^support(?:s|ed|ing)?$/i.test(lead) && /\bin\s+[a-z]+ing\b/i.test(value));
+}
+
+// Gerunds and bare verbs before any relative clause name the shared work:
+// "Assisted engineers in migrating X, which used Redis" names only migrating.
+function assistedWorkVerbs(value: string): Set<string> {
+  const words = value.split(/[,;]|\b(?:which|that|who|where)\b/i)[0].split(/\s+/).slice(1).map((word) => word.replace(/[^A-Za-z-]/g, ""));
+  return new Set(words.filter((word) => /ing$/i.test(word) || !/(?:s|ed)$/i.test(word))
+    .map(actionVerbPast).filter((past): past is string => Boolean(past)));
+}
+
+const PARTIAL_ROLE = /\b(?:team|group|squad|member|part|contributor|collaborator|participant|assistant|intern(?:ship)?|course(?:work)?|class|curriculum|bootcamp|capstone|hackathon|volunteer|on-call|engineer|developer|analyst|scientist|tester|consultant|manager|lead|specialist|administrator|technician|researcher|student|swe|sde|sre)s?\b/i;
+const PARTIAL_ACTIVITY = /\b(?:knowledge|experience|understanding|background|familiarity|proficiency|exposure|documentation|testing|qa|evaluation|monitoring|support|maintenance|research|reviews?|triage|migration|sessions?|mentorship|mentors?|tutoring|contributions?|work|hotfix(?:es)?|fix(?:es)?|patch(?:es)?|cleanup|audits?|assisting|helping|supporting|shadowing|pairing|pair-programmed|mentored|under|alongside)\b/i;
+const AUTHORSHIP_VERBS = new Set(["built", "created", "designed", "developed", "engineered", "implemented", "wrote"]);
+
+// A single verbless line naming a thing ("Python CLI that imports bank CSV exports")
+// presents it as the candidate's own; role, team, coursework, and activity lines do not.
+// The proposal must name that thing: every distinctive word of the head phrase.
+function namesHeadPhrase(proposed: string, line: string): boolean {
+  const head = line.split(/\s(?:for|to|on|in|of|at|with|from|by|via|that|which|who|using|featuring|including|powered)\b|[,;:(\u2014\u2013]/i)[0];
+  const named = new Set(distinctiveTokenKeys(proposed, OWNERSHIP_CONTEXT_STOPWORDS));
+  const tokens = distinctiveTokenKeys(head, OWNERSHIP_CONTEXT_STOPWORDS);
+  return tokens.length > 0 && tokens.every((token) => named.has(token));
+}
+
+function describesOwnWork(value: string): boolean {
+  const word = leadingWord(value);
+  return Boolean(word) && !/[\r\n]/.test(value) && !actionVerbPast(word) && !/(?:ly|ed|ing)$|^responsible$/i.test(word)
+    && !PARTIAL_ROLE.test(value) && !PARTIAL_ACTIVITY.test(value) && !/^\S+\s+(?:of|to|on|in|for|with|at)\b/i.test(value.trim());
+}
+
+const SOLO_PROJECT = /\b(?:personal|solo|independent|individual|side|hobby)\s+project\b|\bsole\s+(?:developer|author|engineer|maintainer)\b/i;
+const OTHERS_WORK = /\b(?:teams?|teammates?|group|squad|members?|contributors?|collaborators?|colleagues?|coworkers?|classmates?|friends?|brothers?|sisters?|cousins?|roommates?|partners?|peers?|mentors?|maintainers?|vendors?|contractors?|agency|upstream|third[- ]party|open[- ]source|community|assist\w*|help\w*|contribut\w*|participat\w*|collaborat\w*|pair\w*|shadow\w*|alongside|inherited|adapted|forked?|starter|templates?|tutorials?|course\w*|class|bootcamp|capstone|hackathon)\b/i;
+const USE_WORDS = new Set(["use", "uses", "used", "using"]);
+
+// Every Profile heading linked to the entry must call it a solo project
+// ("## Ledger (personal project)"); one team heading leaves the entry shared.
+export function declaresSoloProject(profileText: string): boolean {
+  const headings = profileText.split(/\r?\n/).filter((line) => /^#{1,6}\s/.test(line));
+  return /^#{1,6}\s/.test(profileText.trimStart()) && headings.every((heading) => SOLO_PROJECT.test(heading) && !OTHERS_WORK.test(heading));
+}
+
+// In a solo project, one evidence line supports an authorship verb for the thing it
+// states: 80% of the claim's words come from that line and nobody else is credited.
+export function soloProjectSupportsAuthorship(proposed: string, currentText: string, supportText: string): boolean {
+  if (!AUTHORSHIP_VERBS.has(actionVerbPast(leadingWord(proposed)) ?? "") || ownershipStrength(proposed) !== 2
+    || /\bmanaged\b/i.test(proposed) || OTHERS_WORK.test(proposed) || OTHERS_WORK.test(currentText)) return false;
+  const words = (value: string) => distinctiveTokenKeys(value, OWNERSHIP_CONTEXT_STOPWORDS).filter((token) => !USE_WORDS.has(token));
+  const claimed = words(proposed);
+  return claimed.length >= 3 && ownershipSupportSegments(supportText).some((segment) => {
+    if (OTHERS_WORK.test(segment)) return false;
+    const stated = new Set(words(segment));
+    return claimed.filter((token) => stated.has(token)).length >= claimed.length * 0.8;
+  });
+}
+
+const CHECK_VERB_STEM = String.raw`(?:validat|verif|test|check|cover|ensur|guard|catch|confirm|exercis)`;
+// "… to verify X", "… covering X" after the count; "X, covered by …" before it.
+const PURPOSE_AFTER = new RegExp(String.raw`\b(?:(?:to|that|which)\s+${CHECK_VERB_STEM}(?:e|es|s|y|ies|ed)?|${CHECK_VERB_STEM}y?ing)\s+([^;.,]+)[^;.]*`, "i");
+const PURPOSE_BEFORE = new RegExp(String.raw`([^;.,]+),?\s+(?:and\s+)?\b${CHECK_VERB_STEM}i?ed\s+(?:by|with|through|using|via)\s+[^;.,]*$`, "i");
+const COUNT = /(?<![\w.])\d[\d,]*\+?(?![\w.]*\d)/g;
+
+// A count keeps the scope of its own evidence line: "135 tests" plus a validation
+// layer on another line is not "135 tests that verify the validation layer".
+export function findCountWithUnstatedPurpose(proposed: string, evidence: string): string | null {
+  const plain = proposed.replace(/<\/?(?:b|i|u)>/gi, "");
+  const segments = ownershipSupportSegments(evidence);
+  const counts = [...plain.matchAll(COUNT)];
+  for (const [index, match] of counts.entries()) {
+    const digits = match[0].replace(/[,+]/g, "");
+    const lines = segments.filter((segment) => new RegExp(String.raw`(?<![\d.,])${digits}(?![\d])`).test(segment.replace(/(?<=\d),(?=\d)/g, "")));
+    if (!lines.length) continue;
+    // A purpose belongs to the nearest count, so the search stops at the next one.
+    const after = plain.slice(match.index + match[0].length, counts[index + 1]?.index).match(PURPOSE_AFTER);
+    const previous = counts[index - 1];
+    const before = plain.slice(previous ? previous.index + previous[0].length : 0, match.index).match(PURPOSE_BEFORE);
+    // The purpose's first item, or the whole list of them, may be what the line names.
+    const named = (purpose: string) => {
+      const tokens = distinctiveTokenKeys(purpose, OWNERSHIP_CONTEXT_STOPWORDS);
+      return tokens.length > 0 && lines.some((line) => {
+        const stated = new Set(distinctiveTokenKeys(line, OWNERSHIP_CONTEXT_STOPWORDS));
+        return tokens.filter((token) => stated.has(token)).length * 2 >= tokens.length;
+      });
+    };
+    const purposes = after ? [after[1], after[0]] : before ? [before[1]] : [];
+    if (purposes.some((purpose) => distinctiveTokenKeys(purpose, OWNERSHIP_CONTEXT_STOPWORDS).length > 0) && !purposes.some(named)) return match[0];
+  }
+  return null;
+}
+
 export function hasUnsupportedOwnershipIncrease(
   proposed: string,
   currentText: string,
   supportText: string,
   semanticTarget = currentText || proposed
 ): boolean {
-  const proposedLevel = ownershipStrength(proposed);
-  if (proposedLevel <= ownershipStrength(currentText)) return false;
+  const currentLevel = ownershipStrength(currentText);
+  const singleLine = !/[\r\n]/.test(currentText);
+  // Claiming the assisted work itself ("Migrated…" from "Assisted … in migrating…")
+  // is an increase; only evidence led by that same verb supports it.
+  const assistedVerbs = singleLine && currentLevel <= 1 && assistsOthersWork(currentText) ? assistedWorkVerbs(currentText) : new Set<string>();
+  const proposedLead = actionVerbPast(leadingWord(proposed));
+  const claimsAssistedWork = Boolean(proposedLead && assistedVerbs.has(proposedLead) && !SHARED_WORK_LEAD.test(leadingWord(proposed)))
+    && ownershipStrength(proposed) < 2;
+  const level = (value: string) => claimsAssistedWork && actionVerbPast(leadingWord(value)) === proposedLead
+    ? Math.max(2, ownershipStrength(value))
+    : ownershipStrength(value);
+  const proposedLevel = level(proposed);
+  if (proposedLevel <= currentLevel) return false;
+  if (proposedLevel === 2 && currentLevel === 0 && AUTHORSHIP_VERBS.has(proposedLead ?? "")
+    && describesOwnWork(currentText) && namesHeadPhrase(proposed, currentText)) return false;
   return !ownershipSupportSegments(supportText).some((segment) =>
-    ownershipStrength(segment) >= proposedLevel
+    level(segment) >= proposedLevel
     && ownershipSupportIsTied(semanticTarget, segment)
   );
 }
 
 function normalizePhrase(text: string): string {
-  return text.replace(/[-/]+/g, " ");
+  return text.replace(/[-/]+/g, " ").replace(/\brestful\b/gi, "rest");
 }
 
 // Token set for a corpus string: boundary periods freed (see stripBoundaryDots
@@ -229,7 +401,8 @@ const TOKEN_ALIASES = new Map([
   ["postgres", "postgresql"], ["postgresql", "postgres"],
   ["k8s", "kubernetes"], ["kubernetes", "k8s"],
   ["js", "javascript"], ["javascript", "js"],
-  ["ts", "typescript"], ["typescript", "ts"]
+  ["ts", "typescript"], ["typescript", "ts"],
+  ["rest", "restful"], ["restful", "rest"]
 ]);
 
 // Pure inflectional suffixes: grammatical variants of the same word.
@@ -253,7 +426,10 @@ function isGrounded(groundingText: string, groundingTokens: Set<string>, term: s
   // normalized phrase" contract).
   const phrase = normalizePhrase(term);
   if (phrase.includes(" ")) {
-    return normalizePhrase(groundingText).includes(phrase);
+    const corpus = normalizePhrase(groundingText);
+    // "code reviews" matches "code review"; short last words ("ECS", "APIs") never lose their s.
+    return corpus.includes(phrase)
+      || (/[a-z]{4,}s$/i.test(phrase) && new RegExp(`${phrase.slice(0, -1).replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?![a-z0-9])`, "i").test(corpus));
   }
   for (const token of groundingTokens) {
     if (token === term) return true;
@@ -262,6 +438,15 @@ function isGrounded(groundingText: string, groundingTokens: Set<string>, term: s
     if (term.startsWith(token) && INFLECTION_SUFFIX.test(term.slice(token.length))) return true;
   }
   return false;
+}
+
+function isConceptGrounded(groundingText: string, groundingTokens: Set<string>, term: string): boolean {
+  return isGrounded(groundingText, groundingTokens, term) || Boolean(CONCEPT_EVIDENCE.get(term)?.test(groundingText));
+}
+
+// isTermGrounded, also counting specific evidence for a concept (ARIA labels → accessibility).
+export function isConceptTermGrounded(term: string, grounding: string): boolean {
+  return isTermGrounded(term, grounding) || Boolean(CONCEPT_EVIDENCE.get(term.toLowerCase())?.test(grounding));
 }
 
 // Returns the first ungrounded JD term found in proposedText, or null.
@@ -279,7 +464,7 @@ export function findUngroundedJdTerm(
   proposedText: unknown,
   jobLower: string,
   grounding: string,
-  options: { proseMode?: boolean } = {}
+  options: { proseMode?: boolean; jobText?: string } = {}
 ): string | null {
   if (!jobLower) return null;
   const proseMode = Boolean(options.proseMode);
@@ -307,13 +492,10 @@ export function findUngroundedJdTerm(
   if (!proseMode) {
     for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
       const token = match[0].toLowerCase();
-      // A normal action verb is grammatical at the start of ANY sentence, not
-      // only at absolute offset 0. Without the sentence-boundary check, a
-      // truthful two-sentence bullet such as "Built APIs. Improved deploys."
-      // falsely treats "Improved" as an invented proper-name claim.
-      if (LEADING_ACTION_VERBS.has(token) && isProseSentenceStart(markStripped, match.index ?? 0)) continue;
       if (!jobLower.includes(token)) continue;
-      if (!isGrounded(grounding, groundingTokens, token)) return match[0];
+      // Unless the posting uses that word as a name ("experience with Index").
+      if (isSentenceInitialVerb(markStripped, match.index ?? 0, match[0]) && !jobNamesWord(options.jobText ?? "", match[0])) continue;
+      if (!isConceptGrounded(grounding, groundingTokens, token)) return match[0];
     }
   }
 
@@ -322,7 +504,7 @@ export function findUngroundedJdTerm(
   for (const concept of LOWERCASE_TECH_CONCEPTS) {
     if (!proposedLower.includes(concept)) continue;
     if (!jobLower.includes(concept)) continue;
-    if (!isGrounded(grounding, groundingTokens, concept)) return concept;
+    if (!isConceptGrounded(grounding, groundingTokens, concept)) return concept;
   }
 
   // Detector 3: bounded lexicon sweep. Only names in the curated
@@ -337,7 +519,7 @@ export function findUngroundedJdTerm(
   for (const name of LOWERCASE_TOOL_NAMES) {
     if (!jobTokens.has(name)) continue;
     if (!proposedTokens.has(name)) continue;
-    if (!isGrounded(grounding, groundingTokens, name)) return name;
+    if (!isConceptGrounded(grounding, groundingTokens, name)) return name;
   }
 
   // Detector 4: distinctive short tech tokens (C#, C++, ML, NLP) below detector
@@ -354,6 +536,12 @@ export function findUngroundedJdTerm(
   return null;
 }
 
+// After a lowercase word ("experience with Boost") or inside "C++/Boost" a capitalized
+// word is a name; after a heading comma ("Engineer, Build and Release") it is not.
+function jobNamesWord(jobText: string, word: string): boolean {
+  return new RegExp(String.raw`(?:(?:^|[\s(])[a-z][a-z0-9+#.-]*\s+|[/(]\s*)${word.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\b`).test(jobText);
+}
+
 // General claim-term gate for resume-field rewrites. The JD-specific gate above
 // catches keyword stuffing, but an invented metric/tool/employer that is NOT in
 // the JD must not become invisible to sanitization. This companion checks the
@@ -368,8 +556,8 @@ export function findUngroundedClaimTerm(proposedText: unknown, grounding: unknow
 
   for (const match of markStripped.matchAll(/\b[A-Z][A-Za-z0-9.+#]{2,}\b/g)) {
     const token = match[0].toLowerCase();
-    if (LEADING_ACTION_VERBS.has(token) && isProseSentenceStart(markStripped, match.index ?? 0)) continue;
-    if (!isGrounded(groundingLower, groundingTokens, token)) return match[0];
+    if (isConceptGrounded(groundingLower, groundingTokens, token)) continue;
+    if (!isSentenceInitialVerb(markStripped, match.index ?? 0, match[0])) return match[0];
   }
   return findUngroundedCuratedClaimTerm(proposedText, grounding);
 }
@@ -393,7 +581,7 @@ export function curatedClaimTerms(value: unknown): string[] {
 export function findUngroundedCuratedClaimTerm(proposedText: unknown, grounding: unknown): string | null {
   const groundingLower = String(grounding ?? "").toLowerCase();
   const groundingTokens = tokenize(groundingLower);
-  return curatedClaimTerms(proposedText).find((term) => !isGrounded(groundingLower, groundingTokens, term)) ?? null;
+  return curatedClaimTerms(proposedText).find((term) => !isConceptGrounded(groundingLower, groundingTokens, term)) ?? null;
 }
 
 // Fit uses named tools without requiring literal wording for broader concepts.

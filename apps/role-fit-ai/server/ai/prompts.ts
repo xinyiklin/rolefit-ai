@@ -241,6 +241,8 @@ const UNTRUSTED_FENCE_NAMES = [
   "employer_context",
   "source_context",
   "evidence_items",
+  "earlier_output_concerns",
+  "terminology_priorities",
   "validation_failures",
   "rejected_output"
 ] as const;

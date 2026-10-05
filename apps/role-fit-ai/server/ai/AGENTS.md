@@ -111,9 +111,113 @@ application retain blocking technical guards.
   actual accepted edits with the current document, job, and supported baseline.
   True aliases can preserve a mention; related tools never establish support.
   Keep this advisory separate from Fit, without a score or coverage guarantee.
+- Resume Polish warning precision is benchmark-backed (2026-10-04): replaying
+  stored proposals against independent per-edit fact checks showed most warnings
+  fired on honest paraphrases. These shared checks also serve cover letters,
+  application answers and review, and Fit evidence. Each relaxation below was
+  kept only where the replay showed it removed false warnings:
+  - A sentence-initial, Title-case inflection of a listed action verb is
+    grammar, not a claim, unless it is a known verb-named product (Boost,
+    Scale, Drive, Make, Parse) or the posting uses it mid-sentence as a name
+    ("experience with Index"). Unlisted -ed words and acronyms are not verbs.
+  - A single verbless line naming the candidate's thing ("Python CLI that
+    imports bank CSV exports") supports an authorship verb (Built, Developed…)
+    when the rewrite names every word of that head phrase; lines naming a role,
+    team, knowledge, coursework, or an activity (testing, review, fixes,
+    audits, migration, pairing) do not.
+  - In an entry where every linked Profile heading calls it a solo project
+    ("## Ledger (personal project)"), one evidence line stating what the
+    project has or does supports an authorship verb for that same thing. The
+    claim needs at least three distinctive words, 80% of them from that one
+    line, and neither the line, the current bullet, the claim, nor a heading may
+    credit anyone else. Headings are the only accepted declaration: a body
+    sentence inside a job entry is not, and one team heading leaves the whole
+    entry shared. Leading, managing, and claims drawn from two lines still warn
+    with the merge hint. Accepted gaps: a credit worded outside the marker list
+    ("Frontend by my uncle"), and a third-party tool the project only uses
+    restated as built ("Uses Stripe checkout" as "Built Stripe checkout").
+    These three functions serve only Resume Polish but live in `grounding.ts`
+    because they need its private token helpers.
+  - A single line that leads with assisting others, in any tense ("Assist
+    engineers in migrating…"), rewritten to lead with that assisted verb is an
+    ownership increase unless evidence leads with the same verb.
+  - Specific evidence entails its category or language (PostgreSQL→database,
+    ARIA labels→accessibility, Docker→containerization, Django/pytest→Python,
+    AWS/Azure/GCP→cloud, CI→continuous integration; CI evidence never
+    grounds CI/CD and a statistical "95% CI" grounds nothing),
+    never the reverse, never against a denial, and related practice never
+    entails a broader term (CI is not CI/CD). Written-out, undenied
+    "object-oriented" evidence grounds the abbreviation OOP. Terminology names are
+    case-sensitive; lowercase-only grounding leaves out ambiguous names
+    (flask, pandas). Contrived collisions (Django Reinhardt) and tools named
+    only inside a posting's list ("Tools: Port, Backstage") are accepted gaps.
+  - Skills: a new item warns when it or any parenthetical part is a category
+    label (whole labels built from category words, any colon, or any Skills row
+    label sent in the request), when a parenthetical is a proficiency qualifier
+    ("(advanced)"), or when a parenthetical part is not grounded beside its
+    head ("AWS (S3, EC2)"). Existing items are not re-judged. "Name API/SDK/CLI"
+    is grounded only where the evidence attaches that interface to the name
+    ("OpenAI and Anthropic APIs", "API providers (OpenAI, Anthropic)"), never by
+    another name's interface or a stack list ("REST APIs (Django, PostgreSQL)").
+    Names sharing one interface ("Mistral and Cohere APIs") and names in
+    parentheses under an interface head ("LLM APIs (OpenAI, Anthropic)") each
+    need that interface attached to them. REST and RESTful are one term (the
+    plain word "rest" grounding either is an accepted gap), and a multi-word
+    term whose last word has four or more letters also matches its singular
+    ("code reviews"), never a different name ("AWS ECS" from "AWS EC2").
+    "AI-assisted <activity>" is grounded by one affirmative line naming an AI
+    coding tool and that activity; "AI-assisted development" needs only the
+    tool ([USER] approved 2026-10-05: a paraphrase match, not a true alias).
+    Codex, Copilot, Cursor, and Windsurf count only on a line that is also
+    about coding, parenthetical parts must be named on that same line, and a
+    denial of the practice or of the tool for that activity vetoes it.
+    Accepted gaps: a line where the tool was replaced or banned for the
+    activity, and a non-tool part named on the tool's line.
+    Hyphenated practices ("AI-assisted", "test-driven") carry no ownership
+    level; role phrases ("Team Lead", "Co-led…") still do.
+  The replay showed no benefit, and reviews found fabrication holes, for
+  treating reduction verbs as interchangeable ("cut" for "reduced") and for
+  letting a count change its modifiers ("14 critical bugs"); both still warn.
+  A count's magnitude stays with its noun and rate ("10k requests per second").
+  A count also keeps the scope of its own evidence line: a checking purpose
+  attached to it ("60 tests to verify X", "X, covered by 60 tests") warns unless
+  a line holding that count names at least half the distinctive words of the
+  purpose's first item or of the whole list. The purpose is read only between
+  that count and the next one. Unsupported purposes attached this way were the
+  largest class of missed edits in the replay; independent labels split on the
+  mildest cases ("to validate backend changes"), which still warn because the
+  statement is accurate. Purposes introduced with "for" are not detected.
+  "One" followed by a participle counts the noun after it ("one shared lock"
+  counts locks), so matching evidence grounds it and an invented one still warns.
+  Do not restore warnings on sentence-initial verbs or verb choice alone.
+- A Resume Polish evidence warning names what failed: up to three concerns, one
+  per kind of check (term, number, count purpose, ownership, outcome), each echoing the edit's
+  own wording. An ownership concern adds a merged-facts hint only when the
+  current text makes no ownership claim and the entry uses a building verb
+  elsewhere; a supporting line promoted to building or leading keeps the plain
+  ownership wording. Do not return to one generic sentence or to naming only the
+  first concern: a reviewer who fixes the named term would read the rest as
+  checked.
+- Churn settles as an `UNCHANGED` no-op, never a reviewable edit: a bullet
+  rewrite that adds no word as written (only tense and number inflect), keeps
+  the remaining words in order and marked alike, and cuts under 15%; and a
+  Skills row with the same items, written and marked the same, that moves no
+  skill the posting names forward. Casing, spelling, symbol, and preposition
+  changes are new words and stay reviewable. Dropping is safe because the resume
+  keeps its text, but the filter is narrow by design: on 1,146 stored real
+  edits it removed 3, none judged material (2026-10-04 replay). Length is never
+  a materiality test in either direction, here or in the benchmark judge; page
+  fit is the candidate's guidance and review, not a server rule.
 - Resume Polish restraint rules are benchmark-backed: rewrites keep
   each bullet's existing tense, tense-only and synonym edits are churn, and
-  separate facts or a broader posting term never become a new claim. Do not
+  separate facts or a broader posting term never become a new claim. Keep
+  supporting-role and team wording explicit; adding "with" or "alongside"
+  teammates does not justify promoting assistance to direct execution or
+  ownership. Never compute totals such as years of experience from dates. The
+  prompt tells the model to follow user_guidance preferences within these rules:
+  the shared firewall still lists user_guidance as data, and without that line a
+  static page-length preference was half-followed (2026-10-04 round-2 benchmark).
+  Keep guidance-following in per-prompt lines, not the shared firewall. Do not
   restore the current-role present-tense rule: it made a quarter of rewrites
   tense-only churn that the grounding checks then flagged.
 - Polish failures fail plainly without changing the document.

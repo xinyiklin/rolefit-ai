@@ -5,6 +5,7 @@ import {
   curatedClaimTerms,
   findUngroundedOutcomeClaim,
   hasUnsupportedOwnershipIncrease,
+  isConceptTermGrounded,
   isTermGrounded
 } from "./grounding.ts";
 import { findUngroundedNumericClaim } from "./sanitize.ts";
@@ -32,10 +33,12 @@ export function affirmativeEvidence(evidence: string): string {
 export function hasContradictoryClaimEvidence(claim: string, evidence: string): boolean {
   const sources = evidenceSegments(evidence);
   return curatedClaimTerms(affirmativeEvidence(claim)).some((term) =>
-    sources.some((source) => evidencePolarity(source) === "affirmative" && isTermGrounded(term, source)) &&
+    sources.some((source) => evidencePolarity(source) === "affirmative" && isConceptTermGrounded(term, source)) &&
     sources.some((source) => evidencePolarity(source) === "denied" && isTermGrounded(term, source))
   );
 }
+
+export const OWNERSHIP_ISSUE = "Unsupported ownership or responsibility";
 
 export function candidateClaimIssue(
   claim: string,
@@ -50,7 +53,7 @@ export function candidateClaimIssue(
   const number = findUngroundedNumericClaim(claim, affirmative);
   if (number) return `Unsupported measurement or duration: ${number}`;
   if (hasUnsupportedOwnershipIncrease(claim, original, affirmativeEvidence(ownershipEvidence)))
-    return "Unsupported ownership or responsibility";
+    return OWNERSHIP_ISSUE;
   const outcome = findUngroundedOutcomeClaim(claim, affirmative, { candidateProse: true });
   return outcome ? `Unsupported outcome: ${outcome}` : null;
 }

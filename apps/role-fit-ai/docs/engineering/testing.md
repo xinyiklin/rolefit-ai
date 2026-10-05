@@ -239,14 +239,50 @@ Good server verification covers:
   gaps, partial compound requirements, one isolated duration gap, and a content-
   poor application form. Private corpus calibration stays gitignored and is
   reported only through anonymized aggregate counts.
-- Resume Proposal has a separate synthetic-only live smoke harness:
+- Resume Proposal has an opt-in synthetic regression benchmark:
   `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
-  Every run checks an aligned fixture where `NO_CHANGES` is valid and an
-  improvable fixture that must yield at least one safe proposal. It independently
-  verifies allowed target ids, locked skill labels, grounded tools/numbers/outcomes,
-  and target-specific ownership. It reads no workspace resume, prints only status/count summaries, writes full
-  synthetic receipts under gitignored `workspace/resume-proposal-eval/`, and is
-  never part of `npm test`.
+  The tracked `server/ai/__evals__/fixtures/resume-proposal-quality.json` keeps
+  34 invented cases: 18 from the 2026-10-04 benchmark (six original tuning
+  cases, six initial holdouts, and six supporting-role holdouts, now all
+  regression cases) plus 16 frozen holdouts for prompt slimming. They exercise
+  attribution, posting-only skills, ownership, numbers, prompt injection,
+  linked Profile additions, negative evidence, tense, restraint, bold-off
+  guidance, and key-evidence removal. Aligned cases permit `NO_CHANGES`;
+  brochure cases require an improvement. Corpus inputs and labels are
+  agent-authored; passing these cases is not a general accuracy estimate.
+  `EVAL_PROVIDER`, `EVAL_MODEL`, and `EVAL_REASONING_EFFORT` select the generator.
+  `EVAL_FIXTURES=all` (default) or comma-separated case names select coverage;
+  runs accepts 1–5 (default 1). `--help` lists cases without provider calls.
+  Every live run also uses Codex CLI / GPT-6 Astra / high to fact-check each
+  replacement and added bullet against its permitted entry/Profile evidence.
+  Thus a full run makes 34 generation calls and up to 34 judge calls per
+  repetition (generation may retry unreadable responses). Both providers must
+  be configured; there is no provider fallback or workspace-settings import.
+  Traps, tense flips, withheld edits, missing required improvements, unsupported
+  edits, and provider/judge failures fail the run. The judge must return complete,
+  unique, typed labels; missing labels never count as support. Materiality,
+  opportunity coverage, warning counts, and character growth are diagnostics,
+  not gates or rendered page-fit claims. An edit is material when it changes
+  what a screener learns or how quickly they find it; length and page count
+  are never criteria in either direction. Astra labels are model judgments,
+  not independent human certification; removals/reorders receive deterministic
+  checks rather than per-edit factual judgments.
+  The runner calls the production proposal workflow, reads only tracked
+  synthetic inputs/source files, and prints status/count summaries. Unique
+  owner-only directories beneath ignored `workspace/resume-proposal-eval/`
+  retain the fixture snapshot, generator/judge configuration, corpus/source
+  fingerprints, sanitized proposals, judge labels, and `summary.json` for
+  comparisons across edits. It stops after the first execution failure and
+  reports remaining cases as unrun; trap/factual failures still allow other
+  cases to run. Personal applications and earlier private benchmarks are never
+  read. The live runner remains excluded from `npm test`; the offline
+  `resume-proposal-quality-contracts.mjs` checks fixtures, trap controls, strict
+  judge validation, and injected provider success/failure paths without calls.
+
+  Example, from the repository root (explicitly calls both live providers):
+  `EVAL_PROVIDER=claude-cli EVAL_MODEL=claude-opus-5-5 EVAL_REASONING_EFFORT=high npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- 3`.
+  Compare the same fixtures/repetitions on another model by changing those
+  environment variables; each invocation retains its own receipts.
 - pasted resume text reaches the structured editor as a one-time conversion into
   `ResumeData`; a `.resume` file loads its `ResumeData` directly, and export offers
   PDF + `.resume`. The Resume file picker rejects plain-text, word-processing, and

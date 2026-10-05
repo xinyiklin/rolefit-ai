@@ -57,13 +57,18 @@ const SMALL_NUMBER_PATTERN = Object.keys(SMALL_NUMBER_WORDS).join("|");
 const TENS_NUMBER_PATTERN = Object.keys(TENS_NUMBER_WORDS).join("|");
 const WORD_NUMBER_PATTERN =
   `(?:${SMALL_NUMBER_PATTERN}|(?:${TENS_NUMBER_PATTERN})(?:[- ](?:one|two|three|four|five|six|seven|eight|nine))?)`;
-const DIGIT_NUMBER_PATTERN = String.raw`\d[\d,_]*(?:\.\d+)?`;
+// A group separator must be followed by digits, so "React 18, reducing" ends at 18.
+const DIGIT_NUMBER_PATTERN = String.raw`\d+(?:[,_]\d+)*(?:\.\d+)?`;
 const DURATION_CLAIM_PATTERN = new RegExp(
   String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b`,
   "gi"
 );
 
 export type NumericClaim = { key: string; display: string; context: string; subject: string };
+
+// A magnitude after the digits is part of the count: "4k users" is not "4 users".
+const UNSCALED_MAGNITUDES = String.raw`[kmb]|bn|mm|x|hundred|trillion|dozen`;
+const MAGNITUDE_PREFIX = new RegExp(String.raw`^(${UNSCALED_MAGNITUDES})\b`, "i");
 
 function normalizedDigit(value: string): string {
   return value.replace(/[, _]/g, "").replace(/^0+(?=\d)/, "");
@@ -143,21 +148,24 @@ export function numericClaims(value: unknown): NumericClaim[] {
   }
 
   const countUnits = "invoices?|users?|requests?|tests?|endpoints?|customers?|developers?|tickets?|services?";
-  const countPhrase = String.raw`(?:(?!(?:and|or|but|for|of|to|with|from|by|in|on|at|per)\b)[A-Za-z][A-Za-z-]*\s+){0,3}?(?:${countUnits})\b`;
+  const countPhrase = String.raw`(?:(?:${UNSCALED_MAGNITUDES})\b\s*)?(?:(?!(?:and|or|but|for|of|to|with|from|by|in|on|at|per|${UNSCALED_MAGNITUDES})\b)[A-Za-z][A-Za-z-]*\s+){0,3}?(?:${countUnits})\b`;
   const measurement = new RegExp(
     String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(%|percentage\s+points?|percent\b|${countPhrase}|thousand\b|million\b|billion\b|[A-Za-z][A-Za-z-]*\b)`, "gi"
   );
   for (const match of text.matchAll(measurement)) {
     if (occupied.some(([start, end]) => match.index! >= start && match.index! < end)) continue;
     if (/^(?:and|or|of|to|in|on|at|for|by|from|with|is|was|were|as|a|an|the|i)$/i.test(match[2]) || /^(?:19|20)\d{2}$/.test(match[1])) continue;
+    // "one shared lock" counts locks: a participle after "one" describes the unit that follows it.
+    const described = /^one$/i.test(match[1]) && /ed$/i.test(match[2])
+      ? text.slice(match.index! + match[0].length).match(/^\s+([A-Za-z][A-Za-z-]*)/)?.[1] : undefined;
     const currency = text.slice(Math.max(0, match.index! - 12),match.index!).match(/(?:\b(?:USD|CAD|EUR|GBP)|[$€£])\s*$/i)?.[0].trim().toUpperCase();
     const suffix = text.slice(match.index! + match[0].length).match(/^\s*(?:\/|per\s+)(second|minute|hour|day|month|year)s?\b/i);
     const unit = /^(?:%|percent)$/i.test(match[2]) ? "percent"
       : /^percentage/i.test(match[2]) ? "percentage-point"
-        : `count:${match[2].trim().split(/\s+/).at(-1)!.toLowerCase().replace(/s$/, "")}`;
+        : `count:${match[2].trim().match(MAGNITUDE_PREFIX)?.[1].toLowerCase() ?? ""}${(described ?? match[2].trim().split(/\s+/).at(-1)!).toLowerCase().replace(/s$/, "")}`;
     push(`${currency ? `currency:${currency}:` : ""}${unit}${suffix ? `/${suffix[1].toLowerCase()}` : ""}:${scaledMeasurementNumber(match[1], match[2])}`, match[0] + (suffix?.[0] ?? ""), match.index!, match[0].length + (suffix?.[0].length ?? 0));
   }
-  for (const match of text.matchAll(/\d[\d,_]*(?:\.\d+)?/g)) {
+  for (const match of text.matchAll(new RegExp(DIGIT_NUMBER_PATTERN, "g"))) {
     const index = match.index!;
     if (occupied.some(([start, end]) => index >= start && index < end)) continue;
     const before = text.slice(Math.max(0, index - 30), index);
