@@ -241,6 +241,8 @@ const UNTRUSTED_FENCE_NAMES = [
   "employer_context",
   "source_context",
   "evidence_items",
+  "earlier_output_concerns",
+  "terminology_priorities",
   "validation_failures",
   "rejected_output"
 ] as const;
@@ -292,7 +294,7 @@ export function accomplishmentStyleRules(finishedDocument = false) {
 - Use plain, specific verbs (built, designed, implemented, migrated, reduced, automated, debugged). Never use brochure or AI-tell vocabulary: seamless, robust, cutting-edge, innovative, dynamic, passionate, powerful, world-class, state-of-the-art, spearheaded, revolutionized, leveraged, utilized, showcasing, pivotal, intricate, results-driven, "proven track record", "in the realm of", "leveraging synergies".
 - Cover JD keywords through the candidate's real, concrete work; never transplant the posting's own sentences or adjective style into bullets. A resume that mirrors the JD word-for-word reads as generated and is rejected.
 - Preserve the candidate's actual level of ownership: do not turn entry-level or individual-contributor work into senior/staff-scale claims (led the org, owned the platform, architected company-wide, drove strategy) unless the resume itself states that scope.
-- Match verb tense to the role's timeframe: present tense for bullets in the candidate's current role (its dates run to "Present" or show no end date), past tense for every prior role. When you rewrite a bullet, keep its tense consistent with the other bullets in the same entry rather than introducing a conflicting one. The entry's dates decide which tense applies — never change a date or employment status to fit a tense.
+- Keep each bullet's existing tense when you rewrite it. Completed accomplishments stay in past tense even in the current role; present tense fits only ongoing work in the current role (its dates run to "Present" or show no end date), and every prior role stays in past tense. Never change a date or employment status to fit a tense.
 - Every claim must survive an interview probe ("walk me through how you did that"). If the candidate could not defend the wording with the evidence given, soften or cut it.`;
 }
 

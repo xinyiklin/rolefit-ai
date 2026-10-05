@@ -12,13 +12,18 @@ import assert from "node:assert/strict";
 
 import {
   findUngroundedClaimTerm,
+  findUngroundedCuratedClaimTerm,
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
   hasUnsupportedOwnershipIncrease,
   isClaimTermGroundedInSource
 } from "../grounding.ts";
+import { findUngroundedNumericClaim } from "../sanitize.ts";
+import { candidateClaimIssue } from "../claimEvidence.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
+const assisted = "Assisted senior engineers in migrating the payouts service from a cron script to Celery workers backed by Redis.";
+const qaBugs = "Fixed 14 bugs from the QA backlog in the claims intake form, a jQuery front end.";
 
 const checks = [
   ["every upward ownership step is gated",
@@ -89,6 +94,165 @@ const checks = [
       "Built JavaScript reporting tools and maintained the deployment workflow."
     ) === null],
 
+  // --- 2026-10 warning precision: honest paraphrases stay clean, fabrication still flags ---
+  ...["Build", "Optimize", "Instrument", "Helped", "Fixing", "Reduces"].map((verb) => [
+    `sentence-initial verb "${verb}" is grammar, not a proper-name claim`,
+    findUngroundedClaimTerm(`${verb} the Celery queue for dispatch.`, "Built and rewrote the Celery queue for dispatch.") === null
+      && f(`${verb} the Celery queue for dispatch.`, `${verb.toLowerCase()} queues\n${verb} the Celery queue`, "built and rewrote the celery queue for dispatch.") === null
+  ]),
+  ["sentence-initial product name not in evidence is still a claim",
+    findUngroundedClaimTerm("Snowpipe ingestion for carrier rate lookups.", "Built Django REST endpoints for carrier rate lookups.") === "Snowpipe"],
+  ["sentence-initial JD product name not in evidence is still flagged",
+    f("Looker dashboards for dispatch teams.", "experience with looker required", "built django endpoints for dispatch teams.") === "Looker"],
+  ["verbless own-project line restated with Built is not an ownership increase",
+    !hasUnsupportedOwnershipIncrease("Built a Python CLI that imports bank CSV exports.", "Python CLI that imports bank CSV exports and categorizes transactions.", "Python CLI that imports bank CSV exports and categorizes transactions.")],
+  ["verbless own-project line still cannot become leadership",
+    hasUnsupportedOwnershipIncrease("Led a Python CLI that imports bank CSV exports.", "Python CLI that imports bank CSV exports and categorizes transactions.", "Python CLI that imports bank CSV exports and categorizes transactions.")],
+  ["maintaining is not building",
+    hasUnsupportedOwnershipIncrease("Built a Django admin for ferry schedules.", "Maintained a Django admin for ferry schedules.", "Maintained a Django admin for ferry schedules.")],
+  ["an empty new-bullet slot still needs ownership evidence",
+    hasUnsupportedOwnershipIncrease("Built a Django admin for ferry schedules.", "", "Worked on ferry schedule tooling.")],
+  ["assisted work rewritten to lead with a direct verb is inflation",
+    hasUnsupportedOwnershipIncrease("Migrated the payouts service from a cron script to Celery workers backed by Redis, working alongside senior engineers.", assisted, assisted)],
+  ["assisted validation rewritten as Added is inflation",
+    hasUnsupportedOwnershipIncrease("Added input validation to the Java Spring claims intake service alongside senior engineers.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.")],
+  ["helping framing kept is not inflation",
+    !hasUnsupportedOwnershipIncrease("Helped migrate the payouts service from a cron script to Celery workers backed by Redis.", assisted, assisted)],
+  ["tied direct-action evidence supports the direct rewrite",
+    !hasUnsupportedOwnershipIncrease("Migrated the payouts service from a cron script to Celery workers backed by Redis.", assisted, `${assisted}\nI migrated the payouts service from a cron script to Celery workers backed by Redis.`)],
+  ["supporting a team by automating is the candidate's own work",
+    !hasUnsupportedOwnershipIncrease("Automated weekly reports for the finance team.", "Supported the finance team by automating weekly reports.", "Supported the finance team by automating weekly reports.")],
+  ["supporting others in their migration is still assistive",
+    hasUnsupportedOwnershipIncrease("Migrated the billing service to PostgreSQL.", "Supported senior engineers in migrating the billing service to PostgreSQL.", "Supported senior engineers in migrating the billing service to PostgreSQL.")],
+  ["a count's noun phrase is part of the claim, so a new modifier is reviewed",
+    findUngroundedNumericClaim("Fixed 14 QA-reported bugs in the jQuery front end.", qaBugs) !== null
+      && findUngroundedNumericClaim("Fixed 14 bugs from the QA backlog.", qaBugs) === null],
+  ["the same number cannot count a different thing",
+    findUngroundedNumericClaim("Resolved 14 production incidents in the claims intake form.", qaBugs) === "14 production"],
+  ["a changed count is still flagged", findUngroundedNumericClaim("Fixed 40 QA-reported bugs.", qaBugs) === "40 QA-reported"],
+  ["a shared modifier is not the counted noun", findUngroundedNumericClaim("Launched 5 new services.", "Onboarded 5 new engineers.") === "5 new services"],
+  ["a list comma does not glue the next word to a number",
+    findUngroundedNumericClaim("Migrated to Vite and React 18, reducing bundle size.", "Migrated to Vite and React 18, trimming bundle size.") === null],
+  ["a reduction verb needs its own evidence; synonym swaps are churn the prompt forbids",
+    findUngroundedOutcomeClaim("Reduced the nightly load from 3 hours to 50 minutes.", "Cut the nightly load from 3 hours to 50 minutes.") === "reduce"
+      && findUngroundedOutcomeClaim("Cut the nightly load from 3 hours to 50 minutes.", "Cut the nightly load from 3 hours to 50 minutes.") === null],
+  ["a reduction never grounds an increase",
+    findUngroundedOutcomeClaim("Increased warehouse throughput.", "Cut the nightly warehouse load.") === "increase"],
+  ["specific evidence establishes a concept",
+    f("Checked React forms for accessibility.", "accessibility required", "built react forms with keyboard navigation and aria labels.") === null
+      && findUngroundedCuratedClaimTerm("Added observability with Prometheus metrics.", "Added Prometheus metrics and Grafana dashboards.") === null
+      && findUngroundedCuratedClaimTerm("Docker containerization.", "Packaged services with Docker.") === null],
+  ["a concept with no specific evidence is still flagged",
+    findUngroundedCuratedClaimTerm("Added observability to the queue.", "Wrote Celery tasks.") === "observability"],
+  ["plain CI never implies CI/CD", f("Built CI/CD with GitHub Actions.", "ci/cd required", "ran tests in github actions ci.") === "ci/cd"],
+
+  // --- 2026-10 review regressions: precision fixes must not reopen fabrication ---
+  ...[
+    "Part of a 4-person team for the capstone room scheduler.",
+    "Contributor to the Apache Airflow scheduler plugin system.",
+    "Coursework in distributed systems and Kafka stream processing.",
+    "Member of the payouts team that moved the cron script to Celery workers.",
+    "Intern on the payouts reconciliation service.",
+    "Backend engineer focused on payments reconciliation services in Python."
+  ].map((line) => [`participation or role line "${line.slice(0, 24)}…" cannot become Built`,
+    hasUnsupportedOwnershipIncrease("Built the scheduler, plugin system, stream processing, and reconciliation services.", line, line)]),
+  ["an unrelated direct verb does not support the assisted work",
+    hasUnsupportedOwnershipIncrease("Designed the payouts service migration to Celery workers.", assisted, `${assisted}\nLoad-tested the payouts Celery workers on Redis before launch.`)
+      && hasUnsupportedOwnershipIncrease("Migrated the payouts service to Celery workers backed by Redis.", assisted, `${assisted}\nLoad-tested the payouts Celery workers on Redis before launch.`)],
+  ["learning or documenting is not building", ["Learned", "Documented", "Attended"].every((verb) =>
+    hasUnsupportedOwnershipIncrease("Built the payouts Celery workers.", "", `${verb} the payouts Celery workers.`))],
+  ["a multi-line baseline with a role title gains no assisted-work warning",
+    !hasUnsupportedOwnershipIncrease("Maintained the billing dashboard reports.", "Assistant Engineer\nHelped with billing dashboard reports.", "Assistant Engineer\nHelped with billing dashboard reports.")],
+  ...[
+    "Basic knowledge of Kafka consumers for invoice events.",
+    "Hands-on experience with Kafka consumers for invoice events.",
+    "Studying Kafka consumers for invoice events.",
+    "Code reviews for the Kafka consumers of invoice events.",
+    "QA testing of Kafka consumers for invoice events.",
+    "Bootcamp curriculum covering Kafka consumers for invoice events.",
+    "Tutoring sessions on Kafka consumers for invoice events.",
+    "Mentorship from staff on Kafka consumers for invoice events.",
+    "Payments squad for Kafka consumers of invoice events.",
+    "Backend SWE focused on Kafka consumers for invoice events.",
+    "Kafka consumer documentation and QA for invoice events.",
+    "Kafka consumer monitoring and alert triage for invoice events.",
+    "Invoice event consumers, shadowing the platform manager."
+  ].map((line) => [`knowledge, activity, or role line "${line.slice(0, 26)}…" cannot become Built`,
+    hasUnsupportedOwnershipIncrease("Built Kafka consumers for invoice events.", line, line)]),
+  ["an own-work line supports only authorship of the same thing",
+    hasUnsupportedOwnershipIncrease("Built the company payments platform.", "Python CLI that imports bank CSV exports.", "Python CLI that imports bank CSV exports.")
+      && hasUnsupportedOwnershipIncrease("Managed the Python CLI that imports bank CSV exports.", "Python CLI that imports bank CSV exports.", "Python CLI that imports bank CSV exports.")],
+  ["the assisted verb's support does not carry design or building along",
+    hasUnsupportedOwnershipIncrease("Migrated and designed the payouts service on Celery workers.", assisted, `${assisted}\nMigrated the payouts service cron jobs to Celery workers.`)],
+  ["only the assisted work names assisted verbs, not nouns or relative clauses",
+    !hasUnsupportedOwnershipIncrease("Used Redis while assisting senior engineers in migrating the payouts service.", "Assisted senior engineers in migrating the payouts service, which used Redis.", "Assisted senior engineers in migrating the payouts service, which used Redis.")],
+  ["helping by doing names the candidate's own means",
+    !hasUnsupportedOwnershipIncrease("Automated weekly reports for the finance team.", "Helped the finance team by automating weekly reports.", "Helped the finance team by automating weekly reports.")],
+  ["restating shared work with a shared-work verb is not inflation",
+    !hasUnsupportedOwnershipIncrease("Supported the on-call rotation for payouts alongside senior engineers.", "Helped senior engineers in supporting the on-call rotation for payouts.", "Helped senior engineers in supporting the on-call rotation for payouts.")],
+  ["a denied concept is not entailed by specific evidence",
+    candidateClaimIssue("Ran accessibility audits and added ARIA labels to the intake forms.", "Added ARIA labels to the intake forms. No accessibility experience beyond labels.") !== null],
+  ["a person or lowercase phrase is not observability evidence",
+    findUngroundedCuratedClaimTerm("Added observability to the queue.", "Reported to Dr. Jaeger on the queue.") === "observability"
+      && findUngroundedCuratedClaimTerm("Added observability to the queue.", "Gave the queue a new relic of the old cron jobs.") === "observability"],
+  ...["Scale AI labeling helpers for dispatch.", "Drive sync helpers for dispatch.", "Make targets for dispatch builds.", "Indeed job-feed helpers for dispatch."].map((text) =>
+    [`a product named like a verb is still a claim: ${text.split(" ")[0]}`, findUngroundedClaimTerm(text, "Built Django endpoints for dispatch teams.") !== null]),
+  ["a capitalized heading word in the posting is not a product name",
+    f("Build Django endpoints for dispatch.", "senior engineer, build and release", "built django endpoints for dispatch.", { jobText: "Senior Engineer, Build and Release" }) === null
+      && f("Lead the dispatch API rewrite.", "tech lead", "led the dispatch api rewrite.", { jobText: "Tech Lead" }) === null],
+  ...[
+    "Bug fixes for the payments API.",
+    "Unit tests for the billing service in Python.",
+    "Feature flags for the checkout page.",
+    "Accessibility audit of the patient portal.",
+    "Checkout service rewrite, pairing with a mentor.",
+    "Payments API work with Alice.",
+    "Payments API hotfix."
+  ].map((line) => [`work on a thing "${line.slice(0, 24)}…" is not building it`,
+    hasUnsupportedOwnershipIncrease(`Built the ${line.split(/ (?:for|of) the | rewrite/)[1]?.replace(/[.,].*$/, "") ?? "service"}.`, line, line)]),
+  ["an own-work line still supports Built when the rewrite names its thing",
+    !hasUnsupportedOwnershipIncrease("Built a real-time chat app with WebSockets and Redis.", "Real-time chat app with WebSockets and Redis.", "Real-time chat app with WebSockets and Redis.")],
+  ["a present-tense assist line rewritten as the assisted action is inflation",
+    hasUnsupportedOwnershipIncrease("Switch nightly archive uploads to S3 multipart transfers.", "Assist infrastructure engineers in switching nightly archive uploads to S3 multipart transfers.", "Assist infrastructure engineers in switching nightly archive uploads to S3 multipart transfers.")],
+  ["an acronym is a name, not a sentence-initial verb",
+    f("RAN tooling for the billing service.", "skills: ran, o-ran, 5g core", "built billing service tooling.", { jobText: "Skills: RAN, O-RAN, 5G core" }) === "RAN"],
+  ["a Python framework is Python evidence, never against a denial",
+    f("Built Python services for dispatch.", "python required", "built django rest endpoints for dispatch.") === null
+      && findUngroundedClaimTerm("Built Python services for dispatch.", "Built Django REST endpoints for dispatch.") === null
+      && candidateClaimIssue("Wrote Python services for dispatch.", "Built Django REST endpoints for dispatch.") === null
+      && candidateClaimIssue("Wrote Python services for dispatch.", "Built Django REST endpoints for dispatch. No production Python experience.") !== null
+      && findUngroundedClaimTerm("Built Django admin pages.", "Built Python scripts.") === "Django"
+      && findUngroundedClaimTerm("Wrote Python scripts.", "Fed the red pandas at the zoo.") === "Python"],
+  ["OOP abbreviates written-out object-oriented evidence, never the reverse",
+    findUngroundedClaimTerm("Applied OOP design to the invoice parser.", "Wrote an object-oriented invoice parser.") === null
+      && findUngroundedClaimTerm("Applied OOP design to the invoice parser.", "Wrote an invoice parser.") === "OOP"
+      && findUngroundedClaimTerm("Applied OOP design to the invoice parser.", "Wrote procedural scripts with no object-oriented design.") === "OOP"
+      && findUngroundedClaimTerm("Applied SOLID design to the invoice parser.", "Wrote an object-oriented invoice parser.") === "SOLID"],
+  ...[["Handled 10k requests per second.", "Handled 10k requests per day."], ["Served 2M customers.", "Served 2M users."], ["Ran 3 dozen services.", "Ran 3 dozen tests."]].map(([claim, source]) =>
+    [`a magnitude keeps the counted noun and rate: ${claim}`, findUngroundedNumericClaim(claim, source) !== null && findUngroundedNumericClaim(source, source) === null]),
+  ["a lower verb than the assisted work is not inflation",
+    !hasUnsupportedOwnershipIncrease("Tested the payouts service migration to Celery workers.", assisted, assisted)],
+  ...[["Processed 2B rows.", "Processed 2 rows."], ["Optimized 50K queries.", "Optimized 50 queries."], ["Scaled to 3x nodes.", "Scaled to 3 nodes."],
+    ["Trained 5 hundred engineers.", "Trained 5 engineers."], ["Served 4k users.", "Served 4 users."]].map(([claim, source]) =>
+    [`a magnitude is part of the number: ${claim}`, findUngroundedNumericClaim(claim, source) !== null]),
+  ["a count cannot gain a severity or seniority modifier",
+    findUngroundedNumericClaim("Fixed 14 critical security bugs.", qaBugs) !== null
+      && findUngroundedNumericClaim("Fixed 14 production bugs.", qaBugs) !== null
+      && findUngroundedNumericClaim("Onboarded 5 senior engineers.", "Onboarded 5 engineers.") !== null],
+  ...[["Reduced build times for the mobile app.", "Cut release branches for the mobile app."],
+    ["Reduced deploy time for the billing service.", "Led the cut-over of the billing service."],
+    ["Reduced the onboarding backlog.", "Worked through budget cuts on the onboarding team."],
+    ["Decreased page load time.", "Trimmed unused dependencies from the page bundle."],
+    ["Shortened onboarding for new billing engineers.", "Lowered the logging verbosity of the billing service."]].map(([claim, source]) =>
+    [`another sense or object of a reduction verb is not evidence: ${claim}`, findUngroundedOutcomeClaim(claim, source) !== null]),
+  ["ambiguous words do not establish a concept",
+    f("Added observability to the honeycomb layout.", "observability required", "built a honeycomb layout for the gallery.") === "observability"
+      && f("Built forms for accessibility.", "accessibility required", "worked with aria on the forms team.") === "accessibility"
+      && f("Built forms for accessibility.", "accessibility required", "added keyboard navigation shortcuts for power users.") === "accessibility"],
+  ["a verb the posting uses as a name is still a claim at sentence start",
+    f("Boost libraries for carrier rate lookups.", "experience with c++ and boost.", "built django endpoints for carrier rate lookups.", { jobText: "Experience with C++ and Boost." }) === "Boost"
+      && f("Build Django endpoints for carrier rate lookups.", "- build django endpoints", "built django endpoints for carrier rate lookups.", { jobText: "Responsibilities:\n- Build Django endpoints" }) === null],
+
   // --- deliberate exclusion: collision-prone short tokens never flagged ---
   ["bare 'go' is NOT flagged (verb / go-to-market collision)", f("our go-to-market plan", "go developer wanted", "", { proseMode: true }) === null],
 
@@ -139,7 +303,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 25, `grounding probe count dropped below the floor (25): found ${checks.length}`);
+assert(checks.length >= 119, `grounding probe count dropped below the floor (119): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

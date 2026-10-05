@@ -140,6 +140,8 @@ const prompts = buildResumeProposalPrompts({ jobText, targets, scopeText, candid
 assert.match(prompts.userPrompt, /"action": "remove"/);
 assert.match(prompts.userPrompt, /bullet-order target lists/);
 assert.match(prompts.userPrompt, /never every bullet of an entry/);
+assert.match(prompts.userPrompt, /if you remove any bullet from an entry, omit that entry's bullet-order target/,
+  "the remove-or-reorder exclusivity is stated as an instruction the server enforces");
 const skillsOnly = flattenResumeTargets({ ...scope, sections: [scope.sections[2]] });
 const plain = buildResumeProposalPrompts({ jobText, targets: skillsOnly, scopeText, candidateContext: "", customInstructions: "" });
 assert.doesNotMatch(plain.userPrompt, /"action": "remove"|bullet-order/, "structural rules appear only when a target allows them");

@@ -1,153 +1,146 @@
-// Live, synthetic-only smoke harness for the one-call Resume Polish workflow.
-// It never reads a user's workspace or prints generated resume text. Full
-// synthetic inputs and sanitized results are written beneath gitignored
-// workspace/resume-proposal-eval/ for deliberate manual inspection.
-//
-// Usage:
-//   npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.6-sol npm run eval:live:resume-proposal --workspace apps/role-fit-ai
-import { mkdirSync, writeFileSync } from "node:fs";
+// Opt-in synthetic benchmark. Importing it and running npm test never calls a provider.
+// Usage: npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { flattenResumeTargets } from "../../../shared/resumePolishContract.ts";
-import {
-  findUngroundedClaimTerm,
-  findUngroundedJdTerm,
-  findUngroundedOutcomeClaim,
-  hasUnsupportedOwnershipIncrease
-} from "../grounding.ts";
+import { callConfiguredProvider } from "../clients.ts";
 import { generateResumeProposal } from "../resumeProposal.ts";
-import { hasUngroundedNumericClaim } from "../sanitize.ts";
+import { resolveProviderRequest } from "../providers.ts";
+import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, validateFactCheck } from "./support/resume-proposal-quality.mjs";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const OUT_DIR = join(APP_ROOT, "workspace/resume-proposal-eval");
-const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";
-const MODEL = process.env.EVAL_MODEL ?? (PROVIDER === "claude-cli" ? "opus" : "");
-const RUNS = Number(process.argv[2] || 1);
-if (!Number.isInteger(RUNS) || RUNS < 1 || RUNS > 5) {
-  console.error("runs must be an integer from 1 to 5");
-  process.exit(2);
-}
+const FIXTURE_URL = new URL("./fixtures/resume-proposal-quality.json", import.meta.url);
+export const fixtures = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
+export const JUDGE = { provider: "codex-cli", model: "gpt-6-astra", reasoningEffort: "high" };
+const hash = (text) => createHash("sha256").update(text).digest("hex");
+const publicConfig = ({ provider, model, reasoningEffort }) => ({ provider, model, reasoningEffort });
 
-const alignedScope = {
-  version: 1,
-  locked: { omittedIdentity: true, omittedContact: true, omittedSections: ["Education"] },
-  sections: [
-    {
-      id: "experience",
-      heading: "Experience",
-      type: "standard",
-      entries: [{
-        id: "role-1",
-        titleLeft: "Software Developer",
-        titleRight: "Synthetic Systems",
-        subtitleLeft: "",
-        subtitleRight: "2022-present",
-        bullets: [
-          { id: "bullet-1", text: "Supported JavaScript and SQL services used by internal operations teams." },
-          { id: "bullet-2", text: "Built automated tests and documented release procedures." }
-        ]
-      }]
-    },
-    {
-      id: "skills",
-      heading: "Skills",
-      type: "skills",
-      entries: [{
-        id: "skills-1",
-        titleLeft: "Languages",
-        titleRight: "",
-        subtitleLeft: "JavaScript, SQL",
-        subtitleRight: "",
-        bullets: []
-      }]
+export function evalOptions(argv, env) {
+  const runs = Number(argv[0] ?? 1);
+  if (argv.length > 1 || !Number.isInteger(runs) || runs < 1 || runs > 5) throw new Error("runs must be an integer from 1 to 5");
+  const names = (env.EVAL_FIXTURES || "all").split(",");
+  const selected = names[0] === "all" && names.length === 1 ? fixtures : fixtures.filter((fixture) => names.includes(fixture.name));
+  if (!selected.length || (names[0] !== "all" && new Set(names).size !== selected.length) || (names.includes("all") && names.length > 1)) throw new Error("EVAL_FIXTURES must be all or known comma-separated fixture names");
+  return {
+    runs, selected,
+    config: {
+      provider: env.EVAL_PROVIDER || "claude-cli",
+      model: env.EVAL_MODEL ?? ((env.EVAL_PROVIDER || "claude-cli") === "claude-cli" ? "opus" : ""),
+      ...(env.EVAL_REASONING_EFFORT ? { reasoningEffort: env.EVAL_REASONING_EFFORT } : {})
     }
-  ],
-  contextSections: []
-};
-const alignedScopeText = "EXPERIENCE\nSoftware Developer | Synthetic Systems\nSupported JavaScript and SQL services used by internal operations teams.\nBuilt automated tests and documented release procedures.\nSKILLS\nLanguages: JavaScript, SQL";
-const alignedJobText = "Software Developer responsible for JavaScript services, SQL data workflows, automated testing, and release documentation.";
-
-const improvableScope = structuredClone(alignedScope);
-improvableScope.sections[0].entries[0].bullets[0].text =
-  "Built reporting tools used by internal operations teams. The tools used JavaScript and SQL.";
-const improvableScopeText = "EXPERIENCE\nSoftware Developer | Synthetic Systems\nBuilt reporting tools used by internal operations teams. The tools used JavaScript and SQL.\nBuilt automated tests and documented release procedures.\nSKILLS\nLanguages: JavaScript, SQL";
-const improvableJobText = "Software Developer responsible for JavaScript and SQL reporting tools, automated testing, and release documentation.";
-
-const fixtures = [
-  {
-    name: "aligned",
-    resumeScope: alignedScope,
-    scopeText: alignedScopeText,
-    jobText: alignedJobText,
-    customInstructions: "Keep supported facts and ownership unchanged. Return NO_CHANGES when no material improvement is needed.",
-    requiresProposal: false
-  },
-  {
-    name: "improvable",
-    resumeScope: improvableScope,
-    scopeText: improvableScopeText,
-    jobText: improvableJobText,
-    customInstructions: "Make one safe bullet edit that foregrounds the supported JavaScript and SQL reporting work without changing facts or ownership.",
-    requiresProposal: true
-  }
-];
-
-function independentlySafe(fixture, result) {
-  if (result.status === "WITHHELD") return false;
-  if (fixture.requiresProposal && (result.status !== "PROPOSAL" || result.changes.length === 0)) return false;
-  if (result.status === "NO_CHANGES") return result.changes.length === 0;
-  if (result.status !== "PROPOSAL" || result.changes.length === 0) return false;
-
-  const targets = flattenResumeTargets(fixture.resumeScope);
-  const targetMap = new Map(targets.map((target) => [target.targetId, target]));
-  for (const change of result.changes) {
-    const target = targetMap.get(change.targetId);
-    if (!target) return false;
-    if (target.target.field !== "bullet" && target.target.field !== "skill") return false;
-    const grounding = target.sectionType === "standard" ? target.entryText : fixture.scopeText;
-    if (hasUngroundedNumericClaim(change.replacement, grounding)) return false;
-    if (findUngroundedJdTerm(change.replacement, fixture.jobText.toLowerCase(), grounding.toLowerCase())) return false;
-    if (findUngroundedClaimTerm(change.replacement, grounding)) return false;
-    if (findUngroundedOutcomeClaim(change.replacement, grounding)) return false;
-    if (hasUnsupportedOwnershipIncrease(change.replacement, target.currentText, target.entryText)) return false;
-  }
-  return true;
+  };
 }
 
-mkdirSync(OUT_DIR, { recursive: true });
-const summaries = [];
-for (let run = 1; run <= RUNS; run += 1) {
-  for (const fixture of fixtures) {
-    try {
-      const result = await generateResumeProposal({
-        body: { provider: PROVIDER, ...(MODEL ? { model: MODEL } : {}) },
-        resumeScope: fixture.resumeScope,
-        scopeText: fixture.scopeText,
-        jobText: fixture.jobText,
-        candidateContext: "",
-        customInstructions: fixture.customInstructions
-      });
-      const passed = independentlySafe(fixture, result);
-      writeFileSync(
-        join(OUT_DIR, `${PROVIDER.replace(/[^a-z0-9-]/gi, "_")}-${fixture.name}-run-${run}.json`),
-        JSON.stringify({
-          resumeScope: fixture.resumeScope,
-          scopeText: fixture.scopeText,
-          jobText: fixture.jobText,
-          result
-        }, null, 2)
-      );
-      summaries.push({ fixture: fixture.name, run, passed, status: result.status, changes: result.changes.length, withheld: result.withheld.count });
-    } catch (error) {
-      summaries.push({ fixture: fixture.name, run, passed: false, error: error instanceof Error ? error.message : "unknown error" });
+export async function evaluateCase(fixture, config, {
+  generate = generateResumeProposal,
+  judge = callConfiguredProvider
+} = {}) {
+  const started = Date.now();
+  const receipt = { fixture: fixture.name, config: publicConfig(config), judge: JUDGE, humanReviewed: false };
+  let stage = "generation";
+  try {
+    const { scope, resumeText } = fixtureIndex(fixture);
+    receipt.result = await generate({
+      body: config, resumeScope: scope, scopeText: resumeText, jobText: fixture.jobText,
+      candidateContext: fixture.candidateContext, customInstructions: fixture.customInstructions,
+      boldBulletKeywords: fixture.boldBulletKeywords ?? true
+    });
+    stage = "trap-check";
+    receipt.grade = gradeProposal(fixture, receipt.result);
+    const edits = factCheckEdits(fixture, receipt.result);
+    receipt.factCheck = { status: "not-needed", edits: [], unsupported: 0, immaterial: 0 };
+    if (edits.length) {
+      stage = "fact-check";
+      const stats = {};
+      const raw = await judge({ ...JUDGE, ...factCheckPrompt(fixture, edits), retryUnreadableOutput: false }, stats);
+      receipt.judgeAttempts = stats.attempts ?? 1;
+      stage = "fact-check-shape";
+      receipt.factCheck = validateFactCheck(raw, edits);
+    }
+    receipt.passed = receipt.grade.passed && receipt.factCheck.unsupported === 0;
+  } catch {
+    // Provider errors can contain response excerpts. Keep only the failing stage.
+    receipt.error = stage;
+    if (stage.startsWith("fact-check")) receipt.factCheck = { status: "error", edits: [], unsupported: null, immaterial: null };
+    receipt.passed = false;
+  }
+  receipt.seconds = (Date.now() - started) / 1000;
+  return receipt;
+}
+
+export function summaryRow(receipt, run) {
+  const hits = {};
+  for (const hit of receipt.grade?.hits ?? []) hits[hit.type] = (hits[hit.type] ?? 0) + 1;
+  return {
+    fixture: receipt.fixture, run, passed: receipt.passed, status: receipt.result?.status ?? "ERROR",
+    ...(receipt.error ? { error: receipt.error } : {}),
+    metrics: receipt.grade?.metrics ?? null, opportunities: receipt.grade?.opportunities ?? null,
+    trapHits: hits, factCheck: receipt.error?.startsWith("fact-check") ? "error" : receipt.factCheck?.status ?? "unverified",
+    unsupported: receipt.error?.startsWith("fact-check") ? null : receipt.factCheck?.unsupported ?? null,
+    immaterial: receipt.error?.startsWith("fact-check") ? null : receipt.factCheck?.immaterial ?? null,
+    providerAttempts: receipt.result?.attempts ?? null, judgeAttempts: receipt.judgeAttempts ?? 0,
+    seconds: receipt.seconds
+  };
+}
+
+export async function main(argv = process.argv.slice(2), env = process.env) {
+  if (argv.length === 1 && argv[0] === "--help") {
+    console.log("Usage: npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator; EVAL_FIXTURES selects all or comma-separated names.\nEvery run includes GPT-6 Astra/high per-edit fact-checks via Codex CLI. Both providers must be configured.\nFixtures: " + fixtures.map((fixture) => fixture.name).join(", "));
+    return 0;
+  }
+  let options;
+  try {
+    options = evalOptions(argv, env);
+    options.config = publicConfig(resolveProviderRequest(options.config));
+    resolveProviderRequest(JUDGE);
+  } catch {
+    console.error("Invalid eval configuration or unavailable provider. Check --help and the generator/Astra provider settings.");
+    return 2;
+  }
+  const root = join(APP_ROOT, "workspace/resume-proposal-eval");
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const out = mkdtempSync(join(root, new Date().toISOString().replace(/[:.]/g, "-") + "-"));
+  chmodSync(out, 0o700);
+  const save = (name, value) => writeFileSync(join(out, name), JSON.stringify(value, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  const sourceHashes = Object.fromEntries([
+    "../resumeProposal.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../resumeScope.ts", "../json.ts", "../clients.ts",
+    "../claimEvidence.ts", "../../../shared/resumePolishContract.ts", "../../../shared/candidateProfileContract.ts",
+    "../../../shared/evidencePolarity.ts", "../../../shared/contentWarnings.ts", "../../../src/lib/coverLetterTemplate.ts",
+    "../../../src/resume/terminology.ts", "./support/resume-proposal-quality.mjs", "./resume-proposal-quality-eval.mjs"
+  ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));
+  save("manifest.json", {
+    createdAt: new Date().toISOString(), config: options.config, judge: JUDGE, runs: options.runs,
+    fixtures: options.selected.map((fixture) => fixture.name), corpusHash: hash(readFileSync(FIXTURE_URL)), sourceHashes,
+    labelProvenance: "Agent-authored synthetic traps; Astra labels are model judgments, not human factual certification.",
+    fixtureProvenance: Object.entries(Object.groupBy(options.selected, (fixture) => fixture.provenance)).map(([provenance, group]) => ({ provenance, count: group.length })),
+    humanReviewed: false
+  });
+  save("fixtures.json", options.selected);
+  console.log(`Resume Proposal benchmark: ${options.selected.length} fixtures x ${options.runs} runs; Astra/high fact-check enabled.`);
+  const rows = [];
+  outer: for (let run = 1; run <= options.runs; run += 1) {
+    for (const fixture of options.selected) {
+      const receipt = await evaluateCase(fixture, options.config);
+      save(`${fixture.name}-run-${run}.json`, receipt);
+      const row = summaryRow(receipt, run);
+      rows.push(row);
+      console.log(JSON.stringify(row));
+      if (receipt.error) break outer;
     }
   }
+  const expected = options.selected.length * options.runs;
+  const passed = rows.filter((row) => row.passed).length;
+  save("summary.json", { expected, completed: rows.length, passed, unrun: expected - rows.length, rows });
+  console.log(`Result: ${passed}/${expected} passed; ${expected - rows.length} unrun. Materiality/opportunity/length metrics are diagnostic, not pass gates. Receipts: ${out}`);
+  return passed === expected ? 0 : 1;
 }
 
-console.log(`Resume Proposal live eval: provider=${PROVIDER} model=${MODEL || "(default)"} fixtures=${fixtures.length} runs=${RUNS}`);
-for (const summary of summaries) console.log(JSON.stringify(summary));
-const failures = summaries.filter((summary) => !summary.passed);
-console.log(`Result: ${summaries.length - failures.length}/${summaries.length} clean.`);
-process.exit(failures.length ? 1 : 0);
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { process.exitCode = await main(); }
+  catch {
+    console.error("Could not complete the eval or write its receipts; no success recorded.");
+    process.exitCode = 1;
+  }
+}

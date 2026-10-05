@@ -36,9 +36,34 @@ export function jobTerminology(jobText: string): { terms: JobTerm[]; limitations
   return { terms: terms.slice(0, 48), limitations };
 }
 
+// Specific evidence entails its category: PostgreSQL is database work. Only that
+// direction holds, a related tool never entails a practice (CI is not CI/CD), and a
+// denied category stays unsupported. Names are case-sensitive to avoid common-word
+// collisions; contrived ones (a colleague named Django) are accepted.
+const ENTAILED_BY: Record<string, RegExp> = {
+  database: /\b(?:PostgreSQL|Postgres|MySQL|MariaDB|SQLite|MongoDB|DynamoDB|Apache Cassandra)\b/g,
+  frontend: /\b(?:React|Vue(?:\.js)?|Angular|Svelte|Next\.js)\b/g,
+  backend: /\b(?:Node\.js|Express\.js|ExpressJS|Django|Flask|FastAPI|Spring Boot|NestJS)\b/g,
+  "rest api": /\bDjango REST Framework\b/g,
+  algorithms: /\balgorithmic\b/gi,
+  cloud: /\b(?:AWS|Azure|GCP|Google Cloud)\b/g,
+  python: /\b(?:Django|Flask|FastAPI|NumPy|PyTorch|pytest|scikit-learn)\b/g
+};
+// Line-initial "React to pages", "Angular momentum", or "Flask cultures" is not the tool.
+const LINE_START_HOMONYMS = new Set(["React", "Vue", "Angular", "Flask"]);
+
+function entailedTerm(evidence: string, keyword: string): boolean {
+  const pattern = ENTAILED_BY[keyword];
+  if (!pattern) return false;
+  const segments = evidenceSegments(evidence);
+  return !segments.some((segment) => evidencePolarity(segment) === "denied" && ["exact", "equivalent"].includes(terminologyMatch(segment, keyword)))
+    && segments.some((segment) => evidencePolarity(segment) === "affirmative" && [...segment.matchAll(pattern)].some((match) =>
+      !(LINE_START_HOMONYMS.has(match[0]) && /^[\s\u2022*-]*$/.test(segment.slice(0, match.index)))));
+}
+
 export function unsupportedTerminology(replacement: string, evidence: string, terms: JobTerm[]): string[] {
   return terms
-    .filter(({ keyword }) => affirmativeTerm(replacement, keyword) && !affirmativeTerm(evidence, keyword))
+    .filter(({ keyword }) => affirmativeTerm(replacement, keyword) && !affirmativeTerm(evidence, keyword) && !entailedTerm(evidence, keyword))
     .map(({ keyword }) => `${keyword}: not supported by provided evidence for this entry.`);
 }
 

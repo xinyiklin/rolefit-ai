@@ -50,6 +50,9 @@ assert.doesNotMatch(
   /\[add metric/
 );
 assert.match(accomplishmentStyleRules(), /\[add metric/);
+// Shared with Application Answers: completed work keeps its past tense in the current role.
+assert.match(accomplishmentStyleRules(), /Keep each bullet's existing tense/);
+assert.doesNotMatch(accomplishmentStyleRules(), /present tense for bullets in the candidate's current role/);
 assert.equal(
   sanitizeResumePolishWireResult({
     status: "NO_CHANGES",

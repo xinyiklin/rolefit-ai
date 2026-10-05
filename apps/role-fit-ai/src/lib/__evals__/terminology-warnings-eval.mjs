@@ -34,6 +34,36 @@ assert.ok(analysis.limitations.length);
 assert.ok(jobTerminology('Uncategorized job prose').limitations.some(t => t.includes('not assessed')));
 assert.ok(unsupportedTerminology('Built CI/CD pipelines.', 'Built continuous integration pipelines.', jobTerminology(job).terms).length);
 assert.equal(unsupportedTerminology('Used k8s.', 'Used Kubernetes.', jobTerminology(job).terms).length, 0);
+const categoryTerms = ['database', 'frontend', 'backend', 'rest api', 'algorithms'].map((keyword) => ({ keyword, phrase: keyword, category: 'required' }));
+for (const [replacement, evidence] of [
+  ['Tuned PostgreSQL database queries.', 'Tuned PostgreSQL queries.'],
+  ['Built a React frontend and a Node.js backend.', 'Clinic platform with React and Node.js.'],
+  ['Built REST APIs for rate lookups.', 'Built Django REST Framework endpoints for rate lookups.'],
+  ['Implemented scheduling algorithms.', 'Wrote an algorithmic route scheduler.']
+]) assert.deepEqual(unsupportedTerminology(replacement, evidence, categoryTerms), [], `${evidence} entails ${replacement}`);
+assert.equal(unsupportedTerminology('Designed the database schema.', 'Built React forms.', categoryTerms).length, 1, 'a category needs specific evidence');
+const cloudTerm = [{ keyword: 'cloud', phrase: 'cloud', category: 'required' }];
+assert.deepEqual(unsupportedTerminology('Deployed the frontends to AWS Amplify cloud hosting.', 'Deployed with AWS Amplify frontends.', cloudTerm), [], 'AWS entails cloud');
+assert.equal(unsupportedTerminology('Deployed to cloud hosting.', 'Deployed to an on-premises server.', cloudTerm).length, 1, 'cloud needs a named provider');
+assert.equal(unsupportedTerminology('Deployed to cloud hosting.', 'No AWS or other cloud experience.', cloudTerm).length, 1, 'a denied provider entails no cloud');
+assert.deepEqual(unsupportedTerminology('Built backend services.', 'Built REST services with Express.js.', categoryTerms), [], 'Express.js entails backend');
+const pythonTerm = [{ keyword: 'python', phrase: 'Python', category: 'required' }];
+assert.deepEqual(unsupportedTerminology('Built Python services.', 'Built Django REST endpoints.', pythonTerm), [], 'Django entails Python');
+assert.equal(unsupportedTerminology('Built Python services.', 'Washed each flask after the assay.', pythonTerm).length, 1, 'a lab flask is not Flask');
+assert.equal(unsupportedTerminology('Built Python services.', 'Built Django admin pages. No Python experience.', pythonTerm).length, 1, 'a denied language is not entailed');
+assert.equal(unsupportedTerminology('Tuned the database.', 'Have not used PostgreSQL.', categoryTerms).length, 1, 'denied evidence entails nothing');
+assert.equal(unsupportedTerminology('Built a PostgreSQL schema.', 'Designed the database schema.', [{ keyword: 'postgresql', phrase: 'PostgreSQL', category: 'required' }]).length, 1, 'a category never entails a specific tool');
+for (const [replacement, evidence] of [
+  ['Built frontend dashboards.', 'Helped on-call staff react to incidents.'],
+  ['Built backend services.', 'Titrated each flask by hand in the lab.'],
+  ['Designed the database.', 'Talked with Mongo about the roadmap.'],
+  ['Built backend services.', 'Have not built a backend. Used Django templates for the admin pages.'],
+  ['Built frontend dashboards.', 'React to pager alerts within five minutes.'],
+  ['Built frontend dashboards.', 'Angular momentum simulations for the physics lab.'],
+  ['Built backend services.', 'Flask cultures were prepared for the assay.'],
+  ['Built backend services.', 'Analyst at American Express.'],
+  ['Designed the database.', 'Paired with Cassandra on the roadmap.']
+]) assert.equal(unsupportedTerminology(replacement, evidence, categoryTerms).length, 1, `${evidence} entails nothing`);
 const snapshot = {inputKey:'job-a', terms: [{keyword:'postgresql',phrase:'PostgreSQL',category:'required'}], limitations:[]};
 const accepted = [{original:'Built PostgreSQL tools.',current:'Built relational database tools.'}];
 assert.equal(lostAcceptedTerms(snapshot,'job-a',accepted[0].current,accepted).length,1);
