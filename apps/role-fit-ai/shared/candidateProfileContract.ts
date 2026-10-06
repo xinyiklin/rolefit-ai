@@ -93,7 +93,7 @@ type LinkableEntry = { id: string | null; names: string[] };
 
 // Headings that group entries rather than name one: the resume's own section
 // headings and the usual Profile groupings.
-const GROUPING_HEADINGS = [
+export const GROUPING_HEADINGS = [
   "experience", "work experience", "professional experience", "employment", "work history", "work",
   "jobs", "internships", "projects", "personal projects", "side projects", "academic projects",
   "open source", "research", "volunteering", "volunteer work", "leadership", "activities",
@@ -199,6 +199,12 @@ export function linkProfileBlocks(scope: ProfileLinkScope, profile: string): Map
     linked.set(owner, linked.has(owner) ? `${linked.get(owner)}\n\n${text}` : text);
   }
   return linked;
+}
+
+// The entry each heading links to, by heading position, so a consumer that walks
+// headings never confuses two headings with the same text.
+export function profileHeadingOwners(scope: ProfileLinkScope, profile: string): Array<string | null> {
+  return analyzeProfileHeadings(scope, profile).owners;
 }
 
 // Every whole heading linked to each entry, so a review row can show all the

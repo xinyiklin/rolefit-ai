@@ -317,3 +317,7 @@ export function analyzeCoverLetterTemplate(
 export function templateHasUnresolvedSlots(text: string): boolean {
   return analyzeCoverLetterTemplate({ text }).slots.length > 0;
 }
+
+export function withoutTemplateSlots(text: string): string {
+  return text.replace(TEMPLATE_TOKEN, " ").replace(/\s+/g, " ").trim();
+}

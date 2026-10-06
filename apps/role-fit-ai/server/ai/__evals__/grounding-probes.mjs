@@ -128,8 +128,8 @@ const checks = [
     findUngroundedNumericClaim("Fixed 14 QA-reported bugs in the jQuery front end.", qaBugs) !== null
       && findUngroundedNumericClaim("Fixed 14 bugs from the QA backlog.", qaBugs) === null],
   ["the same number cannot count a different thing",
-    findUngroundedNumericClaim("Resolved 14 production incidents in the claims intake form.", qaBugs) === "14 production"],
-  ["a changed count is still flagged", findUngroundedNumericClaim("Fixed 40 QA-reported bugs.", qaBugs) === "40 QA-reported"],
+    findUngroundedNumericClaim("Resolved 14 production incidents in the claims intake form.", qaBugs) === "14 production incidents"],
+  ["a changed count is still flagged", findUngroundedNumericClaim("Fixed 40 QA-reported bugs.", qaBugs) === "40 QA-reported bugs"],
   ["a shared modifier is not the counted noun", findUngroundedNumericClaim("Launched 5 new services.", "Onboarded 5 new engineers.") === "5 new services"],
   ["a list comma does not glue the next word to a number",
     findUngroundedNumericClaim("Migrated to Vite and React 18, reducing bundle size.", "Migrated to Vite and React 18, trimming bundle size.") === null],

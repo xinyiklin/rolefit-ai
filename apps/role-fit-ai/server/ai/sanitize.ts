@@ -60,11 +60,30 @@ const WORD_NUMBER_PATTERN =
 // A group separator must be followed by digits, so "React 18, reducing" ends at 18.
 const DIGIT_NUMBER_PATTERN = String.raw`\d+(?:[,_]\d+)*(?:\.\d+)?`;
 const DURATION_CLAIM_PATTERN = new RegExp(
-  String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b`,
+  // "30d", "5yrs", and "2 weeks" are durations; "3D" is a name (uppercase only).
+  // Only digits glue ("tend" is not ten days).
+  String.raw`\b(?:(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b|(${DIGIT_NUMBER_PATTERN})(yrs?|mos?|wks?|d|hrs?|h)(?![A-Za-z]))`,
   "gi"
 );
 
-export type NumericClaim = { key: string; display: string; context: string; subject: string };
+// modifiers: the words between a count and the noun it counts ("critical" in "14 critical bugs").
+export type NumericClaim = { key: string; display: string; context: string; subject: string; modifiers: string[] };
+
+// Words ending in "s" that are not the plural noun a count attaches to.
+const NOT_PLURAL_NOUNS = new Set(["as", "is", "was", "has", "its", "this", "thus", "plus", "versus", "across", "less", "unless", "various", "previous", "continuous", "numerous", "serious", "focus", "status", "process", "basis", "analysis", "always", "perhaps", "towards", "whereas", "yes"]);
+
+// Spelling variants of one counted noun ("140 evaluations" and "140 evals").
+const COUNT_UNIT_ALIASES = new Map([["evaluation", "eval"], ["specification", "spec"], ["repository", "repo"], ["configuration", "config"]]);
+const GLUED_DURATIONS = new Map([["d", "day"], ["h", "hour"], ["hr", "hour"], ["wk", "week"], ["mo", "month"], ["yr", "year"]]);
+const countUnit = (word: string): string => { const unit = word.toLowerCase().replace(/s$/, ""); return COUNT_UNIT_ALIASES.get(unit) ?? unit; };
+
+// Letters glued to digits that make a name, not a quantity: 5G, 3GPP, 2FA, 3D ("30d" is a duration).
+const GLUED_NAME = /^(?:[gG]|[gG][pP][pP]|[fF][aA]|D|[lL][tT][eE]|[nN][rR])(?![A-Za-z])/;
+
+// A count's noun phrase ends at the next preposition.
+const PHRASE_BOUNDARY = new Set(["for", "of", "to", "in", "on", "at", "per", "by", "with", "from", "across", "into", "over", "under", "that", "which", "who", "whose", "where", "while", "when"]);
+// "regression and adversarial evals" is one noun phrase; "1 dashboard and APIs" is two.
+const CONJUNCTIONS = new Set(["and", "or", "but"]);
 
 // A magnitude after the digits is part of the count: "4k users" is not "4 users".
 const UNSCALED_MAGNITUDES = String.raw`[kmb]|bn|mm|x|hundred|trillion|dozen`;
@@ -123,12 +142,12 @@ export function numericClaims(value: unknown): NumericClaim[] {
   const text = String(value ?? "").replace(/<\/?(?:b|i|u)>/gi, "");
   const claims: NumericClaim[] = [];
   const occupied: Array<[number, number]> = [];
-  const push = (key: string, display: string, index: number, length: number) => {
+  const push = (key: string, display: string, index: number, length: number, modifiers: string[] = []) => {
     // A quantity cannot borrow the metric from a neighboring coordinated clause.
     const boundary = /[\n;,!?]|\.(?:\s|$)|\b(?:and|but|while|whereas)\b/i;
     const before = text.slice(0, index).split(boundary).at(-1) ?? "";
     const after = text.slice(index + length).split(boundary)[0];
-    claims.push({ key, display, context: `${before}${display}${after}`, subject: measurementSubject(before, after, key) });
+    claims.push({ key, display, context: `${before}${display}${after}`, subject: measurementSubject(before, after, key), modifiers });
     occupied.push([index, index + length]);
   };
 
@@ -141,33 +160,64 @@ export function numericClaims(value: unknown): NumericClaim[] {
     push(`version:${match[1].toLowerCase()}:${match[2]}`, match[2], index, match[2].length);
   }
   for (const match of text.matchAll(DURATION_CLAIM_PATTERN)) {
-    const number = normalizedNumber(match[1]);
-    if (!number) continue;
-    const unit = match[2].toLowerCase().replace(/s$/, "");
+    const number = normalizedNumber(match[1] ?? match[3]);
+    // "3D" and "2H" are names; only lowercase letters glue a duration.
+    if (!number || (match[4] && /[A-Z]/.test(match[4]))) continue;
+    const rawUnit = (match[2] ?? match[4]).toLowerCase().replace(/s$/, "");
+    const unit = GLUED_DURATIONS.get(rawUnit) ?? rawUnit;
     push(`duration:${unit}:${number}`, match[0], match.index!, match[0].length);
   }
 
   const countUnits = "invoices?|users?|requests?|tests?|endpoints?|customers?|developers?|tickets?|services?";
   const countPhrase = String.raw`(?:(?:${UNSCALED_MAGNITUDES})\b\s*)?(?:(?!(?:and|or|but|for|of|to|with|from|by|in|on|at|per|${UNSCALED_MAGNITUDES})\b)[A-Za-z][A-Za-z-]*\s+){0,3}?(?:${countUnits})\b`;
+  // "300+ tests" and "300-plus tests" count tests: the qualifier never separates a
+  // count from its noun, and a count never takes its noun from the next line.
   const measurement = new RegExp(
-    String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(%|percentage\s+points?|percent\b|${countPhrase}|thousand\b|million\b|billion\b|[A-Za-z][A-Za-z-]*\b)`, "gi"
+    String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN}(?![A-Za-z]))[ \t]*(?:\+|-?plus\b)?[ \t]*(%|percentage\s+points?|percent\b|${countPhrase}|thousand\b|million\b|billion\b|[A-Za-z][A-Za-z-]*\b)`, "gi"
   );
   for (const match of text.matchAll(measurement)) {
     if (occupied.some(([start, end]) => match.index! >= start && match.index! < end)) continue;
     if (/^(?:and|or|of|to|in|on|at|for|by|from|with|is|was|were|as|a|an|the|i)$/i.test(match[2]) || /^(?:19|20)\d{2}$/.test(match[1])) continue;
+    // "3GPP" or "5G" is a name, not a count: letters glued to digits are a unit only as a magnitude.
+    if (GLUED_NAME.test(text.slice(match.index! + match[1].length))) continue;
     // "one shared lock" counts locks: a participle after "one" describes the unit that follows it.
     const described = /^one$/i.test(match[1]) && /ed$/i.test(match[2])
       ? text.slice(match.index! + match[0].length).match(/^\s+([A-Za-z][A-Za-z-]*)/)?.[1] : undefined;
     const currency = text.slice(Math.max(0, match.index! - 12),match.index!).match(/(?:\b(?:USD|CAD|EUR|GBP)|[$€£])\s*$/i)?.[0].trim().toUpperCase();
-    const suffix = text.slice(match.index! + match[0].length).match(/^\s*(?:\/|per\s+)(second|minute|hour|day|month|year)s?\b/i);
+    // "120+ documented API endpoints" counts endpoints: a single generic word
+    // after the count yields to the first plural noun before the next preposition.
+    let afterConjunction = false;
+    // A percent keeps its own metric ("25 percent lower costs" is not "25 percent" of anything else).
+    const headNoun = described || !/^[A-Za-z][A-Za-z-]*$/.test(match[2].trim()) || /s$/i.test(match[2]) || /^percent/i.test(match[2])
+      ? null
+      : [...(text.slice(match.index! + match[0].length).match(/^((?:[ \t]+[A-Za-z][A-Za-z-]*){1,4})/)?.[1] ?? "").matchAll(/\S+/g)]
+        .reduce<{ word: string; length: number } | null | false>((found, wordMatch) => {
+          const word = wordMatch[0];
+          const lower = word.toLowerCase();
+          if (found !== null) return found;
+          if (CONJUNCTIONS.has(lower)) { afterConjunction = true; return null; }
+          if (PHRASE_BOUNDARY.has(lower) || /^[a-z]{3,}ing$/i.test(word)) return false;
+          const plural = /[a-z]s$/i.test(word) && !NOT_PLURAL_NOUNS.has(lower);
+          if (plural && afterConjunction) return false;
+          if (!plural) { afterConjunction = false; return null; }
+          return { word, length: (wordMatch.index ?? 0) + word.length };
+        }, null) || null;
+    const matchedLength = match[0].length + (headNoun?.length ?? 0);
+    const suffix = text.slice(match.index! + matchedLength).match(/^\s*(?:\/|per\s+)(second|minute|hour|day|month|year)s?\b/i);
     const unit = /^(?:%|percent)$/i.test(match[2]) ? "percent"
       : /^percentage/i.test(match[2]) ? "percentage-point"
-        : `count:${match[2].trim().match(MAGNITUDE_PREFIX)?.[1].toLowerCase() ?? ""}${(described ?? match[2].trim().split(/\s+/).at(-1)!).toLowerCase().replace(/s$/, "")}`;
-    push(`${currency ? `currency:${currency}:` : ""}${unit}${suffix ? `/${suffix[1].toLowerCase()}` : ""}:${scaledMeasurementNumber(match[1], match[2])}`, match[0] + (suffix?.[0] ?? ""), match.index!, match[0].length + (suffix?.[0].length ?? 0));
+        : `count:${match[2].trim().match(MAGNITUDE_PREFIX)?.[1].toLowerCase() ?? ""}${countUnit(described ?? headNoun?.word ?? match[2].trim().split(/\s+/).at(-1)!)}`;
+    const phraseWords = text.slice(match.index! + match[1].length, match.index! + matchedLength).trim().split(/\s+/).filter(Boolean);
+    const modifiers = unit.startsWith("count:")
+      ? phraseWords.slice(0, -1).map((word) => word.toLowerCase()).filter((word) => /^[a-z]/.test(word) && !/^(?:plus|and|or|thousand|million|billion)$/.test(word) && !MAGNITUDE_PREFIX.test(word))
+      : [];
+    push(`${currency ? `currency:${currency}:` : ""}${unit}${suffix ? `/${suffix[1].toLowerCase()}` : ""}:${scaledMeasurementNumber(match[1], match[2])}`, text.slice(match.index!, match.index! + matchedLength) + (suffix?.[0] ?? ""), match.index!, matchedLength + (suffix?.[0].length ?? 0), modifiers);
   }
   for (const match of text.matchAll(new RegExp(DIGIT_NUMBER_PATTERN, "g"))) {
     const index = match.index!;
     if (occupied.some(([start, end]) => index >= start && index < end)) continue;
+    // "3GPP", "5G": digits glued to letters name a standard, not a quantity.
+    if (GLUED_NAME.test(text.slice(index + match[0].length))) continue;
     const before = text.slice(Math.max(0, index - 30), index);
     const after = text.slice(index + match[0].length, index + match[0].length + 20);
     const currency = before.match(/(?:\b(USD|CAD|EUR|GBP)|([$€£]))\s*$/i)?.[0].trim();
@@ -182,11 +232,15 @@ export function numericClaims(value: unknown): NumericClaim[] {
   return claims;
 }
 
+// A count must match the evidence's number and noun, and may drop the evidence's
+// modifiers but never gain one the evidence does not state anywhere.
 export function findUngroundedNumericClaim(value: unknown, grounding: unknown): string | null {
   const grounded = numericClaims(grounding);
-  return numericClaims(value).find((claim) => !grounded.some((source) =>
-    claim.key === source.key && (!claim.subject || claim.subject === source.subject)
-  ))?.display ?? null;
+  const groundingWords = new Set((String(grounding ?? "").toLowerCase().match(/[a-z0-9][a-z0-9+#.-]*/g) ?? []).map((word) => word.replace(/[.-]+$/, "")));
+  return numericClaims(value).find((claim) =>
+    !grounded.some((source) => claim.key === source.key && (!claim.subject || claim.subject === source.subject))
+    || claim.modifiers.some((modifier) => !groundingWords.has(modifier))
+  )?.display ?? null;
 }
 
 export function hasUngroundedNumericClaim(value: unknown, grounding: unknown): boolean {

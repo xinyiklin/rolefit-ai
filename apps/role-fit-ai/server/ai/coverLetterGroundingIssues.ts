@@ -1,6 +1,7 @@
 import type { ResolvedCoverLetterContext } from "../../src/lib/coverLetterPreflight.ts";
-import { findUngroundedJdTerm, findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
-import { findUngroundedNumericClaim } from "./sanitize.ts";
+import { evidencePolarity, evidenceSegments } from "../../shared/evidencePolarity.ts";
+import { curatedClaimTerms, findUngroundedJdTerm, findUngroundedCuratedClaimTerm, findUngroundedOutcomeClaim } from "./grounding.ts";
+import { findUngroundedNumericClaim, numericClaims } from "./sanitize.ts";
 import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 
 function escapeRegex(value: string): string {
@@ -16,9 +17,71 @@ function claimSurfaceValue(claim: string, normalizedValue: string): string {
 // candidate claim surface so a paraphrase cannot bypass grounding by avoiding
 // a finite list of comparison words.
 const DIRECT_EMPLOYER_FACT =
-  /^(?:used|built|ran|operated|developed|maintained|offered|provided|served|sought|needed|required|valued|prioritized|included|had\b|uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|seeks?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|(?:is|are) (?:hiring|looking for|seeking|building|developing|operating|focused on|based (?:in|on)|located in|remote|hybrid|onsite|part of|responsible for))\b/i;
+  /^(?:used|built|ran|operated|developed|maintained|offered|provided|served|sought|needed|required|valued|prioritized|included|had\b|uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|seeks?|needs?|requires?|values?|prioritizes?|includes?|has\b|focus(?:es)? on|works? on|(?:is|are) (?:hiring|looking for|seeking|building|developing|operating|focused on|based (?:in|on)|located in|remote|hybrid|onsite|part of|responsible for))\b/i;
 const POSSESSIVE_EMPLOYER_FACT =
-  /^(?![^.!?]*\b(?:experience|expertise|background|track record|skills?|abilities|knowledge|proficiency|familiarity)\b)[^.!?]{1,120}\b(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|needs?|requires?|values?|prioritizes?|includes?|has\b|focuses? on|works? on|is (?:built|based) on)\b/i;
+  /^(?![^.!?]*\b(?:experience|expertise|background|track record|skills?|abilities|knowledge|proficiency|familiarity)\b)[^.!?]{0,120}\b(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|needs?|requires?|values?|prioritizes?|includes?|has\b|focus(?:es)? on|works? on|is (?:built|based) on)\b/i;
+
+// The idiom makes no claim only when it closes its clause or leads into a reason;
+// "which drew me after years building Kafka pipelines" is still a candidate sentence.
+const ATTENTION_IDIOM = /(?:\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention|interest|eye)\b|\b(?:drew|draws|interests?|interested|appeals?|appealed|attracted|brought)\s+(?:to\s+)?me\b|\bwhat\s+(?:drew|brought|draws|brings)\s+me\b)(?:\s+(?:in|early|immediately|right away)|\s+to\s+apply|\s+(?:to|into|toward|towards)\s+(?:this|the|your)\s+(?:role|team|company|position|posting|opening|work))?(?=\s*(?:[.!?,;:]|$|(?:because|since)\b))/gi;
+
+// A denial drops only its own verb phrase. When it governs the clause ("I have
+// not used Kafka, Airflow, or Spark", "Never having used Kafka", "I have no
+// production experience with Kafka") the phrase is the denied verb or experience
+// noun and its object list: name-like items (a capitalised word, a tool, "C++")
+// joined by commas, "and", "or", or "nor", so "though I ran 12 Spark clusters"
+// after the list stays on the surface; a denial with no verb of its own ("Never
+// once did I miss a page", "Not one of the 40 Kafka consumers") gives up at most
+// four plain words, never a number, a name, or a tool. A trailing denial ("with
+// no prior experience") drops only itself.
+const DENIAL_GOVERNS = /^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without)\b|^(?:(?:although|though|while|even though)\s+)?(?:(?:I|we)\s+)?\w+n't\b/i;
+const DENIAL_PREFIX = /^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without|\w+n't)\b/i;
+const DENIED_VERBS = String.raw`used|use|using|worked|work|built|build|developed|develop|learned|learn|known|touched|touch|deployed|deploy|operated|operate|managed|manage|experienced|familiar|proficient|skilled`;
+const DENIED_VERB = new RegExp(String.raw`^\s*(?:having\s+|yet\s+|ever\s+)?(?:${DENIED_VERBS})\b(?:\s+(?:with|in|on|of))?`, "i");
+const DENIED_EXPERIENCE = /^\s*(?:(?!\d)[\w+-]+\s+){0,3}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of))?/i;
+const DENIAL_SPAN = new RegExp(String.raw`\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:(?!\d)[\w+-]+\s+){0,4}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of))?|\bwithout\s+(?:prior\s+)?experience\b|(?:\b(?:never|not)|n't)\s+(?:having\s+|yet\s+|ever\s+)?(?:${DENIED_VERBS})\b(?:\s+(?:with|in|on|of))?|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of))?|\bunfamiliar\s+with\b`, "gi");
+const CLAUSE_WORD = /^(?:at|in|on|for|since|beyond|except|after|before|while|when|because|but|so|which|that|who|where|until|during|to|from|by|as|over|across|through|despite|of|with|and|or|nor|yet|though|although|then|now|however|instead|only|just|other|than)$/i;
+const LIST_ITEM = /^(\s*(?:,\s*)?(?:(?:and|or|nor)\s+)?)([^\s,;]+)/;
+function nameLike(word: string): boolean {
+  if (/^(?:I|We)$/.test(word)) return false;
+  return /^\p{Lu}/u.test(word) || curatedClaimTerms(word).length > 0 || (/[+#./]/.test(word) && /[A-Za-z]/.test(word)) || /\d[A-Za-z]|[A-Za-z]\d/.test(word);
+}
+// The object list of a denied verb: "Kafka, Airflow, or Spark", "Kafka Streams or Apache Airflow".
+function afterNameList(text: string): string {
+  let rest = text;
+  for (;;) {
+    const item = rest.match(LIST_ITEM);
+    if (!item || !nameLike(item[2].replace(/[.!?]+$/, ""))) return rest;
+    rest = rest.slice(item[0].length);
+  }
+}
+function deniedSurface(segment: string): string {
+  const trimmed = segment.trim();
+  if (!DENIAL_GOVERNS.test(trimmed)) {
+    let surface = "";
+    let cursor = 0;
+    for (const span of trimmed.matchAll(DENIAL_SPAN)) {
+      if (span.index! < cursor) continue;
+      surface += `${trimmed.slice(cursor, span.index!)} `;
+      cursor = trimmed.length - afterNameList(trimmed.slice(span.index! + span[0].length)).length;
+    }
+    return surface + trimmed.slice(cursor);
+  }
+  let rest = trimmed.replace(DENIAL_PREFIX, "");
+  const phrase = rest.match(DENIED_VERB) ?? rest.match(DENIED_EXPERIENCE);
+  if (phrase) return afterNameList(rest.slice(phrase[0].length));
+  for (let taken = 0; taken < 4; taken += 1) {
+    const next = rest.match(/^\s*([^\s,]+)/);
+    const word = next?.[1];
+    if (!word || CLAUSE_WORD.test(word) || /ing$/i.test(word) || /\d/.test(word) || (/^\p{Lu}/u.test(word) && word !== "I") || curatedClaimTerms(word).length > 0) break;
+    rest = rest.slice(next![0].length);
+  }
+  return rest;
+}
+
+// Employer nouns a possessive company name attaches to as a name ("Databricks'
+// roadmap"); "Datadog's agent" and "Datadog's platform" are tools and stay checkable.
+const EMPLOYER_NOUNS = String.raw`teams?|mission|work|roadmap|posting|job description|culture|clients|business|focus|approach|emphasis|commitment|goals?|values|vision|growth|members|people|engineers|offices?|reputation|priorities|needs|investment`;
 
 // Employer/job statements may use posting facts, but they must never widen the
 // candidate corpus. Mixed employer/candidate sentences stay in every gate.
@@ -30,7 +93,7 @@ export function candidateClaimSentences(
   const candidateName = resolved.candidateName.trim();
   const employerStatement = company
     ? new RegExp(
-        `^(?:${escapeRegex(company)}(?<possessive>['’]s)?|(?:The company|The team|This role|The posting))\\s*(?:[,:;]\\s*)?(?<predicate>.+)$`,
+        `^(?:${escapeRegex(company)}(?<possessive>['’]s?)?|(?:The company|The team|This role|The posting))\\s*(?:[,:;]\\s*)?(?<predicate>.+)$`,
         "i"
       )
     : /^(?:The company|The team|This role|The posting)\s*(?:[,:;]\s*)?(?<predicate>.+)$/i;
@@ -48,7 +111,8 @@ export function candidateClaimSentences(
     .map((sentence) => sentence.trim())
     .filter((sentence) => {
       if (!sentence) return false;
-      if (candidateReference.test(sentence)) return true;
+      // "caught my attention" or "drew me" makes no claim about the candidate.
+      if (candidateReference.test(sentence.replace(ATTENTION_IDIOM, " "))) return true;
       const match = sentence.match(employerStatement);
       if (!match) return true;
       const predicate = match.groups?.predicate?.trim() ?? "";
@@ -57,6 +121,58 @@ export function candidateClaimSentences(
         : DIRECT_EMPLOYER_FACT;
       return !factPattern.test(predicate);
     });
+}
+
+// The checked surface of a sentence: a denial ("I have not used Kafka") claims
+// nothing, and the prepared role and company are names the letter must use,
+// not skills ("AI/ML Engineer", "Continuous Deployment team").
+function claimSurface(sentence: string, resolved: ResolvedCoverLetterContext): string {
+  // Polarity is judged per clause: "I can work five days a week, and I would like
+  // to contribute" keeps its factual half when the second half is only intent.
+  let surface = evidenceSegments(sentence)
+    .flatMap((segment) => segment.split(/[;:]\s+|,\s+(?:and|but|so|which|while|where|whereas)\s+|\s+(?:but|whereas)\s+|,\s+(?=(?:I|we)\b)|\s+(?:when|after|while|because|since|as|and)\s+(?=(?:I|we)\b)/))
+    // Only a denial claims nothing; an aspiration ("I want to bring 12 Kafka
+    // migrations") can still carry facts, so it stays on the surface.
+    .map((segment) => (evidencePolarity(segment) === "denied" ? deniedSurface(segment) : segment))
+    .join(" ");
+  // The whole prepared role title is a name only in an application frame
+  // ("applying for <role>", "the <role> role", "as a <role> at <Company>"), even
+  // when it carries a tool ("Backend Engineer - Kafka"); "As the Senior Kafka
+  // Engineer at Harbor", "my previous <role> role", "the <role> role at Harbor",
+  // and a lone "Kafka" are claims. The company is a
+  // name only in an employer frame ("at Databricks", "Databricks' roadmap", "the
+  // Databricks team"), so "Databricks engineering experience" stays checkable when
+  // the employer is also a tool.
+  const role = resolved.role.trim();
+  const company = resolved.company.trim();
+  if (role.length >= 3) {
+    const title = escapeRegex(role);
+    const name = company.length >= 3 ? escapeRegex(company) : "";
+    const atCompany = name ? `|(?<=\\bas\\s+(?:a|an|the)\\s)${title}(?=\\s+(?:at|with)\\s+${name}(?![\\p{L}\\p{N}]))` : "";
+    // "the <role> role at Harbor" or "the <role> role I held" is a past job, not the application.
+    const elsewhere = new RegExp(`^\\s+(?:role|position|opportunity|opening|posting)\\s+(?:(?:at|with|for)\\s+(?!${name || "$^"}(?![\\p{L}\\p{N}]))\\p{Lu}|(?:I|we)\\s+(?:held|had|left|took|filled))`, "u");
+    surface = surface.replace(
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|(?<=\\b(?:the|this|your${name ? `|${name}['’]s?` : ""})\\s)${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b)${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
+      (match: string, offset: number, whole: string) => (elsewhere.test(whole.slice(offset + match.length)) ? match : " ")
+    );
+  }
+  if (company.length >= 3) {
+    const name = escapeRegex(company);
+    surface = surface.replace(
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:at|join|joining|why)\\s)${name}|${name}(?=['’]s?\\s+(?:${EMPLOYER_NOUNS})\\b|['’]s?\\s+(?:(?:engineering|hiring|platform|product)\\s+)?team\\b|\\s+(?:(?:engineering|hiring|platform|product)\\s+)?team\\b))(?![\\p{L}\\p{N}])`, "giu"),
+      " "
+    );
+  }
+  return surface
+    // "the continuous deployment team", "Acme's platform team": a team's name is not a skill
+    // claim, unless the name carries a count or a tool ("the 15-person Kafka team").
+    .replace(/\b(?:the|your|its|their|[A-Z][\w'’]*(?:'s|’s))\s+((?:[\w/&-]+\s+){1,3})team\b/gi, (match, modifier) =>
+      numericClaims(modifier).length > 0 || curatedClaimTerms(modifier).length > 0 ? match : match.replace(modifier, " "))
+    // 401(k) and 403(b) are plan names, not counts.
+    .replace(/\b40[13]\s*\([a-z]\)/gi, " ")
+    // "one workflow", "one scheduling decision": an article in prose, not a count;
+    // "one million users" and "one year" stay quantities.
+    .replace(/(?<![a-z]-)\bone\b(?!\s+(?:thousand|million|billion|hundred|dozen|percent|years?|months?|weeks?|days?|hours?|minutes?)\b)/gi, " ");
 }
 
 export function coverLetterGroundingIssues({
@@ -71,7 +187,8 @@ export function coverLetterGroundingIssues({
   resolved: ResolvedCoverLetterContext;
 }): CoverLetterValidationIssue[] {
   const sentences = candidateClaimSentences(coverLetterText, resolved);
-  const claims = sentences.join(" ");
+  const surfaces = sentences.map((sentence) => claimSurface(sentence, resolved));
+  const claims = surfaces.join(" ");
   const jobLower = jobText.toLowerCase();
   const groundingLower = grounding.toLowerCase();
   const issues: CoverLetterValidationIssue[] = [];
@@ -82,10 +199,11 @@ export function coverLetterGroundingIssues({
     { proseMode: true }
   );
   if (ungroundedTerm) {
-    const sentenceIndex = sentences.findIndex(
-      (sentence) =>
-        findUngroundedJdTerm(sentence, jobLower, groundingLower, { proseMode: true }) ===
-        ungroundedTerm
+    const sentenceIndex = surfaces.findIndex(
+      (surface) =>
+        findUngroundedCuratedClaimTerm(surface, grounding) === ungroundedTerm ||
+        findUngroundedJdTerm(surface, jobLower, groundingLower, { proseMode: true }) ===
+          ungroundedTerm
     );
     const claim = sentenceIndex >= 0 ? sentences[sentenceIndex] : claims;
     const displayTerm = claimSurfaceValue(claim, ungroundedTerm);
@@ -103,8 +221,8 @@ export function coverLetterGroundingIssues({
   }
   const ungroundedNumber = findUngroundedNumericClaim(claims, grounding);
   if (ungroundedNumber) {
-    const sentenceIndex = sentences.findIndex(
-      (sentence) => findUngroundedNumericClaim(sentence, grounding) === ungroundedNumber
+    const sentenceIndex = surfaces.findIndex(
+      (surface) => findUngroundedNumericClaim(surface, grounding) === ungroundedNumber
     );
     issues.push({
       code: "unsupported_number",
@@ -120,9 +238,9 @@ export function coverLetterGroundingIssues({
   }
   const outcome = findUngroundedOutcomeClaim(claims, grounding, { candidateProse: true });
   if (outcome) {
-    const sentenceIndex = sentences.findIndex(
-      (sentence) =>
-        findUngroundedOutcomeClaim(sentence, grounding, { candidateProse: true }) === outcome
+    const sentenceIndex = surfaces.findIndex(
+      (surface) =>
+        findUngroundedOutcomeClaim(surface, grounding, { candidateProse: true }) === outcome
     );
     issues.push({
       code: "unsupported_outcome",

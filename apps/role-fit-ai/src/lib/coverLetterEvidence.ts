@@ -1,7 +1,7 @@
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
-import { templateHasUnresolvedSlots } from "./coverLetterTemplate.ts";
+import { templateHasUnresolvedSlots, withoutTemplateSlots } from "./coverLetterTemplate.ts";
 
 export type CoverLetterEvidenceSource = "resume" | "profile" | "user_answer";
 
@@ -123,11 +123,18 @@ export function splitProfileEvidence(candidateContext: string): string[] {
   const items: string[] = [];
   for (const rawLine of lines) {
     const line = rawLine.trim();
-    if (
-      !line ||
-      /^[A-Za-z][A-Za-z ]{1,40}:$/.test(line) ||
-      templateHasUnresolvedSlots(line)
-    ) continue;
+    if (!line || /^[A-Za-z][A-Za-z ]{1,40}:$/.test(line)) continue;
+    if (templateHasUnresolvedSlots(line)) {
+      // A heading keeps its place without the slot ("## Beacon [add dates]", and
+      // "## [Project name]" becomes an untitled heading), so the lines beneath it
+      // still group under it; the slot itself is never evidence.
+      const hashes = line.match(/^#{1,6}(?=\s)/)?.[0];
+      if (hashes) {
+        const heading = withoutTemplateSlots(line).replace(/^#+\s*/, "");
+        items.push(`${hashes} ${/[\p{L}\p{N}]{2,}/u.test(heading) ? heading : "(untitled)"}`);
+      }
+      continue;
+    }
     items.push(line.replace(/^[-*•]\s+/, "").trim());
   }
   const kept = items.filter(Boolean);

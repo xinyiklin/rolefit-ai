@@ -188,10 +188,15 @@ owns:
   source ids; known ids remain available without certifying their claims.
   Content checks detect unlocated evidence, missing citations, safe placeholders,
   target wording, generic prose, and unsupported terms, metrics, or outcomes.
-  Those issues return usable text with warnings and never trigger repair.
-  Technical issues, including unusable paragraphs, unsafe markup, invalid template
-  slot ids, correspondence assembly defects, and resource limits, may trigger one
-  repair. Repeated technical failure returns `422`, `status: "blocked"`,
+  Those issues return usable text with warnings and never trigger repair. A
+  citation grounds its whole entry (the resume entry's other bullets and the
+  Profile section whose heading names it), and a value only the candidate's own
+  base letter supports is returned with a warning naming it. Technical issues,
+  including unusable paragraphs, unsafe markup, a template slot id the source
+  never had (a cited deterministic role or company slot is dropped, not
+  repaired; a cited unanswered private slot is returned as a warning on its
+  paragraph), correspondence assembly defects, and resource limits, may trigger
+  one repair. Repeated technical failure returns `422`, `status: "blocked"`,
   `reason: "technical_checks"`, and at most eight display-safe issue records.
   Internal repair instructions and rejected provider bodies never reach the UI.
   A usable response is staged as a fingerprinted proposal: **Accept proposal**
@@ -695,6 +700,11 @@ to mimic a single sample:
   copying a job description:
   <https://careerservices.fas.harvard.edu/resources/hes-create-impactful-resumes-and-cover-letters/>
   and <https://capd.mit.edu/resources/career-toolkit-crafting-an-effective-resume/>
+
+The cover-letter prompt wording was benchmarked by blinded pairwise judging on
+the user's real applications on 2026-10-05/06; a restraint-and-length variant
+won on the Claude models and lost on GPT-6.1 Sol, the configured cover model,
+so the wording stayed. `server/ai/AGENTS.md` records the trade-off.
 
 These are prompt-quality inputs, not permission to fabricate. The shared
 truthfulness, source-attribution, grounding, and sanitization rules remain

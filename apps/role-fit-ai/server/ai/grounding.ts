@@ -70,6 +70,7 @@ const CONCEPT_EVIDENCE = new Map([
   ["observability", /\b(?:prometheus|grafana|datadog|opentelemetry)\b/i],
   ["containerization", /\b(?:docker(?:ized|file)?|podman)\b/i],
   ["python", /\b(?:django|fastapi|numpy|pytorch|pytest|scikit-learn)\b/i],
+  ["relational database", /\b(?:postgres(?:ql)?|mysql|mariadb|sqlite|sql server)\b/i],
   ["continuous integration", /(?<!%\s?)\bci\b(?![/-]?cd\b)/i]
 ]);
 
@@ -194,9 +195,15 @@ const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
   { level: 1, pattern: /\b(?:assisted|supported|contributed|helped|collaborated|coordinated|participated)\b/i }
 ];
 
+// "led me to build", "led to fewer errors": causal, not leadership. "API-driven",
+// "test-driven", "community-led": compound adjectives, not responsibility.
+const CAUSAL_LED = /(?<!\b(?:i|we)\s+)\bled\s+(?:(?:me|us)\s+)?to\b/gi;
+const COMPOUND_OWNERSHIP = /\b(?!co-|self-)[\w]+-(?:driven|led|owned|directed|headed)\b/gi;
+
 export function ownershipStrength(value: string): number {
+  const text = value.replace(CAUSAL_LED, " ").replace(COMPOUND_OWNERSHIP, " ");
   for (const { level, pattern } of OWNERSHIP_LEVELS) {
-    if (pattern.test(value)) return level;
+    if (pattern.test(text)) return level;
   }
   return 0;
 }
@@ -502,8 +509,9 @@ export function findUngroundedJdTerm(
   // Detector 2: lowercase concept terms present in both the JD and the
   // proposed text but absent from the grounding corpus.
   for (const concept of LOWERCASE_TECH_CONCEPTS) {
-    if (!proposedLower.includes(concept)) continue;
-    if (!jobLower.includes(concept)) continue;
+    const whole = conceptPattern(concept);
+    if (!whole.test(proposedLower)) continue;
+    if (!whole.test(jobLower)) continue;
     if (!isConceptGrounded(grounding, groundingTokens, concept)) return concept;
   }
 
@@ -534,6 +542,17 @@ export function findUngroundedJdTerm(
   }
 
   return null;
+}
+
+// Whole-word concept matching: "etl" must not match inside "quietly".
+const CONCEPT_PATTERNS = new Map<string, RegExp>();
+function conceptPattern(concept: string): RegExp {
+  let pattern = CONCEPT_PATTERNS.get(concept);
+  if (!pattern) {
+    pattern = new RegExp(`(?<![a-z0-9])${concept.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:e?s)?(?![a-z0-9])`);
+    CONCEPT_PATTERNS.set(concept, pattern);
+  }
+  return pattern;
 }
 
 // After a lowercase word ("experience with Boost") or inside "C++/Boost" a capitalized
@@ -573,7 +592,7 @@ export function curatedClaimTerms(value: unknown): string[] {
   const text = String(value ?? "").replace(/<\/?(?:b|i|u)>/gi, " ").toLowerCase();
   const tokens = new Set(stripBoundaryDots(text).match(/[a-z0-9.#+]+/g) ?? []);
   return [...new Set([
-    ...LOWERCASE_TECH_CONCEPTS.filter((concept) => text.includes(concept)),
+    ...LOWERCASE_TECH_CONCEPTS.filter((concept) => conceptPattern(concept).test(text)),
     ...[...SHORT_TECH_TOKENS, ...LOWERCASE_TOOL_NAMES, ...SHORT_TOOL_TOKENS].filter((term) => tokens.has(term))
   ])];
 }
@@ -675,10 +694,24 @@ function proseOutcomeIsCandidateClaim(sentence: string): boolean {
     || OUTCOME_VERB_FAMILIES.some(({ pattern }) => pattern.test(sentence.trimStart().split(/\s+/, 1)[0] ?? ""));
 }
 
+// A modal or intent verb anywhere earlier in the clause makes the outcome an offer,
+// not a record: "would allow me to contribute to ... improving platform reliability".
 function outcomeAttributionIsConditional(sentence: string, index: number): boolean {
-  const clausePrefix = sentence.slice(Math.max(0, index - 64), index);
-  return /\b(?:would|could|can|will|may|might)\b[^.;!?]*$/i.test(clausePrefix)
+  const clausePrefix = sentence.slice(0, index).split(/[,;]\s+|\s+(?:that|which|who)\s+/).at(-1) ?? "";
+  return /\b(?:would|could|can|will|might)\b[^.;!?]*$/i.test(clausePrefix)
+    || /\bmay\b[^.;!?]*$/.test(clausePrefix)
     || /\b(?:aim|hope|plan|seek|intend)(?:s|ed|ing)?\s+to\b[^.;!?]*$/i.test(clausePrefix);
+}
+
+// "LLM-enabled features" or "cost-aware" is a compound adjective, not a claimed result.
+function standaloneOutcomeMatch(pattern: RegExp, sentence: string): { index: number } | null {
+  for (const match of sentence.matchAll(new RegExp(pattern.source, "gi"))) {
+    const index = match.index ?? 0;
+    if (index > 0 && sentence[index - 1] === "-" && !/\b(?:re|pre|un|de|co)-$/i.test(sentence.slice(0, index))) continue;
+    if (/^\s+out\s+of\b/i.test(sentence.slice(index + match[0].length))) continue;
+    return { index };
+  }
+  return null;
 }
 
 // Returns the first unsupported ordinary-language achievement family. Resume
@@ -700,14 +733,14 @@ export function findUngroundedOutcomeClaim(
 
     let factualOutcomeVerb = false;
     for (const family of OUTCOME_VERB_FAMILIES) {
-      const match = family.pattern.exec(sentence);
+      const match = standaloneOutcomeMatch(family.pattern, sentence);
       if (!match || outcomeAttributionIsConditional(sentence, match.index)) continue;
       factualOutcomeVerb = true;
       if (!family.pattern.test(source)) return family.label;
     }
     if (!factualOutcomeVerb) continue;
     for (const family of OUTCOME_NOUN_FAMILIES) {
-      const match = family.pattern.exec(sentence);
+      const match = standaloneOutcomeMatch(family.pattern, sentence);
       if (!match || outcomeAttributionIsConditional(sentence, match.index)) continue;
       if (!family.pattern.test(source)) return family.label;
     }

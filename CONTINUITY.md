@@ -3,6 +3,186 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-05
+
+- [USER+CODE] Cover Letter Polish: prompt, evidence guard, and base variants
+  (task `cover-polish-benchmark-20261005`; the user asked to improve all three
+  the way Resume Polish was proven, so the brief and plan were written and the
+  two approval gates compressed into after-the-fact acceptance). No schema,
+  request, route, or UI change.
+  - Prompt: unchanged in the end. A restraint-and-length variant (v3: numbers
+    keep noun and qualifier, team wording stays, no computed totals, no merged
+    entries, scope notes never restated, no volunteered gaps, no posting
+    mirroring, generate-kind slot ids only, 3-4 paragraphs under 340 words)
+    won on the Claude models but lost on GPT-6.1 Sol, which the user then
+    chose as the cover model; the variant text is kept in the ignored harness.
+  - [TOOL] Benchmark mirrored the Resume Polish one: 40 tuning + 20 holdout
+    real applications sampled by Fit verdict, live resume and Profile through
+    the app's evidence builder, matched base variant, GPT-6 Astra/high
+    per-sentence fact check, blinded pairwise by Astra and Opus 5.5 (A/B
+    swapped by hash). Results stay in ignored
+    `apps/role-fit-ai/workspace/cover-benchmark/`.
+    - Variant v3 vs the shipped prompt on the tuning set, both judges agree:
+      Sonnet 5.5 medium (the user's cover setting) 23-4 for v3 (Astra +0.72
+      of 10, CI ±0.34; Opus judge +0.16, CI ±0.29); Opus 5.5 high 15-7 for v3
+      (Astra +0.40, CI ±0.33; Opus judge 19-21, a tie). Astra fact checks:
+      unsupported sentences Sonnet 16.2% -> 12.6%, Opus 15.3% -> 13.4%.
+      Disjoint 20-application holdout, both judges agree: Sonnet 11-6 for
+      v3 (Astra +0.63, CI ±0.52), Opus 8-1 (Astra +0.46, CI ±0.53).
+      GPT-6.1 Sol medium is the exception: it prefers the
+      shipped prompt 27-7 where judges agree (it already wrote 310-word
+      letters with 3% unsupported sentences, and v3 makes it terse at 287
+      words), and the same held with the rewritten base letter (28-9).
+    - Cross-model, same shipped prompt, both judges agree: Sol 6.1 medium beat
+      Sonnet 5.5 medium 25-2 (Astra +1.90 of 10, CI ±0.34) and Opus 5.5 high
+      16-0 (Astra +1.73, CI ±0.31; the Opus judge alone preferred Opus 22-18),
+      and Opus beat Sonnet 17-8; Sol with the shipped prompt beat Opus-v3
+      21-0 and Sonnet-v3 36-0. Sol's letters also carried the fewest
+      unsupported sentences (3.4% vs 12.6% Sonnet, 13.4% Opus). [USER]
+      2026-10-06: the cover stage is now Codex / GPT-6.1 Sol / medium
+      (preferences backed up to `workspace/.trash/`), so the prompt stays as
+      shipped rather than taking the Claude-only win.
+      The harness (cases, runner, judge, replay) is copied under
+      `workspace/cover-benchmark/harness/` for reruns.
+    - Rejected: v2 (restraint rules plus a 220-340 word target) lost on
+      elaboration with every judge (Opus 11-7 for the old prompt where judges
+      agree, Sol 18-10, Sonnet a 14-12 tie) even though repairs fell from
+      114 of 120 runs to 0 and Opus unsupported sentences fell 28%; v4 (the
+      same rules with the original 200-400 word line) lost on Opus 14-6 and
+      Sol 12-4 and tied on Sonnet 16-15, so the structural paragraph rule is
+      what carries the Sonnet and Opus wins.
+    - Every model cited the deterministic role or company slot, which the
+      validator treated as a technical defect: 114 of 120 baseline runs paid a
+      second provider call for the repair pass. Cited deterministic slot ids are
+      now dropped, not repaired (a cited unanswered private slot warns on its
+      paragraph); v2 through v4 ran with zero repairs.
+  - [CODE] Evidence guard (rules in `server/ai/AGENTS.md`): whole-entry
+    citation scope with Profile sections linked by heading, named entries
+    checked against their own evidence, a cleaner claim surface (per-clause
+    polarity, role and team names, 401(k), "one"), count qualifiers, head
+    nouns and modifiers, compound adjectives, causal "led to", clause-wide
+    modals, whole-word concepts, PostgreSQL -> relational database, and a
+    warning for values only the base letter supports.
+    - [TOOL] Replay of the 120 baseline letters against Astra labels, after
+      two review rounds: warned candidate sentences 233 -> 35 of 1,518;
+      precision 12.4% -> 27.8%; recall 16.9% -> 5.8%. Most lost true warnings were coincidental hits on denials
+      ("I have not used Kafka") or judgment labels ("what the candidate did
+      most"); 87 of 172 unsupported labels were claims only the user's own base
+      letter made. A count-purpose check ("covered by 90+ tests") was tried
+      and dropped: 1 true of 7 warnings on letters. The resume warning replay
+      stayed at 53.5% precision / 54.8% recall; the offline suite passed
+      141/141.
+  - [USER+CODE] Base variants, now one. The five variants carried an outcome
+    figure the Profile explicitly disclaims, "helped lead" where the
+    resume says "Led", and stale counts. Matched specialized variants vs
+    `default` on 15 postings (Opus 5.5 high, both judges): 8-7 and 7-7, agree
+    6-6, so specialization adds nothing measurable. [USER] One variant, as
+    the resume has one: `default.cover` only, rewritten in a plain
+    first-person voice (one short clinic story, one small engineering
+    decision, no stack lists, no "I would bring X, Y, and Z"). On Sol with
+    the shipped prompt it beat the previous template 35-0 where both judges
+    agreed (writing 5.8 -> 7.8 and 7.3 -> 9.0 of 10; judges cited voice and
+    less resume-like prose), with evidence warnings 133 -> 11 across 40
+    letters. All old files are in `cover-letters/.trash/`; the new one parses
+    strictly, round-trips, lays out on one page, and raises no grounding
+    warning against the corpus.
+  - [USER+CODE] Base letter, second round (2026-10-06). The 40 Sol letters from
+    the rewrite had become formulaic at the slots: 37/40 opened "<gerund
+    phrase> is the kind of problem I like working on", every sampled closer
+    was "<Company>'s emphasis on X connects with Y", and Sol turned the
+    reflective clinic sentence into "taught me" in 29/40. The opening slot is
+    now its own sentence that asks for one checkable posting detail, the two
+    closing slots collapsed into one that names a concrete team
+    responsibility, the clinic sentence states the action the resume
+    documents (translate the problem into a requirement, fix, explain), and
+    the intro's plural "applications" became singular. A first draft of this
+    round with a self-assessment sentence about how the candidate handles
+    complaints won 29-2 but doubled Astra's unsupported candidate facts (4.0%
+    -> 9.1%); the grounded draft won 24-3 against it and 34-0 against the
+    installed letter where both judges agreed (Opus 38-2, Astra 36-4), with
+    unsupported facts at 3.2% and the formula phrases at zero. Installed as
+    `default.cover`; the prior letter is in `cover-letters/.trash/`. The
+    prompt was not changed: the slot fills, not the prompt, drove the
+    repetition, and Sol still prefers the shipped prompt on this letter
+    family.
+  - [TOOL] Sixth review (exact head da8c5674, 2026-10-06): no high findings;
+    two regressions from the fifth round: the denied verb's object list ran
+    past the clause ("I have not used Kafka, though I ran 12 Spark clusters"
+    lost its count), and widening the shared polarity verbs made passive
+    bullets ("200 resources not managed by Terraform") read as denials, which
+    would have put false warnings on Resume Polish, Application Answers, and
+    Fit. Closed: the list takes only name-like items joined by commas, and,
+    or, nor and stops at the next clause; the polarity helper is back to
+    main's verb list, so "I have never touched Airflow" warns as it does on
+    main (recorded residual); the role frame yields only to a capitalised
+    other employer or "I held", so "the <role> role with your team" stays
+    the application. Seventh review (exact head f15f6d39): no high or medium
+    findings. Recorded residuals, not fixed: a capitalised word that opens a
+    new clause right after a denied list ("Having never used Rust, Flink
+    became my main tool", "I have not used Rust and Flink is my strength")
+    is absorbed into the list, so that tool is not warned (main warns; the
+    suggested fix backs off later items before a lowercase non-clause word,
+    and a broader one would make "I have not used Kafka much" warn); a
+    company name under three characters counts as another employer in the
+    role frame (main warns too); "I had hoped for" reads as a past job (main
+    warns too); a lowercase non-curated or article-led tool after a denied
+    list warns ("not used dbt or terraform", "Kafka or the Airflow
+    scheduler"), as on main.
+  - [TOOL] Fifth review (exact head 6c3d5104, 2026-10-06): no high findings;
+    two regressions from the fourth round (glued durations also took word
+    numbers, so "tend" read as ten days in every shared guard; the stricter
+    denial head left "no experience with Kafka", "never having used", and
+    denied lists warning again) and two residuals (a verbless denial could
+    still swallow "my 12 Airflow DAGs"; any possessive or "that" framed the
+    role title, and "the <role> role at Harbor" was stripped). All closed
+    with probes: digits only glue a duration; a denied verb takes its whole
+    object list and an experience denial its noun; a verbless denial never
+    gives up a number, a name, or a tool; the role frame takes only
+    the/this/your/<Company>'s and never "at" another employer. Replay on
+    the 120 baseline letters is back at 27.8% / 5.8% (the fourth round's
+    extra true warning came from the over-wide denial head); Resume Polish
+    replay unchanged at 53.5% / 54.8%; check 141/141.
+  - [TOOL] Fourth review (exact head 18e6ec7a, 2026-10-06): no high findings;
+    four of the third review's holes were only partly closed (a clause-initial
+    denial still hid the facts after it; the role title was stripped before
+    "role" without an article; "platform", "products", "users", "customers"
+    made a tool-named company a name; a slot-only Profile heading still
+    dropped out), two fixture strings still matched the Profile and the
+    tracker, and the stricter denial handling had made honest contraction
+    denials and "drew me to this role" warn again. All closed with probes: a
+    governing denial now drops only its own verb phrase; the title needs
+    the/this/your/<Company>'s before "role"; the employer-noun list lost the
+    product words; a slot-only heading is kept as "(untitled)"; glued
+    durations ("30d", "5yrs") match their spelled-out forms; the idiom may
+    land on "this role" or "in". Replay on the 120 baseline letters: precision
+    27.8% -> 29.7%, recall 5.8% -> 6.4% (one more true warning); Resume
+    Polish replay unchanged at 53.5% / 54.8%; check 141/141.
+  - [TOOL] Third review (exact head of PR #169, 2026-10-06): no high findings;
+    eight medium recall holes and two low ones, all closed with probes: a
+    percent borrowed another metric's evidence; the attention idiom hid a
+    candidate clause after it; a trailing denial dropped its whole clause;
+    the role title was stripped outside an application frame and the
+    company outside an employer frame ("Databricks engineering experience",
+    "within Databricks", "Datadog's agent"); a cited unanswered private slot
+    vanished silently (now a paragraph warning); Profile owners were keyed by
+    heading text, so a same-text nested heading borrowed the linked one, and
+    a bracketed heading dropped out of the corpus so its lines fell into the
+    previous section; a capitalised Skills row could be "named"; "30d" was a
+    name; "who" did not end a counted phrase. The review also found the
+    precision-probe fixtures paraphrased the real resume, Profile, and base
+    letter despite a "synthetic" header; they are now invented (a lending
+    app, a sandbox CLI, a marina job). Replays unchanged: cover 27.8% / 5.8%,
+    resume 53.5% / 54.8%; check 141/141.
+  - [TOOL] Two independent reviews: the first found 4 high / 4 medium holes in
+    the guard relaxations (glued units, plural concepts, aspiration clauses,
+    role and company stripping, team names, Profile grouping, modal lookback),
+    the second 3 high / 7 medium more (denial-led clauses, company after
+    "with", same-title entries pooling, stack segments linking, glued-metric
+    skips, counts crossing lines, relative-clause modals, past titles, word
+    numbers, a doc overclaim). All were fixed with a negative probe each in
+    `cover-letter-warning-precision-probes.mjs`. No browser QA (server-side text and ignored workspace
+    files; the cover workspace listing re-reads the directory per request).
+
 ## 2026-10-04
 
 - [USER+CODE] Resume Polish prompt update (benchmark variant v5; unrelated to

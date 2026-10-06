@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { coverLetterParagraphClaims } from "../coverLetterParagraphEvidence.ts";
 const resolved = { company: "Acme", role: "Engineer", candidateName: "Jordan Lee" };
 const evidence = [
-  { id: "a", source: "resume", entry: "Atlas project", text: "Built Python services." },
-  { id: "b", source: "resume", entry: "Beacon project", text: "Maintained Kubernetes deployments." }
+  { id: "a", source: "resume", section: "Projects", entry: "Atlas · Jan 2026 – Present", text: "Built Python services." },
+  { id: "b", source: "resume", section: "Projects", entry: "Beacon · Mar 2026 – Present", text: "Maintained Kubernetes deployments." }
 ];
 function review(text, evidenceIds, claims, jobText = "Acme needs Kubernetes experience.") {
   return coverLetterParagraphClaims({
@@ -19,7 +19,7 @@ assert.ok(review("I maintained Kubernetes deployments.", ["a"]).issues.length);
 assert.ok(review("I built Terraform services.", ["a"]).issues.length);
 assert.ok(review("I led the organization building Python services.", ["a"]).issues.length);
 assert.ok(
-  review("At Atlas project I maintained Kubernetes deployments.", ["a", "b"]).issues.length
+  review("In Atlas I maintained Kubernetes deployments.", ["a", "b"]).issues.length
 );
 assert.ok(review("Acme runs Terraform across its platform.", ["a"]).issues.length);
 assert.equal(
