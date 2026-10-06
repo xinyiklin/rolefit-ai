@@ -623,9 +623,10 @@ assert.equal(filledWindow.withheld.count, 0, "echoes are never counted as withhe
 assert.equal(filledWindow.warnings, undefined, "an all-echo response omits no usable edit, so no limit warning");
 
 // ----- Result cap keeps the model's order -----
-// Conflicts are settled over the whole examined window, then the first 12 usable
-// changes in the model's own order survive: a Profile addition listed first is
-// kept ahead of twelve lower-value rewrites, and the prompt says so.
+// The first 12 usable changes in the model's own order survive: when more are
+// usable, the prefix up to the twelfth is examined again without the cut tail
+// until stable, so a Profile addition listed first is kept ahead of twelve
+// lower-value rewrites and a cut change never wins a conflict. The prompt says so.
 const capScope = {
   version: 1,
   locked: { omittedIdentity: true, omittedContact: true, omittedSections: [] },

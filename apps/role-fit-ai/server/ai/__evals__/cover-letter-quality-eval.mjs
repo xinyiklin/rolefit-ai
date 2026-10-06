@@ -21,6 +21,7 @@ import {
 import { layoutCoverLetter } from "@typeset/engine/typeset/layout.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { tailorCoverLetter } from "../coverLetter.ts";
+import { CoverLetterBlockedError } from "../coverLetterIssues.ts";
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { resolveProviderRequest } from "../providers.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
@@ -162,10 +163,15 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
           save(`${fixture.id}-run-${run}.json`, outcome.receipt);
         }
         rows.push(outcome.row ?? outcome);
-      } catch {
+      } catch (error) {
+        // A letter still unusable after repair is that case's own failure.
+        if (error instanceof CoverLetterBlockedError) {
+          rows.push({ fixture: fixture.id, run, error: "blocked", repaired: error.repairAttempted });
+          continue;
+        }
         // Provider errors can contain response excerpts; record only the stage.
         rows.push({ fixture: fixture.id, run, error: stage.current });
-        // A provider or usage-limit failure would repeat for every later case.
+        // A provider, auth, or usage-limit failure would repeat for every later case.
         if (stage.current === "generation") {
           unrun = options.fixtures.length * options.runs - rows.length;
           break outer;

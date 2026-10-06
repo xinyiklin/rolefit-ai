@@ -29,8 +29,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
     still settles rewrite/remove/reorder conflicts) and then keeps the first 12
     usable changes in the model's own order; the prompt now states the limit
     and asks for the most valuable changes first. Before, a Profile addition
-    listed first was cut by twelve rewrites. The omission warning fires on
-    usable edits actually cut (with a count), not on any response over 12 items.
+    listed first was cut by twelve rewrites. The omission warning fires only
+    when usable edits were actually cut, not on any response over 12 items.
   - [CODE] Resume quality corpus: 34 -> 39 fixtures with five opportunity cases
     that require a proposal (buried strength, duplicated achievement, missing
     Profile fact, feature tour, irrelevant bullet beside the only proof), so an
@@ -51,7 +51,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
     Lows closed: model notes stripped from the repair prompt's rejected output
     and listed last; rail de-duplicates the two lists; the cover runner records
     a stage, not an error class, and stops on a generation failure; contract
-    and doc wording no longer claim the opportunity counters gate a pass. Not
+    and doc wording no longer claim the opportunity counters gate a pass. An
+    exact-head review of the PR commit (no high or medium) left four lows,
+    fixed in a follow-up commit: the runner no longer stops a run on one
+    fixture's blocked letter, and three wording drifts. Not
     changed on advice: the component keeps `concerns` required rather than
     defaulting it (the hook normalizes older servers). Offline suite 141/141.
   - Deferred, recorded for the next brief: Profile linkage preview and

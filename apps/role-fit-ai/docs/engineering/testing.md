@@ -210,12 +210,14 @@ Good server verification covers:
   outcomes return the letter with warnings and never trigger repair — while an
   employer-subject sentence drawn from the posting must not widen candidate
   evidence. Length is asserted
-  as a warning, never a gate. Probes pin the two lifetimes: evidence and
-  template findings return in `concerns`, structure/quality/length/model notes
-  in `warnings`, the model's `warnings` field becomes at most three sanitized
-  `Model note:` entries (malformed metadata yields none and no issue), the
-  route echoes carried `sourceWarnings` as concerns, and the client hook carries
-  only `concerns` forward. `cover-letter-warning-precision-probes.mjs` pins
+  as a warning, never a gate. Probes pin the two lifetimes: claim findings (the
+  evidence category minus citation bookkeeping) and a cited unanswered private
+  slot return in `concerns`; structure, quality, unknown or missing citations,
+  leftover tokens, length, and model notes in `warnings`; the model's
+  `warnings` field becomes at most three sanitized `Model note:` entries listed
+  last (malformed metadata yields none and no issue) and is stripped from the
+  repair prompt; the route echoes carried `sourceWarnings` as concerns; and the
+  client hook carries only `concerns` forward. `cover-letter-warning-precision-probes.mjs` pins
   each benchmark-backed warning rule from `server/ai/AGENTS.md` (whole-entry
   citation scope, the claim surface, count modifiers and head nouns, compound
   adjectives, base-letter-only values, dropped deterministic slot ids) with a
@@ -234,8 +236,9 @@ Good server verification covers:
   and source hashes), the fixture snapshot, one receipt per fixture run, and
   `summary.json`, so results from two models never overwrite each other. A
   failed case records only its stage (preflight, generation, layout, grade,
-  receipt), never provider text, and a generation failure stops the run with
-  the remaining cases reported as unrun.
+  receipt), never provider text; a letter still unusable after repair is that
+  case's `blocked` failure, while any other generation failure stops the run
+  with the remaining cases reported as unrun.
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
