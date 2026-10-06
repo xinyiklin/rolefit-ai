@@ -24,7 +24,10 @@ application retain blocking technical guards.
   Catalog changes must preserve readable canonical preferences and backups;
   only known provider-setting repairs may precede strict validation.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess
-  invocation and provider-specific process constraints.
+  invocation and provider-specific process constraints. The optional dispatch
+  collector reports attempts and the provider's own token counts
+  (`providerUsage.ts`: numbers only, `null` when a provider reports none);
+  benchmarks read it, the product does not display it.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
 - `sanitize.ts` owns shared deterministic markup and numeric-claim guards. Stage
   modules own their response schemas and outcome derivation.
@@ -47,7 +50,12 @@ application retain blocking technical guards.
   when their provider/model/reasoning settings match; otherwise the client commits
   Job analysis before using `mode: "fit-assessment"` with Fit's own configuration.
   Their response subsections sanitize independently. `mode: "fit-assessment"`
-  reruns only the compact fit after a relevant input changes. Fit Assessment must
+  reruns only the compact fit after a relevant input changes. Fit's normalized
+  input limits (`fitAssessmentInputLimitError`) are measured before any
+  dispatch on both paths: the standalone route answers with the existing
+  input-limit explanation and zero attempts, and combined Prepare omits the
+  Fit section while Job analysis still runs. The sanitizer repeats the check
+  on the response as defense in depth. Fit Assessment must
   follow the canonical
   [`server/ai/README.md`](README.md#fit-assessment-technical-contract)
   contract: both paths render one exported rules block and request exact
@@ -384,10 +392,14 @@ application retain blocking technical guards.
 - Run the nearest offline eval under `server/ai/__evals__/`.
 - Prompt, grounding, sanitizer, provider-contract, or scoring-contract changes
   require adversarial probes and a diff review before handoff.
-- Fit Assessment changes require `fit-assessment-probes.mjs` and
-  `fit-assessment-consistency-contracts.mjs`; shared request or lifecycle changes
-  additionally require the client request, lifecycle, and intake entry-point
-  evals named in the app guide.
+- Fit Assessment changes require `fit-assessment-probes.mjs`,
+  `fit-input-limit-probes.mjs`, and `fit-assessment-consistency-contracts.mjs`
+  (which also runs the Prepare benchmark offline against a fake dispatcher);
+  shared request or lifecycle changes additionally require the client request,
+  lifecycle, and intake entry-point evals named in the app guide.
+- `coverLetterJudge.ts` is benchmark-only: its rubric prompt and tolerant
+  parser are pinned by `cover-letter-quality-contracts.mjs`; never GPT Sol as a
+  judge, and never a judge pass in the product.
 - Live provider evals cost tokens and may expose private inputs; run them only
   with explicit authorization and synthetic or approved fixtures.
 

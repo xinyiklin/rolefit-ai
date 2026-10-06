@@ -20,6 +20,7 @@ import {
   UserSafeAiError
 } from "../ai/errors.ts";
 import { RequestAbortedError } from "../http.ts";
+import { readProviderUsage, recordProviderUsage, totalOnlyUsage, type UsageSink } from "../ai/providerUsage.ts";
 
 type RunCliOptions = { timeoutMs?: number; cwd?: string; signal?: AbortSignal };
 type RunCliResult = { stdout: string; stderr: string };
@@ -295,7 +296,7 @@ export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: Cli
   return args;
 }
 
-export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs): Promise<string> {
+export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs, sink?: UsageSink): Promise<string> {
   // Keep bounded JSON work at low effort unless the caller chooses another level.
   const args = buildClaudeCliArgs({ model, reasoningEffort, systemPrompt });
 
@@ -325,6 +326,7 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
   }
 
   if (envelope.is_error) throw classifyClaudeFailure(stdout);
+  recordProviderUsage(sink, readProviderUsage(envelope.usage, envelope.total_cost_usd));
 
   return String(envelope.result ?? "");
 }
@@ -380,7 +382,7 @@ export function buildCodexCliArgs({ model, reasoningEffort }: CliArgs, workdir: 
   return args;
 }
 
-export async function callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs): Promise<string> {
+export async function callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs, sink?: UsageSink): Promise<string> {
   const combined = systemPrompt
     ? `${systemPrompt}\n\n---\n\n${userPrompt}`
     : userPrompt;
@@ -391,6 +393,7 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
 
   try {
     const { stdout } = await runCli("codex", args, combined, { cwd: workdir, signal });
+    recordProviderUsage(sink, totalOnlyUsage(extractCodexTokensUsed(stdout)));
     const directOutput = await readBoundedFile(outputPath);
     return directOutput.trim() || extractCodexFinalOutput(stdout);
   } finally {
@@ -464,6 +467,15 @@ export async function callAntigravityCli({ model, systemPrompt, userPrompt, sign
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }
+}
+
+// The transcript's last "tokens used" line carries one total; codex reports no
+// split, and the echoed prompt earlier in the transcript may contain the phrase.
+export function extractCodexTokensUsed(stdout: string): number | null {
+  const index = stdout.lastIndexOf("tokens used");
+  if (index < 0) return null;
+  const match = /^tokens used\s*\n\s*([\d,]+)/.exec(stdout.slice(index));
+  return match ? Number(match[1].replace(/,/g, "")) : null;
 }
 
 // Codex exec writes a structured transcript: preamble → "user" → prompt →

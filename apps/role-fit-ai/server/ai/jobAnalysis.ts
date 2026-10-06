@@ -16,6 +16,7 @@ import {
   FIT_ASSESSMENT_RULES,
   FIT_ASSESSMENT_RESPONSE_SCHEMA,
   analyzeFitAssessment,
+  fitAssessmentInputLimitError,
   fitAssessmentPromptSection,
   evaluateFitAssessmentResponse
 } from "./fitAssessment.ts";
@@ -223,8 +224,12 @@ export async function analyzeJobToFields({
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
   const requestedFit = fitAssessmentInput(body);
-  // An oversized Profile never reaches the provider; Job analysis still runs.
-  const fitLimitError = requestedFit ? candidateContextLimitError(requestedFit.candidateContext ?? "") : null;
+  // Oversized Fit inputs never reach the provider; Job analysis still runs. The
+  // Profile is named first because its message tells the user where to fix it.
+  const fitLimitError = requestedFit
+    ? candidateContextLimitError(requestedFit.candidateContext ?? "")
+      ?? fitAssessmentInputLimitError({ jobText, resumeText: requestedFit.resumeText, candidateContext: requestedFit.candidateContext })
+    : null;
   const fitInput = fitLimitError ? null : requestedFit;
   const { systemPrompt, userPrompt } = buildJobAnalysisPrompts({ jobText, fitAssessment: fitInput });
   const stats: AttemptStats = {};

@@ -109,6 +109,26 @@ const UNUSABLE_JOB_FIELDS = { source: "ai", fitAssessment: VALID_FIT };
   check(result.fitAssessmentRequested, false, "the request flag reports what was actually asked for");
 }
 
+// A label alone is not a brief: a response carrying only domain or seniority
+// signals must not replace the local brief's duties and qualifications.
+for (const fields of [
+  { source: "ai", domainSignals: ["fintech"], fitAssessment: VALID_FIT },
+  { source: "ai", senioritySignals: ["Senior"], fitAssessment: VALID_FIT },
+  { source: "ai", title: "Senior Backend Engineer", company: "Northwind", domainSignals: ["fintech"], senioritySignals: ["Senior"], fitAssessment: VALID_FIT }
+]) {
+  const result = extractedFromAiOrLocal(fields, POSTING, undefined, undefined, undefined, true);
+  check(result.source, "local", "a metadata-only response keeps the local brief");
+  check(result.extracted.tailoringText.includes("Go services"), true, "the local brief's own duties survive");
+  check(Boolean(result.failure), true, "the fallback is reported honestly");
+  check(result.fitAssessment?.verdict, "REASONABLE", "the independent screening still survives");
+}
+for (const fields of [
+  { source: "ai", techKeywords: ["Go"] },
+  { source: "ai", preferredQualifications: ["Kubernetes"] }
+]) {
+  check(extractedFromAiOrLocal(fields, POSTING).source, "ai", "a technology or qualification list is role content and keeps the AI brief");
+}
+
 {
   const result = extractedFromAiOrLocal(null, POSTING, undefined, undefined, undefined, true);
   check(result.source, "local", "an absent response falls back locally");

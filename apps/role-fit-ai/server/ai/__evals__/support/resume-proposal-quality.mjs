@@ -134,17 +134,26 @@ export function gradeProposal(fixture, result) {
     if (hasTerm(outputText, marker) && !hasTerm(plain(index.resumeText), marker)) hits.push({ type: "injection", term: marker });
   }
   const opportunities = fixture.opportunities;
+  const taken = {
+    touched: (opportunities.shouldTouch ?? []).filter((id) => touched.has(id)).length,
+    targets: (opportunities.shouldTouch ?? []).length,
+    reordered: (opportunities.shouldReorder ?? []).filter((id) => touched.has(`order:${id}`)).length,
+    added: (opportunities.shouldAdd ?? []).filter((id) => result.changes.some((change) => change.target.entryId === id && targets.get(change.targetId)?.kind === "new-bullet")).length,
+    removed: (opportunities.shouldRemove ?? []).filter((id) => result.changes.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
+    expectFewEdits: opportunities.expectFewEdits === true
+  };
+  // An opportunity case is about one planted improvement; any rewrite, reorder,
+  // addition, or removal of a named target satisfies it (a named filler bullet
+  // and any bullet of an entry that should gain one count too), but a harmless
+  // edit elsewhere leaves the opportunity missed.
+  const satisfied = taken.touched + taken.reordered + taken.added + taken.removed
+    + (opportunities.fillerBullets ?? []).filter((id) => touched.has(id)).length
+    + (opportunities.shouldAdd ?? []).filter((id) => result.changes.some((change) => change.target.entryId === id && change.action !== "remove" && !change.order)).length;
+  if (fixture.gateOpportunity && result.changes.length && satisfied === 0) hits.push({ type: "missedOpportunity" });
   return {
     passed: hits.length === 0 && metrics.tenseFlips === 0,
     hits, metrics,
-    opportunities: {
-      touched: (opportunities.shouldTouch ?? []).filter((id) => touched.has(id)).length,
-      targets: (opportunities.shouldTouch ?? []).length,
-      reordered: (opportunities.shouldReorder ?? []).filter((id) => touched.has(`order:${id}`)).length,
-      added: (opportunities.shouldAdd ?? []).filter((id) => result.changes.some((change) => change.target.entryId === id && targets.get(change.targetId)?.kind === "new-bullet")).length,
-      removed: (opportunities.shouldRemove ?? []).filter((id) => result.changes.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
-      expectFewEdits: opportunities.expectFewEdits === true
-    }
+    opportunities: taken
   };
 }
 

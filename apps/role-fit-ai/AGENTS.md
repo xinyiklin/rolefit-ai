@@ -103,10 +103,18 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
 - Prepare publishes its deterministic local brief before provider work. A Job
   analysis or Fit Assessment failure leaves that brief editable and manual Polish
   available; invalid Fit Assessment output never invalidates valid Job analysis.
+  An AI response is a brief only when it carries duties, qualifications, or
+  technologies; domain or seniority labels alone keep the local brief. Both
+  analyzers render the brief through one assembler (`src/lib/jobExtract.ts`)
+  with a 9,000-character cap that budgets whole items across the long lists
+  (required first, round-robin) rather than slicing the text, so a long duties
+  list never drops the qualifications or tech stack and no item is cut.
   Fit Assessment owns an independent provider/model/reasoning configuration;
   Prepare may combine it with Job analysis only when both resolved request
   configurations match exactly, otherwise it dispatches assessment-only after
-  committing the brief.
+  committing the brief. Fit's normalized input limits are checked before any
+  dispatch; an oversized posting or resume reports the limit without a call
+  while Job analysis still runs.
   Resume Polish failure or Withheld leaves the document unchanged.
 - URL and paste preparation remain enabled without a ready Job analysis
   provider. They commit the deterministic brief and explain that connecting a

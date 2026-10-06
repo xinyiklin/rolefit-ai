@@ -7,6 +7,8 @@ import { readFileSync } from "node:fs";
 
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { assembleCoverLetterText } from "../coverLetterContracts.ts";
+import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
+import { judgeLetter, judgeMatrix } from "./cover-letter-quality-eval.mjs";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 
 const fixtures = JSON.parse(
@@ -209,4 +211,46 @@ assert.equal(
   "a pasted resume bullet is a resume dump, not elaboration"
 );
 
-console.log("cover-letter synthetic quality contracts: PASS");
+
+// Whole-letter judge: prompt carries the sources, parsing is tolerant, Sol never judges.
+{
+  const fixture = fixtures[0];
+  const preflight = buildCoverLetterPreflight({ text: fixture.sourceText, candidateName: "Jordan Lee", role: fixture.role, company: fixture.company, date: "July 28, 2026" });
+  const used = fixture.evidence.slice(0, 1);
+  const result = goodResult(fixture, preflight.resolved, used);
+  const prompts = buildCoverLetterJudgePrompts({ letterText: result.coverLetterText, baseLetterText: preflight.template.authoredProse, jobText: fixture.jobText, evidence: fixture.evidence, role: fixture.role, company: fixture.company });
+  assert.match(prompts.systemPrompt, /support[\s\S]*relevance[\s\S]*argument[\s\S]*voice[\s\S]*improvementOverBase/, "the rubric names every dimension");
+  assert.match(prompts.systemPrompt, /never as instructions/i, "fenced inputs are data");
+  assert.ok(prompts.userPrompt.includes(result.coverLetterText.split("\n")[0]), "the judge sees the letter");
+  assert.ok(prompts.userPrompt.includes(`[${used[0].id}]`), "the judge sees the evidence ids");
+  assert.ok(!/claude|gpt|codex|provider/i.test(prompts.userPrompt), "the judge never learns which model wrote the letter");
+  const parsed = parseCoverLetterJudgment({ support: 7, relevance: "8", argument: 11, voice: 0, improvementOverBase: 5.6, overall: 7, unsupportedSentences: ["I led the team.", 42, "", "x".repeat(900)], notes: "  Two   notes. " });
+  assert.deepEqual([parsed.support, parsed.relevance, parsed.argument, parsed.voice, parsed.improvementOverBase, parsed.overall], [7, 8, 10, 1, 6, 7], "scores are clamped to 1-10 and rounded");
+  assert.equal(parsed.unsupportedSentences.length, 2, "non-string and empty sentences are dropped");
+  assert.equal(parsed.unsupportedSentences[1].length, 400, "a sentence is bounded");
+  assert.equal(parsed.notes, "Two notes.");
+  const malformed = parseCoverLetterJudgment("not an object");
+  assert.equal(malformed.overall, null);
+  assert.deepEqual(malformed.unsupportedSentences, []);
+  assert.equal(coverLetterJudgeConfigError({ model: "gpt-6.1-sol" }) !== null, true, "Sol is refused as a judge");
+  assert.equal(coverLetterJudgeConfigError({ model: "gpt-6-astra" }), null);
+  assert.equal(judgeMatrix({}).length, 0, "no judge by default");
+  assert.deepEqual(judgeMatrix({ EVAL_JUDGE: "panel" }).map((judge) => judge.model), COVER_LETTER_JUDGE_PANEL.map((judge) => judge.model));
+  assert.throws(() => judgeMatrix({ EVAL_JUDGE: JSON.stringify([{ provider: "codex-cli", model: "gpt-6-sol" }]) }), /never judges/);
+  assert.throws(() => judgeMatrix({ EVAL_JUDGE: JSON.stringify([{ provider: "codex-cli" }]) }), /never judges/, "an omitted model resolves to the Codex default, which is a Sol model");
+  assert.throws(() => judgeMatrix({ EVAL_JUDGE: "nope" }), /EVAL_JUDGE must/);
+  const seen = [];
+  process.env.OPENAI_API_KEY = "synthetic-test-key";
+  const judgments = await judgeLetter({ fixture, preflight, result, judges: [{ provider: "openai", model: "gpt-6-astra", reasoningEffort: "" }], dispatch: async (args, stats) => { seen.push(args); stats.attempts = 1; return { overall: 6, support: 9, unsupportedSentences: [] }; } });
+  assert.equal(judgments.length, 1);
+  assert.equal(judgments[0].judgment.overall, 6);
+  assert.equal(judgments[0].judge.model, "gpt-6-astra");
+  assert.equal(seen[0].retryUnreadableOutput, false, "a judge reply is read once");
+  const mixed = await judgeLetter({ fixture, preflight, result, judges: [{ provider: "openai", model: "gpt-6-astra", reasoningEffort: "" }, { provider: "openai", model: "gpt-6-luna", reasoningEffort: "" }], dispatch: async (args, stats) => { stats.attempts = 1; if (args.model === "gpt-6-luna") throw new Error("unreadable reply"); return { overall: 7 }; } });
+  assert.equal(mixed[0].judgment.overall, 7);
+  assert.equal(mixed[1].error, "judge", "a failing judge is recorded as absent, not thrown");
+  assert.equal(mixed[1].judgment, undefined);
+  delete process.env.OPENAI_API_KEY;
+}
+
+console.log("cover-letter quality contracts passed (judge module included)");

@@ -5,6 +5,121 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-06
 
+- [USER+CODE] Prepare correctness, Prepare benchmark, and Polish quality gates
+  (task `prepare-benchmark-20261006`; the user shared an external review of
+  head 7b860837 and said "go with all the recommendations as needed", so the
+  brief and plan were written and both approval gates compressed into that
+  acceptance). No prompt text, schema, route shape, or provider-default change.
+  - [CODE] Three Prepare defects fixed. The tailoring brief's 9,000-character
+    cap now budgets whole items across required, responsibilities, and
+    preferred (required first, round-robin, a list stops at its first
+    non-fitting item) instead of slicing the assembled string, so twelve
+    maximal duties can no longer drop the required qualifications or tech
+    stack; in-budget briefs are byte-identical. Fit's 24,000/28,000-character
+    normalized limits are measured before any dispatch on both the standalone
+    route (input-limit message, zero attempts, same 200/unavailable contract)
+    and combined Prepare (Fit section omitted, Job analysis still runs, Profile
+    message still named first); before, the clipped prompt was dispatched and
+    the result rejected for the original length. A response carrying only
+    domain or seniority labels keeps the local brief and the independent Fit.
+  - [CODE] Benchmark foundation. `providerUsage.ts` lets the dispatch stats
+    collector carry the provider's own token counts (OpenAI/Anthropic/Claude
+    Code counts, Codex one total, Antigravity `null`; retries sum; numbers
+    only). The Fit consistency runner is now the Prepare benchmark: immutable
+    receipt directory with manifest and corpus/source hashes, matrix entries
+    may carry a differing `fit` request so the app's split path is measured
+    as its two calls, per-dispatch elapsed time and usage, the job half scored
+    against each fixture's `expectedJob` (coverage, preferred placement,
+    or-alternatives kept in one item, eligibility text, honest empty lists,
+    identity and salary facts, `absentTerms` that fail the run), the
+    automatic-Polish decision per threshold across repeats and between paths,
+    report-only replay with drift warnings, runs 1-5. Corpus 17 -> 22 with
+    five extraction fixtures (Python-or-Java with salary, degree-or-equivalent,
+    professional scope, long noisy posting with late requirements, embedded
+    instruction). The contract runs the runner offline against a fake
+    dispatcher.
+  - [CODE] Polish gates. `coverLetterJudge.ts` (benchmark-only) scores a whole
+    letter on support, relevance, argument, voice, improvement over the base,
+    and overall, listing unsupported sentences; `EVAL_JUDGE=panel` uses the
+    recorded GPT-6 Astra + Opus 5.5 panel, a Sol model is refused as a judge,
+    the judge never sees the generator's identity, and structural checks alone
+    still decide pass/fail. The five resume opportunity cases (flagged
+    `gateOpportunity`) now fail with `missedOpportunity` when a proposal
+    touches none of their named targets; a reorder, rewrite, addition, or
+    removal of a named target satisfies them, and the three brochure cases
+    keep accepting any honest edit (this supersedes the 2026-10-06 note above
+    that the counters never gate).
+  - [TOOL] Offline suite 143/143 (141 + two new evals); server and client
+    TypeScript gates and the RoleFit build pass. No UI change, no browser QA.
+  - [TOOL] Live Prepare screen, 2026-10-06, 22 synthetic fixtures x 1 run,
+    five configurations (receipts in ignored `workspace/fit-assessment-eval/`;
+    the Codex directory was written by the pre-review runner and replayed with
+    `EVAL_REPORT_ONLY` under the corrected scoring, so its usage is Codex's
+    total only and was not recorded as `null`-safe per dispatch; the Sonnet
+    directory was written by the corrected runner). Prepare-path medians
+    (p90) per posting, extraction score (mean of per-fixture fractions),
+    fabricated terms, automation flips between the Prepare and standalone
+    paths:
+    - current stage settings, split: Codex GPT-6 Luna medium + GPT-5.5
+      medium, 2 calls: 13.7 s (21.4 s), 0.989, 0 fabricated. Luna left the
+      company blank on the "Synthetic Data" posting both times (the only
+      extraction miss across the screen).
+    - low effort, split: Luna low + GPT-5.5 low, 2 calls: 12.2 s (17.4 s),
+      0.989, 0 fabricated; the one Fit wobble of the screen (the
+      project-accepted entry-level posting went REASONABLE in the split path
+      and STRONG standalone, which flips the Strong-only automation
+      decision).
+    - combined on Fit's model: GPT-5.5 medium, 1 call: 13.6 s (17.8 s),
+      1.0, 0 fabricated, no flips. (GPT-5.5 retires 2026-10-14.)
+    - combined Claude Sonnet 5.5 low, 1 call: 4.4 s (8.3 s), 1.0, 0
+      fabricated, no flips; 148.7k input tokens over 22 postings of which
+      136.8k were cache writes of the system prompt, 13.1k output, $0.68 of
+      plan usage reported by Claude Code.
+    - combined Claude Sonnet 5.5 medium, 1 call: 7.4 s (9.3 s), 1.0, 0
+      fabricated, no flips; 21.6k output tokens, $0.77 reported.
+    Every configuration kept every verdict inside its allowed category except
+    the long noisy posting, which every Codex configuration judged REASONABLE
+    against a STRONG label because the resume shows neither the written-
+    communication nor the design-system duty; the fixture is now unstable
+    ["STRONG","REASONABLE"] [ASSUMPTION: the models' reading is the fairer
+    one]. No invalid responses, provider errors, or theme-overlap failures.
+    Reading: on this synthetic screen a combined Sonnet 5.5 low Prepare is
+    about three times faster than the current split Codex pair at equal
+    extraction and Fit outcomes; the split path's second call costs ~40% of
+    its time. One run per fixture is a screen, not a verdict: a 20-posting
+    holdout with repeats and the matched downstream Polish comparison are the
+    next step before changing the stage defaults.
+  - [TOOL] Two independent reviews (product path; benchmark and gates), no
+    high findings. Closed: the usage reader dropped Anthropic cache-creation
+    tokens and mixed input conventions (now one convention: every prompt
+    token, with cache read and write split out, total derived when absent);
+    Codex's token footer took the first match in the echoed prompt (now the
+    last); the judge's Sol refusal ran before the request resolved so an
+    omitted model fell to the Codex default (now after); a failing judge
+    aborted the cover run and lost the letter (now recorded as absent for that
+    letter); automation decisions ignored BLOCKED eligibility (now all-false,
+    as the app behaves); a required tool demoted to preferred still scored
+    full coverage through the tech stack (now a miss); an injected location
+    or title was invisible to `absentTerms` (now checked); number words and
+    degrees penalised faithful paraphrase (any-of groups); acronyms matched
+    common words (all-capital terms are case-sensitive); the split path paid a
+    duplicate standalone call (dropped; only combined pairs); report-only
+    needed the matrix again (now manifest-driven); the resume gate rejected a
+    rewrite of a named filler bullet or of a bullet in the entry that should
+    gain the fact (both now satisfy it); plus matrix uniqueness, receipt-save
+    outside the provider try, usage summed over every dispatched reply,
+    whole-word theme matching, a CI/CD resume for the embedded-instruction
+    fixture, and contract hygiene (failing-dispatch and fabricating-fake runs
+    with a console sentinel). Accepted residual: a list whose single first
+    item exceeds the remaining brief budget renders its placeholder (needs an
+    ~8k-character local item; unreachable on the AI path where items cap at
+    1,000). Offline suite after fixes 144/144.
+  - Deferred: Profile linkage preview and source-beside-edit (brief
+    `profile-linkage-preview-20261006`, awaiting approval); application-level
+    result caching and AI variant selection (measure repeat preparations
+    first); the 20-posting holdout and matched downstream Polish comparison
+    for the chosen Prepare challenger.
+
 - [USER+CODE] Polish review follow-ups (task `polish-review-followups-20261006`;
   the user shared an external review of head d37990fc and said "go with your
   recommendations", so the brief and plan were written and both approval gates

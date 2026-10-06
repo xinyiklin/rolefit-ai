@@ -133,7 +133,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const expected = options.selected.length * options.runs;
   const passed = rows.filter((row) => row.passed).length;
   save("summary.json", { expected, completed: rows.length, passed, unrun: expected - rows.length, rows });
-  console.log(`Result: ${passed}/${expected} passed; ${expected - rows.length} unrun. Materiality/opportunity/length metrics are diagnostic, not pass gates. Receipts: ${out}`);
+  console.log(`Result: ${passed}/${expected} passed; ${expected - rows.length} unrun. Materiality and length metrics are diagnostic; a required case must touch a named opportunity. Receipts: ${out}`);
   return passed === expected ? 0 : 1;
 }
 
