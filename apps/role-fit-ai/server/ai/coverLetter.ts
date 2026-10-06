@@ -2,7 +2,8 @@
 // decides what to use; the server resolves correspondence deterministically,
 // warns on content concerns and repairs unusable structure once. The
 // server has no approval stage; the browser stages a valid response as a
-// proposal.
+// proposal. `concerns` are factual findings the browser may carry into the
+// next request after acceptance; `warnings` describe only this draft.
 
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -41,6 +42,7 @@ import type { CoverLetterSourceContext } from "../../src/lib/coverLetterTemplate
 import {
   CoverLetterBlockedError,
   coverLetterIssueWarnings,
+  isCoverLetterConcern,
   repairMessagesForCoverLetterIssues
 } from "./coverLetterIssues.ts";
 import { coverLetterParagraphClaims } from "./coverLetterParagraphEvidence.ts";
@@ -121,8 +123,7 @@ export async function tailorCoverLetter(
         })
       : { issues: [], warnings: [] };
     const issues = [...validation.issues, ...claimReview.issues];
-    if (validation.output) validation.output.warnings.push(...claimReview.warnings);
-    return { parsed, validation, issues };
+    return { parsed, validation, issues, concerns: claimReview.warnings };
   };
 
   let run = await attempt();
@@ -130,9 +131,13 @@ export async function tailorCoverLetter(
   if (!run.validation.output || run.issues.some((issue) => issue.blocking)) {
     // Repair only technical defects; usable content concerns remain advisory.
     repaired = true;
+    // The model's own notes are display-only, so they never go back to it.
+    const { warnings: _notes, ...rejectedOutput } = (run.parsed && typeof run.parsed === "object" && !Array.isArray(run.parsed)
+      ? run.parsed
+      : { value: run.parsed }) as Record<string, unknown>;
     run = await attempt({
       violations: repairMessagesForCoverLetterIssues(run.issues.filter((issue) => issue.blocking)),
-      rejectedOutput: run.parsed
+      rejectedOutput
     });
   }
   if (!run.validation.output || run.issues.some((issue) => issue.blocking)) {
@@ -141,12 +146,19 @@ export async function tailorCoverLetter(
 
   const { output } = run.validation;
   const coverLetterText = assembleCoverLetterText(output.bodyParagraphs, resolvedContext);
+  // Claim findings are about the facts in the wording, so they outlive
+  // acceptance; structure, quality, citation bookkeeping, leftover tokens,
+  // style, length, and model notes describe this draft only and are recomputed
+  // for the next one. Model notes sit last so the list cap trims them first.
+  const durable = run.issues.filter(isCoverLetterConcern);
+  const draftOnly = run.issues.filter((issue) => !isCoverLetterConcern(issue));
   return {
     status: "ready",
     coverLetterText,
     bodyParagraphs: output.bodyParagraphs,
     evidenceUsed: evidenceUsedByParagraphs(output.bodyParagraphs, evidenceItems),
-    warnings: sanitizeContentWarnings([...coverLetterIssueWarnings(run.issues), ...output.warnings, ...coverLetterLengthWarnings(coverLetterText)]) ?? [],
+    warnings: sanitizeContentWarnings([...coverLetterIssueWarnings(draftOnly), ...output.warnings, ...coverLetterLengthWarnings(coverLetterText), ...output.modelNotes]) ?? [],
+    concerns: sanitizeContentWarnings([...coverLetterIssueWarnings(durable), ...run.concerns]) ?? [],
     ...(repaired ? { repaired: true } : {})
   };
 }
@@ -278,7 +290,8 @@ export async function handleCoverPolish(
     );
     sendJson(res, 200, {
       ...result,
-      warnings: sanitizeContentWarnings([...preflight.warnings, ...result.warnings, ...sourceWarnings]) ?? [],
+      warnings: sanitizeContentWarnings([...preflight.warnings, ...result.warnings]) ?? [],
+      concerns: sanitizeContentWarnings([...result.concerns, ...sourceWarnings]) ?? [],
       model,
       provider,
       reasoningEffort,

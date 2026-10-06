@@ -78,7 +78,11 @@ function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   ) {
     return null;
   }
-  return { ...candidate, warnings: sanitizeContentWarnings(candidate.warnings) ?? [] } as CoverLetterTailorResult;
+  return {
+    ...candidate,
+    warnings: sanitizeContentWarnings(candidate.warnings) ?? [],
+    concerns: sanitizeContentWarnings(candidate.concerns ?? []) ?? [],
+  } as CoverLetterTailorResult;
 }
 
 // Owns the whole cover-letter AI workflow: deterministic preflight, the single
@@ -160,9 +164,11 @@ export function useCoverLetter({
       }),
     [candidateContext, resumeData, slotAnswers, slotLabels],
   );
+  // Only evidence concerns about the accepted wording carry forward; this
+  // draft's length, phrasing, and structure notes are recomputed each run.
   const inputSourceWarnings = sanitizeContentWarnings([
     ...(sourceWarnings ?? []),
-    ...(lastAppliedResult?.warnings.length ? ["Earlier accepted cover-letter wording had unresolved concerns; repeating Polish or editing does not verify it.", ...lastAppliedResult.warnings] : [])
+    ...(lastAppliedResult?.concerns.length ? ["Earlier accepted cover-letter wording had unresolved concerns; repeating Polish or editing does not verify it.", ...lastAppliedResult.concerns] : [])
   ]) ?? [];
   const proposalContentFingerprint = workflowInputFingerprint({
     sourceRevision,

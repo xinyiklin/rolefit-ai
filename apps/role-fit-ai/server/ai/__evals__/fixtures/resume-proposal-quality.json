@@ -4735,5 +4735,569 @@
       "fillerBullets": []
     },
     "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+  },
+  {
+    "name": "buried-strength-order",
+    "note": "Buried strength: the one bullet that answers the posting's core requirement sits last behind two routine-duty bullets; the entry needs a reorder and the duty bullets need sharpening.",
+    "resumeScope": {
+      "version": 1,
+      "locked": {
+        "omittedIdentity": true,
+        "omittedContact": true,
+        "omittedSections": [
+          "Education"
+        ]
+      },
+      "sections": [
+        {
+          "id": "exp",
+          "heading": "Experience",
+          "type": "standard",
+          "entries": [
+            {
+              "id": "pinecone",
+              "titleLeft": "Pinecone Analytics",
+              "titleRight": "2022 – Present",
+              "subtitleLeft": "Data Engineer",
+              "subtitleRight": "Austin, TX",
+              "bullets": [
+                {
+                  "id": "pinecone-b1",
+                  "text": "Responsible for maintaining data pipelines and supporting analysts with ad hoc requests."
+                },
+                {
+                  "id": "pinecone-b2",
+                  "text": "Attended sprint planning and wrote tickets for the ingestion backlog."
+                },
+                {
+                  "id": "pinecone-b3",
+                  "text": "Rebuilt the nightly Airflow DAG that loads 40 vendor feeds into Snowflake, adding schema checks that catch malformed files before they reach reporting tables."
+                }
+              ]
+            },
+            {
+              "id": "juniper",
+              "titleLeft": "Juniper Retail",
+              "titleRight": "2020 – 2022",
+              "subtitleLeft": "Analyst",
+              "subtitleRight": "Austin, TX",
+              "bullets": [
+                {
+                  "id": "juniper-b1",
+                  "text": "Built weekly sales dashboards in Tableau for regional managers."
+                },
+                {
+                  "id": "juniper-b2",
+                  "text": "Wrote SQL reports against the Postgres order database."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "skl",
+          "heading": "Skills",
+          "type": "skills",
+          "entries": [
+            {
+              "id": "skl-1",
+              "titleLeft": "Languages",
+              "titleRight": "",
+              "subtitleLeft": "Python, SQL",
+              "subtitleRight": "",
+              "bullets": []
+            },
+            {
+              "id": "skl-2",
+              "titleLeft": "Tools",
+              "titleRight": "",
+              "subtitleLeft": "Airflow, Snowflake, Postgres, Tableau, dbt",
+              "subtitleRight": "",
+              "bullets": []
+            }
+          ]
+        }
+      ]
+    },
+    "candidateContext": "",
+    "jobText": "Job Title:\nData Engineer\n\nCompany / Product Context:\nHarrow Freight builds shipment-tracking analytics for logistics brokers.\n\nCore Responsibilities:\n- Own Airflow pipelines that load partner feeds into Snowflake\n- Add data quality checks that stop bad files before reporting\n- Model warehouse tables with dbt\n\nRequired Qualifications:\n- 2+ years building batch pipelines in Python\n- Airflow and Snowflake experience\n- Strong SQL\n\nPreferred Qualifications:\n- Great Expectations or similar data-quality tooling\n- Logistics or supply-chain data\n\nTech Stack / Keywords:\n- Python\n- Airflow\n- Snowflake\n- dbt\n- Great Expectations\n\nSeniority Signals:\n- Mid-level\n\nDomain Signals:\n- Logistics",
+    "customInstructions": "",
+    "traps": {
+      "jdOnly": [
+        "Great Expectations",
+        "logistics",
+        "supply-chain",
+        "shipment*"
+      ],
+      "perEntryForbidden": {
+        "juniper": [
+          "Airflow",
+          "Snowflake",
+          "dbt",
+          "Python"
+        ],
+        "pinecone": [
+          "Tableau"
+        ]
+      },
+      "lowOwnershipBullets": [],
+      "mustKeepBullets": [
+        "pinecone-b3"
+      ]
+    },
+    "opportunities": {
+      "shouldTouch": [
+        "pinecone-b1"
+      ],
+      "shouldReorder": [
+        "pinecone"
+      ],
+      "fillerBullets": [
+        "pinecone-b1",
+        "pinecone-b2"
+      ],
+      "shouldRemove": []
+    },
+    "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
+    "requiresProposal": true
+  },
+  {
+    "name": "duplicate-achievement",
+    "note": "Two bullets state the same checkout-latency win in different words; one should go, the other must stay, and nothing may invent a new metric.",
+    "resumeScope": {
+      "version": 1,
+      "locked": {
+        "omittedIdentity": true,
+        "omittedContact": true,
+        "omittedSections": [
+          "Education"
+        ]
+      },
+      "sections": [
+        {
+          "id": "exp",
+          "heading": "Experience",
+          "type": "standard",
+          "entries": [
+            {
+              "id": "marlow",
+              "titleLeft": "Marlow Commerce",
+              "titleRight": "2021 – Present",
+              "subtitleLeft": "Software Engineer",
+              "subtitleRight": "Remote",
+              "bullets": [
+                {
+                  "id": "marlow-b1",
+                  "text": "Cut checkout page load time from 4.2 s to 1.6 s by lazy-loading the payment SDK and caching the cart summary."
+                },
+                {
+                  "id": "marlow-b2",
+                  "text": "Improved checkout performance, reducing load time by over 60% through lazy loading and caching."
+                },
+                {
+                  "id": "marlow-b3",
+                  "text": "Wrote the Stripe webhook handler that reconciles refunds against orders, with 85 Jest cases covering retries and duplicate events."
+                },
+                {
+                  "id": "marlow-b4",
+                  "text": "Participated in code reviews and daily standups."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "skl",
+          "heading": "Skills",
+          "type": "skills",
+          "entries": [
+            {
+              "id": "skl-1",
+              "titleLeft": "Languages",
+              "titleRight": "",
+              "subtitleLeft": "TypeScript, JavaScript, SQL",
+              "subtitleRight": "",
+              "bullets": []
+            },
+            {
+              "id": "skl-2",
+              "titleLeft": "Tools",
+              "titleRight": "",
+              "subtitleLeft": "React, Node.js, Stripe, Jest, Postgres",
+              "subtitleRight": "",
+              "bullets": []
+            }
+          ]
+        }
+      ]
+    },
+    "candidateContext": "",
+    "jobText": "Job Title:\nFull-Stack Engineer, Checkout\n\nCompany / Product Context:\nTidewater sells subscription boxes and is rebuilding its checkout.\n\nCore Responsibilities:\n- Improve checkout conversion and performance\n- Integrate payment providers and reconcile payment events\n- Write reliable tests for money-handling code\n\nRequired Qualifications:\n- 3+ years with TypeScript, React, and Node.js\n- Payment integration experience (Stripe, Adyen, or Braintree)\n- Automated testing\n\nPreferred Qualifications:\n- Experience with A/B testing checkout flows\n\nTech Stack / Keywords:\n- TypeScript\n- React\n- Node.js\n- Stripe\n- Postgres\n\nSeniority Signals:\n- Mid-level\n\nDomain Signals:\n- E-commerce",
+    "customInstructions": "",
+    "traps": {
+      "jdOnly": [
+        "Adyen",
+        "Braintree",
+        "A/B",
+        "conversion"
+      ],
+      "perEntryForbidden": {},
+      "lowOwnershipBullets": [],
+      "mustKeepBullets": [
+        "marlow-b1",
+        "marlow-b3"
+      ],
+      "numericForbidden": [
+        "70%",
+        "75%",
+        "80%"
+      ]
+    },
+    "opportunities": {
+      "shouldTouch": [
+        "marlow-b4"
+      ],
+      "shouldRemove": [
+        "marlow-b2"
+      ],
+      "shouldReorder": [],
+      "fillerBullets": [
+        "marlow-b4"
+      ]
+    },
+    "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
+    "requiresProposal": true
+  },
+  {
+    "name": "profile-fact-missing",
+    "note": "The resume entry never mentions the on-call and incident work its linked Profile block documents, and the posting leads with it; an addition from the Profile is the material improvement.",
+    "resumeScope": {
+      "version": 1,
+      "locked": {
+        "omittedIdentity": true,
+        "omittedContact": true,
+        "omittedSections": [
+          "Education"
+        ]
+      },
+      "sections": [
+        {
+          "id": "exp",
+          "heading": "Experience",
+          "type": "standard",
+          "entries": [
+            {
+              "id": "saltmarsh",
+              "titleLeft": "Saltmarsh Software",
+              "titleRight": "Mar 2022 – Present",
+              "subtitleLeft": "Backend Engineer",
+              "subtitleRight": "Boston, MA",
+              "bullets": [
+                {
+                  "id": "saltmarsh-b1",
+                  "text": "Build Go services that price insurance quotes for small businesses."
+                },
+                {
+                  "id": "saltmarsh-b2",
+                  "text": "Maintain the Postgres schema and migrations for the quoting service."
+                }
+              ]
+            },
+            {
+              "id": "heron",
+              "titleLeft": "Heron Labs",
+              "titleRight": "2020 – 2022",
+              "subtitleLeft": "Software Engineer",
+              "subtitleRight": "Boston, MA",
+              "bullets": [
+                {
+                  "id": "heron-b1",
+                  "text": "Built internal Django tools for the research team."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "skl",
+          "heading": "Skills",
+          "type": "skills",
+          "entries": [
+            {
+              "id": "skl-1",
+              "titleLeft": "Languages",
+              "titleRight": "",
+              "subtitleLeft": "Go, Python, SQL",
+              "subtitleRight": "",
+              "bullets": []
+            },
+            {
+              "id": "skl-2",
+              "titleLeft": "Tools",
+              "titleRight": "",
+              "subtitleLeft": "Postgres, Docker, GitHub Actions, Grafana",
+              "subtitleRight": "",
+              "bullets": []
+            }
+          ]
+        }
+      ]
+    },
+    "candidateContext": "Open to hybrid roles in Boston.\n\n## Saltmarsh Software (Backend Engineer, 2022–present)\nOn the weekly on-call rotation for the quoting service; wrote the runbook for its three most common pages.\nLed the postmortem for the March 2025 pricing outage and added the Grafana alert on quote latency that now pages before customers notice.\n\n## Heron Labs (Software Engineer, 2020–2022)\nMostly Django admin tooling; no production on-call.",
+    "jobText": "Job Title:\nSite Reliability Engineer\n\nCompany / Product Context:\nBrightwater runs payment infrastructure for credit unions.\n\nCore Responsibilities:\n- Take part in the on-call rotation and run blameless postmortems\n- Write and maintain runbooks and alerting\n- Improve service reliability in Go and Postgres systems\n\nRequired Qualifications:\n- 2+ years operating production services\n- On-call and incident-response experience\n- Go or Python\n\nPreferred Qualifications:\n- Grafana or Prometheus alerting\n- Kubernetes\n\nTech Stack / Keywords:\n- Go\n- Postgres\n- Grafana\n- Prometheus\n- Kubernetes\n\nSeniority Signals:\n- Mid-level\n\nDomain Signals:\n- Fintech",
+    "customInstructions": "",
+    "traps": {
+      "jdOnly": [
+        "Kubernetes",
+        "Prometheus",
+        "credit union*",
+        "payment*"
+      ],
+      "perEntryForbidden": {
+        "heron": [
+          "on-call",
+          "postmortem",
+          "runbook",
+          "Grafana",
+          "Go"
+        ]
+      },
+      "lowOwnershipBullets": [],
+      "mustKeepBullets": [
+        "saltmarsh-b1"
+      ]
+    },
+    "opportunities": {
+      "shouldAdd": [
+        "saltmarsh"
+      ],
+      "shouldTouch": [],
+      "shouldReorder": [],
+      "fillerBullets": []
+    },
+    "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
+    "requiresProposal": true
+  },
+  {
+    "name": "feature-tour-contribution",
+    "note": "Project bullets list what the product does, not what the candidate did; the README sentences in the linked Profile block carry the contribution, so the rewrite must surface it without inventing scope.",
+    "resumeScope": {
+      "version": 1,
+      "locked": {
+        "omittedIdentity": true,
+        "omittedContact": true,
+        "omittedSections": [
+          "Education"
+        ]
+      },
+      "sections": [
+        {
+          "id": "proj",
+          "heading": "Projects",
+          "type": "standard",
+          "entries": [
+            {
+              "id": "tallyho",
+              "titleLeft": "TallyHo",
+              "titleRight": "2025",
+              "subtitleLeft": "Open-source expense splitter",
+              "subtitleRight": "",
+              "bullets": [
+                {
+                  "id": "tallyho-b1",
+                  "text": "TallyHo lets groups split expenses, settle debts, and export summaries, with support for multiple currencies and recurring bills."
+                },
+                {
+                  "id": "tallyho-b2",
+                  "text": "Features include a React Native app, a Node.js API, Postgres storage, and email receipts."
+                }
+              ]
+            },
+            {
+              "id": "coursekit",
+              "titleLeft": "CourseKit",
+              "titleRight": "2024",
+              "subtitleLeft": "Study planner",
+              "subtitleRight": "",
+              "bullets": [
+                {
+                  "id": "coursekit-b1",
+                  "text": "Built a Flask app that turns a syllabus PDF into a weekly study schedule."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "skl",
+          "heading": "Skills",
+          "type": "skills",
+          "entries": [
+            {
+              "id": "skl-1",
+              "titleLeft": "Languages",
+              "titleRight": "",
+              "subtitleLeft": "TypeScript, Python, SQL",
+              "subtitleRight": "",
+              "bullets": []
+            },
+            {
+              "id": "skl-2",
+              "titleLeft": "Tools",
+              "titleRight": "",
+              "subtitleLeft": "React Native, Node.js, Postgres, Flask",
+              "subtitleRight": "",
+              "bullets": []
+            }
+          ]
+        }
+      ]
+    },
+    "candidateContext": "## TallyHo (personal project, 2025)\nI wrote the debt-settlement algorithm that reduces a group's balances to the minimum number of transfers, and the property-based tests (fast-check) that found two rounding bugs in it.\nA friend built the React Native screens; I wrote the Node.js API and the Postgres schema.\n\n## CourseKit (personal project, 2024)\nSolo project.",
+    "jobText": "Job Title:\nSoftware Engineer, Backend\n\nCompany / Product Context:\nLedgerly builds bookkeeping software for small businesses.\n\nCore Responsibilities:\n- Design and implement backend services in Node.js and Postgres\n- Write correct money-handling logic with thorough tests\n- Collaborate with mobile engineers on API design\n\nRequired Qualifications:\n- Node.js and SQL experience\n- Strong testing habits\n\nPreferred Qualifications:\n- Property-based or fuzz testing\n- Fintech or accounting domain\n\nTech Stack / Keywords:\n- Node.js\n- Postgres\n- TypeScript\n- fast-check\n\nSeniority Signals:\n- Early career\n\nDomain Signals:\n- Fintech",
+    "customInstructions": "",
+    "traps": {
+      "jdOnly": [
+        "bookkeeping",
+        "accounting",
+        "fuzz"
+      ],
+      "perEntryForbidden": {
+        "coursekit": [
+          "Node",
+          "Postgres",
+          "React Native",
+          "fast-check"
+        ],
+        "tallyho": [
+          "Flask"
+        ]
+      },
+      "lowOwnershipBullets": [
+        "tallyho-b2"
+      ],
+      "mustKeepBullets": []
+    },
+    "opportunities": {
+      "shouldTouch": [
+        "tallyho-b1",
+        "tallyho-b2"
+      ],
+      "fillerBullets": [
+        "tallyho-b1",
+        "tallyho-b2"
+      ],
+      "shouldReorder": [],
+      "shouldRemove": []
+    },
+    "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
+    "requiresProposal": true
+  },
+  {
+    "name": "only-proof-removal-trap",
+    "note": "A support-heavy entry has one concrete proof of the posting's core requirement beside an obviously irrelevant bullet; the irrelevant bullet should go, the proof must survive, and the generic summary needs a rewrite.",
+    "resumeScope": {
+      "version": 1,
+      "locked": {
+        "omittedIdentity": true,
+        "omittedContact": true,
+        "omittedSections": [
+          "Education"
+        ]
+      },
+      "sections": [
+        {
+          "id": "sum",
+          "heading": "Summary",
+          "type": "summary",
+          "entries": [
+            {
+              "id": "sum-1",
+              "titleLeft": "",
+              "titleRight": "",
+              "subtitleLeft": "",
+              "subtitleRight": "",
+              "bullets": [
+                {
+                  "id": "sum-1-b1",
+                  "text": "Results-driven IT professional passionate about technology and helping people."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "exp",
+          "heading": "Experience",
+          "type": "standard",
+          "entries": [
+            {
+              "id": "oakridge",
+              "titleLeft": "Oakridge Credit Union",
+              "titleRight": "2021 – Present",
+              "subtitleLeft": "IT Support Specialist",
+              "subtitleRight": "Columbus, OH",
+              "bullets": [
+                {
+                  "id": "oakridge-b1",
+                  "text": "Resolved an average of 35 help-desk tickets per week for 300 branch and back-office staff."
+                },
+                {
+                  "id": "oakridge-b2",
+                  "text": "Wrote the PowerShell script that provisions new-hire accounts in Active Directory and Microsoft 365, cutting setup from a half day to 20 minutes."
+                },
+                {
+                  "id": "oakridge-b3",
+                  "text": "Organized the annual staff holiday party and managed its budget."
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": "skl",
+          "heading": "Skills",
+          "type": "skills",
+          "entries": [
+            {
+              "id": "skl-1",
+              "titleLeft": "Tools",
+              "titleRight": "",
+              "subtitleLeft": "PowerShell, Active Directory, Microsoft 365, Intune, Jira Service Management",
+              "subtitleRight": "",
+              "bullets": []
+            }
+          ]
+        }
+      ]
+    },
+    "candidateContext": "",
+    "jobText": "Job Title:\nIT Automation Engineer\n\nCompany / Product Context:\nNorthgate Health runs IT for a network of outpatient clinics.\n\nCore Responsibilities:\n- Automate account provisioning and device setup with PowerShell and Intune\n- Reduce manual help-desk work through scripting\n- Document automation for the support team\n\nRequired Qualifications:\n- 2+ years in IT support or systems administration\n- PowerShell scripting in Active Directory and Microsoft 365 environments\n\nPreferred Qualifications:\n- Intune or Autopilot deployments\n- Healthcare IT\n\nTech Stack / Keywords:\n- PowerShell\n- Active Directory\n- Microsoft 365\n- Intune\n- Autopilot\n\nSeniority Signals:\n- Mid-level\n\nDomain Signals:\n- Healthcare",
+    "customInstructions": "",
+    "traps": {
+      "jdOnly": [
+        "Autopilot",
+        "healthcare",
+        "clinic*",
+        "device setup"
+      ],
+      "perEntryForbidden": {},
+      "lowOwnershipBullets": [],
+      "mustKeepBullets": [
+        "oakridge-b2"
+      ]
+    },
+    "opportunities": {
+      "shouldTouch": [
+        "sum-1-b1"
+      ],
+      "shouldRemove": [
+        "oakridge-b3"
+      ],
+      "shouldReorder": [],
+      "fillerBullets": []
+    },
+    "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
+    "requiresProposal": true
   }
 ]

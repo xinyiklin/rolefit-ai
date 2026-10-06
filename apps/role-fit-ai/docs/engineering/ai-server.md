@@ -202,8 +202,19 @@ owns:
   A usable response is staged as a fingerprinted proposal: **Accept proposal**
   applies it, **Discard proposal** does not mutate the editor, and stale content
   identity prevents applying to another document. Resume-only changes retain the
-  proposal with an earlier-resume warning. Accepted concerns survive later edits
-  with an earlier-wording label; Restore follows the editor's own snapshot lifetime.
+  proposal with an earlier-resume warning. The response carries two bounded
+  lists: `concerns` (claim findings about the wording: unsupported terms,
+  numbers, outcomes, ownership, employer claims, conflicting or base-letter-only
+  evidence, attribution, and a cited unanswered private slot, plus echoed
+  `sourceWarnings`) and `warnings` (this draft's structure, quality, citation
+  bookkeeping, leftover template tokens, phrasing, length, and, last, up to
+  three model notes prefixed `Model note:`, read from the model's optional
+  `warnings` field; malformed metadata is ignored). The review rail shows both;
+  after acceptance only the `concerns` carry into the next request with an
+  earlier-wording label, while draft warnings are recomputed, so a corrected
+  length, bracket, or citation never recurs. Model notes are display-only: they
+  are stripped from the repair prompt's rejected output and never carried into a
+  later request. Restore follows the editor's own snapshot lifetime.
   The 180–420-word preference is advisory. Employer facts use employer evidence;
   implied candidate experience still goes through candidate checks. Equivalent
   word/digit durations receive the same support check.
@@ -415,8 +426,16 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   diagnostic record. A response longer than the examined window cannot settle
   as `NO_CHANGES`,
   because its tail was never read; each beyond-window change is recorded as a
-  malformed safety drop. Eligible items are examined in order until 12 safe
-  edits fill the wire cap. `stripBoldMarks` is
+  malformed safety drop. Every change in the window is examined (rewrites, then
+  removals, reorders, and additions, so conflicts resolve the same way), and the
+  wire cap keeps the first 12 usable changes in the model's own order: when more
+  are usable, the prefix up to the twelfth is examined again without the cut
+  tail, repeating until stable, so a change the cap cuts can never have won a
+  conflict against one listed earlier. The prompt states that limit and asks for
+  the most valuable changes first, so an addition the model listed first
+  survives twelve rewrites. The kept set is still emitted rewrites, removals,
+  reorders, then additions. The never-examined tail is reported with the
+  omission warning, not as withheld. `stripBoldMarks` is
   case-insensitive and re-collapses whitespace on purpose: the markup gate
   accepts `<B>`, and removing a tag can join the spaces around it.
   Content checks warn when proposed terminology lacks support in the target's

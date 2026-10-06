@@ -55,6 +55,9 @@ const PROMPT_TARGET_BUDGET = 42_000;
 // response records its tail as malformed, so truncation can never settle as
 // NO_CHANGES.
 const MAX_EXAMINED_CHANGES = 40;
+// Usable changes returned to the client. The prompt states this limit so the
+// model orders its list by value; selection keeps its order, not the kind order.
+const RESULT_CHANGE_LIMIT = 12;
 const JOB_TERM_STOP_WORDS = new Set([
   "and", "are", "for", "from", "have", "role", "that", "the", "this", "with", "you", "your"
 ]);
@@ -233,6 +236,7 @@ ${fenceUntrusted(JSON.stringify(jobTerminology(jobText).terms.map(({ keyword, ca
 - Every change must change what a screener learns or how quickly they find it: surface buried job-relevant evidence, rewrite filler or a feature tour into the one claim that matters, or use the posting's term when it names exactly what the same entry shows. Omit churn: tense-only changes, synonym swaps (Cut to Reduced, Moved to Migrated), and rephrasing a bullet that is already specific and relevant. Leave strong bullets unchanged; NO_CHANGES is correct when nothing material remains.
 - Keep the candidate's accurate verbs, and keep any number you retain with the noun it counts, exactly as written. Never compute a new total, such as years of experience from dates.
 - Omit weak, cosmetic, unchanged, or unsupported edits. Do not explain evidence metadata.
+- At most ${RESULT_CHANGE_LIMIT} changes are kept, in the order you list them. Put the changes that matter most for this job first; do not pad the list.
 ${removableBullets ? `- To cut a project or experience bullet, return its targetId with "action": "remove" and a reason instead of a replacement. Remove only a bullet clearly irrelevant to this job or redundant with a stronger bullet, never the only evidence of a job requirement, and never every bullet of an entry. A bullet is rewritten or removed, not both.
 ` : ""}${orderTargets ? `- A bullet-order target lists its entry's bullet targetIds in current order. To lead with the most job-relevant evidence, return its targetId with "order": the same targetIds in the new order, and a reason. Never reorder for cosmetic reasons. An entry gets removals or one reorder, never both: if you remove any bullet from an entry, omit that entry's bullet-order target.
 ` : ""}
@@ -517,16 +521,11 @@ export function sanitizeResumeProposal(
     : {};
   const targetMap = new Map(targets.map((target) => [target.targetId, target]));
   const rawChanges = Array.isArray(source.changes) ? source.changes : [];
-  const counts: DropCounts = { UNSUPPORTED: 0, INVALID_TARGET: 0, UNCHANGED: 0, MALFORMED: 0 };
-  if (!Array.isArray(source.changes)) counts.MALFORMED += 1;
+  const baseCounts: DropCounts = { UNSUPPORTED: 0, INVALID_TARGET: 0, UNCHANGED: 0, MALFORMED: 0 };
+  if (!Array.isArray(source.changes)) baseCounts.MALFORMED += 1;
   if (rawChanges.length > MAX_EXAMINED_CHANGES) {
-    counts.MALFORMED += rawChanges.length - MAX_EXAMINED_CHANGES;
+    baseCounts.MALFORMED += rawChanges.length - MAX_EXAMINED_CHANGES;
   }
-  const seenTargets = new Set<string>();
-  // Bullet texts already accepted per entry in this response, so a second
-  // bullet change with the same text is a no-op rather than a duplicate line.
-  const proposedTexts = new Map<string, Set<string>>();
-  const changes: ResumePolishWireChange[] = [];
   const postingTerms = jobTerminology(jobText).terms;
   const evidence = { jobText, scopeText, candidateContext, rowLabels: new Set(targets.filter((target) => target.kind === "skill-list").map(skillRowLabel).filter(Boolean)) };
 
@@ -546,137 +545,161 @@ export function sanitizeResumeProposal(
     const key = `${target.target.sectionId}\u0000${target.target.entryId}`;
     entryBulletCounts.set(key, (entryBulletCounts.get(key) ?? 0) + 1);
   }
-  const removalsByEntry = new Map<string, number>();
-  // A rewrite of a bullet blocks its removal even when the rewrite is dropped.
-  const rewriteAttempts = new Set<string>();
-  for (const rawChange of [...examined].sort((left, right) => examineRank(left) - examineRank(right))) {
-    if (!rawChange || typeof rawChange !== "object" || Array.isArray(rawChange)) {
-      increment(counts, "MALFORMED");
-      continue;
-    }
-    const change = rawChange as Record<string, unknown>;
-    const targetId = text(change.targetId, 40);
-    const target = targetMap.get(targetId);
-    // A new-bullet slot is positional, so the model must name the entry it means;
-    // a spilled "third add" otherwise lands in the next entry's slot.
-    if (!target || (target.kind === "new-bullet" && text(change.entryId, 120) !== target.target.entryId)) {
-      increment(counts, "INVALID_TARGET");
-      continue;
-    }
-    if (seenTargets.has(targetId)) {
-      increment(counts, "MALFORMED");
-      continue;
-    }
-    // Exactly one operation per change; an ambiguous one is never read destructively.
-    if ([change.replacement, change.action, change.order].filter((value) => value !== undefined).length !== 1) {
-      increment(counts, "MALFORMED");
-      continue;
-    }
-    const entryKey = `${target.target.sectionId}\u0000${target.target.entryId}`;
-    const reason = text(change.reason, 240);
-    if (change.action !== undefined) {
-      const removals = removalsByEntry.get(entryKey) ?? 0;
-      if (change.action !== "remove" || rewriteAttempts.has(targetId)) {
+  // One examination of the first `limit` changes. The cap below re-runs it over
+  // a shorter prefix, so a change the cap cuts can never have won a conflict
+  // against one the model listed earlier.
+  const runPass = (limit: number) => {
+    const counts: DropCounts = { ...baseCounts };
+    const seenTargets = new Set<string>();
+    // Bullet texts already accepted per entry in this response, so a second
+    // bullet change with the same text is a no-op rather than a duplicate line.
+    const proposedTexts = new Map<string, Set<string>>();
+    const accepted: { index: number; rank: number; change: ResumePolishWireChange }[] = [];
+    const removalsByEntry = new Map<string, number>();
+    // A rewrite of a bullet blocks its removal even when the rewrite is dropped.
+    const rewriteAttempts = new Set<string>();
+    for (const [index, rawChange] of [...examined.slice(0, limit).entries()].sort((left, right) => examineRank(left[1]) - examineRank(right[1]))) {
+      const rank = examineRank(rawChange);
+      if (!rawChange || typeof rawChange !== "object" || Array.isArray(rawChange)) {
         increment(counts, "MALFORMED");
         continue;
       }
-      if (target.kind !== "bullet" || target.sectionType !== "standard" || removals + 1 >= (entryBulletCounts.get(entryKey) ?? 0)) {
+      const change = rawChange as Record<string, unknown>;
+      const targetId = text(change.targetId, 40);
+      const target = targetMap.get(targetId);
+      // A new-bullet slot is positional, so the model must name the entry it means;
+      // a spilled "third add" otherwise lands in the next entry's slot.
+      if (!target || (target.kind === "new-bullet" && text(change.entryId, 120) !== target.target.entryId)) {
         increment(counts, "INVALID_TARGET");
         continue;
       }
-      seenTargets.add(targetId);
-      removalsByEntry.set(entryKey, removals + 1);
-      const { sectionId, entryId, bulletId } = target.target;
-      changes.push({ targetId, target: { sectionId, entryId, ...(bulletId ? { bulletId } : {}) }, action: "remove", ...(reason ? { reason } : {}) });
-      if (changes.length === 12) break;
-      continue;
-    }
-    if (target.kind === "bullet-order") {
-      const expected = target.bulletTargetIds ?? [];
-      const order = Array.isArray(change.order) ? change.order.map((id) => text(id, 40)) : [];
+      if (seenTargets.has(targetId)) {
+        increment(counts, "MALFORMED");
+        continue;
+      }
+      // Exactly one operation per change; an ambiguous one is never read destructively.
+      if ([change.replacement, change.action, change.order].filter((value) => value !== undefined).length !== 1) {
+        increment(counts, "MALFORMED");
+        continue;
+      }
+      const entryKey = `${target.target.sectionId}\u0000${target.target.entryId}`;
+      const reason = text(change.reason, 240);
+      if (change.action !== undefined) {
+        const removals = removalsByEntry.get(entryKey) ?? 0;
+        if (change.action !== "remove" || rewriteAttempts.has(targetId)) {
+          increment(counts, "MALFORMED");
+          continue;
+        }
+        if (target.kind !== "bullet" || target.sectionType !== "standard" || removals + 1 >= (entryBulletCounts.get(entryKey) ?? 0)) {
+          increment(counts, "INVALID_TARGET");
+          continue;
+        }
+        seenTargets.add(targetId);
+        removalsByEntry.set(entryKey, removals + 1);
+        const { sectionId, entryId, bulletId } = target.target;
+        accepted.push({ index, rank, change: { targetId, target: { sectionId, entryId, ...(bulletId ? { bulletId } : {}) }, action: "remove", ...(reason ? { reason } : {}) } });
+        continue;
+      }
+      if (target.kind === "bullet-order") {
+        const expected = target.bulletTargetIds ?? [];
+        const order = Array.isArray(change.order) ? change.order.map((id) => text(id, 40)) : [];
+        if (
+          order.length !== expected.length
+          || new Set(order).size !== order.length
+          || !order.every((id) => expected.includes(id))
+          || removalsByEntry.has(entryKey)
+        ) {
+          increment(counts, "MALFORMED");
+          continue;
+        }
+        if (order.every((id, index) => id === expected[index])) {
+          increment(counts, "UNCHANGED");
+          continue;
+        }
+        seenTargets.add(targetId);
+        const { sectionId, entryId } = target.target;
+        accepted.push({ index, rank, change: { targetId, target: { sectionId, entryId }, order, ...(reason ? { reason } : {}) } });
+        continue;
+      }
+      if (change.order !== undefined) {
+        increment(counts, "MALFORMED");
+        continue;
+      }
+      rewriteAttempts.add(targetId);
+      const replacementRaw = change.replacement;
+      const normalized = text(replacementRaw, 1400);
+      // A replacement carrying only inline marks ("<b></b>") passes the markup
+      // gate and would blank the field, so it is malformed for every target kind.
       if (
-        order.length !== expected.length
-        || new Set(order).size !== order.length
-        || !order.every((id) => expected.includes(id))
-        || removalsByEntry.has(entryKey)
+        !normalized
+        || !stripInlineMarks(normalized)
+        || String(replacementRaw ?? "").length > 1400
+        || containsStructuredMarkup(replacementRaw)
+        || templateHasUnresolvedSlots(normalized)
       ) {
         increment(counts, "MALFORMED");
         continue;
       }
-      if (order.every((id, index) => id === expected[index])) {
+      // Comparing both sides unbolded keeps a bold-only delta UNCHANGED, so turning
+      // the preference off never proposes a formatting-only edit.
+      const plainBullet = !boldBulletKeywords && target.kind !== "skill-list";
+      const replacement = plainBullet ? stripBoldMarks(normalized) : normalized;
+      if (replacement === (plainBullet ? stripBoldMarks(target.currentText) : target.currentText)) {
         increment(counts, "UNCHANGED");
         continue;
       }
+      if (target.kind === "skill-list"
+        ? isImmaterialSkillOrder(replacement, target.currentText, jobText, postingTerms)
+        : target.kind === "bullet" && isImmaterialRewrite(replacement, plainBullet ? stripBoldMarks(target.currentText) : target.currentText)) {
+        seenTargets.add(targetId);
+        increment(counts, "UNCHANGED");
+        continue;
+      }
+      const entryTexts = proposedTexts.get(entryKey) ?? new Set<string>();
+      if (target.kind !== "skill-list" && (
+        entryTexts.has(plainText(replacement))
+        || (target.kind === "new-bullet" && target.entryText.split("\n").some((line) => plainText(line) === plainText(replacement)))
+      )) {
+        increment(counts, "UNCHANGED");
+        continue;
+      }
+      const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? entryGrounding(target) : `${scopeText}\n${candidateContext}`, postingTerms);
+      const issues = replacementIssues(replacement, target, evidence);
+      if (issues.length) warnings.push(`Not supported by provided evidence. ${issues.join("; ").replace(/[.!?]+$/, "")}.`);
+      const usesProfile = Boolean(target.profileText) && (
+        target.kind === "new-bullet"
+        || change.evidence === "profile"
+        || (!issues.length && replacementIssues(replacement, target, evidence, false).length > 0)
+      );
       seenTargets.add(targetId);
-      const { sectionId, entryId } = target.target;
-      changes.push({ targetId, target: { sectionId, entryId }, order, ...(reason ? { reason } : {}) });
-      if (changes.length === 12) break;
-      continue;
+      entryTexts.add(plainText(replacement));
+      proposedTexts.set(entryKey, entryTexts);
+      const { sectionId, entryId, bulletId } = target.target;
+      accepted.push({ index, rank, change: {
+        targetId,
+        target: { sectionId, entryId, ...(bulletId ? { bulletId } : {}) },
+        replacement,
+        ...(usesProfile ? { evidence: "profile" as const } : {}),
+        ...(warnings.length ? { warnings } : {}),
+        ...(reason ? { reason } : {})
+      } });
     }
-    if (change.order !== undefined) {
-      increment(counts, "MALFORMED");
-      continue;
-    }
-    rewriteAttempts.add(targetId);
-    const replacementRaw = change.replacement;
-    const normalized = text(replacementRaw, 1400);
-    // A replacement carrying only inline marks ("<b></b>") passes the markup
-    // gate and would blank the field, so it is malformed for every target kind.
-    if (
-      !normalized
-      || !stripInlineMarks(normalized)
-      || String(replacementRaw ?? "").length > 1400
-      || containsStructuredMarkup(replacementRaw)
-      || templateHasUnresolvedSlots(normalized)
-    ) {
-      increment(counts, "MALFORMED");
-      continue;
-    }
-    // Comparing both sides unbolded keeps a bold-only delta UNCHANGED, so turning
-    // the preference off never proposes a formatting-only edit.
-    const plainBullet = !boldBulletKeywords && target.kind !== "skill-list";
-    const replacement = plainBullet ? stripBoldMarks(normalized) : normalized;
-    if (replacement === (plainBullet ? stripBoldMarks(target.currentText) : target.currentText)) {
-      increment(counts, "UNCHANGED");
-      continue;
-    }
-    if (target.kind === "skill-list"
-      ? isImmaterialSkillOrder(replacement, target.currentText, jobText, postingTerms)
-      : target.kind === "bullet" && isImmaterialRewrite(replacement, plainBullet ? stripBoldMarks(target.currentText) : target.currentText)) {
-      seenTargets.add(targetId);
-      increment(counts, "UNCHANGED");
-      continue;
-    }
-    const entryTexts = proposedTexts.get(entryKey) ?? new Set<string>();
-    if (target.kind !== "skill-list" && (
-      entryTexts.has(plainText(replacement))
-      || (target.kind === "new-bullet" && target.entryText.split("\n").some((line) => plainText(line) === plainText(replacement)))
-    )) {
-      increment(counts, "UNCHANGED");
-      continue;
-    }
-    const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? entryGrounding(target) : `${scopeText}\n${candidateContext}`, postingTerms);
-    const issues = replacementIssues(replacement, target, evidence);
-    if (issues.length) warnings.push(`Not supported by provided evidence. ${issues.join("; ").replace(/[.!?]+$/, "")}.`);
-    const usesProfile = Boolean(target.profileText) && (
-      target.kind === "new-bullet"
-      || change.evidence === "profile"
-      || (!issues.length && replacementIssues(replacement, target, evidence, false).length > 0)
-    );
-    seenTargets.add(targetId);
-    entryTexts.add(plainText(replacement));
-    proposedTexts.set(entryKey, entryTexts);
-    const { sectionId, entryId, bulletId } = target.target;
-    changes.push({
-      targetId,
-      target: { sectionId, entryId, ...(bulletId ? { bulletId } : {}) },
-      replacement,
-      ...(usesProfile ? { evidence: "profile" as const } : {}),
-      ...(warnings.length ? { warnings } : {}),
-      ...(reason ? { reason } : {})
-    });
-    if (changes.length === 12) break;
+    return { counts, accepted: accepted.sort((left, right) => left.index - right.index) };
+  };
+  // The cap keeps the first usable changes in the model's own order, so a
+  // Profile addition it listed first survives twelve lower-value rewrites. When
+  // more than the limit are usable, the prefix up to the last kept change is
+  // examined again without the cut tail, until the kept set is stable.
+  let limit = examined.length;
+  let pass = runPass(limit);
+  while (pass.accepted.length > RESULT_CHANGE_LIMIT) {
+    limit = pass.accepted[RESULT_CHANGE_LIMIT - 1].index + 1;
+    pass = runPass(limit);
   }
+  const { counts, accepted } = pass;
+  const omittedByCap = examined.length - limit;
+  // The kept set is emitted in the kind order the client and its probes expect.
+  const changes = [...accepted].sort((left, right) => left.rank - right.rank || left.index - right.index).map((item) => item.change);
 
   const withheldReasons = (Object.entries(counts) as Array<[ResumePolishWithheldReason, number]>)
     .filter(([, count]) => count > 0)
@@ -703,7 +726,7 @@ export function sanitizeResumeProposal(
 
   const summary = optionalList(source.summary, 260);
   const warnings: string[] = [];
-  if (rawChanges.length > 12) warnings.push("Only the first 12 usable edits are shown; additional edits may be omitted.");
+  if (omittedByCap > 0) warnings.push(`Only the first ${RESULT_CHANGE_LIMIT} usable edits are shown; additional edits may be omitted.`);
 
   return {
     status,

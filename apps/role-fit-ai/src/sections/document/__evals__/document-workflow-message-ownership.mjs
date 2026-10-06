@@ -177,6 +177,7 @@ const bundled = await esbuild.build({
               coverLetterText: "A grounded proposed cover letter with enough content for review.",
               repaired: false,
               warnings: [],
+              concerns: [],
               bodyParagraphs: [{ text: "A grounded paragraph.", evidenceIds: ["source_letter"] }],
               evidenceUsed: []
             }

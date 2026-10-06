@@ -102,7 +102,10 @@ export function parseCoverLetterEvidenceItems(value: unknown): CoverLetterEviden
 
 export type CoverLetterTailorOutput = {
   bodyParagraphs: CoverLetterBodyParagraph[];
+  // Deterministic style notes about this draft.
   warnings: string[];
+  // The model's own "check before sending" notes, bounded and labelled.
+  modelNotes: string[];
 };
 
 export type CoverLetterTailorValidation = {
@@ -248,6 +251,7 @@ export function validateCoverLetterTailorOutput({
         claim: paragraphText,
         detail: "This paragraph cites a private-detail slot you did not answer (a referral or personal fact); check it for an invented detail.",
         recovery: "edit_source",
+        concern: true,
         repairMessage: "A paragraph cited a private-detail slot the candidate never answered.",
         paragraphIndex
       });
@@ -358,6 +362,7 @@ export function validateCoverLetterTailorOutput({
   const styleWarnings = GENERIC_DRAFT_LANGUAGE.test(bodyText)
     ? ["Consider replacing generic phrasing with a specific, supported connection."]
     : [];
+  const modelNotes = modelWarningNotes(parsed.warnings);
 
   const coverLetterText = assembleCoverLetterText(bodyParagraphs, resolved);
   if (hasUnresolvedCoverLetterTokens(coverLetterText)) {
@@ -396,11 +401,34 @@ export function validateCoverLetterTailorOutput({
   return {
     output: {
       bodyParagraphs,
-      warnings: styleWarnings
+      warnings: styleWarnings,
+      modelNotes
     },
     coverLetterText,
     issues
   };
+}
+
+// The prompt asks the model for anything the candidate should check before
+// sending. Those notes are the model's own observations, so they are shown as
+// such, never fed back into a later prompt, and malformed metadata is ignored
+// rather than failing a usable letter.
+const MODEL_NOTE_LIMIT = 3;
+const MODEL_NOTE_CHARS = 300;
+export const MODEL_NOTE_PREFIX = "Model note: ";
+
+export function modelWarningNotes(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const notes: string[] = [];
+  for (const item of value) {
+    const note = typeof item === "string" ? item.replace(/[\u0000-\u001f\u007f]+/g, " ").replace(/\s+/g, " ").trim() : "";
+    if (!note || /<\/?[a-z][^>]*>/i.test(note)) continue;
+    const text = `${MODEL_NOTE_PREFIX}${note.slice(0, MODEL_NOTE_CHARS)}`;
+    if (notes.includes(text)) continue;
+    notes.push(text);
+    if (notes.length === MODEL_NOTE_LIMIT) break;
+  }
+  return notes;
 }
 
 // Advisory notes attached to a valid proposal returned to the client.

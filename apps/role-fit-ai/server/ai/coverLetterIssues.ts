@@ -17,7 +17,18 @@ export type CoverLetterValidationIssue = {
   unsupportedValue?: string;
   paragraphIndex?: number;
   sentenceIndex?: number;
+  // Set on a non-evidence issue that is still about the facts in the wording
+  // (a cited unanswered private slot), so it outlives acceptance.
+  concern?: boolean;
 };
+
+// Citation bookkeeping describes how one draft cited its sources, not a claim
+// the candidate made, so it is recomputed per draft rather than carried.
+const CITATION_CODES = new Set<CoverLetterIssueCode>(["unknown_evidence_reference", "missing_evidence_reference"]);
+
+export function isCoverLetterConcern(issue: CoverLetterValidationIssue): boolean {
+  return issue.concern === true || (issue.category === "evidence" && !CITATION_CODES.has(issue.code));
+}
 
 const BLOCKED_MESSAGE =
   "The provider did not return a technically usable letter. Your current letter was kept.";
