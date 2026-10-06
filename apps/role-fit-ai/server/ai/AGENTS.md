@@ -33,6 +33,12 @@ application retain blocking technical guards.
   and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
   are ranked by materiality and job relevance into complete JSON; the response
   is validated only against that selected set and reports the omitted count.
+  The 12-change result cap is stated in the prompt and applied as a fixpoint:
+  the kind order (rewrites, removals, reorders, additions) exists only to settle
+  conflicts and to order the emitted set; the kept set is the first 12 usable
+  changes in the model's order, and the prefix is re-examined without the cut
+  tail until stable so a cut change never knocks out an earlier one. Do not let
+  the kind order rank value.
 - `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
 - `jobAnalysis.ts`, `fitAssessment.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
@@ -67,6 +73,19 @@ application retain blocking technical guards.
   user-safe issues and leaves the editor unchanged. Never expose internal repair
   instructions or treat source-id location as factual verification. Acceptance
   remains a client-side boundary, not another server stage.
+- Cover-letter findings have two lifetimes, decided by `isCoverLetterConcern`.
+  `concerns` are claim findings about the wording (evidence-category issues
+  other than citation bookkeeping, plus a cited unanswered private slot); the
+  client carries them past acceptance. `warnings` describe one draft
+  (structure, quality, unknown or missing citations, leftover template tokens,
+  phrasing, length, model notes) and are recomputed each run. The model's
+  optional `warnings` field is read as at most three sanitized, deduplicated
+  notes prefixed `Model note:`, placed last so the list cap trims them first;
+  malformed metadata is ignored, never an issue, and a note is display-only: it
+  never becomes a concern, is stripped from the repair prompt's rejected
+  output, and never re-enters a later request.
+  (Offline measure on the 2026-10-05 benchmark letters: Sol wrote ~0.3 notes per
+  letter, mostly eligibility gaps; Claude models 3-4, mostly "did not claim X".)
 - Unfinished Guidance prompts are not evidence. Filter unresolved bracketed
   context in the browser corpus builder and independently at the server request
   boundary. Numeric grounding normalizes equivalent digit and word durations

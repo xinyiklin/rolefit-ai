@@ -1,12 +1,15 @@
 // Live, synthetic-only quality harness for the one-call cover-letter workflow.
-// It never reads a user's workspace or prints generated prose. Full provider
-// responses are written under the gitignored workspace/cover-letter-eval/
-// directory for deliberate manual inspection.
+// It never reads a user's workspace or prints generated prose. Each invocation
+// writes an immutable receipt directory under the gitignored
+// workspace/cover-letter-eval/: a manifest (generator configuration, corpus and
+// source hashes), the fixture snapshot, one receipt per fixture run, and a
+// summary, so two models never overwrite each other's results.
 //
 // Usage:
 //   npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
-//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-5.6-sol npm run eval:live:cover-letter --workspace apps/role-fit-ai
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+//   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.1-sol EVAL_REASONING_EFFORT=medium npm run eval:live:cover-letter --workspace apps/role-fit-ai
+import { createHash } from "node:crypto";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,33 +22,34 @@ import { layoutCoverLetter } from "@typeset/engine/typeset/layout.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { tailorCoverLetter } from "../coverLetter.ts";
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
+import { resolveProviderRequest } from "../providers.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const OUT_DIR = join(APP_ROOT, "workspace/cover-letter-eval");
-const PROVIDER = process.env.EVAL_PROVIDER || "claude-cli";
-const MODEL = process.env.EVAL_MODEL ?? (PROVIDER === "claude-cli" ? "opus" : "");
-const fixtureFilter = process.argv[2] || "all";
-const RUNS = Number(process.argv[3] || 1);
-if (!Number.isInteger(RUNS) || RUNS < 1 || RUNS > 5) {
-  console.error("runs must be an integer from 1 to 5");
-  process.exit(2);
+const FIXTURE_URL = new URL("./fixtures/cover-letter-quality.json", import.meta.url);
+const hash = (text) => createHash("sha256").update(text).digest("hex");
+const publicConfig = ({ provider, model, reasoningEffort }) => ({ provider, model, ...(reasoningEffort ? { reasoningEffort } : {}) });
+const allFixtures = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
+
+export function evalOptions(argv, env) {
+  const fixtureFilter = argv[0] || "all";
+  const runs = Number(argv[1] || 1);
+  if (argv.length > 2 || !Number.isInteger(runs) || runs < 1 || runs > 5) throw new Error("runs must be an integer from 1 to 5");
+  const fixtures = fixtureFilter === "all" ? allFixtures : allFixtures.filter((fixture) => fixture.id === fixtureFilter);
+  if (fixtures.length === 0) throw new Error(`Unknown fixture "${fixtureFilter}".`);
+  const provider = env.EVAL_PROVIDER || "claude-cli";
+  return {
+    runs, fixtures,
+    config: {
+      provider,
+      model: env.EVAL_MODEL ?? (provider === "claude-cli" ? "opus" : ""),
+      ...(env.EVAL_REASONING_EFFORT ? { reasoningEffort: env.EVAL_REASONING_EFFORT } : {})
+    }
+  };
 }
 
-const allFixtures = JSON.parse(
-  readFileSync(new URL("./fixtures/cover-letter-quality.json", import.meta.url), "utf8")
-);
-const fixtures =
-  fixtureFilter === "all"
-    ? allFixtures
-    : allFixtures.filter((fixture) => fixture.id === fixtureFilter);
-if (fixtures.length === 0) {
-  console.error(`Unknown fixture "${fixtureFilter}".`);
-  process.exit(2);
-}
-mkdirSync(OUT_DIR, { recursive: true });
-
-async function runFixture(fixture, run) {
+async function runFixture(fixture, run, config, stage) {
+  stage.current = "preflight";
   const preflight = buildCoverLetterPreflight({
     text: fixture.sourceText,
     candidateName: "Jordan Lee",
@@ -58,10 +62,10 @@ async function runFixture(fixture, run) {
     return { fixture: fixture.id, run, error: "fixture failed one-click preflight" };
   }
   const stats = {};
+  stage.current = "generation";
   const result = await tailorCoverLetter(
     {
-      provider: PROVIDER,
-      model: MODEL,
+      ...config,
       jobText: fixture.jobText,
       sourceContext: {
         rawTemplateText: fixture.sourceText,
@@ -76,10 +80,12 @@ async function runFixture(fixture, run) {
     },
     stats
   );
+  stage.current = "layout";
   const pageCount = layoutCoverLetter(
     toTypesetSchema(parseCoverLetterText(result.coverLetterText)),
     coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS)
   ).pages.length;
+  stage.current = "grade";
   const report = gradeCoverLetterResult({
     result,
     allEvidence: fixture.evidence,
@@ -87,67 +93,112 @@ async function runFixture(fixture, run) {
     resolved: preflight.resolved,
     onePage: pageCount === 1
   });
-  writeFileSync(
-    join(OUT_DIR, `${fixture.id}-${PROVIDER.replace(/[^a-z0-9-]/gi, "_")}-run-${run}.json`),
-    JSON.stringify({ fixture, result, pageCount, report, labelProvenance: "Repository-authored synthetic cases; human factual/writing-quality review not recorded", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null }, null, 2)
-  );
   return {
-    fixture: fixture.id,
-    run,
-    structuralScore: report.structuralScore,
-    structuralChecksPassed: report.passed,
-    factualAccuracy: null,
-    coverageAccuracy: null,
-    humanReviewed: false,
-    // The whole point of the rework: the model picks these, and drift across
-    // identical runs is worth seeing.
-    evidenceUsed: result.evidenceUsed.map((item) => item.id),
-    repaired: result.repaired === true,
-    providerRequests: stats.attempts ?? 1,
-    failedChecks: Object.entries(report.checks)
-      .filter(([, check]) => !check.passed)
-      .map(([name]) => name),
-    pageCount
+    receipt: { fixture, result, pageCount, report, labelProvenance: "Repository-authored synthetic cases; human factual/writing-quality review not recorded", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null },
+    row: {
+      fixture: fixture.id,
+      run,
+      structuralScore: report.structuralScore,
+      structuralChecksPassed: report.passed,
+      factualAccuracy: null,
+      coverageAccuracy: null,
+      humanReviewed: false,
+      // The whole point of the rework: the model picks these, and drift across
+      // identical runs is worth seeing.
+      evidenceUsed: result.evidenceUsed.map((item) => item.id),
+      warnings: result.warnings.length,
+      concerns: result.concerns.length,
+      repaired: result.repaired === true,
+      providerRequests: stats.attempts ?? 1,
+      failedChecks: Object.entries(report.checks)
+        .filter(([, check]) => !check.passed)
+        .map(([name]) => name),
+      pageCount
+    }
   };
 }
 
-console.log(
-  `Cover-letter quality eval — provider=${PROVIDER} model=${MODEL || "(default)"} fixtures=${fixtures.length} runs=${RUNS}`
-);
-const results = [];
-for (const fixture of fixtures) {
-  for (let run = 1; run <= RUNS; run += 1) {
-    try {
-      results.push(await runFixture(fixture, run));
-    } catch (error) {
-      results.push({
-        fixture: fixture.id,
-        run,
-        error: error instanceof Error ? error.message : "unknown error"
-      });
+export async function main(argv = process.argv.slice(2), env = process.env) {
+  if (argv.length === 1 && argv[0] === "--help") {
+    console.log("Usage: npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator.\nFixtures: " + allFixtures.map((fixture) => fixture.id).join(", "));
+    return 0;
+  }
+  let options;
+  try {
+    options = evalOptions(argv, env);
+    options.config = publicConfig(resolveProviderRequest(options.config));
+  } catch (error) {
+    console.error(error instanceof Error && /runs must|Unknown fixture/.test(error.message) ? error.message : "Invalid eval configuration or unavailable provider. Check --help and the provider settings.");
+    return 2;
+  }
+  const root = join(APP_ROOT, "workspace/cover-letter-eval");
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  const out = mkdtempSync(join(root, new Date().toISOString().replace(/[:.]/g, "-") + "-"));
+  chmodSync(out, 0o700);
+  const save = (name, value) => writeFileSync(join(out, name), JSON.stringify(value, null, 2) + "\n", { mode: 0o600, flag: "wx" });
+  const sourceHashes = Object.fromEntries([
+    "../coverLetter.ts", "../coverLetterContracts.ts", "../coverLetterParagraphEvidence.ts", "../coverLetterGroundingIssues.ts",
+    "../coverLetterIssues.ts", "../coverLetterQuality.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../claimEvidence.ts",
+    "../clients.ts", "../../../shared/contentWarnings.ts", "../../../shared/evidencePolarity.ts", "../../../src/lib/coverLetterTemplate.ts",
+    "../../../src/lib/coverLetterPreflight.ts", "../../../src/lib/coverLetterEvidence.ts", "./cover-letter-quality-eval.mjs"
+  ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));
+  save("manifest.json", {
+    createdAt: new Date().toISOString(), config: options.config, runs: options.runs,
+    fixtures: options.fixtures.map((fixture) => fixture.id), corpusHash: hash(readFileSync(FIXTURE_URL)), sourceHashes,
+    labelProvenance: "Repository-authored synthetic cases; the structural grader measures neither factual support nor writing quality.",
+    humanReviewed: false
+  });
+  save("fixtures.json", options.fixtures);
+  console.log(`Cover-letter quality eval — ${JSON.stringify(options.config)} fixtures=${options.fixtures.length} runs=${options.runs}`);
+  const rows = [];
+  let unrun = 0;
+  outer: for (const fixture of options.fixtures) {
+    for (let run = 1; run <= options.runs; run += 1) {
+      const stage = { current: "preflight" };
+      try {
+        const outcome = await runFixture(fixture, run, options.config, stage);
+        if (outcome.receipt) {
+          stage.current = "receipt";
+          save(`${fixture.id}-run-${run}.json`, outcome.receipt);
+        }
+        rows.push(outcome.row ?? outcome);
+      } catch {
+        // Provider errors can contain response excerpts; record only the stage.
+        rows.push({ fixture: fixture.id, run, error: stage.current });
+        // A provider or usage-limit failure would repeat for every later case.
+        if (stage.current === "generation") {
+          unrun = options.fixtures.length * options.runs - rows.length;
+          break outer;
+        }
+      }
     }
   }
-}
-for (const result of results) console.log(JSON.stringify(result));
+  for (const row of rows) console.log(JSON.stringify(row));
 
-const selectionSpread = new Map();
-for (const result of results) {
-  if (!result.evidenceUsed) continue;
-  const choices = selectionSpread.get(result.fixture) ?? new Set();
-  choices.add([...result.evidenceUsed].sort().join("|"));
-  selectionSpread.set(result.fixture, choices);
+  const selectionSpread = new Map();
+  for (const row of rows) {
+    if (!row.evidenceUsed) continue;
+    const choices = selectionSpread.get(row.fixture) ?? new Set();
+    choices.add([...row.evidenceUsed].sort().join("|"));
+    selectionSpread.set(row.fixture, choices);
+  }
+  for (const [fixture, choices] of selectionSpread) {
+    if (choices.size > 1) console.log(`NOTE: ${fixture} used ${choices.size} different evidence sets across identical runs.`);
+  }
+  const repairs = rows.filter((row) => row.repaired).length;
+  if (repairs > 0) console.log(`NOTE: ${repairs}/${rows.length} runs needed the repair pass.`);
+
+  const failures = rows.filter((row) => row.error || row.structuralChecksPassed !== true);
+  const expected = options.fixtures.length * options.runs;
+  save("summary.json", { expected, completed: rows.length, passed: rows.length - failures.length, unrun, rows });
+  console.log(`Result: ${rows.length - failures.length}/${expected} structural checks passed; ${unrun} unrun; factual accuracy and persuasiveness unmeasured. Receipts: ${out}`);
+  return failures.length || unrun ? 1 : 0;
 }
-for (const [fixture, choices] of selectionSpread) {
-  if (choices.size > 1) {
-    console.log(
-      `NOTE: ${fixture} used ${choices.size} different evidence sets across identical runs.`
-    );
+
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  try { process.exitCode = await main(); }
+  catch {
+    console.error("Could not complete the eval or write its receipts; no success recorded.");
+    process.exitCode = 1;
   }
 }
-
-const repairs = results.filter((result) => result.repaired).length;
-if (repairs > 0) console.log(`NOTE: ${repairs}/${results.length} runs needed the repair pass.`);
-
-const failures = results.filter((result) => result.error || result.structuralChecksPassed !== true);
-console.log(`Result: ${results.length - failures.length}/${results.length} structural checks passed; factual accuracy and persuasiveness unmeasured.`);
-process.exit(failures.length ? 1 : 0);

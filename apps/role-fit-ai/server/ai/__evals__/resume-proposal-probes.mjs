@@ -620,7 +620,105 @@ const filledWindow = sanitizeResumeProposal(
 );
 assert.equal(filledWindow.status, "NO_CHANGES", "a fully examined all-echo response is no changes");
 assert.equal(filledWindow.withheld.count, 0, "echoes are never counted as withheld");
-assert.ok(filledWindow.warnings?.includes("Only the first 12 usable edits are shown; additional edits may be omitted."), "response-limit warnings remain separate from editorial summary feedback");
+assert.equal(filledWindow.warnings, undefined, "an all-echo response omits no usable edit, so no limit warning");
+
+// ----- Result cap keeps the model's order -----
+// Conflicts are settled over the whole examined window, then the first 12 usable
+// changes in the model's own order survive: a Profile addition listed first is
+// kept ahead of twelve lower-value rewrites, and the prompt says so.
+const capScope = {
+  version: 1,
+  locked: { omittedIdentity: true, omittedContact: true, omittedSections: [] },
+  sections: [{
+    id: "exp", heading: "Experience", type: "standard",
+    entries: [{
+      id: "role-cap", titleLeft: "Software Developer", titleRight: "Acme", subtitleLeft: "", subtitleRight: "2024-present",
+      bullets: Array.from({ length: 13 }, (_, i) => ({ id: `cap-b${i + 1}`, text: `Maintained internal tool number ${i + 1} for operations teams.` }))
+    }]
+  }],
+  contextSections: []
+};
+const capProfile = "## Software Developer (professional, 2024–present)\nAt Acme, I built the SQL reporting pipeline the finance team uses for month-end close.";
+const capTargets = flattenResumeTargets(capScope, capProfile);
+const capAdd = capTargets.find((target) => target.kind === "new-bullet");
+const capBullets = capTargets.filter((target) => target.kind === "bullet");
+assert.ok(capAdd && capBullets.length === 13);
+const capScopeText = capBullets.map((target) => target.currentText).join("\n");
+const capJob = "Software Developer required to build SQL reporting pipelines and internal tools.";
+assert.match(
+  buildResumeProposalPrompts({ jobText: capJob, targets: capTargets, scopeText: capScopeText, candidateContext: capProfile, customInstructions: "" }).userPrompt,
+  /At most 12 changes are kept, in the order you list them/,
+  "the prompt states the result limit and asks for value order"
+);
+const capped = sanitizeResumeProposal(
+  {
+    status: "PROPOSAL",
+    changes: [
+      { targetId: capAdd.targetId, entryId: "role-cap", replacement: "Built the SQL reporting pipeline the finance team uses for month-end close.", evidence: "profile" },
+      ...capBullets.map((target, i) => ({ targetId: target.targetId, replacement: `Maintained internal tool number ${i + 1} for operations and finance teams.` }))
+    ]
+  },
+  capTargets,
+  capJob,
+  capScopeText,
+  capProfile
+);
+assert.equal(capped.status, "PROPOSAL");
+assert.equal(capped.changes.length, 12, "the result keeps twelve usable changes");
+assert.deepEqual(
+  capped.changes.map((change) => change.targetId),
+  [...capBullets.slice(0, 11).map((target) => target.targetId), capAdd.targetId],
+  "the addition the model listed first survives and the last two rewrites are omitted; the kept set is still emitted rewrites-first"
+);
+assert.equal(capped.withheld.count, 0, "edits cut by the cap are omitted, not withheld");
+assert.deepEqual(capped.warnings, ["Only the first 12 usable edits are shown; additional edits may be omitted."]);
+const addLast = sanitizeResumeProposal(
+  {
+    status: "PROPOSAL",
+    changes: [
+      ...capBullets.map((target, i) => ({ targetId: target.targetId, replacement: `Maintained internal tool number ${i + 1} for operations and finance teams.` })),
+      { targetId: capAdd.targetId, entryId: "role-cap", replacement: "Built the SQL reporting pipeline the finance team uses for month-end close.", evidence: "profile" }
+    ]
+  },
+  capTargets, capJob, capScopeText, capProfile
+);
+assert.equal(addLast.changes.some((change) => change.targetId === capAdd.targetId), false, "an addition the model listed last is the one omitted");
+// A change the cap cuts can never win a conflict against one listed earlier:
+// the prefix is re-examined without the cut tail. Twelve filler rewrites of
+// other bullets sit between the two sides of each conflict.
+const capFillers = capBullets.slice(1, 13).map((target, i) => ({ targetId: target.targetId, replacement: `Maintained internal tool number ${i + 2} for operations and finance teams.` }));
+const removeThenRewrite = sanitizeResumeProposal(
+  { status: "PROPOSAL", changes: [
+    { targetId: capBullets[0].targetId, action: "remove", reason: "irrelevant" },
+    ...capFillers,
+    { targetId: capBullets[0].targetId, replacement: "Maintained internal tool number 1 for operations and finance teams." }
+  ] },
+  capTargets, capJob, capScopeText, capProfile
+);
+assert.equal(removeThenRewrite.changes.length, 12);
+assert.ok(removeThenRewrite.changes.some((change) => change.action === "remove" && change.targetId === capBullets[0].targetId), "the removal listed first survives once the later rewrite of the same bullet is cut");
+assert.equal(removeThenRewrite.withheld.count, 0, "the cut rewrite is omitted, not counted against the removal");
+const addThenSameText = sanitizeResumeProposal(
+  { status: "PROPOSAL", changes: [
+    { targetId: capAdd.targetId, entryId: "role-cap", replacement: "Built the SQL reporting pipeline the finance team uses for month-end close.", evidence: "profile" },
+    ...capFillers,
+    { targetId: capBullets[0].targetId, replacement: "Built the SQL reporting pipeline the finance team uses for month-end close." }
+  ] },
+  capTargets, capJob, capScopeText, capProfile
+);
+assert.ok(addThenSameText.changes.some((change) => change.targetId === capAdd.targetId), "the addition listed first survives once the later same-text rewrite is cut");
+assert.equal(addThenSameText.withheld.reasons.includes("UNCHANGED"), false, "the cut rewrite no longer makes the earlier addition a no-op");
+// Within the kept prefix the conflict rules are unchanged.
+const conflictInPrefix = sanitizeResumeProposal(
+  { status: "PROPOSAL", changes: [
+    { targetId: capBullets[0].targetId, action: "remove", reason: "irrelevant" },
+    { targetId: capBullets[0].targetId, replacement: "Maintained internal tool number 1 for operations and finance teams." }
+  ] },
+  capTargets, capJob, capScopeText, capProfile
+);
+assert.equal(conflictInPrefix.changes.length, 1, "a bullet is rewritten or removed, never both");
+assert.equal(conflictInPrefix.changes[0].replacement !== undefined, true, "the rewrite wins and the removal is malformed");
+assert.deepEqual(conflictInPrefix.withheld.reasons, ["MALFORMED"]);
 
 // The model's own explicit withhold outranks the echo carve-out, and an
 // unrecognized or missing status fails closed rather than settling as success.

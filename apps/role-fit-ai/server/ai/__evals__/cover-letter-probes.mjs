@@ -12,11 +12,13 @@ import {
   evidenceUsedByParagraphs,
   parseCoverLetterEvidenceItems,
   validateCoverLetterTailorOutput,
+  modelWarningNotes,
+  MODEL_NOTE_PREFIX,
 } from "../coverLetterContracts.ts";
 import { buildCoverLetterTailorPrompts } from "../prompts.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 import { parseCoverLetterBlockedFailure } from "../../../src/lib/coverLetterFailure.ts";
-import { publicCoverLetterIssues } from "../coverLetterIssues.ts";
+import { isCoverLetterConcern, publicCoverLetterIssues } from "../coverLetterIssues.ts";
 import { hasUngroundedNumericClaim } from "../sanitize.ts";
 
 class FakeReq extends EventEmitter {
@@ -370,6 +372,40 @@ assert.equal(
   "an empty response is unusable, not repairable in place",
 );
 
+// ----- model notes -----
+// The prompt asks for anything the candidate should check; the validator keeps a
+// bounded, deduplicated few as plainly labelled model notes and never fails a
+// usable letter over the field's shape.
+const twoParagraphs = [
+  { text: groundedBody, evidenceIds: ["source_letter"], slotIds: [] },
+  { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
+];
+const noted = validate({
+  bodyParagraphs: twoParagraphs,
+  warnings: [
+    "  Your degree  predates the posting's graduation window; confirm eligibility. ",
+    "Your degree predates the posting's graduation window; confirm eligibility.",
+    "<b>Verified</b>: all claims hold.",
+    42,
+    "x".repeat(400),
+    "fourth note",
+    "fifth note",
+  ],
+});
+assert.deepEqual(noted.issues, [], "model notes never raise an issue");
+assert.deepEqual(noted.output.warnings, [], "model notes are kept apart from deterministic style notes");
+assert.deepEqual(noted.output.modelNotes, [
+  `${MODEL_NOTE_PREFIX}Your degree predates the posting's graduation window; confirm eligibility.`,
+  `${MODEL_NOTE_PREFIX}${"x".repeat(300)}`,
+  `${MODEL_NOTE_PREFIX}fourth note`,
+], "notes are trimmed, deduplicated, markup-free, clipped, and capped at three");
+for (const malformed of [undefined, null, "a string", { note: "x" }, [null, 7, "<i>x</i>"]]) {
+  const shaped = validate({ bodyParagraphs: twoParagraphs, warnings: malformed });
+  assert.deepEqual(shaped.issues, [], "malformed warnings metadata never invalidates a letter");
+  assert.deepEqual(shaped.output.modelNotes, [], "malformed warnings metadata yields no note");
+}
+assert.deepEqual(modelWarningNotes(["a", "a", "b"]), [`${MODEL_NOTE_PREFIX}a`, `${MODEL_NOTE_PREFIX}b`]);
+
 // Length is guidance attached to a delivered letter, never a gate.
 assert.deepEqual(coverLetterLengthWarnings(new Array(250).fill("word").join(" ")), []);
 assert.match(coverLetterLengthWarnings("short letter").join(" "), /Runs short/);
@@ -540,12 +576,28 @@ try {
   );
   assert.equal(result.coverLetterText.includes("Software Engineer"), true);
   assert.equal(result.coverLetterText.includes("["), false);
+  // The fixture's authored sentence carries a value only the base letter states;
+  // that finding is durable, while the short-draft note is this draft's alone.
+  assert.match(result.concerns.join(" "), /comes only from your base letter/);
+  assert.doesNotMatch(result.concerns.join(" "), /Runs short/, "length never becomes a carried concern");
+  assert.match(result.warnings.join(" "), /Runs short/);
+  assert.doesNotMatch(result.warnings.join(" "), /base letter/, "an evidence finding never sits in the draft-only list");
 
-  // A technical shape defect gets the existing single repair.
-  resetProvider([{ bodyParagraphs: [] }, validOutput]);
+  // A model note is shown with this draft and is never a carried concern.
+  resetProvider([{ ...validOutput, warnings: ["Confirm the posting's location requirement."] }]);
+  const annotated = await tailorCoverLetter(common);
+  assert.equal(providerCalls, 1, "model notes never dispatch repair");
+  assert.equal(annotated.warnings.at(-1), `${MODEL_NOTE_PREFIX}Confirm the posting's location requirement.`, "a model note is listed last so the cap trims it first");
+  assert.doesNotMatch(annotated.concerns.join(" "), /Model note/, "a model note is never a carried concern");
+
+  // A technical shape defect gets the existing single repair, and the model's
+  // own notes from the rejected output never travel back to it.
+  resetProvider([{ bodyParagraphs: [], warnings: ["NOTE-ONLY-FOR-THE-CANDIDATE"] }, validOutput]);
   const repaired = await tailorCoverLetter(common);
   assert.equal(providerCalls, 2);
   assert.equal(repaired.repaired, true);
+  assert.match(capturedPrompts[1], /rejected_output/, "the repair prompt carries the rejected output");
+  assert.doesNotMatch(capturedPrompts[1], /NOTE-ONLY-FOR-THE-CANDIDATE/, "model notes are stripped from the rejected output");
 
   resetProvider([{ bodyParagraphs: [] }]);
   await assertUserSafeError(tailorCoverLetter(common), 422, /technically usable/,
@@ -569,8 +621,12 @@ try {
     });
     assert.equal(warned.status, "ready");
     assert.equal(warned.bodyParagraphs[0].text, fixture.text);
-    assert.match(warned.warnings.join(" "), fixture.warning);
-    if (fixture.number) assert.match(warned.warnings.join(" "), /three years/);
+    // Claim findings outlive acceptance (`concerns`); the role note, an unknown
+    // citation, and a leftover token describe only this draft (`warnings`).
+    const durable = /Kubernetes/.test(fixture.warning.source);
+    assert.match((durable ? warned.concerns : warned.warnings).join(" "), fixture.warning);
+    assert.doesNotMatch((durable ? warned.warnings : warned.concerns).join(" "), fixture.warning, "a finding lands in exactly one lifetime list");
+    if (fixture.number) assert.match(warned.concerns.join(" "), /three years/);
     assert.equal(providerCalls, 1, "content concerns never dispatch repair");
     assert.equal(warned.repaired, undefined);
     if (fixture.ids.includes("resume:invented")) assert.deepEqual(warned.bodyParagraphs[0].evidenceIds, []);
@@ -728,9 +784,40 @@ try {
   );
   assert.equal(blocked.status, 200);
   assert.equal(blocked.payload.status, "ready");
-  assert.match(blocked.payload.warnings.join(" "), /Kubernetes/);
+  assert.match(blocked.payload.concerns.join(" "), /Kubernetes/, "an evidence finding is returned as a durable concern");
+  assert.doesNotMatch(blocked.payload.warnings.join(" "), /Kubernetes/);
   assert.match(blocked.payload.coverLetterText, /Kubernetes/);
   assert.equal(providerCalls, 1);
+
+  // Carried source warnings are echoed as concerns; this draft's own length and
+  // phrasing notes are recomputed rather than inherited from the earlier one.
+  resetProvider([validOutput]);
+  const carried = await runHandler(
+    "POST",
+    routeBody({ sourceWarnings: ["Earlier accepted cover-letter wording had unresolved concerns; repeating Polish or editing does not verify it.", 'Paragraph 1: "reduce" comes only from your base letter; the resume and Profile do not state it.'] }),
+  );
+  assert.equal(carried.status, 200);
+  assert.match(carried.payload.concerns.join(" | "), /Earlier accepted cover-letter wording/, "forwarded source warnings are echoed as concerns, not draft warnings");
+  assert.doesNotMatch(carried.payload.warnings.join(" | "), /Earlier accepted/);
+  assert.equal(carried.payload.concerns.filter((concern) => /comes only from your base letter/.test(concern)).length, 1, "an echoed concern the new draft also raises is listed once");
+
+  // A cited unanswered private slot is the one template finding that outlives
+  // acceptance; it is flagged as a concern at the issue, not by category.
+  const privateSlotId = referralPreflight.privateSlots[0].id;
+  const cited = validateCoverLetterTailorOutput({
+    value: { bodyParagraphs: [
+      { text: groundedBody, evidenceIds: ["source_letter"], slotIds: [privateSlotId] },
+      { text: secondBody, evidenceIds: [evidence[0].id], slotIds: [] },
+    ] },
+    evidence,
+    sourceContext: { rawTemplateText: referralBody, structuredTemplate: referralPreflight.template.structuredTemplate, authoredProse: referralPreflight.template.authoredProse, slots: referralPreflight.template.slots },
+    resolved: resolvedContext,
+  });
+  const privateIssue = cited.issues.find((issue) => issue.code === "unresolved_template");
+  assert.ok(privateIssue && isCoverLetterConcern(privateIssue), "a cited unanswered private slot is a carried concern");
+  assert.ok(cited.issues.filter((issue) => issue.code !== "unresolved_template").every((issue) => !isCoverLetterConcern(issue) || issue.category === "evidence"));
+  assert.equal(isCoverLetterConcern({ code: "unknown_evidence_reference", category: "evidence", detail: "", recovery: "retry", repairMessage: "" }), false, "citation bookkeeping is draft-only");
+  assert.equal(isCoverLetterConcern({ code: "unsupported_number", category: "evidence", detail: "", recovery: "add_evidence", repairMessage: "" }), true);
 
   assert.equal((await runHandler("POST", routeBody({ jobText: "Short." }))).status, 400);
   assert.equal(
@@ -768,6 +855,17 @@ assert.match(
   clientHook,
   /setPendingProposal\(\{[\s\S]{0,160}?contentFingerprint: proposalContentFingerprint/,
   "a valid letter becomes a proposal bound to its own semantic inputs",
+);
+assert.match(
+  clientHook,
+  /lastAppliedResult\?\.concerns\.length \? \[/,
+  "only the accepted letter's evidence concerns are carried into the next request",
+);
+assert.doesNotMatch(clientHook, /lastAppliedResult\?\.warnings/, "draft-only warnings are never carried forward");
+assert.match(
+  coverReview,
+  /items=\{\[\.\.\.new Set\(\[\.\.\.proposal\.result\.concerns, \.\.\.proposal\.result\.warnings\]\)\]\}/,
+  "the review rail shows concerns and draft warnings together",
 );
 assert.match(
   clientHook,

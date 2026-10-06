@@ -6,16 +6,33 @@ import { fixtures, evalOptions, evaluateCase, JUDGE, summaryRow } from "./resume
 import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, hasTerm, plain, tenseFlip, validateFactCheck } from "./support/resume-proposal-quality.mjs";
 
 const byName = new Map(fixtures.map((fixture) => [fixture.name, fixture]));
-assert.equal(fixtures.length, 34);
-assert.equal(byName.size, 34);
+assert.equal(fixtures.length, 39);
+assert.equal(byName.size, 39);
 const provenanceCounts = {};
 for (const fixture of fixtures) provenanceCounts[fixture.provenance] = (provenanceCounts[fixture.provenance] ?? 0) + 1;
 assert.deepEqual(provenanceCounts, {
   "Original synthetic tuning case (2026-10-04)": 6,
   "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case": 6,
   "Synthetic supporting-role holdout (2026-10-04); now a regression case": 6,
-  "Synthetic holdout for prompt slimming (2026-10-04b)": 16
+  "Synthetic holdout for prompt slimming (2026-10-04b)": 16,
+  "Synthetic opportunity case (2026-10-06); requires a proposal": 5
 });
+// Opportunity cases exist so an always-NO_CHANGES generator cannot pass the
+// corpus. Each requires a proposal and names the improvement it expects; the
+// opportunity counters stay diagnostic, so any usable change passes the gate.
+const opportunityCases = fixtures.filter((fixture) => fixture.provenance.startsWith("Synthetic opportunity case"));
+assert.equal(opportunityCases.length, 5);
+for (const fixture of opportunityCases) {
+  const { shouldTouch = [], shouldReorder = [], shouldAdd = [], shouldRemove = [] } = fixture.opportunities;
+  assert.equal(fixture.requiresProposal, true, `${fixture.name}: requires a proposal`);
+  assert.ok(shouldTouch.length + shouldReorder.length + shouldAdd.length + shouldRemove.length > 0, `${fixture.name}: names an opportunity`);
+}
+assert.equal(fixtures.filter((fixture) => fixture.requiresProposal).length, 8, "eight cases fail an always-NO_CHANGES generator");
+assert.deepEqual(
+  fixtures.filter((fixture) => fixture.requiresProposal && fixture.opportunities.shouldAdd?.length).map((fixture) => fixture.name),
+  ["profile-fact-missing"],
+  "one required case expects a Profile-backed addition (diagnostic counter, not a gate)"
+);
 const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal"]);
 const TRAP_KEYS = new Set(["jdOnly", "perEntryForbidden", "lowOwnershipBullets", "mustKeepBullets", "numericForbidden", "injectionMarkers"]);
 const OPPORTUNITY_KEYS = new Set(["shouldTouch", "shouldReorder", "fillerBullets", "shouldAdd", "shouldRemove", "expectFewEdits", "adviceFromProfile"]);
@@ -24,7 +41,8 @@ const NEGATIVE_EVIDENCE = new Set([
   "analyst-negative-evidence:bloom:Python",
   "profile-assisted-backfill:profile-assisted-backfill:designed and ran",
   "skills-labels-composite-product:skl-2:Cloud Platforms",
-  "skills-labels-composite-product:skl-3:Developer Tools"
+  "skills-labels-composite-product:skl-3:Developer Tools",
+  "profile-fact-missing:heron:on-call"
 ]);
 // Every label must resolve to a real target, and no trap term may already be true of the text it guards.
 for (const fixture of fixtures) {
@@ -69,7 +87,7 @@ assert.deepEqual(linkedEntries("injection-three-channels"), ["tamarack"]);
 const longScope = fixtureIndex(byName.get("staff-long-leadership-control")).scope;
 const longEntries = longScope.sections.filter((section) => section.type === "standard").flatMap((section) => section.entries);
 assert.ok(longEntries.length >= 6 && longEntries.reduce((count, entry) => count + entry.bullets.length, 0) >= 25);
-assert.equal(evalOptions([], {}).selected.length, 34);
+assert.equal(evalOptions([], {}).selected.length, 39);
 assert.equal(evalOptions(["3"], { EVAL_FIXTURES: "aligned-data,brochure-project" }).selected.length, 2);
 for (const args of [["0"], ["6"], ["1.5"], ["wat"], ["1", "ignored"]]) assert.throws(() => evalOptions(args, {}));
 for (const value of ["unknown", "aligned-data,unknown", "all,aligned-data"]) assert.throws(() => evalOptions([], { EVAL_FIXTURES: value }));
@@ -106,6 +124,9 @@ assert.equal(gradeProposal(productionFixture, productionResult).passed, true, "p
 assert.equal(gradeProposal(byName.get("backend-platform"), proposal([safe])).passed, true);
 assert.equal(gradeProposal(byName.get("aligned-data"), noChanges()).passed, true);
 assert.equal(gradeProposal(byName.get("brochure-project"), noChanges()).passed, false);
+for (const name of ["buried-strength-order", "duplicate-achievement", "profile-fact-missing", "feature-tour-contribution", "only-proof-removal-trap"]) {
+  assert.equal(gradeProposal(byName.get(name), noChanges()).passed, false, `${name}: NO_CHANGES misses the required improvement`);
+}
 assert.ok(types("backend-platform", [change("backend-platform", "harbor-b2", "Built Kubernetes services.")]).includes("jdOnly"));
 assert.ok(types("frontend-attribution", [change("frontend-attribution", "orbit-b1", "Built React forms.")]).includes("attribution"));
 assert.ok(types("analyst-negative-evidence", [change("analyst-negative-evidence", "bloom-b1", "Wrote Python services.")]).includes("attribution"));
@@ -242,7 +263,12 @@ const trapControls = [
   ["nurse-clinical-informatics", "fair-b2", "Moved incident reports from paper forms to a shared Excel workbook.", "ownership"],
   ["backend-platform", "lumen-b1", "Migrated the payouts service from a cron script to Celery workers backed by Redis.", "ownership"],
   ["profile-assisted-backfill", "profile-assisted-backfill-b1", "", "removedKeyEvidence", remove],
-  ["direct-execution-control", "direct-execution-control-b1", "", "removedKeyEvidence", remove]
+  ["direct-execution-control", "direct-execution-control-b1", "", "removedKeyEvidence", remove],
+  ["buried-strength-order", "juniper-b2", "Wrote SQL reports against the Postgres order database and loaded them into Snowflake.", "attribution"],
+  ["duplicate-achievement", "marlow-b1", "", "removedKeyEvidence", remove],
+  ["profile-fact-missing", "heron-b1", "Built internal Django tools and ran the on-call rotation for the research team.", "attribution"],
+  ["feature-tour-contribution", "tallyho-b2", "Built the React Native app, Node.js API, and Postgres schema.", "ownership"],
+  ["only-proof-removal-trap", "oakridge-b2", "", "removedKeyEvidence", remove]
 ];
 for (const [name, id, replacement, type, extra] of trapControls) {
   assert.ok(types(name, [edit(name, id, replacement, extra)]).includes(type), `${name}: ${id} should hit ${type}`);

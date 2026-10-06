@@ -3,6 +3,65 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-06
+
+- [USER+CODE] Polish review follow-ups (task `polish-review-followups-20261006`;
+  the user shared an external review of head d37990fc and said "go with your
+  recommendations", so the brief and plan were written and both approval gates
+  compressed into that acceptance). No schema, route, provider-default, or
+  `.resume`/`.cover` change; the cover prompt text is unchanged.
+  - [CODE] Cover Letter Polish findings now have two lifetimes on the wire:
+    `concerns` (evidence, attribution, and private-slot findings about the
+    wording, plus echoed `sourceWarnings`) and `warnings` (this draft's
+    structure, quality, phrasing, length, and model notes). The review rail
+    shows both; the client carries only `concerns` past acceptance, so a
+    corrected length or phrasing note never recurs. The model's `warnings`
+    field, requested by the prompt since the one-call rewrite but discarded by
+    the validator, is now read as at most three sanitized, deduplicated
+    `Model note:` entries; malformed metadata is ignored and a note never
+    re-enters a prompt. [TOOL] Offline measure over the 2026-10-05 benchmark
+    letters (raw provider output, no new calls): Sol wrote model warnings on
+    10 of 40 letters (~0.3 each, mostly eligibility and requirement gaps the
+    deterministic guard cannot see); Opus and Sonnet wrote 3-4 per letter,
+    mostly "the letter does not claim X" and dropped-source-claim notes, which
+    is why the cap is three and the notes are draft-scoped.
+  - [CODE] Resume Polish examines every change in the 40-item window (kind order
+    still settles rewrite/remove/reorder conflicts) and then keeps the first 12
+    usable changes in the model's own order; the prompt now states the limit
+    and asks for the most valuable changes first. Before, a Profile addition
+    listed first was cut by twelve rewrites. The omission warning fires on
+    usable edits actually cut (with a count), not on any response over 12 items.
+  - [CODE] Resume quality corpus: 34 -> 39 fixtures with five opportunity cases
+    that require a proposal (buried strength, duplicated achievement, missing
+    Profile fact, feature tour, irrelevant bullet beside the only proof), so an
+    always-NO_CHANGES generator fails 8 of 39. Cover live runner rewritten on the
+    resume runner's pattern: unique owner-only receipt directory, manifest with
+    configuration and corpus/source hashes, fixture snapshot, per-run receipts,
+    `summary.json`, forwarded `EVAL_REASONING_EFFORT`, `--help`. No live run
+    was made; the private `workspace/cover-benchmark/harness/run.mjs` still
+    mirrors the old flat `warnings` list and should add `concerns` before its
+    next rerun.
+  - [TOOL] Two independent reviews (cover lifecycle; resume cap and evals), no
+    high findings, one medium each, both closed with probes: the concern split
+    was by issue category, which kept citation bookkeeping and leftover-token
+    notes echoing after acceptance (now by code via `isCoverLetterConcern`; the
+    cited private slot carries a `concern` flag); and a change the cap cut could
+    still have won a conflict against one listed earlier (now a fixpoint: the
+    prefix up to the twelfth kept change is re-examined without the tail).
+    Lows closed: model notes stripped from the repair prompt's rejected output
+    and listed last; rail de-duplicates the two lists; the cover runner records
+    a stage, not an error class, and stops on a generation failure; contract
+    and doc wording no longer claim the opportunity counters gate a pass. Not
+    changed on advice: the component keeps `concerns` required rather than
+    defaulting it (the hook normalizes older servers). Offline suite 141/141.
+  - Deferred, recorded for the next brief: Profile linkage preview and
+    source-beside-edit in the review rail (draft Product Brief written as task
+    `profile-linkage-preview-20261006`, awaiting approval, local artifact
+    only); a whole-document judge for the cover
+    corpus (the structural grader still scores a nine-times-repeated sentence
+    100); an opportunity gate for the five new resume cases is a benchmark
+    policy decision for the user.
+
 ## 2026-10-05
 
 - [USER+CODE] Cover Letter Polish: prompt, evidence guard, and base variants

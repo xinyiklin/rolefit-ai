@@ -241,7 +241,7 @@ export function CoverLetterReview({
             <span>{proposal.result.coverLetterText.trim().split(/\s+/).length} words</span>
             {proposal.result.repaired ? <span>Structure repaired once</span> : null}
           </div>
-          <ProposalFeedbackList title="Check before using" items={proposal.result.warnings} tone="warning" />
+          <ProposalFeedbackList title="Check before using" items={[...new Set([...proposal.result.concerns, ...proposal.result.warnings])]} tone="warning" />
           {proposal.stale ? (
             <p className="cover-letter-proposal__stale" role="status">
               The letter, job, Guidance, or polishing instructions changed. Polish again for the current inputs.
@@ -303,8 +303,8 @@ export function CoverLetterReview({
         <section className="cover-letter-applied" aria-label="Applied letter summary">
           <p>{words} words · {pageCount === 1 ? "1 page" : `${pageCount || 0} pages`}</p>
           {pageCount > 1 ? <p>Runs {pageCount} pages — shorten before exporting.</p> : null}
-          {appliedResult.warnings.length > 0 && currentText !== appliedResult.coverLetterText ? <p>Warnings refer to the earlier accepted wording.</p> : null}
-          {appliedResult.warnings.map((warning) => <p key={warning}>{warning}</p>)}
+          {appliedResult.concerns.length + appliedResult.warnings.length > 0 && currentText !== appliedResult.coverLetterText ? <p>Warnings refer to the earlier accepted wording.</p> : null}
+          {[...new Set([...appliedResult.concerns, ...appliedResult.warnings])].map((warning) => <p key={warning}>{warning}</p>)}
         </section>
       ) : (
         <>

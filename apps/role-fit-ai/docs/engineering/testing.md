@@ -210,7 +210,12 @@ Good server verification covers:
   outcomes return the letter with warnings and never trigger repair — while an
   employer-subject sentence drawn from the posting must not widen candidate
   evidence. Length is asserted
-  as a warning, never a gate. `cover-letter-warning-precision-probes.mjs` pins
+  as a warning, never a gate. Probes pin the two lifetimes: evidence and
+  template findings return in `concerns`, structure/quality/length/model notes
+  in `warnings`, the model's `warnings` field becomes at most three sanitized
+  `Model note:` entries (malformed metadata yields none and no issue), the
+  route echoes carried `sourceWarnings` as concerns, and the client hook carries
+  only `concerns` forward. `cover-letter-warning-precision-probes.mjs` pins
   each benchmark-backed warning rule from `server/ai/AGENTS.md` (whole-entry
   citation scope, the claim surface, count modifiers and head nouns, compound
   adjectives, base-letter-only values, dropped deterministic slot ids) with a
@@ -222,6 +227,15 @@ Good server verification covers:
   correspondence, role/company specificity, word range, and page count. It is
   offline by default; run the real-provider harness deliberately with
   `npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]`.
+  `EVAL_PROVIDER`, `EVAL_MODEL`, and `EVAL_REASONING_EFFORT` select the
+  generator; `--help` lists fixtures without a provider call. Each invocation
+  writes an owner-only receipt directory under ignored
+  `workspace/cover-letter-eval/` holding `manifest.json` (configuration, corpus
+  and source hashes), the fixture snapshot, one receipt per fixture run, and
+  `summary.json`, so results from two models never overwrite each other. A
+  failed case records only its stage (preflight, generation, layout, grade,
+  receipt), never provider text, and a generation failure stops the run with
+  the remaining cases reported as unrun.
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
@@ -246,20 +260,26 @@ Good server verification covers:
 - Resume Proposal has an opt-in synthetic regression benchmark:
   `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
   The tracked `server/ai/__evals__/fixtures/resume-proposal-quality.json` keeps
-  34 invented cases: 18 from the 2026-10-04 benchmark (six original tuning
+  39 invented cases: 18 from the 2026-10-04 benchmark (six original tuning
   cases, six initial holdouts, and six supporting-role holdouts, now all
-  regression cases) plus 16 frozen holdouts for prompt slimming. They exercise
+  regression cases), 16 frozen holdouts for prompt slimming, and five
+  opportunity cases (2026-10-06) that each require a proposal and name the
+  expected improvement (the opportunity counters stay diagnostic): a
+  buried strength to reorder, a duplicated achievement to remove, a Profile fact
+  missing from its entry, a feature tour hiding the contribution, and an
+  irrelevant bullet beside the only proof of a requirement. They exercise
   attribution, posting-only skills, ownership, numbers, prompt injection,
   linked Profile additions, negative evidence, tense, restraint, bold-off
   guidance, and key-evidence removal. Aligned cases permit `NO_CHANGES`;
-  brochure cases require an improvement. Corpus inputs and labels are
+  brochure and opportunity cases (eight in all) require an improvement, so an
+  always-`NO_CHANGES` generator cannot pass the corpus. Corpus inputs and labels are
   agent-authored; passing these cases is not a general accuracy estimate.
   `EVAL_PROVIDER`, `EVAL_MODEL`, and `EVAL_REASONING_EFFORT` select the generator.
   `EVAL_FIXTURES=all` (default) or comma-separated case names select coverage;
   runs accepts 1–5 (default 1). `--help` lists cases without provider calls.
   Every live run also uses Codex CLI / GPT-6 Astra / high to fact-check each
   replacement and added bullet against its permitted entry/Profile evidence.
-  Thus a full run makes 34 generation calls and up to 34 judge calls per
+  Thus a full run makes 39 generation calls and up to 39 judge calls per
   repetition (generation may retry unreadable responses). Both providers must
   be configured; there is no provider fallback or workspace-settings import.
   Traps, tense flips, withheld edits, missing required improvements, unsupported

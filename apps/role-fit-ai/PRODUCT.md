@@ -141,7 +141,11 @@ changed source letter, job, personal evidence, or polishing instruction still
 requires Polish again before acceptance. A letter still technically unusable
 after repair returns bounded issues and leaves the current document untouched.
 Content concerns never trigger a repair or prevent acceptance. Accepted warnings
-remain visible after editing, labelled as referring to the earlier wording;
+remain visible after editing, labelled as referring to the earlier wording; only
+evidence concerns about that wording carry into the next Polish, while length
+and phrasing notes are recomputed for each draft. The model's own "check before
+sending" notes appear with the draft, labelled as the model's notes rather than
+RoleFit evidence checks;
 Restore remains available only while the editor retains its exact baseline. Neither warnings nor errors expose repair instructions or internal evidence ids.
 An unfinished Profile evidence prompt never counts as evidence, and spelled-out
 durations receive the same grounding check as digit forms.

@@ -14,7 +14,7 @@ export type CoverLetterEvidenceItem = {
 };
 
 // A body paragraph and its located source ids. Located references do not certify
-// factual support; content concerns remain attached to the result as warnings.
+// factual support; claim findings stay attached to the result as concerns.
 export type CoverLetterBodyParagraph = {
   text: string;
   evidenceIds: string[];
@@ -26,7 +26,10 @@ export type CoverLetterTailorResult = {
   coverLetterText: string;
   bodyParagraphs: CoverLetterBodyParagraph[];
   evidenceUsed: CoverLetterEvidenceItem[];
+  // Draft-only checks (length, phrasing, structure, model notes), recomputed per draft.
   warnings: string[];
+  // Evidence and attribution findings about the wording; these outlive acceptance.
+  concerns: string[];
   provider?: string;
   model?: string;
   reasoningEffort?: string;
