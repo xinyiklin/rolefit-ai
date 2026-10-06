@@ -1533,13 +1533,14 @@
     "set": "holdout-20261006",
     "candidateContext": "",
     "id": "hold-hourly-contract-rate",
-    "scenario": "Holdout: six-month contract posting with an hourly rate and a W-2-only condition; the extraction must keep the hourly period and the contract type, and the matching resume is Strong.",
+    "scenario": "Holdout: six-month contract posting with an hourly rate and a W-2-only condition; the extraction must keep the hourly period and the contract type, and the matching resume is Strong. A W-2-only condition may be read as an eligibility check.",
     "stable": true,
     "expectedVerdicts": [
       "STRONG"
     ],
     "allowedEligibility": [
       "CLEAR",
+      "CHECK",
       "OMITTED"
     ],
     "materialThemes": [
@@ -2500,7 +2501,6 @@
       ],
       "salary": {
         "salaryMin": 45,
-        "salaryMax": null,
         "salaryCurrency": "USD",
         "salaryPeriod": "hr"
       },

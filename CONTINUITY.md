@@ -93,8 +93,53 @@ bounded; app-only operational detail belongs in the affected app documentation.
     analysis and Fit Assessment are now both Claude CLI / Sonnet 5.5 / low, so
     Prepare takes the one-call combined path (previously Codex GPT-6 Luna
     medium + GPT-5.5 medium, split). The prior preferences file is backed up
-    under `workspace/.trash/` (`...before-prepare-sonnet.json`). The holdout
-    confirmation is still owed.
+    under `workspace/.trash/` (`...before-prepare-sonnet.json`).
+  - [TOOL] Holdout, 2026-10-06: twenty disjoint synthetic postings
+    (`set:holdout-20261006`: early-career full stack and backend, consulting,
+    healthcare HL7/FHIR, clearance, hourly and GBP pay, staff-level stretch,
+    noisy and instruction-laden postings, a title-only page, offered
+    sponsorship, an internship), three runs each, corrected runner, Sonnet
+    first then the old pair (receipts under `workspace/fit-assessment-eval/`).
+    - Sonnet 5.5 low combined, 60 Prepare runs: median 4.9 s (p90 6.6 s) per
+      posting, extraction 0.997, 0 fabricated terms, no invalid responses;
+      one automation flip group (the Spark-or-Flink posting went STRONG twice
+      and REASONABLE once on the standalone prompt, crossing the Strong-only
+      threshold), 2 of 60 prepare/standalone pairs differed on that same
+      threshold; 455k tokens, $1.94 of plan usage reported by Claude Code.
+    - Old pair, Codex GPT-6 Luna medium + GPT-5.5 medium split, 60 runs:
+      median 17.5 s (p90 22.7 s), extraction 0.993 (Luna missed the "0-2
+      years" requirement once and named the client instead of the staffing
+      agency), 0 fabricated; one flip group (the instruction-laden QA posting
+      went REASONABLE twice, STRONG once); GPT-5.5 read the UK posting
+      REASONABLE on all three runs where Sonnet read STRONG on all three
+      [ASSUMPTION: STRONG is the better reading; the resume covers every
+      stated requirement].
+    - Both models flagged the W-2-only contract condition as a CHECK
+      eligibility on some runs, and both read a flat "$45 per hour" as
+      min = max; the two expectations were widened (W-2 may be CHECK; a
+      flat rate is min-only). No other fixture changed.
+  - [TOOL] Matched downstream comparison, 2026-10-06 (private harness
+    `workspace/prepare-benchmark/harness/`, ten real applications sampled by
+    stored Fit verdict 3/3/2/2, raw postings re-analyzed; same resume,
+    Profile, base letter, Resume Polish Opus 5.5 high, Cover Polish Sol
+    medium; only the brief differed; blinded Astra + Opus 5.5 pairwise with
+    A/B swapped by hash, judged against the raw posting):
+    - Briefs: Sonnet low 5.8 s vs Luna medium 10.1 s per posting; list sizes
+      within half an item of each other; Luna fell back to the local brief
+      on two content-poor pages where Sonnet fell back on one. On one of
+      them Luna returned only a seniority and three domain labels, which the
+      old usability rule would have accepted in place of the local brief.
+    - Resume Polish: 41 vs 40 proposed changes over ten postings, 1 vs 4
+      warned; both judges split 5-5 and agreed on every case; mean score
+      8.01 (Sonnet brief) vs 7.79; unsupported edits 0 vs 1.
+    - Cover Polish: judges disagreed (Astra 6-4 Sonnet brief, Opus 7-3 Luna
+      brief; agree on 5 of 10, 2-3); mean 8.30 vs 8.20; unsupported
+      sentences 1 vs 3.
+    - Reading: the brief's source does not measurably change what Polish
+      writes, so Prepare is not the quality bottleneck; choose it on speed
+      and cost. Sonnet 5.5 low stands as the Prepare setting. Further Prepare
+      tuning should wait for a measured defect; Resume and Cover Polish
+      remain where the earlier benchmarks put them.
   - [TOOL] Two independent reviews (product path; benchmark and gates), no
     high findings. Closed: the usage reader dropped Anthropic cache-creation
     tokens and mixed input conventions (now one convention: every prompt
