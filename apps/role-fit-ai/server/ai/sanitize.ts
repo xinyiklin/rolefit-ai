@@ -60,7 +60,8 @@ const WORD_NUMBER_PATTERN =
 // A group separator must be followed by digits, so "React 18, reducing" ends at 18.
 const DIGIT_NUMBER_PATTERN = String.raw`\d+(?:[,_]\d+)*(?:\.\d+)?`;
 const DURATION_CLAIM_PATTERN = new RegExp(
-  String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b`,
+  // "30d", "5yrs", and "2 weeks" are durations; "3D" is a name (uppercase only).
+  String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})(?:\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b|(yrs?|mos?|wks?|d|hrs?|h)(?![A-Za-z]))`,
   "gi"
 );
 
@@ -72,6 +73,7 @@ const NOT_PLURAL_NOUNS = new Set(["as", "is", "was", "has", "its", "this", "thus
 
 // Spelling variants of one counted noun ("140 evaluations" and "140 evals").
 const COUNT_UNIT_ALIASES = new Map([["evaluation", "eval"], ["specification", "spec"], ["repository", "repo"], ["configuration", "config"]]);
+const GLUED_DURATIONS = new Map([["d", "day"], ["h", "hour"], ["hr", "hour"], ["wk", "week"], ["mo", "month"], ["yr", "year"]]);
 const countUnit = (word: string): string => { const unit = word.toLowerCase().replace(/s$/, ""); return COUNT_UNIT_ALIASES.get(unit) ?? unit; };
 
 // Letters glued to digits that make a name, not a quantity: 5G, 3GPP, 2FA, 3D ("30d" is a duration).
@@ -158,8 +160,9 @@ export function numericClaims(value: unknown): NumericClaim[] {
   }
   for (const match of text.matchAll(DURATION_CLAIM_PATTERN)) {
     const number = normalizedNumber(match[1]);
-    if (!number) continue;
-    const unit = match[2].toLowerCase().replace(/s$/, "");
+    // "3D" and "2H" are names; only lowercase letters glue a duration.
+    if (!number || (match[3] && /[A-Z]/.test(match[3]))) continue;
+    const unit = GLUED_DURATIONS.get((match[2] ?? match[3]).toLowerCase().replace(/s$/, "")) ?? (match[2] ?? match[3]).toLowerCase().replace(/s$/, "");
     push(`duration:${unit}:${number}`, match[0], match.index!, match[0].length);
   }
 

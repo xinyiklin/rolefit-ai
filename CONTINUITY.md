@@ -65,7 +65,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
     warning for values only the base letter supports.
     - [TOOL] Replay of the 120 baseline letters against Astra labels, after
       two review rounds: warned candidate sentences 233 -> 35 of 1,518;
-      precision 12.4% -> 28.6%; recall 16.9% -> 5.8%. Most lost true warnings were coincidental hits on denials
+      precision 12.4% -> 27.8%; recall 16.9% -> 5.8%. Most lost true warnings were coincidental hits on denials
       ("I have not used Kafka") or judgment labels ("what the candidate did
       most"); 87 of 172 unsupported labels were claims only the user's own base
       letter made. A count-purpose check ("covered by 90+ tests") was tried
@@ -96,8 +96,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
     responsibility, the clinic sentence states the action the resume
     documents (translate the problem into a requirement, fix, explain), and
     the intro's plural "applications" became singular. A first draft of this
-    round with a judgment sentence ("the complaint is rarely the real
-    problem") won 29-2 but doubled Astra's unsupported candidate facts (4.0%
+    round with a self-assessment sentence about how the candidate handles
+    complaints won 29-2 but doubled Astra's unsupported candidate facts (4.0%
     -> 9.1%); the grounded draft won 24-3 against it and 34-0 against the
     installed letter where both judges agreed (Opus 38-2, Astra 36-4), with
     unsupported facts at 3.2% and the formula phrases at zero. Installed as
@@ -105,6 +105,21 @@ bounded; app-only operational detail belongs in the affected app documentation.
     prompt was not changed: the slot fills, not the prompt, drove the
     repetition, and Sol still prefers the shipped prompt on this letter
     family.
+  - [TOOL] Fourth review (exact head 18e6ec7a, 2026-10-06): no high findings;
+    four of the third review's holes were only partly closed (a clause-initial
+    denial still hid the facts after it; the role title was stripped before
+    "role" without an article; "platform", "products", "users", "customers"
+    made a tool-named company a name; a slot-only Profile heading still
+    dropped out), two fixture strings still matched the Profile and the
+    tracker, and the stricter denial handling had made honest contraction
+    denials and "drew me to this role" warn again. All closed with probes: a
+    governing denial now drops only its own verb phrase; the title needs
+    the/this/your/<Company>'s before "role"; the employer-noun list lost the
+    product words; a slot-only heading is kept as "(untitled)"; glued
+    durations ("30d", "5yrs") match their spelled-out forms; the idiom may
+    land on "this role" or "in". Replay on the 120 baseline letters: precision
+    27.8% -> 29.7%, recall 5.8% -> 6.4% (one more true warning); Resume
+    Polish replay unchanged at 53.5% / 54.8%; check 141/141.
   - [TOOL] Third review (exact head of PR #169, 2026-10-06): no high findings;
     eight medium recall holes and two low ones, all closed with probes: a
     percent borrowed another metric's evidence; the attention idiom hid a

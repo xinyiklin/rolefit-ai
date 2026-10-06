@@ -11,7 +11,7 @@ import { coverLetterIssueWarnings } from "../coverLetterIssues.ts";
 import { splitProfileEvidence } from "../../../src/lib/coverLetterEvidence.ts";
 import { findUngroundedJdTerm, findUngroundedOutcomeClaim, ownershipStrength } from "../grounding.ts";
 
-const resolved = { candidateName: "Jordan Lee", role: "Software Engineer, Continuous Deployment (Remote)", company: "Acme", recipientName: "", date: "July 28, 2026", greeting: "Dear Acme Hiring Team,", signoff: "Sincerely,\nJordan Lee" };
+const resolved = { candidateName: "Jordan Lee", role: "Platform Engineer, Release Tooling (Remote)", company: "Acme", recipientName: "", date: "July 28, 2026", greeting: "Dear Acme Hiring Team,", signoff: "Sincerely,\nJordan Lee" };
 const atlas = "Atlas · Jan 2026 – Present · Vue, TypeScript, FastAPI, MySQL";
 const evidence = [
   { id: "r1", source: "resume", section: "Projects", entry: atlas, text: "Generated a typed client from the GraphQL schema; CI runs 310+ pytest cases against MySQL." },
@@ -27,7 +27,7 @@ const evidence = [
   { id: "p5", source: "profile", text: "## Harbor (professional employment)" },
   { id: "p6", source: "profile", text: "Rescheduled berth assignments to clear arrival backlogs." }
 ];
-const jobText = "Acme needs a Software Engineer, Continuous Deployment (Remote) with ETL, Kafka, AWS, and continuous deployment experience.";
+const jobText = "Acme needs a Platform Engineer, Release Tooling (Remote) with ETL, Kafka, AWS, and continuous deployment experience.";
 const warnings = (text, evidenceIds) => coverLetterParagraphClaims({ paragraphs: [{ text, evidenceIds, slotIds: [] }], evidence, authoredProse: "", jobText, resolved }).issues.map((issue) => `${issue.code}:${issue.unsupportedValue ?? ""}`);
 const clean = (text, ids, label) => assert.deepEqual(warnings(text, ids), [], label);
 const warns = (text, ids, pattern, label) => assert.match(warnings(text, ids).join(" | "), pattern, label);
@@ -51,7 +51,7 @@ assert.equal(ownershipStrength("Helping members at the desk led me to develop At
 assert.equal(ownershipStrength("I led the migration."), 3);
 
 // The prepared role, company, and a team's name are not skill claims; denials claim nothing.
-clean("I am applying for the Software Engineer, Continuous Deployment (Remote) role at Acme.", ["r1"], "the whole role title is a name");
+clean("I am applying for the Platform Engineer, Release Tooling (Remote) role at Acme.", ["r1"], "the whole role title is a name");
 clean("I would be glad to support the platform team at Acme.", ["r1"], "a team name is not a skill");
 warns("I would be glad to support the Kafka platform team at Acme.", ["r1"], /kafka/i, "a team name that carries a tool stays checkable");
 clean("I have not worked with Kafka, and I would expect to learn it on the job.", ["r1"], "a denial");
@@ -83,7 +83,7 @@ assert.deepEqual(stated.warnings, [], "a value the resume states draws no base-l
 
 // Glued names are not counts, spelling variants count the same noun, and polarity is judged per clause.
 assert.equal(findUngroundedNumericClaim("validated against 3GPP LTE specifications", "Built modem tests."), null, "3GPP is a name");
-assert.equal(findUngroundedNumericClaim("more than 140 offline regression and adversarial evaluations", "140+ offline regression and adversarial evals"), null, "evaluations and evals count the same thing");
+assert.equal(findUngroundedNumericClaim("more than 90 nightly contract and smoke evaluations", "90+ nightly contract and smoke evals"), null, "evaluations and evals count the same thing");
 warns("I live in Hoboken and can work on site five days a week, and I would like to contribute to the team.", ["p5"], /five days/, "a factual clause survives an intent clause");
 clean("I have not used Kafka, and I would like to learn it.", ["r1"], "a denial plus an intent claims nothing");
 
@@ -224,5 +224,31 @@ assert.equal(cloudCheck("I have used Terraform.", ["k2"]), "", "a cited Skills r
 assert.match(String(findUngroundedNumericClaim("Cut onboarding from 30d to 7d.", "Cut onboarding time.")), /30d/, "30d is a duration");
 assert.equal(findUngroundedNumericClaim("Rendered 3D charts.", "Rendered charts."), null, "3D is a name");
 assert.equal(findUngroundedNumericClaim("Mentored 1 intern who ships weekly.", "Mentored 1 intern."), null, "a relative pronoun ends the counted phrase");
+
+// Fourth review (2026-10-06): a governing denial drops only its own verb phrase; the role title needs its article;
+// a tool-ish employer noun is not a name frame; a slot-only heading keeps its place; honest denials and idioms stay quiet;
+// "30d" counts days.
+assert.match(harborCheck("Not one of the 40 Kafka consumers I shipped at Harbor lost data."), /kafka|40/i, "a clause-initial denial keeps the facts after it");
+assert.match(harborCheck("Never once did I miss a page across the 12 Kafka clusters I ran at Harbor."), /kafka|12/i);
+assert.match(harborCheck("No one else at Harbor shipped as many Kafka consumers as my 40."), /kafka|40/i);
+assert.match(harborCheck("I have no Kafka experience beyond the 40 Kafka consumers I shipped at Harbor."), /kafka|40/i);
+assert.equal(harborCheck("Although I didn't use Kafka at Harbor, I built the scheduling service."), "", "a contraction denial claims nothing");
+assert.equal(harborCheck("At Harbor I didn't use Kafka."), "");
+assert.equal(harborCheck("Though I have never used Apache Kafka, I would learn it quickly."), "", "a two-word object is still the denial's");
+assert.equal(harborCheck("I have not used Airflow or Kafka in production."), "");
+assert.match(harborCheck("My previous Senior Kafka Engineer role at Harbor taught me scheduling.", "Acme", "Senior Kafka Engineer"), /kafka/i, "a past title before \"role\" is a claim");
+assert.match(harborCheck("I held a Senior Kafka Engineer position at Harbor.", "Acme", "Senior Kafka Engineer"), /kafka/i);
+assert.equal(harborCheck("Acme's Senior Kafka Engineer opening asks for Go.", "Acme", "Senior Kafka Engineer"), "", "the company's own opening is a frame");
+assert.match(harborCheck("At Harbor I instrumented the scheduling service with Datadog's platform.", "Datadog"), /datadog/i, "a possessive before a product noun stays a claim");
+assert.match(harborCheck("I built the scheduling service on Snowflake's products.", "Snowflake"), /snowflake/i);
+assert.equal(harborCheck("Snowflake's roadmap is why I am applying.", "Snowflake"), "", "a possessive before an employer noun is a name");
+const northwind = { ...resolved, company: "Northwind" };
+assert.deepEqual(candidateClaimSentences("Northwind's focus on Kafka drew me to this role.", northwind), [], "an idiom that lands on the role is still closed");
+assert.deepEqual(candidateClaimSentences("Northwind's focus on Kafka drew me in.", northwind), []);
+assert.deepEqual(candidateClaimSentences("Northwind's focus on Kafka caught my eye early.", northwind), []);
+const slotOnly = [{ id: "b1", source: "resume", section: "Projects", entry: "Beacon · Mar 2026 – Present · Go", text: "Built Beacon." }, ...profileItems("## Beacon\nBeacon provisions sandboxes.\n## [Project name]\nRuns 12 Airflow DAGs nightly.")];
+assert.ok(slotOnly.some((item) => /^## \(untitled\)$/.test(item.text)), "a slot-only heading keeps its level");
+assert.match(coverLetterParagraphClaims({ paragraphs: [{ text: "Beacon taught me to run 12 Airflow DAGs nightly.", evidenceIds: ["b1"], slotIds: [] }], evidence: slotOnly, authoredProse: "", jobText: "Acme needs Airflow.", resolved }).issues.map((issue) => issue.unsupportedValue).join(" "), /airflow|12/i, "lines under a slot-only heading do not fall into the previous section");
+assert.equal(findUngroundedNumericClaim("Cut onboarding to 30d.", "Cut onboarding to 30 days."), null, "30d counts days");
 
 console.log("cover-letter warning precision probes passed");

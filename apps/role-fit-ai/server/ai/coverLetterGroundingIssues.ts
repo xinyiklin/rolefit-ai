@@ -23,24 +23,26 @@ const POSSESSIVE_EMPLOYER_FACT =
 
 // The idiom makes no claim only when it closes its clause or leads into a reason;
 // "which drew me after years building Kafka pipelines" is still a candidate sentence.
-const ATTENTION_IDIOM = /(?:\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention|interest|eye)\b|\b(?:drew|draws|interests?|interested|appeals?|appealed|attracted|brought)\s+(?:to\s+)?me\b|\bwhat\s+(?:drew|brought|draws|brings)\s+me\b)(?=\s*(?:[.!?,;:]|$|(?:because|since)\b))/gi;
+const ATTENTION_IDIOM = /(?:\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention|interest|eye)\b|\b(?:drew|draws|interests?|interested|appeals?|appealed|attracted|brought)\s+(?:to\s+)?me\b|\bwhat\s+(?:drew|brought|draws|brings)\s+me\b)(?:\s+(?:in|early|immediately|right away)|\s+(?:to|into|toward|towards)\s+(?:this|the|your)\s+(?:role|team|company|position|posting|opening|work))?(?=\s*(?:[.!?,;:]|$|(?:because|since)\b))/gi;
 
-// A denial drops its own clause only when it governs the clause's verb; a trailing
-// denial ("with no prior experience") drops only itself, and a fact a governing
-// denial merely frames ("while shipping 40 Kafka consumers", "in 2 years of running
-// Kafka") stays on the surface.
-const DENIAL_GOVERNS = /^(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|n't|without)\b|^(?:I|we)\s+\w+n't\b/i;
-const DENIAL_SPAN = /\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:[\w+-]+\s+){0,4}experience\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bwithout\s+(?:prior\s+)?experience\b|\b(?:never|not|n't)\s+(?:used|use|worked|built|developed|learned|experienced|familiar|proficient|skilled)\b(?:\s+(?:with|in|on))?(?:\s+[\w+./-]+)?|\b(?:have|has)(?:\s+not|n't)\s+(?:used|worked|built|developed)\b(?:\s+(?:with|in|on))?(?:\s+[\w+./-]+)?|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bunfamiliar\s+with\s+[\w+./-]+/gi;
-const FRAMED_FACT = /\s+(?:while|after|before|when|by|through|despite|from)\s+(?=\w+ing\b)|\s+(?:in|over|across|for)\s+(?=\d)/i;
+// A denial drops only its own verb phrase: when it governs the clause ("I have
+// not used Kafka", "Never once did I miss a page") the phrase runs to the first
+// comma, preposition, relative pronoun, or participle and everything after it
+// ("across the 12 Kafka clusters I ran") stays; a trailing denial ("with no prior
+// experience") drops only itself.
+const DENIAL_GOVERNS = /^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without)\b|^(?:(?:although|though|while|even though)\s+)?(?:(?:I|we)\s+)?\w+n't\b/i;
+const DENIAL_OBJECT = String.raw`(?:\s+(?:with|in|on))?(?:\s+(?!(?:and|but|so|while|when|at|in|on|for|with|since|beyond|except|after|before)\b)[\w+./-]+){0,3}`;
+const DENIAL_HEAD = new RegExp(String.raw`^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without|\w+n't)\b(?:\s+(?:used|use|worked|work|built|build|developed|develop|learned|learn|known|touched|experienced|familiar|proficient|skilled)\b${DENIAL_OBJECT}|\s*(?:(?!\b(?:of|in|on|at|across|beyond|while|after|before|when|by|through|despite|from|with|for|over|that|which|who|where|and|but|so)\b|\w+ing\b|,)\S+\s*){0,4})`, "i");
+const DENIAL_SPAN = new RegExp(String.raw`\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:[\w+-]+\s+){0,4}experience\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bwithout\s+(?:prior\s+)?experience\b|(?:\b(?:never|not)|n't)\s+(?:used|use|worked|work|built|build|developed|develop|learned|learn|known|touched|experienced|familiar|proficient|skilled)\b${DENIAL_OBJECT}|\b(?:have|has)(?:\s+not|n't)\s+(?:used|worked|built|developed)\b${DENIAL_OBJECT}|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bunfamiliar\s+with\s+[\w+./-]+`, "gi");
 function deniedSurface(segment: string): string {
-  if (!DENIAL_GOVERNS.test(segment.trim())) return segment.replace(DENIAL_SPAN, " ");
-  const [, ...framed] = segment.split(FRAMED_FACT);
-  return framed.join(" ");
+  const trimmed = segment.trim();
+  if (!DENIAL_GOVERNS.test(trimmed)) return segment.replace(DENIAL_SPAN, " ");
+  return trimmed.replace(DENIAL_HEAD, " ");
 }
 
 // Employer nouns a possessive company name attaches to as a name ("Databricks'
-// roadmap"); "Datadog's agent" is a tool and stays checkable.
-const EMPLOYER_NOUNS = String.raw`teams?|mission|work|products?|platform|roadmap|posting|job description|culture|customers|clients|business|focus|approach|emphasis|commitment|goals?|values|vision|growth|users|members|people|engineers|offices?|reputation|priorities|needs|investment`;
+// roadmap"); "Datadog's agent" and "Datadog's platform" are tools and stay checkable.
+const EMPLOYER_NOUNS = String.raw`teams?|mission|work|roadmap|posting|job description|culture|clients|business|focus|approach|emphasis|commitment|goals?|values|vision|growth|members|people|engineers|offices?|reputation|priorities|needs|investment`;
 
 // Employer/job statements may use posting facts, but they must never widen the
 // candidate corpus. Mixed employer/candidate sentences stay in every gate.
@@ -97,7 +99,7 @@ function claimSurface(sentence: string, resolved: ResolvedCoverLetterContext): s
   // The whole prepared role title is a name only in an application frame
   // ("applying for <role>", "the <role> role", "as a <role> at <Company>"), even
   // when it carries a tool ("Backend Engineer - Kafka"); "As the Senior Kafka
-  // Engineer at Harbor" and a lone "Kafka" elsewhere are claims. The company is a
+  // Engineer at Harbor", "my previous <role> role", and a lone "Kafka" are claims. The company is a
   // name only in an employer frame ("at Databricks", "Databricks' roadmap", "the
   // Databricks team"), so "Databricks engineering experience" stays checkable when
   // the employer is also a tool.
@@ -107,7 +109,7 @@ function claimSurface(sentence: string, resolved: ResolvedCoverLetterContext): s
     const title = escapeRegex(role);
     const atCompany = company.length >= 3 ? `|(?<=\\bas\\s+(?:a|an|the)\\s)${title}(?=\\s+(?:at|with)\\s+${escapeRegex(company)}\\b)` : "";
     surface = surface.replace(
-      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b)${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|(?<=\\b(?:the|this|that|your|[A-Z][\\w]*['’]s)\\s)${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b)${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
       " "
     );
   }

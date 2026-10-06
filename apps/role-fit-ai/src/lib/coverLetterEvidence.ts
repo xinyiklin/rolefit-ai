@@ -125,10 +125,14 @@ export function splitProfileEvidence(candidateContext: string): string[] {
     const line = rawLine.trim();
     if (!line || /^[A-Za-z][A-Za-z ]{1,40}:$/.test(line)) continue;
     if (templateHasUnresolvedSlots(line)) {
-      // A heading keeps its place without the slot ("## Beacon [add dates]"), so
-      // the lines beneath it still group under it; the slot itself is never evidence.
-      const heading = /^#{1,6}\s/.test(line) ? withoutTemplateSlots(line) : "";
-      if (/^#{1,6}\s+\S/.test(heading)) items.push(heading);
+      // A heading keeps its place without the slot ("## Beacon [add dates]", and
+      // "## [Project name]" becomes an untitled heading), so the lines beneath it
+      // still group under it; the slot itself is never evidence.
+      const hashes = line.match(/^#{1,6}(?=\s)/)?.[0];
+      if (hashes) {
+        const heading = withoutTemplateSlots(line).replace(/^#+\s*/, "");
+        items.push(`${hashes} ${heading || "(untitled)"}`);
+      }
       continue;
     }
     items.push(line.replace(/^[-*•]\s+/, "").trim());

@@ -106,32 +106,38 @@ application retain blocking technical guards.
     stand alone, and Skills rows never link. Owners are read by heading
     position, so a "### Atlas" nested under an unrelated heading is not the
     top-level "## Atlas", and a heading that carries a bracketed slot ("##
-    Beacon [add dates]") keeps its place without the slot. A sentence that
-    names exactly one dated resume entry as a name (capitalised first letter;
+    Beacon [add dates]", or a slot-only "## [Project name]", kept as "##
+    (untitled)") keeps its place without the slot. A sentence that names
+    exactly one resume entry with a multi-part label (title plus dates,
+    employer, or stack; a single-title entry or a Skills row is never named) (capitalised first letter;
     "Frontend" the Skills row is never an entry and "the frontend" is not a
     name) is checked against that entry alone, cited or not: it cannot borrow
     another entry's tools, counts, or outcomes, and a missed citation is
     bookkeeping. Two entries sharing a title ("Software Engineer" twice) never
     pool: the sentence keeps only the cited one.
   - The checked surface of a candidate sentence drops only the clause a
-    denial governs (clauses split before "I"/"we": "Having never used Go, I
-    shipped 12 Go services" keeps its second half; a trailing denial, "with
-    no prior experience", drops only itself; a fact a governing denial merely
-    frames, "while shipping 40 Kafka consumers" or "in 2 years of running
-    Kafka", stays; an aspiration keeps its facts), the prepared role title
-    only in an application frame ("applying for <role>", "the <role> role",
-    "your <role> posting", "as a <role> at <Company>"; "As the Senior Kafka
-    Engineer at Harbor" is a claim), the company only in an employer frame
-    ("at Databricks", "join Databricks", "why Databricks", "the Databricks
-    team", or a possessive before an employer noun such as "Databricks'
-    roadmap"; "Databricks engineering experience", "within Databricks", and
-    "Datadog's agent" stay checkable, so a "contribute to Snowflake" sentence
-    may warn), "the <words> team" references unless the words carry a count
+    denial governs, and of that clause only the denial's own verb phrase
+    (clauses split before "I"/"we": "Having never used Go, I shipped 12 Go
+    services" keeps its second half; "I have not worked with Kafka" drops
+    whole; a trailing denial, "with no prior experience", drops only itself;
+    what follows a governing denial's first preposition, relative pronoun,
+    or participle, "Not one of the 40 Kafka consumers I shipped" or "in 2
+    years of running Kafka", stays; an aspiration keeps its facts), the
+    prepared role title only in an application frame ("applying for <role>",
+    "the/this/your/<Company>'s <role> role", "as a <role> at <Company>"; "As
+    the Senior Kafka Engineer at Harbor" and "my previous <role> role" are
+    claims), the company only in an employer frame ("at Databricks", "join
+    Databricks", "why Databricks", "the Databricks team", or a possessive
+    before an employer noun such as "Databricks' roadmap" or "mission";
+    "Databricks engineering experience", "within Databricks", "Datadog's
+    agent", and "Datadog's platform" stay checkable, so a "contribute to
+    Snowflake" sentence may warn), "the <words> team" references unless the words carry a count
     or a tool, 401(k)-style plan names, and the word "one" except before a
     magnitude, percent, or duration or inside "fifty-one". An employer-led
     sentence is an employer statement only when "caught my attention" or
-    "drew me" closes its clause or leads into "because"; "which drew me after
-    years building Kafka pipelines" stays a candidate sentence. A
+    "drew me" closes its clause (also "drew me in", "drew me to this role")
+    or leads into "because"; "which drew me after years building Kafka
+    pipelines" stays a candidate sentence. A
     bare-apostrophe possessive ("Labs' work on") counts.
   - A count keeps its noun and may drop the evidence's modifiers but never gain
     one the evidence does not state ("14 critical bugs" from "14 bugs" warns);
@@ -141,7 +147,8 @@ application retain blocking technical guards.
     errors" counts dashboards). "evaluations" and "evals" count the same
     thing; "apps" and "applications" do not; a percent keeps its own metric
     ("25 percent lower costs" is not grounded by "25 percent" of latency);
-    "30d" is a duration and "3D" a name; "who" ends a counted phrase. A number word ends at a word
+    "30d" and "5yrs" are durations that match "30 days" and "5 years", and
+    "3D" is a name; "who" ends a counted phrase. A number word ends at a word
     boundary ("ones" is not a count); letters glued to digits stay a quantity
     ("200ms", "60fps", "5yrs") except the few that make a name (5G, 3GPP, 2FA,
     3D); a count never takes its noun from the next line.
