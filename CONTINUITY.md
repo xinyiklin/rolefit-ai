@@ -117,14 +117,17 @@ bounded; app-only operational detail belongs in the affected app documentation.
     main (recorded residual); the role frame yields only to a capitalised
     other employer or "I held", so "the <role> role with your team" stays
     the application. Seventh review (exact head f15f6d39): no high or medium
-    findings. Recorded residuals, not fixed: a name-like word that opens a
-    new clause after a denied list without a conjunction ("Having never used
-    Rust, Flink became my main tool") is absorbed into the list, so that
-    tool is not warned (main warns; a fix would make "I have not used Kafka
-    much" warn); a company name under three characters counts as another
-    employer in the role frame (main warns too); "I had hoped for" reads as
-    a past job; a lowercase non-curated tool after a denied list warns
-    ("not used dbt or terraform"), as on main.
+    findings. Recorded residuals, not fixed: a capitalised word that opens a
+    new clause right after a denied list ("Having never used Rust, Flink
+    became my main tool", "I have not used Rust and Flink is my strength")
+    is absorbed into the list, so that tool is not warned (main warns; the
+    suggested fix backs off later items before a lowercase non-clause word,
+    and a broader one would make "I have not used Kafka much" warn); a
+    company name under three characters counts as another employer in the
+    role frame (main warns too); "I had hoped for" reads as a past job (main
+    warns too); a lowercase non-curated or article-led tool after a denied
+    list warns ("not used dbt or terraform", "Kafka or the Airflow
+    scheduler"), as on main.
   - [TOOL] Fifth review (exact head 6c3d5104, 2026-10-06): no high findings;
     two regressions from the fourth round (glued durations also took word
     numbers, so "tend" read as ten days in every shared guard; the stricter
