@@ -7,6 +7,7 @@ import { coverLetterParagraphClaims } from "../coverLetterParagraphEvidence.ts";
 import { candidateClaimSentences } from "../coverLetterGroundingIssues.ts";
 import { validateCoverLetterTailorOutput } from "../coverLetterContracts.ts";
 import { findUngroundedNumericClaim } from "../sanitize.ts";
+import { evidencePolarity } from "../../../shared/evidencePolarity.ts";
 import { coverLetterIssueWarnings } from "../coverLetterIssues.ts";
 import { splitProfileEvidence } from "../../../src/lib/coverLetterEvidence.ts";
 import { findUngroundedJdTerm, findUngroundedOutcomeClaim, ownershipStrength } from "../grounding.ts";
@@ -262,8 +263,6 @@ assert.equal(harborCheck("Never having used Kafka, I would learn it on the job."
 assert.equal(harborCheck("I have not used Kafka, Airflow, or Spark."), "", "a denied list");
 assert.equal(harborCheck("I haven't used Spark, Flink, or Airflow."), "");
 assert.equal(harborCheck("I have not used Kafka Streams or Apache Airflow."), "", "two-word names in a denied list");
-assert.equal(harborCheck("I have never touched Airflow."), "", "touched and deployed are denial verbs");
-assert.equal(harborCheck("I have never deployed Airflow."), "");
 assert.match(harborCheck("Never did my 12 Airflow DAGs miss a run at Harbor."), /airflow|12/i, "a verbless denial never eats a count or a tool");
 assert.match(harborCheck("Not once did 40 Kafka consumers drop a message at Harbor."), /kafka|40/i);
 assert.match(harborCheck("Never have 12 Spark clusters run more smoothly than under me."), /spark|12/i);
@@ -272,5 +271,25 @@ assert.match(harborCheck("That Senior Kafka Engineer position at Harbor taught m
 assert.match(harborCheck("In the Senior Kafka Engineer role at Harbor I ran clusters.", "Acme", "Senior Kafka Engineer"), /kafka/i, "\"the <role> role at <other employer>\" is a past job");
 assert.equal(harborCheck("This Senior Kafka Engineer role is the work I want.", "Acme", "Senior Kafka Engineer"), "");
 assert.deepEqual(candidateClaimSentences("Northwind's work on Kafka drew me to apply.", northwind), [], "\"drew me to apply\" closes the idiom");
+
+// Sixth review (2026-10-06): a denied verb's object list is name-like items joined by commas, "and", "or", or "nor",
+// and stops at the next clause; a passive bullet ("not managed by Terraform") stays affirmative in the shared
+// polarity helper; the role frame yields only to a capitalised other employer or a past-tense relative clause.
+assert.match(harborCheck("I have not used Kafka, though I ran 12 Spark clusters."), /12/, "a denied list stops at the next clause");
+assert.match(harborCheck("I have not used Kafka yet I ran 12 Spark clusters."), /12/);
+assert.match(harborCheck("I have not used Kafka and ran 12 Spark clusters at Harbor."), /12/);
+assert.match(harborCheck("I have never used Kafka - I ran 12 Spark clusters at Harbor."), /12/);
+assert.match(harborCheck("I have not used Kafka, Airflow, or Spark, then shipped 12 Flink jobs."), /flink|12/i);
+assert.match(harborCheck("I am unfamiliar with Kafka although I ran 12 Spark clusters."), /12/, "a trailing denial's list stops at the next clause");
+assert.match(harborCheck("I have not used Kafka, other than 12 Spark clusters at Harbor."), /12/);
+assert.match(harborCheck("I have never used anything other than Kafka."), /kafka/i, "\"anything other than Kafka\" claims Kafka");
+assert.match(harborCheck("I haven't used Kafka, although I built Flink pipelines."), /flink/i);
+assert.match(harborCheck("Never did 5 years experience with Kafka feel so short."), /kafka|5 years/i, "an experience denial never starts with a number");
+assert.equal(harborCheck("I joined the arrivals team with no prior experience with Kafka."), "", "a trailing experience denial takes its object");
+assert.equal(evidencePolarity("Imported 200 orphaned cloud resources not managed by Terraform into code."), "affirmative", "a passive bullet is not a denial");
+assert.equal(evidencePolarity("Retired 40 Kafka topics not touched in a year."), "affirmative");
+assert.equal(harborCheck("I would take the Senior Kafka Engineer role with your team seriously.", "Acme", "Senior Kafka Engineer"), "", "\"with your team\" is not another employer");
+assert.equal(harborCheck("The Senior Kafka Engineer role at a growing company suits me.", "Acme", "Senior Kafka Engineer"), "");
+assert.match(harborCheck("In the Senior Kafka Engineer role I held at Harbor, I ran clusters.", "Acme", "Senior Kafka Engineer"), /kafka/i, "\"the <role> role I held\" is a past job");
 
 console.log("cover-letter warning precision probes passed");

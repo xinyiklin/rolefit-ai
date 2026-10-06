@@ -105,6 +105,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
     prompt was not changed: the slot fills, not the prompt, drove the
     repetition, and Sol still prefers the shipped prompt on this letter
     family.
+  - [TOOL] Sixth review (exact head da8c5674, 2026-10-06): no high findings;
+    two regressions from the fifth round: the denied verb's object list ran
+    past the clause ("I have not used Kafka, though I ran 12 Spark clusters"
+    lost its count), and widening the shared polarity verbs made passive
+    bullets ("200 resources not managed by Terraform") read as denials, which
+    would have put false warnings on Resume Polish, Application Answers, and
+    Fit. Closed: the list takes only name-like items joined by commas, and,
+    or, nor and stops at the next clause; the polarity helper is back to
+    main's verb list, so "I have never touched Airflow" warns as it does on
+    main (recorded residual); the role frame yields only to a capitalised
+    other employer or "I held", so "the <role> role with your team" stays
+    the application.
   - [TOOL] Fifth review (exact head 6c3d5104, 2026-10-06): no high findings;
     two regressions from the fourth round (glued durations also took word
     numbers, so "tend" read as ten days in every shared guard; the stricter
@@ -115,8 +127,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
     with probes: digits only glue a duration; a denied verb takes its whole
     object list and an experience denial its noun; a verbless denial never
     gives up a number, a name, or a tool; the role frame takes only
-    the/this/your/<Company>'s and never "at" another employer; the shared
-    polarity helper knows touched/deployed/known/operated/managed. Replay on
+    the/this/your/<Company>'s and never "at" another employer. Replay on
     the 120 baseline letters is back at 27.8% / 5.8% (the fourth round's
     extra true warning came from the over-wide denial head); Resume Polish
     replay unchanged at 53.5% / 54.8%; check 141/141.

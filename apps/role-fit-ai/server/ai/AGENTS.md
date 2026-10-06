@@ -118,10 +118,12 @@ application retain blocking technical guards.
   - The checked surface of a candidate sentence drops only the clause a
     denial governs, and of that clause only the denial's own verb phrase
     (clauses split before "I"/"we": "Having never used Go, I shipped 12 Go
-    services" keeps its second half; a denied verb takes its whole object
-    list, "I have not used Kafka, Airflow, or Spark", and an experience
-    denial its noun, "I have no production experience with Kafka"; a
-    trailing denial, "with no prior experience", drops only itself; a
+    services" keeps its second half; a denied verb takes its object list of
+    name-like items joined by commas, "and", "or", or "nor", "I have not
+    used Kafka, Airflow, or Spark", and stops at the next clause, so "though
+    I ran 12 Spark clusters" stays; an experience denial takes its noun, "I
+    have no production experience with Kafka"; a trailing denial, "with no
+    prior experience", drops only itself; a
     verbless denial, "Never once did I miss a page", gives up at most four
     plain words and never a number, a name, or a tool, so "Not one of the 40
     Kafka consumers I shipped" and "Never did my 12 Airflow DAGs miss a run"
@@ -129,7 +131,9 @@ application retain blocking technical guards.
     title only in an application frame ("applying for <role>",
     "the/this/your/<Company>'s <role> role", "as a <role> at <Company>"; "As
     the Senior Kafka Engineer at Harbor", "my previous <role> role",
-    "Harbor's <role> role", and "the <role> role at Harbor" are claims), the company only in an employer frame ("at Databricks", "join
+    "Harbor's <role> role", "the <role> role at Harbor", and "the <role>
+    role I held" are claims, while "the <role> role with your team" is the
+    application), the company only in an employer frame ("at Databricks", "join
     Databricks", "why Databricks", "the Databricks team", or a possessive
     before an employer noun such as "Databricks' roadmap" or "mission";
     "Databricks engineering experience", "within Databricks", "Datadog's
@@ -151,7 +155,8 @@ application retain blocking technical guards.
     thing; "apps" and "applications" do not; a percent keeps its own metric
     ("25 percent lower costs" is not grounded by "25 percent" of latency);
     "30d" and "5yrs" are durations that match "30 days" and "5 years",
-    only digits glue ("tend" is not ten days), and "3D" is a name; "who" ends a counted phrase. A number word ends at a word
+    only digits glue ("tend" is not ten days), and "3D" is a name; "who"
+    ends a counted phrase. A number word ends at a word
     boundary ("ones" is not a count); letters glued to digits stay a quantity
     ("200ms", "60fps", "5yrs") except the few that make a name (5G, 3GPP, 2FA,
     3D); a count never takes its noun from the next line.

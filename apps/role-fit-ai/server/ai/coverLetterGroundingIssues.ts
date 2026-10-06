@@ -28,25 +28,48 @@ const ATTENTION_IDIOM = /(?:\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention
 // A denial drops only its own verb phrase. When it governs the clause ("I have
 // not used Kafka, Airflow, or Spark", "Never having used Kafka", "I have no
 // production experience with Kafka") the phrase is the denied verb or experience
-// noun and its object list, up to the first preposition or clause word; a denial
-// with no verb of its own ("Never once did I miss a page", "Not one of the 40
-// Kafka consumers") gives up at most four plain words, never a number, a name,
-// or a tool, so "across the 12 Kafka clusters I ran" stays on the surface. A
-// trailing denial ("with no prior experience") drops only itself.
+// noun and its object list: name-like items (a capitalised word, a tool, "C++")
+// joined by commas, "and", "or", or "nor", so "though I ran 12 Spark clusters"
+// after the list stays on the surface; a denial with no verb of its own ("Never
+// once did I miss a page", "Not one of the 40 Kafka consumers") gives up at most
+// four plain words, never a number, a name, or a tool. A trailing denial ("with
+// no prior experience") drops only itself.
 const DENIAL_GOVERNS = /^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without)\b|^(?:(?:although|though|while|even though)\s+)?(?:(?:I|we)\s+)?\w+n't\b/i;
 const DENIAL_PREFIX = /^(?:(?:although|though|while|even though|despite)\s+)?(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|does|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|without|\w+n't)\b/i;
-const CLAUSE_WORDS = String.raw`at|in|on|for|since|beyond|except|after|before|while|when|because|but|so|which|that|who|where|until|during|to|from|by|as|over|across|through|despite|of|with`;
-const NAME_LIST = String.raw`(?:\s*,?\s*(?:(?:and|or)\s+)?(?!(?:${CLAUSE_WORDS}|and|or)\b)[\w+./-]+)*`;
-const DENIED_VERB = new RegExp(String.raw`^\s*(?:having\s+|yet\s+|ever\s+)?(?:used|use|using|worked|work|built|build|developed|develop|learned|learn|known|touched|touch|deployed|deploy|operated|operate|managed|manage|experienced|familiar|proficient|skilled)\b(?:\s+(?:with|in|on|of))?${NAME_LIST}`, "i");
-const DENIED_EXPERIENCE = new RegExp(String.raw`^\s*(?:[\w+-]+\s+){0,3}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of)${NAME_LIST})?`, "i");
-const DENIAL_SPAN = new RegExp(String.raw`\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:[\w+-]+\s+){0,4}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of)${NAME_LIST})?|\bwithout\s+(?:prior\s+)?experience\b|(?:\b(?:never|not)|n't)\s+(?:having\s+|yet\s+|ever\s+)?(?:used|use|worked|work|built|build|developed|develop|learned|learn|known|touched|deployed|operated|managed|experienced|familiar|proficient|skilled)\b(?:\s+(?:with|in|on|of))?${NAME_LIST}|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of)${NAME_LIST})?|\bunfamiliar\s+with${NAME_LIST}`, "gi");
-const CLAUSE_WORD = new RegExp(String.raw`^(?:${CLAUSE_WORDS}|and|or)$`, "i");
+const DENIED_VERBS = String.raw`used|use|using|worked|work|built|build|developed|develop|learned|learn|known|touched|touch|deployed|deploy|operated|operate|managed|manage|experienced|familiar|proficient|skilled`;
+const DENIED_VERB = new RegExp(String.raw`^\s*(?:having\s+|yet\s+|ever\s+)?(?:${DENIED_VERBS})\b(?:\s+(?:with|in|on|of))?`, "i");
+const DENIED_EXPERIENCE = /^\s*(?:(?!\d)[\w+-]+\s+){0,3}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of))?/i;
+const DENIAL_SPAN = new RegExp(String.raw`\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:(?!\d)[\w+-]+\s+){0,4}(?:experience|exposure|knowledge|background|familiarity)\b(?:\s+(?:with|in|of))?|\bwithout\s+(?:prior\s+)?experience\b|(?:\b(?:never|not)|n't)\s+(?:having\s+|yet\s+|ever\s+)?(?:${DENIED_VERBS})\b(?:\s+(?:with|in|on|of))?|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of))?|\bunfamiliar\s+with\b`, "gi");
+const CLAUSE_WORD = /^(?:at|in|on|for|since|beyond|except|after|before|while|when|because|but|so|which|that|who|where|until|during|to|from|by|as|over|across|through|despite|of|with|and|or|nor|yet|though|although|then|now|however|instead|only|just|other|than)$/i;
+const LIST_ITEM = /^(\s*(?:,\s*)?(?:(?:and|or|nor)\s+)?)([^\s,;]+)/;
+function nameLike(word: string): boolean {
+  if (/^(?:I|We)$/.test(word)) return false;
+  return /^\p{Lu}/u.test(word) || curatedClaimTerms(word).length > 0 || (/[+#./]/.test(word) && /[A-Za-z]/.test(word)) || /\d[A-Za-z]|[A-Za-z]\d/.test(word);
+}
+// The object list of a denied verb: "Kafka, Airflow, or Spark", "Kafka Streams or Apache Airflow".
+function afterNameList(text: string): string {
+  let rest = text;
+  for (;;) {
+    const item = rest.match(LIST_ITEM);
+    if (!item || !nameLike(item[2].replace(/[.!?]+$/, ""))) return rest;
+    rest = rest.slice(item[0].length);
+  }
+}
 function deniedSurface(segment: string): string {
   const trimmed = segment.trim();
-  if (!DENIAL_GOVERNS.test(trimmed)) return segment.replace(DENIAL_SPAN, " ");
+  if (!DENIAL_GOVERNS.test(trimmed)) {
+    let surface = "";
+    let cursor = 0;
+    for (const span of trimmed.matchAll(DENIAL_SPAN)) {
+      if (span.index! < cursor) continue;
+      surface += `${trimmed.slice(cursor, span.index!)} `;
+      cursor = trimmed.length - afterNameList(trimmed.slice(span.index! + span[0].length)).length;
+    }
+    return surface + trimmed.slice(cursor);
+  }
   let rest = trimmed.replace(DENIAL_PREFIX, "");
   const phrase = rest.match(DENIED_VERB) ?? rest.match(DENIED_EXPERIENCE);
-  if (phrase) return rest.slice(phrase[0].length);
+  if (phrase) return afterNameList(rest.slice(phrase[0].length));
   for (let taken = 0; taken < 4; taken += 1) {
     const next = rest.match(/^\s*([^\s,]+)/);
     const word = next?.[1];
@@ -126,11 +149,11 @@ function claimSurface(sentence: string, resolved: ResolvedCoverLetterContext): s
     const title = escapeRegex(role);
     const name = company.length >= 3 ? escapeRegex(company) : "";
     const atCompany = name ? `|(?<=\\bas\\s+(?:a|an|the)\\s)${title}(?=\\s+(?:at|with)\\s+${name}(?![\\p{L}\\p{N}]))` : "";
-    // "the <role> role at Harbor" is a past job at another employer, not the application.
-    const notElsewhere = name ? `(?!\\s+(?:at|with|for)\\s+(?!${name}(?![\\p{L}\\p{N}])))` : "";
+    // "the <role> role at Harbor" or "the <role> role I held" is a past job, not the application.
+    const elsewhere = new RegExp(`^\\s+(?:role|position|opportunity|opening|posting)\\s+(?:(?:at|with|for)\\s+(?!${name || "$^"}(?![\\p{L}\\p{N}]))\\p{Lu}|(?:I|we)\\s+(?:held|had|left|took|filled))`, "u");
     surface = surface.replace(
-      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|(?<=\\b(?:the|this|your${name ? `|${name}['’]s?` : ""})\\s)${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b${notElsewhere})${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
-      " "
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|(?<=\\b(?:the|this|your${name ? `|${name}['’]s?` : ""})\\s)${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b)${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
+      (match: string, offset: number, whole: string) => (elsewhere.test(whole.slice(offset + match.length)) ? match : " ")
     );
   }
   if (company.length >= 3) {
