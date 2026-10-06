@@ -105,6 +105,21 @@ bounded; app-only operational detail belongs in the affected app documentation.
     prompt was not changed: the slot fills, not the prompt, drove the
     repetition, and Sol still prefers the shipped prompt on this letter
     family.
+  - [TOOL] Fifth review (exact head 6c3d5104, 2026-10-06): no high findings;
+    two regressions from the fourth round (glued durations also took word
+    numbers, so "tend" read as ten days in every shared guard; the stricter
+    denial head left "no experience with Kafka", "never having used", and
+    denied lists warning again) and two residuals (a verbless denial could
+    still swallow "my 12 Airflow DAGs"; any possessive or "that" framed the
+    role title, and "the <role> role at Harbor" was stripped). All closed
+    with probes: digits only glue a duration; a denied verb takes its whole
+    object list and an experience denial its noun; a verbless denial never
+    gives up a number, a name, or a tool; the role frame takes only
+    the/this/your/<Company>'s and never "at" another employer; the shared
+    polarity helper knows touched/deployed/known/operated/managed. Replay on
+    the 120 baseline letters is back at 27.8% / 5.8% (the fourth round's
+    extra true warning came from the over-wide denial head); Resume Polish
+    replay unchanged at 53.5% / 54.8%; check 141/141.
   - [TOOL] Fourth review (exact head 18e6ec7a, 2026-10-06): no high findings;
     four of the third review's holes were only partly closed (a clause-initial
     denial still hid the facts after it; the role title was stripped before

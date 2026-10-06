@@ -251,4 +251,26 @@ assert.ok(slotOnly.some((item) => /^## \(untitled\)$/.test(item.text)), "a slot-
 assert.match(coverLetterParagraphClaims({ paragraphs: [{ text: "Beacon taught me to run 12 Airflow DAGs nightly.", evidenceIds: ["b1"], slotIds: [] }], evidence: slotOnly, authoredProse: "", jobText: "Acme needs Airflow.", resolved }).issues.map((issue) => issue.unsupportedValue).join(" "), /airflow|12/i, "lines under a slot-only heading do not fall into the previous section");
 assert.equal(findUngroundedNumericClaim("Cut onboarding to 30d.", "Cut onboarding to 30 days."), null, "30d counts days");
 
+// Fifth review (2026-10-06): only digits glue a duration; a denied verb takes its whole object list and an
+// "experience" denial its noun; a verbless denial never gives up a number, a name, or a tool; a role title before
+// "role" is a name only after the/this/your/<Company>'s and never when the role noun is "at" another employer.
+assert.equal(findUngroundedNumericClaim("I tend to write tests before code.", "Wrote tests."), null, "\"tend\" is not ten days");
+assert.equal(findUngroundedNumericClaim("Finished eighth of forty.", "Finished eighth of forty."), null, "\"eighth\" is not eight hours");
+assert.equal(harborCheck("I have no experience with Kafka."), "", "an experience denial claims nothing");
+assert.equal(harborCheck("I have no production experience in Kafka."), "");
+assert.equal(harborCheck("Never having used Kafka, I would learn it on the job."), "", "\"having\" before the denied verb");
+assert.equal(harborCheck("I have not used Kafka, Airflow, or Spark."), "", "a denied list");
+assert.equal(harborCheck("I haven't used Spark, Flink, or Airflow."), "");
+assert.equal(harborCheck("I have not used Kafka Streams or Apache Airflow."), "", "two-word names in a denied list");
+assert.equal(harborCheck("I have never touched Airflow."), "", "touched and deployed are denial verbs");
+assert.equal(harborCheck("I have never deployed Airflow."), "");
+assert.match(harborCheck("Never did my 12 Airflow DAGs miss a run at Harbor."), /airflow|12/i, "a verbless denial never eats a count or a tool");
+assert.match(harborCheck("Not once did 40 Kafka consumers drop a message at Harbor."), /kafka|40/i);
+assert.match(harborCheck("Never have 12 Spark clusters run more smoothly than under me."), /spark|12/i);
+assert.match(harborCheck("In Harbor's Senior Kafka Engineer role I ran clusters.", "Acme", "Senior Kafka Engineer"), /kafka/i, "another employer's possessive is not a frame");
+assert.match(harborCheck("That Senior Kafka Engineer position at Harbor taught me scheduling.", "Acme", "Senior Kafka Engineer"), /kafka/i);
+assert.match(harborCheck("In the Senior Kafka Engineer role at Harbor I ran clusters.", "Acme", "Senior Kafka Engineer"), /kafka/i, "\"the <role> role at <other employer>\" is a past job");
+assert.equal(harborCheck("This Senior Kafka Engineer role is the work I want.", "Acme", "Senior Kafka Engineer"), "");
+assert.deepEqual(candidateClaimSentences("Northwind's work on Kafka drew me to apply.", northwind), [], "\"drew me to apply\" closes the idiom");
+
 console.log("cover-letter warning precision probes passed");

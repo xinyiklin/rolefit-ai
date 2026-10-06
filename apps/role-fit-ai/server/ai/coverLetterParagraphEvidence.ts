@@ -108,8 +108,9 @@ export function coverLetterParagraphClaims({
   }));
   if (authoredProse) sources.push({ id: "source_letter", entry: "", group: "source_letter", text: authoredProse });
   const employer = `${jobText}\n${employerContext ?? ""}`;
-  // Only a dated resume entry can be named: a Skills row ("Cloud") or an answer
-  // label never narrows a sentence to itself or lends its tools to a job.
+  // Only a resume entry with a multi-part label (title plus dates, employer, or
+  // stack) can be named: a Skills row ("Cloud"), a single-title entry, or an
+  // answer label never narrows a sentence to itself or lends its tools to a job.
   const nameable = new Set(evidence.filter((item) => item.source === "resume" && item.entry?.includes(ENTRY_LABEL_SEPARATOR)).map((item) => evidenceEntryName(item.entry)));
   for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
     // A citation grounds its whole entry: the other bullets of that resume entry

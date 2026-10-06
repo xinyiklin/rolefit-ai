@@ -61,7 +61,8 @@ const WORD_NUMBER_PATTERN =
 const DIGIT_NUMBER_PATTERN = String.raw`\d+(?:[,_]\d+)*(?:\.\d+)?`;
 const DURATION_CLAIM_PATTERN = new RegExp(
   // "30d", "5yrs", and "2 weeks" are durations; "3D" is a name (uppercase only).
-  String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})(?:\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b|(yrs?|mos?|wks?|d|hrs?|h)(?![A-Za-z]))`,
+  // Only digits glue ("tend" is not ten days).
+  String.raw`\b(?:(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN})\s*(?:\+|plus)?\s+(years?|months?|weeks?|days?|hours?)\b|(${DIGIT_NUMBER_PATTERN})(yrs?|mos?|wks?|d|hrs?|h)(?![A-Za-z]))`,
   "gi"
 );
 
@@ -159,10 +160,11 @@ export function numericClaims(value: unknown): NumericClaim[] {
     push(`version:${match[1].toLowerCase()}:${match[2]}`, match[2], index, match[2].length);
   }
   for (const match of text.matchAll(DURATION_CLAIM_PATTERN)) {
-    const number = normalizedNumber(match[1]);
+    const number = normalizedNumber(match[1] ?? match[3]);
     // "3D" and "2H" are names; only lowercase letters glue a duration.
-    if (!number || (match[3] && /[A-Z]/.test(match[3]))) continue;
-    const unit = GLUED_DURATIONS.get((match[2] ?? match[3]).toLowerCase().replace(/s$/, "")) ?? (match[2] ?? match[3]).toLowerCase().replace(/s$/, "");
+    if (!number || (match[4] && /[A-Z]/.test(match[4]))) continue;
+    const rawUnit = (match[2] ?? match[4]).toLowerCase().replace(/s$/, "");
+    const unit = GLUED_DURATIONS.get(rawUnit) ?? rawUnit;
     push(`duration:${unit}:${number}`, match[0], match.index!, match[0].length);
   }
 

@@ -11,7 +11,7 @@ export function evidenceSegments(value: string): string[] {
 export function evidencePolarity(segment: string): "affirmative" | "denied" | "aspirational" {
   const text = segment.replace(/\bnot only\b/gi, "");
   if (
-    /\b(?:no (?:[\w+-]+\s+){0,4}experience|without experience|(?:never|not) (?:used|use|worked|built|developed|learned|experienced|familiar|proficient|skilled)|(?:have|has)(?:\s+not|n't) (?:used|worked|built|developed)|(?:do|did)(?:\s+not|n't) (?:use|work|build|develop)|lack(?:s|ing)? (?:experience|knowledge|skills?)|unfamiliar with)\b/i.test(
+    /\b(?:no (?:[\w+-]+\s+){0,4}experience|without experience|(?:never|not) (?:(?:having |yet )?used|use|worked|built|developed|learned|touched|deployed|known|operated|managed|experienced|familiar|proficient|skilled)|(?:have|has)(?:\s+not|n't) (?:used|worked|built|developed)|(?:do|did)(?:\s+not|n't) (?:use|work|build|develop)|lack(?:s|ing)? (?:experience|knowledge|skills?)|unfamiliar with)\b/i.test(
       text
     ) ||
     /^(?:no|not|never)\b/i.test(text.trim())

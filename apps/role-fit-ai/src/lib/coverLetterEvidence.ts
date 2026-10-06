@@ -131,7 +131,7 @@ export function splitProfileEvidence(candidateContext: string): string[] {
       const hashes = line.match(/^#{1,6}(?=\s)/)?.[0];
       if (hashes) {
         const heading = withoutTemplateSlots(line).replace(/^#+\s*/, "");
-        items.push(`${hashes} ${heading || "(untitled)"}`);
+        items.push(`${hashes} ${/[\p{L}\p{N}]{2,}/u.test(heading) ? heading : "(untitled)"}`);
       }
       continue;
     }
