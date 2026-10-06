@@ -53,8 +53,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
       what carries the Sonnet and Opus wins.
     - Every model cited the deterministic role or company slot, which the
       validator treated as a technical defect: 114 of 120 baseline runs paid a
-      second provider call for the repair pass. Known slot ids are now dropped,
-      not repaired; v2 through v4 ran with zero repairs.
+      second provider call for the repair pass. Cited deterministic slot ids are
+      now dropped, not repaired (a cited unanswered private slot warns on its
+      paragraph); v2 through v4 ran with zero repairs.
   - [CODE] Evidence guard (rules in `server/ai/AGENTS.md`): whole-entry
     citation scope with Profile sections linked by heading, named entries
     checked against their own evidence, a cleaner claim surface (per-clause
@@ -71,8 +72,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
       and dropped: 1 true of 7 warnings on letters. The resume warning replay
       stayed at 53.5% precision / 54.8% recall; the offline suite passed
       141/141.
-  - [USER+CODE] Base variants, now one. The five variants carried a "more than 50%"
-    wait-time figure the Profile explicitly disclaims, "helped lead" where the
+  - [USER+CODE] Base variants, now one. The five variants carried an outcome
+    figure the Profile explicitly disclaims, "helped lead" where the
     resume says "Led", and stale counts. Matched specialized variants vs
     `default` on 15 postings (Opus 5.5 high, both judges): 8-7 and 7-7, agree
     6-6, so specialization adds nothing measurable. [USER] One variant, as
@@ -104,6 +105,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
     prompt was not changed: the slot fills, not the prompt, drove the
     repetition, and Sol still prefers the shipped prompt on this letter
     family.
+  - [TOOL] Third review (exact head of PR #169, 2026-10-06): no high findings;
+    eight medium recall holes and two low ones, all closed with probes: a
+    percent borrowed another metric's evidence; the attention idiom hid a
+    candidate clause after it; a trailing denial dropped its whole clause;
+    the role title was stripped outside an application frame and the
+    company outside an employer frame ("Databricks engineering experience",
+    "within Databricks", "Datadog's agent"); a cited unanswered private slot
+    vanished silently (now a paragraph warning); Profile owners were keyed by
+    heading text, so a same-text nested heading borrowed the linked one, and
+    a bracketed heading dropped out of the corpus so its lines fell into the
+    previous section; a capitalised Skills row could be "named"; "30d" was a
+    name; "who" did not end a counted phrase. The review also found the
+    precision-probe fixtures paraphrased the real resume, Profile, and base
+    letter despite a "synthetic" header; they are now invented (a lending
+    app, a sandbox CLI, a marina job). Replays unchanged: cover 27.8% / 5.8%,
+    resume 53.5% / 54.8%; check 141/141.
   - [TOOL] Two independent reviews: the first found 4 high / 4 medium holes in
     the guard relaxations (glued units, plural concepts, aspiration clauses,
     role and company stripping, team names, Profile grouping, modal lookback),

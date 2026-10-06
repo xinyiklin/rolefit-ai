@@ -21,7 +21,26 @@ const DIRECT_EMPLOYER_FACT =
 const POSSESSIVE_EMPLOYER_FACT =
   /^(?![^.!?]*\b(?:experience|expertise|background|track record|skills?|abilities|knowledge|proficiency|familiarity)\b)[^.!?]{0,120}\b(?:uses?|builds?|runs?|operates?|develops?|maintains?|offers?|provides?|serves?|needs?|requires?|values?|prioritizes?|includes?|has\b|focus(?:es)? on|works? on|is (?:built|based) on)\b/i;
 
-const ATTENTION_IDIOM = /\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention|interest|eye)\b|\b(?:drew|draws|interests?|interested|appeals?|appealed|attracted|brought)\s+(?:to\s+)?me\b|\bwhat\s+(?:drew|brought|draws|brings)\s+me\b/gi;
+// The idiom makes no claim only when it closes its clause or leads into a reason;
+// "which drew me after years building Kafka pipelines" is still a candidate sentence.
+const ATTENTION_IDIOM = /(?:\b(?:caught|drew|holds?|has|got)\s+my\s+(?:attention|interest|eye)\b|\b(?:drew|draws|interests?|interested|appeals?|appealed|attracted|brought)\s+(?:to\s+)?me\b|\bwhat\s+(?:drew|brought|draws|brings)\s+me\b)(?=\s*(?:[.!?,;:]|$|(?:because|since)\b))/gi;
+
+// A denial drops its own clause only when it governs the clause's verb; a trailing
+// denial ("with no prior experience") drops only itself, and a fact a governing
+// denial merely frames ("while shipping 40 Kafka consumers", "in 2 years of running
+// Kafka") stays on the surface.
+const DENIAL_GOVERNS = /^(?:(?:I|we)\s+)?(?:(?:have|has|had|do|did|am|are|was|were|having|while|despite)\s+)?(?:not|never|no|n't|without)\b|^(?:I|we)\s+\w+n't\b/i;
+const DENIAL_SPAN = /\b(?:with(?:out)?\s+)?(?:no|without|little|zero)\s+(?:[\w+-]+\s+){0,4}experience\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bwithout\s+(?:prior\s+)?experience\b|\b(?:never|not|n't)\s+(?:used|use|worked|built|developed|learned|experienced|familiar|proficient|skilled)\b(?:\s+(?:with|in|on))?(?:\s+[\w+./-]+)?|\b(?:have|has)(?:\s+not|n't)\s+(?:used|worked|built|developed)\b(?:\s+(?:with|in|on))?(?:\s+[\w+./-]+)?|\black(?:s|ing)?\s+(?:experience|knowledge|skills?)\b(?:\s+(?:with|in|of)\s+[\w+./-]+)?|\bunfamiliar\s+with\s+[\w+./-]+/gi;
+const FRAMED_FACT = /\s+(?:while|after|before|when|by|through|despite|from)\s+(?=\w+ing\b)|\s+(?:in|over|across|for)\s+(?=\d)/i;
+function deniedSurface(segment: string): string {
+  if (!DENIAL_GOVERNS.test(segment.trim())) return segment.replace(DENIAL_SPAN, " ");
+  const [, ...framed] = segment.split(FRAMED_FACT);
+  return framed.join(" ");
+}
+
+// Employer nouns a possessive company name attaches to as a name ("Databricks'
+// roadmap"); "Datadog's agent" is a tool and stays checkable.
+const EMPLOYER_NOUNS = String.raw`teams?|mission|work|products?|platform|roadmap|posting|job description|culture|customers|clients|business|focus|approach|emphasis|commitment|goals?|values|vision|growth|users|members|people|engineers|offices?|reputation|priorities|needs|investment`;
 
 // Employer/job statements may use posting facts, but they must never widen the
 // candidate corpus. Mixed employer/candidate sentences stay in every gate.
@@ -73,24 +92,29 @@ function claimSurface(sentence: string, resolved: ResolvedCoverLetterContext): s
     .flatMap((segment) => segment.split(/[;:]\s+|,\s+(?:and|but|so|which|while|where|whereas)\s+|\s+(?:but|whereas)\s+|,\s+(?=(?:I|we)\b)|\s+(?:when|after|while|because|since|as|and)\s+(?=(?:I|we)\b)/))
     // Only a denial claims nothing; an aspiration ("I want to bring 12 Kafka
     // migrations") can still carry facts, so it stays on the surface.
-    .filter((segment) => evidencePolarity(segment) !== "denied")
+    .map((segment) => (evidencePolarity(segment) === "denied" ? deniedSurface(segment) : segment))
     .join(" ");
-  // The whole prepared role title is a name the letter must use, even when it
-  // carries a tool ("Backend Engineer - Kafka"); a lone "Kafka" elsewhere is
-  // still a claim. The company is a name only where it is used as one
-  // ("Databricks' roadmap", "to join Databricks"), so "built Databricks
-  // pipelines" stays checkable when the employer is also a tool.
+  // The whole prepared role title is a name only in an application frame
+  // ("applying for <role>", "the <role> role", "as a <role> at <Company>"), even
+  // when it carries a tool ("Backend Engineer - Kafka"); "As the Senior Kafka
+  // Engineer at Harbor" and a lone "Kafka" elsewhere are claims. The company is a
+  // name only in an employer frame ("at Databricks", "Databricks' roadmap", "the
+  // Databricks team"), so "Databricks engineering experience" stays checkable when
+  // the employer is also a tool.
   const role = resolved.role.trim();
+  const company = resolved.company.trim();
   if (role.length >= 3) {
+    const title = escapeRegex(role);
+    const atCompany = company.length >= 3 ? `|(?<=\\bas\\s+(?:a|an|the)\\s)${title}(?=\\s+(?:at|with)\\s+${escapeRegex(company)}\\b)` : "";
     surface = surface.replace(
-      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:the|this|your|for|[A-Z][\\w]*['’]s)\\s)${escapeRegex(role)}|${escapeRegex(role)}(?=\\s+(?:role|position|opportunity|opening|posting)\\b))(?![\\p{L}\\p{N}])`, "giu"),
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:applying|apply|application|applied|interest|candidacy)\\s+(?:for|in)\\s(?:the\\s|this\\s|your\\s|a\\s|an\\s)?)${title}|${title}(?=\\s+(?:role|position|opportunity|opening|posting)\\b)${atCompany})(?![\\p{L}\\p{N}])`, "giu"),
       " "
     );
   }
-  const company = resolved.company.trim();
   if (company.length >= 3) {
+    const name = escapeRegex(company);
     surface = surface.replace(
-      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:at|join|joining|about|why|within)\\s)${escapeRegex(company)}|${escapeRegex(company)}(?=['’](?:s\\b|\\s|$)|\\s+(?:team|engineering|hiring)\\b))(?![\\p{L}\\p{N}])`, "giu"),
+      new RegExp(`(?<![\\p{L}\\p{N}])(?:(?<=\\b(?:at|join|joining|why)\\s)${name}|${name}(?=['’]s?\\s+(?:${EMPLOYER_NOUNS})\\b|['’]s?\\s+(?:(?:engineering|hiring|platform|product)\\s+)?team\\b|\\s+(?:(?:engineering|hiring|platform|product)\\s+)?team\\b))(?![\\p{L}\\p{N}])`, "giu"),
       " "
     );
   }

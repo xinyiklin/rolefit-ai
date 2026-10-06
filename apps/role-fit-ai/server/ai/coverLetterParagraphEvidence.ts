@@ -4,7 +4,7 @@ import {
   type CoverLetterBodyParagraph
 } from "../../src/lib/coverLetterEvidence.ts";
 import type { ResolvedCoverLetterContext } from "../../src/lib/coverLetterPreflight.ts";
-import { GROUPING_HEADINGS, linkedProfileHeadings, profileHeadingName, profileHeadings } from "../../shared/candidateProfileContract.ts";
+import { GROUPING_HEADINGS, profileHeadingName, profileHeadingOwners, profileHeadings } from "../../shared/candidateProfileContract.ts";
 import type { CoverLetterValidationIssue } from "./coverLetterIssues.ts";
 import { affirmativeEvidence, candidateClaimIssue, evidenceSegments, hasContradictoryClaimEvidence } from "./claimEvidence.ts";
 import { curatedClaimTerms, hasUnsupportedOwnershipIncrease, isTermGrounded } from "./grounding.ts";
@@ -56,10 +56,9 @@ function evidenceGroups(evidence: CoverLetterEvidenceItem[]): Map<string, string
   const headings = profileHeadings(profileText);
   const ends = headings.map((heading, index) =>
     headings.slice(index + 1).find((next) => next.level <= heading.level)?.line ?? lines.length);
-  const ownerByHeading = new Map<string, string>();
-  for (const [owner, texts] of linkedProfileHeadings(scope, profileText)) {
-    for (const text of texts) ownerByHeading.set(text, owner);
-  }
+  // Owners are read by heading position: a "### Atlas" nested under an unrelated
+  // heading is not the top-level "## Atlas" even though the text matches.
+  const owners = profileHeadingOwners(scope, profileText);
   const grouping = new Set(GROUPING_HEADINGS);
   const nameKey = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
   const entryNames = new Set([...entries.values()].map((entry) => nameKey(entry.titleLeft)));
@@ -77,7 +76,7 @@ function evidenceGroups(evidence: CoverLetterEvidenceItem[]): Map<string, string
       let owner: string | undefined;
       for (let index = innermost; index >= 0 && !owner; index -= 1) {
         if (headings[index].line > lineIndex || lineIndex >= ends[index]) continue;
-        owner = ownerByHeading.get(headingName(index));
+        owner = owners[index] ?? undefined;
         // An unlinked heading that names some entry ("### Beacon" under "## Atlas")
         // is excluded from its parent's section, as the shared linker excludes it.
         if (!owner && entryNames.has(nameKey(profileHeadingName(headingName(index))))) break;
@@ -109,6 +108,9 @@ export function coverLetterParagraphClaims({
   }));
   if (authoredProse) sources.push({ id: "source_letter", entry: "", group: "source_letter", text: authoredProse });
   const employer = `${jobText}\n${employerContext ?? ""}`;
+  // Only a dated resume entry can be named: a Skills row ("Cloud") or an answer
+  // label never narrows a sentence to itself or lends its tools to a job.
+  const nameable = new Set(evidence.filter((item) => item.source === "resume" && item.entry?.includes(ENTRY_LABEL_SEPARATOR)).map((item) => evidenceEntryName(item.entry)));
   for (const [paragraphIndex, paragraph] of paragraphs.entries()) {
     // A citation grounds its whole entry: the other bullets of that resume entry
     // and the Profile section its heading names, never another entry.
@@ -118,7 +120,7 @@ export function coverLetterParagraphClaims({
     for (const sentence of evidenceSegments(paragraph.text)) {
       const isCandidate = candidateSentences.some((candidate) => candidate.includes(sentence));
       // Case-sensitive: "Frontend" is a Skills row, "the frontend" is not a reference to it.
-      const named = isCandidate ? sources.filter((source) => source.entry &&
+      const named = isCandidate ? sources.filter((source) => source.entry && nameable.has(source.entry) &&
         /^[A-Z]/.test(sentence.match(new RegExp(`(?:^|[^\\p{L}\\p{N}])(${source.entry.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})(?=$|[^\\p{L}\\p{N}])`, "iu"))?.[1] ?? "")) : [];
       const names = new Set(named.map((source) => source.entry));
       // Explicitly named work is checked against that entry alone, cited or not:

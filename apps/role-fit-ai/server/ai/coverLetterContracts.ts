@@ -183,8 +183,11 @@ export function validateCoverLetterTailorOutput({
       .map((slot) => slot.id)
   );
   // Models routinely cite the role or company slot beside the paragraph that names
-  // them. Those ids are real source slots, so they are dropped, not repaired.
-  const knownSlotIds = new Set(sourceContext.slots.map((slot) => slot.id));
+  // them. Those ids are real source slots, so they are dropped, not repaired. A cited
+  // unanswered private slot (a referral) is the clearest sign of an invented fact,
+  // so it is surfaced as a warning rather than dropped or repaired away.
+  const knownSlotIds = new Set(sourceContext.slots.filter((slot) => slot.resolution.kind !== "needs_input").map((slot) => slot.id));
+  const privateSlotIds = new Set(sourceContext.slots.filter((slot) => slot.resolution.kind === "needs_input").map((slot) => slot.id));
 
   const bodyParagraphs: CoverLetterBodyParagraph[] = [];
   for (const [paragraphIndex, raw] of rawParagraphs.entries()) {
@@ -238,7 +241,18 @@ export function validateCoverLetterTailorOutput({
         paragraphIndex
       });
     }
-    const unknownSlots = slotIds.filter((id) => !knownSlotIds.has(id));
+    if (slotIds.some((id) => privateSlotIds.has(id))) {
+      issues.push({
+        code: "unresolved_template",
+        category: "template",
+        claim: paragraphText,
+        detail: "This paragraph cites a private-detail slot you did not answer (a referral or personal fact); check it for an invented detail.",
+        recovery: "edit_source",
+        repairMessage: "A paragraph cited a private-detail slot the candidate never answered.",
+        paragraphIndex
+      });
+    }
+    const unknownSlots = slotIds.filter((id) => !knownSlotIds.has(id) && !privateSlotIds.has(id));
     if (unknownSlots.length > 0) {
       issues.push({
         code: "unresolved_template",

@@ -194,7 +194,8 @@ owns:
   base letter supports is returned with a warning naming it. Technical issues,
   including unusable paragraphs, unsafe markup, a template slot id the source
   never had (a cited deterministic role or company slot is dropped, not
-  repaired), correspondence assembly defects, and resource limits, may trigger
+  repaired; a cited unanswered private slot is returned as a warning on its
+  paragraph), correspondence assembly defects, and resource limits, may trigger
   one repair. Repeated technical failure returns `422`, `status: "blocked"`,
   `reason: "technical_checks"`, and at most eight display-safe issue records.
   Internal repair instructions and rejected provider bodies never reach the UI.

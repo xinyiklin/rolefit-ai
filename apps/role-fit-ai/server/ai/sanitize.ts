@@ -74,11 +74,11 @@ const NOT_PLURAL_NOUNS = new Set(["as", "is", "was", "has", "its", "this", "thus
 const COUNT_UNIT_ALIASES = new Map([["evaluation", "eval"], ["specification", "spec"], ["repository", "repo"], ["configuration", "config"]]);
 const countUnit = (word: string): string => { const unit = word.toLowerCase().replace(/s$/, ""); return COUNT_UNIT_ALIASES.get(unit) ?? unit; };
 
-// Letters glued to digits that make a name, not a quantity: 5G, 3GPP, 2FA, 3D.
-const GLUED_NAME = /^(?:g|gpp|fa|d|lte|nr)(?![A-Za-z])/i;
+// Letters glued to digits that make a name, not a quantity: 5G, 3GPP, 2FA, 3D ("30d" is a duration).
+const GLUED_NAME = /^(?:[gG]|[gG][pP][pP]|[fF][aA]|D|[lL][tT][eE]|[nN][rR])(?![A-Za-z])/;
 
 // A count's noun phrase ends at the next preposition.
-const PHRASE_BOUNDARY = new Set(["for", "of", "to", "in", "on", "at", "per", "by", "with", "from", "across", "into", "over", "under", "that", "which", "while", "when"]);
+const PHRASE_BOUNDARY = new Set(["for", "of", "to", "in", "on", "at", "per", "by", "with", "from", "across", "into", "over", "under", "that", "which", "who", "whose", "where", "while", "when"]);
 // "regression and adversarial evals" is one noun phrase; "1 dashboard and APIs" is two.
 const CONJUNCTIONS = new Set(["and", "or", "but"]);
 
@@ -165,7 +165,7 @@ export function numericClaims(value: unknown): NumericClaim[] {
 
   const countUnits = "invoices?|users?|requests?|tests?|endpoints?|customers?|developers?|tickets?|services?";
   const countPhrase = String.raw`(?:(?:${UNSCALED_MAGNITUDES})\b\s*)?(?:(?!(?:and|or|but|for|of|to|with|from|by|in|on|at|per|${UNSCALED_MAGNITUDES})\b)[A-Za-z][A-Za-z-]*\s+){0,3}?(?:${countUnits})\b`;
-  // "480+ tests" and "480-plus tests" count tests: the qualifier never separates a
+  // "300+ tests" and "300-plus tests" count tests: the qualifier never separates a
   // count from its noun, and a count never takes its noun from the next line.
   const measurement = new RegExp(
     String.raw`\b(${DIGIT_NUMBER_PATTERN}|${WORD_NUMBER_PATTERN}(?![A-Za-z]))[ \t]*(?:\+|-?plus\b)?[ \t]*(%|percentage\s+points?|percent\b|${countPhrase}|thousand\b|million\b|billion\b|[A-Za-z][A-Za-z-]*\b)`, "gi"
@@ -179,10 +179,11 @@ export function numericClaims(value: unknown): NumericClaim[] {
     const described = /^one$/i.test(match[1]) && /ed$/i.test(match[2])
       ? text.slice(match.index! + match[0].length).match(/^\s+([A-Za-z][A-Za-z-]*)/)?.[1] : undefined;
     const currency = text.slice(Math.max(0, match.index! - 12),match.index!).match(/(?:\b(?:USD|CAD|EUR|GBP)|[$€£])\s*$/i)?.[0].trim().toUpperCase();
-    // "240+ documented OpenAPI operations" counts operations: a single generic word
+    // "120+ documented API endpoints" counts endpoints: a single generic word
     // after the count yields to the first plural noun before the next preposition.
     let afterConjunction = false;
-    const headNoun = described || !/^[A-Za-z][A-Za-z-]*$/.test(match[2].trim()) || /s$/i.test(match[2])
+    // A percent keeps its own metric ("25 percent lower costs" is not "25 percent" of anything else).
+    const headNoun = described || !/^[A-Za-z][A-Za-z-]*$/.test(match[2].trim()) || /s$/i.test(match[2]) || /^percent/i.test(match[2])
       ? null
       : [...(text.slice(match.index! + match[0].length).match(/^((?:[ \t]+[A-Za-z][A-Za-z-]*){1,4})/)?.[1] ?? "").matchAll(/\S+/g)]
         .reduce<{ word: string; length: number } | null | false>((found, wordMatch) => {
