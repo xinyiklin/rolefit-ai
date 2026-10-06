@@ -108,6 +108,20 @@ type PromptSources = {
   candidateContext: string;
 };
 
+// The prompt clips oversized text, but the result is rejected for the original
+// normalized length, so the same measure must decide before any dispatch.
+export function fitAssessmentInputLimitError(input: {
+  jobText: unknown;
+  resumeText: unknown;
+  candidateContext?: unknown;
+}): string | null {
+  const over =
+    normalizeFitAssessmentInput(input.jobText).length > JOB_CHAR_LIMIT ||
+    normalizeFitAssessmentInput(input.resumeText).length > RESUME_CHAR_LIMIT ||
+    normalizeFitAssessmentInput(input.candidateContext ?? "").length > CANDIDATE_CONTEXT_CHAR_LIMIT;
+  return over ? FIT_FAILURE_MESSAGES["input-limit"] : null;
+}
+
 function promptSources({
   jobText,
   resumeText,
@@ -291,7 +305,7 @@ export function sanitizeFitAssessmentResponse(
   const reject = (reason: FitFailureReason): null => { reportFailure?.(reason); return null; };
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return reject("invalid-response");
   const source = raw as Record<string, unknown>;
-  if (normalizeFitAssessmentInput(input.jobText).length > JOB_CHAR_LIMIT || normalizeFitAssessmentInput(input.resumeText).length > RESUME_CHAR_LIMIT || normalizeFitAssessmentInput(input.candidateContext ?? "").length > CANDIDATE_CONTEXT_CHAR_LIMIT) return reject("input-limit");
+  if (fitAssessmentInputLimitError(input)) return reject("input-limit");
   const sources = promptSources(input);
   if (source.status === "INSUFFICIENT_JOB_INFORMATION") {
     if (source.verdict !== undefined || source.eligibility !== undefined ||
@@ -404,6 +418,10 @@ export async function analyzeFitAssessment({
   signal?: AbortSignal;
 }) {
   const { provider, apiKey, model, reasoningEffort } = resolveProviderRequest(body);
+  const inputLimitError = fitAssessmentInputLimitError({ jobText, resumeText, candidateContext });
+  if (inputLimitError) {
+    return { fitAssessment: null, fitAssessmentError: inputLimitError, provider, model, reasoningEffort, attempts: 0 };
+  }
   const { systemPrompt, userPrompt } = buildFitAssessmentPrompts({ jobText, resumeText, candidateContext });
   const stats: AttemptStats = {};
   const parsed = await callConfiguredProvider(

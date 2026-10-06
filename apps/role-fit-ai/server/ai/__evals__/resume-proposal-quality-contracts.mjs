@@ -18,10 +18,12 @@ assert.deepEqual(provenanceCounts, {
   "Synthetic opportunity case (2026-10-06); requires a proposal": 5
 });
 // Opportunity cases exist so an always-NO_CHANGES generator cannot pass the
-// corpus. Each requires a proposal and names the improvement it expects; the
-// opportunity counters stay diagnostic, so any usable change passes the gate.
+// corpus. Each requires a proposal and names the improvement it expects, and a
+// proposal that touches none of the named targets misses the opportunity. The
+// older brochure cases require a proposal but accept any honest edit.
 const opportunityCases = fixtures.filter((fixture) => fixture.provenance.startsWith("Synthetic opportunity case"));
 assert.equal(opportunityCases.length, 5);
+assert.deepEqual(fixtures.filter((fixture) => fixture.gateOpportunity).map((fixture) => fixture.name).sort(), opportunityCases.map((fixture) => fixture.name).sort(), "exactly the opportunity cases gate on their named targets");
 for (const fixture of opportunityCases) {
   const { shouldTouch = [], shouldReorder = [], shouldAdd = [], shouldRemove = [] } = fixture.opportunities;
   assert.equal(fixture.requiresProposal, true, `${fixture.name}: requires a proposal`);
@@ -31,9 +33,9 @@ assert.equal(fixtures.filter((fixture) => fixture.requiresProposal).length, 8, "
 assert.deepEqual(
   fixtures.filter((fixture) => fixture.requiresProposal && fixture.opportunities.shouldAdd?.length).map((fixture) => fixture.name),
   ["profile-fact-missing"],
-  "one required case expects a Profile-backed addition (diagnostic counter, not a gate)"
+  "one required case expects a Profile-backed addition"
 );
-const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal"]);
+const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal", "gateOpportunity"]);
 const TRAP_KEYS = new Set(["jdOnly", "perEntryForbidden", "lowOwnershipBullets", "mustKeepBullets", "numericForbidden", "injectionMarkers"]);
 const OPPORTUNITY_KEYS = new Set(["shouldTouch", "shouldReorder", "fillerBullets", "shouldAdd", "shouldRemove", "expectFewEdits", "adviceFromProfile"]);
 // Terms an entry mentions only as denied, someone else's work, or the row's own label.
@@ -116,6 +118,12 @@ function types(name, changes) {
   return gradeProposal(byName.get(name), proposal(changes)).hits.map((hit) => hit.type);
 }
 const safe = change("backend-platform", "harbor-b2", "Built Django REST endpoints used by pricing and dispatch teams to look up carrier rates.");
+// A same-text rewrite of the first editable bullet, for cases where only the gate is under test.
+function safeFor(fixtureName) {
+  const fixture = byName.get(fixtureName);
+  const target = flattenResumeTargets(fixtureIndex(fixture).scope, fixture.candidateContext).find((item) => item.kind === "bullet");
+  return { targetId: target.targetId, target: wireTarget(target.target), replacement: plain(target.currentText) };
+}
 const productionFixture = byName.get("backend-platform");
 const productionIndex = fixtureIndex(productionFixture);
 const productionResult = sanitizeResumeProposal(proposal([safe]), flattenResumeTargets(productionIndex.scope, productionFixture.candidateContext), productionFixture.jobText, productionIndex.resumeText, productionFixture.candidateContext);
@@ -126,6 +134,27 @@ assert.equal(gradeProposal(byName.get("aligned-data"), noChanges()).passed, true
 assert.equal(gradeProposal(byName.get("brochure-project"), noChanges()).passed, false);
 for (const name of ["buried-strength-order", "duplicate-achievement", "profile-fact-missing", "feature-tour-contribution", "only-proof-removal-trap"]) {
   assert.equal(gradeProposal(byName.get(name), noChanges()).passed, false, `${name}: NO_CHANGES misses the required improvement`);
+}
+// A harmless edit beside the planted opportunity does not satisfy it; any named target does.
+{
+  const buried = byName.get("buried-strength-order");
+  const buriedTargets = flattenResumeTargets(fixtureIndex(buried).scope, buried.candidateContext);
+  const juniper = buriedTargets.find((target) => target.target.bulletId === "juniper-b1");
+  const harmless = { targetId: juniper.targetId, target: wireTarget(juniper.target), replacement: plain(juniper.currentText) + " for the team." };
+  assert.ok(types("buried-strength-order", [harmless]).includes("missedOpportunity"), "an edit to an unrelated bullet misses the planted opportunity");
+  const pinecone = buriedTargets.find((target) => target.kind === "bullet-order" && target.target.entryId === "pinecone");
+  const reordered = gradeProposal(buried, proposal([{ targetId: pinecone.targetId, target: wireTarget(pinecone.target), order: [...pinecone.bulletTargetIds].reverse() }]));
+  assert.ok(!reordered.hits.some((hit) => hit.type === "missedOpportunity"), "a reorder of the named entry satisfies the opportunity");
+  assert.equal(reordered.opportunities.reordered, 1);
+  const missing = byName.get("profile-fact-missing");
+  const slot = flattenResumeTargets(fixtureIndex(missing).scope, missing.candidateContext).find((target) => target.kind === "new-bullet" && target.target.entryId === "saltmarsh");
+  const added = gradeProposal(missing, proposal([{ targetId: slot.targetId, target: wireTarget(slot.target), replacement: "Carried the on-call rotation for the service." }]));
+  assert.ok(!added.hits.some((hit) => hit.type === "missedOpportunity"), "an addition to the named entry satisfies the opportunity");
+  assert.equal(gradeProposal(byName.get("aligned-data"), proposal([safeFor("aligned-data")])).hits.some((hit) => hit.type === "missedOpportunity"), false, "a control case never reports a missed opportunity");
+  const filler = buriedTargets.find((target) => target.target.bulletId === "pinecone-b2");
+  assert.ok(!types("buried-strength-order", [{ targetId: filler.targetId, target: wireTarget(filler.target), replacement: plain(filler.currentText) }]).includes("missedOpportunity"), "sharpening a named filler bullet satisfies the opportunity");
+  const existing = flattenResumeTargets(fixtureIndex(missing).scope, missing.candidateContext).find((target) => target.target.bulletId === "saltmarsh-b1");
+  assert.ok(!gradeProposal(missing, proposal([{ targetId: existing.targetId, target: wireTarget(existing.target), replacement: plain(existing.currentText) }])).hits.some((hit) => hit.type === "missedOpportunity"), "rewriting a bullet of the entry that should gain the fact is a legitimate alternative");
 }
 assert.ok(types("backend-platform", [change("backend-platform", "harbor-b2", "Built Kubernetes services.")]).includes("jdOnly"));
 assert.ok(types("frontend-attribution", [change("frontend-attribution", "orbit-b1", "Built React forms.")]).includes("attribution"));

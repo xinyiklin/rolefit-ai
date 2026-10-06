@@ -4859,7 +4859,8 @@
       "shouldRemove": []
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "gateOpportunity": true
   },
   {
     "name": "duplicate-achievement",
@@ -4966,7 +4967,8 @@
       ]
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "gateOpportunity": true
   },
   {
     "name": "profile-fact-missing",
@@ -5076,7 +5078,8 @@
       "fillerBullets": []
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "gateOpportunity": true
   },
   {
     "name": "feature-tour-contribution",
@@ -5191,7 +5194,8 @@
       "shouldRemove": []
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "gateOpportunity": true
   },
   {
     "name": "only-proof-removal-trap",
@@ -5298,6 +5302,7 @@
       "fillerBullets": []
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "gateOpportunity": true
   }
 ]

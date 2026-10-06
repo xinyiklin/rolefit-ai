@@ -8,6 +8,8 @@
 // Usage:
 //   npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
 //   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.1-sol EVAL_REASONING_EFFORT=medium npm run eval:live:cover-letter --workspace apps/role-fit-ai
+//   EVAL_JUDGE=panel adds the whole-letter judge stage with the recorded Astra + Opus panel;
+//   EVAL_JUDGE='[{"provider":"codex-cli","model":"gpt-6-astra","reasoningEffort":"high"}]' names the judges.
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -20,8 +22,10 @@ import {
 } from "@typeset/engine/lib/coverLetter.ts";
 import { layoutCoverLetter } from "@typeset/engine/typeset/layout.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
+import { callConfiguredProvider } from "../clients.ts";
 import { tailorCoverLetter } from "../coverLetter.ts";
 import { CoverLetterBlockedError } from "../coverLetterIssues.ts";
+import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { resolveProviderRequest } from "../providers.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
@@ -32,6 +36,24 @@ const hash = (text) => createHash("sha256").update(text).digest("hex");
 const publicConfig = ({ provider, model, reasoningEffort }) => ({ provider, model, ...(reasoningEffort ? { reasoningEffort } : {}) });
 const allFixtures = JSON.parse(readFileSync(FIXTURE_URL, "utf8"));
 
+// Judges are evaluation-only; a Sol model is a generator under test, never a judge.
+export function judgeMatrix(env) {
+  if (!env.EVAL_JUDGE) return [];
+  let raw;
+  if (env.EVAL_JUDGE === "panel") raw = COVER_LETTER_JUDGE_PANEL;
+  else {
+    try { raw = JSON.parse(env.EVAL_JUDGE); } catch { throw new Error("EVAL_JUDGE must be \"panel\" or a JSON array of judge configurations."); }
+  }
+  if (!Array.isArray(raw) || !raw.length) throw new Error("EVAL_JUDGE must name at least one judge.");
+  return raw.map((entry) => {
+    // Resolve first: an omitted model would otherwise fall to a provider default.
+    const config = publicConfig(resolveProviderRequest(entry ?? {}));
+    const error = coverLetterJudgeConfigError(config);
+    if (error) throw new Error(error);
+    return config;
+  });
+}
+
 export function evalOptions(argv, env) {
   const fixtureFilter = argv[0] || "all";
   const runs = Number(argv[1] || 1);
@@ -41,6 +63,7 @@ export function evalOptions(argv, env) {
   const provider = env.EVAL_PROVIDER || "claude-cli";
   return {
     runs, fixtures,
+    judges: judgeMatrix(env),
     config: {
       provider,
       model: env.EVAL_MODEL ?? (provider === "claude-cli" ? "opus" : ""),
@@ -49,7 +72,39 @@ export function evalOptions(argv, env) {
   };
 }
 
-async function runFixture(fixture, run, config, stage) {
+// One judge reads the whole letter; the receipt keeps the judgment and the
+// judge's identity, never the judge's raw reply.
+export async function judgeLetter({ fixture, preflight, result, judges, dispatch = callConfiguredProvider }) {
+  const prompts = buildCoverLetterJudgePrompts({
+    letterText: result.coverLetterText,
+    baseLetterText: preflight.template.authoredProse,
+    jobText: fixture.jobText,
+    evidence: fixture.evidence,
+    role: fixture.role,
+    company: fixture.company
+  });
+  const judgments = [];
+  for (const judge of judges) {
+    const stats = {};
+    const started = Date.now();
+    try {
+      const raw = await dispatch({ ...resolveProviderRequest(judge), ...prompts, retryUnreadableOutput: false }, stats);
+      judgments.push({ judge, judgment: parseCoverLetterJudgment(raw), attempts: stats.attempts ?? 1, elapsedMs: Date.now() - started });
+    } catch {
+      // A judge that fails or answers unreadably is recorded as absent for this
+      // letter; the structural grade and receipt stand on their own.
+      judgments.push({ judge, error: "judge", attempts: stats.attempts ?? 1, elapsedMs: Date.now() - started });
+    }
+  }
+  return judgments;
+}
+
+const mean = (values) => {
+  const numbers = values.filter((value) => typeof value === "number");
+  return numbers.length ? Number((numbers.reduce((sum, value) => sum + value, 0) / numbers.length).toFixed(2)) : null;
+};
+
+async function runFixture(fixture, run, config, stage, judges) {
   stage.current = "preflight";
   const preflight = buildCoverLetterPreflight({
     text: fixture.sourceText,
@@ -94,13 +149,25 @@ async function runFixture(fixture, run, config, stage) {
     resolved: preflight.resolved,
     onePage: pageCount === 1
   });
+  let judgments = [];
+  if (judges.length) {
+    stage.current = "judge";
+    judgments = await judgeLetter({ fixture, preflight, result, judges });
+  }
+  const judged = (dimension) => mean(judgments.filter((item) => item.judgment).map((item) => item.judgment[dimension]));
   return {
-    receipt: { fixture, result, pageCount, report, labelProvenance: "Repository-authored synthetic cases; human factual/writing-quality review not recorded", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null },
+    receipt: { fixture, result, pageCount, report, judgments, labelProvenance: "Repository-authored synthetic cases; judge scores are model judgments, not human review", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null },
     row: {
       fixture: fixture.id,
       run,
       structuralScore: report.structuralScore,
       structuralChecksPassed: report.passed,
+      // Judge means across the panel, or null when no judge ran.
+      judgeOverall: judged("overall"),
+      judgeSupport: judged("support"),
+      judgeImprovementOverBase: judged("improvementOverBase"),
+      judgeUnsupportedSentences: judgments.some((item) => item.judgment) ? Math.max(...judgments.filter((item) => item.judgment).map((item) => item.judgment.unsupportedSentences.length)) : null,
+      judgeErrors: judgments.filter((item) => item.error).length,
       factualAccuracy: null,
       coverageAccuracy: null,
       humanReviewed: false,
@@ -121,7 +188,7 @@ async function runFixture(fixture, run, config, stage) {
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   if (argv.length === 1 && argv[0] === "--help") {
-    console.log("Usage: npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator.\nFixtures: " + allFixtures.map((fixture) => fixture.id).join(", "));
+    console.log("Usage: npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator. EVAL_JUDGE=panel (Astra + Opus) or a JSON array adds the whole-letter judge stage.\nFixtures: " + allFixtures.map((fixture) => fixture.id).join(", "));
     return 0;
   }
   let options;
@@ -144,20 +211,20 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     "../../../src/lib/coverLetterPreflight.ts", "../../../src/lib/coverLetterEvidence.ts", "./cover-letter-quality-eval.mjs"
   ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));
   save("manifest.json", {
-    createdAt: new Date().toISOString(), config: options.config, runs: options.runs,
+    createdAt: new Date().toISOString(), config: options.config, judges: options.judges, runs: options.runs,
     fixtures: options.fixtures.map((fixture) => fixture.id), corpusHash: hash(readFileSync(FIXTURE_URL)), sourceHashes,
     labelProvenance: "Repository-authored synthetic cases; the structural grader measures neither factual support nor writing quality.",
     humanReviewed: false
   });
   save("fixtures.json", options.fixtures);
-  console.log(`Cover-letter quality eval — ${JSON.stringify(options.config)} fixtures=${options.fixtures.length} runs=${options.runs}`);
+  console.log(`Cover-letter quality eval — ${JSON.stringify(options.config)} fixtures=${options.fixtures.length} runs=${options.runs} judges=${options.judges.length}`);
   const rows = [];
   let unrun = 0;
   outer: for (const fixture of options.fixtures) {
     for (let run = 1; run <= options.runs; run += 1) {
       const stage = { current: "preflight" };
       try {
-        const outcome = await runFixture(fixture, run, options.config, stage);
+        const outcome = await runFixture(fixture, run, options.config, stage, options.judges);
         if (outcome.receipt) {
           stage.current = "receipt";
           save(`${fixture.id}-run-${run}.json`, outcome.receipt);
@@ -197,7 +264,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const failures = rows.filter((row) => row.error || row.structuralChecksPassed !== true);
   const expected = options.fixtures.length * options.runs;
   save("summary.json", { expected, completed: rows.length, passed: rows.length - failures.length, unrun, rows });
-  console.log(`Result: ${rows.length - failures.length}/${expected} structural checks passed; ${unrun} unrun; factual accuracy and persuasiveness unmeasured. Receipts: ${out}`);
+  const judgeNote = options.judges.length
+    ? `judge overall mean ${mean(rows.map((row) => row.judgeOverall))} over ${rows.filter((row) => typeof row.judgeOverall === "number").length} letters`
+    : "factual accuracy and persuasiveness unmeasured (no judge)";
+  console.log(`Result: ${rows.length - failures.length}/${expected} structural checks passed; ${unrun} unrun; ${judgeNote}. Receipts: ${out}`);
   return failures.length || unrun ? 1 : 0;
 }
 

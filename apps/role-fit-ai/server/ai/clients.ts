@@ -8,6 +8,7 @@ import { fetchWithTimeout } from "../http.ts";
 import { UserSafeAiError } from "./errors.ts";
 import { parseAiJson } from "./json.ts";
 import { providerLabel } from "./providers.ts";
+import { readProviderUsage, recordProviderUsage, type UsageSink } from "./providerUsage.ts";
 
 const OUTPUT_TOKEN_LIMIT = 8192;
 const MAX_PROVIDER_RESPONSE_BYTES = 2_000_000;
@@ -26,9 +27,10 @@ type ProviderCallArgs = {
   retryUnreadableOutput?: boolean;
 };
 
-// Optional dispatch-attempt collector (same additive pattern as the sanitizer's
-// drop-stats): its `attempts` counter is bumped once per dispatch attempt.
-type AttemptStats = { attempts?: number };
+// Optional dispatch collector (same additive pattern as the sanitizer's
+// drop-stats): `attempts` is bumped once per dispatch attempt, and `usage`
+// receives the provider's reported token counts, or null when it reports none.
+type AttemptStats = { attempts?: number } & UsageSink;
 
 // Provider response JSON is boundary data walked defensively with optional
 // chaining and runtime type checks; these extractors take the raw parsed body.
@@ -175,7 +177,8 @@ export function buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }: Pr
 
 export async function callOpenAiResponsesWithFetch(
   { apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs,
-  request: typeof fetchWithTimeout = fetchWithTimeout
+  request: typeof fetchWithTimeout = fetchWithTimeout,
+  sink?: UsageSink
 ): Promise<unknown> {
   const response = await request("https://api.openai.com/v1/responses", {
     method: "POST",
@@ -192,6 +195,7 @@ export async function callOpenAiResponsesWithFetch(
     providerRequestFailed("openai", response, data);
   }
   assertNotTruncated("openai", isMaxTokenFinishReason(data.incomplete_details?.reason));
+  recordProviderUsage(sink, readProviderUsage(data.usage));
 
   return parseAiJson(extractOutputText(data));
 }
@@ -227,7 +231,7 @@ export function buildAnthropicMessagesBody({ model, systemPrompt, userPrompt }: 
   };
 }
 
-async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs): Promise<unknown> {
+async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
   // No `temperature` and no trailing assistant prefill: both return a 400 on the
   // current Anthropic models this app offers — `temperature` is removed on Opus
   // 4.7/4.8, and a last-assistant-turn prefill is rejected on Sonnet 4.6 and
@@ -249,16 +253,20 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, 
     providerRequestFailed("anthropic", response, data);
   }
   assertNotTruncated("anthropic", isMaxTokenFinishReason(data.stop_reason));
+  recordProviderUsage(sink, readProviderUsage(data.usage));
 
   return parseAiJson(extractAnthropicText(data));
 }
 
-async function dispatchProvider({ provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal }: ProviderCallArgs): Promise<unknown> {
-  if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }));
-  if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }));
-  if (provider === "antigravity-cli") return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt, signal }));
-  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal });
-  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt, signal });
+async function dispatchProvider({ provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
+  if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
+  if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
+  if (provider === "antigravity-cli") {
+    recordProviderUsage(sink, null);
+    return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt, signal }));
+  }
+  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }, sink);
+  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt, signal }, fetchWithTimeout, sink);
   throw new UserSafeAiError("Unsupported AI provider. Pick one of the configured CLI or API providers.", 400);
 }
 
@@ -277,14 +285,15 @@ async function dispatchProvider({ provider, model, reasoningEffort, apiKey, syst
 // Optional bounded `stats` collector: when provided, its `attempts` counter is
 // incremented once per dispatch attempt so a route can report how
 // many provider calls a pass took (1 = no retry, 2 = the JSON-only retry
-// fired). Purely observational — it never changes retry or error behavior.
+// fired), and `usage` collects reported token counts. Purely observational —
+// it never changes retry or error behavior.
 export async function callConfiguredProvider(args: ProviderCallArgs, stats?: AttemptStats): Promise<unknown> {
   const bump = (): void => {
     if (stats && typeof stats === "object") stats.attempts = (stats.attempts ?? 0) + 1;
   };
   try {
     bump();
-    return await dispatchProvider(args);
+    return await dispatchProvider(args, stats);
   } catch (error) {
     const unreadableOutput =
       error instanceof UserSafeAiError && error.status === 502 && /^AI returned/.test(error.message);
@@ -293,6 +302,6 @@ export async function callConfiguredProvider(args: ProviderCallArgs, stats?: Att
     return dispatchProvider({
       ...args,
       userPrompt: `${args.userPrompt}\n\nREMINDER: Respond with exactly one JSON object and nothing else — no commentary, no markdown fences, no notes about the input.`
-    });
+    }, stats);
   }
 }

@@ -290,16 +290,15 @@ function localOnlyUsage(): StageAiUsage {
   return { source: "local", completedAt: new Date().toISOString() };
 }
 
-// Metadata alone is not a tailoring brief; without requirement lists the local
-// engine may still extract structure, so fall back and label the result "local".
+// Metadata alone is not a tailoring brief: a seniority or domain label beside
+// empty duty, qualification, and technology lists must not replace a local
+// brief that already carries them, so fall back and label the result "local".
 function hasUsableAiContent(fields: Partial<AiJobAnalysisFields>): boolean {
   return (
     strArray(fields.responsibilities).length > 0 ||
     strArray(fields.requiredQualifications).length > 0 ||
     strArray(fields.preferredQualifications).length > 0 ||
-    strArray(fields.techKeywords).length > 0 ||
-    strArray(fields.senioritySignals).length > 0 ||
-    strArray(fields.domainSignals).length > 0
+    strArray(fields.techKeywords).length > 0
   );
 }
 

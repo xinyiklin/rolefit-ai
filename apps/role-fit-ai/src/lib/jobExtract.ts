@@ -2195,7 +2195,7 @@ export type TailoringParts = {
 // the same "[manual input needed: …]" / "Not specified" placeholders the engine
 // has always emitted, so manualReviewFields() and the scorer behave identically
 // regardless of which analyzer produced the parts.
-export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): string {
+function renderTailoringText(parts: TailoringParts): string {
   const sections = [
     `Job Title:\n${parts.title || "[manual input needed: job title]"}`,
     `Company / Product Context:\n${parts.context || "[manual input needed: 1-3 sentence company or product summary]"}`,
@@ -2206,7 +2206,32 @@ export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): 
     ["Seniority Signals:", ...bulletLines(parts.seniority ?? [], "Not specified")].join("\n"),
     ["Domain Signals:", ...bulletLines(parts.domains ?? [], "Not specified")].join("\n")
   ];
-  return normalize(sections.join("\n\n")).slice(0, maxChars);
+  return normalize(sections.join("\n\n"));
+}
+
+// Over budget, the three long lists take whole items round-robin (required
+// first) and each stops at its first item that does not fit: no mid-item cut,
+// and no list can push another out of the brief.
+const BUDGETED_LISTS = ["required", "responsibilities", "preferred"] as const satisfies ReadonlyArray<keyof TailoringParts>;
+
+export function assembleTailoringText(parts: TailoringParts, maxChars = 9_000): string {
+  const full = renderTailoringText(parts);
+  if (full.length <= maxChars) return full;
+  const kept: TailoringParts = { ...parts, responsibilities: [], required: [], preferred: [] };
+  const open = new Set<(typeof BUDGETED_LISTS)[number]>(BUDGETED_LISTS.filter((list) => (parts[list] ?? []).length > 0));
+  while (open.size) {
+    for (const list of BUDGETED_LISTS) {
+      if (!open.has(list)) continue;
+      const source = parts[list] ?? [];
+      const taken = kept[list] ?? [];
+      if (taken.length >= source.length) { open.delete(list); continue; }
+      const next = [...taken, source[taken.length]];
+      if (renderTailoringText({ ...kept, [list]: next }).length > maxChars) { open.delete(list); continue; }
+      kept[list] = next;
+    }
+  }
+  // Only the bounded sections alone exceeding the budget reaches this slice.
+  return renderTailoringText(kept).slice(0, maxChars);
 }
 
 function buildStructuredTailoringText(

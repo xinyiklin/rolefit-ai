@@ -230,7 +230,16 @@ Good server verification covers:
   offline by default; run the real-provider harness deliberately with
   `npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]`.
   `EVAL_PROVIDER`, `EVAL_MODEL`, and `EVAL_REASONING_EFFORT` select the
-  generator; `--help` lists fixtures without a provider call. Each invocation
+  generator; `--help` lists fixtures without a provider call. `EVAL_JUDGE=panel`
+  (the recorded GPT-6 Astra + Opus 5.5 panel) or a JSON array of judge
+  configurations adds a whole-letter judge stage (`server/ai/coverLetterJudge.ts`):
+  each judge scores support, relevance, argument, voice, improvement over the
+  base letter, and an overall mark from 1 to 10 and lists unsupported
+  sentences; the judge sees the letter, evidence, posting, and base letter but
+  never the generator's identity, a Sol model is refused as a judge (after the
+  request resolves, so an omitted model cannot fall to the Codex default), a
+  judge that fails or answers unreadably is recorded as absent for that letter,
+  and the structural checks alone still decide pass or fail. Each invocation
   writes an owner-only receipt directory under ignored
   `workspace/cover-letter-eval/` holding `manifest.json` (configuration, corpus
   and source hashes), the fixture snapshot, one receipt per fixture run, and
@@ -242,23 +251,49 @@ Good server verification covers:
   Both halves use only the tracked synthetic corpus: neither reads ignored
   `workspace/cover-letters/` variants or copies personal letter text into a
   fixture, console output, or provider request.
-- Fit Assessment has a manual synthetic consistency calibration:
+- Prepare has a manual synthetic benchmark (Fit Assessment consistency plus
+  Job analysis extraction, timing, and provider usage):
   `npm run eval:live:fit-assessment --workspace apps/role-fit-ai -- [fixture-id[,fixture-id]|all] [runs]`.
-  It runs three to five repetitions through both combined Prepare and standalone
-  Retry prompts, measures verdict and eligibility distributions, non-adjacent
-  jumps, invalid responses, provider errors, repairs, and material-theme overlap,
-  and writes full synthetic receipts under gitignored
-  `workspace/fit-assessment-eval/`. `EVAL_PROVIDER`, `EVAL_MODEL`, and
-  `EVAL_REASONING_EFFORT` select one supported configuration; `EVAL_MATRIX`
-  accepts a JSON array of supported configurations. `EVAL_REPORT_ONLY=1`
-  recomputes the aggregate from existing receipts without provider calls. The
-  runner stops one provider configuration after its first provider failure and
-  is explicitly excluded from `npm test`.
-  Its seventeen tracked fixtures include the four verdicts, three eligibility
+  Each matrix entry is one Prepare configuration: the Job analysis request plus
+  an optional `fit` request; matching requests take the one-call combined
+  path and also run the standalone Retry prompt for pairing, differing
+  requests take the app's split path (Job analysis, then standalone Fit) and
+  are measured as the two calls they cost, with no second standalone call.
+  Runs accept 1–5 (default 3). The runner measures verdict and eligibility distributions,
+  non-adjacent jumps, invalid responses, provider errors, material-theme
+  overlap, the automatic-Polish decision per threshold across repeats and
+  between paths, per-dispatch elapsed time and reported token usage (Claude
+  Code and the API adapters report counts, Codex one total, Antigravity none,
+  recorded as `null`, never estimated), and the job half of each Prepare
+  response against the fixture's `expectedJob` block: required-term coverage,
+  preferred placement, or-alternatives kept in one item, eligibility text,
+  honest empty lists, identity and salary facts, and `absentTerms` the
+  extraction must never add to a list, title, location, or work-authorization
+  text (an added term fails the run). Terms may be any-of groups so "4+ years"
+  or "BS" count as faithful paraphrases, and all-capital terms match
+  case-sensitively. Each invocation
+  writes an owner-only receipt directory under ignored
+  `workspace/fit-assessment-eval/` holding `manifest.json` (configurations,
+  corpus and source hashes), the fixture snapshot, one receipt per dispatch
+  set, and `summary.json`. `EVAL_PROVIDER`, `EVAL_MODEL`, and
+  `EVAL_REASONING_EFFORT` select one configuration; `EVAL_MATRIX` accepts a
+  JSON array (the same configuration twice is rejected). `EVAL_REPORT_ONLY=1`
+  with `EVAL_REPORT_DIR` re-reports a receipt directory from its own manifest
+  and fixture snapshot, without provider calls or the original matrix,
+  re-scoring extraction, themes, and automation decisions from the stored
+  fields under the current rules, and warns when the tracked corpus or
+  sources have changed since. The runner stops one configuration after its first provider
+  failure and is excluded from `npm test`; its contracts run the whole thing
+  offline against a fake dispatcher.
+  Its twenty-two tracked fixtures include the four verdicts, three eligibility
   states, prompt injection, preferred-only gaps, adjacent technologies, unshown
   years/degree, project-accepted entry-level work, specialized production-AI
-  gaps, partial compound requirements, one isolated duration gap, and a content-
-  poor application form. Private corpus calibration stays gitignored and is
+  gaps, partial compound requirements, one isolated duration gap, a content-
+  poor application form, and five extraction cases: a Python-or-Java
+  alternative with a salary range, degree-or-equivalent experience, an
+  explicitly professional experience scope, a long posting whose requirements
+  follow benefits and equal-opportunity prose, and an embedded instruction that
+  must add nothing. Private corpus calibration stays gitignored and is
   reported only through anonymized aggregate counts.
 - Resume Proposal has an opt-in synthetic regression benchmark:
   `npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]`.
@@ -267,7 +302,8 @@ Good server verification covers:
   cases, six initial holdouts, and six supporting-role holdouts, now all
   regression cases), 16 frozen holdouts for prompt slimming, and five
   opportunity cases (2026-10-06) that each require a proposal and name the
-  expected improvement (the opportunity counters stay diagnostic): a
+  expected improvement (a proposal that touches none of the named targets
+  fails as `missedOpportunity`; the brochure cases accept any honest edit): a
   buried strength to reorder, a duplicated achievement to remove, a Profile fact
   missing from its entry, a feature tour hiding the contribution, and an
   irrelevant bullet beside the only proof of a requirement. They exercise
@@ -406,8 +442,15 @@ Good frontend verification covers:
   and `server/__evals__/workspace-candidate-batch-probes.mjs` pins the batch
   routes' name guards, bounded size, skip-on-corrupt behavior, and that they
   return candidates and nothing else
-- a valid Fit Assessment survives a local job-analysis fallback
-  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`), and the compact fit
+- a valid Fit Assessment survives a local job-analysis fallback, and a response
+  carrying only domain or seniority labels keeps the local brief
+  (`src/lib/__evals__/job-analysis-fallback-fit-eval.mjs`); the tailoring brief
+  budgets whole items across its long lists instead of slicing one string, so
+  twelve maximal duties cannot drop the required qualifications or tech stack
+  (`src/lib/__evals__/tailoring-text-budget-eval.mjs`); Fit measures its
+  24,000/28,000-character normalized input limits once before any dispatch, on
+  the standalone route and inside combined Prepare where Job analysis still
+  runs (`server/ai/__evals__/fit-input-limit-probes.mjs`); and the compact fit
   contract has threshold-boundary, exact-source-anchor, malformed-response, fixed-
   summary, deduplication, and eligibility adversarial probes in
   `server/ai/__evals__/fit-assessment-probes.mjs`
