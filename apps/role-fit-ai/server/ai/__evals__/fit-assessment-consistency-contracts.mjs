@@ -19,7 +19,9 @@ const liveRunner = readFileSync(new URL("./fit-assessment-consistency-eval.mjs",
 const modelFor = (provider) => modelOptionsByProvider[provider][0].value;
 const EXPECTED_JOB_KEYS = new Set(["title", "company", "location", "jobType", "salary", "requiredTerms", "preferredTerms", "alternatives", "eligibilityTerms", "absentTerms", "emptyLists"]);
 
-assert.equal(fixtures.length, 22, "the calibration corpus contains twenty-two synthetic scenarios");
+assert.equal(fixtures.length, 42, "the calibration corpus contains twenty-two screen scenarios and a twenty-fixture holdout");
+assert.equal(fixtures.filter((fixture) => fixture.set === "holdout-20261006").length, 20, "the 2026-10-06 holdout set has twenty fixtures");
+assert.equal(fixtures.filter((fixture) => !fixture.set).length, 22, "the screen corpus is unchanged");
 assert.equal(new Set(fixtures.map((fixture) => fixture.id)).size, fixtures.length, "fixture ids are unique");
 assert.match(offlineGate, /"fit-assessment-consistency-eval\.mjs"/, "the live runner stays out of ordinary CI");
 assert.equal(
@@ -65,6 +67,7 @@ for (const fixture of fixtures) {
   assert(fixture.resumeText.length >= 80, `${fixture.id} has a usable synthetic resume`);
   assert(fixture.jobText.includes("Synthetic"), `${fixture.id} visibly identifies synthetic input`);
   assert(fixture.resumeText.includes("Synthetic"), `${fixture.id} visibly identifies synthetic input`);
+  assert(fixture.set === undefined || fixture.set === "holdout-20261006", `${fixture.id}: unknown fixture set`);
   assert(Array.isArray(fixture.materialThemes) && fixture.materialThemes.length >= 2);
   assert(Array.isArray(fixture.expectedOutcomes ?? fixture.expectedVerdicts) && (fixture.expectedOutcomes ?? fixture.expectedVerdicts).length >= 1);
   assert(Array.isArray(fixture.allowedEligibility) && fixture.allowedEligibility.length >= 1);
@@ -160,6 +163,18 @@ assert.equal(evalOptions(["all", "1"], {}).runs, 1);
 assert.throws(() => evalOptions(["all", "6"], {}), /runs must/);
 assert.throws(() => evalOptions(["nope"], {}), /Unknown fixture/);
 assert.equal(evalOptions(["strong-direct-fit,extraction-embedded-instruction"], {}).fixtures.length, 2);
+assert.equal(evalOptions(["set:holdout-20261006"], {}).fixtures.length, 20, "a set filter selects the tagged holdout");
+assert.throws(() => evalOptions(["set:nope"], {}), /Unknown fixture/);
+for (const [label, pattern] of [
+  ["an hourly contract rate", /per hour/],
+  ["a GBP salary", /£/],
+  ["a clearance condition", /clearance/],
+  ["offered sponsorship", /sponsorship is available/i],
+  ["an internship enrollment requirement", /enrollment/],
+  ["a title-only incomplete posting", /No further details/]
+]) {
+  assert(fixtures.some((fixture) => fixture.set && pattern.test(fixture.jobText)), `the holdout covers ${label}`);
+}
 const [splitConfig] = configuredMatrix({ EVAL_MATRIX: JSON.stringify([{ provider: "openai", model: modelFor("openai"), fit: { provider: "anthropic", model: modelFor("anthropic") } }]) });
 assert.equal(splitConfig.combined, false, "a differing Fit request is the split path");
 assert.equal(configuredMatrix({ EVAL_MATRIX: JSON.stringify([{ provider: "openai", model: modelFor("openai") }]) })[0].combined, true, "a single request combines");
@@ -177,17 +192,19 @@ const fakeFit = (fixture) => fixture.expectedOutcomes?.[0] === "INSUFFICIENT_JOB
       // Eligibility excerpts must be exact source text, so copy them from the fixture.
       ...(fixture.allowedEligibility[0] === "BLOCKED" ? { eligibility: { status: "BLOCKED", jobExcerpt: excerptOf(fixture.jobText, /must be authorized to work[^.]*/), candidateExcerpt: excerptOf(fixture.candidateContext, /not currently authorized[^.]*/) } } : {}),
       ...(fixture.allowedEligibility[0] === "CHECK" ? { eligibility: { status: "CHECK", jobExcerpt: excerptOf(fixture.jobText, /authorized to work[^;.]*/) } } : {}),
-      ...(fixture.allowedEligibility[0] === "CLEAR" && fixture.allowedEligibility.length === 1 ? { eligibility: { status: "CLEAR", jobExcerpt: excerptOf(fixture.jobText, /authorized to work[^.]*/), candidateExcerpt: excerptOf(fixture.candidateContext, /authorized to work[^.]*/) } } : {})
+      ...(fixture.allowedEligibility[0] === "CLEAR" && !fixture.allowedEligibility.includes("OMITTED") ? { eligibility: { status: "CLEAR", jobExcerpt: excerptOf(fixture.jobText, /(?:authorized to work|sponsorship)[^.]*/i), candidateExcerpt: excerptOf(fixture.candidateContext, /(?:authorized to work|sponsorship)[^.]*/i) } } : {})
     };
 const excerptOf = (text, pattern) => (pattern.exec(text) ?? [""])[0];
 // An any-of expectation is satisfied by its first option.
 const pick = (term) => (Array.isArray(term) ? term[0] : term);
+const preferredAlternative = (fixture, terms) => terms.every((term) => (fixture.expectedJob.preferredTerms ?? []).some((preferred) => JSON.stringify(preferred).includes(JSON.stringify(pick(term)).slice(1, -1))));
 const fakeJob = (fixture) => ({
-  title: fixture.expectedJob.title ?? "", company: fixture.expectedJob.company ?? "",
+  title: pick(fixture.expectedJob.title ?? ""), company: fixture.expectedJob.company ?? "",
   location: fixture.expectedJob.location ?? "", jobType: fixture.expectedJob.jobType ?? "", ...(fixture.expectedJob.salary ?? {}),
   responsibilities: fixture.expectedJob.emptyLists ? [] : ["Do the work described in the posting"],
-  requiredQualifications: fixture.expectedJob.emptyLists ? [] : [...(fixture.expectedJob.requiredTerms ?? []).map((term) => pick(term).replace(/\*$/, "ing")), ...(fixture.expectedJob.alternatives ?? []).map((terms) => terms.map(pick).join(" or "))],
-  preferredQualifications: (fixture.expectedJob.preferredTerms ?? []).map((term) => pick(term).replace(/\*$/, "s")),
+  // An alternative made only of preferred terms belongs in the preferred list.
+  requiredQualifications: fixture.expectedJob.emptyLists ? [] : [...(fixture.expectedJob.requiredTerms ?? []).map((term) => pick(term).replace(/\*$/, "ing")), ...(fixture.expectedJob.alternatives ?? []).filter((terms) => !preferredAlternative(fixture, terms)).map((terms) => terms.map(pick).join(" or "))],
+  preferredQualifications: [...(fixture.expectedJob.preferredTerms ?? []).map((term) => pick(term).replace(/\*$/, "s")), ...(fixture.expectedJob.alternatives ?? []).filter((terms) => preferredAlternative(fixture, terms)).map((terms) => terms.map(pick).join(" or "))],
   techKeywords: [], workAuth: (fixture.expectedJob.eligibilityTerms ?? []).map((term) => pick(term).replace(/\*$/, "ship")).join("; ")
 });
 let clock = 0;
@@ -312,4 +329,4 @@ assert.ok(logged.some((line) => /\+ fit anthropic.*(combined|split)/.test(line))
   delete process.env.ANTHROPIC_API_KEY;
 }
 
-console.log("Prepare benchmark contracts passed: 22-fixture corpus with extraction expectations, scoring rules, matrix validation, offline end-to-end receipts");
+console.log("Prepare benchmark contracts passed: 22-fixture screen corpus plus 20-fixture holdout with extraction expectations, scoring rules, matrix validation, offline end-to-end receipts");

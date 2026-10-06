@@ -105,10 +105,15 @@ export function evalOptions(argv, env) {
   const fixtureFilter = argv[0] || "all";
   const runs = Number(argv[1] || 3);
   if (!Number.isInteger(runs) || runs < 1 || runs > 5) throw new Error("runs must be an integer from 1 to 5");
+  // "set:<name>" selects a tagged fixture set (for example a disjoint holdout).
   const requested = new Set(fixtureFilter.split(",").map((id) => id.trim()).filter(Boolean));
-  const fixtures = fixtureFilter === "all" ? allFixtures : allFixtures.filter((fixture) => requested.has(fixture.id));
+  const fixtures = fixtureFilter === "all"
+    ? allFixtures
+    : fixtureFilter.startsWith("set:")
+      ? allFixtures.filter((fixture) => fixture.set === fixtureFilter.slice(4))
+      : allFixtures.filter((fixture) => requested.has(fixture.id));
   if (fixtures.length === 0) throw new Error(`Unknown fixture "${fixtureFilter}".`);
-  if (fixtureFilter !== "all" && fixtures.length !== requested.size) {
+  if (fixtureFilter !== "all" && !fixtureFilter.startsWith("set:") && fixtures.length !== requested.size) {
     const known = new Set(fixtures.map((fixture) => fixture.id));
     throw new Error(`Unknown fixture(s): ${[...requested].filter((id) => !known.has(id)).join(", ")}.`);
   }
@@ -201,6 +206,7 @@ export async function main(argv = process.argv.slice(2), env = process.env, deps
 EVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select one Prepare configuration; EVAL_MATRIX takes a JSON array of
 {provider, model, reasoningEffort, fit?: {provider, model, reasoningEffort}} entries (a differing fit request measures the split path).
 EVAL_REPORT_ONLY=1 with EVAL_REPORT_DIR re-reports an existing receipt directory without provider calls.
+Sets: ${[...new Set(allFixtures.map((fixture) => fixture.set).filter(Boolean))].map((name) => `set:${name}`).join(", ") || "none"}
 Fixtures: ${allFixtures.map((fixture) => fixture.id).join(", ")}`);
     return 0;
   }
