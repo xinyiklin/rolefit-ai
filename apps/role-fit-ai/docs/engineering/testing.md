@@ -210,7 +210,11 @@ Good server verification covers:
   outcomes return the letter with warnings and never trigger repair — while an
   employer-subject sentence drawn from the posting must not widen candidate
   evidence. Length is asserted
-  as a warning, never a gate. The thirteen-fixture synthetic corpus spans
+  as a warning, never a gate. `cover-letter-warning-precision-probes.mjs` pins
+  each benchmark-backed warning rule from `server/ai/AGENTS.md` (whole-entry
+  citation scope, the claim surface, count modifiers and head nouns, compound
+  adjectives, base-letter-only values, dropped deterministic slot ids) with a
+  clean and a warned case each, so removing a rule fails a probe. The thirteen-fixture synthetic corpus spans
   general full-stack, frontend, backend/platform, healthcare, applied AI, a
   role whose strongest lead is not the most prominent project, relevant
   AI-workflow Profile context, and Profile context that must be omitted; it

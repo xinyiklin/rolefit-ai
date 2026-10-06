@@ -93,7 +93,7 @@ type LinkableEntry = { id: string | null; names: string[] };
 
 // Headings that group entries rather than name one: the resume's own section
 // headings and the usual Profile groupings.
-const GROUPING_HEADINGS = [
+export const GROUPING_HEADINGS = [
   "experience", "work experience", "professional experience", "employment", "work history", "work",
   "jobs", "internships", "projects", "personal projects", "side projects", "academic projects",
   "open source", "research", "volunteering", "volunteer work", "leadership", "activities",

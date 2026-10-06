@@ -83,6 +83,71 @@ application retain blocking technical guards.
   a template.
 - Length is a warning, never a gate. Do not restore a word-count or
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
+- A cited slot id that the source letter really has (the deterministic role,
+  company, name, or date slot) is dropped, never repaired: on the 2026-10-05
+  benchmark every model cited one beside the paragraph naming the role, and
+  that alone sent 114 of 120 letters through the repair pass. Only an id the
+  source never had is a technical defect.
+- Cover-letter evidence warnings are benchmark-backed (2026-10-05, replaying
+  real letters against GPT-6 Astra per-sentence labels; see `CONTINUITY.md`).
+  Each rule below removed false warnings on honest prose; the recall given up
+  is recorded in `CONTINUITY.md`, and the resume warning replay stayed at
+  parity:
+  - A citation grounds its whole entry: the other bullets of that resume entry
+    and the Profile section the shared Profile linker ties to it
+    (`shared/candidateProfileContract.ts`: a heading naming exactly one dated
+    resume entry, with every enclosing heading naming it or merely grouping;
+    the label's first segment and an employer-like segment name the entry, a
+    stack list, location, or date never does). Any other heading forms its
+    own group, an unlinked heading that names some entry leaves its parent's
+    section, lines under no heading or directly under a grouping heading
+    stand alone, and Skills rows never link. A sentence that names exactly
+    one entry as a name (capitalised first letter; "Frontend" the Skills row is
+    not "the frontend") is checked against that entry alone, cited or not: it
+    cannot borrow another entry's tools, counts, or outcomes, and a missed
+    citation is bookkeeping. Two entries sharing a title ("Software Engineer"
+    twice) never pool: the sentence keeps only the cited one.
+  - The checked surface of a candidate sentence drops only the clause a
+    denial governs (clauses split before "I"/"we": "Having never used Go, I
+    shipped 12 Go services" keeps its second half; an aspiration keeps its
+    facts), the prepared role title only in an application frame ("the
+    <role> role", "applying for <role>"; "I was a Senior Kafka Engineer" is a
+    claim), the company only in an employer frame ("to join Databricks",
+    "at Databricks", "Databricks' roadmap", "the Databricks team"; "experience
+    with Snowflake" stays checkable even when Snowflake is the employer, so a
+    "contribute to Snowflake" sentence may warn), "the <words> team"
+    references unless the words carry a count or a tool, 401(k)-style plan
+    names, and the word "one" except before a magnitude, percent, or duration
+    or inside "fifty-one". An employer-led sentence that
+    only "caught my attention" or "drew me" is an employer statement; a
+    bare-apostrophe possessive ("Labs' work on") counts.
+  - A count keeps its noun and may drop the evidence's modifiers but never gain
+    one the evidence does not state ("14 critical bugs" from "14 bugs" warns);
+    "480+", "480-plus", and "more than 480" all count the same noun, and the
+    noun is the first plural before the next preposition or participle ("240+
+    documented OpenAPI operations" counts operations; "1 dashboard tracking
+    errors" counts dashboards). "evaluations" and "evals" count the same
+    thing; "apps" and "applications" do not. A number word ends at a word
+    boundary ("ones" is not a count); letters glued to digits stay a quantity
+    ("200ms", "60fps", "5yrs") except the few that make a name (5G, 3GPP, 2FA,
+    3D); a count never takes its noun from the next line.
+  - Compound adjectives are not outcomes or ownership ("LLM-enabled",
+    "API-driven"; "co-led", "self-directed", and "re-enabled" keep their
+    verb), "grew out of" is an origin idiom, bare "led to" or "led me to" is
+    causal while "I led them to" leads, a modal earlier in the same clause
+    (before any comma or relative pronoun; "May" the month is not one) makes
+    an outcome an offer, lowercase concepts match whole words and
+    their plurals ("etl" is not inside "quietly"; "data pipelines" is still
+    the concept), and PostgreSQL grounds "relational database".
+  - A value only the candidate's own source letter supports is still allowed,
+    but the result carries a warning naming it so a stale base letter gets
+    corrected; the Profile may explicitly disclaim what an old letter claims.
+  Accepted gaps: small narrative counts ("two bookings cannot overlap"), CI
+  evidence for a "CI/CD" claim, a tool-bearing team name the posting itself
+  uses ("the Kafka platform team" warns), and judgment calls the labels mark
+  unsupported (what the candidate did "most", daily use, an unverifiable
+  denial) are not lexical and stay with human review. A count-purpose check
+  ("covered by 90+ tests") was tried on letters and dropped: 1 true of 7.
 - `json.ts` and `errors.ts` own response parsing and user-safe failure mapping.
 
 ## Trust contracts
@@ -220,6 +285,22 @@ application retain blocking technical guards.
   Keep guidance-following in per-prompt lines, not the shared firewall. Do not
   restore the current-role present-tense rule: it made a quarter of rewrites
   tense-only churn that the grounding checks then flagged.
+- The cover-letter prompt wording is benchmark-backed (2026-10-05/06, 40 real
+  applications plus a disjoint holdout, blinded GPT-6 Astra + Claude Opus 5.5
+  pairwise judging; numbers in `CONTINUITY.md`). A restraint-and-length variant
+  (numbers keep noun and qualifier, team wording stays, no merged entries,
+  scope notes never restated, no volunteered gaps, 3-4 paragraphs under 340
+  words) beat the current wording on Sonnet 5.5 and Opus 5.5 but lost on GPT-6.1
+  Sol medium 27-7, and Sol with the current wording wrote the best-judged
+  letters of any arm (and the fewest unsupported sentences, 3-4%). The cover
+  stage is configured for Sol, so the current wording stays; the losing variant
+  is kept verbatim in the ignored `workspace/cover-benchmark/harness/variants.mjs`
+  (`v3`) for a Claude-model setting. Do not add length or restraint lines
+  without re-running that benchmark on the configured model: judges reward
+  elaboration, and Sol already writes tersely and faithfully. The base letter
+  is the stronger lever: a rewrite in a plain first-person voice (one short
+  clinic story, one small engineering decision, no stack lists, no
+  "I would bring X, Y, and Z") won 35-0 over the previous template on Sol.
 - Polish failures fail plainly without changing the document.
   Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
