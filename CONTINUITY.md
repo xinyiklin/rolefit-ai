@@ -89,6 +89,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
     its time. One run per fixture is a screen, not a verdict: a 20-posting
     holdout with repeats and the matched downstream Polish comparison are the
     next step before changing the stage defaults.
+  - [USER] 2026-10-06: the user adopted the screen's recommendation. Job
+    analysis and Fit Assessment are now both Claude CLI / Sonnet 5.5 / low, so
+    Prepare takes the one-call combined path (previously Codex GPT-6 Luna
+    medium + GPT-5.5 medium, split). The prior preferences file is backed up
+    under `workspace/.trash/` (`...before-prepare-sonnet.json`). The holdout
+    confirmation is still owed.
   - [TOOL] Two independent reviews (product path; benchmark and gates), no
     high findings. Closed: the usage reader dropped Anthropic cache-creation
     tokens and mixed input conventions (now one convention: every prompt
