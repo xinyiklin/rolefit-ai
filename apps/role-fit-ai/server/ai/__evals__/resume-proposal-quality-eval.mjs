@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 import { callConfiguredProvider } from "../clients.ts";
 import { generateResumeProposal } from "../resumeProposal.ts";
 import { resolveProviderRequest } from "../providers.ts";
-import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, validateFactCheck } from "./support/resume-proposal-quality.mjs";
+import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, opportunityMetOnlyByChurn, validateFactCheck } from "./support/resume-proposal-quality.mjs";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const FIXTURE_URL = new URL("./fixtures/resume-proposal-quality.json", import.meta.url);
@@ -58,6 +58,10 @@ export async function evaluateCase(fixture, config, {
       receipt.judgeAttempts = stats.attempts ?? 1;
       stage = "fact-check-shape";
       receipt.factCheck = validateFactCheck(raw, edits);
+      if (opportunityMetOnlyByChurn(fixture, receipt.grade, edits, receipt.factCheck)) {
+        receipt.grade.hits.push({ type: "missedOpportunity" });
+        receipt.grade.passed = false;
+      }
     }
     receipt.passed = receipt.grade.passed && receipt.factCheck.unsupported === 0;
   } catch {

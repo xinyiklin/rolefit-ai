@@ -24,6 +24,49 @@ bounded; app-only operational detail belongs in the affected app documentation.
     (two rail messages, stale testing docs, this entry), all fixed. Full RoleFit
     check passed after the fixes. No browser QA (rail copy and one button;
     flag-first policy).
+- [USER] Briefs drafted, awaiting approval (tasks
+  `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
+  user-originated **eligible source pool** for Prepare's resume/cover variant
+  pick — conflicts with the app guide's "no persisted variant metadata" rule,
+  so it needs a guide update; (2) an optional internal Resume Polish review step
+  that drops immaterial or wrong edits, using the Polish stage's model. It would
+  replace the "one provider request, never Tailor followed by Review" contract
+  and change the warning policy for that path. The recommendation was opt-in,
+  show the dropped edits, fail open, and benchmark it after the eval fixes.
+- [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
+  claims held: the no-op rewrite filter hides claim-changing deletions;
+  `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;
+  present-tense `Build`/`Own` escape the ownership check; the outcome check
+  accepts recombined claims; the cover judge drops section/entry attribution
+  and its source is unhashed; a worded cap in one unit demotes bare limits in
+  other units in Answers; saved Answers revisions keep only a facts
+  fingerprint.
+- [CODE] Stage 1 of that review's follow-up (eval fixes and one parser bug):
+  - Resume Polish benchmark: a gated `shouldAdd` now counts only a new or
+    rewritten bullet that carries one of the case's `addTerms`; a gated
+    reorder counts only when it puts `leadBullet` first; only valid-target
+    changes count; and an opportunity met only by rewrites also needs a
+    `material` Astra label. Removals and labeled reorders count on their own.
+  - Cover judge: its evidence lines carry section and entry. A missing or
+    unreadable `unsupportedSentences` list is unknown, not zero, and the panel
+    row is unknown when any answer lacks one. `coverLetterJudge.ts` is in the
+    manifest hashes.
+  - Answers: a worded maximum still demotes bare counts of its own unit, but
+    an instructed count in another unit stays hard ("Answer in 3 sentences.
+    Maximum 500 characters."). Permitted, negated, approximate, or advisory
+    phrasings stay advice, as does a count sitting between two of a field's
+    questions. The 57 fixture questions parse exactly as before.
+  - No stored repo-eval receipts existed (`workspace/resume-proposal-eval/` is
+    empty), so re-scoring needs a live run. Still open: the no-op filter,
+    present-tense ownership, outcome recombination, and Answers declared facts.
+  - [TOOL] Two independent reviews. Answers parser: four rounds; fixed one
+    regression of the first fix (content wording after a comma softened real
+    no-cap limits) and the gaps it found. Evals: one medium finding (trivial
+    rewrites still met the other gated cases, fixed via the material label) and
+    lows fixed. Known accepted gaps: rare phrasings such as "Feel free to keep
+    it to 3 sentences" beside a cap; the judge's own fence names are not in the
+    shared registry, and its score clamping still hides off-scale replies
+    (benchmark-only; flagged, not changed).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).
@@ -357,8 +400,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
     the judge never sees the generator's identity, and structural checks alone
     still decide pass/fail. The five resume opportunity cases (flagged
     `gateOpportunity`) now fail with `missedOpportunity` when a proposal
-    touches none of their named targets; a reorder, rewrite, addition, or
-    removal of a named target satisfies them, and the three brochure cases
+    touches none of their named targets (tightened 2026-10-07: labeled
+    additions and reorders must reach their outcome, and rewrites must be
+    judged material), and the three brochure cases
     keep accepting any honest edit (this supersedes the 2026-10-06 note above
     that the counters never gate).
   - [TOOL] Offline suite 143/143 (141 + two new evals); server and client

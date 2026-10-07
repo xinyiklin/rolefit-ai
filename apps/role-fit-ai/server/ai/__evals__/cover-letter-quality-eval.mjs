@@ -25,7 +25,7 @@ import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { callConfiguredProvider } from "../clients.ts";
 import { tailorCoverLetter } from "../coverLetter.ts";
 import { CoverLetterBlockedError } from "../coverLetterIssues.ts";
-import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
+import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, panelUnsupportedSentenceCount, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { resolveProviderRequest } from "../providers.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
@@ -166,7 +166,7 @@ async function runFixture(fixture, run, config, stage, judges) {
       judgeOverall: judged("overall"),
       judgeSupport: judged("support"),
       judgeImprovementOverBase: judged("improvementOverBase"),
-      judgeUnsupportedSentences: judgments.some((item) => item.judgment) ? Math.max(...judgments.filter((item) => item.judgment).map((item) => item.judgment.unsupportedSentences.length)) : null,
+      judgeUnsupportedSentences: panelUnsupportedSentenceCount(judgments),
       judgeErrors: judgments.filter((item) => item.error).length,
       factualAccuracy: null,
       coverageAccuracy: null,
@@ -206,7 +206,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const save = (name, value) => writeFileSync(join(out, name), JSON.stringify(value, null, 2) + "\n", { mode: 0o600, flag: "wx" });
   const sourceHashes = Object.fromEntries([
     "../coverLetter.ts", "../coverLetterContracts.ts", "../coverLetterParagraphEvidence.ts", "../coverLetterGroundingIssues.ts",
-    "../coverLetterIssues.ts", "../coverLetterQuality.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../claimEvidence.ts",
+    "../coverLetterIssues.ts", "../coverLetterQuality.ts", "../coverLetterJudge.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../claimEvidence.ts",
     "../clients.ts", "../../../shared/contentWarnings.ts", "../../../shared/evidencePolarity.ts", "../../../src/lib/coverLetterTemplate.ts",
     "../../../src/lib/coverLetterPreflight.ts", "../../../src/lib/coverLetterEvidence.ts", "./cover-letter-quality-eval.mjs"
   ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));

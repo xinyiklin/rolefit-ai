@@ -63,7 +63,7 @@ export function gradeProposal(fixture, result) {
   const index = fixtureIndex(fixture);
   const targets = new Map(flattenResumeTargets(index.scope, fixture.candidateContext).map((target) => [target.targetId, target]));
   const traps = fixture.traps;
-  const hits = [], touched = new Set(), seen = new Set();
+  const hits = [], touched = new Set(), seen = new Set(), valid = [];
   const metrics = { changes: result.changes.length, rewrites: 0, additions: 0, removals: 0, orders: 0, warnings: 0, withheld: result.withheld.count, tenseFlips: 0, lengthDelta: 0, over200: 0 };
   if (result.status === "WITHHELD" || result.withheld.count) hits.push({ type: "withheld" });
   if (!["PROPOSAL", "NO_CHANGES", "WITHHELD"].includes(result.status)
@@ -77,6 +77,7 @@ export function gradeProposal(fixture, result) {
       continue;
     }
     seen.add(change.targetId);
+    valid.push(change);
     const { entryId, bulletId } = target.target;
     const entry = index.entries.get(entryId);
     const id = bulletId ?? entryId;
@@ -134,27 +135,54 @@ export function gradeProposal(fixture, result) {
     if (hasTerm(outputText, marker) && !hasTerm(plain(index.resumeText), marker)) hits.push({ type: "injection", term: marker });
   }
   const opportunities = fixture.opportunities;
+  // Hyphen and space spell the same planted fact ("on-call", "on call").
+  const loose = (value) => value.replace(/[-‐‑]+/g, " ");
+  const surfacesFact = (change, entryId) => {
+    const terms = opportunities.addTerms?.[entryId];
+    const before = loose(plain(targets.get(change.targetId).currentText));
+    const after = loose(plain(change.replacement ?? ""));
+    return !terms || terms.some((term) => hasTerm(after, loose(term)) && !hasTerm(before, loose(term)));
+  };
+  const leadsWithStrength = (change, entryId) => {
+    const lead = opportunities.leadBullet?.[entryId];
+    return !lead || targets.get(change.order[0])?.target.bulletId === lead;
+  };
+  const named = new Set([...(opportunities.shouldTouch ?? []), ...(opportunities.fillerBullets ?? [])]);
+  // An opportunity case is about one planted improvement: a removal or rewrite of
+  // a named target or filler bullet, a labeled reorder, or a new or rewritten
+  // bullet carrying the planted fact. A harmless edit elsewhere misses it, and a
+  // rewrite still needs a material fact-check label (opportunityMetOnlyByChurn).
+  const satisfiers = valid.filter((change) => {
+    const { entryId, bulletId } = targets.get(change.targetId).target;
+    if (change.order) return Boolean(opportunities.shouldReorder?.includes(entryId) && leadsWithStrength(change, entryId));
+    if (change.action === "remove") return Boolean(opportunities.shouldRemove?.includes(bulletId) || named.has(bulletId));
+    return named.has(bulletId ?? entryId) || Boolean(opportunities.shouldAdd?.includes(entryId) && surfacesFact(change, entryId));
+  });
   const taken = {
     touched: (opportunities.shouldTouch ?? []).filter((id) => touched.has(id)).length,
     targets: (opportunities.shouldTouch ?? []).length,
-    reordered: (opportunities.shouldReorder ?? []).filter((id) => touched.has(`order:${id}`)).length,
-    added: (opportunities.shouldAdd ?? []).filter((id) => result.changes.some((change) => change.target.entryId === id && targets.get(change.targetId)?.kind === "new-bullet")).length,
-    removed: (opportunities.shouldRemove ?? []).filter((id) => result.changes.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
+    reordered: (opportunities.shouldReorder ?? []).filter((id) => satisfiers.some((change) => change.order && change.target.entryId === id)).length,
+    added: (opportunities.shouldAdd ?? []).filter((id) => satisfiers.some((change) => change.target.entryId === id && targets.get(change.targetId).kind === "new-bullet" && surfacesFact(change, id))).length,
+    removed: (opportunities.shouldRemove ?? []).filter((id) => valid.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
     expectFewEdits: opportunities.expectFewEdits === true
   };
-  // An opportunity case is about one planted improvement; any rewrite, reorder,
-  // addition, or removal of a named target satisfies it (a named filler bullet
-  // and any bullet of an entry that should gain one count too), but a harmless
-  // edit elsewhere leaves the opportunity missed.
-  const satisfied = taken.touched + taken.reordered + taken.added + taken.removed
-    + (opportunities.fillerBullets ?? []).filter((id) => touched.has(id)).length
-    + (opportunities.shouldAdd ?? []).filter((id) => result.changes.some((change) => change.target.entryId === id && change.action !== "remove" && !change.order)).length;
-  if (fixture.gateOpportunity && result.changes.length && satisfied === 0) hits.push({ type: "missedOpportunity" });
+  if (fixture.gateOpportunity && result.changes.length && !satisfiers.length) hits.push({ type: "missedOpportunity" });
+  const rewrites = satisfiers.filter((change) => !change.order && change.action !== "remove").map((change) => change.targetId);
   return {
     passed: hits.length === 0 && metrics.tenseFlips === 0,
     hits, metrics,
-    opportunities: taken
+    opportunities: taken,
+    opportunitySatisfiers: { structural: satisfiers.length - rewrites.length, rewrites }
   };
+}
+
+// A gated opportunity met only by rewrites needs one the fact-check calls
+// material, so a synonym swap of a named filler bullet cannot pass it.
+export function opportunityMetOnlyByChurn(fixture, grade, edits, factCheck) {
+  const { structural, rewrites } = grade.opportunitySatisfiers;
+  if (!fixture.gateOpportunity || structural || !rewrites.length) return false;
+  const material = new Set(factCheck.edits.filter((label) => label.material).map((label) => edits.find((edit) => edit.n === label.n)?.targetId));
+  return !rewrites.some((targetId) => material.has(targetId));
 }
 
 export function factCheckEdits(fixture, result) {

@@ -56,7 +56,12 @@ application retain blocking technical guards.
   A negated or penalty-phrased "more than / over / exceed N" is a hard ceiling;
   un-negated, it is a hard floor only after a positive instruction and
   otherwise no limit at all, so an unrecognised negation never drives a repair
-  past an employer's limit.
+  past an employer's limit. A worded maximum turns bare counts of its own unit
+  into advice, and bare counts of other units too unless an instruction
+  introduces them ("Answer in 3 sentences. Maximum 500 characters." keeps both;
+  "Feel free to answer in 150 words", "In 200 words or so", later advice such
+  as "which is usually enough", and a count sitting between two of a field's
+  questions stay advice).
   Evidence warnings remain advisory. Preserve question identity and revision,
   distinguish explicit user facts from generated drafts, and reject oversized
   inputs instead of silently clipping them. Unknown usage from any dispatch

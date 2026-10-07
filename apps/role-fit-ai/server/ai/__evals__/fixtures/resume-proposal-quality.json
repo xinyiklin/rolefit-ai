@@ -4856,7 +4856,10 @@
         "pinecone-b1",
         "pinecone-b2"
       ],
-      "shouldRemove": []
+      "shouldRemove": [],
+      "leadBullet": {
+        "pinecone": "pinecone-b3"
+      }
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
@@ -5075,7 +5078,17 @@
       ],
       "shouldTouch": [],
       "shouldReorder": [],
-      "fillerBullets": []
+      "fillerBullets": [],
+      "addTerms": {
+        "saltmarsh": [
+          "on-call",
+          "runbook*",
+          "postmortem*",
+          "outage*",
+          "alert*",
+          "page*"
+        ]
+      }
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,

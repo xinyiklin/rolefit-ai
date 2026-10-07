@@ -121,12 +121,21 @@ const CONDITIONAL_IN_CLAUSE = /\b(?:if|when|whenever|unless|where|wherever|in\s+
 const CONDITIONAL_AFTER = /\b(?:only\s+(?:if|when|where)|unless|if\s+(?:necessary|needed|required)|when\s+(?:necessary|needed))\b/i;
 // A count introduced as a suggestion or a typical length is advice, not the
 // employer's limit ("Up to 500 words; we suggest 200-300 words").
-const ADVISORY_BEFORE = /\b(?:suggest(?:ed|s)?|recommend(?:ed|s)?|ideally|typical(?:ly)?|usually|often|tend\s+to|prefer(?:ably|red|s)?|target|aim\s+for|most\s+(?:answers|responses|candidates|applicants|people|submissions)|(?:strong|good|great)\s+(?:answers|responses))\b/i;
+const ADVISORY_BEFORE = /\b(?:suggest(?:ed|s)?|recommend(?:ed|s)?|ideally|typical(?:ly)?|usually|often|tend\s+to|prefer(?:ably|red|s)?|target|aim\s+for|(?:most|many)\s+(?:answers|responses|candidates|applicants|people|submissions)|(?:strong|good|great)\s+(?:answers|responses))\b/i;
 // A penalty or suggestion belongs to the nearest count: the window stops at a
 // contrastive conjunction, a comma-joined "and", or the next count.
 const SEGMENT_BREAK = /\b(?:and|but|though|although|however|while|whereas|with)\b|,/i;
-const ADVISORY_AFTER = /^[^.;!?\n,]{0,30}?\b(?:usually|typical(?:ly)?|enough|plenty|target|ideal(?:ly)?|recommended|suggested|sufficient|fine|works\s+well|is\s+common|ample|a\s+good\s+length)\b/i;
+const ADVISORY_AFTER = /^(?:[^.;!?\n,]{0,30}?\b(?:usually|typical(?:ly)?|enough|plenty|target|ideal(?:ly)?|(?:is|are)\s+preferable|recommended|suggested|sufficient|fine|works?\s+(?:well|best)|is\s+common|ample|a\s+good\s+length)\b|\s+or\s+so\b|\s*,?\s*(?:ideally|preferably|if\s+(?:you\s+can|possible))\s*(?:[.;!?)\n]|$))/i;
 const FLOOR_QUALIFIER = /^(?:under|below|fewer than|less than|shorter than)$/;
+// "Answer in 3 sentences" or "Keep it to 150 words" instructs; another bare count
+// beside a worded maximum of a different unit reads as advice ("A 250-word
+// answer works"), as does a permitted or negated length ("Feel free to answer in
+// 150 words", "You don't have to answer in 200 words").
+const INSTRUCTED_COUNT_BEFORE = /\b(?:in|use|using|write|(?:answer|respond|reply)\s+with|(?:should|must)\s+be|(?:keep|limit)\s+(?:it|this|them|your\s+(?:answer|response))\s+to)\s+$/i;
+const NEGATED_COUNT_BEFORE = /\b(?:don['’]t|do\s+not|doesn['’]t|no\s+need\s+to|needn['’]t|not\s+(?:required|necessary)\s+to)\b[^.;!?\n,]{0,25}$/i;
+// Advice later in the question ("…, which is usually enough") softens the count too.
+const LATER_ADVICE = /^[^\n]{0,80}?(?:\b(?:usually|is|are)\s+(?:enough|plenty|sufficient|ample|fine)\b|['’]s\s+(?:enough|plenty|sufficient|ample|fine)\b|\bno\s+penalty\b|\blonger\s+is\s+(?:fine|ok(?:ay)?)\b)/i;
+const PERMITTED_COUNT_BEFORE = /\b(?:(?:free|welcome)\s+to|can|could|may|might)\s+(?:answer|respond|reply|write|use|do\s+(?:this|it))(?:\s+(?:in|with|using))?\s+$/i;
 const KEEP_BEFORE = /\b(?:keep(?:\s+(?:it|answers|responses|them|this))?|stay|staying|be|remain|aim|write|writing|submit|use|using|please|answer|respond|limit)\s+$/i;
 const COUNT_PATTERN = () => new RegExp(`${NUMBER}\\s*[-‐‑]?\\s*${UNIT}`, "gi");
 // "under N words will not be considered" states a floor only when the penalty
@@ -149,15 +158,19 @@ const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|be
 export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   const constraints: AnswerConstraint[] = [];
   const occupied: Array<[number, number]> = [];
+  const FIELD_MARKER = /(?:^|\n)\s*(?:\d+[.)]|(?:question|field)\s*\d+[:.)])/gi;
   const multipleFields = (question.match(/\?/g)?.length ?? 0) > 1
-    || (question.match(/(?:^|\n)\s*(?:\d+[.)]|(?:question|field)\s*\d+[:.)])/gi)?.length ?? 0) > 1;
+    || (question.match(FIELD_MARKER)?.length ?? 0) > 1;
+  const FIELD_BREAK = new RegExp(`\\?|${FIELD_MARKER.source}`, "i");
   // A builder returns null to leave the span for later rules, or false to claim
   // it without a constraint ("more than 100 words" must not fall through to the
   // bare "100 words" rule as a ceiling).
   type Build = (match: RegExpMatchArray, clause: { before: string; after: string }) => Omit<AnswerConstraint, "scope" | "source"> | null | false;
   // Bare counts ("250 words") are the weakest signal: suggestion wording after
-  // them, or a worded hard maximum elsewhere for the same unit, makes them advice.
+  // them, or a worded hard maximum (see the demotion rule below), makes them advice.
   const bareIndexes: number[] = [];
+  const instructedIndexes: number[] = [];
+  const starts: number[] = [];
   const rangeIndexes: number[] = [];
   const addMatches = (pattern: RegExp, build: Build, options: { bare?: boolean; bareWhen?: (match: RegExpMatchArray) => boolean; range?: boolean } = {}) => {
     for (const match of question.matchAll(pattern)) {
@@ -174,11 +187,16 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       if (options.bare || options.bareWhen?.(match)) {
         if (ADVISORY_AFTER.test(after)) built.hard = false;
         if (options.range) rangeIndexes.push(constraints.length);
-        else if (!/\s(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly)$/i.test(match[0])) bareIndexes.push(constraints.length);
+        else if (!/\s(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly)$/i.test(match[0])) {
+          bareIndexes.push(constraints.length);
+          if (INSTRUCTED_COUNT_BEFORE.test(before) && !PERMITTED_COUNT_BEFORE.test(before) && !NEGATED_COUNT_BEFORE.test(before)
+            && !LATER_ADVICE.test(question.slice(end))) instructedIndexes.push(constraints.length);
+        }
       }
       const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
         : /\b(?:total|combined|altogether|across (?:both|all))\b/i.test(context) ? "total" : "answer";
+      starts[constraints.length] = start;
       constraints.push({
         ...built, scope, source: match[0],
         ...(scope === "each" && multipleFields ? { unresolvedScope: true as const } : {})
@@ -235,10 +253,22 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     ...(/\b(?:minimum|min|or more)$/i.test(match[0]) ? { min: numberValue(match[1]) } : /\bexactly$/i.test(match[0]) ? { exact: numberValue(match[1]) } : { max: numberValue(match[1]) }),
     hard: true
   }), { bare: true });
-  // A worded hard maximum anywhere in the question makes bare counts advice,
-  // and an unworded range below a worded maximum of the same unit is advice too.
-  const worded = constraints.filter((other, index) => !bareIndexes.includes(index) && !rangeIndexes.includes(index) && other.hard && (other.max !== undefined || other.exact !== undefined));
-  if (worded.length) for (const index of bareIndexes) constraints[index].hard = false;
+  // A worded hard maximum makes bare counts of its unit advice, and uninstructed
+  // bare counts of any unit, as well as an instructed count that sits between
+  // two questions with a question break before the cap (it may belong to one
+  // question only); an unworded range below a worded maximum of the same unit
+  // is advice too.
+  const wordedIndexes = constraints.flatMap((other, index) => !bareIndexes.includes(index) && !rangeIndexes.includes(index) && other.hard && (other.max !== undefined || other.exact !== undefined) ? [index] : []);
+  const worded = wordedIndexes.map((index) => constraints[index]);
+  const separated = (a: number, b: number) => multipleFields
+    && FIELD_BREAK.test(question.slice(0, starts[a]))
+    && FIELD_BREAK.test(question.slice(starts[a] + constraints[a].source.length))
+    && FIELD_BREAK.test(question.slice(Math.min(starts[a], starts[b]) + 1, Math.max(starts[a], starts[b])));
+  for (const index of bareIndexes) {
+    const bare = constraints[index];
+    const instructed = instructedIndexes.includes(index);
+    if (wordedIndexes.some((other) => constraints[other].unit === bare.unit || !instructed || separated(index, other))) bare.hard = false;
+  }
   for (const index of rangeIndexes) {
     const range = constraints[index];
     if (worded.some((other) => other.unit === range.unit && (other.max ?? other.exact ?? 0) > (range.max ?? 0))) range.hard = false;
