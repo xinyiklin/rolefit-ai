@@ -144,7 +144,7 @@ const PERMISSIVE_BEFORE = /\b(?:may|can|could|free\s+to|allowed\s+to|welcome\s+t
 const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|(?:must|should|needs?\s+to|ha(?:s|ve)\s+to)\s+(?:contain|include|have|require|run)|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
-const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being|we['’]ll|they['’]ll)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread|stop\s+reading|skip|skim)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
+const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being|we['’]ll|they['’]ll)\b(?:(?!\b(?:not|never)\b|n['’]t\b)[^.;!?\n]){0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread|stop\s+reading|skip|skim)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
 
 export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   const constraints: AnswerConstraint[] = [];
@@ -158,7 +158,8 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   // Bare counts ("250 words") are the weakest signal: suggestion wording after
   // them, or a worded hard maximum elsewhere for the same unit, makes them advice.
   const bareIndexes: number[] = [];
-  const addMatches = (pattern: RegExp, build: Build, options: { bare?: boolean; bareWhen?: (match: RegExpMatchArray) => boolean; demote?: boolean } = {}) => {
+  const rangeIndexes: number[] = [];
+  const addMatches = (pattern: RegExp, build: Build, options: { bare?: boolean; bareWhen?: (match: RegExpMatchArray) => boolean; range?: boolean } = {}) => {
     for (const match of question.matchAll(pattern)) {
       const start = match.index!;
       const end = start + match[0].length;
@@ -172,7 +173,8 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       if (ADVISORY_BEFORE.test(before.split(SEGMENT_BREAK).pop() ?? "")) built.hard = false;
       if (options.bare || options.bareWhen?.(match)) {
         if (ADVISORY_AFTER.test(after)) built.hard = false;
-        if (options.demote !== false && !/\s(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly)$/i.test(match[0])) bareIndexes.push(constraints.length);
+        if (options.range) rangeIndexes.push(constraints.length);
+        else if (!/\s(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly)$/i.test(match[0])) bareIndexes.push(constraints.length);
       }
       const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
@@ -188,7 +190,7 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     const max = numberValue(match[3]);
     // "seventy-five words" is one number, not a 70–5 range; leave the span free.
     return min > max ? null : { unit: unitValue(match[4]), min, max, hard: !match[1] };
-  }, { bare: true, demote: false });
+  }, { bare: true, range: true });
   // A negated comparison runs first and claims its span, so "no longer than
   // 300 words" never reaches the un-negated ceiling rule below.
   const comparison = "(more\\s+than|less\\s+than|fewer\\s+than|longer\\s+than|shorter\\s+than|greater\\s+than|over|above|beyond|under|below|exceed(?:s|ing)?|go\\s+over|go\\s+beyond|fall\\s+below|go\\s+below)";
@@ -233,9 +235,13 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     ...(/\b(?:minimum|min|or more)$/i.test(match[0]) ? { min: numberValue(match[1]) } : /\bexactly$/i.test(match[0]) ? { exact: numberValue(match[1]) } : { max: numberValue(match[1]) }),
     hard: true
   }), { bare: true });
-  // A worded hard maximum anywhere in the question makes bare counts advice.
-  if (constraints.some((other, index) => !bareIndexes.includes(index) && other.hard && (other.max !== undefined || other.exact !== undefined))) {
-    for (const index of bareIndexes) constraints[index].hard = false;
+  // A worded hard maximum anywhere in the question makes bare counts advice,
+  // and an unworded range below a worded maximum of the same unit is advice too.
+  const worded = constraints.filter((other, index) => !bareIndexes.includes(index) && !rangeIndexes.includes(index) && other.hard && (other.max !== undefined || other.exact !== undefined));
+  if (worded.length) for (const index of bareIndexes) constraints[index].hard = false;
+  for (const index of rangeIndexes) {
+    const range = constraints[index];
+    if (worded.some((other) => other.unit === range.unit && (other.max ?? other.exact ?? 0) > (range.max ?? 0))) range.hard = false;
   }
   return constraints.filter((constraint) => [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000))
     && (constraint.min === undefined || constraint.max === undefined || constraint.min <= constraint.max));
