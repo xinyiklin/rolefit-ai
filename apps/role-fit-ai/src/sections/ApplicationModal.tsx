@@ -462,11 +462,14 @@ export function ApplicationModal({
       if (!question || !text) return [];
       const previous = answer.id ? base.applicationAnswers?.find((saved) => saved.id === answer.id) : undefined;
       if (!previous) return [{ ...answer, question, answer: text, savedAt: answer.savedAt || now }];
-      if (previous.question === answer.question && previous.answer === answer.answer) return [previous];
+      // Whitespace-only differences are not edits; a question that only lost
+      // surrounding whitespace keeps its stored text and revision number.
+      if (previous.question.trim() === question && previous.answer.trim() === text) return [previous];
+      const nextQuestion = previous.question.trim() === question ? previous.question : question;
       const questionKey = previous.questionId ?? "";
       const revision = (latestQuestionRevision.get(questionKey) ?? previous.questionRevision ?? 0) + 1;
-      if (question !== previous.question && previous.questionId) latestQuestionRevision.set(questionKey, revision);
-      return [previous, editedSavedApplicationAnswer(previous, question, text,
+      if (nextQuestion !== previous.question && previous.questionId) latestQuestionRevision.set(questionKey, revision);
+      return [previous, editedSavedApplicationAnswer(previous, nextQuestion, text,
         `manual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`, now, revision)];
     });
 

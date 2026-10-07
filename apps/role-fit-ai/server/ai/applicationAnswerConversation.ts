@@ -175,7 +175,7 @@ export async function generateApplicationAnswer(
     id: input.answerRevisionId, applicationId: input.applicationId,
     questionId: input.question.id, questionRevision: input.question.revision, question: input.question.text,
     answer: draft.answer, ...(draft.clarification ? { clarification: draft.clarification } : {}),
-    status: draft.clarification ? "needs-input" : validation.compliant && !incomplete ? "ready" : "draft",
+    status: draft.clarification && !draft.answer ? "needs-input" : draft.clarification || !validation.compliant || incomplete ? "draft" : "ready",
     constraints, counts: validation.counts, compliant: validation.compliant,
     ...(warnings?.length ? { warnings } : {}),
     ...(input.previousAnswer ? { previousAnswerId: input.previousAnswer.id } : {}),

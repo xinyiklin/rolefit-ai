@@ -50,8 +50,8 @@ career, senior individual contribution, volunteering, factual fields, motivation
 behavioral examples, hard limits and minimal refinements. Cases sharing a
 candidate context are related observations, not independent population samples.
 
-It calls the production conversation generator with frozen context and prompt
-v3. Astra High and Opus High exchanged rubric feedback, then both explicitly
+It calls the production conversation generator with frozen context and the
+production prompt (v3 for every recorded run below; v4 now). Astra High and Opus High exchanged rubric feedback, then both explicitly
 approved the identical `senior-recruiter-consensus-v1` hash before grading. The
 tracked `support/application-answer-judge-protocol.mjs` owns that exact rubric
 and approval metadata. Each judge then receives an independently reordered,

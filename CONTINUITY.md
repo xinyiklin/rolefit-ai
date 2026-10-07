@@ -72,9 +72,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
     record as an existing application; the unload guard follows the current
     thread only; the Applications modal numbers same-question revisions
     correctly and trims manual rows again; saved versions number per
-    question. Left as residual: no duplicate resolution runs when the first
-    tracker record for a posting is an answer-created Draft (the tracker's
-    later duplicate scan still surfaces it); conversations of earlier
+    question. The server re-review then caught a regression in the first
+    parser fix (negated ceilings such as "no longer than 300 words" had
+    become minimums): the negation pattern now covers those comparisons and
+    a negated-prefix fallback guards the ceiling rule. Also fixed on that
+    pass: a repair that asks a question leaves the retained text a draft
+    (normal Save would have sent an invalid ready revision); reopened answers
+    recompute limits under current rules so later edits save; fence tags with
+    spaces around the slash are neutralized; hyphenated and thousand-scale
+    number words parse; impossible ranges are dropped; numeric, editorial and
+    code-style brackets are not placeholders; whitespace-only edits in the
+    Applications modal create no revision; edits typed during a failed save
+    no longer name the unsaved revision. Left as residual: no duplicate
+    resolution runs when the first tracker record for a posting is an
+    answer-created Draft, and acknowledging that Draft replaces an earlier
+    Link/Keep-separate decision for the same posting (the tracker's later
+    duplicate scan still surfaces both); re-preparing the same posting hides
+    its unsaved thread without a prompt; conversations of earlier
     preparations stay in memory for the session; "Node.js" and "U.S." count
     as two words.
     Earlier sessions' receipts (app-local ledger, ignored): synthetic-route

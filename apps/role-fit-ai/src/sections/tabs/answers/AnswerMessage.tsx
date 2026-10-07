@@ -26,7 +26,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
   const canUse = nonempty && Boolean(validation?.compliant);
   const saved = Boolean(response && message.savedRevisionId === response.id);
   const saving = Boolean(message.savingRevisionId);
-  const saveDraft = !canUse || response?.status === "draft";
+  const saveDraft = !canUse || response?.status !== "ready";
   const modelLabel = response?.generation
     ? modelOptionsByProvider[response.generation.provider as AiProviderValue]?.find((model) => model.value === response.generation?.model)?.label ?? "Generated answer"
     : message.edited ? "Your edit" : "Saved answer";

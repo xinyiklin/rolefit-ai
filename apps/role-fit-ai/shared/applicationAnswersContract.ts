@@ -74,53 +74,60 @@ export function countAnswerText(value: string): AnswerCounts {
 }
 
 // Bracketed or doubled-brace slots, including the historical "[add: …]"
-// drafting placeholder, mark prose that is not finished.
+// drafting placeholder, mark prose that is not finished. Numeric brackets,
+// editorial marks and code-style indexes are ordinary prose.
 export function hasUnresolvedAnswerPlaceholder(text: string): boolean {
-  return /\[[^\]\r\n]{1,240}\]|\{\{[^}\r\n]{1,240}\}\}/.test(text);
+  return /(?<![\w\]])\[(?!(?:[\d.,%\s-]+|sic|redacted|citation needed)\])[^\]\r\n]{1,240}\]|\{\{[^}\r\n]{1,240}\}\}/i.test(text);
 }
 
-const NUMBER_WORDS: Record<string, number> = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10,
-  eleven: 11, twelve: 12, fifteen: 15, twenty: 20, thirty: 30, forty: 40, fifty: 50,
-  sixty: 60, seventy: 70, eighty: 80, ninety: 90
+const SMALL_NUMBERS: Record<string, number> = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12,
+  thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19
 };
-const WORD_NUMBER = `(?:${Object.keys(NUMBER_WORDS).join("|")})`;
-// Digits with optional thousands separators ("1,500", "2.000"), a bare or
-// compound number word ("two hundred fifty"), or one number word. The
-// lookbehind keeps "2.000" or "3.5" from yielding a trailing "000" or "5".
-const NUMBER = `(?<![\\d.,])(?:\\d{1,3}(?:[.,]\\d{3})+|\\d+|(?:${WORD_NUMBER}\\s+)?(?:hundred|thousand)(?:\\s+(?:and\\s+)?${WORD_NUMBER})?|${WORD_NUMBER})`;
+const TENS: Record<string, number> = { twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const NUMBER_WORDS: Record<string, number> = { ...SMALL_NUMBERS, ...TENS };
+const ONES = `(?:${Object.keys(SMALL_NUMBERS).slice(0, 9).join("|")})`;
+const WORD_NUMBER = `(?:(?:${Object.keys(TENS).join("|")})(?:[-\\s]${ONES})?|(?:${Object.keys(SMALL_NUMBERS).join("|")}))`;
+const COMPOUND_NUMBER = `(?:(?:${WORD_NUMBER}\\s+)?thousand(?:\\s+(?:and\\s+)?(?:${WORD_NUMBER}\\s+)?hundred)?(?:\\s+(?:and\\s+)?${WORD_NUMBER})?|(?:${WORD_NUMBER}\\s+)?hundred(?:\\s+(?:and\\s+)?${WORD_NUMBER})?|${WORD_NUMBER})`;
+// Digits with optional thousands separators ("1,500", "2.000") or number words
+// ("seventy-five", "one thousand five hundred"). The lookbehind keeps "2.000"
+// or "3.5" from yielding a trailing "000" or "5".
+const NUMBER = `(?<![\\d.,])(?:\\d{1,3}(?:[.,]\\d{3})+|\\d+|${COMPOUND_NUMBER})`;
 const UNIT = "(words?|characters?|chars?|sentences?)";
 function numberValue(value: string): number {
   if (/^\d/.test(value)) return Number(value.replace(/[.,]/g, ""));
   let total = 0;
-  for (const word of value.toLowerCase().split(/\s+/)) {
-    if (word === "hundred") total = (total || 1) * 100;
-    else if (word === "thousand") total = (total || 1) * 1000;
-    else if (word in NUMBER_WORDS) total += NUMBER_WORDS[word];
+  let current = 0;
+  for (const word of value.toLowerCase().split(/[\s-]+/)) {
+    if (word === "hundred") current = (current || 1) * 100;
+    else if (word === "thousand") { total += (current || 1) * 1000; current = 0; }
+    else if (word in NUMBER_WORDS) current += NUMBER_WORDS[word];
   }
-  return total;
+  return total + current;
 }
 const unitValue = (value: string): keyof AnswerCounts => value.toLowerCase().startsWith("word") ? "words" : value.toLowerCase().startsWith("sent") ? "sentences" : "characters";
-const CEILING_QUALIFIER = /^(?:more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? over|longer than|greater than)$/;
+const CEILING_QUALIFIER = /^(?:more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? (?:over|beyond)|longer than|greater than)$/;
+const NEGATED_BEFORE = /\b(?:no|not|never|don['’]t|cannot|can['’]t|mustn['’]t|shouldn['’]t|won['’]t|without)\s+(?:(?:to|be|go|write|use)\s+)*$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
-const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being)\b[^.;!?\n]{0,20}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,12}?\b(?:read|reviewed|considered|accepted|scored|counted|processed|assessed)\b/i;
+const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
 
 export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   const constraints: AnswerConstraint[] = [];
   const occupied: Array<[number, number]> = [];
   const multipleFields = (question.match(/\?/g)?.length ?? 0) > 1
     || (question.match(/(?:^|\n)\s*(?:\d+[.)]|(?:question|field)\s*\d+[:.)])/gi)?.length ?? 0) > 1;
-  const addMatches = (pattern: RegExp, build: (match: RegExpMatchArray, trailing: string) => Omit<AnswerConstraint, "scope" | "source"> | null) => {
+  type Build = (match: RegExpMatchArray, clause: { before: string; after: string }) => Omit<AnswerConstraint, "scope" | "source"> | null;
+  const addMatches = (pattern: RegExp, build: Build) => {
     for (const match of question.matchAll(pattern)) {
       const start = match.index!;
       const end = start + match[0].length;
       if (occupied.some(([left, right]) => start < right && end > left)) continue;
-      const trailing = question.slice(end, end + 45).split(/[.;!?\n]/)[0];
-      const preceding = question.slice(Math.max(0, start - 35), start).split(/[.;!?\n]/).pop() ?? "";
-      const built = build(match, trailing);
+      const before = question.slice(Math.max(0, start - 120), start).split(/[.;!?\n]/).pop() ?? "";
+      const after = question.slice(end, end + 160).split(/[.;!?\n]/)[0];
+      const built = build(match, { before, after });
       if (!built) continue;
-      const context = `${preceding} ${match[0]} ${trailing}`;
+      const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
         : /\b(?:total|combined|altogether|across (?:both|all))\b/i.test(context) ? "total" : "answer";
       constraints.push({
@@ -133,20 +140,24 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   addMatches(new RegExp(`\\b(?:(about|around|approximately|roughly)\\s+)?(?:between\\s+)?(${NUMBER})\\s*(?:[-–—]|to|and)\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
     unit: unitValue(match[4]), min: numberValue(match[2]), max: numberValue(match[3]), hard: !match[1]
   }));
-  const negation = "(?:no|not|never|do\\s+not|don['’]t|must\\s+not|mustn['’]t|should\\s+not|shouldn['’]t|cannot|can['’]t)";
-  const action = "(?:(?:write|use|include|provide|submit|return|give|be|need|want|require|take|spend)\\s+)?";
-  const comparison = "(more\\s+than|less\\s+than|fewer\\s+than|over|under|exceed|go\\s+over|fall\\s+below|go\\s+below)";
-  addMatches(new RegExp(`\\b${negation}\\s+(?:to\\s+)?${action}(?:to\\s+)?${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
+  // A negated comparison runs first and claims its span, so "no longer than
+  // 300 words" never reaches the un-negated ceiling rule below.
+  const negation = "(?:no|not|never|do\\s+not|don['’]t|must\\s+not|mustn['’]t|should\\s+not|shouldn['’]t|cannot|can['’]t|won['’]t|will\\s+not)";
+  const filler = "(?:(?:to|write|use|include|provide|submit|return|give|be|need|want|require|take|spend|go|have|try)\\s+){0,3}";
+  const comparison = "(more\\s+than|less\\s+than|fewer\\s+than|longer\\s+than|shorter\\s+than|greater\\s+than|over|above|beyond|under|below|exceed(?:s|ing)?|go\\s+over|go\\s+beyond|fall\\s+below|go\\s+below)";
+  addMatches(new RegExp(`\\b${negation}\\s+${filler}${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
     unit: unitValue(match[3]),
-    ...(/^(?:less|fewer|under)|below$/i.test(match[1]) ? { min: numberValue(match[2]) } : { max: numberValue(match[2]) }),
+    ...(/^(?:less|fewer|shorter|under|below)|below$/i.test(match[1]) ? { min: numberValue(match[2]) } : { max: numberValue(match[2]) }),
     hard: true
   }));
-  addMatches(new RegExp(`\\b(exactly|about|around|approximately|roughly|under|below|no fewer than|no less than|fewer than|less than|at most|no more than|more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? over|longer than|greater than|up to|maximum(?: of)?|max\\.?|at least|minimum(?: of)?|min\\.?)\\s*:?\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match, trailing) => {
+  addMatches(new RegExp(`\\b(exactly|about|around|approximately|roughly|under|below|no fewer than|no less than|fewer than|less than|at most|no more than|more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? (?:over|beyond)|longer than|greater than|up to|maximum(?: of)?|max\\.?|at least|minimum(?: of)?|min\\.?)\\s*:?\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match, clause) => {
     const n = numberValue(match[2]);
     const qualifier = match[1].toLowerCase().replace(/\s+/g, " ");
+    const ceiling = CEILING_QUALIFIER.test(qualifier) && (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before));
     const bounds = qualifier === "exactly" ? { exact: n }
       : /^(?:at least|no fewer than|no less than|min)/.test(qualifier) ? { min: n }
-      : CEILING_QUALIFIER.test(qualifier) ? (PENALTY_CLAUSE.test(trailing) ? { max: n } : { min: n + 1 })
+      : ceiling ? { max: n }
+      : CEILING_QUALIFIER.test(qualifier) ? { min: n + 1 }
       : /^(?:about|around|approximately|roughly)$/.test(qualifier) ? { exact: n }
       : { max: /^(?:under|below|fewer|less)/.test(qualifier) ? Math.max(0, n - 1) : n };
     return { unit: unitValue(match[3]), ...bounds, hard: !/^(?:about|around|approximately|roughly)$/.test(qualifier) };
@@ -163,7 +174,8 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     ...(/\b(?:minimum|min|or more)$/i.test(match[0]) ? { min: numberValue(match[1]) } : /\bexactly$/i.test(match[0]) ? { exact: numberValue(match[1]) } : { max: numberValue(match[1]) }),
     hard: true
   }));
-  return constraints.filter((constraint) => [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000)));
+  return constraints.filter((constraint) => [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000))
+    && (constraint.min === undefined || constraint.max === undefined || constraint.min <= constraint.max));
 }
 
 export function validateAnswerConstraints(text: string, constraints: readonly AnswerConstraint[]): {

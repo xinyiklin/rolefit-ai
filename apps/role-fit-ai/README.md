@@ -325,8 +325,9 @@ font, size and wrapping changes still reflow the page normally.
   intake. A Skipped record reopens in job-update-only mode; Save job updates
   preserves its decision metadata, while reconsidering the role creates a
   separate linked attempt. Generated application answers stay session-local
-  until an explicit Save, which creates or updates one Draft record; job
-  matching supplies only warnings and relationships. Linked
+  until an explicit Save, which creates a Draft or updates the record the
+  preparation already targets; job matching supplies only warnings and
+  relationships. Linked
   posting histories remain separate table rows with a quiet group count and a
   date-ordered related-record list. Application Detail can open a related row,
   atomically mark it unrelated without deletion, or explicitly merge an
