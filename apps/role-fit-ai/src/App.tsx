@@ -158,6 +158,8 @@ import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
 import { DocumentSaveMenu } from "./sections/document/DocumentSaveMenu";
 import { StudioPane } from "./sections/StudioPane";
 import { SettingsDialog, type SettingsSection } from "./sections/SettingsDialog";
+import type { ProfileNoteFocus } from "./sections/settings/ProfileNotes.tsx";
+import { appendProfileBlock, profileNotesScope } from "./lib/profileNotes.ts";
 import { ExportMenu } from "./sections/ExportRail";
 import { ApplyDownloadDialog } from "./sections/ApplyDownloadDialog";
 import { SkipJobDialog } from "./sections/SkipJobDialog";
@@ -617,10 +619,11 @@ function App() {
     );
     return () => window.cancelIdleCallback(handle);
   }, []);
-  // The Settings dialog's open state AND its active section in one value: null is
-  // closed, a section id is open on that section. "Add evidence" opens it directly
-  // on Profile, so the section cannot be private to the dialog.
-  const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
+  // Open state and page are kept apart so the gear reopens the last page used in
+  // this tab; targeted entry points (provider setup, add evidence) pick theirs.
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<SettingsSection>("background");
+  const [profileNoteFocus, setProfileNoteFocus] = useState<ProfileNoteFocus | null>(null);
   // Ref for the Profile Background textarea inside Settings — focused after the
   // dialog is opened by handleAddProfileEvidence so the user can type immediately.
   const profileBackgroundTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1934,23 +1937,25 @@ function App() {
   ]);
 
   // Called from the document review rails when a candidate claim needs evidence.
-  // Appends a template line to the Profile Background (unless the keyword is
-  // already there), then opens Settings on Profile so the user can fill it in.
+  // Appends a template note to the Profile Background (unless the keyword is
+  // already there), then opens Settings on Background with that note selected.
   function handleAddProfileEvidence(keyword: string) {
     const alreadyPresent = profileBackground.toLowerCase().includes(keyword.toLowerCase());
     if (!alreadyPresent) {
       // Its own heading keeps the new fact from inheriting the last entry's type.
-      const template = `## ${keyword} ([type], [dates])\n[describe your exact experience: what you did and where]`;
-      const next = profileBackground ? `${profileBackground.trimEnd()}\n\n${template}` : template;
+      const appended = appendProfileBlock(profileBackground, `${keyword} ([type], [dates])`, resumeReady ? profileNotesScope(editedResume) : null);
+      const next = `${appended.background}[describe your exact experience: what you did and where]`;
       if (next.length > PROFILE_BACKGROUND_STORAGE_LIMIT) {
-        setPolishStatus("Your Profile Background is full. Shorten it in Settings > Profile first.");
+        setPolishStatus("Your Profile Background is full. Shorten it in Settings > Background first.");
         return;
       }
       setProfileBackground(next);
+      setProfileNoteFocus({ line: appended.start, nonce: Date.now() });
     }
-    setSettingsSection("about");
-    // Give the dialog one frame to render before trying to focus the textarea.
-    // This deliberately beats the dialog's own initial focus on the close button.
+    setSettingsSection("background");
+    setSettingsOpen(true);
+    // Without an open resume the Background is only its raw field: focus it
+    // one frame later, beating the dialog's own initial focus on the close button.
     window.requestAnimationFrame(() => {
       profileBackgroundTextareaRef.current?.focus();
     });
@@ -2670,8 +2675,8 @@ function App() {
                 type="button"
                 className="studio-settings-trigger"
                 aria-haspopup="dialog"
-                aria-expanded={settingsSection !== null}
-                onClick={() => setSettingsSection((current) => (current === null ? "stages" : null))}
+                aria-expanded={settingsOpen}
+                onClick={() => setSettingsOpen((open) => !open)}
                 title="Settings"
               >
                 <span className="studio-settings-trigger__icon" aria-hidden="true">
@@ -2701,7 +2706,7 @@ function App() {
             <PrepareTab
               finalReview={<ApplicationReview review={finalReview}
                 providerLabel={`${stages["application-review"].provider} · ${stages["application-review"].selectedModel}`}
-                onSettings={() => setSettingsSection("stages")}
+                onSettings={() => { setSettingsSection("models"); setSettingsOpen(true); }}
                 onOpenDocument={(document) => { setActiveOutputTab(document === "resume" ? "resume" : "cover"); requestAnimationFrame(() => (document === "resume" ? typesetEditorRef : coverLetterEditorRef).current?.focusDocumentStart()); }}
                 pendingProposals={Boolean(resumeProposalDecisions.outstanding || coverLetterProposal)}
                 disabled={isApplying || jobPreparationActive || isManuallySelectingResumeVariant || isResolvingPreparedResume || coverLetterSelectionPending}
@@ -3266,11 +3271,18 @@ function App() {
         </StudioPane>
       </div>
 
-      {settingsSection !== null ? (
+      {settingsOpen ? (
         <SettingsDialog
           section={settingsSection}
-          onSectionChange={setSettingsSection}
-          onClose={() => setSettingsSection(null)}
+          onSectionChange={(next) => {
+            setSettingsSection(next);
+            // A spent request must not reselect its note when Background mounts again.
+            setProfileNoteFocus(null);
+          }}
+          onClose={() => {
+            setSettingsOpen(false);
+            setProfileNoteFocus(null);
+          }}
           stages={stages}
           onStageChange={updateStage}
           onStageProviderChange={changeStageProvider}
@@ -3311,6 +3323,8 @@ function App() {
           profileBackground={profileBackground}
           onProfileBackgroundChange={setProfileBackground}
           profileBackgroundRef={profileBackgroundTextareaRef}
+          profileResume={resumeReady ? editedResume : null}
+          profileNoteFocus={profileNoteFocus}
           customInstructions={customInstructions}
           onCustomInstructionsChange={setCustomInstructions}
           stageCustomInstructions={stageCustomInstructions}

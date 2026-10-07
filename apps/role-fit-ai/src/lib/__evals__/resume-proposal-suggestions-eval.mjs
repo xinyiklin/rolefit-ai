@@ -31,6 +31,12 @@ assert.equal(added.currentText, "");
 assert.equal(added.evidence, "profile");
 assert.equal(added.profileSource, "Acme Corp (internship, 2024)", "a Profile row shows the whole heading its text came from, qualifiers included");
 assert.equal(edit.profileSource, undefined, "a resume-only edit names no Profile heading");
+assert.equal(edit.profileEvidence, profile, "every row on a linked entry carries the linked Profile text, Profile-evidenced or not");
+assert.equal(added.profileEvidence, profile);
+const [unlinked] = proposalSuggestions(wire([
+  { targetId: "target-1", target: { sectionId: "exp", entryId: "acme", bulletId: "b1" }, replacement: "Built JavaScript tools." }
+]), scope, "## Somewhere else\nUnrelated.");
+assert.equal(unlinked.profileEvidence, undefined, "an entry with no linked block carries no evidence text");
 assert.ok(added.target.bulletId && added.target.bulletId !== "b1", "an addition gets a fresh bullet id");
 const [again] = proposalSuggestions(wire([
   { targetId: "add-1", target: { sectionId: "exp", entryId: "acme" }, replacement: "Automated release notes." }

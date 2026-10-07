@@ -6,7 +6,7 @@ export const CANDIDATE_FACTS_CONTEXT_MAX_LENGTH = 1_000;
 export const CANDIDATE_CONTEXT_CHAR_LIMIT = PROFILE_BACKGROUND_CHAR_LIMIT + CANDIDATE_FACTS_CONTEXT_MAX_LENGTH;
 
 export const PROFILE_BACKGROUND_LIMIT_MESSAGE =
-  "Your Profile Background is over 12,000 characters. Shorten it in Settings > Profile.";
+  "Your Profile Background is over 12,000 characters. Shorten it in Settings > Background.";
 
 // Fit measures NFKC-normalized text and the other stages send raw text, so the
 // limit applies to whichever is longer.
@@ -89,7 +89,7 @@ export function normalizeOmittedEntryNames(value: unknown): string[][] {
 // An entry answers to its title or its subtitle: resumes put the employer or
 // project on either line. An omitted entry can make a name ambiguous but never
 // owns Profile text.
-type LinkableEntry = { id: string | null; names: string[] };
+type LinkableEntry = { id: string | null; label: string; names: string[] };
 
 // Headings that group entries rather than name one: the resume's own section
 // headings and the usual Profile groupings.
@@ -114,11 +114,12 @@ function linkableEntries(scope: ProfileLinkScope): LinkableEntry[] {
     if (!entry || typeof entry !== "object") return [];
     const { id, titleLeft, subtitleLeft } = entry as { id?: unknown; titleLeft?: unknown; subtitleLeft?: unknown };
     if (typeof id !== "string" || !id.trim()) return [];
-    return [{ id, names: [...new Set([...nameKeys(titleLeft), ...nameKeys(subtitleLeft)])] }];
+    const label = plainScopeText(titleLeft) || plainScopeText(subtitleLeft);
+    return [{ id, label, names: [...new Set([...nameKeys(titleLeft), ...nameKeys(subtitleLeft)])] }];
   }));
   const locked = scope?.locked && typeof scope.locked === "object" ? scope.locked as { omittedEntryNames?: unknown } : {};
   for (const names of normalizeOmittedEntryNames(locked.omittedEntryNames)) {
-    entries.push({ id: null, names: [...new Set(names.flatMap(nameKeys))] });
+    entries.push({ id: null, label: names[0] || names[1], names: [...new Set(names.flatMap(nameKeys))] });
   }
   return entries;
 }
@@ -129,6 +130,9 @@ type HeadingAnalysis = {
   ends: number[];
   // Whether a heading's own name matches any entry.
   names: boolean[];
+  matches: LinkableEntry[][];
+  keys: string[];
+  grouping: Set<string>;
   owners: (string | null)[];
   parents: number[];
 };
@@ -164,7 +168,74 @@ function analyzeProfileHeadings(scope: ProfileLinkScope, profile: string): Headi
     }
     return candidates.length === 1 ? candidates[0].id : null;
   });
-  return { lines, headings, ends, names: matches.map((list) => list.length > 0), owners, parents };
+  return { lines, headings, ends, names: matches.map((list) => list.length > 0), matches, keys, grouping, owners, parents };
+}
+
+function plainHeading(text: string): string {
+  return text.replace(/[*_`]+/g, "").replace(/\s+#+\s*$/, "").trim();
+}
+
+export type ProfileHeadingLinkage = {
+  text: string;
+  level: number;
+  line: number;
+  // Whether this heading starts its own stretch of text in the linker's
+  // partition: a top-level heading, one under a grouping heading, or one cut
+  // out of its ancestor because it names another entry. Any other heading is
+  // part of the block above it.
+  block: boolean;
+  status: "linked" | "grouping" | "general" | "omitted";
+  // The linked entry's id and title (or subtitle when the title is blank).
+  entryId?: string;
+  entry?: string;
+  reason?: "names no entry" | "names more than one entry" | "parent heading is not a grouping heading" | "inside another entry's heading";
+};
+
+// What the linker decided for each heading, in document order, so the user
+// can see the rules' result while editing. Walks the same parent chain as
+// `owners` and names the first thing that stopped a link.
+export function profileHeadingLinkage(scope: ProfileLinkScope, profile: string): ProfileHeadingLinkage[] {
+  const { headings, matches, names, keys, grouping, owners, parents } = analyzeProfileHeadings(scope, profile);
+  const linked = (index: number, owner: string): ProfileHeadingLinkage["entry"] =>
+    matches[index].find((entry) => entry.id === owner)?.label ?? "";
+  const startsBlock = (index: number): boolean => {
+    const parent = parents[index];
+    if (parent < 0 || grouping.has(keys[parent])) return true;
+    return names[index] && owners[index] !== owners[parent];
+  };
+  const linkage = headings.map((heading, index): ProfileHeadingLinkage => {
+    const base = { text: plainHeading(heading.text), level: heading.level, line: heading.line, block: startsBlock(index) };
+    const owner = owners[index];
+    if (owner) return { ...base, status: "linked", entryId: owner, entry: linked(index, owner) };
+    if (!names[index]) {
+      // `linkedBlocks` keeps a nested heading that names no entry inside its
+      // linked ancestor's text; only a nested heading naming another entry cuts.
+      let ancestor = parents[index];
+      while (ancestor >= 0 && !names[ancestor]) ancestor = parents[ancestor];
+      const above = ancestor >= 0 ? owners[ancestor] : null;
+      if (above) return { ...base, status: "linked", entryId: above, entry: linked(ancestor, above) };
+      return grouping.has(keys[index]) ? { ...base, status: "grouping" } : { ...base, status: "general", reason: "names no entry" };
+    }
+    let candidates = matches[index];
+    for (let parent = parents[index]; candidates.length && parent >= 0; parent = parents[parent]) {
+      if (matches[parent].length) {
+        candidates = candidates.filter((entry) => matches[parent].includes(entry));
+        if (!candidates.length) return { ...base, status: "general", reason: "inside another entry's heading" };
+      } else if (!grouping.has(keys[parent])) {
+        return { ...base, status: "general", reason: "parent heading is not a grouping heading" };
+      }
+    }
+    if (candidates.every((entry) => entry.id === null)) return { ...base, status: "omitted", entry: candidates[0].label };
+    return { ...base, status: "general", reason: "names more than one entry" };
+  });
+  // After a cut-out sibling ends, the linker hands the text back to the
+  // ancestor, so a heading resuming a different owner starts its own stretch.
+  let open: string | undefined;
+  return linkage.map((heading) => {
+    if (!heading.block && heading.entryId === open) return heading;
+    open = heading.entryId;
+    return heading.block ? heading : { ...heading, block: true };
+  });
 }
 
 type LinkedBlock = { owner: string; heading: string; text: string };
@@ -188,7 +259,7 @@ function linkedBlocks(scope: ProfileLinkScope, profile: string): LinkedBlock[] {
       }
     }
     const text = lines.slice(heading.line, ends[index]).filter((_, offset) => !excluded.has(heading.line + offset)).join("\n").trim();
-    blocks.push({ owner, heading: heading.text.replace(/[*_`]+/g, "").replace(/\s+#+\s*$/, "").trim(), text });
+    blocks.push({ owner, heading: plainHeading(heading.text), text });
   }
   return blocks;
 }

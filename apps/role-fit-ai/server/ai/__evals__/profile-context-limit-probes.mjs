@@ -81,7 +81,7 @@ assert.equal(profileBackgroundLimitError("b".repeat(PROFILE_BACKGROUND_CHAR_LIMI
 assert.equal(profileBackgroundLimitError("b".repeat(PROFILE_BACKGROUND_CHAR_LIMIT + 1)), PROFILE_BACKGROUND_LIMIT_MESSAGE, "12,001 declines");
 assert.equal(candidateContextLimitError("c".repeat(CANDIDATE_CONTEXT_CHAR_LIMIT)), null);
 assert.equal(candidateContextLimitError("c".repeat(CANDIDATE_CONTEXT_CHAR_LIMIT + 1)), PROFILE_BACKGROUND_LIMIT_MESSAGE);
-assert.match(PROFILE_BACKGROUND_LIMIT_MESSAGE, /Settings > Profile/);
+assert.match(PROFILE_BACKGROUND_LIMIT_MESSAGE, /Settings > Background/);
 // Fit measures NFKC text ("…" becomes "..."), so the shared measure is the longer form.
 assert.equal(profileTextLength("…".repeat(4_000)), 12_000);
 assert.equal(profileBackgroundLimitError("…".repeat(4_000)), null, "an expanding Background exactly at the limit runs");

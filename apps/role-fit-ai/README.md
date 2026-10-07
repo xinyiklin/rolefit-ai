@@ -196,7 +196,7 @@ font, size and wrapping changes still reflow the page normally.
   that exact browser origin once in the companion. The extension does not
   estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
-- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > AI stages shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
+- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
@@ -428,9 +428,9 @@ npm run test:rolefit:desktop:packaged
 ## AI setup
 
 Add providers in the Electron companion, then choose among those configured
-providers and their models in **Settings > AI stages**, opened from the foot of
-the studio tab rail. Every stage section stays expanded together; there is no
-per-section collapse control:
+providers and their models in **Settings > Models**, opened from the foot of
+the studio tab rail. Every stage row stays visible together; there is no
+per-row collapse control:
 
 - **Job analysis** — structures the captured posting into the editable job brief.
 - **Fit Assessment** — assesses the selected resume and your Profile against
@@ -442,8 +442,9 @@ per-section collapse control:
   free-text questions.
 
 Each stage has its own provider/model/effort settings. Resume Polish, Cover
-letter, and Application questions expose an optional instruction override;
-Job analysis and Fit Assessment keep fixed analysis contracts and do not.
+letter, and Application questions take an optional instruction override in
+**Settings > Guidance**; Job analysis and Fit Assessment keep fixed analysis
+contracts and do not.
 Use **Copy settings** to sync one stage from another. The browser never renders or submits an
 API-key field. The companion accepts OpenAI and Claude keys as write-only
 values, encrypts them through Electron `safeStorage`, and never reveals a saved
@@ -659,9 +660,9 @@ Browser recovery is separate from the on-disk workspace. The active localhost
 origin may cache a serialized recovery resume, optional raw job text, AI usage,
 and allowlisted settings so the app can fail open when the companion is
 temporarily unavailable. The canonical per-stage settings, guidance, selected
-base resume, and your Settings > Profile—declared citizenship, work
+base resume, your Settings > Profile—declared citizenship, work
 authorization, sponsorship, education and optional GPA, earliest-start
-availability, and the Background text—live in the owner-only workspace
+availability—and the Settings > Background text live in the owner-only workspace
 `workspace-preferences.json`. Every RoleFit client attached to that workspace
 adopts the same preferences at startup and on window focus, regardless of
 browser, origin, port, or incognito mode. The boundary is the current OS user

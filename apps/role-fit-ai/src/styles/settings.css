@@ -48,10 +48,10 @@
   position: relative;
   display: flex;
   flex-direction: column;
-  width: min(860px, 100%);
-  /* Bounded so the panel scrolls internally rather than the page: the AI stages
-     section is intentionally long. */
-  height: min(680px, calc(100vh - var(--s6)));
+  /* One size for every page, so switching pages never resizes the dialog; the
+     Background list and editor set the width. The panel scrolls internally. */
+  width: min(1040px, 100%);
+  height: min(760px, calc(100vh - var(--s6)));
   overflow: hidden;
   background: var(--card);
   border: 1px solid var(--hairline);
@@ -136,6 +136,25 @@
   background: var(--card-soft);
 }
 
+/* Groups are labelled by a quiet caption, not a heading: the rail stays a list. */
+.settings-nav__group {
+  display: grid;
+  gap: 2px;
+}
+
+.settings-nav__group + .settings-nav__group {
+  margin-top: var(--s3);
+}
+
+.settings-nav__group-label {
+  padding: 0 var(--s2) 2px;
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
 .settings-nav__item {
   min-height: 32px;
   padding: 0 var(--s2);
@@ -188,14 +207,6 @@
   line-height: 1.45;
 }
 
-/* Profile facts are a settings list, not a form: label and control share a line, and
-   one label column keeps the controls aligned down the panel. Scoped to this
-   section because the Stages panel's only inline field is a short "Minimum fit"
-   that would gain a wide empty gutter from the same rule. */
-.settings-panel[data-section="about"] .field--inline > span {
-  min-inline-size: 152px;
-}
-
 .settings-panel .menu-subhead {
   margin-top: var(--s2);
 }
@@ -203,14 +214,13 @@
 /* Text controls on these rows sit beside compact selects, so they take the same
    height and stop at roughly the same width rather than being the one control
    that runs to the panel edge. */
-.settings-panel[data-section="about"] .field--inline > .text-input {
+.settings-panel[data-section="profile"] .field--inline > .text-input {
   min-inline-size: 0;
-  max-inline-size: 260px;
   min-height: 28px;
   font-size: 0.78rem;
 }
 
-.settings-panel[data-section="about"] .field--inline > .text-input--narrow {
+.settings-panel[data-section="profile"] .field--inline > .text-input--narrow {
   max-inline-size: 148px;
 }
 
@@ -235,9 +245,16 @@
   -webkit-appearance: none;
 }
 
-/* The Background count closes its subhead row; the notice below the field
-   shares the count's over-limit tone. */
+/* The intro and the count share one row; the notice below the notes shares
+   the count's over-limit tone. */
+.settings-background__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s3);
+}
+
 .settings-background__count {
+  flex: 0 0 auto;
   margin-left: auto;
   color: var(--ink-faint);
   font-size: 0.7rem;
@@ -264,14 +281,330 @@
   position: absolute;
 }
 
-/* Automation controls are one labelled group, not a stack of framed cards. */
-.settings-automation-group {
-  display: grid;
-  gap: 6px;
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--hairline);
+/* -------- Profile facts -------- */
+
+/* A settings list, not a form: label and control share a line and one label
+   column keeps the controls aligned. Short values, so the column stays narrow
+   in the wide card. */
+.settings-profile__facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  max-inline-size: 560px;
 }
 
+.settings-panel[data-section="profile"] .field--inline > span {
+  min-inline-size: 168px;
+}
+
+.settings-panel[data-section="profile"] .field--inline > .text-input {
+  max-inline-size: none;
+}
+
+/* -------- Background: entry list beside the selected note -------- */
+
+.profile-notes {
+  display: grid;
+  gap: var(--s3);
+  container-type: inline-size;
+}
+
+.profile-notes__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2) var(--s3);
+}
+
+/* Two pressed-state buttons sharing one hairline, not a tab strip. */
+.profile-notes__views {
+  display: inline-flex;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.profile-notes__view {
+  min-height: 26px;
+  padding: 0 var(--s3);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.profile-notes__view + .profile-notes__view {
+  border-left: 1px solid var(--hairline-strong);
+}
+
+.profile-notes__view:hover {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.profile-notes__view[aria-pressed="true"] {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+
+.profile-notes__view:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.profile-notes__coverage {
+  color: var(--ink-faint);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-notes__layout {
+  display: grid;
+  grid-template-columns: 248px minmax(0, 1fr);
+  align-items: start;
+  gap: var(--s5);
+}
+
+/* The list stays in view while a long note scrolls the panel. */
+.profile-notes__list {
+  position: sticky;
+  top: 0;
+  display: grid;
+  /* minmax(0, …) so a long, nowrap note name ellipsizes instead of widening the column. */
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+  gap: var(--s3);
+  padding-right: var(--s4);
+  border-right: 1px solid var(--hairline);
+}
+
+.profile-notes__group {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+
+.profile-notes__group .menu-subhead {
+  margin-top: 0;
+  padding-bottom: var(--s1);
+}
+
+.profile-notes__item {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  width: 100%;
+  min-height: 32px;
+  padding: 0 var(--s2);
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-md);
+  font-family: var(--font-ui);
+  font-size: 0.8rem;
+  text-align: left;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.profile-notes__item:hover {
+  background: var(--card-hover);
+}
+
+.profile-notes__item[aria-current="true"] {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+  font-weight: 600;
+}
+
+.profile-notes__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.profile-notes__item-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-notes__item .proposal-chip {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-notes__item-meta {
+  flex: 0 0 auto;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.profile-notes__item[data-empty] .profile-notes__item-meta {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
+.profile-notes__add-general {
+  justify-self: start;
+  margin-top: var(--s2);
+}
+
+.profile-notes__detail {
+  display: grid;
+  gap: var(--s4);
+  min-width: 0;
+}
+
+.profile-notes__detail-head h3 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.profile-notes__detail-head p {
+  margin: 2px 0 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.profile-notes__editor {
+  display: grid;
+  gap: var(--s2);
+}
+
+.profile-notes__editor + .profile-notes__editor {
+  padding-top: var(--s4);
+  border-top: 1px dashed var(--hairline-soft);
+}
+
+.profile-notes__field {
+  display: grid;
+  gap: 3px;
+}
+
+.profile-notes__field > span {
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.profile-notes__field .select--compact {
+  justify-self: start;
+  max-inline-size: 100%;
+}
+
+.profile-notes__field .text-input {
+  min-height: 28px;
+  font-size: 0.8rem;
+}
+
+.profile-notes__field .textarea {
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.profile-notes__link-state {
+  margin: -2px 0 var(--s1);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.profile-notes__warn {
+  color: var(--danger);
+  font-size: 0.7rem;
+}
+
+.profile-notes__editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--s2);
+}
+
+.profile-notes__confirm {
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+}
+
+.profile-notes__empty {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s3);
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+}
+
+.profile-notes__empty p {
+  margin: 0;
+}
+
+/* The resume as it stands, read-only and folded: context, not evidence. */
+.profile-notes__resume {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline-soft);
+  color: var(--ink-soft);
+  font-size: 0.74rem;
+  line-height: 1.45;
+}
+
+.profile-notes__resume summary {
+  color: var(--ink-soft);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.profile-notes__resume summary:hover {
+  color: var(--accent-deep);
+}
+
+.profile-notes__resume ul,
+.profile-notes__resume p {
+  margin: var(--s2) 0 0;
+}
+
+.profile-notes__resume ul {
+  padding-left: 1.1em;
+}
+
+.profile-notes__fallback {
+  margin-top: var(--s2);
+}
+
+@container (max-width: 620px) {
+  .profile-notes__layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .profile-notes__list {
+    position: static;
+    padding-right: 0;
+    padding-bottom: var(--s3);
+    border-right: 0;
+    border-bottom: 1px solid var(--hairline);
+  }
+}
+
+/* Automation controls are one labelled group, not a stack of framed cards. */
 .settings-automation {
   display: grid;
   gap: 6px;
@@ -328,31 +661,40 @@
   line-height: 1.4;
 }
 
-/* -------- AI stage rows -------- */
+/* -------- Models: one row per stage -------- */
 
-/* Hairline-separated rows, NOT cards. These were bordered cards nested inside
-   another bordered card — the Drafting Desk rejects card-in-card, and five of
-   them measured 317px each inside a 625px panel. Frameless rows plus a disclosed
-   instruction override bring a stage to roughly a third of that. */
+/* Hairline rows, not cards (the Drafting Desk rejects card-in-card). Column
+   heads appear once; each row is the stage, then provider, model, effort, and
+   a quiet Copy from. Model gets the most room: model ids run long. */
 .settings-stages {
   display: grid;
+  container-type: inline-size;
+}
+
+.settings-stages__head,
+.settings-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr) minmax(0, 1.1fr) minmax(0, 0.6fr) 92px;
+  align-items: center;
+  gap: var(--s2);
+}
+
+.settings-stages__head {
+  padding-bottom: var(--s1);
+  border-bottom: 1px solid var(--hairline);
+  color: var(--ink-faint);
+  font-size: 0.66rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
 }
 
 .settings-stage {
-  display: grid;
-  gap: var(--s2);
   padding: var(--s3) 0;
 }
 
 .settings-stage + .settings-stage {
   border-top: 1px solid var(--hairline-soft);
-}
-
-.settings-stage__head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--s3);
 }
 
 .settings-stage__naming {
@@ -373,15 +715,25 @@
 .settings-stage__naming p {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 0.71rem;
+  font-size: 0.7rem;
   line-height: 1.35;
+}
+
+.settings-stage select {
+  min-width: 0;
+  min-height: 28px;
+  font-size: 0.78rem;
+}
+
+.settings-stage__empty {
+  color: var(--ink-faint);
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 /* Quiet until used: this is a rarely-touched convenience, so it must not compete
    with the stage name. */
-.settings-stage__copy {
-  flex: 0 0 auto;
-  width: auto;
+.settings-stage .settings-stage__copy {
   min-height: 26px;
   padding: 0 var(--s1) 0 6px;
   color: var(--ink-soft);
@@ -396,36 +748,8 @@
   border-color: var(--hairline);
 }
 
-.settings-stage__controls {
-  display: grid;
-  /* Model gets more room than Provider — model ids run longer than provider
-     names (e.g. Antigravity's "Gemini 3.5 Flash (Medium)"). minmax(0,…) lets the
-     selects shrink instead of overflowing the columns. */
-  grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
-  gap: var(--s2);
-}
-
-.settings-stage__controls--3 {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr) minmax(0, 0.7fr);
-}
-
-.settings-stage__controls .field {
-  gap: 3px;
-  margin-top: 0;
-  min-width: 0;
-}
-
-.settings-stage__controls .field > span {
-  font-size: 0.66rem;
-  letter-spacing: 0.01em;
-}
-
-.settings-stage__controls select {
-  min-height: 28px;
-  font-size: 0.78rem;
-}
-
 .settings-stage__blocked {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -447,27 +771,73 @@
   flex: 0 0 auto;
 }
 
-.settings-stage__extra {
+/* Narrow: the stage takes its own line and the controls share the next. */
+@container (max-width: 640px) {
+  .settings-stages__head {
+    display: none;
+  }
+
+  .settings-stage {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 0.7fr);
+  }
+
+  .settings-stage__naming {
+    grid-column: 1 / -2;
+  }
+
+  .settings-stage__copy {
+    grid-column: -2 / -1;
+    grid-row: 1;
+  }
+}
+
+/* -------- Guidance: per-stage instruction overrides -------- */
+
+.settings-guidance__stages {
+  display: grid;
+}
+
+.settings-guidance__stage {
   display: grid;
   gap: 6px;
   justify-items: start;
+  padding: var(--s2) 0;
+}
+
+.settings-guidance__stage + .settings-guidance__stage {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.settings-guidance__stage .field {
+  width: 100%;
+  margin-top: 0;
+}
+
+.settings-guidance__stage .settings-stage__disclose strong {
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.settings-guidance__state {
+  color: var(--ink-faint);
+  font-weight: 400;
 }
 
 .settings-stage__disclose {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   padding: 2px 0;
   color: var(--ink-soft);
   background: transparent;
   border: 0;
   font-family: var(--font-ui);
-  font-size: 0.7rem;
+  font-size: 0.76rem;
   font-weight: 560;
   cursor: pointer;
 }
 
-.settings-stage__disclose:hover {
+.settings-stage__disclose:hover strong {
   color: var(--accent-deep);
 }
 
@@ -499,11 +869,6 @@
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
-}
-
-.settings-stage__extra .field {
-  width: 100%;
-  margin-top: 0;
 }
 
 /* -------- Reset (foot of the section rail) -------- */
@@ -601,6 +966,20 @@
 
   .settings-nav__item {
     flex: 0 0 auto;
+  }
+
+  /* Groups flatten into the row; their captions would crowd it. */
+  .settings-nav__group {
+    display: flex;
+    gap: 2px;
+  }
+
+  .settings-nav__group + .settings-nav__group {
+    margin-top: 0;
+  }
+
+  .settings-nav__group-label {
+    display: none;
   }
 
   /* The rail is a row here, so the pin flips from bottom to trailing edge and

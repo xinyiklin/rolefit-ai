@@ -17,14 +17,57 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
-- Settings > Profile stores optional declared facts and one Background text
-  field, never self-scored fit. GPA is a single bounded 4.0-scale value attached
-  to declared education; availability is a bounded notice period or valid exact
-  date. The Background is free text organised by headings that name each role
-  or project with its type and dates; job-specific relevance belongs to Fit
+- Settings is five pages in two rail groups: **You** — Profile, Background;
+  **AI** — Guidance, Automation, Models. `SettingsDialog` is only the shell
+  (rail, autosave status, focus trap, Reset); each page in `settings/` renders
+  from the `SettingsDialogProps` it picks. The card has one size for every
+  page. App keeps the open state apart from the page, so the gear reopens the
+  last page used in the tab; provider setup opens Models and add-evidence
+  opens Background.
+- Settings > Profile stores optional declared facts, never self-scored fit.
+  GPA is a single bounded 4.0-scale value attached to declared education;
+  availability is a bounded notice period or valid exact date.
+- Settings > Background is one text field organised by headings that name each
+  role or project with its type and dates; job-specific relevance belongs to Fit
   Assessment. Its count shows the shared 12,000-character AI limit; edits past
   the storage bound are refused, never cut. Drafting preferences stay in
-  Guidance, out of the Background.
+  Guidance, out of the Background. `settings/ProfileNotes.tsx` renders it as an
+  entry list beside the selected note's editor over `lib/profileNotes.ts`,
+  which partitions the text exactly as the shared linker does and writes one
+  block's lines back at a time (`profileResume` null — the starter sample or an
+  empty document — leaves only the text field). Links are chosen, not typed:
+  **Linked to** rewrites only the heading's name (`relinkProfileBlock`, with
+  `entryLinkName` picking title, else subtitle), because entry ids are session
+  ids and the Background serves every variant; a linked note edits only its
+  Type and dates, and an unlinked note never stores a name that would link.
+  Body and detail keep local drafts so trimming the stored text never eats a
+  trailing space or newline mid-typing, and each editor rewrites exactly the
+  span of lines it last wrote (`writeProfileLines`, kept as a length from its
+  start), so a heading typed into a body stays in place and becomes its own
+  note when focus leaves the editor. Typed text is not guarded the way rename,
+  relink, and remove are: a `#` heading typed into a note or the preamble
+  regroups the notes after it, exactly as in Text view, with no warning yet.
+  An unfocused editor whose note (start and
+  heading) changes under a line shift adopts that note's stored text.
+  Every write reports whether the storage limit accepted it; drafts change only
+  when it did. Any structural change (remove, append, relink, a settled split)
+  or a Background change from outside the view (Text view, another tab) bumps
+  a revision that remounts every editor from the stored text — keying by line
+  position alone handed a removed note's drafts and open confirm to the next
+  note. Relink, unlink, and rename are judged by re-parsing in place, so a
+  nested note never silently merges into its parent's notes (renaming a note
+  to a grouping word can still free entry-named headings inside it to link to
+  their own entries — never to a wrong one). Relink, unlink, rename, and
+  remove are also refused when any heading outside the note would link
+  differently (`keepsOtherLinks`): renaming `# Experience` would otherwise
+  unlink every entry note beneath it. A new note is `##` unless the
+  heading above would change how it links, then `#`. The
+  add-evidence shortcut appends its template note and passes
+  `profileNoteFocus` so the note opens with its notes focused.
+- Settings > Guidance owns every instruction: the shared custom instructions,
+  one collapsed override per stage that accepts one (previewed when set), and
+  Bold keywords in bullets. Settings > Models is one hairline `SettingsStage`
+  row per stage under column heads shown once.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.
@@ -155,7 +198,11 @@ and `docs/engineering/ui-principles.md`.
   Prepare; no stage selector exists. Its compact feedback is What improved, the
   proposed edits open in one disclosure with per-row Accept/Edit/Discard, Still
   missing, and a quiet withheld line. Evidence, risk, and keyword chips do not
-  belong in the normal surface, and Withheld never receives success treatment.
+  belong in the normal surface; each standard-entry row folds its
+  sources (the entry's current bullets and `profileEvidence`, the linked Profile
+  text at proposal time) behind one collapsed Show evidence disclosure, and
+  skills/summary rows state their scope in one line. Withheld never receives
+  success treatment.
   Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after acceptance.

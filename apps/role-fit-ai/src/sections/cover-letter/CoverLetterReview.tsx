@@ -85,7 +85,7 @@ function proposalEvidence(result: CoverLetterTailorResult, evidenceIds: string[]
 
 function issueRecovery(issue: CoverLetterIssue): string {
   if (issue.recovery === "add_evidence") {
-    return "Add factual experience in Settings > Profile, then Polish again.";
+    return "Add factual experience in Settings > Background, then Polish again.";
   }
   if (issue.recovery === "edit_source") {
     return "Edit the source letter, then Polish again.";

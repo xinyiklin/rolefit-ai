@@ -1,6 +1,6 @@
 import { newBullet } from "@typeset/engine/lib/resumeData.ts";
 
-import { linkedProfileHeadings } from "../../shared/candidateProfileContract.ts";
+import { linkProfileBlocks, linkedProfileHeadings } from "../../shared/candidateProfileContract.ts";
 import { flattenResumeTargets, type ResumePolishWireResult } from "../../shared/resumePolishContract.ts";
 import type { ResumeProposalSuggestion } from "../resume/types.ts";
 import { ApiError } from "./failures.ts";
@@ -19,6 +19,7 @@ export function proposalSuggestions(
   // Every heading linked to the entry, qualifiers included: the model cannot
   // say which block it used, so a surprising link must stay visible.
   const sources = linkedProfileHeadings(resumeScope, candidateContext);
+  const blocks = linkProfileBlocks(resumeScope, candidateContext);
   return data.changes.map((change) => {
     const target = targets.get(change.targetId);
     const echo = change.target;
@@ -35,7 +36,8 @@ export function proposalSuggestions(
       id: change.targetId,
       sectionHeading: target.section,
       reason: change.reason ?? "",
-      warnings: change.warnings
+      warnings: change.warnings,
+      ...(target.sectionType === "standard" && blocks.has(target.target.entryId) ? { profileEvidence: blocks.get(target.target.entryId) } : {})
     };
     if (change.action === "remove" || change.order) {
       const entryOrder = [...targets.values()]

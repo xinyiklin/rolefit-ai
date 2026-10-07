@@ -1,5 +1,4 @@
-import { useId, useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useId } from "react";
 
 import {
   cliReasoningEffortOptionsFor,
@@ -29,18 +28,11 @@ type SettingsStageProps = {
   onChange: (patch: Partial<StageConfig>) => void;
   onProviderChange: (provider: AiProviderValue) => void;
   onCopyFrom: (from: StageKey) => void;
-  instructions: string;
-  onInstructionsChange: (value: string) => void;
-  supportsInstructions: boolean;
 };
 
-// One stage's row in Settings > AI stages: what it does, which provider runs it,
-// and an optional instruction override.
-//
-// Deliberately frameless. This started as a bordered card inside another bordered
-// card — the Drafting Desk rejects nested card-in-card containers, and five of
-// them stacked to 317px each in a 625px panel. Stages are separated by a hairline
-// instead, and the override is disclosed rather than five always-open textareas.
+// One stage's row in Settings > Models: the stage, then provider, model, and
+// effort in the columns ModelsPage heads once. Frameless and hairline-separated;
+// instruction overrides live in Guidance.
 export function SettingsStage({
   stage,
   title,
@@ -52,15 +44,10 @@ export function SettingsStage({
   onRefreshProviders,
   onChange,
   onProviderChange,
-  onCopyFrom,
-  instructions,
-  onInstructionsChange,
-  supportsInstructions
+  onCopyFrom
 }: SettingsStageProps) {
   const headingId = useId();
   const { provider, selectedModel, cliReasoningEffort } = config;
-  const hasInstructions = Boolean(instructions.trim());
-  const [instructionsOpen, setInstructionsOpen] = useState(hasInstructions);
 
   const providerById = new Map(providers.map((connection) => [connection.id, connection]));
   const availableOptions = providerOptions.filter((option) => providerById.has(option.value));
@@ -72,83 +59,82 @@ export function SettingsStage({
 
   return (
     <section className="settings-stage" aria-labelledby={headingId}>
-      <div className="settings-stage__head">
-        <div className="settings-stage__naming">
-          <h3 id={headingId}>{title}</h3>
-          <p>{blurb}</p>
-        </div>
+      <div className="settings-stage__naming">
+        <h3 id={headingId}>{title}</h3>
+        <p>{blurb}</p>
+      </div>
+
+      <select
+        className="settings-stage__provider"
+        aria-label={`${title} provider`}
+        value={selectedConnection ? provider : ""}
+        disabled={availabilityStatus === "loading" || availableOptions.length === 0}
+        onChange={(event) => {
+          if (event.target.value) onProviderChange(event.target.value as AiProviderValue);
+        }}
+      >
+        {!selectedConnection ? (
+          <option value="" disabled>
+            {availableOptions.length ? "Choose an added provider…" : "No providers added"}
+          </option>
+        ) : null}
+        {availableOptions.map((option) => {
+          const connection = providerById.get(option.value);
+          return (
+            <option key={option.value} value={option.value}>
+              {option.label}{connection?.ready ? "" : " — reconnect"}
+            </option>
+          );
+        })}
+      </select>
+
+      {selectedConnection ? (
         <select
-          className="settings-stage__copy"
-          aria-label={`Copy ${title} settings from another stage`}
-          value=""
-          onChange={(event) => {
-            const from = event.target.value as StageKey;
-            if (from) onCopyFrom(from);
-          }}
+          className="settings-stage__model"
+          aria-label={`${title} model`}
+          value={selectedModel}
+          onChange={(event) => onChange({ selectedModel: event.target.value })}
         >
-          <option value="">Copy from…</option>
-          {AI_STAGES.filter((item) => item.id !== stage).map((item) => (
-            <option key={item.id} value={item.id}>{item.label}</option>
+          <ModelSelectOptions options={modelOptions} />
+        </select>
+      ) : <span className="settings-stage__empty" aria-hidden="true">—</span>}
+
+      {selectedConnection && effortOptions.length ? (
+        <select
+          className="settings-stage__effort"
+          aria-label={`${title} effort`}
+          value={cliReasoningEffort}
+          onChange={(event) => onChange({ cliReasoningEffort: event.target.value })}
+        >
+          {effortOptions.map((option) => (
+            <option key={option.value || "cli-default-effort"} value={option.value}>
+              {option.label}
+            </option>
           ))}
         </select>
-      </div>
+      ) : <span className="settings-stage__empty" aria-hidden="true">—</span>}
 
-      <div className={`settings-stage__controls${effortOptions.length ? " settings-stage__controls--3" : ""}`}>
-        <label className="field">
-          <span>Provider</span>
-          <select
-            value={selectedConnection ? provider : ""}
-            disabled={availabilityStatus === "loading" || availableOptions.length === 0}
-            onChange={(event) => {
-              if (event.target.value) onProviderChange(event.target.value as AiProviderValue);
-            }}
-          >
-            {!selectedConnection ? (
-              <option value="" disabled>
-                {availableOptions.length ? "Choose an added provider…" : "No providers added"}
-              </option>
-            ) : null}
-            {availableOptions.map((option) => {
-              const connection = providerById.get(option.value);
-              return (
-                <option key={option.value} value={option.value}>
-                  {option.label}{connection?.ready ? "" : " — reconnect"}
-                </option>
-              );
-            })}
-          </select>
-        </label>
+      {/* Quiet until used: a rarely-touched convenience. */}
+      <select
+        className="settings-stage__copy"
+        aria-label={`Copy ${title} settings from another stage`}
+        value=""
+        onChange={(event) => {
+          const from = event.target.value as StageKey;
+          if (from) onCopyFrom(from);
+        }}
+      >
+        <option value="">Copy from…</option>
+        {AI_STAGES.filter((item) => item.id !== stage).map((item) => (
+          <option key={item.id} value={item.id}>{item.label}</option>
+        ))}
+      </select>
 
-        {selectedConnection ? (
-          <label className="field">
-            <span>Model</span>
-            <select value={selectedModel} onChange={(event) => onChange({ selectedModel: event.target.value })}>
-              <ModelSelectOptions options={modelOptions} />
-            </select>
-          </label>
-        ) : null}
-
-        {selectedConnection && effortOptions.length ? (
-          <label className="field">
-            <span>Effort</span>
-            <select value={cliReasoningEffort} onChange={(event) => onChange({ cliReasoningEffort: event.target.value })}>
-              {effortOptions.map((option) => (
-                <option key={option.value || "cli-default-effort"} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-      </div>
-
-      {/* Recovery guidance is shown only for a provider that cannot run: a ready
-          stage says nothing, which is the quiet-status contract. */}
+      {/* Recovery guidance only for a provider that cannot run: a ready stage
+          says nothing, which is the quiet-status contract. */}
       {!selectedConnection?.ready ? (
         <div className="settings-stage__blocked">
           <p>{selectedConnection ? selectedConnection.guidance : availabilityMessage}</p>
-          {/* One of these appears per blocked stage, so name which stage it is
-              rather than leaving five identical "Check providers" buttons. */}
           <button
             className="ghost-button is-compact"
             type="button"
@@ -157,37 +143,6 @@ export function SettingsStage({
           >
             Check providers
           </button>
-        </div>
-      ) : null}
-
-      {supportsInstructions ? (
-        <div className="settings-stage__extra">
-          <button
-            type="button"
-            className={`settings-stage__disclose${instructionsOpen ? " is-open" : ""}`}
-            aria-expanded={instructionsOpen}
-            onClick={() => setInstructionsOpen((open) => !open)}
-          >
-            <ChevronDown size={12} aria-hidden="true" />
-            {hasInstructions ? "Edit instructions" : "Add instructions"}
-          </button>
-          {/* A set override stays legible when collapsed — otherwise guidance that
-              is actually being sent would be invisible. */}
-          {!instructionsOpen && hasInstructions ? (
-            <p className="settings-stage__preview">{instructions.trim()}</p>
-          ) : null}
-          {instructionsOpen ? (
-            <label className="field">
-              <span className="sr-only">Instructions for {title}</span>
-              <textarea
-                className="textarea"
-                rows={3}
-                value={instructions}
-                placeholder="Replaces the shared custom instructions. Leave empty to use them."
-                onChange={(event) => onInstructionsChange(event.target.value)}
-              />
-            </label>
-          ) : null}
         </div>
       ) : null}
     </section>

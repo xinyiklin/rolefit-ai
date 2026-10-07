@@ -11,7 +11,7 @@ import { proposalSuggestions } from "../lib/resumeProposalSuggestions.ts";
 import {
   adviceNotOnResume,
   buildResumePolishScope,
-  defaultResumePolishScopeModes,
+  resumePolishScopeFromModes,
   resumePolishScopeToText,
   type ResumePolishScopeMode
 } from "../lib/resumePolishScope";
@@ -185,12 +185,7 @@ export function useResumePolishPipeline({
       setPolishStatus("Load a resume before polishing.");
       return null;
     }
-    const modes = Object.keys(polishScopeModes).length
-      ? polishScopeModes
-      : defaultResumePolishScopeModes(editedResume);
-    const polishIds = Object.keys(modes).filter((id) => modes[id] === "polish");
-    const contextIds = Object.keys(modes).filter((id) => modes[id] === "include");
-    const resumeScope = buildResumePolishScope(editedResume, polishIds, contextIds);
+    const resumeScope = resumePolishScopeFromModes(editedResume, polishScopeModes);
     const scopedResumeText = resumePolishScopeToText(resumeScope);
     if (!flattenResumeTargets(resumeScope, candidateContext).length) {
       setPolishStatus("Set at least one editable resume section to Polish.");

@@ -154,7 +154,7 @@ try {
   );
   assert.equal(fetched.length, 3, "over-budget evidence never dispatches");
   input = { ...input, evidence: [] };
-  profileLimitMessage = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Profile.";
+  profileLimitMessage = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Background.";
   hook = renderHook();
   await hook.run();
   hook = renderHook();
