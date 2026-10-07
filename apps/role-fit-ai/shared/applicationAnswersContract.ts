@@ -77,7 +77,7 @@ export function countAnswerText(value: string): AnswerCounts {
 // drafting placeholder, mark prose that is not finished. Numeric brackets,
 // editorial marks and code-style indexes are ordinary prose.
 export function hasUnresolvedAnswerPlaceholder(text: string): boolean {
-  return /(?<![\w\]])\[(?!(?:[\d.,%\s-]+|sic|redacted|citation needed)\])[^\]\r\n]{1,240}\]|\{\{[^}\r\n]{1,240}\}\}/i.test(text);
+  return /(?<![\w\]])\[(?!(?:[\d.,%\s\-–—]+|sic|redacted|citation needed)\])[^\]\r\n]{1,240}\]|\{\{[^}\r\n]{1,240}\}\}/i.test(text);
 }
 
 const SMALL_NUMBERS: Record<string, number> = {
@@ -107,7 +107,17 @@ function numberValue(value: string): number {
 }
 const unitValue = (value: string): keyof AnswerCounts => value.toLowerCase().startsWith("word") ? "words" : value.toLowerCase().startsWith("sent") ? "sentences" : "characters";
 const CEILING_QUALIFIER = /^(?:more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? (?:over|beyond)|longer than|greater than)$/;
-const NEGATED_BEFORE = /\b(?:no|not|never|don['’]t|cannot|can['’]t|mustn['’]t|shouldn['’]t|won['’]t|without)\s+(?:(?:to|be|go|write|use)\s+)*$/i;
+// A negation up to four words before a comparison turns it into a ceiling;
+// words such as "penalty" or "limit" end that reach ("no penalty for going
+// over 300 words" sets no ceiling).
+const NEGATION_WORDS = "(?:no|not|never|don['’]t|doesn['’]t|didn['’]t|isn['’]t|aren['’]t|cannot|can['’]t|mustn['’]t|shouldn['’]t|won['’]t|wouldn['’]t|without|avoid|refrain\\s+from)";
+const NEGATION_FILLER = "(?:(?!(?:penalty|penalties|problem|issue|harm|limit|limits|cap|maximum|restriction)\\b)[A-Za-z’']+\\s+){0,4}";
+const NEGATED_BEFORE = new RegExp(`\\b${NEGATION_WORDS}\\s+${NEGATION_FILLER}$`, "i");
+// An un-negated "more than N words" is a hard floor only after a positive
+// instruction; permissive or bare wording keeps it advisory, so an
+// unrecognised negation can never drive a repair past an employer's ceiling.
+const PERMISSIVE_BEFORE = /\b(?:may|can|could|free\s+to|allowed\s+to|welcome\s+to|no\s+limit)\b[^.;!?\n]{0,30}$/i;
+const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|aim\s+for|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|ideally|prefer(?:ably|red)?|target|minimum\s+of|at\s+least)\s+$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
 const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
@@ -137,15 +147,16 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       occupied.push([start, end]);
     }
   };
-  addMatches(new RegExp(`\\b(?:(about|around|approximately|roughly)\\s+)?(?:between\\s+)?(${NUMBER})\\s*(?:[-–—]|to|and)\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
-    unit: unitValue(match[4]), min: numberValue(match[2]), max: numberValue(match[3]), hard: !match[1]
-  }));
+  addMatches(new RegExp(`\\b(?:(about|around|approximately|roughly)\\s+)?(?:between\\s+)?(${NUMBER})\\s*(?:[-–—]|to|and)\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => {
+    const min = numberValue(match[2]);
+    const max = numberValue(match[3]);
+    // "seventy-five words" is one number, not a 70–5 range; leave the span free.
+    return min > max ? null : { unit: unitValue(match[4]), min, max, hard: !match[1] };
+  });
   // A negated comparison runs first and claims its span, so "no longer than
   // 300 words" never reaches the un-negated ceiling rule below.
-  const negation = "(?:no|not|never|do\\s+not|don['’]t|must\\s+not|mustn['’]t|should\\s+not|shouldn['’]t|cannot|can['’]t|won['’]t|will\\s+not)";
-  const filler = "(?:(?:to|write|use|include|provide|submit|return|give|be|need|want|require|take|spend|go|have|try)\\s+){0,3}";
   const comparison = "(more\\s+than|less\\s+than|fewer\\s+than|longer\\s+than|shorter\\s+than|greater\\s+than|over|above|beyond|under|below|exceed(?:s|ing)?|go\\s+over|go\\s+beyond|fall\\s+below|go\\s+below)";
-  addMatches(new RegExp(`\\b${negation}\\s+${filler}${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
+  addMatches(new RegExp(`\\b${NEGATION_WORDS}\\s+${NEGATION_FILLER}${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
     unit: unitValue(match[3]),
     ...(/^(?:less|fewer|shorter|under|below)|below$/i.test(match[1]) ? { min: numberValue(match[2]) } : { max: numberValue(match[2]) }),
     hard: true
@@ -153,14 +164,17 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   addMatches(new RegExp(`\\b(exactly|about|around|approximately|roughly|under|below|no fewer than|no less than|fewer than|less than|at most|no more than|more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? (?:over|beyond)|longer than|greater than|up to|maximum(?: of)?|max\\.?|at least|minimum(?: of)?|min\\.?)\\s*:?\\s*(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match, clause) => {
     const n = numberValue(match[2]);
     const qualifier = match[1].toLowerCase().replace(/\s+/g, " ");
-    const ceiling = CEILING_QUALIFIER.test(qualifier) && (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before));
+    const approximate = /^(?:about|around|approximately|roughly)$/.test(qualifier);
+    if (CEILING_QUALIFIER.test(qualifier)) {
+      if (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before)) return { unit: unitValue(match[3]), max: n, hard: true };
+      const instructed = !PERMISSIVE_BEFORE.test(clause.before) && INSTRUCTION_BEFORE.test(clause.before);
+      return { unit: unitValue(match[3]), min: n + 1, hard: instructed };
+    }
     const bounds = qualifier === "exactly" ? { exact: n }
       : /^(?:at least|no fewer than|no less than|min)/.test(qualifier) ? { min: n }
-      : ceiling ? { max: n }
-      : CEILING_QUALIFIER.test(qualifier) ? { min: n + 1 }
-      : /^(?:about|around|approximately|roughly)$/.test(qualifier) ? { exact: n }
+      : approximate ? { exact: n }
       : { max: /^(?:under|below|fewer|less)/.test(qualifier) ? Math.max(0, n - 1) : n };
-    return { unit: unitValue(match[3]), ...bounds, hard: !/^(?:about|around|approximately|roughly)$/.test(qualifier) };
+    return { unit: unitValue(match[3]), ...bounds, hard: !approximate };
   });
   // "Character limit: 1,500", "Word count: 250 max", "Minimum word count: 100".
   addMatches(new RegExp(`\\b(?:(maximum|max\\.?|minimum|min\\.?|at most|at least|up to)\\s+)?${UNIT}\\s*(limit|count|maximum|max\\.?|minimum|min\\.?|cap)?\\s*(?:is|of|:|=|[-–—])?\\s*(${NUMBER})\\b(?:\\s*(max\\.?|maximum|min\\.?|minimum|or more|or fewer|or less))?`, "gi"), (match) => {

@@ -265,7 +265,7 @@ export const ANSWER_CONVERSATION_FENCE_NAMES = [
 ] as const;
 
 const UNTRUSTED_FENCE_PATTERN = new RegExp(
-  `<(\\s*/?\\s*)(${[...UNTRUSTED_FENCE_NAMES, ...ANSWER_CONVERSATION_FENCE_NAMES].join("|")})\\b`,
+  `<(\\s*/\\s*|)(${[...UNTRUSTED_FENCE_NAMES, ...ANSWER_CONVERSATION_FENCE_NAMES].join("|")})\\b`,
   "gi"
 );
 

@@ -224,6 +224,9 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     const validation = validateAnswerConstraints(text, response.constraints);
     if (!validation.compliant && !preserveDraft) return;
     const saveAsDraft = preserveDraft || response.status !== "ready";
+    // Generated and reopened revisions anchor lineage even when unsaved; only a
+    // failed manual edit should drop out of the chain.
+    const failedEditCollapses = Boolean(message.edited);
     const captured = { ...response, answer: text, counts: validation.counts, compliant: validation.compliant,
       status: saveAsDraft ? "draft" as const : "ready" as const };
     saveRequests.current.add(response.id);
@@ -235,7 +238,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       // An edit typed during the failed save named this revision as saved; point it past the unsaved one.
       updateMessage(conversationId, messageId, (item) => ({ ...item, savingRevisionId: undefined,
         saveError: error instanceof Error ? error.message : "Could not save the answer. Your draft is still here; try again.",
-        response: item.response && item.response.id !== response.id && item.response.previousAnswerId === response.id
+        response: failedEditCollapses && item.response && item.response.id !== response.id && item.response.previousAnswerId === response.id
           ? { ...item.response, previousAnswerId: response.previousAnswerId } : item.response }));
     } finally { saveRequests.current.delete(response.id); }
   }

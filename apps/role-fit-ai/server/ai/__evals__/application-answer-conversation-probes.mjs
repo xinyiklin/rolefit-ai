@@ -20,12 +20,12 @@ for (const [text, expected] of [
   ["No fewer than 100 words", { unit: "words", min: 100, hard: true }],
   ["No less than 100 words", { unit: "words", min: 100, hard: true }],
   ["100 words or more", { unit: "words", min: 100, hard: true }],
-  ["More than 100 words", { unit: "words", min: 101, hard: true }],
-  ["Over 100 words", { unit: "words", min: 101, hard: true }],
+  ["More than 100 words", { unit: "words", min: 101, hard: false }],
+  ["Over 100 words", { unit: "words", min: 101, hard: false }],
   ["Not more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Explain your experience, not to exceed 100 words.", { unit: "words", max: 100, hard: true }],
   ["Not to go over 100 words", { unit: "words", max: 100, hard: true }],
-  ["To exceed 100 words", { unit: "words", min: 101, hard: true }],
+  ["To exceed 100 words", { unit: "words", min: 101, hard: false }],
   ["Do not write more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Don't use more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Do not exceed 100 words", { unit: "words", max: 100, hard: true }],
@@ -36,7 +36,7 @@ for (const [text, expected] of [
   ["Not less than 100 words", { unit: "words", min: 100, hard: true }],
   ["Do not use fewer than 100 words", { unit: "words", min: 100, hard: true }],
   ["Don't go below 100 words", { unit: "words", min: 100, hard: true }],
-  ["Exceed 100 words", { unit: "words", min: 101, hard: true }],
+  ["Exceed 100 words", { unit: "words", min: 101, hard: false }],
   ["No more than 400 characters", { unit: "characters", max: 400, hard: true }],
   ["three to four sentences", { unit: "sentences", min: 3, max: 4, hard: true }],
   ["50 words or fewer", { unit: "words", max: 50, hard: true }],
@@ -72,7 +72,26 @@ for (const [text, expected] of [
   ["We won't consider answers longer than 300 words", { unit: "words", max: 300, hard: true }],
   ["Answers that exceed 250 words in length, including spaces and links, will be truncated", { unit: "words", max: 250, hard: true }],
   ["fifty to seventy-five words", { unit: "words", min: 50, max: 75, hard: true }],
-  ["one thousand five hundred characters", { unit: "characters", max: 1500, hard: true }]
+  ["one thousand five hundred characters", { unit: "characters", max: 1500, hard: true }],
+  ["Under seventy-five words.", { unit: "words", max: 74, hard: true }],
+  ["Maximum twenty-five words.", { unit: "words", max: 25, hard: true }],
+  ["No more than twenty-five words.", { unit: "words", max: 25, hard: true }],
+  ["Twenty-five word limit.", { unit: "words", max: 25, hard: true }],
+  ["Not required to write more than 100 words.", { unit: "words", max: 100, hard: true }],
+  ["Your answer doesn't have to exceed 200 words", { unit: "words", max: 200, hard: true }],
+  ["It doesn't need to be longer than 300 words", { unit: "words", max: 300, hard: true }],
+  ["Please do not make your response longer than 250 words.", { unit: "words", max: 250, hard: true }],
+  ["Please don't let your answer go over 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Responses should not be any longer than 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Your response must not run over 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Avoid going over 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Avoid writing more than 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Refrain from exceeding 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Answers longer than 300 words won't be penalized.", { unit: "words", min: 301, hard: false }],
+  ["There is no penalty for going over 300 words.", { unit: "words", min: 301, hard: false }],
+  ["You may write more than 100 words if needed.", { unit: "words", min: 101, hard: false }],
+  ["Your answer must exceed 100 words.", { unit: "words", min: 101, hard: true }],
+  ["Aim for over 200 words.", { unit: "words", min: 201, hard: true }]
 ]) check(text, () => { const actual = first(text); for (const [key, value] of Object.entries(expected)) assert.equal(actual[key], value, `${text}: ${key}`); });
 check("separate per-field scope not falsely compliant", () => { const c = extractAnswerConstraints("1. Why us?\n2. Why this role? 100 words for each answer."); assert.equal(c[0].unresolvedScope, true); assert.equal(validateAnswerConstraints("Two short answers.", c).compliant, false); });
 check("spaces count exactly", () => assert.equal(countAnswerText(" ab ").characters, 4));
@@ -85,9 +104,9 @@ check("range floor", () => assert.equal(validateAnswerConstraints("one", extract
 check("exact count", () => assert.equal(validateAnswerConstraints("one two", extractAnswerConstraints("Exactly 3 words")).compliant, false));
 check("no constraints without limits", () => assert.deepEqual(extractAnswerConstraints("Why us? Tell us about a project."), []));
 check("no constraint from ordinary prose", () => { for (const text of ["In your own words, 3 projects you shipped.", "Use 3.5 sentences of context.", "Word choice matters.", "You led more than 3 people.", "Longer than 6 months is fine.", "Our word limit is generous."]) assert.deepEqual(extractAnswerConstraints(text), [], text); });
-check("an impossible range is dropped", () => assert.deepEqual(extractAnswerConstraints("75 to 50 words"), []));
+check("an inverted range never produces a constraint with min above max", () => assert.ok(extractAnswerConstraints("75 to 50 words").every((c) => c.min === undefined || c.max === undefined || c.min <= c.max)));
 check("penalty ceiling agrees with a stated range", () => { const c = extractAnswerConstraints("We read 100–250 words; anything over 250 words may be truncated."); assert.equal(c.length, 2); assert.equal(c[1].max, 250); assert.equal(validateAnswerConstraints(Array.from({ length: 200 }, () => "word").join(" "), c).compliant, true); });
-check("bracketed placeholders are unfinished prose", () => { for (const text of ["Join [Company Name] soon.", "Raised [X%] revenue.", "Add {{metric}} here.", "[add: team size]"]) assert.equal(hasUnresolvedAnswerPlaceholder(text), true, text); for (const text of ["Plain prose, no slots.", "Shipped in [2023] with a 12% lift.", "They wrote 'recieve' [sic] in the brief.", "Names are [redacted] here.", "I indexed arr[i] in a loop.", "See note [1]."]) assert.equal(hasUnresolvedAnswerPlaceholder(text), false, text); });
+check("bracketed placeholders are unfinished prose", () => { for (const text of ["Join [Company Name] soon.", "Raised [X%] revenue.", "Add {{metric}} here.", "[add: team size]"]) assert.equal(hasUnresolvedAnswerPlaceholder(text), true, text); for (const text of ["Plain prose, no slots.", "Shipped in [2023] with a 12% lift.", "They wrote 'recieve' [sic] in the brief.", "Names are [redacted] here.", "I indexed arr[i] in a loop.", "See note [1].", "Led the team [2023–2024]."]) assert.equal(hasUnresolvedAnswerPlaceholder(text), false, text); });
 check("sentence abbreviations and decimals", () => assert.equal(countAnswerText("Dr. Chen used v2.5 in the U.S. office. I wrote tests. It worked!").sentences, 3));
 check("sentence ending etc abbreviation", () => assert.equal(countAnswerText("I tested APIs, queues, etc. The results helped. I added tests. I documented failures.").sentences, 4));
 check("mid-sentence etc abbreviation", () => assert.equal(countAnswerText("I tested APIs, queues, etc. with my team. The results helped.").sentences, 2));
@@ -147,8 +166,14 @@ for (const maximum of ["Not to exceed", "Not to go over", "Not more than", "Do n
 for (const minimum of ["More than", "Over", "Exceed"]) {
   const aboveFloor = fake([raw(oneHundredAndOneWords)]);
   const result = await generateApplicationAnswer({ ...body, question: { ...body.question, text: `Why this role? ${minimum} 100 words.` } }, { dispatch: aboveFloor.dispatch });
-  check(`${minimum} remains a positive strict floor`, () => { assert.equal(result.status, "ready"); assert.equal(result.compliant, true); assert.equal(result.constraints[0].min, 101); assert.equal(aboveFloor.calls.length, 1); });
+  check(`${minimum} without an instruction is an advisory floor`, () => { assert.equal(result.status, "ready"); assert.equal(result.compliant, true); assert.equal(result.constraints[0].min, 101); assert.equal(result.constraints[0].hard, false); assert.equal(aboveFloor.calls.length, 1); });
 }
+const instructedFloor = fake([raw("I built Python APIs."), raw("I built Python APIs.")]);
+const belowInstructedFloor = await generateApplicationAnswer({ ...body, question: { ...body.question, text: "Why this role? Please write more than 100 words." } }, { dispatch: instructedFloor.dispatch });
+check("an instructed floor is hard", () => { assert.equal(belowInstructedFloor.status, "draft"); assert.equal(belowInstructedFloor.constraints[0].min, 101); assert.equal(belowInstructedFloor.constraints[0].hard, true); assert.equal(instructedFloor.calls.length, 2); });
+const avoided = fake([raw(Array.from({ length: 10 }, () => "test").join(" ")), raw(Array.from({ length: 10 }, () => "test").join(" "))]);
+const overAvoided = await generateApplicationAnswer({ ...body, question: { ...body.question, text: "Why this role? Avoid going over 8 words." } }, { dispatch: avoided.dispatch });
+check("an unrecognised negation can no longer drive a repair past the ceiling", () => { assert.equal(overAvoided.status, "draft"); assert.equal(overAvoided.constraints[0].max, 8); assert.equal(overAvoided.compliant, false); assert.match(avoided.calls[1].userPrompt, /Use at most 8 words/); });
 const fourSentences = "I tested APIs, queues, etc. The results helped. I added tests. I documented failures.";
 const sentenceRepair = fake([raw(fourSentences), raw(fourSentences)]);
 const sentenceLimited = await generateApplicationAnswer({ ...body, question: { ...body.question, text: "Describe your work. Maximum 3 sentences." } }, { dispatch: sentenceRepair.dispatch });

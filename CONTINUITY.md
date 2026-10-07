@@ -83,7 +83,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
     number words parse; impossible ranges are dropped; numeric, editorial and
     code-style brackets are not placeholders; whitespace-only edits in the
     Applications modal create no revision; edits typed during a failed save
-    no longer name the unsaved revision. Left as residual: no duplicate
+    no longer name the unsaved revision. A third pass made the ceiling rule
+    conservative: an un-negated "more than / over / exceed N" is a hard floor
+    only after a positive instruction and advisory otherwise (a negation up to
+    four words before, or a penalty clause, makes it a hard ceiling), so an
+    unrecognised negation can never drive a repair past an employer's limit;
+    a lone hyphenated number word no longer claims its span as an inverted
+    range. Left as residual: no duplicate
     resolution runs when the first tracker record for a posting is an
     answer-created Draft, and acknowledging that Draft replaces an earlier
     Link/Keep-separate decision for the same posting (the tracker's later
