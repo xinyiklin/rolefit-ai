@@ -410,8 +410,9 @@ Never show:
 
 ## AI Settings UI
 
-- Default provider is the account-backed Claude Code CLI (`claude-cli`) path,
-  on both the frontend and the server's no-`AI_PROVIDER` fallback. A non-empty,
+- Fresh stage defaults live in `src/lib/stageSettings.ts`: Claude Code CLI
+  (`claude-cli`) for most stages, Codex CLI for Resume and Cover Polish. The
+  server's no-`AI_PROVIDER` fallback is the account-backed Claude Code CLI. A non-empty,
   unrecognized `AI_PROVIDER` fails configuration instead of silently selecting
   OpenAI.
 - First-class provider choices: subscription CLIs (Claude Code, Codex,

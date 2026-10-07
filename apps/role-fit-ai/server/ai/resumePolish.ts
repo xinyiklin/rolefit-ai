@@ -9,7 +9,7 @@ import {
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
-import { providerLabel } from "./providers.ts";
+import { providerLabel, resolveProviderRequest } from "./providers.ts";
 import { generateResumeProposal } from "./resumeProposal.ts";
 import { normalizeResumeScope, resumeScopeToText } from "./resumeScope.ts";
 
@@ -62,6 +62,8 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       return;
     }
 
+    // Resolve before provider work so a failure names the selected provider.
+    provider = resolveProviderRequest(body).provider;
     const proposal = await generateResumeProposal({
       body,
       resumeScope,
@@ -72,7 +74,6 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       boldBulletKeywords,
       signal: request.signal
     });
-    provider = proposal.provider;
     sendJson(res, 200, proposal);
   } catch (error) {
     if (isRequestAborted(error, req, res)) return;
