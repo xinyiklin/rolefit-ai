@@ -48,7 +48,7 @@ masthead into the first/default Prepare page on 2026-07-29):
   one-pass proposal rail docks beside it), Cover
   letter (a separate plain-paragraph editor with one Polish action and a rail
   that reports readiness before it and the result's provenance after it),
-  Materials (application questions and role descriptions); TRACK contains
+  Answers (application questions); TRACK contains
   Applications (table / calendar tracker views) and Analytics — plus the
   document-specific review rails
 
@@ -56,7 +56,7 @@ Prepare treats the paired extension as the primary intake path, with URL fetch
 and pasted text as deliberate fallbacks on the same page. Before preparation,
 one centered Source panel is the whole task: URL and pasted text are two
 keyboard-navigable methods and only the selected method is visible. Empty Job
-brief, Materials, and readiness scaffolds stay out of the page. Extension
+brief, Answers, and readiness scaffolds stay out of the page. Extension
 receipt and Job analysis progress navigate to and remain visible on Prepare.
 
 Once ready, Source collapses to its head — captured size and origin — behind
@@ -579,7 +579,7 @@ Never show:
   and meets the studio/sidebar through one structural hairline; it never wraps
   or paints a false gap below itself. At 720px and below, only the Resume tab's
   precise authoring surface is replaced by the non-dismissible width notice.
-  Prepare, masthead/navigation, the simpler Cover letter page, Materials,
+  Prepare, masthead/navigation, the simpler Cover letter page, Answers,
   Applications, and Analytics remain usable, including when browser zoom makes
   the effective viewport cross that threshold.
 

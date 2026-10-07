@@ -44,6 +44,30 @@ application retain blocking technical guards.
   the kind order rank value.
 - `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
+- `applicationAnswerConversation.ts` owns Answers chat (`mode: "conversation"`);
+  `applicationAnswers.ts` retains the historical batch contract. The shared
+  `applicationAnswersContract.ts` owns question limits, exact-text counts,
+  placeholder detection and constraint validation; `applicationAnswerStorage.ts`
+  owns saved revisions. Every Answers section name is registered in
+  `prompts.ts` (`ANSWER_CONVERSATION_FENCE_NAMES`) so `fenceUntrusted`
+  neutralizes it and the firewall line names it; add any new section there.
+  Generate once and allow at most one format repair. Explicit employer limits
+  gate normal Copy/Save; unresolved drafts remain available through Save draft.
+  A negated or penalty-phrased "more than / over / exceed N" is a hard ceiling;
+  un-negated, it is a hard floor only after a positive instruction and
+  otherwise no limit at all, so an unrecognised negation never drives a repair
+  past an employer's limit.
+  Evidence warnings remain advisory. Preserve question identity and revision,
+  distinguish explicit user facts from generated drafts, and reject oversized
+  inputs instead of silently clipping them. Unknown usage from any dispatch
+  makes the aggregate unknown, including failed repairs.
+  Refinements make the smallest useful edit and retain supported specifics and
+  responsibility levels. A prior draft cannot supply new facts; resume, Profile
+  and explicit user facts remain the evidence. Match the question's work/study/
+  project setting, accept modest contributions, and ask one short non-leading
+  clarification only when necessary. Never invent prior intentions or beliefs.
+  Do not pad to an optional word range or append unasked lessons, pitches or
+  disclaimers. Current cover-letter prose is not Answers evidence.
 - `jobAnalysis.ts`, `fitAssessment.ts`, `coverLetter.ts`, and `applicationAnswers.ts`
   own their routes and prompt contracts. Prepare may ask `jobAnalysis.ts` for
   Job analysis plus optional compact Fit Assessment in one provider dispatch only
@@ -108,7 +132,7 @@ application retain blocking technical guards.
   facts can be flagged but must not require user input before usable output
   proceeds; they do not become operational requirements merely by appearing in
   a template.
-- Length is a warning, never a gate. Do not restore a word-count or
+- Cover-letter length is a warning, never a gate. Do not restore a word-count or
   verbatim-source-phrase acceptance check: both reject genuinely better letters.
 - A cited slot id that the source letter really has (the deterministic role,
   company, name, or date slot) is dropped, never repaired: on the 2026-10-05

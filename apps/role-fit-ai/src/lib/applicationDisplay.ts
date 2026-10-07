@@ -9,6 +9,7 @@ export { displayCompany, parseDate };
 
 export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   // Use a settled decision label while retaining the stored `not_applying` key.
+  draft: "Draft",
   not_applying: "Skipped",
   applied: "Applied",
   interviewing: "Interviewing",
@@ -25,7 +26,7 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   ApplicationActivityGroup,
   readonly ApplicationStatus[]
 > = {
-  active: ["applied", "interviewing", "offer"],
+  active: ["draft", "applied", "interviewing", "offer"],
   inactive: ["not_applying", "rejected", "withdrawn"]
 };
 
@@ -175,6 +176,7 @@ export function splitFitWarnings(
 }
 
 export function nextAction(app: Application) {
+  if (app.status === "draft") return "Finish application";
   if (app.status === "not_applying") return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;
   if (app.status === "interviewing") return "Prepare interview";

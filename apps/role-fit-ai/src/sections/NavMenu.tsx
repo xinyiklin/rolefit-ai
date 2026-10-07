@@ -11,7 +11,7 @@ type NavMenuProps = {
   // Controlled mode: when provided, the caller owns open state.
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
-  popoverPlacement?: "below" | "right";
+  popoverPlacement?: "below" | "right" | "above";
 };
 
 const VIEWPORT_INSET = 8;
@@ -56,9 +56,8 @@ export function NavMenu({
     return () => window.cancelAnimationFrame(frame);
   }, [open]);
 
-  // Below menus keep their existing right-edge anchoring and margin clamp. Rail
-  // menus become fixed so overflow-hidden studio ancestors cannot clip them;
-  // their lower edge tracks the trigger when the viewport has room.
+  // Fixed above/right menus escape clipped workspace shells; below menus keep
+  // their existing right-edge anchoring and horizontal margin clamp.
   useLayoutEffect(() => {
     if (!open) return;
     const clamp = () => {
@@ -66,7 +65,7 @@ export function NavMenu({
       const trigger = triggerRef.current;
       if (!popover || !trigger) return;
 
-      if (popoverPlacement === "right") {
+      if (popoverPlacement === "right" || popoverPlacement === "above") {
         const triggerRect = trigger.getBoundingClientRect();
         popover.style.position = "fixed";
         popover.style.left = "0px";
@@ -75,17 +74,18 @@ export function NavMenu({
         popover.style.bottom = "auto";
         popover.style.marginRight = "0px";
         popover.style.transformOrigin = "bottom left";
+        popover.style.zIndex = popoverPlacement === "above" ? "70" : "";
 
         const popoverWidth = popover.offsetWidth;
         const popoverHeight = popover.offsetHeight;
         const maxLeft = Math.max(VIEWPORT_INSET, window.innerWidth - popoverWidth - VIEWPORT_INSET);
         const maxTop = Math.max(VIEWPORT_INSET, window.innerHeight - popoverHeight - VIEWPORT_INSET);
         const left = Math.min(
-          Math.max(triggerRect.right + POPOVER_GAP, VIEWPORT_INSET),
+          Math.max(popoverPlacement === "above" ? triggerRect.left : triggerRect.right + POPOVER_GAP, VIEWPORT_INSET),
           maxLeft
         );
         const top = Math.min(
-          Math.max(triggerRect.bottom - popoverHeight, VIEWPORT_INSET),
+          Math.max(popoverPlacement === "above" ? triggerRect.top - POPOVER_GAP - popoverHeight : triggerRect.bottom - popoverHeight, VIEWPORT_INSET),
           maxTop
         );
         popover.style.left = `${left}px`;
@@ -93,6 +93,7 @@ export function NavMenu({
         return;
       }
 
+      popover.style.zIndex = "";
       popover.style.position = "";
       popover.style.left = "";
       popover.style.top = "";
@@ -111,7 +112,7 @@ export function NavMenu({
     clamp();
     window.addEventListener("resize", clamp);
     let resizeObserver: ResizeObserver | null = null;
-    if (popoverPlacement === "right" && typeof ResizeObserver !== "undefined" && popoverRef.current) {
+    if (popoverPlacement !== "below" && typeof ResizeObserver !== "undefined" && popoverRef.current) {
       resizeObserver = new ResizeObserver(() => clamp());
       resizeObserver.observe(popoverRef.current);
     }

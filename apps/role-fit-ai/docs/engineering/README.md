@@ -8,6 +8,7 @@ These notes own RoleFit-specific implementation contracts:
 - [Companion distribution, public product page, and cloud boundary](distribution-cloud-plan.md)
 - [Portable workspace backup and restore](workspace-backup.md)
 - [Testing](testing.md)
+- [Benchmark results and cost estimates](benchmarks.md)
 
 Repository-wide ownership, commands, and contribution workflow live at the
 workspace root:

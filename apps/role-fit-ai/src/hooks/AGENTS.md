@@ -60,8 +60,10 @@ browser-side effects; components render them and App composes them.
   cannot starve a pending scan. Clusters are never cached as records — the
   merge modal reads current status, dates, artifacts, and attachments.
 - `useAiSettings` owns per-stage provider/model/effort preferences and the
-  candidate-declared Profile, never API credentials. Browser storage
-  is a fail-open cache; `lib/workspacePreferencesSync.ts` makes the owner-only
+  candidate-declared Profile, never API credentials. Startup, Reset and
+  provider changes share `lib/stageSettings.ts` defaults; switching
+  to a stage's recommended provider restores its recommended model and effort.
+  Browser storage is a fail-open cache; `lib/workspacePreferencesSync.ts` makes the owner-only
   workspace preference file canonical across browsers/origins and reconciles
   live hook state after a startup/focus adoption or a visible stale-write rebase.
   Adoption keeps rendered edits still inside the 400 ms save debounce.
@@ -137,9 +139,12 @@ browser-side effects; components render them and App composes them.
   date remains job-only history and cannot accept resume, cover-letter, or
   additional application-document artifacts. A later-skipped application keeps
   its historical material but cannot change it until reactivated. Job URL or text matching
-  must never infer that target. `useApplicationAnswers` owns generation only: answer drafts stay in
-  the current browser session for editing and copying and never create or update
-  a tracker record.
+  must never infer that target. `useApplicationAnswers` owns per-preparation
+  conversation state, question/revision binding, generation, cancellation and
+  edits. Only explicit Save calls the injected persistence callback;
+  `useApplications.saveApplicationAnswer` owns serialized, revision-checked
+  saves. First Save uses a stable per-preparation Draft ID; the captured target
+  survives navigation and completion never relinks a different preparation.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

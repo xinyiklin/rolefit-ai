@@ -21,7 +21,7 @@ assert.match(appSource, /onStop=\{stopAnswers\}/, "active answer drafting expose
 
 assert.match(jobIntakeSource, /function stopJobAnalysis\(\)[\s\S]*?controller\.abort\(\)/, "Job analysis Stop aborts its request owner");
 assert.match(coverSource, /const stopCoverPolish[\s\S]*?invalidateCoverRequest\(\)/, "Cover Letter Stop invalidates and aborts its request owner");
-assert.match(answersSource, /function stopAnswers\(\)[\s\S]*?requestAbortRef\.current\.abort\(\)/, "answer Stop aborts its request owner");
+assert.match(answersSource, /function stopAnswers\([^]*?active\.controller\.abort\(\)/, "answer Stop aborts its request owner");
 
 assert.match(
   progressSource,

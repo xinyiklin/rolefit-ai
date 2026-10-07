@@ -79,6 +79,35 @@ verification; older app versions may reject new warning-bearing records, so down
 Known uncertainty from accepted Resume text also accompanies Cover and answer
 requests and results instead of becoming independently verified evidence.
 
+### Application Answers
+
+The exact employer question remains attached to every revision. Refinement
+instructions never replace it; new questions and edited question revisions are
+explicit. The answer uses the edited Prepare brief, captured posting, current
+selected resume, whole Profile, and explicit clarifications. Generated or saved
+answers are editing context, never independent evidence. Missing necessary
+personal facts produce a focused follow-up outside the answer instead of an
+invented story or drafting placeholder. Ordinary answers are concise; detailed
+employer statements may be longer.
+
+Only explicit hard employer word, character or sentence rules control normal
+Copy answer and Save answer availability. Defaults, style and all evidence
+warnings remain advisory. Counts describe the exact plain text copied and
+saved, using normalized line endings and UTF-16 character length including
+spaces. The workflow makes at most one formatting repair. An unresolved draft
+remains editable and can be preserved through Save draft; it never appears
+ready. Ambiguous multiple-field limits require separate questions rather than
+claiming compliance with an unknown scope.
+
+Visible Save and the response context menu save the selected exact revision;
+repeated saves do not duplicate it, and newer saved revisions preserve older
+ones. Show Saved only after persistence succeeds. Failed/conflicting saves keep
+the draft and explain recovery. Saved answers survive restart and backup/restore;
+legacy answers keep unknown provenance. Unsaved conversation remains across tab
+navigation, but is not a durable transcript. The model menu shares Application
+Answers settings; changes affect future requests and preserve historical
+configuration. Generation and saving never rerun Prepare or generate documents.
+
 ## Product Purpose
 
 Applications and Analytics show structured loading placeholders while their
@@ -183,9 +212,13 @@ counts; cover-letter Apply readiness also requires 40 authored words and no
 unresolved template slots. Empty-document and unrenderable-content protections
 remain independent of evidence verification.
 The product also includes session-local application-question drafts and a
-lightweight application pipeline tracker. Generated answers remain editable and
-copyable in the current preparation, but never create or update a tracker
-record. Prepare gives Resume and Cover Letter matching material cards, each
+lightweight application pipeline tracker. Answers is an application-specific
+conversation: paste the exact employer question, receive one concise draft,
+edit or refine it, then copy or explicitly save the chosen question/answer
+revision. Generation alone creates no tracker record. First Save creates a
+Draft without an application date; later saves update that same record, and
+Apply or Skip transitions the same ID while retaining its answers. Drafts do
+not contribute to submission metrics or calendar events. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
 and Cover Letter starts excluded. Starting Polish for a document turns on that
 document's Include toggle without changing the sibling material; an enabled
@@ -525,7 +558,7 @@ disappears into the task. Quiet competence, not salesmanship.
    second menu in the document header. Cover letter
    stages a whole-document proposal for explicit acceptance. The document rails
    remember their disclosure separately while their orchestration remains
-   document-specific. The remaining workspaces are Materials, the Applications
+   document-specific. The remaining workspaces are Answers, the Applications
    tracker, and Analytics. The engine-painted page remains the sole editor; the
    resume proposal review navigates back to exact fields, and the editor itself remains the live
    preview. Saved-application PDF preview is a tracker detail, not a second live
@@ -659,7 +692,7 @@ Keyboard access for all changed controls (APG tabs nav, focus-visible rings,
 24px minimum icon hit targets). aria-live for async preview/export status.
 Desktop is primary; content wraps rather than clips at narrow widths. At 720px
 and below, precise Resume authoring yields to a focused width notice, but
-Prepare, navigation, Cover letter, Materials, Applications, and Analytics remain
+Prepare, navigation, Cover letter, Answers, Applications, and Analytics remain
 available.
 
 ## Review final application

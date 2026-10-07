@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import {
   APPLICATION_ID_RE,
   MAX_APPLICATIONS,
@@ -6,6 +7,7 @@ import {
   sanitizeApplications
 } from "./schema.ts";
 import { applicationStatusTransitionAllowed } from "../../src/lib/applicationStatusTransitions.ts";
+import { answerReceiptIsCurrent } from "../../shared/applicationAnswerStorage.ts";
 
 export type ApplicationMutation = {
   id: string;
@@ -113,6 +115,23 @@ export function reconcileApplicationMutations(
         "That stage change would rewrite application history. No tracker changes were saved.",
         400
       );
+    }
+    if (mutation.operation === "upsert" && current && requested) {
+      const savedVersions = new Map((current.applicationAnswers ?? []).flatMap((answer) => answer.id ? [[answer.id, answer] as const] : []));
+      if ((requested.applicationAnswers ?? []).some((answer) => answer.id && savedVersions.has(answer.id) && !isDeepStrictEqual(savedVersions.get(answer.id), answer))) {
+        throw new ApplicationsStorageError("Saved answer revisions cannot be overwritten. Save the edited text as a new revision.", 400);
+      }
+    }
+    if (mutation.operation === "upsert" && requested) {
+      // Stored receipts are shape-checked on load; a new revision must carry
+      // limits and counts computed from the current rules for its exact text.
+      const savedIds = new Set((current?.applicationAnswers ?? []).flatMap((answer) => answer.id ? [answer.id] : []));
+      for (const answer of requested.applicationAnswers ?? []) {
+        if (!answer.id || savedIds.has(answer.id) || !answer.constraints || !answer.counts || answer.compliant === undefined) continue;
+        if (!answerReceiptIsCurrent({ question: answer.question, answer: answer.answer, constraints: answer.constraints, counts: answer.counts, compliant: answer.compliant })) {
+          throw new ApplicationsStorageError("A new answer revision's limit or count receipt does not match its text. Reopen the answer and save it again.", 400);
+        }
+      }
     }
     if (
       mutation.operation === "upsert" &&

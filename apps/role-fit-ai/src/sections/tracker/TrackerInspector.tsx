@@ -69,8 +69,8 @@ export function TrackerInspector({
   ]);
   const posting = postingIdentity(selected);
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
-  const statusDateLabel = selected.status === "not_applying" ? "Decision date" : "Application date";
-  const statusDate = selected.status === "not_applying" ? selected.notApplyingAt : selected.appliedAt;
+  const statusDateLabel = selected.status === "draft" ? "Draft created" : selected.status === "not_applying" ? "Decision date" : "Application date";
+  const statusDate = selected.status === "draft" ? selected.createdAt : selected.status === "not_applying" ? selected.notApplyingAt : selected.appliedAt;
   const statusDetail = selected.status === "not_applying" && selected.notApplyingReason
     ? `${STATUS_LABEL[selected.status]} · ${NOT_APPLYING_REASON_LABEL[selected.notApplyingReason]}`
     : STATUS_LABEL[selected.status];

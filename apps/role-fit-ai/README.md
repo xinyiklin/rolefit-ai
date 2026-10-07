@@ -324,9 +324,10 @@ font, size and wrapping changes still reflow the page normally.
   Prepare; its detail modal edits committed records instead of duplicating job
   intake. A Skipped record reopens in job-update-only mode; Save job updates
   preserves its decision metadata, while reconsidering the role creates a
-  separate linked attempt. Application-answer drafts stay session-local for
-  editing and copying and never create or update a tracker record; job matching
-  supplies only warnings and relationships. Linked
+  separate linked attempt. Generated application answers stay session-local
+  until an explicit Save, which creates a Draft or updates the record the
+  preparation already targets; job matching supplies only warnings and
+  relationships. Linked
   posting histories remain separate table rows with a quiet group count and a
   date-ordered related-record list. Application Detail can open a related row,
   atomically mark it unrelated without deletion, or explicitly merge an
@@ -440,6 +441,25 @@ per-row collapse control:
   accept or discard.
 - **Application questions** — drafts grounded responses to an application's
   free-text questions.
+- **Final application review** — checks the included documents and job context
+  without changing them.
+
+Fresh settings and **Reset all settings** use these recommendations:
+
+| Stage | Provider | Model | Effort |
+| --- | --- | --- | --- |
+| Job analysis + Fit Assessment | Claude Code CLI | Sonnet 5.5 | Low |
+| Resume Polish | Claude Code CLI | Opus 5.5 | High |
+| Cover letter | Codex CLI | GPT-6.1 Sol | Medium |
+| Application questions | Claude Code CLI | Opus 5.5 | High |
+| Final application review | Claude Code CLI | Sonnet 5.5 | Low |
+
+Saved choices remain selected. Choosing a stage's recommended provider seeds
+its recommended model and effort; other providers use their catalog defaults.
+An existing workspace without Final review settings initially copies Fit once.
+Final review retains the prior user-selected setting; it has no comparative
+benchmark winner. The [Answers evaluation](docs/engineering/testing.md#application-answers)
+records the 57-case synthetic comparison, judge disagreement and its limits.
 
 Each stage has its own provider/model/effort settings. Resume Polish, Cover
 letter, and Application questions take an optional instruction override in
@@ -481,8 +501,8 @@ and reports actionable guidance if that request fails authentication.
 
 Settings includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna for Codex
 and OpenAI API, plus Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 for Claude CLI
-and API. New stages start at GPT-6.1 Sol for Codex and Sonnet 5.5 for Claude;
-existing supported selections stay selected. The OpenAI API default remains
+and API. Stage recommendations are listed above; other provider selections
+start at GPT-6.1 Sol for Codex and Sonnet 5.5 for Claude. The OpenAI API default remains
 GPT-5.6 Terra. GPT-6.1 Sol may need a newer Codex CLI (0.159 lists it), and
 Sonnet 5.5 needs Claude Code 2.1.284 or later.
 
@@ -542,6 +562,49 @@ that local brief remains editable and manual Polish stays available. Resume
 Polish, Cover Letter,
 and application-answer generation fail plainly; no local draft, score, or
 verdict silently stands in.
+
+### Application Answers
+
+Open **Answers** after preparing a job. Paste an employer question, refine the
+answer conversationally or edit it directly, and copy only the answer text.
+Context and Saved answers are available from the header; the composer model
+menu uses the same Application Answers settings as Settings > Models.
+
+**Save answer** keeps the original question and chosen answer revision. First
+Save creates a Draft application; Apply or Skip keeps that same record. Drafts
+have no submission date and are excluded from submission analytics. Explicit
+employer limits are counted locally; an unresolved answer can be kept with
+**Save draft**. Evidence warnings remain advisory. Saved revisions survive
+restart and workspace backup; unsaved conversation is session-only.
+
+The opt-in synthetic writing benchmark uses nine settings: Opus 5.5,
+Sonnet 5.5 and GPT-6.1 Sol, each at low, medium and high effort.
+
+```bash
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --dry-run
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --dry-run --expanded
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run --expanded
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run --holdout
+```
+
+The expanded round uses 57 scenarios: 19 existing regression cases and 38 new
+cases across 13 additional invented candidate contexts. The default screen
+uses 12 cases; `--holdout` selects the earlier seven-case corpus, now regression
+data. Each answer allows at most one format repair. Astra High and Opus High
+agreed a senior-recruiter rubric before independently grading blinded answers.
+The rubric distinguishes reasonable professional interpretations, details needing
+confirmation and actual contradictions; a resume/Profile is not a complete life
+history. It retains tone, specificity, clarity, coverage and economy as separate
+scores. Live evaluation consumes configured local CLI
+provider usage; no private applications are read. Receipts stay ignored under
+`workspace/application-answer-eval/`. Scores are model judgments, not human
+certification or a precise estimate of production quality. The benchmark never
+changes your selected model.
+
+The [benchmark record and cost estimates](docs/engineering/benchmarks.md)
+collects Answers, Prepare, Resume and Cover findings, with measured per-task
+averages, benchmark-run subtotals and explicit gaps in historical usage.
 
 ## Browser extension
 
@@ -749,7 +812,7 @@ src/
   lib/                           # downloads, job extraction/analysis, AI text adapters + review-target mapping
   sections/                      # masthead, studio navigation, tabs, workflow progress, saved-PDF preview, review rail
   sections/editor/               # RoleFit-only AI-scope + review-target overlay
-  sections/tabs/                 # Prepare / Resume / Cover letter / Materials / Applications / Analytics
+  sections/tabs/                 # Prepare / Resume / Cover letter / Answers / Applications / Analytics
   resume/                        # RoleFit analysis/types/keywords/rewrite/diff (no fit scoring)
   resumeEngine.ts                # compatibility barrel over focused RoleFit resume helpers
   typeset/__evals__/             # RoleFit integration + migration parity checks for the shared engine

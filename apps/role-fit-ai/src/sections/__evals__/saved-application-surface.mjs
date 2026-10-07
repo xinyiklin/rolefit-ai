@@ -215,10 +215,10 @@ assert.match(postingOverlay, /<pre[^>]*tabIndex=\{0\}/);
 assert.ok(documentsTab.includes('aria-label="Job posting"'));
 assert.ok(documentsTab.includes("<JobPostingPane"));
 assert.ok(documentsTab.includes("isJobOnlySkippedApplication(application)"));
-assert.ok(documentsTab.includes("Skipped jobs keep job details only"));
+assert.ok(documentsTab.includes("Skipped jobs keep job details and saved answers"));
 assert.match(documentsTab, /disabled=\{!application \|\| documentsLocked \|\| busy\}/);
 assert.ok(tracker.includes("TRACKER_STAGE_MENU_GROUPS"));
-assert.ok(tracker.includes("disabled: app.status === status"));
+assert.ok(tracker.includes("disabled: app.status === status || !applicationStatusTransitionAllowed(app.status, status)"), "stage menu disables transitions the record cannot make, including Draft for submitted records");
 assert.match(
   documentsTab,
   /setOperationBusy\(true\)[\s\S]{0,900}?file\.text\(\)[\s\S]{0,1500}?setOperationBusy\(false\)/,

@@ -45,13 +45,9 @@ export const APPLICATION_SOURCES: ApplicationSource[] = [
   "Other"
 ];
 
-// A drafted application-question answer (or per-role description) the user chose
-// to save with this application from the Application Questions tab.
-export type ApplicationAnswer = {
-  question: string;
-  answer: string;
-  savedAt: string;
-};
+export type { ApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
+import { parseSavedApplicationAnswers, type ApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
+import type { ApplicationAnswerRevision } from "../../shared/applicationAnswersContract.ts";
 
 // A recruiter / interviewer / referral contact recorded on an application.
 export type ApplicationContact = {
@@ -161,9 +157,8 @@ function canonicalizeApplicationAiUsage(application: Application): Application {
   return { ...application, aiUsage: copyAiUsage(application.aiUsage) };
 }
 
-// Build the common skeleton for a terminal Apply or Skip record from the
-// current job target. Preparing and drafting answers remain session-local and
-// never create a tracker row.
+// Preparing and generating answers are session-local; explicit Save may create
+// a Draft from this common tracker skeleton.
 // crypto.randomUUID exists only in secure contexts (https / localhost). Served
 // over a LAN IP or plain http it is undefined and would throw, so fall back to a
 // unique-enough id for these client-side pipeline keys.
@@ -196,7 +191,7 @@ function cleanApplicationSource(value: unknown): ApplicationSource {
 export function makeApplicationRecord(
   jobUrl: string,
   jobDescription: string,
-  status: "applied" | "not_applying",
+  status: "draft" | "applied" | "not_applying",
   metadata: ExtractedJobTracking = {}
 ): Application {
   const now = new Date().toISOString();
@@ -229,6 +224,39 @@ export function makeApplicationRecord(
   if (metadata.salaryCurrency) application.salaryCurrency = cleanApplicationString(metadata.salaryCurrency, 8);
   if (metadata.salaryPeriod) application.salaryPeriod = metadata.salaryPeriod;
   return application;
+}
+
+export type SaveApplicationAnswerTarget =
+  | { applicationId: string }
+  | {
+      draftId: string;
+      jobUrl: string;
+      jobDescription: string;
+      rawJobDescription?: string;
+      metadata?: ExtractedJobTracking;
+      jobWarnings?: JobAnalysisWarning[];
+      fitAssessment?: FitAssessmentSnapshot;
+      aiUsage?: ApplicationAiUsage;
+      jobPostingGroupId?: string;
+    };
+
+export type SaveApplicationAnswerInput = {
+  answer: ApplicationAnswerRevision;
+  target: SaveApplicationAnswerTarget;
+  preserveDraft?: boolean;
+};
+
+export class ApplicationAnswerSaveError extends Error {
+  constructor(message: string, readonly code: "conflict" | "deleted" | "invalid" | "save-failed") {
+    super(message);
+    this.name = "ApplicationAnswerSaveError";
+  }
+}
+
+function sameSavedAnswer(left: ApplicationAnswer, right: ApplicationAnswer): boolean {
+  const { savedAt: _leftSavedAt, ...leftRevision } = left;
+  const { savedAt: _rightSavedAt, ...rightRevision } = right;
+  return JSON.stringify(leftRevision) === JSON.stringify(rightRevision);
 }
 
 const MAX_SOURCE_URLS = 10;
@@ -273,6 +301,9 @@ export function useApplications() {
   // line) — carry the message so the newer request's settle still surfaces it
   // instead of silently absorbing the dropped edit.
   const supersededFailure = useRef("");
+  const answerSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const establishedDraftIds = useRef(new Set<string>());
+  const lastPersistError = useRef("");
 
   useEffect(() => {
     let cancelled = false;
@@ -368,6 +399,7 @@ export function useApplications() {
       }
       return true;
     } catch (err) {
+      lastPersistError.current = err instanceof Error ? err.message : "Save failed.";
       if (err instanceof ApplicationConflictError) {
         confirmedApplications.current = err.applications;
         setHasLoadedApplications(true);
@@ -446,6 +478,83 @@ export function useApplications() {
     [persist]
   );
 
+  // Serialize answer saves before taking their base revision. A stable draft id
+  // makes retries after a lost response resolve to the same tracker record.
+  const saveApplicationAnswer = useCallback((input: SaveApplicationAnswerInput): Promise<Application> => {
+    const captured = structuredClone(input);
+    const save = answerSaveQueue.current.catch(() => undefined).then(async () => {
+      let tail: Promise<void>;
+      do {
+        tail = persistQueue.current;
+        await tail;
+      } while (tail !== persistQueue.current);
+      const { answer, target, preserveDraft } = captured;
+      const id = "applicationId" in target ? target.applicationId : target.draftId;
+      if (!/^[A-Za-z0-9_-]{1,80}$/.test(id)) {
+        throw new ApplicationAnswerSaveError("The selected application identity is invalid. Nothing was saved.", "invalid");
+      }
+      if (!preserveDraft && (answer.status !== "ready" || !answer.compliant)) {
+        throw new ApplicationAnswerSaveError("Resolve the answer's formatting rules or explicitly save it as a draft.", "invalid");
+      }
+      const savedAnswer: ApplicationAnswer = {
+        ...answer,
+        ...(answer.applicationId !== id ? { originId: answer.originId ?? answer.applicationId } : {}),
+        applicationId: id,
+        savedAt: new Date().toISOString()
+      };
+      if (!parseSavedApplicationAnswers([savedAnswer], id)) {
+        throw new ApplicationAnswerSaveError("The answer or its revision receipt is invalid or too large. Nothing was saved.", "invalid");
+      }
+      const current = applicationsRef.current;
+      const existing = current.find((application) => application.id === id);
+      if (!existing && ("applicationId" in target || establishedDraftIds.current.has(id))) {
+        throw new ApplicationAnswerSaveError("This application was deleted. Your answer is still available here.", "deleted");
+      }
+      const duplicate = existing?.applicationAnswers?.find((entry) => entry.id === answer.id);
+      if (duplicate) {
+        if (!sameSavedAnswer(duplicate, savedAnswer)) {
+          throw new ApplicationAnswerSaveError("That answer revision already has different saved text. Save your edit as a new revision.", "conflict");
+        }
+      }
+      const draft = "draftId" in target ? {
+        ...makeApplicationRecord(target.jobUrl, target.jobDescription, "draft", target.metadata),
+        id,
+        rawJobDescription: target.rawJobDescription,
+        jobWarnings: target.jobWarnings,
+        fitAssessment: target.fitAssessment,
+        aiUsage: target.aiUsage,
+        jobPostingGroupId: target.jobPostingGroupId
+      } : null;
+      const base = existing ?? draft!;
+      const applicationAnswers = duplicate ? base.applicationAnswers! : [...(base.applicationAnswers ?? []), savedAnswer];
+      if (!parseSavedApplicationAnswers(applicationAnswers, id)) {
+        throw new ApplicationAnswerSaveError("This application's saved answers exceed the storage limit. No answer was shortened or removed.", "invalid");
+      }
+      const application = { ...base, applicationAnswers };
+      const saved = existing
+        ? await updateApplicationById(application)
+        : await createApplication(application);
+      const confirmed = confirmedApplications.current.find((entry) => entry.id === id);
+      const confirmedAnswer = confirmed?.applicationAnswers?.find((entry) => entry.id === answer.id);
+      // A retry may receive 409 because its previous request committed before
+      // the connection failed. Only that exact saved revision proves success.
+      if (confirmed && confirmedAnswer && sameSavedAnswer(confirmedAnswer, savedAnswer)) {
+        if (!saved) {
+          conflictMessage.current = "";
+          setError("");
+        }
+        establishedDraftIds.current.add(id);
+        return confirmed;
+      }
+      if (!saved) {
+        throw new ApplicationAnswerSaveError(lastPersistError.current || "The answer could not be saved. Your draft is still available.", conflictMessage.current ? "conflict" : "save-failed");
+      }
+      throw new ApplicationAnswerSaveError("The saved answer could not be confirmed. Your draft is still available.", "save-failed");
+    });
+    answerSaveQueue.current = save;
+    return save;
+  }, [createApplication, updateApplicationById]);
+
   // Full overwrite of one application by id (the detail modal's save path).
   // Incoming wins for every editable field; only id and createdAt are pinned.
   const saveApplication = useCallback(
@@ -473,7 +582,7 @@ export function useApplications() {
               ...a,
               status,
               updatedAt: now,
-              appliedAt: status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
+              appliedAt: status === "draft" ? undefined : status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
               notApplyingAt: status === "not_applying" ? now : undefined,
               notApplyingReason: status === "not_applying" ? a.notApplyingReason : undefined,
               notApplyingNote: status === "not_applying" ? a.notApplyingNote : undefined
@@ -830,6 +939,7 @@ export function useApplications() {
     createApplication,
     updateApplicationById,
     saveApplication,
+    saveApplicationAnswer,
     updateStatus,
     remove,
     getApplication,

@@ -47,7 +47,7 @@ export function applicationDocumentSyncState(
   currentText: string,
   currentSourceText: string
 ): ApplicationDocumentSyncState {
-  if (!application) return "no-application";
+  if (!application || application.status === "draft") return "no-application";
   if (application.status === "not_applying") return "job-only";
   const artifacts = kind === "resume"
     ? application.resumeArtifacts

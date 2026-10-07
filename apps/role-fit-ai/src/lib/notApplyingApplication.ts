@@ -52,6 +52,7 @@ export function skipApplicationForSession({
   session,
   prepared,
   matchedNotApplying,
+  existingDraft = null,
   now,
   reason,
   note,
@@ -60,14 +61,15 @@ export function skipApplicationForSession({
   session: PreparationSession;
   prepared: Application;
   matchedNotApplying: Application | null;
+  existingDraft?: Application | null;
   now: string;
   reason: NotApplyingReason | "";
   note: string;
   clearFields?: readonly (keyof Application)[];
 }): NotApplyingCommit | null {
-  if (session.mode === "update") return null;
+  if (session.mode === "update" && (!existingDraft || existingDraft.id !== session.applicationId || existingDraft.status !== "draft")) return null;
 
-  const target = matchedNotApplying;
+  const target = session.mode === "update" ? existingDraft : matchedNotApplying;
   if (matchedNotApplying && matchedNotApplying.status !== "not_applying") return null;
 
   if (!target) {

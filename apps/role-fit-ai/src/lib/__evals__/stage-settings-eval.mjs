@@ -68,9 +68,17 @@ assert.deepEqual(
   ["resume-polish", "cover-polish", "application-answers"],
   "only drafting stages expose custom-instruction controls"
 );
-for (const stage of AI_STAGE_IDS) {
-  assert.equal(fresh[stage].provider, "claude-cli", `${stage} defaults to the account-backed CLI`);
-  assert.equal(fresh[stage].selectedModel, "claude-sonnet-5-5", `${stage} defaults to the CLI model`);
+assert.deepEqual(fresh, {
+  "job-analysis": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "fit-assessment": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "resume-polish": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
+  "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
+  "application-answers": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
+  "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
+}, "fresh stages use their task-specific recommendations");
+for (const stage of AI_STAGES) {
+  const keys = stageSettingsKeys(stage);
+  assert.deepEqual(seedStage(stage.id, { [keys.provider]: fresh[stage.id].provider }), fresh[stage.id], "explicitly choosing the recommended provider uses the stage recommendation");
 }
 
 const partialSettings = {
@@ -89,12 +97,11 @@ assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps i
 assert.equal(seeded["fit-assessment"].provider, "codex-cli", "Fit Assessment keeps its own persisted provider");
 assert.equal(seeded["fit-assessment"].selectedModel, "gpt-5.6-terra", "Fit Assessment keeps its own model");
 for (const stage of ["cover-polish", "application-answers"]) {
-  assert.equal(seeded[stage].provider, "claude-cli", `${stage} uses its own default when absent`);
-  assert.equal(seeded[stage].selectedModel, "claude-sonnet-5-5", `${stage} uses the default model when absent`);
+  assert.deepEqual(seeded[stage], fresh[stage], `${stage} uses its own default when absent`);
 }
 assert.equal(
   seedStage("cover-polish", { resumePolishProvider: "openai" }).provider,
-  "claude-cli",
+  "codex-cli",
   "Cover never inherits Resume Polish's provider"
 );
 assert.equal(
@@ -111,7 +118,10 @@ const explicitCover = seedStages({
 });
 assert.equal(explicitCover["cover-polish"].provider, "anthropic", "an explicit cover provider is preserved");
 assert.equal(explicitCover["cover-polish"].selectedModel, "claude-opus-4-8", "an explicit cover model is preserved");
-assert.equal(explicitCover["application-answers"].provider, "claude-cli", "Answers remains independent from Cover");
+assert.deepEqual(explicitCover["application-answers"], fresh["application-answers"], "Answers remains independent from Cover");
+const sparseCover = { coverPolishSelectedModel: "claude-sonnet-5-5", coverPolishCliReasoningEffort: "low" };
+assert.deepEqual(seedStage("cover-polish", sparseCover), { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }, "a prior model-only setting retains its implied provider");
+assert.deepEqual(seedStage("cover-polish", materializeAiSettings(sparseCover)), seedStage("cover-polish", sparseCover), "sparse saved choices seed identically before and after persistence");
 
 assert.deepEqual(
   normalizeSettings({

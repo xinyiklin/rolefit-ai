@@ -244,7 +244,7 @@ export function ApplicationDocumentsTab({
   const resumeAvailability = applicationDocumentAvailability(resumeArtifacts);
   const coverAvailability = applicationDocumentAvailability(coverArtifacts);
   const jobOnly = application ? isJobOnlySkippedApplication(application) : false;
-  const documentsLocked = application?.status === "not_applying";
+  const documentsLocked = application?.status === "not_applying" || application?.status === "draft";
 
   function setOperationBusy(next: boolean) {
     setBusy(next);
@@ -263,8 +263,8 @@ export function ApplicationDocumentsTab({
     }
     if (documentsLocked) {
       await alert({
-        title: "Skipped application",
-        message: jobOnly
+        title: application.status === "draft" ? "Draft application" : "Skipped application",
+        message: application.status === "draft" ? "Apply this Draft before saving application documents." : jobOnly
           ? "Move this job to an active stage before saving application documents."
           : "Move this application to an active stage before changing its saved documents."
       });
@@ -377,9 +377,11 @@ export function ApplicationDocumentsTab({
 
   return (
     <section className="application-form application-form--wide">
-      {jobOnly ? (
+      {application?.status === "draft" ? (
+        <p className="application-muted">Apply this Draft before saving application documents.</p>
+      ) : jobOnly ? (
         <p className="application-muted">
-          Skipped jobs keep job details only. Move this job to an active stage to save application documents.
+          Skipped jobs keep job details and saved answers. Move this job to an active stage to save application documents.
         </p>
       ) : documentsLocked ? (
         <p className="application-muted">

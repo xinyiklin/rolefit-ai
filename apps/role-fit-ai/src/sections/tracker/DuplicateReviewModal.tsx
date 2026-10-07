@@ -27,6 +27,7 @@ type DuplicateReviewModalProps = {
 const STATUS_RANK: Record<ApplicationStatus, number> = {
   rejected: 0,
   withdrawn: 0,
+  draft: 0,
   not_applying: 0,
   applied: 2,
   interviewing: 3,

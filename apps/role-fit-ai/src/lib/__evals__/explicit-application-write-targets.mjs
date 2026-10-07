@@ -39,10 +39,11 @@ for (const persistenceTerm of [
 ]) {
   assert.ok(
     !answersSource.includes(persistenceTerm),
-    `answer drafting remains session-local and excludes ${persistenceTerm}`
+    `answer drafting delegates explicit persistence and excludes ${persistenceTerm}`
   );
 }
-assert.match(answersSource, /Drafts remain session-local for editing and copying/);
+assert.match(answersSource, /await onSaveAnswer\(captured, conversationId, saveAsDraft\)/, "answer Save passes its captured revision, originating conversation identity and preserved draft state");
+assert.doesNotMatch(answersSource, /useEffect\([^]*?onSaveAnswer[^]*?\}, \[\]/, "no mount effect saves drafts automatically");
 assert.match(applySource, /preparationSession[\s\S]{0,1200}?session\.applicationId/);
 assert.match(skipSource, /preparationSession[\s\S]{0,1800}?session\.applicationId/);
 

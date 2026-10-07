@@ -27,6 +27,7 @@ import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
 import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
+import { applicationStatusTransitionAllowed } from "../../lib/applicationStatusTransitions";
 
 export type TrackerView = "table" | "calendar";
 
@@ -520,7 +521,7 @@ export function TrackerTab({
               label: STATUS_LABEL[status],
               dotClass: `stage-dot stage-dot--${status}`,
               active: app.status === status,
-              disabled: app.status === status,
+              disabled: app.status === status || !applicationStatusTransitionAllowed(app.status, status),
               onSelect: () => onUpdateStatus(app.id, status)
             });
           }

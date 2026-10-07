@@ -43,7 +43,7 @@ function buildCalendarDays(month: Date) {
 function applicationEvents(applications: Application[]): CalendarEvent[] {
   return applications.flatMap((app) => {
     const events: CalendarEvent[] = [];
-    const applied = parseDate(app.appliedAt);
+    const applied = app.status === "draft" ? null : parseDate(app.appliedAt);
     const followup = parseDate(app.followupAt);
     if (applied && !Number.isNaN(applied.getTime())) {
       events.push({

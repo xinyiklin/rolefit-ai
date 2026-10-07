@@ -7,7 +7,7 @@ function monthBucket(date: Date) {
 
 export function isSubmittedApplication(application: Application) {
   // A later decision to skip does not erase a prior employer submission.
-  return Boolean(parseDate(application.appliedAt));
+  return application.status !== "draft" && Boolean(parseDate(application.appliedAt));
 }
 
 export function monthlyApplicationsSent(applications: Application[]) {
@@ -45,7 +45,7 @@ export function trackingHygiene(applications: Application[]) {
   let submitted = 0;
 
   for (const application of applications) {
-    if (!application.followupAt && !["not_applying", "rejected", "withdrawn"].includes(application.status)) {
+    if (!application.followupAt && !["draft", "not_applying", "rejected", "withdrawn"].includes(application.status)) {
       missingFollowup += 1;
     }
     if (["rejected", "withdrawn"].includes(application.status)) closed += 1;

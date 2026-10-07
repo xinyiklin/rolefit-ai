@@ -195,7 +195,8 @@ export function useSkipFlow({
   async function saveSkip(reason: NotApplyingReason | "", note: string): Promise<boolean> {
     if (skipInFlightRef.current) return false;
     const session = skipSessionRef.current ?? preparationSession;
-    if (session.mode === "update") return false;
+    const existingDraft = session.applicationId ? getApplication(session.applicationId) ?? null : null;
+    if (session.mode === "update" && existingDraft?.status !== "draft") return false;
     if (!capturedPreparationIsCurrent()) {
       const message = "The prepared job changed while this decision was open. Cancel and choose Skip again.";
       setSkipError(message);
@@ -221,7 +222,7 @@ export function useSkipFlow({
       );
       const prepared = preparedApplicationRecord({
         base: baseRecord,
-        existing: matchedNotApplying,
+        existing: existingDraft ?? matchedNotApplying,
         jobUrl,
         preparedJobDescription,
         jobWarnings,
@@ -236,6 +237,7 @@ export function useSkipFlow({
         session,
         prepared: prepared.application,
         matchedNotApplying,
+        existingDraft,
         now,
         reason,
         note,
@@ -384,6 +386,7 @@ export function useSkipFlow({
     skipPrompt,
     skipError,
     isSkipping,
+    isSkipPending: () => skipInFlightRef.current || Boolean(skipSessionRef.current),
     handleSkip,
     saveSkip,
     saveJobUpdates,
