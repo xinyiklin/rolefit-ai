@@ -20,12 +20,9 @@ for (const [text, expected] of [
   ["No fewer than 100 words", { unit: "words", min: 100, hard: true }],
   ["No less than 100 words", { unit: "words", min: 100, hard: true }],
   ["100 words or more", { unit: "words", min: 100, hard: true }],
-  ["More than 100 words", { unit: "words", min: 101, hard: false }],
-  ["Over 100 words", { unit: "words", min: 101, hard: false }],
   ["Not more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Explain your experience, not to exceed 100 words.", { unit: "words", max: 100, hard: true }],
   ["Not to go over 100 words", { unit: "words", max: 100, hard: true }],
-  ["To exceed 100 words", { unit: "words", min: 101, hard: false }],
   ["Do not write more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Don't use more than 100 words", { unit: "words", max: 100, hard: true }],
   ["Do not exceed 100 words", { unit: "words", max: 100, hard: true }],
@@ -36,7 +33,6 @@ for (const [text, expected] of [
   ["Not less than 100 words", { unit: "words", min: 100, hard: true }],
   ["Do not use fewer than 100 words", { unit: "words", min: 100, hard: true }],
   ["Don't go below 100 words", { unit: "words", min: 100, hard: true }],
-  ["Exceed 100 words", { unit: "words", min: 101, hard: false }],
   ["No more than 400 characters", { unit: "characters", max: 400, hard: true }],
   ["three to four sentences", { unit: "sentences", min: 3, max: 4, hard: true }],
   ["50 words or fewer", { unit: "words", max: 50, hard: true }],
@@ -87,11 +83,13 @@ for (const [text, expected] of [
   ["Avoid going over 300 words.", { unit: "words", max: 300, hard: true }],
   ["Avoid writing more than 300 words.", { unit: "words", max: 300, hard: true }],
   ["Refrain from exceeding 300 words.", { unit: "words", max: 300, hard: true }],
-  ["Answers longer than 300 words won't be penalized.", { unit: "words", min: 301, hard: false }],
-  ["There is no penalty for going over 300 words.", { unit: "words", min: 301, hard: false }],
-  ["You may write more than 100 words if needed.", { unit: "words", min: 101, hard: false }],
   ["Your answer must exceed 100 words.", { unit: "words", min: 101, hard: true }],
-  ["Aim for over 200 words.", { unit: "words", min: 201, hard: true }]
+  ["Aim for over 200 words.", { unit: "words", min: 201, hard: true }],
+  ["Do not, under any circumstances, exceed 300 words.", { unit: "words", max: 300, hard: true }],
+  ["Responses must contain more than 100 words.", { unit: "words", min: 101, hard: true }],
+  ["Write a response of more than 200 words.", { unit: "words", min: 201, hard: true }],
+  ["We require more than 100 words.", { unit: "words", min: 101, hard: true }],
+  ["Answers need more than 50 words.", { unit: "words", min: 51, hard: true }]
 ]) check(text, () => { const actual = first(text); for (const [key, value] of Object.entries(expected)) assert.equal(actual[key], value, `${text}: ${key}`); });
 check("separate per-field scope not falsely compliant", () => { const c = extractAnswerConstraints("1. Why us?\n2. Why this role? 100 words for each answer."); assert.equal(c[0].unresolvedScope, true); assert.equal(validateAnswerConstraints("Two short answers.", c).compliant, false); });
 check("spaces count exactly", () => assert.equal(countAnswerText(" ab ").characters, 4));
@@ -104,6 +102,7 @@ check("range floor", () => assert.equal(validateAnswerConstraints("one", extract
 check("exact count", () => assert.equal(validateAnswerConstraints("one two", extractAnswerConstraints("Exactly 3 words")).compliant, false));
 check("no constraints without limits", () => assert.deepEqual(extractAnswerConstraints("Why us? Tell us about a project."), []));
 check("no constraint from ordinary prose", () => { for (const text of ["In your own words, 3 projects you shipped.", "Use 3.5 sentences of context.", "Word choice matters.", "You led more than 3 people.", "Longer than 6 months is fine.", "Our word limit is generous."]) assert.deepEqual(extractAnswerConstraints(text), [], text); });
+check("an un-negated ceiling word without an instruction is not a limit", () => { for (const text of ["More than 100 words", "Over 100 words", "To exceed 100 words", "Exceed 100 words", "Answers longer than 300 words won't be penalized.", "There is no penalty for going over 300 words.", "You may write more than 100 words if needed.", "Whether or not you exceed 300 words, be concise.", "Don't hesitate to write more than 300 words.", "Don't worry about going over 300 words.", "Not every answer needs to be longer than 200 words."]) assert.deepEqual(extractAnswerConstraints(text), [], text); });
 check("an inverted range never produces a constraint with min above max", () => assert.ok(extractAnswerConstraints("75 to 50 words").every((c) => c.min === undefined || c.max === undefined || c.min <= c.max)));
 check("penalty ceiling agrees with a stated range", () => { const c = extractAnswerConstraints("We read 100–250 words; anything over 250 words may be truncated."); assert.equal(c.length, 2); assert.equal(c[1].max, 250); assert.equal(validateAnswerConstraints(Array.from({ length: 200 }, () => "word").join(" "), c).compliant, true); });
 check("bracketed placeholders are unfinished prose", () => { for (const text of ["Join [Company Name] soon.", "Raised [X%] revenue.", "Add {{metric}} here.", "[add: team size]"]) assert.equal(hasUnresolvedAnswerPlaceholder(text), true, text); for (const text of ["Plain prose, no slots.", "Shipped in [2023] with a 12% lift.", "They wrote 'recieve' [sic] in the brief.", "Names are [redacted] here.", "I indexed arr[i] in a loop.", "See note [1].", "Led the team [2023–2024]."]) assert.equal(hasUnresolvedAnswerPlaceholder(text), false, text); });
@@ -166,7 +165,7 @@ for (const maximum of ["Not to exceed", "Not to go over", "Not more than", "Do n
 for (const minimum of ["More than", "Over", "Exceed"]) {
   const aboveFloor = fake([raw(oneHundredAndOneWords)]);
   const result = await generateApplicationAnswer({ ...body, question: { ...body.question, text: `Why this role? ${minimum} 100 words.` } }, { dispatch: aboveFloor.dispatch });
-  check(`${minimum} without an instruction is an advisory floor`, () => { assert.equal(result.status, "ready"); assert.equal(result.compliant, true); assert.equal(result.constraints[0].min, 101); assert.equal(result.constraints[0].hard, false); assert.equal(aboveFloor.calls.length, 1); });
+  check(`${minimum} without an instruction sets no limit`, () => { assert.equal(result.status, "ready"); assert.equal(result.compliant, true); assert.deepEqual(result.constraints, []); assert.equal(aboveFloor.calls.length, 1); });
 }
 const instructedFloor = fake([raw("I built Python APIs."), raw("I built Python APIs.")]);
 const belowInstructedFloor = await generateApplicationAnswer({ ...body, question: { ...body.question, text: "Why this role? Please write more than 100 words." } }, { dispatch: instructedFloor.dispatch });

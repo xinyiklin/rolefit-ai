@@ -55,8 +55,8 @@ application retain blocking technical guards.
   gate normal Copy/Save; unresolved drafts remain available through Save draft.
   A negated or penalty-phrased "more than / over / exceed N" is a hard ceiling;
   un-negated, it is a hard floor only after a positive instruction and
-  advisory otherwise, so an unrecognised negation never drives a repair past
-  an employer's limit.
+  otherwise no limit at all, so an unrecognised negation never drives a repair
+  past an employer's limit.
   Evidence warnings remain advisory. Preserve question identity and revision,
   distinguish explicit user facts from generated drafts, and reject oversized
   inputs instead of silently clipping them. Unknown usage from any dispatch

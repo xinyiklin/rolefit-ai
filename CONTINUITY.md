@@ -85,8 +85,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
     Applications modal create no revision; edits typed during a failed save
     no longer name the unsaved revision. A third pass made the ceiling rule
     conservative: an un-negated "more than / over / exceed N" is a hard floor
-    only after a positive instruction and advisory otherwise (a negation up to
-    four words before, or a penalty clause, makes it a hard ceiling), so an
+    only after a positive instruction and otherwise no limit at all (a negation
+    up to four words before, or a penalty clause, makes it a hard ceiling), so an
     unrecognised negation can never drive a repair past an employer's limit;
     a lone hyphenated number word no longer claims its span as an inverted
     range. Left as residual: no duplicate
