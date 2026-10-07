@@ -107,20 +107,23 @@ function numberValue(value: string): number {
 }
 const unitValue = (value: string): keyof AnswerCounts => value.toLowerCase().startsWith("word") ? "words" : value.toLowerCase().startsWith("sent") ? "sentences" : "characters";
 const CEILING_QUALIFIER = /^(?:more than|over|above|beyond|exceeds?|exceeding|go(?:es|ing)? (?:over|beyond)|longer than|greater than)$/;
-// A negation up to four words (commas allowed) before a comparison turns it
-// into a ceiling; words such as "penalty", "limit" or "hesitate" end that
-// reach ("no penalty for going over 300 words" sets no ceiling), and
-// "whether or not" is not a negation.
-const NEGATION_WORDS = "(?:no|(?<!whether\\s+or\\s+)not|never|don['’]t|doesn['’]t|didn['’]t|isn['’]t|aren['’]t|cannot|can['’]t|mustn['’]t|shouldn['’]t|won['’]t|wouldn['’]t|without|avoid|refrain\\s+from)";
-const NEGATION_FILLER = "(?:(?!(?:penalty|penalties|problem|issue|harm|limit|limits|cap|maximum|restriction|hesitate|worry|mind|matter)\\b)[A-Za-z’']+,?\\s+){0,4}";
-const NEGATED_BEFORE = new RegExp(`\\b${NEGATION_WORDS},?\\s+${NEGATION_FILLER}$`, "i");
+// A negation up to four words before a comparison turns it into a ceiling;
+// a short parenthetical may follow the negation ("do not, under any
+// circumstances, exceed"), words such as "penalty", "limit" or "hesitate"
+// end that reach ("no penalty for going over 300 words" sets no ceiling),
+// and "whether or not" is not a negation.
+const NEGATION_WORDS = "(?:no|(?<!whether\\s+or\\s+)not|never|nobody|none|nothing|no\\s+one|neither|nor|don['’]t|doesn['’]t|didn['’]t|isn['’]t|aren['’]t|cannot|can['’]t|mustn['’]t|shouldn['’]t|won['’]t|wouldn['’]t|without|avoid|refrain\\s+from)";
+const NEGATION_PARENTHETICAL = "(?:,\\s*[A-Za-z’' ]{1,40},)?";
+const NEGATION_FILLER = "(?:(?!(?:penalty|penalties|problem|issue|harm|limit|limits|cap|maximum|restriction|hesitate|worry|mind|matter)\\b)[A-Za-z’']+\\s+){0,4}";
+const NEGATED_BEFORE = new RegExp(`\\b${NEGATION_WORDS}${NEGATION_PARENTHETICAL}\\s+${NEGATION_FILLER}$`, "i");
 const NEGATION_IN_CLAUSE = new RegExp(`\\b${NEGATION_WORDS}\\b`, "i");
+const CONDITIONAL_IN_CLAUSE = /\b(?:if|when|whenever|unless|where|wherever|in\s+case|should\s+you)\b/i;
 // An un-negated "more than N words" is a hard floor only after a positive
-// instruction with no negation earlier in the clause; otherwise it is not a
-// limit at all, so an unrecognised negation can never drive a repair past an
-// employer's ceiling.
+// instruction, with no negation or condition earlier in the clause; otherwise
+// it is not a limit at all, so an unrecognised negation can never drive a
+// repair past an employer's ceiling.
 const PERMISSIVE_BEFORE = /\b(?:may|can|could|free\s+to|allowed\s+to|welcome\s+to|no\s+limit)\b[^.;!?\n]{0,30}$/i;
-const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|contains?|requires?|required|needs?|aim\s+for|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|ideally|prefer(?:ably|red)?|target|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
+const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|aim\s+for|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|(?:must|should|needs?\s+to|ha(?:s|ve)\s+to)\s+(?:contain|include|have|require|run)|ideally|prefer(?:ably|red)?|target|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
 const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
@@ -163,7 +166,7 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   // A negated comparison runs first and claims its span, so "no longer than
   // 300 words" never reaches the un-negated ceiling rule below.
   const comparison = "(more\\s+than|less\\s+than|fewer\\s+than|longer\\s+than|shorter\\s+than|greater\\s+than|over|above|beyond|under|below|exceed(?:s|ing)?|go\\s+over|go\\s+beyond|fall\\s+below|go\\s+below)";
-  addMatches(new RegExp(`\\b${NEGATION_WORDS},?\\s+${NEGATION_FILLER}${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
+  addMatches(new RegExp(`\\b${NEGATION_WORDS}${NEGATION_PARENTHETICAL}\\s+${NEGATION_FILLER}${comparison}\\s+(${NUMBER})\\s*[-‐‑]?\\s*${UNIT}\\b`, "gi"), (match) => ({
     unit: unitValue(match[3]),
     ...(/^(?:less|fewer|shorter|under|below)|below$/i.test(match[1]) ? { min: numberValue(match[2]) } : { max: numberValue(match[2]) }),
     hard: true
@@ -174,7 +177,8 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     const approximate = /^(?:about|around|approximately|roughly)$/.test(qualifier);
     if (CEILING_QUALIFIER.test(qualifier)) {
       if (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before)) return { unit: unitValue(match[3]), max: n, hard: true };
-      const instructed = INSTRUCTION_BEFORE.test(clause.before) && !PERMISSIVE_BEFORE.test(clause.before) && !NEGATION_IN_CLAUSE.test(clause.before);
+      const instructed = INSTRUCTION_BEFORE.test(clause.before) && !PERMISSIVE_BEFORE.test(clause.before)
+        && !NEGATION_IN_CLAUSE.test(clause.before) && !CONDITIONAL_IN_CLAUSE.test(clause.before);
       return instructed ? { unit: unitValue(match[3]), min: n + 1, hard: true } : false;
     }
     const bounds = qualifier === "exactly" ? { exact: n }
