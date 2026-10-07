@@ -125,7 +125,10 @@ const ADVISORY_BEFORE = /\b(?:suggest(?:ed|s)?|recommend(?:ed|s)?|ideally|typica
 // A penalty or suggestion belongs to the nearest count: the window stops at a
 // contrastive conjunction, a comma-joined "and", or the next count.
 const SEGMENT_BREAK = /\b(?:and|but|though|although|however|while|whereas|with)\b|,/i;
+const ADVISORY_AFTER = /^[^.;!?\n,]{0,30}?\b(?:usually|typical(?:ly)?|enough|plenty|target|ideal(?:ly)?|recommended|suggested|sufficient|fine|works\s+well|is\s+common)\b/i;
 const FLOOR_QUALIFIER = /^(?:under|below|fewer than|less than|shorter than)$/;
+const KEEP_BEFORE = /\b(?:keep(?:\s+(?:it|answers|responses|them|this))?|stay|staying|be|remain|aim)\s+$/i;
+const COUNT_PATTERN = () => new RegExp(`${NUMBER}\\s*[-‐‑]?\\s*${UNIT}`, "gi");
 // An un-negated "more than N words" is a hard floor only after a positive
 // instruction, with no negation or condition earlier in the clause; otherwise
 // it is not a limit at all, so an unrecognised negation can never drive a
@@ -145,7 +148,10 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   // it without a constraint ("more than 100 words" must not fall through to the
   // bare "100 words" rule as a ceiling).
   type Build = (match: RegExpMatchArray, clause: { before: string; after: string }) => Omit<AnswerConstraint, "scope" | "source"> | null | false;
-  const addMatches = (pattern: RegExp, build: Build) => {
+  // Bare counts ("250 words") are the weakest signal: suggestion wording after
+  // them, or a worded hard maximum elsewhere for the same unit, makes them advice.
+  const bareIndexes: number[] = [];
+  const addMatches = (pattern: RegExp, build: Build, options: { bare?: boolean } = {}) => {
     for (const match of question.matchAll(pattern)) {
       const start = match.index!;
       const end = start + match[0].length;
@@ -157,6 +163,10 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       occupied.push([start, end]);
       if (built === false) continue;
       if (ADVISORY_BEFORE.test(before.split(SEGMENT_BREAK).pop() ?? "")) built.hard = false;
+      if (options.bare) {
+        if (ADVISORY_AFTER.test(after)) built.hard = false;
+        if (!/\s(?:maximum|max|limit|or (?:less|fewer|more)|at most|minimum|min|exactly)$/i.test(match[0])) bareIndexes.push(constraints.length);
+      }
       const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
         : /\b(?:total|combined|altogether|across (?:both|all))\b/i.test(context) ? "total" : "answer";
@@ -184,12 +194,15 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     const n = numberValue(match[2]);
     const qualifier = match[1].toLowerCase().replace(/\s+/g, " ");
     const approximate = /^(?:about|around|approximately|roughly)$/.test(qualifier);
-    const nextCount = clause.after.search(new RegExp(`${NUMBER}\\s*[-‐‑]?\\s*${UNIT}`, "i"));
+    const nextCount = clause.after.search(COUNT_PATTERN());
     const penaltyAfter = (nextCount >= 0 ? clause.after.slice(0, nextCount) : clause.after).split(/\b(?:but|though|although|however|while|whereas)\b|,\s*and\b/i)[0];
-    const penaltyBefore = clause.before.split(/\b(?:but|though|although|however|while|whereas)\b/i).pop() ?? "";
-    const penalised = PENALTY_CLAUSE.test(penaltyAfter) || PENALTY_CLAUSE.test(penaltyBefore);
-    // "Responses under 50 words will not be considered" states a floor.
-    if (FLOOR_QUALIFIER.test(qualifier) && penalised) return { unit: unitValue(match[3]), min: n, hard: true };
+    const lastCount = [...clause.before.matchAll(COUNT_PATTERN())].pop();
+    const penaltyBefore = (lastCount ? clause.before.slice(lastCount.index! + lastCount[0].length) : clause.before).split(/\b(?:and|so|but|though|although|however|while|whereas)\b/i).pop() ?? "";
+    const penalisedAfter = PENALTY_CLAUSE.test(penaltyAfter);
+    const penalised = penalisedAfter || PENALTY_CLAUSE.test(penaltyBefore);
+    // "Responses under 50 words will not be considered" states a floor;
+    // "keep it under 300 words" never does.
+    if (FLOOR_QUALIFIER.test(qualifier) && penalisedAfter && !KEEP_BEFORE.test(clause.before)) return { unit: unitValue(match[3]), min: n, hard: true };
     if (CEILING_QUALIFIER.test(qualifier)) {
       if (NEGATED_BEFORE.test(clause.before) || penalised) return { unit: unitValue(match[3]), max: n, hard: true };
       const instructed = INSTRUCTION_BEFORE.test(clause.before) && !PERMISSIVE_BEFORE.test(clause.before)
@@ -213,7 +226,11 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     unit: unitValue(match[2]),
     ...(/\b(?:minimum|min|or more)$/i.test(match[0]) ? { min: numberValue(match[1]) } : /\bexactly$/i.test(match[0]) ? { exact: numberValue(match[1]) } : { max: numberValue(match[1]) }),
     hard: true
-  }));
+  }), { bare: true });
+  for (const index of bareIndexes) {
+    const bare = constraints[index];
+    if (constraints.some((other, otherIndex) => otherIndex !== index && !bareIndexes.includes(otherIndex) && other.hard && other.unit === bare.unit && (other.max !== undefined || other.exact !== undefined))) bare.hard = false;
+  }
   return constraints.filter((constraint) => [constraint.min, constraint.max, constraint.exact].every((n) => n === undefined || (Number.isSafeInteger(n) && n <= 1_000_000))
     && (constraint.min === undefined || constraint.max === undefined || constraint.min <= constraint.max));
 }

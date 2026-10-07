@@ -117,6 +117,11 @@ check("a suggested or typical length beside the real limit is advisory", () => {
   }
   assert.deepEqual(extractAnswerConstraints("Please write more than 200 words, and we'll skip any answer that is generic.").filter((item) => item.hard).map((item) => [item.min, item.max]), [[201, undefined]]);
   assert.deepEqual(extractAnswerConstraints("Responses under 50 words will not be considered.").map((item) => [item.min, item.max, item.hard]), [[50, undefined, true]]);
+  for (const [text, limits] of [["Answers will be truncated at 500 words, so keep it under 300 words.", [299]], ["Text beyond 2,000 characters will be cut off, so keep answers under 1,500 characters.", [2000, 1499]], ["Responses will be cut off after 1,000 characters, so please stay below 900 characters.", [899]], ["Incomplete applications will be rejected and answers over 300 words are welcome.", []], ["Maximum 500 words, though 250 words is usually enough.", [500]], ["Max 500 words; 200 words is usually plenty.", [500]], ["Up to 500 words, with 200 words being typical.", [500]], ["Limit 2,000 characters; 800 characters is a good target.", [2000]]]) {
+    const hard = extractAnswerConstraints(text).filter((item) => item.hard);
+    assert.ok(hard.every((item) => item.min === undefined), `${text} (no floor)`);
+    assert.deepEqual(hard.map((item) => item.max), limits, text);
+  }
   assert.deepEqual(extractAnswerConstraints("Write more than 100 words; answers under 100 words will be rejected.").map((item) => item.min), [101, 100]);
   const suggested = extractAnswerConstraints("Up to 500 words (we suggest 200-300 words).");
   assert.equal(validateAnswerConstraints(Array.from({ length: 400 }, () => "word").join(" "), suggested).compliant, true, "a 400-word answer meets the stated 500-word limit");
