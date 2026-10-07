@@ -335,7 +335,8 @@ unavailable.
 
 Fit Assessment is a reusable advisory screening of the captured posting against
 the exact selected resume and candidate-authored context. The first assessment
-normally runs after Prepare, and the user may reassess at any time afterward.
+runs after Prepare when automatic assessment is on (the default); otherwise the
+user starts it with **Assess fit**. The user may reassess at any time afterward.
 Each result describes demonstrated fit in the selected resume at the time of
 that run; it does not predict hiring, rewrite the resume, or substitute for the
 user's judgment. Its four verdicts mean:
@@ -483,7 +484,10 @@ User-configured switches and verdict thresholds, provider readiness, and fresh
 one-use preparation tokens also govern it. Neither eligibility uncertainty nor a
 Blocked label disables manual actions.
 
-Fit Assessment defaults on and owns provider, model, and reasoning settings
+Automatic Fit Assessment defaults on. Turning it off in Settings > Automation
+stops only the automatic runs — after Prepare and after a selected-resume change —
+and the automatic Polish that depends on them; **Assess fit** and **Reassess fit**
+remain available. Fit Assessment owns provider, model, and reasoning settings
 independently from Job analysis. Its first run shares Prepare's Job analysis
 dispatch only when both stages resolve to the same request configuration;
 otherwise Prepare commits Job analysis and starts a separate assessment-only
@@ -493,12 +497,12 @@ become ready until its one-use automation decision settles. **Reassess fit**
 always starts a new assessment without repeating Job
 analysis, using the retained captured posting, current selected resume and
 candidate context, and the Fit Assessment stage's selected provider, model,
-reasoning effort, and rubric. Changing the selected resume also reruns only Fit
-Assessment. Editing the displayed prepared brief does not silently change the
-screened posting. A changed posting, authoritative resume, candidate context,
+reasoning effort, and rubric. With automatic assessment on, changing the
+selected resume also reruns only Fit Assessment. Editing the displayed prepared
+brief does not silently change the screened posting. A changed posting, authoritative resume, candidate context,
 provider/model/reasoning setting, or prompt version makes the displayed result
-out of date. Beginning, failing, cancelling, or disabling a later assessment
-never erases the latest completed result. Prepare retains that timestamped
+out of date. Beginning, failing, or cancelling a later assessment never erases
+the latest completed result. Prepare retains that timestamped
 result as a clearly labeled previous preparation and lists which input groups changed — job posting, resume
 content, Profile, or assessment setup — without presenting its verdict as
 current. A successful reassessment supersedes that displayed result. Application

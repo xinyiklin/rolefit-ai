@@ -408,8 +408,9 @@ Good server verification covers:
 - the Job analysis rename contract must keep current code and docs free of the
   retired term except for explicit rejection probes and intentional historical
   release/continuity records
-- compact Fit Assessment probes must prove that disabling it omits resume/context
-  data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
+- compact Fit Assessment probes must prove that Prepare with automatic assessment
+  off omits resume/context data entirely, automatic Prepare requests Job
+  analysis plus fit in one prompt,
   invalid fit preserves valid job fields, the prompt contains the direct rubric
   as one identical system-level block in combined and reassessment paths, includes
   the conservative lower-category and stable posting-order tie breaks, unlocated
@@ -504,8 +505,11 @@ Good server verification covers:
   configurations adds a whole-letter judge stage (`server/ai/coverLetterJudge.ts`):
   each judge scores support, relevance, argument, voice, improvement over the
   base letter, and an overall mark from 1 to 10 and lists unsupported
-  sentences; the judge sees the letter, evidence, posting, and base letter but
-  never the generator's identity, a Sol model is refused as a judge (after the
+  sentences; the judge sees the letter, evidence (with each item's section and
+  entry when the evidence carries them, so employer attribution is checkable;
+  the tracked synthetic corpus does not), posting, and base letter but
+  never the generator's identity; a reply without an unsupported-sentence list
+  leaves that letter's count unknown, never zero; a Sol model is refused as a judge (after the
   request resolves, so an omitted model cannot fall to the Codex default), a
   judge that fails or answers unreadably is recorded as absent for that letter,
   and the structural checks alone still decide pass or fail. Each invocation
@@ -572,7 +576,10 @@ Good server verification covers:
   regression cases), 16 frozen holdouts for prompt slimming, and five
   opportunity cases (2026-10-06) that each require a proposal and name the
   expected improvement (a proposal that touches none of the named targets
-  fails as `missedOpportunity`; the brochure cases accept any honest edit): a
+  fails as `missedOpportunity`; an addition counts only when a new or rewritten
+  bullet carries one of the case's `addTerms`, a reorder only when it puts
+  the `leadBullet` first, and a case met only by rewrites also needs one the
+  fact-check labels material; the brochure cases accept any honest edit): a
   buried strength to reorder, a duplicated achievement to remove, a Profile fact
   missing from its entry, a feature tour hiding the contribution, and an
   irrelevant bullet beside the only proof of a requirement. They exercise
@@ -592,7 +599,8 @@ Good server verification covers:
   be configured; there is no provider fallback or workspace-settings import.
   Traps, tense flips, withheld edits, missing required improvements, unsupported
   edits, and provider/judge failures fail the run. The judge must return complete,
-  unique, typed labels; missing labels never count as support. Materiality,
+  unique, typed labels; missing labels never count as support. Materiality
+  gates only an opportunity case met solely by rewrites; otherwise it,
   opportunity coverage, warning counts, and character growth are diagnostics,
   not gates or rendered page-fit claims. An edit is material when it changes
   what a screener learns or how quickly they find it; length and page count
@@ -726,7 +734,7 @@ Good frontend verification covers:
 - `src/hooks/__evals__/fit-assessment-lifecycle.mjs` executes combined-request and
   reassessment provenance, canonical source replacement, displayed-brief independence,
   cleared-resume invalidation, provider/model/reasoning identity invalidation,
-  friendly-label exclusion, setting-toggle restoration, explicit same-source reassessment,
+  friendly-label exclusion, explicit same-source reassessment,
   and zero-provider-dispatch cases for starter-only, blank-origin edited, and
   40-79-character stub documents
 - `src/hooks/__evals__/job-intake-entry-points.mjs` pins the configuration
@@ -806,8 +814,9 @@ Good frontend verification covers:
   compact match explanations and gaps, and a relevant eligibility warning with
   its accepted anchors. It exposes no score, confidence, broad evidence ledger,
   recommendation, saved audit, or analytics metric
-- changing the selected resume dispatches only `mode: "fit-assessment"`; disabling
-  Fit Assessment sends no resume/context data. Resume and Cover Letter each use an
+- changing the selected resume dispatches only `mode: "fit-assessment"`; with
+  automatic assessment off, Prepare sends no resume/context data and only an
+  explicit Assess fit does. Resume and Cover Letter each use an
   independent automatic Polish switch and categorical minimum-fit threshold;
   `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
   Polish remains available for every fit state

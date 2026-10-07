@@ -216,9 +216,10 @@ font, size and wrapping changes still reflow the page normally.
   **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
   preference; when disabled, every bullet Polish rewrites arrives without bold
   while italic, underline, and Skills-list formatting remain untouched.
-- **Optional Fit Assessment automation** — Fit Assessment defaults on, while Resume
-  and Cover Letter automatic Polish remain separate, default-off decisions.
-  Manual Polish stays available for every outcome; see the
+- **Optional Fit Assessment automation** — Fit Assessment runs after Prepare by
+  default, while Resume and Cover Letter automatic Polish remain separate,
+  default-off decisions. With the automatic run off, **Assess fit** still runs it
+  on request, and manual Polish stays available for every outcome; see the
   [user contract](PRODUCT.md#fit-assessment-user-contract) for thresholds,
   eligibility, staleness, and Retry behavior.
 - **One typeset editing surface** — direct text editing, inline emphasis, undo/redo, keyboard caret movement, structural add/remove/reorder controls, per-section Polish/Include/Off scope, and proposal-field highlighting all operate on the exported page layout.

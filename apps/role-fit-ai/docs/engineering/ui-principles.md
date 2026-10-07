@@ -449,7 +449,8 @@ Never show:
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
-- Settings > Automation holds the compact Fit Assessment toggle and the two
+- Settings > Automation holds the automatic Fit Assessment toggle (it never
+  disables Assess fit or Reassess fit) and the two
   independent automatic Polish switch/minimum-fit pairs. It
   exposes categorical verdict cutoffs, not scores, confidence thresholds, or a
   master automation switch.

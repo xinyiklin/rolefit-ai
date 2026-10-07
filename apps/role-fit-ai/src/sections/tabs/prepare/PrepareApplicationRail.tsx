@@ -101,7 +101,6 @@ export function PrepareApplicationRail({
       completedAssessment.changes.length > 0
       || fitAssessment.activeRun
       || fitAssessment.lastError
-      || !fitAssessment.enabled
     )
   );
   const assessmentMeta = [
@@ -225,8 +224,6 @@ export function PrepareApplicationRail({
                 </p>
               ) : fitAssessment.lastError ? (
                 <p className="prepare-note is-warn" role="status">{fitAssessment.lastError.message}</p>
-              ) : !fitAssessment.enabled ? (
-                <p className="prepare-note is-info">Fit Assessment is off. The completed result is retained.</p>
               ) : null}
               {canAssessFit && !fitAssessment.activeRun ? (
                 <button className="ghost-button is-compact" type="button" onClick={onAssessFit} disabled={applicationActionsBusy}>
@@ -239,8 +236,15 @@ export function PrepareApplicationRail({
               <LoaderCircle className="spin" size={13} aria-hidden="true" />
               Assessing fit…
             </p>
-          ) : !fitAssessment.enabled ? (
-            <p>Off in Settings. You can continue directly to Polish.</p>
+          ) : !fitAssessmentMessage ? (
+            <>
+              <p>Not assessed yet.</p>
+              {canAssessFit ? (
+                <button className="ghost-button is-compact" type="button" onClick={onAssessFit} disabled={applicationActionsBusy}>
+                  Assess fit
+                </button>
+              ) : null}
+            </>
           ) : (
             <>
               <strong className="prepare-fit__empty">Assessment unavailable</strong>

@@ -251,7 +251,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Stop, source-input replacement, application restore, and component cleanup
   invalidate both the outer preparation and this resolver before adoption or
   Fit `running` can publish. Every terminal preparation path that entered Fit
-  `running` must settle it to ready, unavailable, or disabled. A
+  `running` must settle it to ready or unavailable. A
   tie or incomplete comparison returns no recommendation and keeps the current
   selection. Cover letters resolve independently after Prepare: wait for
   workspace startup, adopt the sole saved letter or a meaningful

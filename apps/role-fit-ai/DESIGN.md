@@ -445,8 +445,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
   Fit Assessment row follows the materials: show its verdict, short summary,
   compact run attribution, at most three matches and gaps, and an
-  eligibility warning only when relevant. A completed result offers **Reassess fit**; running, disabled,
-  unavailable/retry, and out-of-date/reassess states use the same flat hierarchy.
+  eligibility warning only when relevant. A completed result offers **Reassess fit**; running, not-yet-assessed
+  (**Assess fit**), unavailable/retry, and out-of-date/reassess states use the
+  same flat hierarchy.
   Starting or failing a new assessment keeps the latest completion visible, and
   an out-of-date result stays visible only as a **Previous preparation** with
   its timestamp plus one compact, hairline-separated **Changed since assessment**

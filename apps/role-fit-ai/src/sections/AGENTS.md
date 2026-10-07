@@ -102,7 +102,7 @@ and `docs/engineering/ui-principles.md`.
   short summary, up to three matches and gaps, and a relevant
   eligibility warning. When out of date, retain those facts only as a clearly
   labeled previous assessment and add one flat Changed since assessment list
-  before Reassess fit. Running, disabled, and retryable-unavailable states stay
+  before Reassess fit. Running, not-yet-assessed, and retryable-unavailable states stay
   flat and never block manual Polish.
   Preparation is one of those checks, so its progress line appears only while
   work is in flight or a status message is outstanding, never as a standing

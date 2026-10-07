@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { flattenResumeTargets } from "../../../shared/resumePolishContract.ts";
 import { sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 import { fixtures, evalOptions, evaluateCase, JUDGE, summaryRow } from "./resume-proposal-quality-eval.mjs";
-import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, hasTerm, plain, tenseFlip, validateFactCheck } from "./support/resume-proposal-quality.mjs";
+import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, hasTerm, opportunityMetOnlyByChurn, plain, tenseFlip, validateFactCheck } from "./support/resume-proposal-quality.mjs";
 
 const byName = new Map(fixtures.map((fixture) => [fixture.name, fixture]));
 assert.equal(fixtures.length, 39);
@@ -25,9 +25,12 @@ const opportunityCases = fixtures.filter((fixture) => fixture.provenance.startsW
 assert.equal(opportunityCases.length, 5);
 assert.deepEqual(fixtures.filter((fixture) => fixture.gateOpportunity).map((fixture) => fixture.name).sort(), opportunityCases.map((fixture) => fixture.name).sort(), "exactly the opportunity cases gate on their named targets");
 for (const fixture of opportunityCases) {
-  const { shouldTouch = [], shouldReorder = [], shouldAdd = [], shouldRemove = [] } = fixture.opportunities;
+  const { shouldTouch = [], shouldReorder = [], shouldAdd = [], shouldRemove = [], addTerms = {}, leadBullet = {} } = fixture.opportunities;
   assert.equal(fixture.requiresProposal, true, `${fixture.name}: requires a proposal`);
   assert.ok(shouldTouch.length + shouldReorder.length + shouldAdd.length + shouldRemove.length > 0, `${fixture.name}: names an opportunity`);
+  // A gated addition or reorder names its outcome, so an unrelated edit to the entry cannot pass it.
+  for (const id of shouldAdd) assert.ok(addTerms[id]?.length, `${fixture.name}: shouldAdd ${id} names its planted fact`);
+  for (const id of shouldReorder) assert.ok(leadBullet[id], `${fixture.name}: shouldReorder ${id} names the bullet that should lead`);
 }
 assert.equal(fixtures.filter((fixture) => fixture.requiresProposal).length, 8, "eight cases fail an always-NO_CHANGES generator");
 assert.deepEqual(
@@ -37,7 +40,7 @@ assert.deepEqual(
 );
 const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal", "gateOpportunity"]);
 const TRAP_KEYS = new Set(["jdOnly", "perEntryForbidden", "lowOwnershipBullets", "mustKeepBullets", "numericForbidden", "injectionMarkers"]);
-const OPPORTUNITY_KEYS = new Set(["shouldTouch", "shouldReorder", "fillerBullets", "shouldAdd", "shouldRemove", "expectFewEdits", "adviceFromProfile"]);
+const OPPORTUNITY_KEYS = new Set(["shouldTouch", "shouldReorder", "fillerBullets", "shouldAdd", "shouldRemove", "expectFewEdits", "adviceFromProfile", "addTerms", "leadBullet"]);
 // Terms an entry mentions only as denied, someone else's work, or the row's own label.
 const NEGATIVE_EVIDENCE = new Set([
   "analyst-negative-evidence:bloom:Python",
@@ -76,6 +79,16 @@ for (const fixture of fixtures) {
   }
   for (const id of opportunities.shouldReorder ?? []) assert.ok(targets.some((target) => target.kind === "bullet-order" && target.target.entryId === id), `${where}: shouldReorder ${id}`);
   for (const id of opportunities.shouldAdd ?? []) assert.ok(targets.some((target) => target.kind === "new-bullet" && target.target.entryId === id), `${where}: shouldAdd ${id}`);
+  for (const [entryId, terms] of Object.entries(opportunities.addTerms ?? {})) {
+    const entry = index.entries.get(entryId);
+    assert.ok(opportunities.shouldAdd?.includes(entryId) && entry, `${where}: addTerms ${entryId} is a shouldAdd entry`);
+    for (const term of terms) assert.ok(hasTerm(entry.profile, term) && !hasTerm(entry.text, term), `${where}: ${term} is a Profile fact missing from ${entryId}`);
+  }
+  for (const [entryId, bulletId] of Object.entries(opportunities.leadBullet ?? {})) {
+    const order = targets.find((target) => target.kind === "bullet-order" && target.target.entryId === entryId);
+    const leadTarget = targets.find((target) => target.kind === "bullet" && target.target.bulletId === bulletId);
+    assert.ok(opportunities.shouldReorder?.includes(entryId) && order && leadTarget && order.bulletTargetIds.indexOf(leadTarget.targetId) > 0, `${where}: leadBullet ${bulletId} is a buried bullet of ${entryId}`);
+  }
   if (opportunities.adviceFromProfile) {
     assert.match(fixture.candidateContext, new RegExp(`^#{1,6} ${opportunities.adviceFromProfile}`, "m"), `${where}: adviceFromProfile heading`);
     assert.ok([...index.entries.values()].every((entry) => !entry.profile.includes(opportunities.adviceFromProfile)), `${where}: adviceFromProfile block is linked`);
@@ -144,17 +157,46 @@ for (const name of ["buried-strength-order", "duplicate-achievement", "profile-f
   assert.ok(types("buried-strength-order", [harmless]).includes("missedOpportunity"), "an edit to an unrelated bullet misses the planted opportunity");
   const pinecone = buriedTargets.find((target) => target.kind === "bullet-order" && target.target.entryId === "pinecone");
   const reordered = gradeProposal(buried, proposal([{ targetId: pinecone.targetId, target: wireTarget(pinecone.target), order: [...pinecone.bulletTargetIds].reverse() }]));
-  assert.ok(!reordered.hits.some((hit) => hit.type === "missedOpportunity"), "a reorder of the named entry satisfies the opportunity");
+  assert.ok(!reordered.hits.some((hit) => hit.type === "missedOpportunity"), "a reorder that leads with the buried strength satisfies the opportunity");
   assert.equal(reordered.opportunities.reordered, 1);
+  const [routineA, routineB, strength] = pinecone.bulletTargetIds;
+  const shuffled = gradeProposal(buried, proposal([{ targetId: pinecone.targetId, target: wireTarget(pinecone.target), order: [routineB, routineA, strength] }]));
+  assert.ok(shuffled.hits.some((hit) => hit.type === "missedOpportunity"), "a reorder that leaves the strength last misses the opportunity");
+  assert.equal(shuffled.opportunities.reordered, 0);
   const missing = byName.get("profile-fact-missing");
   const slot = flattenResumeTargets(fixtureIndex(missing).scope, missing.candidateContext).find((target) => target.kind === "new-bullet" && target.target.entryId === "saltmarsh");
   const added = gradeProposal(missing, proposal([{ targetId: slot.targetId, target: wireTarget(slot.target), replacement: "Carried the on-call rotation for the service." }]));
-  assert.ok(!added.hits.some((hit) => hit.type === "missedOpportunity"), "an addition to the named entry satisfies the opportunity");
+  assert.ok(!added.hits.some((hit) => hit.type === "missedOpportunity"), "an addition carrying the planted fact satisfies the opportunity");
+  assert.equal(added.opportunities.added, 1);
+  const unrelatedAddition = gradeProposal(missing, proposal([{ targetId: slot.targetId, target: wireTarget(slot.target), replacement: "Wrote Go unit tests for the quoting service." }]));
+  assert.ok(unrelatedAddition.hits.some((hit) => hit.type === "missedOpportunity"), "an addition without the planted fact misses the opportunity");
+  assert.equal(unrelatedAddition.opportunities.added, 0);
   assert.equal(gradeProposal(byName.get("aligned-data"), proposal([safeFor("aligned-data")])).hits.some((hit) => hit.type === "missedOpportunity"), false, "a control case never reports a missed opportunity");
   const filler = buriedTargets.find((target) => target.target.bulletId === "pinecone-b2");
   assert.ok(!types("buried-strength-order", [{ targetId: filler.targetId, target: wireTarget(filler.target), replacement: plain(filler.currentText) }]).includes("missedOpportunity"), "sharpening a named filler bullet satisfies the opportunity");
   const existing = flattenResumeTargets(fixtureIndex(missing).scope, missing.candidateContext).find((target) => target.target.bulletId === "saltmarsh-b1");
-  assert.ok(!gradeProposal(missing, proposal([{ targetId: existing.targetId, target: wireTarget(existing.target), replacement: plain(existing.currentText) }])).hits.some((hit) => hit.type === "missedOpportunity"), "rewriting a bullet of the entry that should gain the fact is a legitimate alternative");
+  const rewrite = (replacement) => gradeProposal(missing, proposal([{ targetId: existing.targetId, target: wireTarget(existing.target), replacement }])).hits.some((hit) => hit.type === "missedOpportunity");
+  assert.equal(rewrite("Build Go services that price insurance quotes for small businesses and take the weekly on-call rotation for them."), false, "a rewrite that carries the planted fact is a legitimate alternative");
+  assert.equal(rewrite("Build Go services to price insurance quotes for small businesses."), true, "a rewrite of the entry that never surfaces the fact misses the opportunity");
+  assert.equal(rewrite("Build Go services that price insurance quotes for small businesses and share the weekly on call rotation."), false, "a hyphen or space spells the same planted fact");
+}
+// A gated opportunity met only by rewrites needs a material fact-check label.
+{
+  const labels = (edits, material) => ({ status: "checked", edits: edits.map(({ n }) => ({ n, supported: true, material, unsupportedClaim: "" })), unsupported: 0, immaterial: material ? 0 : edits.length });
+  const churn = (name, changes, material) => {
+    const fixture = byName.get(name);
+    const result = proposal(changes);
+    const edits = factCheckEdits(fixture, result);
+    return opportunityMetOnlyByChurn(fixture, gradeProposal(fixture, result), edits, labels(edits, material));
+  };
+  const swap = change("feature-tour-contribution", "tallyho-b1", "TallyHo helps groups split expenses, settle debts, and export summaries, with support for multiple currencies and recurring bills.");
+  assert.equal(churn("feature-tour-contribution", [swap], false), true, "a synonym swap of a named bullet misses the opportunity once the fact-check calls it immaterial");
+  assert.equal(churn("feature-tour-contribution", [swap], true), false, "a material rewrite of a named bullet meets it");
+  const duplicate = byName.get("duplicate-achievement");
+  const duplicateTarget = flattenResumeTargets(fixtureIndex(duplicate).scope, duplicate.candidateContext).find((target) => target.target.bulletId === "marlow-b2");
+  const removal = { targetId: duplicateTarget.targetId, target: wireTarget(duplicateTarget.target), action: "remove", reason: "Repeats the checkout win." };
+  assert.equal(churn("duplicate-achievement", [removal, change("duplicate-achievement", "marlow-b4", "Took part in code reviews and daily standups.")], false), false, "a planted removal meets the opportunity whatever the rewrites are labeled");
+  assert.equal(churn("backend-platform", [safe], false), false, "ungated cases never fail on materiality");
 }
 assert.ok(types("backend-platform", [change("backend-platform", "harbor-b2", "Built Kubernetes services.")]).includes("jdOnly"));
 assert.ok(types("frontend-attribution", [change("frontend-attribution", "orbit-b1", "Built React forms.")]).includes("attribution"));

@@ -62,10 +62,8 @@ import {
   dispatchFitAssessment,
   emptyFitAssessmentState,
   failFitAssessmentRun,
-  fitAssessmentCanRun,
   fitAssessmentProvenanceChanges,
   restoredFitAssessmentState,
-  setFitAssessmentEnabled,
   type PreparedFitAssessmentJob
 } from "../lib/fitAssessmentLifecycle.ts";
 
@@ -265,7 +263,7 @@ export function useJobIntake({
   const [jobAnalysisProgress, setJobAnalysisProgress] = useState<StageState>({ status: "idle" });
   const [jobAnalysisProgressVisible, setJobAnalysisProgressVisible] = useState(false);
   const [fitAssessmentState, setFitAssessmentState] = useState<FitAssessmentState>(
-    () => emptyFitAssessmentState(fitAssessmentAuto)
+    () => emptyFitAssessmentState()
   );
   // Which job analysis action the card's Retry should re-run (link, paste, or a
   // reanalyze of an extension import). Stored as a tag, not a captured closure,
@@ -413,7 +411,7 @@ export function useJobIntake({
     setJobAnalysisProgress({ status: "idle" });
     setJobAnalysisProgressVisible(false);
     setJobAnalysisRetrySource(null);
-    setFitAssessmentState(restoredFitAssessmentState(fitAssessmentAuto, prepareRunId, snapshot));
+    setFitAssessmentState(restoredFitAssessmentState(prepareRunId, snapshot));
   }
 
   useEffect(() => {
@@ -425,6 +423,9 @@ export function useJobIntake({
     jobAnalysisGenerationRef.current += 1;
     jobAnalysisAbortRef.current.abort();
     jobAnalysisAbortRef.current = null;
+    // Prepare awaits its separately dispatched Fit; abort it too so the intake lock releases.
+    fitAssessmentAbortRef.current?.abort();
+    fitAssessmentAbortRef.current = null;
     setJobAnalysisProgress({
       status: "stopped",
       errorHeadline: "Inputs changed",
@@ -442,16 +443,6 @@ export function useJobIntake({
     fitAssessmentAbortRef.current?.abort();
     fitAssessmentAbortRef.current = null;
   }, []);
-
-  useEffect(() => {
-    if (fitAssessmentAuto) {
-      setFitAssessmentState((current) => setFitAssessmentEnabled(current, true));
-      return;
-    }
-    fitAssessmentAbortRef.current?.abort();
-    fitAssessmentAbortRef.current = null;
-    setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
-  }, [fitAssessmentAuto]);
 
   function claimJobAnalysisRun(): () => void {
     jobAnalysisBusyRef.current = true;
@@ -474,10 +465,10 @@ export function useJobIntake({
     return claimJobAnalysisRun();
   }
 
-  // Resolve the prepared resume for THIS preparation, then turn it into an
-  // Fit Assessment request when the check is enabled. Resolution is unconditional:
-  // turning Fit Assessment off must not stop the workflow from loading the resume
-  // this application will be tailored from.
+  // Resolve the prepared resume for THIS preparation, then turn it into a
+  // Fit Assessment request when automatic assessment is on. Resolution is
+  // unconditional: with it off, the workflow still loads the resume this
+  // application will be tailored from, and Assess fit stays available.
   async function prepareResumeAndFitAssessment(
     localJobText: string,
     request: PreparedJobAnalysisRequest,
@@ -489,7 +480,7 @@ export function useJobIntake({
     });
     if (!request.isCurrent()) return null;
     if (!fitAssessmentAuto) {
-      setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
+      setFitAssessmentState((current) => ({ ...current, lastError: null }));
       return { selection, fitRequest: null, fitRunId: null };
     }
     // Assessment stays available even here: this preparation is real, and the
@@ -532,7 +523,6 @@ export function useJobIntake({
     status: "too-short" | "failed" | "stopped" | "inputs-changed";
     fitRequest?: FitAssessmentRequest | null;
   }) {
-    if (!fitAssessmentAuto) return;
     const message = status === "stopped"
       ? "Fit Assessment stopped with Job analysis. Prepare again or retry the assessment."
       : status === "inputs-changed"
@@ -570,10 +560,6 @@ export function useJobIntake({
     automationEligible?: boolean;
     unavailableMessage?: string;
   }) {
-    if (!fitAssessmentAuto) {
-      setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
-      return;
-    }
     if (!fitRequest) return;
     if (outcome) {
       setFitAssessmentState((current) => {
@@ -622,10 +608,6 @@ export function useJobIntake({
       aiRequest?: AiRequestFields;
     } = {}
   ) {
-    if (!fitAssessmentAuto) {
-      setFitAssessmentState((current) => setFitAssessmentEnabled(current, false));
-      return;
-    }
     fitAssessmentAbortRef.current?.abort();
     const controller = new AbortController();
     fitAssessmentAbortRef.current = controller;
@@ -716,7 +698,7 @@ export function useJobIntake({
 
   async function reassessFit() {
     const committed = committedPreparationRef.current;
-    if (!fitAssessmentAuto || !committed || jobAnalysisBusyRef.current || fitAssessmentState.activeRun) return;
+    if (!committed || jobAnalysisBusyRef.current || fitAssessmentState.activeRun) return;
     await dispatchFitAssessment({
       preparedJob: committed.preparedJob,
       currentResume,
@@ -1292,12 +1274,10 @@ export function useJobIntake({
       note: "Raw description retained for duplicate review",
       noteTone: "info"
     });
-    if (fitAssessmentAuto) {
-      setFitAssessmentState((current) => failFitAssessmentRun(current, null, {
-        resumeLabel: "",
-        message: "Fit Assessment did not run because duplicate review stopped Prepare."
-      }));
-    }
+    setFitAssessmentState((current) => failFitAssessmentRun(current, null, {
+      resumeLabel: "",
+      message: "Duplicate review stopped Prepare. Prepare again to assess fit."
+    }));
   }
 
   // Retry an extension-import analysis by re-running provider-backed AI job analysis
@@ -1509,10 +1489,7 @@ export function useJobIntake({
     reassessFit,
     // Assessment is offered whenever a prepared posting exists, even when no
     // resume resolved and the unavailable state therefore has no label.
-    canAssessFit: fitAssessmentCanRun(
-      fitAssessmentAuto,
-      committedPreparation?.preparedJob ?? null
-    ) && !jobAnalysisBusyRef.current && !preparationDraftDiverged && fitAssessmentState.activeRun === null,
+    canAssessFit: committedPreparation !== null && !jobAnalysisBusyRef.current && !preparationDraftDiverged && fitAssessmentState.activeRun === null,
     preparationDraftDiverged,
     assessFitForResume,
     localPreparedPreview,

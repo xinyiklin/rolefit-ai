@@ -11,13 +11,20 @@ export type CoverLetterJudgeDimension = (typeof COVER_LETTER_JUDGE_DIMENSIONS)[n
 
 export type CoverLetterJudgment = Record<CoverLetterJudgeDimension, number | null> & {
   overall: number | null;
-  unsupportedSentences: string[];
+  // Null when the judge returned no list: an unknown count, never zero.
+  unsupportedSentences: string[] | null;
   notes: string;
 };
 
 const MAX_SENTENCES = 12;
 const MAX_SENTENCE_LENGTH = 400;
 const MAX_NOTES_LENGTH = 600;
+
+// Section and entry carry the employer, title, and dates a bullet's text omits,
+// so attribution can be judged.
+// One line per item, so a newline inside a field cannot fake another item.
+const evidenceLine = (item: CoverLetterEvidenceItem) =>
+  `[${item.id}] (${[item.source, item.section, item.entry].filter(Boolean).join(" · ")}) ${item.text}`.replace(/\s+/g, " ");
 
 // The judge sees no provider or prompt identity: only the letter, its sources,
 // the posting, and the base letter it was written from.
@@ -56,7 +63,7 @@ ${fenceUntrusted(jobText)}
 </job_description>
 
 <evidence>
-${fenceUntrusted(evidence.map((item) => `[${item.id}] (${item.source}) ${item.text}`).join("\n"))}
+${fenceUntrusted(evidence.map(evidenceLine).join("\n"))}
 </evidence>
 
 <base_letter>
@@ -78,12 +85,15 @@ const score = (value: unknown): number | null => {
 // empty rather than a thrown error, so one odd reply never aborts a run.
 export function parseCoverLetterJudgment(raw: unknown): CoverLetterJudgment {
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw as Record<string, unknown> : {};
-  const sentences = Array.isArray(source.unsupportedSentences)
-    ? source.unsupportedSentences
+  const listed = Array.isArray(source.unsupportedSentences) ? source.unsupportedSentences : null;
+  const readable = listed
+    ? listed
       .filter((item): item is string => typeof item === "string" && item.trim().length > 0)
       .map((item) => item.replace(/\s+/g, " ").trim().slice(0, MAX_SENTENCE_LENGTH))
       .slice(0, MAX_SENTENCES)
-    : [];
+    : null;
+  // A non-empty list with no readable sentence is unknown, not zero.
+  const sentences = listed?.length && !readable?.length ? null : readable;
   return {
     support: score(source.support),
     relevance: score(source.relevance),
@@ -94,6 +104,13 @@ export function parseCoverLetterJudgment(raw: unknown): CoverLetterJudgment {
     unsupportedSentences: sentences,
     notes: typeof source.notes === "string" ? source.notes.replace(/\s+/g, " ").trim().slice(0, MAX_NOTES_LENGTH) : ""
   };
+}
+
+// The row's unsupported-sentence count across a panel: the highest count, or
+// unknown when no judge answered or any answer lacked a readable list.
+export function panelUnsupportedSentenceCount(judgments: Array<{ judgment?: CoverLetterJudgment }>): number | null {
+  const counts = judgments.flatMap((item) => item.judgment ? [item.judgment.unsupportedSentences?.length ?? null] : []);
+  return counts.length && counts.every((count) => count !== null) ? Math.max(...(counts as number[])) : null;
 }
 
 // The recorded judge decision: never GPT-6 Sol as a judge; the Astra and Opus

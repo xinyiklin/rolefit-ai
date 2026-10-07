@@ -145,6 +145,45 @@ check("a suggested or typical length beside the real limit is advisory", () => {
   const suggested = extractAnswerConstraints("Up to 500 words (we suggest 200-300 words).");
   assert.equal(validateAnswerConstraints(Array.from({ length: 400 }, () => "word").join(" "), suggested).compliant, true, "a 400-word answer meets the stated 500-word limit");
 });
+check("a worded maximum in one unit never demotes an instructed count in another", () => {
+  const hardUnits = (text) => extractAnswerConstraints(text).filter((item) => item.hard).map((item) => `${item.unit}:${item.max}`).sort();
+  for (const [text, limits] of [
+    ["Answer in 3 sentences. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["Maximum 500 characters. Please keep it to 3 sentences.", ["characters:500", "sentences:3"]],
+    ["Use 3 sentences. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["Your answer should be 3 sentences. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["Limit your answer to 150 words. Maximum 1,000 characters.", ["characters:1000", "words:150"]],
+    ["Respond with 3 sentences. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["In 200 words or so, tell us why you're interested. Max 1,500 characters.", ["characters:1500"]],
+    ["Maximum 2,000 characters. Feel free to answer in 150 words.", ["characters:2000"]],
+    ["Maximum 2,000 characters. You can answer in 150 words if you can.", ["characters:2000"]],
+    ["Maximum 500 characters. Answer in 3 sentences, ideally.", ["characters:500"]],
+    ["Maximum 1,500 characters. Many candidates answer in 200 words.", ["characters:1500"]],
+    ["Limit 2,000 characters. A good answer would be 250 words.", ["characters:2000"]],
+    ["Why us? Answer in 3 sentences. What would you build? Maximum 1,000 characters.", ["characters:1000"]],
+    ["Why us? Why now? Answer in 3 sentences. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["In 3 sentences: what did you build? What changed? Max 500 characters.", ["characters:500", "sentences:3"]],
+    ["Answer in 3 sentences. Why us? Why now? Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["Maximum 500 characters. Why us? Why now? Answer in 3 sentences.", ["characters:500", "sentences:3"]],
+    ["Maximum 2,000 characters. Answer in 150 words, which is usually enough.", ["characters:2000"]],
+    ["Maximum 2,000 characters. Answer in 150 words, but there is no penalty for going over.", ["characters:2000"]],
+    ["Answer in 3 sentences. Be specific enough to show your role. Maximum 500 characters.", ["characters:500", "sentences:3"]],
+    ["Maximum 1,500 characters. You don't have to answer in 200 words.", ["characters:1500"]],
+    ["Maximum 1,500 characters. Responses in 3 sentences work well.", ["characters:1500"]],
+    ["In 150 words, describe a project you led. Maximum 1,000 characters.", ["characters:1000", "words:150"]],
+    ["Limit 2,000 characters. A 250-word answer works.", ["characters:2000"]],
+    ["Answer in 200 words. Maximum 250 words.", ["words:250"]]
+  ]) assert.deepEqual(hardUnits(text), limits, text);
+  // Content wording after a comma never softens a length instruction.
+  for (const text of ["Describe a challenge in 150 words, preferably from a recent role.", "Tell us about a project in 3 sentences, ideally one where you led the work.", "Answer in 150 words, usually about a single project.", "Answer in 150 words if you can't attend the interview in person.", "Answer in 150 words about your preferable start date."]) {
+    assert.equal(extractAnswerConstraints(text).every((item) => item.hard), true, text);
+  }
+  for (const text of ["Answer in 3 sentences, ideally.", "Answer in 150 words if possible.", "Write 150 words or so on your motivation."]) {
+    assert.equal(extractAnswerConstraints(text).some((item) => item.hard), false, text);
+  }
+  const fourSentences = "I led it. I shipped it. I measured it. I kept it.";
+  assert.equal(validateAnswerConstraints(fourSentences, extractAnswerConstraints("Answer in 3 sentences. Maximum 500 characters.")).compliant, false, "four short sentences break a three-sentence limit under a character cap");
+});
 check("an inverted range never produces a constraint with min above max", () => assert.ok(extractAnswerConstraints("75 to 50 words").every((c) => c.min === undefined || c.max === undefined || c.min <= c.max)));
 check("penalty ceiling agrees with a stated range", () => { const c = extractAnswerConstraints("We read 100–250 words; anything over 250 words may be truncated."); assert.equal(c.length, 2); assert.equal(c[1].max, 250); assert.equal(validateAnswerConstraints(Array.from({ length: 200 }, () => "word").join(" "), c).compliant, true); });
 check("bracketed placeholders are unfinished prose", () => { for (const text of ["Join [Company Name] soon.", "Raised [X%] revenue.", "Add {{metric}} here.", "[add: team size]"]) assert.equal(hasUnresolvedAnswerPlaceholder(text), true, text); for (const text of ["Plain prose, no slots.", "Shipped in [2023] with a 12% lift.", "They wrote 'recieve' [sic] in the brief.", "Names are [redacted] here.", "I indexed arr[i] in a loop.", "See note [1].", "Led the team [2023–2024]."]) assert.equal(hasUnresolvedAnswerPlaceholder(text), false, text); });
