@@ -621,8 +621,20 @@ const sharedCommitOrder = [
   await runPaste(harness);
   assert.equal(harness.log.filter(({ event }) => event === "resolvePreparedResume").length, 1);
   const request = harness.requests.find(({ url }) => url === "/api/job-analysis");
-  assert.equal(request.payload.fitAssessment, undefined, "disabled Fit Assessment sends no resume payload");
-  assert.equal(harness.state[5].enabled, false);
+  assert.equal(request.payload.fitAssessment, undefined, "automatic Fit Assessment off sends no resume payload");
+  const fitRequests = () => harness.requests.filter(({ payload }) => payload.mode === "fit-assessment");
+  assert.equal(fitRequests().length, 0, "Prepare makes no Fit request while automatic assessment is off");
+  assert.equal(harness.state[5].activeRun, null);
+  assert.equal(harness.state[5].lastError, null, "an unassessed preparation is not reported as a failure");
+  assert.equal(harness.render().canAssessFit, true, "Assess fit stays available while automatic assessment is off");
+  await harness.render().reassessFit();
+  assert.equal(fitRequests().length, 1, "an explicit assessment makes exactly one Fit request");
+  assert.equal(harness.state[5].latestCompleted?.snapshot.result.verdict, VALID_FIT.verdict);
+  assert.equal(
+    harness.state[5].latestCompleted?.automationToken,
+    undefined,
+    "a requested assessment never authorizes automatic Polish"
+  );
 }
 
 {

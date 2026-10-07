@@ -24,19 +24,11 @@ export type FitAssessmentPersistenceDecision =
   | { action: "preserve" }
   | { action: "clear" };
 
-export function fitAssessmentCanRun(
-  fitAssessmentAuto: boolean,
-  preparedJob: PreparedFitAssessmentJob | null
-): boolean {
-  return fitAssessmentAuto && preparedJob !== null;
-}
-
 export function fitAssessmentMayTriggerAutoPolish(
   state: FitAssessmentState
 ): FitAssessmentCompleted & { provenance: FitAssessmentProvenance; automationToken: string } | null {
   const completed = state.latestCompleted;
-  return state.enabled
-    && completed?.snapshot.result.status !== "INSUFFICIENT_JOB_INFORMATION"
+  return completed?.snapshot.result.status !== "INSUFFICIENT_JOB_INFORMATION"
     && completed?.origin === "current"
     && !completed.previousPreparation
     && completed.changes.length === 0
@@ -67,14 +59,12 @@ export function fitAssessmentPersistenceDecision(
 }
 
 export function emptyFitAssessmentState(
-  enabled: boolean,
   message = "Prepare a job to run Fit Assessment."
 ): FitAssessmentState {
   return {
-    enabled,
     latestCompleted: null,
     activeRun: null,
-    lastError: enabled ? { resumeLabel: "", message } : null
+    lastError: { resumeLabel: "", message }
   };
 }
 
@@ -84,7 +74,6 @@ export function beginFitAssessmentRun(
 ): FitAssessmentState {
   return {
     ...state,
-    enabled: true,
     activeRun,
     lastError: null
   };
@@ -124,21 +113,6 @@ export function failFitAssessmentRun(
   };
 }
 
-export function setFitAssessmentEnabled(
-  state: FitAssessmentState,
-  enabled: boolean,
-  message = "Prepare the current posting to run Fit Assessment."
-): FitAssessmentState {
-  return {
-    ...state,
-    enabled,
-    activeRun: null,
-    lastError: enabled && !state.latestCompleted
-      ? { resumeLabel: "", message }
-      : null
-  };
-}
-
 export function consumeFitAssessmentAutomationToken(
   state: FitAssessmentState,
   token: string
@@ -149,12 +123,10 @@ export function consumeFitAssessmentAutomationToken(
 }
 
 export function restoredFitAssessmentState(
-  fitAssessmentAuto: boolean,
   prepareRunId: string,
   snapshot?: FitAssessmentSnapshot
 ): FitAssessmentState {
   return {
-    enabled: fitAssessmentAuto,
     latestCompleted: snapshot
       ? {
           snapshot,
@@ -165,12 +137,7 @@ export function restoredFitAssessmentState(
         }
       : null,
     activeRun: null,
-    lastError: fitAssessmentAuto && !snapshot
-      ? {
-          resumeLabel: "",
-          message: "No Fit Assessment is saved for this preparation. Run it against the restored resume."
-        }
-      : null
+    lastError: null
   };
 }
 

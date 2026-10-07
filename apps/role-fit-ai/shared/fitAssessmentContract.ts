@@ -110,10 +110,9 @@ export type FitAssessmentCompleted = {
 };
 
 // Durable completion and transient request state are deliberately independent.
-// Beginning, failing, disabling, or cancelling a new request must never erase
-// the last completed assessment.
+// Beginning, failing, or cancelling a new request must never erase the last
+// completed assessment.
 export type FitAssessmentState = {
-  enabled: boolean;
   latestCompleted: FitAssessmentCompleted | null;
   activeRun: FitAssessmentActiveRun | null;
   lastError: { resumeLabel: string; message: string } | null;

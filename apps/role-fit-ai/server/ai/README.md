@@ -22,11 +22,11 @@ source is `FIT_ASSESSMENT_RULES` in [`fitAssessment.ts`](fitAssessment.ts).
 
 ### Prompt and provider paths
 
-When Fit Assessment is enabled and a selected resume is usable, the normal Job
-analysis dispatch requests an independent `fitAssessment` subsection. The
-**Reassess fit** action uses `mode: "fit-assessment"` on the same
+When automatic Fit Assessment is on and a selected resume is usable, the normal
+Job analysis dispatch requests an independent `fitAssessment` subsection. The
+**Assess fit** and **Reassess fit** actions use `mode: "fit-assessment"` on the same
 `/api/job-analysis` route and the same exported system-level rules block, but
-does not repeat Job analysis. When evidence genuinely falls between
+do not repeat Job analysis. When evidence genuinely falls between
 adjacent categories, the rules choose the lower category unless candidate evidence
 meets the higher category's definition. Stretch may rely on meaningful transferable
 core evidence; generic skills or interest alone are insufficient. Transferable evidence may inform the verdict but

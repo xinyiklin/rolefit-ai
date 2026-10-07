@@ -408,8 +408,9 @@ Good server verification covers:
 - the Job analysis rename contract must keep current code and docs free of the
   retired term except for explicit rejection probes and intentional historical
   release/continuity records
-- compact Fit Assessment probes must prove that disabling it omits resume/context
-  data entirely, enabled Prepare requests Job analysis plus fit in one prompt,
+- compact Fit Assessment probes must prove that Prepare with automatic assessment
+  off omits resume/context data entirely, automatic Prepare requests Job
+  analysis plus fit in one prompt,
   invalid fit preserves valid job fields, the prompt contains the direct rubric
   as one identical system-level block in combined and reassessment paths, includes
   the conservative lower-category and stable posting-order tie breaks, unlocated
@@ -726,7 +727,7 @@ Good frontend verification covers:
 - `src/hooks/__evals__/fit-assessment-lifecycle.mjs` executes combined-request and
   reassessment provenance, canonical source replacement, displayed-brief independence,
   cleared-resume invalidation, provider/model/reasoning identity invalidation,
-  friendly-label exclusion, setting-toggle restoration, explicit same-source reassessment,
+  friendly-label exclusion, explicit same-source reassessment,
   and zero-provider-dispatch cases for starter-only, blank-origin edited, and
   40-79-character stub documents
 - `src/hooks/__evals__/job-intake-entry-points.mjs` pins the configuration
@@ -806,8 +807,9 @@ Good frontend verification covers:
   compact match explanations and gaps, and a relevant eligibility warning with
   its accepted anchors. It exposes no score, confidence, broad evidence ledger,
   recommendation, saved audit, or analytics metric
-- changing the selected resume dispatches only `mode: "fit-assessment"`; disabling
-  Fit Assessment sends no resume/context data. Resume and Cover Letter each use an
+- changing the selected resume dispatches only `mode: "fit-assessment"`; with
+  automatic assessment off, Prepare sends no resume/context data and only an
+  explicit Assess fit does. Resume and Cover Letter each use an
   independent automatic Polish switch and categorical minimum-fit threshold;
   `CHECK` remains eligible and only `BLOCKED` stops a threshold match. Manual
   Polish remains available for every fit state

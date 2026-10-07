@@ -26,9 +26,7 @@ const {
   fitAssessmentProvenanceChanges,
   fitAssessmentProvenanceIsStale,
   fitAssessmentRequestFingerprint,
-  fitAssessmentCanRun,
-  restoredFitAssessmentState,
-  setFitAssessmentEnabled
+  restoredFitAssessmentState
 } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
@@ -139,12 +137,6 @@ assert.equal(
 );
 
 const preparedJob = { localJobText: finalPreparedBrief, screeningJobText: rawPosting };
-assert.equal(fitAssessmentCanRun(false, preparedJob), false);
-assert.equal(
-  fitAssessmentCanRun(true, preparedJob),
-  true,
-  "re-enabling Fit Assessment restores Retry from the retained prepared-job receipt"
-);
 
 const savedSnapshot = {
   result: {
@@ -161,7 +153,7 @@ const savedSnapshot = {
   assessedAt: "2026-08-09T12:00:00.000Z"
 };
 const readyProvenance = createFitAssessmentProvenance(rawPosting, request, aiRequest);
-const prepareRunning = beginFitAssessmentRun(emptyFitAssessmentState(true), {
+const prepareRunning = beginFitAssessmentRun(emptyFitAssessmentState(), {
   id: "fit-prepare-1",
   kind: "prepare",
   resumeLabel: "Backend",
@@ -178,7 +170,6 @@ assert.equal(
   "the first Fit Assessment completed by Prepare may trigger automatic Polish"
 );
 for (const staleState of [
-  { ...prepareReady, enabled: false },
   {
     ...prepareReady,
     latestCompleted: { ...prepareReady.latestCompleted, changes: ["resume"] }
@@ -191,7 +182,7 @@ for (const staleState of [
   assert.equal(
     fitAssessmentMayTriggerAutoPolish(staleState),
     null,
-    "disabled, changed, and previous-preparation assessments cannot authorize automatic Polish"
+    "changed and previous-preparation assessments cannot authorize automatic Polish"
   );
 }
 const reassessing = beginFitAssessmentRun(prepareReady, {
@@ -245,7 +236,7 @@ assert.equal(
   "a completed assessment from another preparation is never persisted onto the new application"
 );
 assert.deepEqual(
-  fitAssessmentPersistenceDecision(emptyFitAssessmentState(true)),
+  fitAssessmentPersistenceDecision(emptyFitAssessmentState()),
   { action: "preserve" },
   "Apply preserves a saved assessment when this session has made no assessment decision"
 );
@@ -282,14 +273,8 @@ assert.equal(
   null,
   "a Prepare automation token is single-use"
 );
-const disabledWithHistory = setFitAssessmentEnabled(prepareReady, false);
 assert.equal(
-  fitAssessmentLatestSnapshot(disabledWithHistory),
-  savedSnapshot,
-  "turning Fit Assessment off retains the last completed snapshot"
-);
-assert.equal(
-  fitAssessmentLatestSnapshot(beginFitAssessmentRun(emptyFitAssessmentState(true), {
+  fitAssessmentLatestSnapshot(beginFitAssessmentRun(emptyFitAssessmentState(), {
     id: "fit-empty",
     kind: "reassess",
     resumeLabel: "Backend"
@@ -298,9 +283,8 @@ assert.equal(
   "an incomplete assessment is never persisted as a completed snapshot"
 );
 assert.deepEqual(
-  restoredFitAssessmentState(true, "prepare-restored", savedSnapshot),
+  restoredFitAssessmentState("prepare-restored", savedSnapshot),
   {
-    enabled: true,
     latestCompleted: {
       snapshot: savedSnapshot,
       origin: "saved",
@@ -314,37 +298,17 @@ assert.deepEqual(
   "opening a prepared application retains its compact assessment as historical, not current automation input"
 );
 assert.deepEqual(
-  restoredFitAssessmentState(true, "prepare-without-fit", undefined),
+  restoredFitAssessmentState("prepare-without-fit", undefined),
   {
-    enabled: true,
     latestCompleted: null,
-    activeRun: null,
-    lastError: {
-      resumeLabel: "",
-      message: "No Fit Assessment is saved for this preparation. Run it against the restored resume."
-    }
-  },
-  "a prepared application without a saved assessment invites a run instead of asking to Prepare again"
-);
-assert.deepEqual(
-  restoredFitAssessmentState(false, "prepare-restored-disabled", savedSnapshot),
-  {
-    enabled: false,
-    latestCompleted: {
-      snapshot: savedSnapshot,
-      origin: "saved",
-      changes: [],
-      previousPreparation: false,
-      prepareRunId: "prepare-restored-disabled"
-    },
     activeRun: null,
     lastError: null
   },
-  "turning Fit Assessment off does not erase a restored completed result"
+  "a prepared application without a saved assessment offers Assess fit rather than a failure"
 );
 assert.equal(
   fitAssessmentMayTriggerAutoPolish(
-    restoredFitAssessmentState(true, "prepare-restored-advisory", savedSnapshot)
+    restoredFitAssessmentState("prepare-restored-advisory", savedSnapshot)
   ),
   null,
   "historical assessments never authorize automatic Polish"
@@ -367,7 +331,7 @@ const railSource = readFileSync(
 );
 assert.match(
   intakeSource,
-  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(fitAssessmentAuto, prepareRunId, snapshot\)/,
+  /function restorePreparedFitAssessment\([\s\S]{0,1600}?commitPreparation\(\{[\s\S]{0,500}?preparedJob,[\s\S]{0,500}?restoredFitAssessmentState\(prepareRunId, snapshot\)/,
   "application restore hydrates the hook-owned prepared-job receipt and historical assessment atomically"
 );
 assert.match(
@@ -519,6 +483,11 @@ assert.match(
   railSource,
   /Changed since assessment[\s\S]{0,500}?completedAssessment\.changes/,
   "Prepare explains why the retained assessment is out of date"
+);
+assert.match(
+  intakeSource,
+  /jobAnalysisAbortRef\.current\.abort\(\);\s*jobAnalysisAbortRef\.current = null;[\s\S]{0,200}?fitAssessmentAbortRef\.current\?\.abort\(\);[\s\S]{0,120}?errorHeadline: "Inputs changed"/,
+  "an input change mid-Prepare also aborts the awaited Prepare-owned Fit request"
 );
 assert.match(
   intakeSource,

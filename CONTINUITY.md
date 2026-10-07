@@ -5,6 +5,25 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [USER+CODE] The Settings > Automation Fit toggle now governs only automatic
+  runs (after Prepare and after a selected-resume change) and the automatic
+  Polish that depends on them. Previously turning it off disabled Fit entirely,
+  contradicting its "You can reassess anytime" copy. **Assess fit** / **Reassess
+  fit** always run once a posting is prepared; a requested run never carries an
+  automation token. The client-only `FitAssessmentState.enabled` field and the
+  toggle-change abort effect are gone. Changing the toggle mid-Prepare still
+  cancels that Prepare as "Inputs changed", and that path now also aborts the
+  awaited separately-dispatched Fit request, so the intake lock releases. A
+  manual or resume-change run finishes; App's existing auto-Polish gate
+  declines any pending token. A restored application with no saved assessment
+  and the duplicate-review stop now read "Not assessed yet" / "Prepare again"
+  instead of a failure. Workflow compressed: the user chose this option in
+  chat; no separate Brief/Plan artifacts were written.
+  - [TOOL] One independent review: one medium finding (an orphaned Prepare-owned
+    Fit request held the intake lock after an input change) and four low ones
+    (two rail messages, stale testing docs, this entry), all fixed. Full RoleFit
+    check passed after the fixes. No browser QA (rail copy and one button;
+    flag-first policy).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).
