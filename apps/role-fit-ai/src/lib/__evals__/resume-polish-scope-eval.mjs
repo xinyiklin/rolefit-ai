@@ -17,6 +17,7 @@ import {
   buildResumePolishScope,
   defaultResumePolishScopeMode,
   defaultResumePolishScopeModes,
+  resumePolishScopeFromModes,
   resumePolishScopeToText
 } from "../resumePolishScope.ts";
 
@@ -62,6 +63,18 @@ assert.deepEqual(
 );
 assert.deepEqual(defaultResumePolishScopeModes(null), {}, "a null resume yields an empty mode map, not a throw");
 assert.deepEqual(defaultResumePolishScopeModes({ header: null, sections: [] }), {}, "an empty resume yields an empty mode map");
+
+// ── resumePolishScopeFromModes: the pipeline's and Settings' one scope ──
+assert.deepEqual(
+  resumePolishScopeFromModes(modesResume, {}),
+  buildResumePolishScope(modesResume, ["sum", "skl", "exp"], ["edu", "awd"]),
+  "no choices yet means the default modes"
+);
+assert.deepEqual(
+  resumePolishScopeFromModes(modesResume, { hob: "polish", exp: "include" }),
+  buildResumePolishScope(modesResume, ["hob"], ["exp"]),
+  "explicit choices replace the defaults wholesale"
+);
 
 // ── buildResumePolishScope: the three disjoint buckets ─────────────────────
 const resume = {

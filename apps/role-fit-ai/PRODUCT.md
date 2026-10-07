@@ -361,8 +361,8 @@ scheduling facts: a 4.0-scale GPA attached to a declared education level, plus
 an earliest start of immediately, one to four weeks' notice, or a specific
 date. Citizenship, U.S. work authorization, and sponsorship are three
 independent declarations; each defaults to Not specified, and citizenship
-never implies either employment answer or clearance eligibility. Its
-**Background** is one free-text field for experience beyond, or in more depth
+never implies either employment answer or clearance eligibility.
+Settings > **Background** is one free-text field for experience beyond, or in more depth
 than, the resume, organised by headings that name each role or project with its
 type and dates (for example `## Slotwise (personal project, 2025–present)`). A
 heading that uses the name shown on the resume links its text to that entry.
@@ -388,9 +388,38 @@ the resume), ignoring case, punctuation, and a trailing parenthesised type or
 dates. A heading naming no entry, or several, stays unlinked. Every enclosing
 heading must name the same entry or be a grouping heading such as `# Experience`
 or one of the resume's section names; any other enclosing heading blocks links
-beneath it; a grouping word never names an entry itself. Profile rows list every
-whole heading linked to that entry, for example "From Profile: Acme Corp
-(internship, 2024)". Resume Polish may rewrite a linked entry's bullets from that text and
+beneath it; a grouping word never names an entry itself.
+
+Settings > Background lists the open resume's standard entries (grouped by
+resume section, each with its size or Add) and then Other notes — text above the
+first heading and every note no entry owns, flagged only for a surprising
+reason (two entries share the name, the heading sits under an unlinked heading,
+or inside another entry's heading) — beside the selected note's editor. Every
+note has a **Linked to** choice of the resume's entries or Not linked, so the
+user links by choosing, not by typing a matching name. The choice is stored in
+the heading text, because entry ids change on every open and the Background
+serves every resume variant: choosing an entry rewrites only the heading's name
+to one that links to it (its title, else its subtitle; an entry no name can
+reach alone is offered disabled), keeping the heading's type and dates and the
+note's text, and a note moved onto an entry with notes becomes its second note.
+Not linked renames the note so it names no entry. On a linked note only **Type
+and dates** and the notes are editable, and one line says Resume Polish uses
+them for that entry; an unlinked note's heading is free text, but a name that
+would link is not stored there — linking goes through Linked to. The entry's
+current resume bullets sit folded beside its notes, and a Text view keeps the
+whole Background editable as text. The stored Background stays one text:
+editing a note rewrites only its lines, a new note is appended with the
+entry's link name and the resume's dates, and removal asks once inline. A
+rename, link change, or removal that would change how any other note links
+(renaming `# Experience` would unlink every entry note beneath it) is refused
+with a pointer to the Text view.
+Without a real open resume the text field is the only view.
+Profile rows list every whole heading linked to that entry, for example "From
+Profile: Acme Corp (internship, 2024)", and every row on a standard entry
+(experience, project, or any other dated entry) folds a collapsed **Show
+evidence** section holding the entry's current bullets
+and the linked Profile text the proposal was made from; reading a source is not
+verification. Resume Polish may rewrite a linked entry's bullets from that text and
 propose up to two new bullets at the end of the entry, and Profile-based rows
 are labelled **Profile**. Accepting a new bullet inserts it; Undo removes exactly
 that bullet. Another entry's linked text, and text above the first heading, are

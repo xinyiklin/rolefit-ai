@@ -50,6 +50,32 @@ function highlightTarget(suggestion: ResumeProposalSuggestion): ResumeProposalTa
     : suggestion.target;
 }
 
+// What an edit can rest on, folded away: the entry as it stands now and every
+// Profile block linked to it when the proposal was made. Reading a source is
+// not verification, so the row's warnings stay where they are.
+function EditEvidence({ resume, suggestion }: { resume: ResumeData; suggestion: ResumeProposalSuggestion }) {
+  const section = resume.sections.find((item) => item.id === suggestion.target.sectionId);
+  if (!section) return null;
+  if (section.type !== "standard") {
+    return <p className="resume-proposal__reason">Evidence: the resume sections in scope and the whole Profile.</p>;
+  }
+  const entry = section.items.find((item) => item.id === suggestion.target.entryId);
+  const title = [entry?.titleLeft, entry?.subtitleLeft].map((text) => stripInlineMarks(text ?? "").trim()).filter(Boolean).join(" · ");
+  return (
+    <details className="resume-proposal__evidence">
+      <summary>Show evidence</summary>
+      <div className="resume-proposal__evidence-body">
+        <p className="resume-proposal__label">Resume now{title ? ` · ${title}` : ""}</p>
+        {entry?.bullets.length ? (
+          <ul>{entry.bullets.map((bullet) => <li key={bullet.id}>{stripInlineMarks(bullet.text)}</li>)}</ul>
+        ) : <p className="resume-proposal__evidence-text">No bullets.</p>}
+        <p className="resume-proposal__label">Profile</p>
+        <p className="resume-proposal__evidence-text">{suggestion.profileEvidence ?? "No Profile heading links to this entry."}</p>
+      </div>
+    </details>
+  );
+}
+
 function ProposedOrder({ resume, suggestion }: { resume: ResumeData; suggestion: ResumeProposalSuggestion }) {
   const bullets = resume.sections.find((section) => section.id === suggestion.target.sectionId)
     ?.items.find((entry) => entry.id === suggestion.target.entryId)?.bullets ?? [];
@@ -225,6 +251,7 @@ export function ResumeProposalReview({
                         {suggestion.profileSource ? <p className="resume-proposal__reason">From Profile: {suggestion.profileSource}</p> : null}
                         {suggestion.warnings?.length && (editing || proposedText !== suggestion.proposedText || state === "changed") ? <p className="resume-proposal__reason">Concerns below describe the original proposed wording; edits are not verification.</p> : null}
                         <ContentWarnings warnings={suggestion.warnings} />
+                        <EditEvidence resume={resume} suggestion={suggestion} />
                         <div className="resume-proposal__actions">
                           {editing ? (
                             <>

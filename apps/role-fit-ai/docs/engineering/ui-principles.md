@@ -302,7 +302,8 @@ editable resume sections in the document; identity, contact, education, dates,
 and omitted sections stay locked. After AI returns, show What improved (up to
 three), the proposed edits open by default in one disclosure, and one quiet
 withheld line. Do not render evidence, risk, or keyword
-chips in this normal surface. The editor remains the final source of truth for
+chips in this normal surface; a row's source text sits behind one collapsed
+Show evidence disclosure. The editor remains the final source of truth for
 export and pipeline tracking.
 
 Both documents accept a proposal the same way, because a user should not have to
@@ -417,8 +418,12 @@ Never show:
   Antigravity CLI) plus the native OpenAI and Claude APIs. Do not expose an
   adapter until its current request contract and a live smoke are verified.
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
-  of the studio tab rail. Its three sections are AI stages, Profile, and
-  Guidance, with Reset pinned below them at the foot of the section rail. The
+  of the studio tab rail. Its five pages sit in two groups — **You**: Profile
+  (declared facts) and Background (notes); **AI**: Guidance (every
+  instruction), Automation (what runs after Prepare), and Models (each stage's
+  provider) — with Reset pinned at the foot of the rail. The card keeps one
+  size on every page. The studio gear reopens the last page used in the tab
+  (Background first); a targeted entry point opens its own page. The
   masthead keeps only the RoleFit identity and Apply. Read-only Sessions
   belongs immediately above Settings in the bottom studio-rail utilities group,
   outside the output tablist. Do not add a second control for a setting
@@ -435,20 +440,22 @@ Never show:
   they belong in RoleFit Companion, not in a browser settings panel. Per-stage
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
-- Settings > AI stages carries one section per configurable stage (Job analysis,
-  Fit Assessment, Resume Polish, Cover letter, Application questions). Each
-  owns a concrete provider/model/effort config plus an optional instruction
-  override; **Copy settings** is a one-shot sync between stages, not a live link.
+- Settings > Models carries one hairline row per configurable stage under
+  column heads shown once (stage, provider, model, effort). Each owns a
+  concrete provider/model/effort config; **Copy from** is a one-shot sync
+  between stages, not a live link. Instruction overrides live in Guidance,
+  beside the shared custom instructions they replace, one collapsed row per
+  stage that accepts them; a set override stays previewed.
   The stage list is declared once in `src/config/aiStages.ts` — a stage added to
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
-- Settings places the compact Fit Assessment toggle and the two independent
-  automatic Polish switch/minimum-fit pairs beside the stage configuration. It
+- Settings > Automation holds the compact Fit Assessment toggle and the two
+  independent automatic Polish switch/minimum-fit pairs. It
   exposes categorical verdict cutoffs, not scores, confidence thresholds, or a
   master automation switch.
-- Keep every stage section expanded together. There is no section toggle,
-  collapsed summary, or persisted open/collapse preference; the user can scan
-  and edit all stage configurations without changing view state.
+- Keep every stage row visible together. There is no row toggle, collapsed
+  summary, or persisted open/collapse preference; the user can scan and edit
+  all stage configurations without changing view state.
 - Candidate facts (citizenship, work authorization, sponsorship, education
   level, field of study, optional GPA, earliest-start availability, and
   source-aware experience) are strictly opt-in. An unset field emits no prompt

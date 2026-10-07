@@ -1,18 +1,13 @@
-import { useRef, useState, type Ref } from "react";
+import { useRef, type Ref } from "react";
 import { RotateCcw, X } from "lucide-react";
 
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
-import { AI_STAGES, type AiStageId } from "../config/aiStages";
-import {
-  AVAILABILITY_NOTICE_OPTIONS,
-  CITIZENSHIP_OPTIONS,
-  DECLARED_ANSWER_OPTIONS,
-  EDUCATION_LEVEL_OPTIONS,
-  MAJOR_MAX_LENGTH,
-  type AvailabilityNotice,
-  type CitizenshipStatus,
-  type DeclaredAnswer,
-  type EducationLevel
+import type { AiStageId } from "../config/aiStages";
+import type {
+  AvailabilityNotice,
+  CitizenshipStatus,
+  DeclaredAnswer,
+  EducationLevel
 } from "../lib/candidateFacts";
 import type { AiProviderValue } from "../config/aiOptions";
 import type { StageConfig } from "../lib/aiRequest";
@@ -21,32 +16,32 @@ import type {
   ProviderAvailabilityStatus
 } from "../hooks/useAvailableProviders";
 import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
-import {
-  PROFILE_BACKGROUND_CHAR_LIMIT,
-  profileBackgroundLimitError,
-  profileTextLength
-} from "../../shared/candidateProfileContract.ts";
-import { PROFILE_BACKGROUND_STORAGE_LIMIT } from "../lib/settings.ts";
-import { SettingsStage } from "./SettingsStage";
-import {
-  AUTO_POLISH_THRESHOLD_OPTIONS,
-  type AutoPolishThreshold
-} from "../lib/autoPolishPolicy.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
+import type { ProfileNoteFocus } from "./settings/ProfileNotes.tsx";
+import { AutomationPage } from "./settings/AutomationPage.tsx";
+import { BackgroundPage } from "./settings/BackgroundPage.tsx";
+import { GuidancePage } from "./settings/GuidancePage.tsx";
+import { ModelsPage } from "./settings/ModelsPage.tsx";
+import { ProfilePage } from "./settings/ProfilePage.tsx";
 
-export type SettingsSection = "stages" | "about" | "guidance";
+export type SettingsSection = "profile" | "background" | "guidance" | "automation" | "models";
 
-export const SETTINGS_SECTIONS: { id: SettingsSection; label: string }[] = [
-  { id: "stages", label: "AI stages" },
-  { id: "about", label: "Profile" },
-  { id: "guidance", label: "Guidance" }
+// Your own facts and notes first, then how the AI runs.
+export const SETTINGS_GROUPS: { label: string; sections: { id: SettingsSection; label: string }[] }[] = [
+  { label: "You", sections: [{ id: "profile", label: "Profile" }, { id: "background", label: "Background" }] },
+  { label: "AI", sections: [{ id: "guidance", label: "Guidance" }, { id: "automation", label: "Automation" }, { id: "models", label: "Models" }] }
 ];
 
-type SettingsDialogProps = {
+export const SETTINGS_SECTIONS = SETTINGS_GROUPS.flatMap((group) => group.sections);
+
+export type SettingsDialogProps = {
   section: SettingsSection;
   onSectionChange: (section: SettingsSection) => void;
   onClose: () => void;
+  workspacePreferencesStatus: WorkspacePreferencesStatus;
 
-  // ----- AI stages -----
+  // ----- Models and Automation -----
   stages: Record<AiStageId, StageConfig>;
   onStageChange: (stage: AiStageId, patch: Partial<StageConfig>) => void;
   onStageProviderChange: (stage: AiStageId, provider: AiProviderValue) => void;
@@ -83,10 +78,16 @@ type SettingsDialogProps = {
   onAvailabilityNoticeChange: (value: AvailabilityNotice) => void;
   availabilityDate: string;
   onAvailabilityDateChange: (value: string) => void;
+
+  // ----- Background -----
   profileBackground: string;
   onProfileBackgroundChange: (value: string) => void;
   profileBackgroundRef?: Ref<HTMLTextAreaElement>;
-  workspacePreferencesStatus: WorkspacePreferencesStatus;
+  // The open resume whose entries organise the Background; null (no real
+  // resume open) falls back to the plain text field.
+  profileResume: ResumeData | null;
+  // Selects the note starting on a line and focuses its notes, once per nonce.
+  profileNoteFocus?: ProfileNoteFocus | null;
 
   // ----- Guidance -----
   boldBulletKeywords: boolean;
@@ -100,60 +101,11 @@ type SettingsDialogProps = {
   onReset: () => void | Promise<void>;
 };
 
-// The single home for every RoleFit preference. It replaced the masthead's "AI
-// provider and model" and "Options" popovers: those were two separate menus over
-// one settings hook, and adding a fourth and fifth AI stage to them would have
-// made the taller one unusable. Opened from the bottom of the studio sidebar.
-export function SettingsDialog({
-  section,
-  onSectionChange,
-  onClose,
-  stages,
-  onStageChange,
-  onStageProviderChange,
-  onCopyStage,
-  providers,
-  availabilityStatus,
-  availabilityMessage,
-  onRefreshProviders,
-  fitAssessmentAuto,
-  onFitAssessmentAutoChange,
-  resumePolishAuto,
-  onResumePolishAutoChange,
-  resumePolishAutoThreshold,
-  onResumePolishAutoThresholdChange,
-  coverPolishAuto,
-  onCoverPolishAutoChange,
-  coverPolishAutoThreshold,
-  onCoverPolishAutoThresholdChange,
-  citizenshipStatus,
-  onCitizenshipChange,
-  legallyAuthorizedToWork,
-  onLegallyAuthorizedChange,
-  requiresSponsorship,
-  onRequiresSponsorshipChange,
-  educationLevel,
-  onEducationLevelChange,
-  major,
-  onMajorChange,
-  gpa,
-  onGpaChange,
-  availabilityNotice,
-  onAvailabilityNoticeChange,
-  availabilityDate,
-  onAvailabilityDateChange,
-  profileBackground,
-  onProfileBackgroundChange,
-  profileBackgroundRef,
-  workspacePreferencesStatus,
-  boldBulletKeywords,
-  onBoldBulletKeywordsChange,
-  customInstructions,
-  onCustomInstructionsChange,
-  stageCustomInstructions,
-  onStageCustomInstructionChange,
-  onReset
-}: SettingsDialogProps) {
+// The single home for every RoleFit preference, opened from the bottom of the
+// studio sidebar. The shell owns the rail, autosave status, and focus trap;
+// each page renders from the props it names.
+export function SettingsDialog(props: SettingsDialogProps) {
+  const { section, onSectionChange, onClose, workspacePreferencesStatus, onReset } = props;
   const cardRef = useRef<HTMLDivElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
   const handleKeyDown = useModalFocus({
@@ -162,14 +114,6 @@ export function SettingsDialog({
     initialFocusRef: closeRef,
     onClose
   });
-  // An edit past the storage bound is refused whole rather than cut on save.
-  const [backgroundRefused, setBackgroundRefused] = useState(false);
-  const backgroundOverLimit = profileBackgroundLimitError(profileBackground) !== null;
-  const backgroundNotice = backgroundRefused
-    ? `Background can't exceed ${PROFILE_BACKGROUND_STORAGE_LIMIT.toLocaleString("en-US")} characters.`
-    : backgroundOverLimit
-      ? `Over ${PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")} characters. AI steps won't run until it's shorter.`
-      : "";
 
   return (
     <div
@@ -209,22 +153,25 @@ export function SettingsDialog({
 
         <div className="settings-dialog__body">
           <nav className="settings-nav" aria-label="Settings sections">
-            {SETTINGS_SECTIONS.map((entry) => (
-              <button
-                key={entry.id}
-                type="button"
-                className={`settings-nav__item${section === entry.id ? " is-active" : ""}`}
-                aria-current={section === entry.id || undefined}
-                onClick={() => onSectionChange(entry.id)}
-              >
-                {entry.label}
-              </button>
+            {SETTINGS_GROUPS.map((group) => (
+              <div className="settings-nav__group" key={group.label} role="group" aria-label={group.label}>
+                <span className="settings-nav__group-label" aria-hidden="true">{group.label}</span>
+                {group.sections.map((entry) => (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    className={`settings-nav__item${section === entry.id ? " is-active" : ""}`}
+                    aria-current={section === entry.id || undefined}
+                    onClick={() => onSectionChange(entry.id)}
+                  >
+                    {entry.label}
+                  </button>
+                ))}
+              </div>
             ))}
 
-            {/* Pinned to the foot of this rail, the same way Settings itself is
-                pinned to the foot of the studio rail that opens it. Not a section
-                — it is an action, so it stays out of the section list above and
-                is reachable from whichever section is open. */}
+            {/* An action, not a section: pinned to the rail's foot and reachable
+                from every page. */}
             <div className="settings-nav__foot">
               <button
                 type="button"
@@ -237,332 +184,15 @@ export function SettingsDialog({
             </div>
           </nav>
 
-          {/* The open section is on the element so a panel's own row rhythm can
-              be styled without every section inventing a wrapper. */}
           <div className="settings-panel" data-section={section}>
-            {section === "stages" ? (
-              <>
-                <p className="settings-panel__intro">
-                  Each stage runs on its own provider and model. Add providers in RoleFit
-                  Companion; your API keys never reach the browser.
-                </p>
-
-                <div className="settings-automation-group">
-                  <div className="settings-automation" aria-label="Prepare automation">
-                    <label className="check-row">
-                      <input
-                        type="checkbox"
-                        checked={fitAssessmentAuto}
-                        onChange={(event) => onFitAssessmentAutoChange(event.target.checked)}
-                      />
-                      <span>
-                        <strong>Run Fit Assessment after Prepare</strong>
-                        <small>Assesses the selected resume with Job analysis. You can reassess anytime.</small>
-                      </span>
-                    </label>
-                    {/* One row per document. The checkbox label already names the
-                        document, so a Resume / Cover letter subhead over it was a
-                        second row saying the same word. */}
-                    <div className="settings-automation__document">
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={resumePolishAuto}
-                          disabled={!fitAssessmentAuto}
-                          onChange={(event) => onResumePolishAutoChange(event.target.checked)}
-                        />
-                        <span><strong>Automatically Polish resume</strong></span>
-                      </label>
-                      <label className="field field--inline settings-automation__threshold">
-                        <span>Minimum fit</span>
-                        <select
-                          className="select--compact"
-                          value={resumePolishAutoThreshold}
-                          disabled={!fitAssessmentAuto || !resumePolishAuto}
-                          onChange={(event) => onResumePolishAutoThresholdChange(
-                            event.target.value as AutoPolishThreshold
-                          )}
-                        >
-                          {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                    <div className="settings-automation__document">
-                      <label className="check-row">
-                        <input
-                          type="checkbox"
-                          checked={coverPolishAuto}
-                          disabled={!fitAssessmentAuto}
-                          onChange={(event) => onCoverPolishAutoChange(event.target.checked)}
-                        />
-                        <span><strong>Automatically Polish cover letter</strong></span>
-                      </label>
-                      <label className="field field--inline settings-automation__threshold">
-                        <span>Minimum fit</span>
-                        <select
-                          className="select--compact"
-                          value={coverPolishAutoThreshold}
-                          disabled={!fitAssessmentAuto || !coverPolishAuto}
-                          onChange={(event) => onCoverPolishAutoThresholdChange(
-                            event.target.value as AutoPolishThreshold
-                          )}
-                        >
-                          {AUTO_POLISH_THRESHOLD_OPTIONS.map((option) => (
-                            <option key={option.value} value={option.value}>{option.label}</option>
-                          ))}
-                        </select>
-                      </label>
-                    </div>
-                  </div>
-
-                  <p className="settings-automation__note">
-                    Resume Polish uses one proposal request and leaves the current resume unchanged until you accept edits.
-                  </p>
-                </div>
-
-                <div className="settings-stages">
-                  {AI_STAGES.map((stage) => (
-                    <SettingsStage
-                      key={stage.id}
-                      stage={stage.id}
-                      title={stage.title}
-                      blurb={stage.blurb}
-                      config={stages[stage.id]}
-                      providers={providers}
-                      availabilityStatus={availabilityStatus}
-                      availabilityMessage={availabilityMessage}
-                      onRefreshProviders={onRefreshProviders}
-                      onChange={(patch) => onStageChange(stage.id, patch)}
-                      onProviderChange={(provider) => onStageProviderChange(stage.id, provider)}
-                      onCopyFrom={(from) => onCopyStage(from, stage.id)}
-                      instructions={stageCustomInstructions[stage.id] ?? ""}
-                      onInstructionsChange={(value) => onStageCustomInstructionChange(stage.id, value)}
-                      supportsInstructions={stage.supportsInstructions}
-                    />
-                  ))}
-                </div>
-              </>
-            ) : null}
-
-            {section === "about" ? (
-              <>
-                <p className="settings-panel__intro">
-                  Optional facts and background beyond your resume. Nothing here is sent to the
-                  AI until you fill it in.
-                </p>
-
-                <label className="field field--inline">
-                  <span><strong>Citizenship</strong></span>
-                  <select
-                    className="select--compact"
-                    value={citizenshipStatus}
-                    onChange={(event) => onCitizenshipChange(event.target.value as CitizenshipStatus)}
-                  >
-                    {/* Neutral default: shown until a concrete status is picked, but not a
-                        selectable menu entry (anti-fabrication opt-in gate). */}
-                    <option value="unspecified" disabled hidden>Not specified</option>
-                    {CITIZENSHIP_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field field--inline">
-                  <span><strong>U.S. work authorization</strong></span>
-                  <select
-                    className="select--compact"
-                    value={legallyAuthorizedToWork}
-                    onChange={(event) => onLegallyAuthorizedChange(event.target.value as DeclaredAnswer)}
-                  >
-                    {DECLARED_ANSWER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <label className="field field--inline">
-                  <span><strong>Requires visa sponsorship</strong></span>
-                  <select
-                    className="select--compact"
-                    value={requiresSponsorship}
-                    onChange={(event) => onRequiresSponsorshipChange(event.target.value as DeclaredAnswer)}
-                  >
-                    {DECLARED_ANSWER_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                <div className="menu-subhead">
-                  <span className="menu-subhead__title">Education</span>
-                </div>
-
-                <label className="field field--inline">
-                  <span><strong>Highest completed level</strong></span>
-                  <select
-                    className="select--compact"
-                    value={educationLevel}
-                    onChange={(event) => onEducationLevelChange(event.target.value as EducationLevel)}
-                  >
-                    {/* Same opt-in gate as citizenship: a degree is one of the easiest
-                        things for a resume model to invent, so the default claims none. */}
-                    <option value="unspecified" disabled hidden>Not specified</option>
-                    {EDUCATION_LEVEL_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                {educationLevel === "unspecified" ? (
-                  <p className="micro-status">Choose a level to include your education as evidence.</p>
-                ) : (
-                  <>
-                    <label className="field field--inline">
-                      <span>Field of study <small>(optional)</small></span>
-                      <input
-                        className="text-input"
-                        type="text"
-                        maxLength={MAJOR_MAX_LENGTH}
-                        value={major}
-                        placeholder="e.g. Mechanical Engineering"
-                        onChange={(event) => onMajorChange(event.target.value)}
-                      />
-                    </label>
-                    <label className="field field--inline" htmlFor="candidate-gpa">
-                      <span>GPA <small>(optional)</small></span>
-                      <input
-                        id="candidate-gpa"
-                        className="text-input text-input--narrow"
-                        type="number"
-                        min={0}
-                        max={4}
-                        step={0.01}
-                        inputMode="decimal"
-                        value={gpa ?? ""}
-                        placeholder="e.g. 3.8"
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          onGpaChange(value === "" ? undefined : Number(value));
-                        }}
-                      />
-                    </label>
-                  </>
-                )}
-
-                <div className="menu-subhead">
-                  <span className="menu-subhead__title">Availability</span>
-                </div>
-
-                <label className="field field--inline">
-                  <span><strong>Earliest start</strong></span>
-                  <select
-                    className="select--compact"
-                    value={availabilityNotice}
-                    onChange={(event) => {
-                      const next = event.target.value as AvailabilityNotice;
-                      onAvailabilityNoticeChange(next);
-                      if (next !== "specific-date") onAvailabilityDateChange("");
-                    }}
-                  >
-                    {AVAILABILITY_NOTICE_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>{option.label}</option>
-                    ))}
-                  </select>
-                </label>
-
-                {availabilityNotice === "specific-date" ? (
-                  <label className="field field--inline" htmlFor="candidate-availability-date">
-                    <span>Earliest available date</span>
-                    <input
-                      id="candidate-availability-date"
-                      className="text-input text-input--narrow"
-                      type="date"
-                      value={availabilityDate}
-                      onChange={(event) => onAvailabilityDateChange(event.target.value)}
-                    />
-                  </label>
-                ) : null}
-
-                <div className="menu-subhead">
-                  <span className="menu-subhead__title" id="profile-background-title">Background</span>
-                  <span className={`settings-background__count${backgroundOverLimit ? " is-over" : ""}`}>
-                    {profileTextLength(profileBackground).toLocaleString("en-US")} / {PROFILE_BACKGROUND_CHAR_LIMIT.toLocaleString("en-US")}
-                  </span>
-                </div>
-
-                <p className="settings-panel__supporting-copy" id="profile-background-hint">
-                  One heading per role or project, named as on your resume, with its type and dates.
-                </p>
-
-                <textarea
-                  ref={profileBackgroundRef}
-                  className="textarea settings-background"
-                  aria-labelledby="profile-background-title"
-                  aria-describedby={backgroundNotice ? "profile-background-hint profile-background-notice" : "profile-background-hint"}
-                  aria-invalid={backgroundOverLimit || undefined}
-                  value={profileBackground}
-                  onChange={(event) => {
-                    const next = event.target.value;
-                    const refused = next.length > PROFILE_BACKGROUND_STORAGE_LIMIT;
-                    setBackgroundRefused(refused);
-                    if (!refused) onProfileBackgroundChange(next);
-                  }}
-                  placeholder={"## Inventory tracker (personal project, 2024–present)\nBuilt a Django REST API with role-based access.\n\n## Acme Clinic — Support Specialist (professional, 2021–2023)\nLed the EHR migration for 12 staff."}
-                  rows={14}
-                />
-                <p className="settings-background__notice" id="profile-background-notice" role="status">
-                  {backgroundNotice}
-                </p>
-              </>
-            ) : null}
-
-            {section === "guidance" ? (
-              <>
-                <p className="settings-panel__intro">
-                  Applies to every AI stage. A stage with its own instructions overrides the
-                  custom instructions below.
-                </p>
-
-                <label className="field">
-                  <span>
-                    Custom instructions <small>(optional — steer tone, length, and emphasis)</small>
-                  </span>
-                  <textarea
-                    className="textarea"
-                    value={customInstructions}
-                    onChange={(event) => onCustomInstructionsChange(event.target.value)}
-                    placeholder="e.g., aim for one page; lead each bullet with a metric; use British spelling; don't add a summary section."
-                    rows={8}
-                  />
-                </label>
-
-                {/* Resume Polish only, so it sits below the guidance the intro
-                    describes and under its own heading rather than that intro. */}
-                <div className="menu-subhead">
-                  <span className="menu-subhead__title">Resume Polish</span>
-                </div>
-                <label className="check-row">
-                  <input
-                    type="checkbox"
-                    checked={boldBulletKeywords}
-                    onChange={(event) => onBoldBulletKeywordsChange(event.target.checked)}
-                  />
-                  <span>
-                    <strong>Bold keywords in bullets</strong>
-                    <small>Off keeps bullets Resume Polish rewrites unbolded.</small>
-                  </span>
-                </label>
-              </>
-            ) : null}
-
-            {/* Deliberately no runtime diagnostics section (local server address,
-                workspace path, provider counts). Those describe the machine the
-                companion runs, not a browser preference, and RoleFit Companion is
-                where they belong. Per-stage readiness is not repeated either — a
-                blocked stage says so in its own row, next to the control that
-                fixes it. */}
+            {section === "profile" ? <ProfilePage {...props} /> : null}
+            {section === "background" ? <BackgroundPage {...props} /> : null}
+            {section === "guidance" ? <GuidancePage {...props} /> : null}
+            {section === "automation" ? <AutomationPage {...props} /> : null}
+            {section === "models" ? <ModelsPage {...props} /> : null}
+            {/* Deliberately no runtime diagnostics page (server address,
+                workspace path, provider counts): those describe the machine the
+                companion runs and belong in RoleFit Companion. */}
           </div>
         </div>
       </div>

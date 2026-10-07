@@ -129,6 +129,14 @@ export function buildResumePolishScope(
   };
 }
 
+// The scope Polish sends for the user's per-section choices, or the defaults
+// before any choice. Settings' linkage preview must see this same scope.
+export function resumePolishScopeFromModes(data: ResumeData, modes: Record<string, ResumePolishScopeMode>): ResumePolishScope {
+  const resolved = Object.keys(modes).length ? modes : defaultResumePolishScopeModes(data);
+  const ids = (mode: ResumePolishScopeMode) => Object.keys(resolved).filter((id) => resolved[id] === mode);
+  return buildResumePolishScope(data, ids("polish"), ids("include"));
+}
+
 function appendScopeSectionLines(lines: string[], section: ResumePolishScopeSection): void {
   lines.push(section.heading.toUpperCase());
   for (const entry of section.entries) {

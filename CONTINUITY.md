@@ -39,6 +39,156 @@ bounded; app-only operational detail belongs in the affected app documentation.
   used whole. Backups under `workspace/.trash/` and
   `workspace/resumes/.trash/` (`2026-10-07T02-45-29Z__*`).
 
+- [USER+CODE] Settings redesign with chosen links (task
+  `settings-redesign-20261006`; the user approved Product Brief v2 and
+  Delivery Plan v2 with "approve, include QA as needed"; builds on the
+  uncommitted Profile-by-entry work below). No schema, route, prompt, or
+  provider-default change; the Background limit message now says
+  "Settings > Background".
+  - [CODE] Five pages in two rail groups — You: Profile (facts), Background;
+    AI: Guidance (custom instructions, every per-stage override, Bold
+    keywords), Automation, Models (one compact row per stage, column heads
+    once). `SettingsDialog` is the shell; pages live in `sections/settings/`.
+    One card size (1040x760) for every page. App keeps open state apart from
+    the page: the gear reopens the last page in the tab (Background first).
+  - [CODE] Background is an entry list beside the selected note's editor.
+    [USER] asked to choose links by hand; links stay stored in the heading
+    text (entry ids are session ids; the Background serves every variant), so
+    **Linked to** rewrites only the heading's name (title, else unique
+    subtitle; an unreachable entry is offered disabled) and keeps type/dates
+    and body; Not linked renames to "<name> notes". A linked note edits only
+    Type and dates; an unlinked heading never stores a name that would link.
+    The entry's resume bullets sit folded beside its notes. Add-evidence
+    opens the new note with its notes focused (`profileNoteFocus`).
+  - [CODE] Fixed in passing: the previous editor stored the trimmed body on
+    each keystroke, so a trailing newline or space vanished mid-typing; body
+    and detail now keep local drafts.
+  - [TOOL] Offline suite 147/147 (three evals rewritten/extended), client and
+    server `tsc`, RoleFit build. Browser QA in the in-app pane against the
+    live workspace at 1024, 700, and 375 px: all five pages, add → name
+    preview → link → remove (Background verified byte-identical to a backup
+    afterwards), reopen on last page, stacked layout scrolls the editor into
+    view, no console errors. Fixed during QA: long note names widened the list
+    column. UNCONFIRMED in a browser: the add-evidence focus path (needs a
+    live Polish result).
+  - [TOOL] One independent review: two high, three medium, four low, all
+    fixed. High: removing a note handed its editor (drafts, open confirm) to
+    the next note, since editors were keyed by line position; typing a block
+    heading into a body duplicated text each keystroke. Now each editor
+    rewrites exactly its own line span and settles on blur, and a revision
+    remounts editors after any structural or outside change. Medium: Add
+    notes nested under a level-1 heading (now `#` when `##` would nest);
+    stale drafts after another tab's edit (revision bump); renaming or
+    unlinking a nested note could merge its text into the parent entry (now
+    judged by re-parsing in place and refused with a message). Low: the
+    notes partition now matches the linker after a cut-out nested heading
+    (`profileHeadingLinkage` marks the resuming heading as a block; only the
+    notes view reads that flag); body edits keep the heading line verbatim;
+    refused writes no longer update drafts or selection; an App comment.
+  - [TOOL] After fixes: offline suite 147/147, client and server `tsc`,
+    RoleFit build; browser re-check removed the first of two notes (survivor
+    kept its own text, confirm closed) and typed a heading into a note (stored
+    once, became its own note); Background byte-identical to the baseline
+    afterwards. [USER-side, not this task] Final application review changed
+    from Codex GPT-5.5 medium to Claude Sonnet 5.5 low at 21:04 during the
+    session; left as found.
+  - [TOOL] Re-review closed all nine findings and raised two medium and one
+    low, fixed: an unfocused editor handed another note by a line shift now
+    adopts that note's stored text and keeps its span as a length from its
+    start (was an absolute end); a new note appended after a cut-out nested
+    note is `#` when `##` would inherit the entry above (it had become that
+    entry's evidence); settling waits for focus to leave the whole editor so
+    a click on its own controls is not lost. Probe added for the append case.
+    UNCONFIRMED in a browser: the line-shift handover (needs three notes on
+    one entry with irregular spacing; reasoned and reviewed, not exercised).
+  - [TOOL] Pre-commit review (a separate session, at the user's request "review
+    the work performed, separate from the landing page redesign"): one
+    medium, one low, fixed. Medium: an edit to one note could silently change
+    how other notes link — renaming an unlinked `# Experience` note that has
+    text to `Career` unlinked every entry note beneath it; relinking it to an
+    entry cut the others out; removing a parent re-homed its cut-out and
+    resumed notes. `keepsOtherLinks` now refuses rename, relink, unlink, and
+    remove when any heading outside the note would link differently ("This
+    would change how other notes link. Restructure it in Text view."). Low:
+    a spent add-evidence focus request re-selected its note when the
+    Background page remounted after a page switch (now cleared on page
+    change). A fresh reviewer of the fix found no defects (fuzzed ~1.3M
+    remove/relink/unlink/rename actions against an independent line-ownership
+    oracle: no missed change, no false refusal) and one low, fixed: a refusal
+    message outlived later edits. After fixes: offline suite 147/147, client
+    and server `tsc`, RoleFit build. Browser QA not run for these fixes
+    (logic and message paths only).
+  - Residual: notes written for another resume variant show under Other
+    notes on a resume without that entry; a nested note cannot be relinked
+    or unlinked from the editor (it says to restructure in Text view); typed
+    text is unguarded — a `#` heading typed into a note or the preamble
+    regroups the notes after it, as in Text view, with no warning; typing a
+    heading into the preamble remounts its editor (focus is lost and the
+    typed heading becomes its own note at once).
+
+- [USER+CODE] Profile linkage preview and evidence beside proposed edits (task
+  `profile-linkage-preview-20261006`; the user approved the deferred brief with
+  "sure, lets go with both" under the recommended defaults — Settings only,
+  resume rows only — so the plan gate was compressed into that acceptance).
+  No schema, request, route, prompt, or provider-default change.
+  - [CODE] `profileHeadingLinkage` in the shared Profile contract reports, per
+    Background heading, Linked (with the entry title), Grouping, General
+    context with one reason (names no entry / names more than one entry /
+    parent heading is not a grouping heading / inside another entry's
+    heading), or Omitted (entry in a section set to Off), walking the same
+    parent chain `linkProfileBlocks` uses. Settings > Profile renders it as one
+    flat list under the Background against `resumePolishScopeFromModes` (the
+    pipeline now builds its scope through the same helper); the starter sample
+    or an empty document shows one line instead of a list.
+  - [CODE] Every Resume Polish row on a standard entry carries
+    `profileEvidence` (the linked block text at proposal time) and folds a
+    collapsed Show evidence disclosure with the entry's current bullets and
+    that text; skills/summary rows state their scope. Accept/Edit/Discard and
+    the decision keys are untouched.
+  - [TOOL] One independent review (no high findings). Fixed: a nested heading
+    that names no entry under a linked heading reported General context or
+    Grouping while the linker keeps its text inside the ancestor's block (now
+    Linked to that entry, and the probe asserts Linked rows are exactly the
+    headings inside the linker's blocks); the live entry text is labelled
+    "Resume now" so accepted AI text is not read as evidence; a spoken
+    separator between heading and status; docs say "standard entry" rather
+    than "experience or project". Accepted residual (pre-existing, shared
+    with `profileSource`): the server links on a trimmed/clipped scope, so a
+    title or heading past the clip limit could link differently there.
+  - [TOOL] After fixes: offline suite 145/145 (one new eval); client and
+    server `tsc`; RoleFit build. Browser QA skipped: a list in the Settings
+    panel and a disclosure in the rail, both on existing text treatments.
+    UNCONFIRMED in a browser: the list's indentation and the 16rem evidence
+    scroll bound.
+  - [USER] The flat heading list shipped first was rejected on sight ("very
+    inconvenient, may as well not produce"); the user asked for a redesign of
+    the whole Profile section around the feature and chose, through one
+    structured round, entries-first organisation inside a wider Settings
+    panel over text blocks, free text plus outline, or a studio page.
+  - [CODE] Settings > Profile now renders the Background by the open
+    resume's entries (`sections/settings/ProfileNotes.tsx` over
+    `lib/profileNotes.ts`): facts in a 352px column, notes beside them; one
+    hairline row per standard entry grouped by resume section with the first
+    line of its notes, its word count, and Add notes when empty; General notes
+    for blocks no entry owns (preamble included) with a chip only for a
+    surprising reason; a row expands to edit heading and notes in place
+    (heading stores on blur so a half-typed name cannot move the block; the
+    row follows a block whose heading moved it); inline two-step Remove; a
+    Text view keeps the raw field. Storage stays one Background string:
+    `profileHeadingLinkage` now reports `line`, `block` (starts its own
+    stretch, as the linker partitions), and `entryId`; editing rewrites one
+    block's lines and normalises only its trailing blank line. Every standard
+    section is in scope for notes, whatever Polish would send. The card is
+    1180x820 for this section. The heading list and its styles are gone.
+  - [TOOL] Browser check in the in-app pane at 1440x900 against the live
+    workspace: both columns, the full entry list, an expanded editor, no
+    console errors. Design detector: advisory font-size steps only, all
+    already used by settings.css. Offline suite 147/147 (two new evals);
+    client and server `tsc`; RoleFit build.
+  - Deferred: the linkage note on the Resume page and Show evidence on Cover
+    Letter Polish paragraphs (the brief's two open decisions, declined for the
+    first slice).
+
 - [USER+CODE] Prepare correctness, Prepare benchmark, and Polish quality gates
   (task `prepare-benchmark-20261006`; the user shared an external review of
   head 7b860837 and said "go with all the recommendations as needed", so the

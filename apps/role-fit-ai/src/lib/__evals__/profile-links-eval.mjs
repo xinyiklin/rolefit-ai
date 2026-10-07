@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 
-import { linkProfileBlocks, profileHeadingName, profileTextOnResume } from "../../../shared/candidateProfileContract.ts";
+import { linkProfileBlocks, profileHeadingLinkage, profileHeadingName, profileHeadings, profileTextOnResume } from "../../../shared/candidateProfileContract.ts";
 
 const scope = {
   sections: [
@@ -234,5 +234,73 @@ assert.deepEqual(
   "text under a heading naming any entry, even an ambiguous one, counts as on the resume"
 );
 assert.deepEqual(profileTextOnResume(scope, "## Beta Labs\nx"), ["## Beta Labs\nx"], "a shared name is on the resume");
+
+// ── profileHeadingLinkage: the linker's answer per heading, for the Settings list ──
+const linkage = (scopeArg, profile) => profileHeadingLinkage(scopeArg, profile).map(({ text, status, entry, reason }) =>
+  [text, status, entry ?? reason ?? ""]);
+const previewScope = {
+  sections: [{
+    id: "s-proj", heading: "Projects", type: "standard",
+    entries: [{ id: "e-rolefit", titleLeft: "<b>RoleFit AI</b>", subtitleLeft: "Local-first resume workbench", bullets: [] }]
+  }],
+  locked: { omittedEntryNames: [["Old Startup", "Founder"]] }
+};
+const previewProfile = [
+  "# Projects", "## RoleFit AI (personal project, 2025–present)", "Built it.",
+  "## RoleFit", "Nickname.",
+  "# My engineering work", "## RoleFit AI", "Blocked.",
+  "# Experience", "## Old Startup (2019)", "Omitted entry.",
+  "## RoleFit AI", "Second block.", "### Old Startup", "Nested under another entry.",
+  "## Beta Labs", "Two entries share the name."
+].join("\n");
+assert.deepEqual(linkage(previewScope, previewProfile), [
+  ["Projects", "grouping", ""],
+  ["RoleFit AI (personal project, 2025–present)", "linked", "RoleFit AI"],
+  ["RoleFit", "general", "names no entry"],
+  ["My engineering work", "general", "names no entry"],
+  ["RoleFit AI", "general", "parent heading is not a grouping heading"],
+  ["Experience", "grouping", ""],
+  ["Old Startup (2019)", "omitted", "Old Startup"],
+  ["RoleFit AI", "linked", "RoleFit AI"],
+  ["Old Startup", "general", "inside another entry's heading"],
+  ["Beta Labs", "general", "names no entry"]
+], "each heading reports linked, grouping, general with its reason, or omitted");
+assert.deepEqual(
+  linkage(scope, "## Beta Labs (research, 2023)\nRan experiments."),
+  [["Beta Labs (research, 2023)", "general", "names more than one entry"]],
+  "a name shared by two entries is reported as ambiguous"
+);
+assert.deepEqual(
+  linkage(crossEmployer, "## Acme Corp\nShipped billing.\n### Highlights\nLed it.\n### Projects\nBilling v2.\n### Beta Inc\nOther job.\n#### Notes\nUnder Beta."),
+  [
+    ["Acme Corp", "linked", "Acme Corp"],
+    ["Highlights", "linked", "Acme Corp"],
+    ["Projects", "linked", "Acme Corp"],
+    ["Beta Inc", "general", "inside another entry's heading"],
+    ["Notes", "general", "names no entry"]
+  ],
+  "a nested heading naming no entry (grouping word or not) is part of its linked ancestor; one cut out by another entry's heading is not"
+);
+assert.deepEqual(
+  profileHeadingLinkage(crossEmployer, "# Experience\n## Acme Corp\nx\n### Highlights\ny\n### Beta Inc\nz\n#### Notes\nw\n## Other\nv").map((item) => [item.text, item.line, item.block, item.entryId ?? null]),
+  [["Experience", 0, true, null], ["Acme Corp", 1, true, "acme"], ["Highlights", 3, false, "acme"], ["Beta Inc", 5, true, null], ["Notes", 7, false, null], ["Other", 9, true, null]],
+  "a heading starts a block at top level, under a grouping heading, or when cut out of its ancestor; an unnamed nested heading never does"
+);
+assert.deepEqual(linkage(scope, "No headings."), [], "no headings, no rows");
+assert.deepEqual(linkage(null, "## RoleFit AI\nx"), [["RoleFit AI", "general", "names no entry"]], "no scope links nothing");
+// The list and the linker must agree heading for heading: every heading line
+// inside the linker's blocks is a Linked row, and no other row is.
+for (const profile of [
+  previewProfile,
+  "# Beta Labs\n## Research Assistant (2023)\nRan experiments.",
+  "# Acme Corp\nShipped billing.\n## Data Engineer\nBuilt Spark jobs at Acme.",
+  "## Acme Corp\nShipped billing.\n### Highlights\nLed it.\n### Beta Inc\nOther job.\n#### Notes\nUnder Beta.\n## Beta Inc\nx\n### Tools\ny"
+]) {
+  for (const scopeArg of [scope, previewScope, crossEmployer]) {
+    const inBlocks = [...linkProfileBlocks(scopeArg, profile).values()].flatMap((text) => profileHeadings(text).map((heading) => profileHeadingName(heading.text)));
+    const reported = profileHeadingLinkage(scopeArg, profile).filter((item) => item.status === "linked").map((item) => profileHeadingName(item.text));
+    assert.deepEqual(reported.sort(), inBlocks.sort(), `Linked rows are exactly the headings inside linked blocks (${JSON.stringify(profile.split("\n")[0])})`);
+  }
+}
 
 console.log("profile-links probes passed");

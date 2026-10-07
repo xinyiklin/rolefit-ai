@@ -25,6 +25,9 @@ export type ResumeProposalSuggestion = {
   evidence?: "profile";
   // The Profile heading that text came from, so a surprising link is visible.
   profileSource?: string;
+  // Every Profile block linked to the entry when this proposal was requested,
+  // shown beside the edit so the user can read what it rests on.
+  profileEvidence?: string;
   warnings?: string[];
   // remove/reorder: the entry's bullet ids when proposed, so Undo can restore
   // a removed bullet's position and a reorder's original order.

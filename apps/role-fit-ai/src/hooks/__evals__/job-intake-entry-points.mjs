@@ -731,7 +731,7 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
   assert.equal(harness.requests.filter(({ payload }) => payload.mode === "fit-assessment").length, 0);
 }
 for (const fitProvider of ["codex-cli", "anthropic"]) {
-  const profileLimit = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Profile.";
+  const profileLimit = "Your Profile Background is over 12,000 characters. Shorten it in Settings > Background.";
   const harness = createHarness({ fitProvider, profileLimit });
   await runPaste(harness);
   const providerRequests = harness.requests.filter(({ url }) => url === "/api/job-analysis");
