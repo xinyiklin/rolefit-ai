@@ -118,15 +118,19 @@ const NEGATION_FILLER = "(?:(?!(?:penalty|penalties|problem|issue|harm|limit|lim
 const NEGATED_BEFORE = new RegExp(`\\b${NEGATION_WORDS}${NEGATION_PARENTHETICAL}\\s+${NEGATION_FILLER}$`, "i");
 const NEGATION_IN_CLAUSE = new RegExp(`\\b${NEGATION_WORDS}\\b`, "i");
 const CONDITIONAL_IN_CLAUSE = /\b(?:if|when|whenever|unless|where|wherever|in\s+case|should\s+you)\b/i;
+const CONDITIONAL_AFTER = /\b(?:only\s+(?:if|when|where)|unless|if\s+(?:necessary|needed|required)|when\s+(?:necessary|needed))\b/i;
+// A count introduced as a suggestion or a typical length is advice, not the
+// employer's limit ("Up to 500 words; we suggest 200-300 words").
+const ADVISORY_BEFORE = /\b(?:suggest(?:ed|s)?|recommend(?:ed|s)?|ideally|typical(?:ly)?|usually|often|tend\s+to|prefer(?:ably|red|s)?|target|aim\s+for|most\s+(?:answers|responses|candidates|applicants|people|submissions)|(?:strong|good|great)\s+(?:answers|responses))\b/i;
 // An un-negated "more than N words" is a hard floor only after a positive
 // instruction, with no negation or condition earlier in the clause; otherwise
 // it is not a limit at all, so an unrecognised negation can never drive a
 // repair past an employer's ceiling.
 const PERMISSIVE_BEFORE = /\b(?:may|can|could|free\s+to|allowed\s+to|welcome\s+to|no\s+limit)\b[^.;!?\n]{0,30}$/i;
-const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|aim\s+for|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|(?:must|should|needs?\s+to|ha(?:s|ve)\s+to)\s+(?:contain|include|have|require|run)|ideally|prefer(?:ably|red)?|target|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
+const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|(?:must|should|needs?\s+to|ha(?:s|ve)\s+to)\s+(?:contain|include|have|require|run)|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
-const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
+const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being|we['’]ll|they['’]ll)\b[^.;!?\n]{0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread|stop\s+reading|skip|skim)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
 
 export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   const constraints: AnswerConstraint[] = [];
@@ -148,6 +152,7 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       if (built === null) continue;
       occupied.push([start, end]);
       if (built === false) continue;
+      if (ADVISORY_BEFORE.test(before)) built.hard = false;
       const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
         : /\b(?:total|combined|altogether|across (?:both|all))\b/i.test(context) ? "total" : "answer";
@@ -178,7 +183,7 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     if (CEILING_QUALIFIER.test(qualifier)) {
       if (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before)) return { unit: unitValue(match[3]), max: n, hard: true };
       const instructed = INSTRUCTION_BEFORE.test(clause.before) && !PERMISSIVE_BEFORE.test(clause.before)
-        && !NEGATION_IN_CLAUSE.test(clause.before) && !CONDITIONAL_IN_CLAUSE.test(clause.before);
+        && !NEGATION_IN_CLAUSE.test(clause.before) && !CONDITIONAL_IN_CLAUSE.test(clause.before) && !CONDITIONAL_AFTER.test(clause.after);
       return instructed ? { unit: unitValue(match[3]), min: n + 1, hard: true } : false;
     }
     const bounds = qualifier === "exactly" ? { exact: n }

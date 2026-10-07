@@ -84,7 +84,8 @@ for (const [text, expected] of [
   ["Avoid writing more than 300 words.", { unit: "words", max: 300, hard: true }],
   ["Refrain from exceeding 300 words.", { unit: "words", max: 300, hard: true }],
   ["Your answer must exceed 100 words.", { unit: "words", min: 101, hard: true }],
-  ["Aim for over 200 words.", { unit: "words", min: 201, hard: true }],
+  ["Write over 300 words and we'll stop reading.", { unit: "words", max: 300, hard: true }],
+  ["Use more than 300 words and reviewers may skip it.", { unit: "words", max: 300, hard: true }],
   ["Do not, under any circumstances, exceed 300 words.", { unit: "words", max: 300, hard: true }],
   ["Responses must contain more than 100 words.", { unit: "words", min: 101, hard: true }],
   ["Write a response of more than 200 words.", { unit: "words", min: 201, hard: true }],
@@ -103,7 +104,17 @@ check("exact count", () => assert.equal(validateAnswerConstraints("one two", ext
 check("no constraints without limits", () => assert.deepEqual(extractAnswerConstraints("Why us? Tell us about a project."), []));
 check("no constraint from ordinary prose", () => { for (const text of ["In your own words, 3 projects you shipped.", "Use 3.5 sentences of context.", "Word choice matters.", "You led more than 3 people.", "Longer than 6 months is fine.", "Our word limit is generous."]) assert.deepEqual(extractAnswerConstraints(text), [], text); });
 check("an un-negated ceiling word without an instruction is not a limit", () => { for (const text of ["More than 100 words", "Over 100 words", "To exceed 100 words", "Exceed 100 words", "Answers longer than 300 words won't be penalized.", "There is no penalty for going over 300 words.", "You may write more than 100 words if needed.", "Whether or not you exceed 300 words, be concise.", "Don't hesitate to write more than 300 words.", "Don't worry about going over 300 words.", "Not every answer needs to be longer than 200 words."]) assert.deepEqual(extractAnswerConstraints(text), [], text); });
-check("conditional or negated sentences never produce a floor", () => { for (const text of ["If your response contains more than 300 words, only the first 300 will be read.", "If you need more than 300 words, use the additional information field.", "If your answer requires more than 250 words, summarize instead.", "When a response needs more than 200 words, link to a document instead.", "Nobody needs more than 100 words here.", "If you have not done so, write more than 100 words.", "We require more than 100 words.", "Answers need more than 50 words."]) assert.ok(extractAnswerConstraints(text).every((c) => c.min === undefined), text); });
+check("conditional or negated sentences never produce a floor", () => { for (const text of ["If your response contains more than 300 words, only the first 300 will be read.", "If you need more than 300 words, use the additional information field.", "If your answer requires more than 250 words, summarize instead.", "When a response needs more than 200 words, link to a document instead.", "Nobody needs more than 100 words here.", "If you have not done so, write more than 100 words.", "We require more than 100 words.", "Answers need more than 50 words.", "Aim for over 200 words.", "Please write over 300 words only if necessary.", "Your answer should run longer than 200 words only when needed.", "Maximum 500 words; ideally more than 200 words."]) assert.ok(extractAnswerConstraints(text).every((c) => c.min === undefined), text); });
+check("a suggested or typical length beside the real limit is advisory", () => {
+  for (const [text, limit] of [["Up to 500 words (we suggest 200-300 words).", 500], ["Maximum 500 words. Ideally 250 words.", 500], ["Maximum 500 words; strong answers are often 200 words.", 500], ["Limit 1,000 characters; most answers use 400 characters.", 1000], ["Character limit: 2000. A typical answer is 3 sentences.", 2000]]) {
+    const c = extractAnswerConstraints(text);
+    assert.equal(c.length, 2, text);
+    assert.deepEqual(c.filter((item) => item.hard).map((item) => item.max), [limit], text);
+    assert.equal(c.filter((item) => !item.hard).length, 1, text);
+  }
+  const suggested = extractAnswerConstraints("Up to 500 words (we suggest 200-300 words).");
+  assert.equal(validateAnswerConstraints(Array.from({ length: 400 }, () => "word").join(" "), suggested).compliant, true, "a 400-word answer meets the stated 500-word limit");
+});
 check("an inverted range never produces a constraint with min above max", () => assert.ok(extractAnswerConstraints("75 to 50 words").every((c) => c.min === undefined || c.max === undefined || c.min <= c.max)));
 check("penalty ceiling agrees with a stated range", () => { const c = extractAnswerConstraints("We read 100–250 words; anything over 250 words may be truncated."); assert.equal(c.length, 2); assert.equal(c[1].max, 250); assert.equal(validateAnswerConstraints(Array.from({ length: 200 }, () => "word").join(" "), c).compliant, true); });
 check("bracketed placeholders are unfinished prose", () => { for (const text of ["Join [Company Name] soon.", "Raised [X%] revenue.", "Add {{metric}} here.", "[add: team size]"]) assert.equal(hasUnresolvedAnswerPlaceholder(text), true, text); for (const text of ["Plain prose, no slots.", "Shipped in [2023] with a 12% lift.", "They wrote 'recieve' [sic] in the brief.", "Names are [redacted] here.", "I indexed arr[i] in a loop.", "See note [1].", "Led the team [2023–2024]."]) assert.equal(hasUnresolvedAnswerPlaceholder(text), false, text); });
