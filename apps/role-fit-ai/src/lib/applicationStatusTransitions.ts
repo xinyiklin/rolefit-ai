@@ -1,4 +1,5 @@
 export const APPLICATION_STATUSES = [
+  "draft",
   "not_applying",
   "applied",
   "interviewing",
@@ -10,6 +11,7 @@ export const APPLICATION_STATUSES = [
 export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 
 const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
+  draft: ["draft", "applied", "not_applying"],
   not_applying: ["not_applying"],
   applied: ["applied", "interviewing", "offer", "rejected", "withdrawn"],
   interviewing: ["interviewing", "offer", "rejected", "withdrawn"],
@@ -26,5 +28,6 @@ export function applicationStatusTransitionAllowed(
   current: ApplicationStatus,
   next: ApplicationStatus
 ): boolean {
-  return APPLICATION_STATUSES.includes(current) && APPLICATION_STATUSES.includes(next);
+  if (current === "draft") return STATUS_TRANSITIONS.draft.includes(next);
+  return next !== "draft" && APPLICATION_STATUSES.includes(current) && APPLICATION_STATUSES.includes(next);
 }

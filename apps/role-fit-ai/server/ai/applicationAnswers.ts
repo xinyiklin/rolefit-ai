@@ -1,3 +1,5 @@
+import { generateApplicationAnswer } from "./applicationAnswerConversation.ts";
+export { generateApplicationAnswer } from "./applicationAnswerConversation.ts";
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 // Drafts truthful answers to the supplemental free-text questions a job
@@ -324,6 +326,11 @@ export async function handleApplicationAnswers(req: IncomingMessage, res: Server
   const request = requestAbortSignal(req, res);
   try {
     const body = await readAiJsonBody(req, 1_000_000);
+    if (body.mode === "conversation") {
+      const answer = await generateApplicationAnswer(body, { signal: request.signal });
+      sendJson(res, 200, { answer, ...answer.generation });
+      return;
+    }
     const resumeText = String(body.resumeText ?? "").slice(0, 45_000);
     const jobText = String(body.jobText ?? "").slice(0, 35_000);
     const candidateContext = String(body.candidateContext ?? "");

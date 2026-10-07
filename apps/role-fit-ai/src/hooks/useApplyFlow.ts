@@ -612,7 +612,7 @@ export function useApplyFlow({
       const canDownloadCoverLetter =
         applyMaterialSelectionRef.current.coverLetter && canExportCoverLetter;
       if (!canDownloadResume && !canDownloadCoverLetter) {
-        await commitApply();
+        if (!(await commitApply())) clearCapturedApply();
         return;
       }
       const baseRecord = makeApplicationRecord(
@@ -700,6 +700,8 @@ export function useApplyFlow({
   return {
     applyDownloadPrompt,
     isApplying,
+    isApplyPending: () => Boolean(applySessionRef.current)
+      || applyResolutionInFlightRef.current || applyCommitInFlightRef.current || applyDownloadInFlightRef.current,
     // PDF exports remain part of isApplying but not the persistence phase.
     applicationSavePending: isCommittingApply,
     applySaveError,

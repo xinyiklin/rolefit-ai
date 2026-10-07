@@ -594,7 +594,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   never changes axis into a top navbar. APG tabs keyboard model is mandatory.
 - **Narrow authoring:** at 720px and below, only the Resume tab's precise editor
   becomes the width notice. Prepare, the simpler Cover letter page, masthead,
-  tab rail, Materials, Applications, and Analytics remain part of the working
+  tab rail, Answers, Applications, and Analytics remain part of the working
   product, including under high zoom.
 
 ### Ledger Rows (signature)
@@ -684,7 +684,25 @@ A usable draft keeps its proposal controls and displays compact content warnings
 before acceptance. Technically unusable responses show bounded recovery issues;
 Cover retries structure once, without repairing content-only concerns. Do not badge ordinary readiness gaps or provider errors as evidence
 warnings.
-Materials = draft sheets; Applications = view surface + inspector. The rail is a single sheet
+Answers uses a centered conversation column, one rounded bottom composer,
+compact Context and Saved answers disclosures, and a model/effort picker inside
+the composer. The picker uses the existing stage-settings owner and catalogs,
+opens above its trigger, and stays inside the viewport; it is a compact
+label/control grid (Provider, Model, Effort, as in Settings › Models), and the
+trigger carries a warm dot when its provider needs attention. The composer
+auto-grows without a resize grip; its footer holds the picker, a Refine / Add a
+detail switch while refining, and the question's limits beside Send. Employer
+questions use quiet right-aligned bubbles whose Edit question appears on hover or
+focus for pointer devices; answers stay on an open editable reading surface.
+While drafting, the pending answer slot shows three pulsing dots and "Drafting
+your answer" (no simulated streaming: responses arrive whole and fade in), and
+the progress dock omits the Answers card while that thread is in view.
+Questions and answer revisions stay visually distinct;
+counts, warnings and Copy/Save controls sit outside the answer body. New question
+clears the refinement target explicitly. The conversation owns its scroll; the
+composer remains reachable at narrow widths. Reuse Drafting Desk typography,
+hairlines, paper tones and Forest Ink without a permanent plan
+rail. Applications = view surface + inspector. The rail is a single sheet
 (`--card`, hairline, rest shadow);
 the main column sits directly on the desk. Resume and Cover letter use the same
 rail width, divider, labelled header, readiness order, failure placement, and

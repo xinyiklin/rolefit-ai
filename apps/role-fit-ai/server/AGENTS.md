@@ -45,9 +45,15 @@ for provider, prompt, sanitizer, and review work.
   Each document slot stores either strict editable source or an explicitly
   uploaded PDF. Additional uploads are validated by extension + magic bytes
   and capped per application. Every byte served back is a download (narrow
-  content type, `nosniff`, no inline render). Skipped records are job-only:
+  content type, `nosniff`, no inline render). Draft and skipped records cannot
+  mutate document packets; either may retain application answers:
   every document and attachment mutation must pass the shared
   `routeSupport.ts` guard before any file I/O.
+  Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
+  saves create or update one revision-checked Draft; Apply/Skip promote that same
+  ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across
+  browser, server and backup validation (shape only on load; reconcile verifies
+  a new revision's count receipt); legacy pairs keep unknown provenance.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin

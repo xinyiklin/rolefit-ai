@@ -3,6 +3,87 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-07
+
+- [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
+  `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
+  Product Brief/Delivery Plan gates in those sessions and supplied the draft).
+  Answers is a per-preparation conversation over `/api/application-answers`
+  `mode: "conversation"` (`server/ai/applicationAnswerConversation.ts`, prompt
+  `application-answer-conversation-v4`: the benchmarked v3 writing guidance plus
+  the input firewall naming the Answers sections): the exact employer question and its
+  revision stay attached to every answer; evidence is the selected resume,
+  whole Profile, edited brief, captured posting and explicit user facts, never
+  a previous answer or the cover letter; one generation plus at most one
+  format repair; only explicit hard word/character/sentence limits gate Copy
+  and Save, every other warning stays advisory; oversized inputs are rejected,
+  not clipped. `shared/applicationAnswersContract.ts` (limits, exact counts,
+  constraint parsing) and `shared/applicationAnswerStorage.ts` (strict
+  saved-revision parser; legacy question/answer pairs keep unknown provenance)
+  serve browser, server and backup validation. Explicit Save appends an
+  immutable revision through the normal mutation queue; the first Save creates
+  a `draft` tracker record (new status: no `appliedAt`, no documents, outside
+  submission metrics and calendar events, transitions only to applied or
+  not_applying) and Apply/Skip promote that same id. Reconcile rejects any
+  rewrite of a saved revision id; the Applications modal's manual edit appends
+  a new revision instead. The `materials` tab id is retained so saved tab
+  preferences stay valid.
+- [USER+CODE] Per-stage startup defaults moved to `src/lib/stageSettings.ts`:
+  Prepare/Fit Claude CLI Sonnet 5.5 low, Resume Polish Opus 5.5 high, Cover
+  Codex CLI GPT-6.1 Sol medium, Answers Claude CLI Opus 5.5 high, Final review
+  Sonnet 5.5 low (retained user choice, no benchmark winner). Saved choices
+  stay; a model-only saved setting keeps the implied Claude CLI provider, and
+  choosing a stage's recommended provider seeds its recommended model/effort.
+  Answers' setting comes from the 57-case, nine-setting synthetic comparison
+  graded blind by Astra High and Opus High under one agreed rubric (Opus high
+  a modest quality-first lead; Sol medium the OpenAI alternative; model
+  judgments, no human calibration). Results, judge disagreement and the cost
+  ledger (per-task averages, run subtotals, unknown historical usage, one
+  Resume/Cover cost sample; tasks `benchmark-ledger-20261007`,
+  `polish-cost-sample-20261007`) are in `docs/engineering/testing.md` and the
+  new `docs/engineering/benchmarks.md`. `eval:live:application-answers` is
+  opt-in, synthetic-only and denylisted from `npm test`; receipts stay under
+  ignored `workspace/application-answer-eval/`.
+  - [TOOL] Review-and-publish session: full RoleFit check (client and server
+    `tsc`, Vite build, landing build, desktop probes, 153/153 offline evals
+    including the eight new or rewritten Answers probes), `git diff --check`,
+    and a link/anchor check over the changed docs all passed. Fixed in review:
+    the README Answers section had been appended after License (moved into AI
+    setup); the tracker row menu offered stage transitions the record cannot
+    make (Draft for submitted records, and anything beyond Apply/Skip for a
+    Draft) and now disables them.
+    Two independent reviews (server/shared; client/docs) in this session:
+    fixed two high findings — the twelve Answers prompt sections were not in
+    the shared fence registry, so a posting or question could close a section
+    and forge a candidate-evidence block (now registered in `prompts.ts` and
+    named by the Answers firewall line; prompt version v4, writing guidance
+    unchanged, not re-benchmarked), and an un-negated ceiling stated through
+    its penalty ("responses that exceed 250 words will not be read") parsed as
+    a 251-word minimum, which the repair step then enforced (now a maximum
+    when a penalty clause follows; "don't need more than", compound and
+    thousands-separated numbers, and "Word limit: 300" phrasings also parse;
+    "Limit 2.000 characters" no longer yields a 0-character ceiling). Medium
+    findings fixed: stored revisions are now shape-checked on load so a later
+    count rule can never make the whole tracker unloadable (reconcile verifies
+    only new revisions' receipts); bracketed or doubled-brace placeholders keep
+    an answer a draft on the server and in manual edits; a repair that asks a
+    question keeps the draft text; the answer-created Draft is acknowledged to
+    the duplicate guard so Polish no longer reports the preparation's own
+    record as an existing application; the unload guard follows the current
+    thread only; the Applications modal numbers same-question revisions
+    correctly and trims manual rows again; saved versions number per
+    question. Left as residual: no duplicate resolution runs when the first
+    tracker record for a posting is an answer-created Draft (the tracker's
+    later duplicate scan still surfaces it); conversations of earlier
+    preparations stay in memory for the session; "Node.js" and "U.S." count
+    as two words.
+    Earlier sessions' receipts (app-local ledger, ignored): synthetic-route
+    browser QA of the thread, picker and saved versions at 1440 and 390 px,
+    Reset and provider round trips, companion refresh with one synthetic HTTP
+    generation on prompt v3. UNCONFIRMED this session: no live-provider
+    generation through the installed companion and no browser QA of the
+    stage-menu change.
+
 ## 2026-10-06
 
 - [USER+CODE] RoleFit landing redesigned as "the galley proof" (done in a

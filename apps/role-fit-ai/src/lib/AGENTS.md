@@ -15,6 +15,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
   a verdict; it must not infer or recalculate the verdict.
 - Browser/server-shared helpers must remain safe to import in both runtimes and
   must not pull React-bearing package paths into Node.
+- `stageSettings.ts` owns task-specific startup model and effort defaults.
+  Preserve explicit saved selections and the implied Claude CLI provider for
+  older model-only settings; defaults must not pair a saved model with a new
+  provider. Final Review retains its one-time inheritance from Fit.
 - `coverLetterPreflight.ts` owns template-token detection, deterministic
   correspondence resolution (date, name, role, company, recipient, greeting,
   sign-off), required role/company inputs, and advisory missing private facts.

@@ -52,8 +52,8 @@ export function appliedApplicationForSession({
       ...merged,
       id: existing.id,
       createdAt: existing.createdAt,
-      status: existing.status,
-      appliedAt: existing.appliedAt
+      status: existing.status === "draft" ? "applied" : existing.status,
+      appliedAt: existing.status === "draft" ? now : existing.appliedAt
     }
   };
 }

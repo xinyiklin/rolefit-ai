@@ -71,7 +71,7 @@ export function preparationPrimaryAction(
   session: PreparationSession,
   recordStatus?: string
 ): PreparationPrimaryAction {
-  if (session.mode !== "update") {
+  if (session.mode !== "update" || recordStatus === "draft") {
     return {
       kind: "apply",
       label: "Apply",

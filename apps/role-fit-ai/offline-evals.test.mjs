@@ -32,6 +32,7 @@ const repoRoot = dirname(fileURLToPath(import.meta.url));
 
 // Eval scripts that drive a real AI provider — never run in `npm test`.
 const LIVE = new Set([
+  "application-answer-quality-eval.mjs",
   "cover-letter-quality-eval.mjs",
   "fit-assessment-consistency-eval.mjs",
   "resume-proposal-quality-eval.mjs"

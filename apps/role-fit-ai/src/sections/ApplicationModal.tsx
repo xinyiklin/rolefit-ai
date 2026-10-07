@@ -1,3 +1,4 @@
+import { editedSavedApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
 import { ContentWarnings } from "../components/ContentWarnings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -449,9 +450,25 @@ export function ApplicationModal({
         phone: c.phone?.trim() || ""
       }))
       .filter((c) => c.name || c.title || c.email || c.phone);
-    const cleanAnswers = form.answers
-      .map((a) => ({ question: a.question.trim(), answer: a.answer.trim(), savedAt: a.savedAt || now }))
-      .filter((a) => a.question && a.answer);
+    // Saved revisions stay as they are; an edited one is kept and followed by a
+    // new revision, numbering per question across every edit in this save.
+    const latestQuestionRevision = new Map<string, number>();
+    for (const saved of base.applicationAnswers ?? []) {
+      if (saved.questionId) latestQuestionRevision.set(saved.questionId, Math.max(latestQuestionRevision.get(saved.questionId) ?? 0, saved.questionRevision ?? 0));
+    }
+    const cleanAnswers = form.answers.flatMap((answer): ApplicationAnswer[] => {
+      const question = answer.question.trim();
+      const text = answer.answer.trim();
+      if (!question || !text) return [];
+      const previous = answer.id ? base.applicationAnswers?.find((saved) => saved.id === answer.id) : undefined;
+      if (!previous) return [{ ...answer, question, answer: text, savedAt: answer.savedAt || now }];
+      if (previous.question === answer.question && previous.answer === answer.answer) return [previous];
+      const questionKey = previous.questionId ?? "";
+      const revision = (latestQuestionRevision.get(questionKey) ?? previous.questionRevision ?? 0) + 1;
+      if (question !== previous.question && previous.questionId) latestQuestionRevision.set(questionKey, revision);
+      return [previous, editedSavedApplicationAnswer(previous, question, text,
+        `manual_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`, now, revision)];
+    });
 
     const next: Application = {
       ...base,
@@ -466,7 +483,7 @@ export function ApplicationModal({
       workAuth: form.workAuth.trim(),
       jobUrl: form.jobUrl.trim(),
       appliedAt:
-        toIso(form.appliedAt) || base.appliedAt || (statusOverride !== "not_applying" ? now : undefined),
+        statusOverride === "draft" ? undefined : toIso(form.appliedAt) || base.appliedAt || (statusOverride !== "not_applying" ? now : undefined),
       notApplyingAt:
         statusOverride === "not_applying"
           ? toIso(form.notApplyingAt) || base.notApplyingAt || now
@@ -892,6 +909,8 @@ export function ApplicationModal({
                           <span>Decision date</span>
                           <input className="text-input is-data" type="date" value={form.notApplyingAt} onChange={(e) => update("notApplyingAt", e.target.value)} />
                         </label>
+                      ) : form.status === "draft" ? (
+                        <p className="application-muted">Draft — no submission date.</p>
                       ) : (
                         <label className="field">
                           <span>Application date</span>
@@ -1097,7 +1116,7 @@ export function ApplicationModal({
                     </div>
                   ))
                 ) : (
-                  <p className="application-muted">No saved questions. Generate answers in Application Questions or add one here.</p>
+                  <p className="application-muted">No saved questions. Draft an answer in Answers or add one here.</p>
                 )}
               </section>
             </section>

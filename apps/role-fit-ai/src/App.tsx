@@ -10,6 +10,7 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -172,7 +173,9 @@ import { ResumePrintLayer } from "@typeset/editor/sections/ResumePrintLayer.tsx"
 import { ResumeTab } from "./sections/tabs/ResumeTab";
 import { PrepareTab } from "./sections/tabs/PrepareTab";
 import { CoverLetterTab } from "./sections/tabs/CoverLetterTab";
-import { MaterialsTab } from "./sections/tabs/MaterialsTab";
+import { AnswersTab } from "./sections/tabs/AnswersTab";
+import { AnswerModelPicker } from "./sections/tabs/answers/AnswerModelPicker";
+import type { ApplicationAnswerRevision } from "../shared/applicationAnswersContract.ts";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
 import { providerLabel } from "./config/aiOptions";
@@ -301,7 +304,7 @@ const OUTPUT_TABS: OutputTabDescriptor[] = [
   { id: "prepare", label: "Prepare", group: "PREPARE" },
   { id: "resume", label: "Resume" },
   { id: "cover", label: "Cover letter" },
-  { id: "materials", label: "Materials" },
+  { id: "materials", label: "Answers" },
   { id: "applications", label: "Applications" },
   { id: "analytics", label: "Analytics" }
 ];
@@ -511,7 +514,6 @@ function App() {
   const coverProviderReady = providerReady(stages["cover-polish"].provider);
   const answersProviderReady = providerReady(stages["application-answers"].provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
-  const resumePolishProviderMessage = providerRecoveryMessage(resumePolishStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages["cover-polish"].provider);
   const answersProviderMessage = providerRecoveryMessage(stages["application-answers"].provider);
   const ensureJobAnalysisProvider = useCallback(
@@ -1015,6 +1017,7 @@ function App() {
     createApplication,
     updateApplicationById,
     saveApplication,
+    saveApplicationAnswer,
     updateStatus: updateApplicationStatus,
     remove: removeApplication,
     getApplication,
@@ -1089,29 +1092,6 @@ function App() {
     flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])),
     resumeEditorActions.getDocumentGeneration()).length
       ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
-
-  const {
-    answersResult,
-    answersStatus,
-    isGeneratingAnswers,
-    handleGenerateAnswers,
-    answersProgress,
-    dismissAnswersProgress,
-    stopAnswers,
-    retryAnswers
-  } = useApplicationAnswers({
-    resumeText: currentResumeText || resumeText,
-    resumeData: editedResume,
-    jobDescription,
-    jobUrl,
-    candidateContext,
-    profileLimitMessage,
-    sourceWarnings: resumeSourceWarnings,
-    customInstructions: customInstructionsFor("application-answers"),
-    aiRequest: stages["application-answers"],
-    providerReady: answersProviderReady,
-    providerMessage: answersProviderMessage
-  });
 
   // Cover Polish stages a whole-document proposal. The dedicated editor
   // remains the single owner for accepted text, direct edits, file lifecycle,
@@ -1277,7 +1257,7 @@ function App() {
 
   // ----- Derived (non-memo) -----
   const jobReady = jobPrepared;
-  // Quiet target label for the Materials tab plan rail header.
+  // Application identity shown above the Answers conversation.
   // Only derived when a job description is present; never invents content.
   const materialsJobTarget =
     jobReady && (jobTracking.role || jobTracking.company)
@@ -1560,6 +1540,74 @@ function App() {
     || jobAnalysisProgress.status === "running"
     || preparationAutomationPending;
 
+  const answersConversationId = `preparation-${preparationGenerationRef.current}-${currentPreparationId}`;
+  const answersDraftIds = useRef(new Map<string, string>());
+  const applicationActionPendingRef = useRef<() => boolean>(() => false);
+  async function handleSaveAnswer(answer: ApplicationAnswerRevision, conversationId: string, preserveDraft: boolean) {
+    if (applicationActionPendingRef.current()) throw new Error("Finish or cancel Apply / Skip before saving an answer. Your draft is still here.");
+    if (conversationId !== `preparation-${preparationGenerationRef.current}-${getCurrentPreparationId()}`) {
+      throw new Error("The preparation changed. Reopen the original application to save this answer.");
+    }
+    if (!hasLoadedApplications) throw new Error("Wait for Applications to finish loading before saving.");
+    const session = preparationSessionRef.current;
+    const generation = preparationGenerationRef.current;
+    const preparationId = getCurrentPreparationId();
+    let draftId = answersDraftIds.current.get(conversationId);
+    if (!draftId) {
+      draftId = crypto.randomUUID();
+      answersDraftIds.current.set(conversationId, draftId);
+    }
+    const fit = fitAssessmentPersistenceDecision(fitAssessmentState);
+    let saved = await saveApplicationAnswer({
+      answer, preserveDraft,
+      target: session.applicationId ? { applicationId: session.applicationId } : {
+        draftId, jobUrl, jobDescription: preparedApplicationJobDescription,
+        rawJobDescription: jobRawText, metadata: currentJobTracking(),
+        jobWarnings: importedJob?.jobWarnings, aiUsage: pipelineAiUsage,
+        ...(fit.action === "set" ? { fitAssessment: fit.snapshot } : {})
+      }
+    });
+    if (session.mode === "new" && session.pendingRelationship) {
+      const relationship = session.pendingRelationship;
+      const linked = await linkPostingRecords(
+        [saved.id, relationship.matchedApplicationId], relationship.jobPostingGroupId
+      );
+      if (!linked) throw new Error("The answer was saved, but linking the related application failed. Retry Save to finish linking.");
+      saved = getApplication(saved.id) ?? saved;
+    }
+    if (generation === preparationGenerationRef.current && preparationId === getCurrentPreparationId()) {
+      // Later Polish/Apply gates must not report this preparation's own Draft as a duplicate.
+      duplicateGuard.ackApplication(saved);
+      publishPreparationSession({ mode: "update", applicationId: saved.id, pendingRelationship: null });
+    }
+    return saved;
+  }
+  const answerController = useApplicationAnswers({
+    conversationId: answersConversationId,
+    applicationId: preparationSession.applicationId ?? undefined,
+    resumeText: currentResumeText || resumeText,
+    jobDescription, rawJobText: jobRawText, jobUrl, candidateContext,
+    profileLimitMessage, sourceWarnings: resumeSourceWarnings,
+    customInstructions: customInstructionsFor("application-answers"),
+    aiRequest: stages["application-answers"],
+    providerReady: answersProviderReady, providerMessage: answersProviderMessage,
+    savedAnswers: preparationApplication?.applicationAnswers ?? [],
+    saveBlocker: applicationActionPendingRef.current() ? "Finish or cancel Apply / Skip before saving an answer." : undefined,
+    onSaveAnswer: handleSaveAnswer
+  });
+  const { answersProgress, stopAnswers, retryAnswers } = answerController;
+  // The Answers thread shows its own drafting state; the dock reports only what
+  // happened while that thread was out of view. Hiding the card never resets the
+  // conversation's progress, which also drives Stop, Retry, and the unload guard.
+  const answersTabActive = activeOutputTab === "materials";
+  const [answersProgressSeen, setAnswersProgressSeen] = useState(answersProgress);
+  const [answersProgressHidden, setAnswersProgressHidden] = useState<typeof answersProgress | null>(null);
+  useLayoutEffect(() => { if (answersTabActive) setAnswersProgressSeen(answersProgress); }, [answersTabActive, answersProgress]);
+  const answersProgressVisible = !answersTabActive && answersProgress.status !== "idle"
+    && answersProgress !== answersProgressHidden
+    && (answersProgress.status === "running" || answersProgress !== answersProgressSeen);
+  const hideAnswersProgress = () => setAnswersProgressHidden(answersProgress);
+
   // ----- Resume Polish -----
   // Proposal generation, retry, cancellation, and stale-response protection are
   // extracted to
@@ -1781,7 +1829,9 @@ function App() {
     return true;
   }
 
+  const answerSavePending = answerController.isSavingAnswers;
   const applicationPreparationActive =
+    answerSavePending ||
     jobPreparationActive ||
     (materialSelection.resume &&
       (isPolishStarting ||
@@ -2048,6 +2098,7 @@ function App() {
   const {
     applyDownloadPrompt,
     isApplying,
+    isApplyPending,
     applicationSavePending,
     applySaveError,
     handleApply,
@@ -2118,20 +2169,21 @@ function App() {
     profileLimitMessage
   });
 
-  const skipModeAvailable = preparationSession.mode === "new";
+  const skipModeAvailable = preparationSession.mode === "new" || preparationApplication?.status === "draft";
   const skipBlocker = trackerReadinessBlocker
     ? trackerReadinessBlocker
     : !jobPrepared
       ? "Prepare the posting first."
-      : preparationSession.mode === "update"
+      : preparationSession.mode === "update" && preparationApplication?.status !== "draft"
         ? "Skip is unavailable while editing a saved record."
-        : pendingApplicationWrites > 0 || isApplying
+        : pendingApplicationWrites > 0 || isApplying || answerSavePending
           ? "Wait for the current application save to finish."
           : "";
   const {
     skipPrompt,
     skipError,
     isSkipping,
+    isSkipPending,
     handleSkip,
     saveSkip,
     saveJobUpdates,
@@ -2161,13 +2213,14 @@ function App() {
     setApplicationActionStatus
   });
   const applicationActionsBusy = isApplying || isSkipping;
+  applicationActionPendingRef.current = () => isApplyPending() || isSkipPending();
   const visibleApplicationActionStatus = applyDownloadPrompt || skipPrompt ? null : applicationActionStatus;
   const progressDockVisible = Boolean(
     visibleApplicationActionStatus
     || polishProgressVisible
     || jobAnalysisProgressVisible
     || coverProgress.status !== "idle"
-    || answersProgress.status !== "idle"
+    || answersProgressVisible
   );
   const primaryActionBusy = isApplying || (
     primaryPreparationAction.kind === "update-job" && isSkipping
@@ -2190,6 +2243,7 @@ function App() {
     ? "Wait for the current application action to finish."
     : primaryActionBlocker;
   const handlePrimaryPreparationAction = async (): Promise<void> => {
+    if (answerController.isSavePending()) return;
     if (primaryPreparationAction.kind === "update-job") {
       await saveJobUpdates();
       return;
@@ -2198,6 +2252,7 @@ function App() {
   };
 
   const applicationPersistencePending =
+    answerSavePending ||
     applicationSavePending ||
     resumeApplicationSync.isSaving ||
     coverLetterApplicationSync.isSaving ||
@@ -2222,7 +2277,7 @@ function App() {
     receipt: applicationPersistenceReceipt
   });
   useBeforeUnloadGuard(
-    applicationUnloadGuardActive({
+    answerController.hasUnsavedAnswers || answerController.isGeneratingAnswers || applicationUnloadGuardActive({
       resumeNeedsUnloadGuard,
       coverLetterNeedsUnloadGuard,
       isGeneratingCover,
@@ -2650,15 +2705,17 @@ function App() {
             onDismissButton={() => dismissTaskProgressFromButton(dismissCoverProgress)}
             suspendExpiry={dock.dragging}
           />
-          <TaskProgress
-            stageKey="application-answers"
-            state={answersProgress}
-            onRetry={retryAnswers}
-            onStop={stopAnswers}
-            onDismiss={dismissAnswersProgress}
-            onDismissButton={() => dismissTaskProgressFromButton(dismissAnswersProgress)}
-            suspendExpiry={dock.dragging}
-          />
+          {answersProgressVisible ? (
+            <TaskProgress
+              stageKey="application-answers"
+              state={answersProgress}
+              onRetry={retryAnswers}
+              onStop={stopAnswers}
+              onDismiss={hideAnswersProgress}
+              onDismissButton={() => dismissTaskProgressFromButton(hideAnswersProgress)}
+              suspendExpiry={dock.dragging}
+            />
+          ) : null}
         </div>
       ) : null}
 
@@ -2808,7 +2865,7 @@ function App() {
               canSkip={!skipBlocker}
               skipHint={skipBlocker}
               isSkipping={isSkipping}
-              onSkip={handleSkip}
+              onSkip={() => { if (!answerController.isSavePending()) void handleSkip(); }}
             />
           ) : null}
 
@@ -3240,17 +3297,26 @@ function App() {
             hidden={activeOutputTab !== "materials"}
             aria-hidden={activeOutputTab !== "materials"}
           >
-            <MaterialsTab
-              answersResult={answersResult}
-              answersStatus={answersStatus}
-              isGeneratingAnswers={isGeneratingAnswers}
+            {activeOutputTab === "materials" ? <AnswersTab
+              controller={answerController}
               resumeReady={resumeReady}
               jobReady={jobReady}
-              aiProviderReady={resumePolishProviderReady}
-              aiProviderMessage={resumePolishProviderMessage}
-              onGenerate={handleGenerateAnswers}
               jobTarget={materialsJobTarget}
-            />
+              resumeLabel={baseResumeName || documentTitle}
+              hasProfile={Boolean(candidateContext.trim())}
+              hasOriginalPosting={Boolean(jobRawText.trim())}
+              modelPicker={
+                <AnswerModelPicker
+                  config={stages["application-answers"]}
+                  providers={providerAvailability.providers}
+                  availabilityStatus={providerAvailability.status}
+                  availabilityMessage={providerAvailability.message}
+                  onRefreshProviders={providerAvailability.refresh}
+                  onChange={(patch) => updateStage("application-answers", patch)}
+                  onProviderChange={(provider) => changeStageProvider("application-answers", provider)}
+                />
+              }
+            /> : null}
           </div>
 
           {activeOutputTab === "analytics" ? (

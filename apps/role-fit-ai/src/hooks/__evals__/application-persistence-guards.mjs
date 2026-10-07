@@ -220,8 +220,8 @@ assert.match(
 );
 assert.match(
   app,
-  /const applicationPersistencePending\s*=\s*applicationSavePending\s*\|\|\s*resumeApplicationSync\.isSaving\s*\|\|\s*coverLetterApplicationSync\.isSaving\s*\|\|\s*applicationFiles\.isBusy\s*\|\|\s*applicationDocumentActionBusy/,
-  "explicit resume and cover-letter application uploads join the persistence guard"
+  /const applicationPersistencePending\s*=\s*answerSavePending\s*\|\|\s*applicationSavePending\s*\|\|\s*resumeApplicationSync\.isSaving\s*\|\|\s*coverLetterApplicationSync\.isSaving\s*\|\|\s*applicationFiles\.isBusy\s*\|\|\s*applicationDocumentActionBusy/,
+  "answer saves and explicit document uploads join the persistence guard"
 );
 assert.match(
   applicationFiles,

@@ -5,23 +5,29 @@ import type { AiProviderValue } from "../config/aiOptions.ts";
 import type { StageConfig, StageId } from "./aiRequest.ts";
 import type { PersistedSettings } from "./settings.ts";
 
-// Pure seeding of the per-stage AI configs from persisted settings, and the
-// reverse flattening back to persisted keys. Extracted from useAiSettings so the
-// stage defaults have a test seam that does not need React.
-
-const DEFAULT_PROVIDER: AiProviderValue = "claude-cli";
-const DEFAULT_MODEL = "claude-sonnet-5-5";
+const STAGE_DEFAULTS: Record<StageId, StageConfig> = {
+  "job-analysis": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "fit-assessment": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "resume-polish": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
+  "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
+  "application-answers": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
+  "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
+};
 
 export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
   if (stage === "application-review" && saved.applicationReviewProvider === undefined) return seedStage("fit-assessment", saved);
   const ownKeys = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === stage)!);
   const bag = saved as unknown as Record<string, string | undefined>;
-  const provider = (bag[ownKeys.provider] as AiProviderValue | undefined) ?? DEFAULT_PROVIDER;
-  const selectedModel = bag[ownKeys.model] ?? providerOptions.find((option) => option.value === provider)?.model ?? DEFAULT_MODEL;
+  const defaults = STAGE_DEFAULTS[stage];
+  // Sparse saved model choices used Claude CLI before stage-specific defaults.
+  const provider = (bag[ownKeys.provider] as AiProviderValue | undefined) ?? (bag[ownKeys.model] !== undefined ? "claude-cli" : defaults.provider);
+  const selectedModel = bag[ownKeys.model] ?? (provider === defaults.provider ? defaults.selectedModel : providerOptions.find((option) => option.value === provider)?.model) ?? defaults.selectedModel;
+  const defaultEffort = provider === defaults.provider && selectedModel === defaults.selectedModel
+    ? defaults.cliReasoningEffort : defaultCliReasoningEffort(provider);
   return {
     provider,
     selectedModel,
-    cliReasoningEffort: reconcileCliReasoningEffort(provider, selectedModel, bag[ownKeys.effort] ?? defaultCliReasoningEffort(provider))
+    cliReasoningEffort: reconcileCliReasoningEffort(provider, selectedModel, bag[ownKeys.effort] ?? defaultEffort)
   };
 }
 

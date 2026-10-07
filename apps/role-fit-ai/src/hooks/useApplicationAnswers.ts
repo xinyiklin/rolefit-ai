@@ -1,245 +1,269 @@
-import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { useEffect, useRef, useState } from "react";
+import {
+  ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
+  extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText,
+  validateAnswerConstraints, type ApplicationAnswerRevision
+} from "../../shared/applicationAnswersContract.ts";
+import { parseApplicationAnswerRevision } from "../../shared/applicationAnswerStorage.ts";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { classifyFailure, ApiError } from "../lib/failures";
-import type { ApplicationAnswersResult } from "../sections/shared";
-import {
-  workflowInputFingerprint,
-  workflowRequestIsCurrent,
-  type AiStageState as StageState
-} from "../lib/aiWorkflow";
-import { buildApplicationRoleEvidence } from "../lib/applicationAnswerEvidence";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { workflowInputFingerprint, type AiStageState } from "../lib/aiWorkflow";
+import type { ApplicationAnswer } from "./useApplications";
 
+export type AnswerQuestion = { id: string; revision: number; text: string };
+export type AnswerMessage = {
+  id: string;
+  question: AnswerQuestion;
+  instruction?: string;
+  facts: string[];
+  response?: ApplicationAnswerRevision;
+  edited?: boolean;
+  savedRevisionId?: string;
+  savingRevisionId?: string;
+  saveError?: string;
+};
+type Conversation = {
+  messages: AnswerMessage[];
+  composer: string;
+  targetMessageId: string | null;
+  editedQuestion: AnswerQuestion | null;
+  composerMode: "refinement" | "clarification";
+  targetIntent: number;
+  status: string;
+  progress: AiStageState;
+};
+type SubmittedTurn = {
+  conversationId: string;
+  messageId: string;
+  applicationId: string;
+  question: AnswerQuestion;
+  answerRevisionId: string;
+  previousAnswer?: { id: string; text: string };
+  refinement?: string;
+  clarification?: string;
+  explicitFacts: string[];
+  targetIntent: number;
+};
 type UseApplicationAnswersArgs = {
+  conversationId: string;
+  applicationId?: string;
   resumeText: string;
-  resumeData: ResumeData | null;
   jobDescription: string;
+  rawJobText?: string;
   jobUrl: string;
   candidateContext: string;
-  // Set while the Profile Background is over its limit; the stage declines.
   profileLimitMessage: string | null;
   sourceWarnings?: string[];
   customInstructions: string;
   aiRequest: StageConfig;
   providerReady: boolean;
   providerMessage: string;
+  savedAnswers: ApplicationAnswer[];
+  onSaveAnswer: (answer: ApplicationAnswerRevision, conversationId: string, preserveDraft: boolean) => Promise<{ id: string }>;
+  saveBlocker?: string;
 };
+// One idle object, so an untouched conversation keeps a stable progress identity across renders.
+const IDLE_PROGRESS: AiStageState = { status: "idle" };
+const emptyConversation = (): Conversation => ({ messages: [], composer: "", targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: 0, status: "", progress: IDLE_PROGRESS });
 
-// Owns the Application Questions tab: drafting answers/role descriptions via
-// the AI provider seam. Drafts remain session-local for editing and copying;
-// only Apply or Skip creates a tracker record.
-export function useApplicationAnswers({
-  resumeText,
-  resumeData,
-  jobDescription,
-  jobUrl,
-  candidateContext,
-  profileLimitMessage,
-  sourceWarnings,
-  customInstructions,
-  aiRequest,
-  providerReady,
-  providerMessage
-}: UseApplicationAnswersArgs) {
-  const [answersResult, setAnswersResult] = useState<ApplicationAnswersResult>(null);
-  const [answersStatus, setAnswersStatus] = useState("");
-  const [isGeneratingAnswers, setIsGeneratingAnswers] = useState(false);
-  // Dock card mirroring the polish/job-analysis progress cards. Unlike the cover
-  // letter and job-analysis flows, there is NO local fallback for answers — a
-  // failed generation stays "failed" (with Retry) rather than being
-  // re-presented as a done-with-warning card.
-  const [answersProgress, setAnswersProgress] = useState<StageState>({ status: "idle" });
-
-  const dismissAnswersProgress = () => setAnswersProgress({ status: "idle" });
-
-  function stopAnswers() {
-    if (!requestAbortRef.current) return;
-    requestGenerationRef.current += 1;
-    requestAbortRef.current.abort();
-    requestAbortRef.current = null;
-    setIsGeneratingAnswers(false);
-    setAnswersStatus("Application answer drafting stopped. Existing drafts were kept.");
-    setAnswersProgress({
-      status: "stopped",
-      errorHeadline: "Stopped",
-      error: "Answer drafting was cancelled. Generate drafts again when you are ready."
-    });
-  }
-
-  // Last submitted request, so the failed dock card's Retry can replay it —
-  // handleGenerateAnswers needs the questions list, which only MaterialsTab
-  // holds at click time. A ref (not state): nothing renders from it.
-  const lastRequestRef = useRef<{ questions: string[]; includeRoleDescriptions: boolean } | null>(null);
-  const requestGenerationRef = useRef(0);
-  const requestAbortRef = useRef<AbortController | null>(null);
-  const inputFingerprint = workflowInputFingerprint({
-    resumeText,
-    resumeData,
-    jobDescription,
-    jobUrl,
-    candidateContext,
-    sourceWarnings,
-    customInstructions,
-    aiRequest: buildStageRequestFields(aiRequest)
+export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
+  const { conversationId, applicationId, savedAnswers, onSaveAnswer } = args;
+  const [conversations, setConversations] = useState<Record<string, Conversation>>({});
+  const conversationsRef = useRef(conversations);
+  const requestRef = useRef<{ turn: SubmittedTurn; controller: AbortController; fingerprint: string } | null>(null);
+  const lastRequestRef = useRef<Record<string, SubmittedTurn>>({});
+  const saveRequests = useRef(new Set<string>());
+  const currentIdentityRef = useRef(conversationId);
+  currentIdentityRef.current = conversationId;
+  const fingerprint = workflowInputFingerprint({
+    resumeText: args.resumeText, jobDescription: args.jobDescription, rawJobText: args.rawJobText,
+    jobUrl: args.jobUrl, candidateContext: args.candidateContext, customInstructions: args.customInstructions,
+    sourceWarnings: args.sourceWarnings
   });
-  const inputFingerprintRef = useRef(inputFingerprint);
-  inputFingerprintRef.current = inputFingerprint;
-  const contentFingerprint = workflowInputFingerprint({ resumeText, resumeData, jobDescription, jobUrl, candidateContext, customInstructions, sourceWarnings });
-  const previousContentFingerprintRef = useRef(contentFingerprint);
+  const fingerprintRef = useRef(fingerprint);
+  fingerprintRef.current = fingerprint;
+  const previousInputs = useRef({ conversationId, fingerprint });
+  const conversation = conversations[conversationId] ?? emptyConversation();
 
-  // Any request-input change invalidates only an IN-FLIGHT generation. Completed
-  // output may already contain user edits in MaterialsTab, so settings/provider
-  // changes must never clear it.
+  function update(id: string, change: (current: Conversation) => Conversation) {
+    const next = { ...conversationsRef.current, [id]: change(conversationsRef.current[id] ?? emptyConversation()) };
+    conversationsRef.current = next;
+    setConversations(next);
+  }
+  function updateMessage(id: string, messageId: string, change: (message: AnswerMessage) => AnswerMessage) {
+    update(id, (current) => ({ ...current, messages: current.messages.map((message) => message.id === messageId ? change(message) : message) }));
+  }
+  function stopAnswers(reason = "Answer drafting stopped. Your conversation was kept.") {
+    const active = requestRef.current;
+    if (!active) return;
+    active.controller.abort();
+    requestRef.current = null;
+    update(active.turn.conversationId, (current) => ({ ...current, status: reason,
+      progress: { status: "stopped", errorHeadline: "Stopped", error: reason } }));
+  }
   useEffect(() => {
-    const hadActiveRequest = requestAbortRef.current !== null;
-    requestGenerationRef.current += 1;
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
-    setIsGeneratingAnswers(false);
-    if (hadActiveRequest) {
-      setAnswersStatus("Resume, job, or AI settings changed. The in-flight answer request was cancelled.");
-      setAnswersProgress({
-        status: "stopped",
-        errorHeadline: "Inputs changed",
-        error: "Generate again when the current resume, job, and AI settings are ready."
-      });
-    }
-  }, [inputFingerprint]);
+    const prior = previousInputs.current;
+    previousInputs.current = { conversationId, fingerprint };
+    if (prior.conversationId === conversationId && prior.fingerprint === fingerprint) return;
+    stopAnswers("Application or source context changed. The in-flight answer was stopped; existing drafts were kept.");
+    if (prior.conversationId === conversationId) update(conversationId, (current) => current.messages.length ? {
+      ...current, status: "Source context changed. Earlier answers are preserved; review them against the current resume and job."
+    } : current);
+  }, [conversationId, fingerprint]);
+  useEffect(() => () => { requestRef.current?.controller.abort(); requestRef.current = null; }, []);
 
-  // Resume/job changes make a completed draft stale, but preserving it is safer
-  // than erasing user-edited answers. The next explicit Generate replaces it.
-  useEffect(() => {
-    if (previousContentFingerprintRef.current === contentFingerprint) return;
-    previousContentFingerprintRef.current = contentFingerprint;
-    if (!answersResult) return;
-    setAnswersStatus("Resume, job, or drafting context changed. Existing warnings describe the earlier inputs; review the drafts or generate a fresh set.");
-    setAnswersProgress({
-      status: "stopped",
-      errorHeadline: "Draft inputs changed",
-      error: "Existing drafts are preserved for review and may no longer match the current resume or job."
-    });
-  }, [answersResult, contentFingerprint]);
-
-  useEffect(() => () => {
-    requestGenerationRef.current += 1;
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
-  }, []);
-
-  async function handleGenerateAnswers({
-    questions,
-    includeRoleDescriptions
-  }: {
-    questions: string[];
-    includeRoleDescriptions: boolean;
-  }) {
-    requestGenerationRef.current += 1;
-    const generation = requestGenerationRef.current;
-    requestAbortRef.current?.abort();
-    requestAbortRef.current = null;
-    setIsGeneratingAnswers(false);
-    const submittedQuestions = [...questions];
-    lastRequestRef.current = { questions: submittedQuestions, includeRoleDescriptions };
-    if (profileLimitMessage) {
-      setAnswersStatus(profileLimitMessage);
-      setAnswersProgress({
-        status: "failed",
-        errorHeadline: "Profile too long",
-        error: profileLimitMessage
-      });
+  async function generate(turn: SubmittedTurn) {
+    if (requestRef.current || turn.conversationId !== currentIdentityRef.current) return;
+    const blocker = args.profileLimitMessage || (!args.providerReady ? args.providerMessage : "")
+      || (!args.resumeText.trim() ? "Add your resume first." : "")
+      || (!args.jobDescription.trim() ? "Add the job on Prepare first." : "");
+    lastRequestRef.current[turn.conversationId] = turn;
+    if (blocker) {
+      update(conversationId, (current) => ({ ...current, status: blocker, progress: { status: "failed", errorHeadline: "Cannot draft yet", error: blocker } }));
       return;
     }
-    if (!providerReady) {
-      setAnswersStatus(providerMessage);
-      setAnswersProgress({
-        status: "failed",
-        errorHeadline: "Provider unavailable",
-        error: providerMessage
-      });
-      return;
-    }
-    const roleEvidence = includeRoleDescriptions ? buildApplicationRoleEvidence(resumeData) : [];
-    if (includeRoleDescriptions && !roleEvidence.length) {
-      setAnswersStatus("No structured work-experience roles with bullets are available to describe.");
-      setAnswersProgress({
-        status: "failed",
-        errorHeadline: "No work roles found",
-        error: "Add a bulleted Experience or Employment section, or turn off role descriptions."
-      });
-      return;
-    }
-    setIsGeneratingAnswers(true);
-    setAnswersStatus("Drafting application answers...");
-    setAnswersProgress({ status: "running" });
     const controller = new AbortController();
-    requestAbortRef.current = controller;
-    const requestFingerprint = inputFingerprintRef.current;
-    const isCurrent = () => workflowRequestIsCurrent(
-      generation,
-      requestGenerationRef.current,
-      requestFingerprint,
-      inputFingerprintRef.current,
-      controller.signal
-    );
+    const request = { turn, controller, fingerprint: fingerprintRef.current };
+    requestRef.current = request;
+    const isCurrent = () => requestRef.current === request && !controller.signal.aborted
+      && currentIdentityRef.current === turn.conversationId && fingerprintRef.current === request.fingerprint;
+    update(turn.conversationId, (current) => ({ ...current, status: "Drafting your answer…", progress: { status: "running" } }));
     try {
       const response = await fetch("/api/application-answers", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...buildStageRequestFields(aiRequest),
-          resumeText,
-          jobText: jobDescription,
-          candidateContext,
-          customInstructions,
-          sourceWarnings,
-          questions: submittedQuestions,
-          includeRoleDescriptions,
-          roleEvidence
-        }),
-        signal: controller.signal
+        method: "POST", headers: { "Content-Type": "application/json" }, signal: controller.signal,
+        body: JSON.stringify({ ...buildStageRequestFields(args.aiRequest), mode: "conversation",
+          applicationId: turn.applicationId, question: turn.question, answerRevisionId: turn.answerRevisionId,
+          previousAnswer: turn.previousAnswer, refinement: turn.refinement, clarification: turn.clarification, explicitFacts: turn.explicitFacts,
+          resumeText: args.resumeText, jobText: args.jobDescription, rawJobText: args.rawJobText,
+          candidateContext: args.candidateContext, customInstructions: args.customInstructions, sourceWarnings: args.sourceWarnings })
       });
       const data = await response.json();
       if (!isCurrent()) return;
-      if (!response.ok) throw new ApiError(data.error ?? "Could not generate answers.", response.status);
-      setAnswersResult({
-        answers: Array.isArray(data.answers) ? data.answers.map((item: Record<string, unknown>) => ({ ...item, warnings: sanitizeContentWarnings(item.warnings) })) : [],
-        roleDescriptions: Array.isArray(data.roleDescriptions) ? data.roleDescriptions.map((item: Record<string, unknown>) => ({ ...item, warnings: sanitizeContentWarnings(item.warnings) })) : []
-      });
-      const count = Array.isArray(data.answers) ? data.answers.length : 0;
-      setAnswersStatus(
-        `Drafted ${count} answer${count === 1 ? "" : "s"}${data.model ? ` using ${data.model}` : ""}. Fill in any [add: …] placeholders before sending.`
-      );
-      setAnswersProgress({ status: "done", note: `${count} answer${count === 1 ? "" : "s"} drafted`, noteTone: "ok" });
+      if (!response.ok) throw new ApiError(data.error ?? "Could not draft an answer.", response.status);
+      const answer = parseApplicationAnswerRevision(data.answer);
+      if (!answer || !answer.generation || !answer.sources || answer.id !== turn.answerRevisionId || answer.applicationId !== turn.applicationId
+        || answer.questionId !== turn.question.id || answer.questionRevision !== turn.question.revision || answer.question !== turn.question.text) {
+        throw new Error("The answer did not match this question. Retry to create a new draft.");
+      }
+      update(turn.conversationId, (current) => ({ ...current,
+        messages: current.messages.map((message) => message.id === turn.messageId ? { ...message, response: answer } : message),
+        ...(current.targetIntent === turn.targetIntent && !current.composer ? { targetMessageId: turn.messageId, composerMode: answer.status === "needs-input" ? "clarification" as const : "refinement" as const } : {}),
+        status: answer.clarification || (answer.compliant ? "Answer drafted. Edit, copy, or save it below." : "Draft kept. Adjust the requested format before copying or saving as ready."),
+        progress: { status: "done", note: answer.status === "needs-input" ? "A detail is needed" : "Answer drafted", noteTone: answer.compliant ? "ok" : "warn" }
+      }));
     } catch (error) {
       if (!isCurrent()) return;
-      const message = error instanceof Error ? error.message.replace(/[.。]\s*$/, "") : "request failed";
-      setAnswersStatus(`Could not generate answers: ${message}.`);
-      const f = classifyFailure(error);
-      setAnswersProgress({ status: "failed", errorHeadline: f.headline, error: f.detail });
+      const failure = classifyFailure(error);
+      update(turn.conversationId, (current) => ({ ...current,
+        status: error instanceof Error ? error.message : "Could not draft the answer. Retry when ready.",
+        progress: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
+      }));
     } finally {
-      if (isCurrent()) {
-        requestAbortRef.current = null;
-        setIsGeneratingAnswers(false);
-      }
+      if (requestRef.current === request) requestRef.current = null;
     }
   }
-
-  // Replay the last generation request from the failed dock card's Retry.
-  // No-op if nothing was ever submitted (the card can't exist then anyway).
-  function retryAnswers() {
-    if (!lastRequestRef.current || isGeneratingAnswers) return;
-    void handleGenerateAnswers(lastRequestRef.current);
+  function setComposer(composer: string) { update(conversationId, (current) => ({ ...current, composer })); }
+  function newQuestion(text = "") { update(conversationId, (current) => ({ ...current, composer: text, targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: current.targetIntent + 1 })); }
+  function refine(messageId: string, instruction = "") {
+    update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: instruction, targetIntent: current.targetIntent + 1,
+      composerMode: current.messages.find((item) => item.id === messageId)?.response?.status === "needs-input" ? "clarification" : "refinement" }));
   }
-
+  function editQuestion(messageId: string) {
+    update(conversationId, (current) => {
+      const message = current.messages.find((item) => item.id === messageId);
+      return message ? { ...current, targetMessageId: null, composer: message.question.text, targetIntent: current.targetIntent + 1,
+        editedQuestion: { ...message.question, revision: Math.max(message.question.revision, ...current.messages.filter((item) => item.question.id === message.question.id).map((item) => item.question.revision), ...savedAnswers.filter((item) => item.questionId === message.question.id).map((item) => item.questionRevision ?? 1)) + 1 } } : current;
+    });
+  }
+  async function send() {
+    const current = conversationsRef.current[conversationId] ?? emptyConversation();
+    if (requestRef.current || !current.composer.trim()) return;
+    const target = current.messages.find((message) => message.id === current.targetMessageId);
+    const limit = target ? ANSWER_REFINEMENT_MAX_CHARS : ANSWER_QUESTION_MAX_CHARS;
+    if (current.composer.length > limit) {
+      update(conversationId, (state) => ({ ...state, status: `Keep ${target ? "the refinement" : "the question"} within ${limit.toLocaleString()} characters. Your text has been kept.` }));
+      return;
+    }
+    const explicitFacts = [...(target?.facts ?? []), ...(target && current.composerMode === "clarification" ? [current.composer] : [])];
+    if (explicitFacts.length > 20 || explicitFacts.join("\n").length > 12_000) {
+      update(conversationId, (state) => ({ ...state, status: "This question has reached its context limit. Move the supporting facts into Profile before starting a new question. Your message has been kept." }));
+      return;
+    }
+    const question = target?.question ?? { id: current.editedQuestion?.id ?? crypto.randomUUID(), revision: current.editedQuestion?.revision ?? 1, text: current.composer };
+    const messageId = crypto.randomUUID();
+    const turn: SubmittedTurn = { conversationId, messageId, applicationId: applicationId ?? conversationId,
+      question, answerRevisionId: crypto.randomUUID(), targetIntent: current.targetIntent, explicitFacts,
+      ...(target?.response ? { previousAnswer: { id: target.response.id, text: target.response.answer },
+        ...(current.composerMode === "clarification" ? { clarification: current.composer } : { refinement: current.composer }) } : {}) };
+    update(conversationId, (state) => ({ ...state, composer: "", editedQuestion: null,
+      messages: [...state.messages, { id: messageId, question, facts: turn.explicitFacts, ...(target ? { instruction: current.composer } : {}) }] }));
+    await generate(turn);
+  }
+  function editAnswer(messageId: string, text: string) {
+    if (text.length > ANSWER_TEXT_MAX_CHARS) {
+      update(conversationId, (current) => ({ ...current, status: `Answers can contain up to ${ANSWER_TEXT_MAX_CHARS.toLocaleString()} characters. The last edit was not applied.` }));
+      return;
+    }
+    updateMessage(conversationId, messageId, (message) => {
+      if (!message.response) return message;
+      const validation = validateAnswerConstraints(text, message.response.constraints);
+      // Unsaved intermediate edits collapse onto the last saved (or saving) revision.
+      const settled = message.savedRevisionId === message.response.id || message.savingRevisionId === message.response.id;
+      return { ...message, edited: true, saveError: undefined,
+        response: { ...message.response, id: crypto.randomUUID(), previousAnswerId: message.edited && !settled ? message.response.previousAnswerId : message.response.id, generation: undefined, sources: undefined, clarification: undefined,
+          answer: text.replace(/\r\n?/g, "\n"), counts: validation.counts, compliant: validation.compliant,
+          status: text.trim() && validation.compliant && !hasUnresolvedAnswerPlaceholder(text) ? "ready" : "draft" } };
+    });
+  }
+  async function save(messageId: string, preserveDraft = false) {
+    const message = conversationsRef.current[conversationId]?.messages.find((item) => item.id === messageId);
+    if (!message?.response || !message.response.answer.trim()) return;
+    const response = message.response;
+    if (saveRequests.current.has(response.id) || message.savedRevisionId === response.id) return;
+    const text = normalizeAnswerText(response.answer);
+    const validation = validateAnswerConstraints(text, response.constraints);
+    if (!validation.compliant && !preserveDraft) return;
+    const saveAsDraft = preserveDraft || response.status === "draft";
+    const captured = { ...response, answer: text, counts: validation.counts, compliant: validation.compliant,
+      status: saveAsDraft ? "draft" as const : "ready" as const };
+    saveRequests.current.add(response.id);
+    updateMessage(conversationId, messageId, (item) => ({ ...item, savingRevisionId: response.id, saveError: undefined }));
+    try {
+      await onSaveAnswer(captured, conversationId, saveAsDraft);
+      updateMessage(conversationId, messageId, (item) => ({ ...item, savedRevisionId: response.id, savingRevisionId: undefined }));
+    } catch (error) {
+      updateMessage(conversationId, messageId, (item) => ({ ...item, savingRevisionId: undefined,
+        saveError: error instanceof Error ? error.message : "Could not save the answer. Your draft is still here; try again." }));
+    } finally { saveRequests.current.delete(response.id); }
+  }
+  function reopen(answer: ApplicationAnswer) {
+    const existing = conversationsRef.current[conversationId]?.messages.find((item) => answer.id && item.response?.id === answer.id);
+    if (existing) { refine(existing.id); return; }
+    const constraints = answer.constraints ?? extractAnswerConstraints(answer.question);
+    const validation = validateAnswerConstraints(answer.answer, constraints);
+    const id = answer.id ?? crypto.randomUUID();
+    const question = { id: answer.questionId ?? crypto.randomUUID(), revision: answer.questionRevision ?? 1, text: answer.question };
+    const { savedAt: _savedAt, ...savedRevision } = answer;
+    const response: ApplicationAnswerRevision = { ...savedRevision, id, applicationId: answer.applicationId ?? applicationId ?? conversationId,
+      questionId: question.id, questionRevision: question.revision, constraints, counts: validation.counts, compliant: validation.compliant,
+      status: answer.status ?? (validation.compliant ? "ready" : "draft") };
+    const messageId = crypto.randomUUID();
+    update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: response.status === "needs-input" ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
+      messages: [...current.messages, { id: messageId, question, facts: [], response, savedRevisionId: id }] }));
+  }
   return {
-    answersResult,
-    answersStatus,
-    isGeneratingAnswers,
-    handleGenerateAnswers,
-    answersProgress,
-    dismissAnswersProgress,
-    stopAnswers,
-    retryAnswers
+    conversationId, conversation, savedAnswers, stageConfig: args.aiRequest,
+    saveBlocker: args.saveBlocker, isSavePending: () => saveRequests.current.size > 0,
+    providerReady: args.providerReady, providerMessage: args.providerMessage, profileLimitMessage: args.profileLimitMessage,
+    setComposer, newQuestion, refine, editQuestion, editAnswer, send, save, reopen,
+    setComposerMode: (composerMode: Conversation["composerMode"]) => update(conversationId, (current) => ({ ...current, composerMode })),
+    isGeneratingAnswers: conversation.progress.status === "running",
+    isSavingAnswers: Object.values(conversations).some((current) => current.messages.some((message) => Boolean(message.savingRevisionId))),
+    // Only the current thread can still be saved; earlier preparations' threads are unreachable.
+    hasUnsavedAnswers: Boolean(conversation.composer.trim()) || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id),
+    answersStatus: conversation.status, answersProgress: conversation.progress,
+    stopAnswers: () => stopAnswers(),
+    retryAnswers: () => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); }
   };
 }
+export type ApplicationAnswersController = ReturnType<typeof useApplicationAnswers>;

@@ -218,12 +218,33 @@ owns:
   The 180–420-word preference is advisory. Employer facts use employer evidence;
   implied candidate experience still goes through candidate checks. Equivalent
   word/digit durations receive the same support check.
-  `/api/application-answers` retains each usable answer/role description with item
+  Historical batch `/api/application-answers` retains each usable answer/role description with item
   warnings for unsupported claims or wrong-entry attribution. Wrong question/role
   bindings and unsafe structures still fail. Both routes accept bounded
   `sourceWarnings` for known uncertainty in earlier Resume wording and carry them
   into prompts and results. This propagation does not verify the source. Both
   echo resolved `provider`, `model`, and `reasoningEffort`, never credentials.
+  Answers chat uses `mode: "conversation"` and
+  `server/ai/applicationAnswerConversation.ts`: exact question identity/revision,
+  selected resume, whole Profile, edited job brief, original posting, and explicit
+  user facts are supplied once per turn. Previous answer text is editing context,
+  never factual evidence; current cover-letter prose is not included. Prompt v4
+  (the benchmarked v3 writing guidance plus an input firewall naming the Answers
+  sections, which `prompts.ts` also fences)
+  favors the smallest requested edit, preserves supporting responsibility, and
+  avoids unasked lessons, pitches, disclaimers and padding. Oversized inputs fail visibly (question 12,000,
+  answer 16,000, refinement 4,000 characters); the route does not truncate.
+  One generation and at most one formatting repair share deterministic counts
+  with the UI and persistence. A hard-limit failure stays a draft; content
+  concerns remain advisory. Metadata carries the resolved model/effort, attempts,
+  prompt version and SHA-256 source fingerprints, without duplicating source text.
+  Necessary missing facts return a separate clarification; a repair that asks
+  one instead keeps the draft text. Bracketed or doubled-brace placeholders keep
+  an answer a draft. The explicit Save operation appends the exact revision
+  through the normal application mutation queue; initial saves create one Draft
+  without a submission date. Stored revisions are shape-checked on load, so a
+  later count or limit rule never invalidates a tracker; reconcile verifies a
+  new revision's limits and counts against the current rules.
 - resume input into the structured editor: pasted resume text is parsed once into
   `ResumeData`, the source of truth thereafter; a previously saved `.resume` file
   loads its `ResumeData` directly. The file picker accepts only `.resume` (no DOCX,
@@ -511,12 +532,14 @@ providers the user explicitly added: `/api/job-analysis` receives the Job analys
 uses one name for its stage id, settings prefix, and route (for example
 `cover-polish`, `coverPolishProvider`, `/api/cover-polish`); settings saved
 under the pre-2026-09-29 names convert once in `migrateStoredSettings` before
-strict validation. Missing stage fields use
-that stage's own product default; no stage inherits another stage's persisted
-provider/model/effort triple. Workspace settings drop retired preview keys during
+strict validation. `src/lib/stageSettings.ts` owns task-specific startup defaults;
+explicit saved choices remain authoritative. A model-only saved selection keeps
+the earlier implied Claude CLI provider, so changing a stage's default provider
+cannot create an incompatible pair. Final application review retains its one-time
+Fit inheritance when first introduced; other stages seed independently.
+Workspace settings drop retired preview keys during
 strict normalization, and portable workspace preferences carrying them fail
-closed. The original unprefixed provider/model/effort fields remain the durable
-Resume Polish storage keys.
+closed. Each stage persists the keys declared by `src/config/aiStages.ts`.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends

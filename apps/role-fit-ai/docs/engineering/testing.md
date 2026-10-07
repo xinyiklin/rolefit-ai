@@ -7,6 +7,10 @@ relies on. Run commands below from the repository root unless stated otherwise.
 The RoleFit workspace's offline `node:test` suite runs the deterministic
 AI-safety probes; the root `npm test` additionally runs package-owned evals.
 
+The [benchmark ledger](benchmarks.md) records the Prepare, Resume, Cover and
+Answers decisions together, including per-task cost estimates, benchmark-run
+subtotals, receipt coverage and unavailable historical costs.
+
 ## Offline Test Suite
 
 `npm test --workspace apps/role-fit-ai` runs the app's
@@ -23,9 +27,274 @@ Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
 attaches the child's last output lines to the assertion so you can see which
 case broke without re-running.
 
-The live cover-letter and Resume Proposal quality evals are excluded via the
+The live cover-letter, Answers and Resume Proposal quality evals are excluded via the
 runner's `LIVE` denylist: they drive a real provider, cost tokens, and need a configured provider. Any
 new external-network or model eval must be added to `LIVE` so it stays out of `npm test`.
+
+### Application Answers
+
+The offline conversation probes exercise the production generator with injected
+dispatch, including constraints, bounded repair, factual scope, missing facts,
+question identity, cancellation and usage accounting. Client probes hold requests
+across source/application changes and test exact revision saves, retries, Apply
+coordination and failure recovery. Persistence probes cover Draft dates, same-ID
+Apply/Skip, legacy answers and backup round trips. Run the nearest probe while
+iterating, then the full RoleFit offline suite and app/server build.
+
+The opt-in writing benchmark uses nine settings: Opus 5.5, Sonnet 5.5 and
+GPT-6.1 Sol, each at low/medium/high. `--expanded` selects 57 synthetic cases:
+the existing 12-case screen and seven former holdouts, plus 38 new cases across
+13 additional candidate contexts. Regression and fresh results remain separate.
+The new corpus spans technical and nontechnical work, career changes, early
+career, senior individual contribution, volunteering, factual fields, motivation,
+behavioral examples, hard limits and minimal refinements. Cases sharing a
+candidate context are related observations, not independent population samples.
+
+It calls the production conversation generator with frozen context and prompt
+v3. Astra High and Opus High exchanged rubric feedback, then both explicitly
+approved the identical `senior-recruiter-consensus-v1` hash before grading. The
+tracked `support/application-answer-judge-protocol.mjs` owns that exact rubric
+and approval metadata. Each judge then receives an independently reordered,
+blinded set of answers, without peer scores. Both use a senior-recruiter
+perspective and the same weights: naturalness/tone 25%, evidence/specificity and
+factual judgment 25%, readability/clarity 20%, instructions/coverage 15%, economy
+15%. Each category remains an integer 1–5; weighted totals are out of 100.
+
+The rubric treats resume/Profile as incomplete. Reasonable motivation,
+professional interpretations and modest inferred learning need not be verbatim
+source facts. Specific unconfirmed personal history, unsupported concrete
+qualifications/events and explicit contradictions are distinguished. The legacy
+`severeFabrication` field now means a **material grounding-risk judgment**, not
+a finding of falsehood or dishonesty. A material risk must name a concrete or
+contradiction concern and cannot simultaneously be judged usable. Unasked
+reflections may lose economy points without being mislabeled fabricated. Exact
+counts and deterministic narrow-edit checks are supplied to the judges and
+retained separately from model ratings. The Opus judge also participates as a
+candidate; this is not independent human ground truth. Changed judges and rubric
+mean new scores are not directly comparable with the historical low-judge rounds.
+
+```bash
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --dry-run
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --dry-run --expanded
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run --expanded
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run
+npm run eval:live:application-answers --workspace apps/role-fit-ai -- --run --holdout
+```
+
+`--dry-run` makes no provider calls. `--run` requires explicit authorization:
+The default screen has 108 initial generations, at most 108 repairs and 24 judge
+calls. `--expanded` has 513 generations, at most 513 repairs and 114 judge calls.
+`--holdout` has 63 generations, at most 63 repairs and 14 judge calls. Concurrency
+is two; generator order rotates across cases to balance the fixed arm order.
+No private tracker data is read. Source hashes, frozen fixtures, outputs, usage,
+timings, blind labels and judgments stay in ignored owner-only
+`apps/role-fit-ai/workspace/application-answer-eval/`. Reported CLI cost is an
+estimate, not a subscription charge; unavailable counts and cost stay `null`.
+`--run --expanded --resume=<run-id>` can recover a run after interruption. The
+original corpus, plan and recorded source hashes must match exactly. Completed drafts
+are reused; failed/missing calls resume, and a changed answer set is rejudged.
+Receipts are atomically replaced and a pending marker precedes each live dispatch
+group. An interrupted in-flight call makes cumulative attempts, usage and timing
+unknown; it is not silently counted as zero. Unknown timings are excluded with
+the available latency sample count reported. Consumed recorded failures are
+included in request counts and timing. This recovery does not run automatically.
+
+Choose settings using usable results, factual scope, refinement restraint and
+latency together; small score differences alone do not establish a winner.
+
+#### 2026-10-07 expanded comparison and current selection
+
+See the [cost record](benchmarks.md#cost-of-the-benchmark-runs) for generation,
+judge and consensus estimates; [per-task costs](benchmarks.md#estimated-cost-per-task)
+exclude benchmark grading and retain unknown OpenAI usage explicitly.
+
+The expanded run completed all 513 responses on frozen prompt v3, with six
+format repairs and no generation execution failures. Both High judges approved
+the same rubric through five preceding discussion/approval calls. Grading then
+produced 114 valid independent passes (1,026 ratings). There were 116 recorded
+grading attempts: one provider/response failure, an immediate authentication
+failure in a restricted recovery process, then successful recovery with CLI
+access. Only that failed pass was retried; completed answers and judgments were
+reused. Both failed attempts remain in the receipt, and unknown cumulative usage
+remains unknown. All 16 recorded source hashes matched after execution.
+
+The 38 fresh cases below were not used to retune the prompt. The 19 older cases
+remain regression data. Scores are weighted model judgments, not percentages of
+human answer quality. Median times include any repair, measured under the
+two-request concurrency used by this run. “Usable” allows minor editing or
+candidate confirmation; it does not mean every claim is verified.
+
+| Setting | All 57 mean / 100 | Fresh Astra / 100 | Fresh Opus / 100 | Fresh mean / 100 | Regression mean / 100 | Fresh median seconds | Fresh usable to both |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Opus 5.5 low | 97.1 | 98.4 | 96.0 | 97.2 | 96.8 | 3.72 | 38/38 |
+| Opus 5.5 medium | 97.4 | 98.4 | 96.2 | 97.3 | 97.7 | 6.56 | 38/38 |
+| Opus 5.5 high | 97.9 | 98.8 | 97.1 | 97.9 | 98.0 | 7.72 | 38/38 |
+| GPT-6.1 Sol low | 95.7 | 98.9 | 94.4 | 96.7 | 93.8 | 6.18 | 38/38 |
+| GPT-6.1 Sol medium | 96.1 | 99.1 | 94.4 | 96.8 | 94.8 | 6.54 | 38/38 |
+| GPT-6.1 Sol high | 95.5 | 99.0 | 93.9 | 96.4 | 93.5 | 9.35 | 38/38 |
+| Sonnet 5.5 low | 93.7 | 96.8 | 93.4 | 95.1 | 91.0 | 3.41 | 38/38 |
+| Sonnet 5.5 medium | 94.8 | 97.0 | 93.8 | 95.4 | 93.7 | 3.31 | 37/38 |
+| Sonnet 5.5 high | 94.5 | 96.4 | 93.0 | 94.7 | 94.2 | 4.15 | 37/38 |
+
+Fresh category means retain tone, specificity/evidence, clarity, instructions and
+economy separately. Cliches and stock phrasing affect tone/economy; unnecessary
+additions, removals, disclaimers and repeated conclusions affect economy and
+instruction following. No reliable numerical “cliche rate” is inferred.
+
+| Setting | Tone / 5 | Evidence / 5 | Clarity / 5 | Instructions / 5 | Economy / 5 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Opus 5.5 low | 4.88 | 4.86 | 4.89 | 4.97 | 4.67 |
+| Opus 5.5 medium | 4.84 | 4.93 | 4.80 | 4.96 | 4.76 |
+| Opus 5.5 high | 4.87 | 4.95 | 4.88 | 5.00 | 4.78 |
+| GPT-6.1 Sol low | 4.76 | 4.89 | 4.79 | 4.99 | 4.76 |
+| GPT-6.1 Sol medium | 4.71 | 4.86 | 4.89 | 4.97 | 4.82 |
+| GPT-6.1 Sol high | 4.67 | 4.88 | 4.83 | 4.95 | 4.84 |
+| Sonnet 5.5 low | 4.82 | 4.67 | 4.86 | 4.88 | 4.53 |
+| Sonnet 5.5 medium | 4.83 | 4.70 | 4.88 | 4.93 | 4.49 |
+| Sonnet 5.5 high | 4.68 | 4.78 | 4.83 | 4.87 | 4.49 |
+
+**Current quality-first recommendation: Claude CLI / Opus 5.5 / high.**
+It completed all 57 cases usefully to both judges, had no failed mechanical
+checks, and its stronger examples used readable explanations and restrained
+attribution. It avoided saying the developer fixed the bug "in production" in
+the QA correction, wording Opus low/medium retained, and drafted the long supporting statement where
+Sol high asked an unnecessary clarification. It still added one minor unconfirmed
+action in the notice-prioritization example. Candidate review remains necessary.
+The fresh/reset defaults and the user's current Answers selection adopt this
+recommendation; supported saved choices in other workspaces remain preserved.
+
+This is a modest quality preference, not a decisive model-family or effort win.
+Opus high minus medium averaged only +0.67 points across fresh cases, with
+10 wins, 17 ties and 11 losses. Medium is a near-equivalent alternative at
+6.56 seconds versus 7.72. Opus low is worth retaining as a fast option: 3.72
+seconds and 97.2, though at least one judge flagged minor concrete concerns in
+four fresh cases, versus one each for medium/high. These included expanding a
+single next-sheet change into an ongoing habit and retaining an unsupported
+production setting during a correction.
+
+**Sol medium is the recommended OpenAI option.** Both judges slightly preferred
+it to Sol high on fresh averages; it had no concrete concerns flagged across all
+57 cases, all 57 were usable to both judges, and it was faster. Sol low was also
+competitive: medium gained only +0.08 fresh points (7 wins, 23 ties, 8 losses).
+Sol high lost its older-regression supporting-statement case through unnecessary
+clarification; the mechanical checks alone do not expose that coverage failure.
+
+The family comparison depends on the judge. On fresh cases, Astra scored Opus
+high 0.29 points below Sol medium, while Opus scored it 2.61 points above. Some
+Opus deductions against Sol reflect style preferences rather than factual or
+coverage failures. The Opus candidate/judge overlap means this run cannot
+separate writing preference from family-correlated judging. Sol medium is a
+defensible alternative default when factual restraint and latency take priority.
+
+Sonnet was worth including, but it is not selected as the writing default.
+Medium was fastest here at 3.31 seconds, only slightly faster than Opus low.
+Minor concrete concerns appeared in 6/7/5 fresh cases at low/medium/high,
+respectively, counting a case once if either judge flagged it. Both low and high
+asserted that an unrecorded certification did not exist rather than asking for
+the missing facts. Medium/high also joined two separate archive incidents; Opus
+judged those answers unusable, while Astra allowed a minor correction. Higher
+Sonnet effort did not consistently resolve these issues. CLI billing savings
+relative to Codex are not established by this run.
+
+Count/control replay passed 1,088 of 1,090 checks. All 45 exact-answer and 18
+protected-text checks passed. The two failures were the Sonnet certification
+clarifications above; their “usable after confirmation” ratings do not erase
+those failures. Neither judge raised a material grounding-risk flag, which does
+not certify every claim. Normal interests, professional interpretations and
+modest learning remain acceptable without verbatim source wording. No production
+prompt or evidence-warning policy was weakened. Prompt v3 remains frozen; any
+further tuning should use new acceptance cases rather than reusing these as
+fresh evidence. Production now runs `application-answer-conversation-v4`,
+which registers the Answers section names in the shared fence and names them
+in the input firewall line; its writing guidance is identical to v3 and was
+not re-benchmarked. This round does not justify adding xhigh/max candidates or
+claim that High judging is calibrated against human recruiters.
+
+#### Earlier 2026-10-07 prompt tuning and default selection
+
+The user authorized Sol 6.1 and Opus 5.5 at low, medium and high, prompt tuning,
+and adoption of the recommendations in both fresh and current settings.
+Three 12-case screens tested v1, v2 and v3: 216 completed generations plus one
+format repair and 72 completed judge calls. A further 24 blinded judge calls
+compared the saved v2/v3 answers together, with identical inputs and exact app
+counts. The v1 grader did not receive those counts, so raw v1-to-v2 score changes
+are not a controlled prompt improvement. The paired comparison favored v3 for
+Opus low/high in both judge families; other settings were mixed. The seven fresh
+cases then ran once against the frozen v3 prompt: 42 generations, no repairs,
+14 judgments, no provider or judge failures. No personal workspace inputs were
+sent in these runs.
+
+| Setting | v3 screen mean / 100 | Fresh Opus judge / 100 | Fresh Astra judge / 100 | Fresh mean / 100 | Fresh median seconds |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Opus 5.5 low | 94.2 | 83.3 | 91.1 | 87.2 | 6.08 |
+| Opus 5.5 medium | 92.1 | 92.0 | 97.7 | 94.9 | 6.08 |
+| Opus 5.5 high | 95.0 | 89.6 | 99.6 | 94.6 | 6.37 |
+| GPT-6.1 Sol low | 90.5 | 91.3 | 93.3 | 92.3 | 5.26 |
+| GPT-6.1 Sol medium | 92.6 | 95.1 | 97.7 | 96.4 | 4.87 |
+| GPT-6.1 Sol high | 93.6 | 96.1 | 99.6 | 97.9 | 6.30 |
+
+**Earlier selection: Codex CLI / GPT-6.1 Sol / high, superseded above.** Its fresh workplace, mistake and
+draft-correction answers were concise and stayed within the documented facts.
+Opus low/medium added unsupported timing or frequency in the workplace case;
+Opus low/high suggested the curator as a possible missing disagreement story.
+Sol low/medium added unasked accuracy/decision disclaimers in the mistake case.
+These concrete differences matter more than the small aggregate score gaps.
+Sol medium is a reasonable faster alternative. Sol high's 12-case screen median
+was 8.31 seconds, versus 5.97 for medium; timings are observed single-run values.
+
+All six settings passed the exact typo-only edit on the screen. On fresh cases,
+all six preserved both protected sentences byte-for-byte, removed the unsupported
+prior 40% claim, answered the modest workplace contribution and separated the
+missing-story clarification. Counts replayed correctly for all 42 answers. Both
+judges called every fresh response usable and flagged no severe fabrication;
+that does not erase the smaller unsupported additions above. Advisory guards
+also produced false positives such as “one check”; they were not weakened to
+improve benchmark results. Seven invented scenarios, one sample per setting,
+model judges and no human calibration do not establish a population ranking or
+percentage quality equivalence. OpenAI CLI cost was unavailable.
+
+Prompt `application-answer-conversation-v3` reuses the Resume/Cover tuning
+lessons: preserve supporting responsibility, use modest available evidence,
+make the smallest requested edit, retain supported specifics, and avoid unasked
+lessons, pitches, disclaimers or padding. Resume, Profile and explicit user
+facts/clarifications remain candidate evidence; previous answers and the current
+cover letter do not become factual sources. Existing advisory evidence warnings,
+hard-limit validation and bounded format repair remain in place.
+
+The other stage defaults adopt earlier decisions: Sonnet 5.5 low for Job
+analysis/Fit (the prior 20-posting, three-repeat Prepare comparison), Opus 5.5
+high for Resume Polish (prior user-adopted quality setting; high versus medium
+was not a decisive win), and Sol 6.1 medium for Cover (the prior 40-case paired
+comparison). Final review retains the user's Sonnet 5.5 low choice, without a
+comparative benchmark claim. `src/lib/stageSettings.ts` owns fresh, reset and
+recommended-provider selection defaults. Supported saved choices are preserved;
+the user's current local settings were updated separately with revision checking.
+
+#### Initial screen, retained as historical evidence
+
+The initial 2026-10-07 screen (Opus low/medium, Sonnet medium, Sol low/medium,
+Astra low) completed all 72 generations with two successful repairs
+and all 24 judgments. Final counts/constraints replay matched all 72 outputs
+after edge-case parser and failed-repair accounting fixes; generation itself was
+captured before those fixes. No prompt tuning or human calibration was performed.
+Both judges considered 12/12 responses usable for five settings and 11/12 for
+Sonnet medium. Sonnet answered a workplace-accomplishment question with an
+explicitly personal project; the other settings requested a missing work example.
+No judge flagged severe fabrication. Opus/Astra judges disagreed materially on
+absolute scores, so the aggregate does not establish percentage equivalence.
+
+| Setting | Mean judge score / 100 | Median generation seconds | Reported generation cost |
+| --- | ---: | ---: | ---: |
+| Opus 5.5 low | 95.3 | 4.19 | $0.5332 |
+| Opus 5.5 medium | 96.2 | 12.03 | $0.6659 |
+| Sonnet 5.5 medium | 92.6 | 4.03 | $0.2735 |
+| GPT-6.1 Sol low | 95.5 | 6.91 | Unknown |
+| GPT-6.1 Sol medium | 95.2 | 7.24 | Unknown |
+| GPT-6 Astra low | 96.5 | 6.57 | Unknown |
+
+Costs total 12 cases per setting and include repairs, excluding judges. These
+single-run measurements favor testing Low further; they do not justify a default
+change. Inspect source hashes and both judge families before reusing a receipt.
 
 `src/lib/__evals__/job-identity-golden.mjs` is a CHARACTERIZATION test, not a
 correctness one. It pins the duplicate matcher's verdict for every pair of a
@@ -586,7 +855,7 @@ Good frontend verification covers:
   configured providers appear, configured-but-unready selections stay visible
   and disabled, and no API key appears in DOM, browser storage, or HTTP requests
 - at 720px and below, only precise Resume authoring is replaced by the width
-  notice; Prepare, masthead/navigation, Cover letter, Materials, Applications,
+  notice; Prepare, masthead/navigation, Cover letter, Answers, Applications,
   and Analytics remain reachable, including under high browser zoom
 - Sessions and Settings remain reachable in order in expanded and collapsed
   rail states; the compact Sessions count/working indicator remains visible,

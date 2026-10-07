@@ -1,12 +1,9 @@
 import { reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  defaultCliReasoningEffort,
-  providerOptions
-} from "../config/aiOptions";
+import { AI_STAGES, stageSettingsKeys } from "../config/aiStages.ts";
 import { clearStoredSettings, loadSettings, saveSettings, type PersistedSettings } from "../lib/settings";
 import type { AiProviderValue } from "../config/aiOptions";
-import { seedStages, stageFieldsToPersist } from "../lib/stageSettings";
+import { seedStage, seedStages, stageFieldsToPersist } from "../lib/stageSettings";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type {
   AvailabilityNotice,
@@ -189,17 +186,11 @@ export function useAiSettings() {
     });
   }
 
-  // Switching a stage's provider resets its model/effort
-  // to that provider's defaults, mirroring the original per-stage handlers.
   function changeStageProvider(stage: StageId, value: AiProviderValue) {
-    const option = providerOptions.find((item) => item.value === value);
+    const keys = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === stage)!);
     setStages((prev) => ({
       ...prev,
-      [stage]: {
-        provider: value,
-        selectedModel: option?.model ?? "",
-        cliReasoningEffort: defaultCliReasoningEffort(value)
-      }
+      [stage]: seedStage(stage, { [keys.provider]: value })
     }));
   }
 

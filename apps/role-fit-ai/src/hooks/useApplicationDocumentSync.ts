@@ -128,7 +128,7 @@ export function useApplicationDocumentSync({
   const save = useCallback(
     async (kind: ApplicationDocumentKind) => {
       if (!application) return;
-      if (application.status === "not_applying") return;
+      if (application.status === "not_applying" || application.status === "draft") return;
       if (saveInFlight.current.has(kind)) return;
       // Never let an empty editor erase the version the application holds.
       if (!(kind === "resume" ? currentResumeText : coverLetterText).trim()) return;

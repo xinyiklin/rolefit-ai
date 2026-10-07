@@ -122,6 +122,9 @@ export function requireApplicationRevision(
 }
 
 export function assertApplicationAcceptsDocuments(application: { status: string }): void {
+  if (application.status === "draft") {
+    throw new ApplicationDocumentError("Apply this Draft before saving application documents.", 409);
+  }
   if (application.status === "not_applying") {
     throw new ApplicationDocumentError(
       "Skipped jobs cannot store application documents. Start a new application attempt first.",

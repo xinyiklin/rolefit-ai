@@ -1,3 +1,4 @@
+import { parseSavedApplicationAnswers } from "../../shared/applicationAnswerStorage.ts";
 import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import {
@@ -199,22 +200,6 @@ function sanitizeFitAssessmentSnapshot(raw: unknown) {
   };
 }
 
-function sanitizeApplicationAnswers(raw: unknown) {
-  if (!Array.isArray(raw)) return undefined;
-  const answers = raw
-    .slice(0, 40)
-    .map((a) => ({
-      question: sanitizeString(a?.question, 400),
-      answer: sanitizeString(a?.answer, 4_000),
-      savedAt:
-        typeof a?.savedAt === "string" && a.savedAt
-          ? a.savedAt.slice(0, 100)
-          : MISSING_PERSISTED_TIMESTAMP
-    }))
-    .filter((a) => a.answer && a.question);
-  return answers.length ? answers : undefined;
-}
-
 // Every board/ATS URL this posting has been seen at (LinkedIn, the company site,
 // the underlying ATS…), so the layered duplicate matcher keeps matching no matter
 // which board the user is on. Entries are trimmed, capped, and de-duplicated
@@ -343,7 +328,10 @@ function sanitizeApplication(raw: unknown) {
   if (!inList(APPLICATION_STATUSES, r.status)) return null;
   const status = r.status;
   const appliedAt = typeof r.appliedAt === "string" ? r.appliedAt : "";
-  const jobOnlySkipped = status === "not_applying" && !appliedAt;
+  if (status === "draft" && (appliedAt || r.resumeArtifacts || r.coverLetterArtifacts || r.attachments || r.resumeUsed || r.notApplyingAt)) return null;
+  const applicationAnswers = parseSavedApplicationAnswers(r.applicationAnswers, id);
+  if (applicationAnswers === null) return null;
+  const jobOnlySkipped = (status === "not_applying" && !appliedAt) || status === "draft";
   const notApplyingAt = status === "not_applying" && isCanonicalApplicationTimestamp(r.notApplyingAt)
     ? r.notApplyingAt
     : undefined;
@@ -405,7 +393,7 @@ function sanitizeApplication(raw: unknown) {
       !jobOnlySkipped && (r.resumeUsed === "base" || r.resumeUsed === "tailored")
         ? r.resumeUsed
         : undefined,
-    applicationAnswers: sanitizeApplicationAnswers(r.applicationAnswers),
+    applicationAnswers,
     aiUsage: sanitizeAiUsage(r.aiUsage),
     duplicateDismissedIds: sanitizeDuplicateDismissedIds(r.duplicateDismissedIds, id),
     jobPostingGroupId:
