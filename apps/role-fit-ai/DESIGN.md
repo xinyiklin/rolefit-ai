@@ -175,7 +175,7 @@ shows real product captures, the local runtime boundary, and explicit macOS
 Apple silicon, macOS Intel, and Windows x64 download rows. Unlike the Drafting Desk, which rejects decorative
 motion, the landing carries the restrained entrance motion shared across the
 portfolio: a one-shot fade-and-lift as sections scroll into view (never
-looping) and a small hover lift on cards — a progressive enhancement that
+looping), plus a one-shot proof-mark draw on the hero slip — a progressive enhancement that
 collapses under `prefers-reduced-motion` and never leaves content hidden when
 scripting is unavailable. It must not imitate
 the working app shell, use gradients or template-style feature cards, imply
@@ -183,6 +183,27 @@ hosted execution, guess the user's architecture, or attempt native-install
 detection. At a missing or invalid release, it keeps the platform choices
 visible and states that no complete verified installer set is available instead
 of rendering a broken primary action.
+
+**Landing north star: "The galley proof."** The page borrows print
+production rather than SaaS marketing: the hero sets the real resume-editor
+capture as a sheet with crop marks and a figure slug, overlapped by a proof
+slip that shows one proposed edit in proofreader's marks (struck word, inserted
+word, reason, Accept · Edit · Discard). The slip is a labeled illustration on a
+synthetic resume line, never a mock of the app shell, and it never shows an
+invented figure. The workflow reads as flat editorial spreads ruled by
+hairlines (01 prepare → 04 track), not feature cards. The Forest Ink band
+carries the local runtime boundary with the companion capture and the runtime
+diagram; downloads are ledger rows with dotted leaders. Because the page's CSP
+is `font-src 'self'`, its type is bundled from `@typeset/engine`: Source Serif 4
+(as "RoleFit Serif") for display and figure slugs, Source Sans 3 (as "RoleFit
+Sans") for body and controls, and the system mono stack for labels and data.
+
+**Shared maker house** (kept in step with CareFlow's landing): creator tag in
+the masthead, a one-line spec strip under the hero, section heads with the
+heading left and lede right, an inverse boundary band in the product's deepest
+color with a node-and-wire runtime diagram, action ledger rows, and a colophon
+footer listing the real stack and the sibling projects. Mono labels share one
+voice across both pages (0.6875rem, 0.08em tracking, uppercase).
 
 ### Shared editor boundary
 

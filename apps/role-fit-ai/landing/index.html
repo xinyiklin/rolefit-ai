@@ -42,13 +42,17 @@
 
     <header class="site-header" id="top">
       <div class="site-header__inner">
-        <button class="wordmark" type="button" data-scroll-to="top" aria-label="RoleFit AI, back to top">
-          <span class="wordmark__mark" aria-hidden="true">R</span>
-          <span>RoleFit AI</span>
-        </button>
+        <div class="masthead-id">
+          <button class="wordmark" type="button" data-scroll-to="top" aria-label="RoleFit AI, back to top">
+            <span class="wordmark__mark" aria-hidden="true">R</span>
+            <span>RoleFit AI</span>
+          </button>
+          <span class="masthead-id__rule" aria-hidden="true"></span>
+          <a class="masthead-id__creator" href="https://xinyiklin.com/">by Xinyi Lin</a>
+        </div>
 
         <nav class="site-nav" aria-label="Primary navigation">
-          <button type="button" data-scroll-to="product">Product</button>
+          <button type="button" data-scroll-to="product">Workflow</button>
           <button type="button" data-scroll-to="local-first">Local-first</button>
           <button type="button" data-scroll-to="download">Download</button>
         </nav>
@@ -82,14 +86,45 @@
           <p class="hero__note">No RoleFit account · Local workspace · Your choice of supported provider</p>
         </div>
 
-        <figure class="desktop-shot">
-          <img
-            src="/assets/desktop-app.png"
-            alt="RoleFit AI desktop companion overview with providers, workspace backup, browser extension, settings, and a browser launch control"
-            width="1800"
-            height="1176"
-          />
-        </figure>
+        <div class="galley">
+          <figure class="galley__sheet">
+            <div class="galley__plate">
+              <span class="crop crop--tl" aria-hidden="true"></span>
+              <span class="crop crop--tr" aria-hidden="true"></span>
+              <span class="crop crop--bl" aria-hidden="true"></span>
+              <span class="crop crop--br" aria-hidden="true"></span>
+              <img
+                src="/assets/screenshot.png"
+                alt="RoleFit AI resume editor: the one-page export layout of a synthetic resume, with formatting controls and the resume workflow rail"
+                width="2880"
+                height="1800"
+                fetchpriority="high"
+              />
+            </div>
+            <figcaption class="galley__slug">
+              <span>Fig. 1</span> The page you edit is the page that exports.
+            </figcaption>
+          </figure>
+
+          <aside class="proof-slip" aria-label="Illustration of one proposed resume edit">
+            <p class="proof-slip__head"><span>Proposed edit</span><span>Experience</span></p>
+            <p class="proof-slip__line">
+              <del><span class="visually-hidden">removed: </span>Reduced</del>
+              <ins><span class="visually-hidden">inserted: </span>Cut</ins>
+              interaction latency in a 20,000-row planning view by 46%
+              <del><span class="visually-hidden">removed: </span>through</del>
+              <ins><span class="visually-hidden">inserted: </span>with</ins>
+              profiling, memoization, and virtualized rendering.
+            </p>
+            <p class="proof-slip__reason">
+              <span>Reason</span> A tighter verb. Figures unchanged.
+            </p>
+            <p class="proof-slip__actions" aria-hidden="true">
+              <span class="is-primary">Accept</span><span>Edit</span><span>Discard</span>
+            </p>
+            <p class="proof-slip__foot">Illustration · synthetic resume</p>
+          </aside>
+        </div>
       </section>
 
       <section class="proof-strip section-shell" aria-label="RoleFit product facts">
@@ -100,20 +135,18 @@
       </section>
 
       <section class="product section-shell" id="product" aria-labelledby="product-title">
-        <header class="section-heading">
-          <div>
-            <p class="eyebrow">Application workflow</p>
-            <h2 id="product-title">Prepare, export, and track one application.</h2>
-          </div>
+        <header class="section-heading" data-reveal>
+          <h2 id="product-title">Prepare, export, and track one application.</h2>
           <p>
             Prepare the posting, work on both documents, export the files you
             send, and keep the dates and follow-up with the application record.
+            Every proposed change waits for your decision.
           </p>
         </header>
 
-        <article class="cover-feature" data-reveal>
-          <div class="cover-feature__copy">
-            <span>01 · prepare</span>
+        <article class="spread" data-reveal>
+          <div class="spread__copy">
+            <p class="spread__index"><span>01</span> Prepare</p>
             <h3>Start from the posting.</h3>
             <p>
               Import a job from the browser extension, a URL, or pasted text.
@@ -134,10 +167,10 @@
           </figure>
         </article>
 
-        <div class="surface-grid" data-reveal>
-          <article class="surface-card surface-card--editor">
-            <div class="surface-card__copy">
-              <span>02 · resume</span>
+        <div class="spread spread--pair" data-reveal>
+          <article>
+            <div class="spread__copy">
+              <p class="spread__index"><span>02</span> Resume</p>
               <h3>Decide the resume edits one at a time.</h3>
               <p>
                 Polish proposes changes and shows what each one rewrites.
@@ -146,20 +179,21 @@
                 decision can be taken back.
               </p>
             </div>
-            <figure class="app-frame">
+            <figure class="app-frame app-frame--detail">
               <img
                 src="/assets/screenshot.png"
-                alt="Resume editor showing the export layout and the resume workflow rail"
+                alt="Detail of the resume editor: the right side of the export page beside the resume workflow rail and its readiness checks"
                 width="2880"
                 height="1800"
                 loading="lazy"
               />
+              <figcaption>Detail · workflow rail</figcaption>
             </figure>
           </article>
 
-          <article class="surface-card surface-card--editor">
-            <div class="surface-card__copy">
-              <span>03 · cover letter</span>
+          <article>
+            <div class="spread__copy">
+              <p class="spread__index"><span>03</span> Cover letter</p>
               <h3>One pass on the letter.</h3>
               <p>
                 Open a saved variant or your own template and press Polish
@@ -180,9 +214,9 @@
           </article>
         </div>
 
-        <article class="cover-feature" data-reveal>
-          <div class="cover-feature__copy">
-            <span>04 · track</span>
+        <article class="spread" data-reveal>
+          <div class="spread__copy">
+            <p class="spread__index"><span>04</span> Track</p>
             <h3>Keep the record after you apply.</h3>
             <p>
               Stage, fit verdict, dates, next action, notes, and the exact
@@ -201,22 +235,12 @@
             />
           </figure>
         </article>
-
-        <div class="job-loop" role="group" aria-label="RoleFit application workflow">
-          <div><span>target</span><strong>Job description</strong><small>Import it, then read the fit.</small></div>
-          <div><span>resume</span><strong>Grounded edits</strong><small>Keep claims tied to evidence.</small></div>
-          <div><span>letter</span><strong>Your own voice</strong><small>Revise, review, and export.</small></div>
-          <div><span>apply</span><strong>Application</strong><small>Save the record and follow up.</small></div>
-        </div>
       </section>
 
       <section class="local-first" id="local-first" aria-labelledby="local-first-title">
         <div class="section-shell local-first__inner">
-          <header class="section-heading section-heading--inverse">
-            <div>
-              <p class="eyebrow">Runtime boundary</p>
-              <h2 id="local-first-title">Your machine runs RoleFit AI.</h2>
-            </div>
+          <header class="section-heading section-heading--inverse" data-reveal>
+            <h2 id="local-first-title">Your machine runs RoleFit AI.</h2>
             <p>
               The desktop app starts a loopback service and opens the workbench
               in your normal browser. This site only provides product information
@@ -224,30 +248,46 @@
             </p>
           </header>
 
-          <div class="boundary-grid">
-            <article>
-              <span>stays local</span>
-              <h3>Workspace and credentials</h3>
-              <ul>
-                <li>Resumes, cover letters, applications, notes, and exported artifacts</li>
-                <li>Provider registry and operating-system-encrypted API keys</li>
-                <li>Validated portable backups, restored only with your approval</li>
-              </ul>
-            </article>
-            <article>
-              <span>only when you run AI</span>
-              <h3>The selected workflow input</h3>
-              <ul>
-                <li>The necessary input goes directly to the provider you chose</li>
-                <li>No RoleFit credential proxy, hosted backend, or sync service</li>
-                <li>No analytics or telemetry service</li>
-              </ul>
-            </article>
+          <div class="boundary" data-reveal>
+            <div class="boundary__lists">
+              <div>
+                <h3>Stays local</h3>
+                <ul>
+                  <li>Resumes, cover letters, applications, notes, and exported artifacts</li>
+                  <li>Provider registry and operating-system-encrypted API keys</li>
+                  <li>Validated portable backups, restored only with your approval</li>
+                </ul>
+              </div>
+              <div>
+                <h3>Only when you run AI</h3>
+                <ul>
+                  <li>The necessary input goes directly to the provider you chose</li>
+                  <li>No RoleFit credential proxy, hosted backend, or sync service</li>
+                  <li>No analytics or telemetry service</li>
+                </ul>
+              </div>
+            </div>
+
+            <figure class="boundary__shot">
+              <img
+                src="/assets/desktop-app.png"
+                alt="RoleFit AI desktop companion overview with providers, workspace backup, browser extension, settings, and a browser launch control"
+                width="1800"
+                height="1176"
+                loading="lazy"
+              />
+              <figcaption><span>Fig. 2</span> The companion: providers, backups, extension pairing, and the browser launch.</figcaption>
+            </figure>
           </div>
 
-          <div class="runtime-line" role="group" aria-label="RoleFit local runtime flow">
-            <span>RoleFit AI</span><i aria-hidden="true"></i><span>localhost browser</span><i aria-hidden="true"></i><span>your provider, on request</span>
-          </div>
+          <figure class="runtime" data-reveal>
+            <figcaption class="runtime__label">How it runs</figcaption>
+            <ol class="runtime__flow" aria-label="RoleFit local runtime flow">
+              <li><strong>RoleFit AI</strong><span>Desktop companion</span></li>
+              <li><strong>localhost browser</strong><span>The workbench, on loopback</span></li>
+              <li><strong>Your provider</strong><span>Only on request</span></li>
+            </ol>
+          </figure>
         </div>
       </section>
 
@@ -273,6 +313,7 @@
           <article class="download-row" role="listitem" data-download-target="macos-arm64">
             <div class="download-row__platform"><span>macOS</span><strong>Apple silicon</strong></div>
             <p>M1 or newer</p>
+            <span class="download-row__leader" aria-hidden="true"></span>
             <p class="download-row__format" data-format>DMG</p>
             <a class="download-row__action" href="https://github.com/xinyiklin/rolefit-ai/releases" aria-label="View RoleFit AI releases for macOS Apple silicon" data-action>
               <span data-action-label>View releases</span>
@@ -281,6 +322,7 @@
           <article class="download-row" role="listitem" data-download-target="macos-x64">
             <div class="download-row__platform"><span>macOS</span><strong>Intel</strong></div>
             <p>Intel processor</p>
+            <span class="download-row__leader" aria-hidden="true"></span>
             <p class="download-row__format" data-format>DMG</p>
             <a class="download-row__action" href="https://github.com/xinyiklin/rolefit-ai/releases" aria-label="View RoleFit AI releases for macOS Intel" data-action>
               <span data-action-label>View releases</span>
@@ -289,6 +331,7 @@
           <article class="download-row" role="listitem" data-download-target="windows-x64">
             <div class="download-row__platform"><span>Windows</span><strong>64-bit</strong></div>
             <p>x64 setup</p>
+            <span class="download-row__leader" aria-hidden="true"></span>
             <p class="download-row__format" data-format>EXE</p>
             <a class="download-row__action" href="https://github.com/xinyiklin/rolefit-ai/releases" aria-label="View RoleFit AI releases for Windows 64-bit" data-action>
               <span data-action-label>View releases</span>
@@ -308,17 +351,41 @@
 
     <footer class="site-footer">
       <div class="site-footer__inner">
-        <div>
+        <div class="colophon__brand">
           <button class="wordmark" type="button" data-scroll-to="top" aria-label="RoleFit AI, back to top">
             <span class="wordmark__mark" aria-hidden="true">R</span>
             <span>RoleFit AI</span>
           </button>
-          <p>&copy; 2026 Xinyi Lin. Built as a portfolio project.</p>
+          <p>
+            A local-first job application workbench, designed and built by
+            <a href="https://xinyiklin.com/">Xinyi Lin</a>.
+          </p>
         </div>
-        <nav aria-label="Project links">
-          <a href="https://github.com/xinyiklin/rolefit-ai">Source</a>
-          <a href="https://github.com/xinyiklin/rolefit-ai/releases">Releases</a>
-        </nav>
+        <div class="colophon__col">
+          <h2>Colophon</h2>
+          <p>
+            React, TypeScript, and Vite in the browser; a loopback Node server and
+            an Electron companion on your machine; documents on the shared Typeset
+            engine. Set in Source Serif 4 and Source Sans 3.
+          </p>
+        </div>
+        <div class="colophon__col">
+          <h2>Also by Xinyi Lin</h2>
+          <ul class="colophon__siblings">
+            <li><a href="https://careflow.xinyiklin.com/"><strong>CareFlow</strong><span>EHR-style clinic workflow demo ↗</span></a></li>
+            <li><a href="https://typeset.xinyiklin.com/"><strong>Typeset</strong><span>Local-first resume editor ↗</span></a></li>
+            <li><a href="https://xinyiklin.com/"><strong>Portfolio</strong><span>xinyiklin.com ↗</span></a></li>
+          </ul>
+        </div>
+      </div>
+      <div class="site-footer__base">
+        <div class="site-footer__base-inner">
+          <p>&copy; 2026 Xinyi Lin. Built as a portfolio project.</p>
+          <nav aria-label="Project links">
+            <a href="https://github.com/xinyiklin/rolefit-ai">Source</a>
+            <a href="https://github.com/xinyiklin/rolefit-ai/releases">Releases</a>
+          </nav>
+        </div>
       </div>
     </footer>
 
