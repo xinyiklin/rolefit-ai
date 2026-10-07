@@ -5,6 +5,22 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-06
 
+- [USER] Base documents refreshed (task `base-docs-refresh-20261006`, user
+  data only, no code change): the general base resume's RoleFit AI entry now
+  states evidence-grounded tailoring with user approval, the benchmark method
+  (real applications, blinded two-family judging, per-edit fact checks, 140+
+  offline evals), and the monorepo extraction; Experience dates use en dashes.
+  The Profile Background's RoleFit section carries the Sept–Oct evidence
+  grounding, Prepare, benchmark, and eval facts at 11.3k of the 12k limit;
+  every entry heading still links. The base cover letter is unchanged (three
+  independent drafts — Opus 5.5 high, GPT-6.1 Sol medium, this session — all
+  recommended keeping the 2026-10-06 benchmarked letter). Portfolio mirror
+  synced. [TOOL] Layout probe: one page, 44 lines, 25.1 pt room; PDF rendered
+  and inspected; linkage and limit checked with the shared contract. Both
+  external Profile drafts exceeded the 12,000-character limit and were not
+  used whole. Backups under `workspace/.trash/` and
+  `workspace/resumes/.trash/` (`2026-10-07T02-45-29Z__*`).
+
 - [USER+CODE] Prepare correctness, Prepare benchmark, and Polish quality gates
   (task `prepare-benchmark-20261006`; the user shared an external review of
   head 7b860837 and said "go with all the recommendations as needed", so the
