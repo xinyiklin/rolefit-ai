@@ -18,6 +18,7 @@ import {
   type EducationLevel
 } from "./candidateFacts.ts";
 import { migrateExperienceEvidence } from "./experienceEvidenceMigration.ts";
+import { normalizeVariantExclusions, type VariantExclusions } from "./variantPool.ts";
 
 // Allowlisted workspace preferences. localStorage is a fail-open browser cache;
 // workspacePreferencesSync.ts makes the owner-only workspace file canonical.
@@ -59,6 +60,9 @@ export type PersistedSettings = {
   resumePolishAutoThreshold?: AutoPolishThreshold;
   coverPolishAuto?: boolean;
   coverPolishAutoThreshold?: AutoPolishThreshold;
+  // Saved variants Prepare must not pick automatically; absent means all eligible.
+  excludedResumeVariants?: VariantExclusions;
+  excludedCoverLetterVariants?: VariantExclusions;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: DeclaredAnswer;
   requiresSponsorship?: DeclaredAnswer;
@@ -98,6 +102,8 @@ const PERSISTED_SETTING_KEYS = [
   "resumePolishAutoThreshold",
   "coverPolishAuto",
   "coverPolishAutoThreshold",
+  "excludedResumeVariants",
+  "excludedCoverLetterVariants",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -244,6 +250,12 @@ export function normalizeSettings(value: unknown): PersistedSettings {
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);
   for (const key of ["resumePolishAutoThreshold", "coverPolishAutoThreshold"] as const) {
     if (settings[key] !== undefined && !validAutoPolishThresholds.has(settings[key] as string)) delete settings[key];
+  }
+  for (const [key, kind] of [["excludedResumeVariants", "resume"], ["excludedCoverLetterVariants", "cover-letter"]] as const) {
+    if (settings[key] === undefined) continue;
+    const exclusions = normalizeVariantExclusions(settings[key], kind);
+    if (Object.keys(exclusions).length) settings[key] = exclusions;
+    else delete settings[key];
   }
   // "unspecified" is the neutral default (not a selectable option), so add it
   // explicitly — the option lists carry only the concrete values.

@@ -17,7 +17,7 @@ const bundled = await build({
       export { SETTINGS_GROUPS };
       const noop = () => {};
       const stages = Object.fromEntries(AI_STAGES.map((stage) => [stage.id, { provider: "claude-cli", selectedModel: "", cliReasoningEffort: "" }]));
-      export function render(section, profileBackground, profileResume = null) {
+      export function render(section, profileBackground, profileResume = null, pool = {}) {
         return renderToStaticMarkup(
           <SettingsDialog
             section={section}
@@ -69,6 +69,12 @@ const bundled = await build({
             onCustomInstructionsChange={noop}
             stageCustomInstructions={{ "cover-polish": "Keep it to three paragraphs." }}
             onStageCustomInstructionChange={noop}
+            resumeVariants={[]}
+            coverLetterVariants={[]}
+            excludedResumeVariants={{}}
+            excludedCoverLetterVariants={{}}
+            onVariantEligibilityChange={noop}
+            {...pool}
             onReset={noop}
           />
         );
@@ -151,6 +157,25 @@ const automation = render("automation", "");
 assert.match(automation, /Run Fit Assessment after Prepare/);
 assert.match(automation, /Automatically Polish resume[\s\S]*Minimum fit[\s\S]*Automatically Polish cover letter[\s\S]*Minimum fit/);
 assert.doesNotMatch(automation, /settings-stage"/, "Automation holds no provider rows");
+assert.match(automation, /Prepare picks from[\s\S]*Unchecked variants still open by hand\./, "the pool has one heading and one line");
+assert.match(automation, /<legend>Resumes<\/legend><p class="settings-automation__empty">No saved resumes\.<\/p>/);
+assert.match(automation, /<legend>Cover letters<\/legend><p class="settings-automation__empty">No saved cover letters\.<\/p>/);
+
+const loading = render("automation", "", null, { resumeVariants: null });
+assert.match(loading, /<legend>Resumes<\/legend><p class="settings-automation__empty">Loading…<\/p>/, "a loading workspace is not reported as empty");
+
+const pooled = render("automation", "", null, {
+  resumeVariants: [
+    { fileName: "general-sde.resume", label: "General SDE" },
+    { fileName: "experiment.resume", label: "Experiment" }
+  ],
+  coverLetterVariants: [{ fileName: "base.cover", label: "Base" }],
+  excludedResumeVariants: { "experiment.resume": true, "deleted.resume": true }
+});
+assert.match(pooled, /title="general-sde\.resume"><input type="checkbox" checked=""\/><span>General SDE<\/span>/, "an eligible variant is checked");
+assert.match(pooled, /title="experiment\.resume"><input type="checkbox"\/><span>Experiment<\/span>/, "an excluded variant is unchecked");
+assert.match(pooled, /title="base\.cover"><input type="checkbox" checked=""\/><span>Base<\/span>/, "the cover-letter pool is independent");
+assert.doesNotMatch(pooled, /deleted/, "an exclusion for a deleted variant is not listed");
 
 const models = render("models", "");
 assert.match(models, /settings-stages__head[^>]*><span>Stage<\/span><span>Provider<\/span><span>Model<\/span><span>Effort<\/span>/, "Models heads its columns once");

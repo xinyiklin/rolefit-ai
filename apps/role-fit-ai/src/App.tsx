@@ -459,6 +459,9 @@ function App() {
     setCoverPolishAuto,
     coverPolishAutoThreshold,
     setCoverPolishAutoThreshold,
+    excludedResumeVariants,
+    excludedCoverLetterVariants,
+    setVariantEligibility,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -1345,6 +1348,7 @@ function App() {
   preparedResumeStateRef.current = {
     baseResumeName,
     options: baseResumeOptions,
+    excludedVariants: excludedResumeVariants,
     resumeOrigin,
     applicationOwned: applicationOfRecordId !== null,
     currentText: currentResumeText || resumeText,
@@ -1748,7 +1752,8 @@ function App() {
     documentDirty: coverLetterEditor.dirty,
     documentFingerprint: coverLetterEditor.draftPayload ?? "",
     workspaceSaving: coverLetterEditor.isWorkspaceSaving,
-    candidateRevision: coverLetterEditor.coverLetterCandidatesRevision
+    candidateRevision: coverLetterEditor.coverLetterCandidatesRevision,
+    excludedVariants: excludedCoverLetterVariants
   };
   const {
     coverLetterVariantRecommendation,
@@ -3372,6 +3377,11 @@ function App() {
           onCoverPolishAutoChange={setCoverPolishAuto}
           coverPolishAutoThreshold={coverPolishAutoThreshold}
           onCoverPolishAutoThresholdChange={setCoverPolishAutoThreshold}
+          resumeVariants={isWorkspaceBootstrapping ? null : baseResumeOptions}
+          coverLetterVariants={coverLetterEditor.isWorkspaceBootstrapping ? null : coverLetterEditor.coverLetterOptions}
+          excludedResumeVariants={excludedResumeVariants}
+          excludedCoverLetterVariants={excludedCoverLetterVariants}
+          onVariantEligibilityChange={setVariantEligibility}
           citizenshipStatus={citizenshipStatus}
           onCitizenshipChange={setCitizenshipStatus}
           legallyAuthorizedToWork={legallyAuthorizedToWork}

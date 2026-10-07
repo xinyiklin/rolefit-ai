@@ -930,6 +930,12 @@ assert.match(
   /workflowInputFingerprint\(\{[^}]*?\n\s*boldBulletKeywords[,\n]/,
   "toggling the preference invalidates an in-flight proposal"
 );
+const routeSource = readFileSync(new URL("../resumePolish.ts", import.meta.url), "utf8");
+assert.match(
+  routeSource,
+  /provider = resolveProviderRequest\(body\)\.provider;[\s\S]*?await generateResumeProposal\(/,
+  "a Codex or other non-Claude failure is labeled with the selected provider, not the claude-cli placeholder"
+);
 const appSource = readFileSync(new URL("../../../src/App.tsx", import.meta.url), "utf8");
 assert.match(
   appSource,

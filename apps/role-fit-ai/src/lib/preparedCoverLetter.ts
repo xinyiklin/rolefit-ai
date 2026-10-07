@@ -3,6 +3,7 @@ import {
   type VariantCandidate,
   type VariantRecommendation
 } from "./variantRecommendation.ts";
+import { eligibleVariantOptions, type VariantExclusions } from "./variantPool.ts";
 
 export const MINIMUM_PREPARED_COVER_LETTER_LENGTH = 40;
 
@@ -19,6 +20,8 @@ export type PreparedCoverLetterState = {
   documentFingerprint: string;
   workspaceSaving: boolean;
   candidateRevision: number;
+  // Settings' cover-letter pool: excluded letters are never read, ranked, or adopted.
+  excludedVariants: VariantExclusions;
 };
 
 export type PreparedCoverLetterResolution = {
@@ -52,6 +55,7 @@ export function preparedCoverLetterOptionSnapshotKey(
 ): string {
   return JSON.stringify({
     orderedFileNames: state.options.map((option) => option.fileName),
+    eligibleFileNames: eligibleVariantOptions(state.options, state.excludedVariants).map((option) => option.fileName),
     candidateRevision: state.candidateRevision
   });
 }
@@ -61,11 +65,12 @@ function preparedCoverLetterTarget(
   state: PreparedCoverLetterState,
   candidates: VariantCandidate[]
 ): { fileName: string | null; recommendation: VariantRecommendation | null } {
-  if (state.options.length === 1) {
+  const eligible = eligibleVariantOptions(state.options, state.excludedVariants);
+  if (eligible.length === 1) {
     const only = candidates[0];
     const fileName =
       candidates.length === 1 &&
-      only?.fileName === state.options[0]?.fileName &&
+      only?.fileName === eligible[0]?.fileName &&
       only.text.trim().length >= MINIMUM_PREPARED_COVER_LETTER_LENGTH
         ? only.fileName
         : null;
@@ -74,13 +79,13 @@ function preparedCoverLetterTarget(
       recommendation: null
     };
   }
-  if (state.options.length === 0) {
+  if (eligible.length === 0) {
     return { fileName: null, recommendation: null };
   }
   const recommendation = recommendVariant(
     jobText,
     candidates,
-    state.options.length,
+    eligible.length,
     MINIMUM_PREPARED_COVER_LETTER_LENGTH
   );
   return {
@@ -98,12 +103,13 @@ export async function resolvePreparedCoverLetterSelection(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const snapshot = settled;
     const snapshotKey = preparedCoverLetterOptionSnapshotKey(snapshot);
+    const eligible = eligibleVariantOptions(snapshot.options, snapshot.excludedVariants);
     const shouldRead =
-      snapshot.options.length > 1 ||
-      (snapshot.options.length === 1 &&
-        snapshot.options[0]?.fileName !== snapshot.activeFileName &&
+      eligible.length > 1 ||
+      (eligible.length === 1 &&
+        eligible[0]?.fileName !== snapshot.activeFileName &&
         documentIsReplaceable(snapshot));
-    candidates = shouldRead ? await deps.readCandidates(snapshot.options) : [];
+    candidates = shouldRead ? await deps.readCandidates(eligible) : [];
     if (!deps.isCurrent()) return null;
 
     settled = deps.readState();
@@ -142,8 +148,14 @@ export async function resolvePreparedCoverLetterSelection(
     );
   });
   if (!deps.isCurrent()) return null;
+  // A pick ranked under an option set or pool that changed before commit is
+  // stale; other cancellations (edits, ownership) keep it as a non-mutating hint.
+  const rankedSnapshotChanged =
+    !adopted &&
+    preparedCoverLetterOptionSnapshotKey(deps.readState()) !==
+      preparedCoverLetterOptionSnapshotKey(adoptionState);
   return {
-    recommendation,
+    recommendation: rankedSnapshotChanged ? null : recommendation,
     adoptedFileName: adopted ? fileName : null
   };
 }

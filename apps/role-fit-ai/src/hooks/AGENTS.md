@@ -67,8 +67,9 @@ browser-side effects; components render them and App composes them.
   on the scan identity rather than the array, so per-keystroke notes edits
   cannot starve a pending scan. Clusters are never cached as records — the
   merge modal reads current status, dates, artifacts, and attachments.
-- `useAiSettings` owns per-stage provider/model/effort preferences and the
-  candidate-declared Profile, never API credentials. Startup, Reset and
+- `useAiSettings` owns per-stage provider/model/effort preferences, the
+  candidate-declared Profile, and Prepare's two variant eligibility pools,
+  never API credentials. Startup, Reset and
   provider changes share `lib/stageSettings.ts` defaults; switching
   to a stage's recommended provider restores its recommended model and effort.
   Browser storage is a fail-open cache; `lib/workspacePreferencesSync.ts` makes the owner-only
@@ -90,8 +91,8 @@ browser-side effects; components render them and App composes them.
   posting remains immutable and separately persisted even when it initially
   matches that prepared projection.
   `useWorkspaceResume` may read actual saved resume documents to support
-  Prepare's deterministic recommendation, but that decision stays session-only
-  and never adds persisted variant metadata. It reads every variant through one
+  Prepare's deterministic recommendation, but that decision stays session-only;
+  its only persisted input is the Settings eligibility pool. It reads every variant through one
   batch request (`lib/baseResumeWorkspaceRepository.ts`), caches the result
   against a candidate revision, and exposes a settled signal callers await
   instead of sampling `isWorkspaceBootstrapping` mid-flight. Metadata-only
@@ -105,16 +106,21 @@ browser-side effects; components render them and App composes them.
   preparation. The ordering rules live in `lib/preparedResume.ts` — pure, so the
   hydration wait, the terminal states, and the adoption guards are executable in
   tests rather than only inspectable as source. Do not reintroduce a second
-  selector or a post-preparation re-ranking effect for the resume. Candidate
-  bytes, ordered option metadata, and the numeric candidate revision must share
-  one snapshot. Read the live revision at resolution time so a same-filename
+  selector or a post-preparation re-ranking effect for the resume. Options are
+  filtered by the resume pool before any candidate read. Candidate bytes,
+  ordered option metadata, the eligible set, and the numeric candidate revision
+  must share one snapshot, and a pool change before the loader commits cancels
+  the adoption. Read the live revision at resolution time so a same-filename
   overwrite invalidates an in-flight read; retry one changed snapshot, then
   retain current. The guarded loader returns the exact committed
   document receipt, failed adoption clears the recommendation, and cancellation
   clears both the recommendation and visible resolving flag.
 - `usePreparedCoverLetter` owns Prepare's ONE saved-letter resolution after the
   prepared brief is current. It waits for workspace startup to finish, then
-  adopts the sole saved letter or ranks one option/candidate snapshot. Adoption
+  adopts the sole eligible letter or ranks one option/candidate snapshot of the
+  letters the cover-letter pool leaves eligible. The pool is a snapshot input,
+  not a re-resolution trigger: changing it cancels a pending adoption but never
+  re-resolves a settled preparation. Adoption
   preserves Prepare's output title and uses the editor's guarded loader; edits,
   application ownership, saves, manual intent, ties, and incomplete reads keep
   the current document. Its pending signal gates Cover Letter Polish and Apply.
@@ -254,7 +260,8 @@ browser-side effects; components render them and App composes them.
   with weighted prepared-job sections and auto-select a meaningful unique
   winner while the editor is clean and not application-owned. A tie or
   incomplete comparison keeps the current selection without inventing a
-  recommendation. A sole saved variant is adopted without ranking. Cover-letter
+  recommendation. A sole eligible variant is adopted without ranking; variants
+  the user unchecked in Settings are never read, ranked, or adopted. Cover-letter
   output-title changes remain recoverable but do not block saved-body adoption.
   An explicitly uploaded resume is authoritative even while clean and is never
   an automatic-adoption target. A successful automatic proposal run must not force the Resume tab;

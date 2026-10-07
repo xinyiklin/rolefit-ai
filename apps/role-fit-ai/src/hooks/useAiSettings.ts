@@ -13,6 +13,7 @@ import type {
 } from "../lib/candidateFacts";
 import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
 import { materializeAiSettings } from "../lib/aiSettingsPersistence.ts";
+import type { VariantExclusions, VariantKind } from "../lib/variantPool.ts";
 import {
   WORKSPACE_PREFERENCES_APPLIED_EVENT,
   WORKSPACE_PREFERENCES_STATUS_EVENT,
@@ -49,6 +50,12 @@ export function useAiSettings() {
   const [coverPolishAuto, setCoverPolishAuto] = useState(saved.coverPolishAuto ?? false);
   const [coverPolishAutoThreshold, setCoverPolishAutoThreshold] = useState<AutoPolishThreshold>(
     saved.coverPolishAutoThreshold ?? "STRONG"
+  );
+  const [excludedResumeVariants, setExcludedResumeVariants] = useState<VariantExclusions>(
+    saved.excludedResumeVariants ?? {}
+  );
+  const [excludedCoverLetterVariants, setExcludedCoverLetterVariants] = useState<VariantExclusions>(
+    saved.excludedCoverLetterVariants ?? {}
   );
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState<DeclaredAnswer>(
@@ -90,6 +97,8 @@ export function useAiSettings() {
       setResumePolishAutoThreshold(next.resumePolishAutoThreshold ?? "REASONABLE");
       setCoverPolishAuto(next.coverPolishAuto ?? false);
       setCoverPolishAutoThreshold(next.coverPolishAutoThreshold ?? "STRONG");
+      setExcludedResumeVariants(next.excludedResumeVariants ?? {});
+      setExcludedCoverLetterVariants(next.excludedCoverLetterVariants ?? {});
       setCitizenshipStatus(next.citizenshipStatus ?? "unspecified");
       setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? "unspecified");
       setRequiresSponsorship(next.requiresSponsorship ?? "unspecified");
@@ -140,6 +149,8 @@ export function useAiSettings() {
       resumePolishAutoThreshold,
       coverPolishAuto,
       coverPolishAutoThreshold,
+      excludedResumeVariants,
+      excludedCoverLetterVariants,
       citizenshipStatus,
       legallyAuthorizedToWork,
       requiresSponsorship,
@@ -172,6 +183,8 @@ export function useAiSettings() {
     resumePolishAutoThreshold,
     coverPolishAuto,
     coverPolishAutoThreshold,
+    excludedResumeVariants,
+    excludedCoverLetterVariants,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -221,6 +234,19 @@ export function useAiSettings() {
     });
   }
 
+  function setVariantEligibility(kind: VariantKind, fileName: string, eligible: boolean) {
+    const update = (prev: VariantExclusions): VariantExclusions => {
+      const excluded = Object.prototype.hasOwnProperty.call(prev, fileName);
+      if (excluded === !eligible) return prev;
+      if (!eligible) return { ...prev, [fileName]: true };
+      const next = { ...prev };
+      delete next[fileName];
+      return next;
+    };
+    if (kind === "resume") setExcludedResumeVariants(update);
+    else setExcludedCoverLetterVariants(update);
+  }
+
   // Resolve the guidance one stage actually sends: its own override when it has
   // non-blank text, otherwise the shared instructions.
   const customInstructionsFor = useCallback(
@@ -246,6 +272,8 @@ export function useAiSettings() {
     setResumePolishAutoThreshold("REASONABLE");
     setCoverPolishAuto(false);
     setCoverPolishAutoThreshold("STRONG");
+    setExcludedResumeVariants({});
+    setExcludedCoverLetterVariants({});
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork("unspecified");
     setRequiresSponsorship("unspecified");
@@ -277,6 +305,9 @@ export function useAiSettings() {
     setCoverPolishAuto,
     coverPolishAutoThreshold,
     setCoverPolishAutoThreshold,
+    excludedResumeVariants,
+    excludedCoverLetterVariants,
+    setVariantEligibility,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

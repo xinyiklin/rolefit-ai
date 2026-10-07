@@ -5,6 +5,33 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
+  medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
+  Saved choices stay; the user's own saved selection was switched too (app
+  continuity).
+  - [TOOL] Evidence: live baseline on the 39 synthetic cases with the corrected
+    opportunity gates and Astra fact-checks.
+    - Sol medium: 39/39 passed, 88 edits, 0 unsupported, 1 immaterial.
+    - Opus High: 35/39, 103 edits, 3 unsupported, 3 immaterial, 1 tense flip.
+      All three unsupported edits combined separate facts into a new
+      relationship.
+    - Both met all five gated opportunity cases.
+    - Real applications pull both ways. On 32 fresh applications
+      (2026-10-05), Opus had 2/99 edits unsupported and Sol 0/123. On the
+      2026-10-04 22-application holdout (older prompt), Opus High beat Sol
+      Medium 11–5 on quality where Astra and Opus agreed (Astra alone 11–11).
+    - The switch is a user-directed, safety-first choice. The only fact-check
+      judge is Astra, the same vendor as Sol. One run per synthetic case.
+    - [USER] Deferred: a paired real-application rerun on the current prompt
+      (about 20 applications, blinded Astra + Opus, sides swapped). The user is
+      low on Codex usage.
+    - Receipts are in ignored `workspace/resume-proposal-eval/`.
+  - [CODE] The Resume Polish route now resolves the selected provider before
+    generation, so a Codex failure is no longer labeled "Claude Code".
+    Follow-ups not done: a fresh user with only Claude Code gets a generic
+    "check AI settings" blocker for Polish instead of "add Codex"; and
+    switching Resume Polish to Claude CLI now seeds Sonnet 5.5 low rather than
+    Opus 5.5 high.
 - [USER+CODE] The Settings > Automation Fit toggle now governs only automatic
   runs (after Prepare and after a selected-resume change) and the automatic
   Polish that depends on them. Previously turning it off disabled Fit entirely,
@@ -24,7 +51,59 @@ bounded; app-only operational detail belongs in the affected app documentation.
     (two rail messages, stale testing docs, this entry), all fixed. Full RoleFit
     check passed after the fixes. No browser QA (rail copy and one button;
     flag-first policy).
-- [USER] Briefs drafted, awaiting approval (tasks
+- [USER+CODE] Prepare's variant pick has a user-chosen eligible pool (task
+  `variant-source-pool-20261007`; the user approved Product Brief v1 and
+  Delivery Plan v1, which supersedes that task's "awaiting approval" note
+  below). Settings > Automation **Prepare picks from** lists saved resumes and
+  cover letters independently; unchecked variants are never read, ranked, or
+  adopted automatically but still open by hand, and a manual choice wins. It
+  is stored as `excludedResumeVariants` / `excludedCoverLetterVariants`
+  file-name exclusion records in workspace preferences: absent means every
+  variant is eligible, newly saved or renamed names are eligible, names of
+  deleted variants are inert, and edits rebase per variant across tabs. The
+  strict preferences/backup parse rejects malformed records; the preferences
+  schema version is unchanged. Both resolvers filter before candidate reads,
+  and the eligible set joins their snapshots: a pool change during the read
+  retries under the new pool, one before the loader commits cancels adoption,
+  and a pool change never re-resolves a settled preparation. The app guide's
+  "no persisted variant metadata" rule now allows only this pool. Rollback:
+  before reverting, run Settings Reset (it clears every setting) or delete both
+  `excludedResumeVariants` and `excludedCoverLetterVariants` from
+  `workspace-preferences.json`; otherwise an older build treats the preferences
+  file as invalid and refuses settings saves. Re-checking variants is not
+  enough, because a deleted or renamed excluded variant can no longer be
+  re-checked. Backups taken while a pool was customized need a newer build to
+  restore.
+  - [TOOL] Self-verification in the feature worktree: full RoleFit check
+    (client and server `tsc`, Vite build, landing build, desktop probes,
+    154/154 offline evals including the new `variant-pool-eval.mjs` and the
+    extended resolver, backup-contract, preferences-conflict, server
+    preferences/backup, and Settings markup probes) and `git diff --check`
+    passed. Mutation checks confirmed the resolver evals fail when excluded
+    variants are read, counted, left out of the snapshot, or not cancelled at
+    commit.
+  - [TOOL] Two independent reviews (resolver; persistence), no high
+    findings. Two medium, fixed: a cover-letter pick cancelled at commit by a
+    pool change still returned its recommendation, so Prepare could offer a
+    letter the user had just excluded (now cleared when the option or pool
+    snapshot changed; edit or ownership cancels keep it); and the rollback note
+    above, which had said to re-check every variant. Three low, fixed: the
+    resume eval pins that the hook passes the pool check to the loader, the
+    cover eval pins that the hook's input key holds no pool and adds a
+    twice-changed pool case, and excluded names may be up to 255 characters
+    (was 200, shorter than names the workspace can list). The full RoleFit
+    check (154/154) and `git diff --check` passed after the fixes.
+  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
+    synthetic workspace (three resumes, one with a long name, and two cover
+    letters).
+    - "Prepare picks from" lists every variant checked by default.
+    - Unchecking one resume persisted only that exclusion.
+    - The lists sit side by side at 1040 px and stack at 375 px, with no
+      overflow.
+    - The only console errors were Vite's live-reload socket.
+    - QA ran before the review fixes, which changed no UI.
+- [USER] Briefs approved 2026-10-07 (the source pool is implemented above; the
+  Polish review step is in progress) (tasks
   `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
   user-originated **eligible source pool** for Prepare's resume/cover variant
   pick — conflicts with the app guide's "no persisted variant metadata" rule,
@@ -124,7 +203,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   a new revision instead. The `materials` tab id is retained so saved tab
   preferences stay valid.
 - [USER+CODE] Per-stage startup defaults moved to `src/lib/stageSettings.ts`:
-  Prepare/Fit Claude CLI Sonnet 5.5 low, Resume Polish Opus 5.5 high, Cover
+  Prepare/Fit Claude CLI Sonnet 5.5 low, Resume Polish Opus 5.5 high (later
+  superseded the same day by Codex CLI GPT-6.1 Sol medium, above), Cover
   Codex CLI GPT-6.1 Sol medium, Answers Claude CLI Opus 5.5 high, Final review
   Sonnet 5.5 low (retained user choice, no benchmark winner). Saved choices
   stay; a model-only saved setting keeps the implied Claude CLI provider, and

@@ -16,6 +16,7 @@
 
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
@@ -68,6 +69,7 @@ function baseState(overrides = {}) {
   return {
     baseResumeName: "",
     options: [],
+    excludedVariants: {},
     resumeOrigin: "blank",
     applicationOwned: false,
     currentText: "",
@@ -130,7 +132,7 @@ function baseState(overrides = {}) {
 // A harness that records what the resolution actually did, so ordering claims
 // ("waits for hydration", "adopts before returning") are observed, not asserted
 // about source text.
-function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdopt, onReadCandidates }) {
+function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdopt, onReadCandidates, onBeforeCommit }) {
   const log = [];
   let live = state;
   let bootstrapped = false;
@@ -150,8 +152,14 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
       log.push(`readCandidates:${options.map((option) => option.fileName).join(",")}`);
       return onReadCandidates ? onReadCandidates(options, live) : candidates;
     },
-    adopt: async (fileName) => {
+    adopt: async (fileName, poolChanged) => {
       log.push(`adopt:${fileName}`);
+      // The guarded loader's final commit boundary rechecks its cancel signal.
+      if (onBeforeCommit) live = onBeforeCommit(live) ?? live;
+      if (poolChanged()) {
+        log.push("adopt:cancelled");
+        return null;
+      }
       if (adoptSucceeds) {
         const candidate = candidates.find((entry) => entry.fileName === fileName);
         live = { ...live, baseResumeName: fileName, resumeOrigin: "saved", currentText: candidate?.text ?? live.currentText };
@@ -563,6 +571,124 @@ for (const [label, overrides] of [
   check(await resolvePreparedResumeSelection(run.deps), null, "a superseded resolution returns nothing to publish");
 }
 
+// ── The Settings pool limits what Prepare may read, rank, and adopt ────────
+{
+  const backendJob = "Job title:\nBackend Engineer\nTech stack / keywords:\n- Go\n- Postgres\n- Kubernetes\n- Python";
+  const frontend = { fileName: "frontend.resume", label: "Frontend", text: resumeText("Frontend", "React TypeScript accessibility") };
+  const backend = { fileName: "backend.resume", label: "Backend", text: resumeText("Backend", "Go Postgres Kubernetes Python") };
+  const data = { fileName: "data.resume", label: "Data", text: resumeText("Data", "Python Postgres") };
+  const all = [frontend, backend, data];
+  const optionsOf = (variants) => variants.map(({ fileName, label }) => ({ fileName, label }));
+  const readOnly = (options) => all.filter((variant) => options.some((option) => option.fileName === variant.fileName));
+  const readsOf = (run) => run.log.filter((entry) => entry.startsWith("readCandidates:"));
+  const pooled = (excludedVariants, overrides = {}) => harness({
+    state: baseState({ options: optionsOf(all), excludedVariants, ...overrides.state }),
+    candidates: all,
+    onReadCandidates: overrides.onReadCandidates ?? ((options) => readOnly(options)),
+    onBeforeCommit: overrides.onBeforeCommit
+  }).setJobText(backendJob);
+
+  // AC1 and AC6: an unset pool, or one naming only deleted variants, is today's behavior.
+  const unset = pooled({});
+  const unsetResolution = await resolvePreparedResumeSelection(unset.deps);
+  check(unsetResolution.selection?.fileName, backend.fileName, "an unset pool still adopts the ranked winner");
+  const stale = pooled({ "deleted.resume": true });
+  const staleResolution = await resolvePreparedResumeSelection(stale.deps);
+  check(stale.log, unset.log, "a pool naming a deleted variant reads and adopts exactly as an unset pool");
+  check(staleResolution, unsetResolution, "a deleted variant in the pool changes nothing and raises no error");
+
+  // AC2: the excluded variant would rank first, yet is never read, recommended, or adopted.
+  const excluded = pooled({ "backend.resume": true });
+  const excludedResolution = await resolvePreparedResumeSelection(excluded.deps);
+  check(readsOf(excluded), ["readCandidates:frontend.resume,data.resume"], "an excluded variant is never read for ranking");
+  checkOk(excludedResolution.recommendation?.fileName !== backend.fileName, "an excluded variant is never recommended");
+  checkOk(!excluded.log.includes(`adopt:${backend.fileName}`), "an excluded variant is never adopted");
+  check(excludedResolution.selection?.fileName, data.fileName, "the best eligible variant is adopted instead");
+  check(excludedResolution.selection?.origin, "ranked", "several eligible variants are still ranked");
+
+  // AC3: one eligible variant is adopted without ranking; none keeps the current document.
+  const sole = pooled({ "frontend.resume": true, "data.resume": true });
+  const soleResolution = await resolvePreparedResumeSelection(sole.deps);
+  check(readsOf(sole), ["readCandidates:backend.resume"], "only the sole eligible variant is read");
+  check(soleResolution.selection?.fileName, backend.fileName, "the sole eligible variant is adopted");
+  check(soleResolution.selection?.origin, "sole-saved", "a sole eligible variant is adopted without ranking");
+
+  const everyVariant = { "frontend.resume": true, "backend.resume": true, "data.resume": true };
+  const keptCurrent = pooled(everyVariant, {
+    state: { baseResumeName: frontend.fileName, resumeOrigin: "saved", currentText: frontend.text }
+  });
+  const keptResolution = await resolvePreparedResumeSelection(keptCurrent.deps);
+  check(readsOf(keptCurrent), [], "with nothing eligible no variant is read");
+  checkOk(!keptCurrent.log.some((entry) => entry.startsWith("adopt:")), "with nothing eligible nothing is adopted");
+  check(keptResolution.selection?.origin, "current", "with nothing eligible the open, excluded document is kept");
+  check(keptResolution.recommendation, null, "with nothing eligible there is no automatic pick to report");
+  const nothingOpen = pooled(everyVariant);
+  const nothingOpenResolution = await resolvePreparedResumeSelection(nothingOpen.deps);
+  check(
+    [nothingOpenResolution.selection, nothingOpenResolution.blocker],
+    [null, "no-resume"],
+    "with nothing eligible and nothing open, no resume resolves"
+  );
+
+  // AC5: a pool change while reading re-reads under the new pool, never adopting the old pick.
+  let reads = 0;
+  const changedWhileReading = pooled({}, {
+    onReadCandidates: (options, state) => {
+      reads += 1;
+      if (reads === 1) state.excludedVariants = { "backend.resume": true };
+      return readOnly(options);
+    }
+  });
+  const changedResolution = await resolvePreparedResumeSelection(changedWhileReading.deps);
+  check(
+    readsOf(changedWhileReading),
+    ["readCandidates:frontend.resume,backend.resume,data.resume", "readCandidates:frontend.resume,data.resume"],
+    "a pool change during the read retries under the new pool"
+  );
+  checkOk(!changedWhileReading.log.includes(`adopt:${backend.fileName}`), "the winner under the old pool is never adopted");
+  check(changedResolution.selection?.fileName, data.fileName, "the retry adopts under the new pool");
+
+  let flips = 0;
+  const changedTwice = pooled({}, {
+    onReadCandidates: (options, state) => {
+      flips += 1;
+      state.excludedVariants = flips === 1 ? { "backend.resume": true } : { "data.resume": true };
+      return readOnly(options);
+    }
+  });
+  const changedTwiceResolution = await resolvePreparedResumeSelection(changedTwice.deps);
+  checkOk(!changedTwice.log.some((entry) => entry.startsWith("adopt:")), "a pool that keeps changing adopts nothing");
+  check(changedTwiceResolution.recommendation, null, "a pool that keeps changing reports no pick");
+
+  const changedBeforeCommit = pooled({}, {
+    state: { baseResumeName: frontend.fileName, resumeOrigin: "saved", currentText: frontend.text },
+    onBeforeCommit: (state) => ({ ...state, excludedVariants: { "data.resume": true } })
+  });
+  const beforeCommitResolution = await resolvePreparedResumeSelection(changedBeforeCommit.deps);
+  checkOk(changedBeforeCommit.log.includes("adopt:cancelled"), "a pool change before commit cancels the chosen adoption");
+  check(beforeCommitResolution.selection?.fileName, frontend.fileName, "a cancelled adoption reports the document still open");
+  check(beforeCommitResolution.selection?.origin, "current", "a cancelled adoption is not reported as a pick");
+  check(beforeCommitResolution.recommendation, null, "a cancelled adoption does not advertise the old pool's winner");
+
+  // AC6: a renamed variant is a new name, so it is eligible even if its old name was excluded.
+  const renamed = { ...backend, fileName: "backend-2026.resume", label: "Backend 2026" };
+  const renamedRun = harness({
+    state: baseState({ options: optionsOf([frontend, renamed]), excludedVariants: { "backend.resume": true } }),
+    candidates: [frontend, renamed],
+    onReadCandidates: () => [frontend, renamed]
+  }).setJobText(backendJob);
+  const renamedResolution = await resolvePreparedResumeSelection(renamedRun.deps);
+  check(renamedResolution.selection?.fileName, renamed.fileName, "a renamed variant is eligible under its new name");
+
+  // AC7: excluding the open document never replaces unsaved work in it.
+  const dirtyExcluded = pooled({ "frontend.resume": true }, {
+    state: { baseResumeName: frontend.fileName, resumeOrigin: "saved", currentText: frontend.text, documentDirty: true }
+  });
+  const dirtyResolution = await resolvePreparedResumeSelection(dirtyExcluded.deps);
+  checkOk(!dirtyExcluded.log.some((entry) => entry.startsWith("adopt:")), "an excluded document with unsaved edits is never replaced");
+  check(dirtyResolution.selection?.fileName, frontend.fileName, "the excluded open document keeps speaking for the preparation");
+}
+
 // ── The decision itself, at the boundaries ──────────────────────────────────
 {
   const shortText = "Too short to screen.";
@@ -606,5 +732,13 @@ for (const [label, overrides] of [
     "a sole saved variant too short to screen is not adopted"
   );
 }
+
+// The harness honors `poolChanged` itself, so pin that the real hook passes it
+// into the guarded loader's cancel predicate.
+const resumeHookSource = readFileSync(new URL("../usePreparedResume.ts", import.meta.url), "utf8");
+checkOk(
+  /adopt: \(fileName, poolChanged\) =>\s*loadBaseResumeVersion\(fileName, true, \(\) => \{[\s\S]{0,400}?\|\|\s*poolChanged\(\)\s*\);/.test(resumeHookSource),
+  "the hook's loader cancel predicate includes the resolver's pool check"
+);
 
 console.log(`Prepared resume resolution eval: ${checks}/${checks} checks passed`);

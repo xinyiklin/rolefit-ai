@@ -264,7 +264,8 @@ hard-limit validation and bounded format repair remain in place.
 The other stage defaults adopt earlier decisions: Sonnet 5.5 low for Job
 analysis/Fit (the prior 20-posting, three-repeat Prepare comparison), Opus 5.5
 high for Resume Polish (prior user-adopted quality setting; high versus medium
-was not a decisive win), and Sol 6.1 medium for Cover (the prior 40-case paired
+was not a decisive win; superseded 2026-10-07 by GPT-6.1 Sol medium, see
+[Benchmarks](benchmarks.md)), and Sol 6.1 medium for Cover (the prior 40-case paired
 comparison). Final review retains the user's Sonnet 5.5 low choice, without a
 comparative benchmark claim. `src/lib/stageSettings.ts` owns fresh, reset and
 recommended-provider selection defaults. Supported saved choices are preserved;
@@ -744,14 +745,24 @@ Good frontend verification covers:
 - extension intake never launches Resume Polish; multiple saved resume
   variants may still be ranked from their actual strict document contents and
   a clear high-confidence winner selected while the editor is clean, but that
-  is source selection, not tailoring, and no variant metadata is persisted
+  is source selection, not tailoring, and the only persisted variant input is
+  the Settings eligibility pool
 - the prepared-resume resolution runs as REAL sequences rather than source
   regexes (`src/hooks/__evals__/prepared-resume-resolution.mjs`): an import
   arriving before workspace hydration, exactly one saved variant, a
   starter-only workspace, a ranked winner, option addition/deletion during a
   read, a same-filename candidate overwrite during a read, a changed candidate
   before adoption, a protected document, and a refused adoption with no stale
-  recommendation. `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
+  recommendation. Both it and `prepared-cover-letter-resolution.mjs` cover the
+  Settings pool: an excluded top-ranked variant is never read or adopted, one
+  eligible variant is adopted, none keeps the current document, a pool change
+  during the read retries under the new pool, a pool change before commit
+  cancels adoption, and stale or renamed names are inert.
+  `src/lib/__evals__/variant-pool-eval.mjs` pins the exclusion record's
+  normalization, eligibility filter, cache round trip, and per-variant rebase;
+  the backup-contract, preferences-conflict, and server preferences/backup
+  probes pin strict rejection of malformed pools and their backup round trip.
+  `src/lib/__evals__/resume-proposal-decisions-eval.mjs`
   pins content-derived proposal identity, keyed resets, undo, and manual-match
   behavior; `src/hooks/__evals__/resume-proposal-add-hook.mjs` runs the real
   decision hook for Profile-linked new bullets (Accept inserts with the assigned

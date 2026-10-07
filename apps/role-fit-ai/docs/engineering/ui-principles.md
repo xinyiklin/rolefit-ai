@@ -105,14 +105,15 @@ Skipped decision replaces both application actions with Save job updates.
 
 Extension intake requests AI-backed Job analysis and stops on Prepare. Its local
 brief remains usable when provider work fails, and it never implicitly starts
-resume Polish. Independently, Prepare may rank the actual contents of saved
-`.resume` and `.cover` variants against weighted prepared-job sections. For
+resume Polish. Independently, Prepare may rank the actual contents of the saved
+`.resume` and `.cover` variants the user left eligible in Settings > Automation
+against weighted prepared-job sections. For
 either document, auto-select a meaningful unique winner only while its editor
 is clean and not application-owned. A tie or incomplete read keeps the current
 selection. This is source selection, not automatic tailoring. The selector is
 the normal receipt; reserve the shared compact recommendation line for a blocked
-replacement. Do not persist parallel variant metadata or widen the strict
-document schema for this decision.
+replacement. Beyond that eligibility list, do not persist parallel variant
+metadata or widen the strict document schema for this decision.
 
 When enabled, Fit Assessment is an optional subsection of the same normal Prepare
 provider dispatch and sanitizes independently from Job analysis. A resume change
@@ -410,8 +411,9 @@ Never show:
 
 ## AI Settings UI
 
-- Default provider is the account-backed Claude Code CLI (`claude-cli`) path,
-  on both the frontend and the server's no-`AI_PROVIDER` fallback. A non-empty,
+- Fresh stage defaults live in `src/lib/stageSettings.ts`: Claude Code CLI
+  (`claude-cli`) for most stages, Codex CLI for Resume and Cover Polish. The
+  server's no-`AI_PROVIDER` fallback is the account-backed Claude Code CLI. A non-empty,
   unrecognized `AI_PROVIDER` fails configuration instead of silently selecting
   OpenAI.
 - First-class provider choices: subscription CLIs (Claude Code, Codex,
@@ -450,10 +452,12 @@ Never show:
   the UI without being declared there silently runs on another stage's provider,
   which is how the cover-letter and Q&A flows sat on Tailor's config unnoticed.
 - Settings > Automation holds the automatic Fit Assessment toggle (it never
-  disables Assess fit or Reassess fit) and the two
-  independent automatic Polish switch/minimum-fit pairs. It
-  exposes categorical verdict cutoffs, not scores, confidence thresholds, or a
-  master automation switch.
+  disables Assess fit or Reassess fit), the two
+  independent automatic Polish switch/minimum-fit pairs, and **Prepare picks
+  from**: independent Resumes and Cover letters checkbox lists of the saved
+  variants Prepare may pick automatically (checked = eligible; new variants
+  start checked). It exposes categorical verdict cutoffs, not scores,
+  confidence thresholds, or a master automation switch.
 - Keep every stage row visible together. There is no row toggle, collapsed
   summary, or persisted open/collapse preference; the user can scan and edit
   all stage configurations without changing view state.

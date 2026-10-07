@@ -5,14 +5,15 @@ Cover and Answers evaluations. Detailed prompts, candidate documents, answers,
 judgments and receipts remain ignored and local. Synthetic fixtures are tracked
 where the corresponding evaluation supports them. The initial ledger used
 existing receipts only; the explicitly requested single-sample follow-up below
-made two additional generation calls.
+made two additional generation calls, and the later 39-case Resume baseline is
+listed under coverage gaps.
 
 ## Decisions and evidence
 
 | Workflow | Current recommendation | Meaningful benchmark evidence | Limits |
 | --- | --- | --- | --- |
 | Prepare: Job analysis + Fit | Claude Sonnet 5.5 low, combined | 22 synthetic postings across five configurations; then 20 fresh postings × three repeats for Sonnet and the old Luna/GPT-5.5 split. Sonnet holdout: 4.9 s median versus 17.5 s, extraction 0.997 versus 0.993, zero fabricated terms in both. | Each setting had a Fit automation-flip group; synthetic labels are not human calibration. |
-| Resume Polish | Claude Opus 5.5 high | Original prompt comparison: synthetic cases, 40 real applications and a disjoint 22-application holdout, six models, Low–XHigh. On the holdout, Opus High beat the prior Sonnet Medium setup 17–1 where both judges agreed. Later 34-case safety runs, guidance comparisons and 32 fresh applications tested restraint and warning behavior. | A quality-first choice; High versus Medium was not decisive. Later prompt candidates often lost or tied. Page count is not materiality or a factuality score. |
+| Resume Polish | GPT-6.1 Sol medium (since 2026-10-07; previously Claude Opus 5.5 high) | Factual safety favors Sol. 2026-10-07 live baseline, 39 synthetic cases, corrected opportunity gates, Astra fact-checks: Sol 39/39 passed, 88 edits, 0 unsupported, 1 immaterial; Opus High 35/39, 103 edits, 3 unsupported (each merged separately listed facts into a new relationship), 3 immaterial, 1 tense flip; both met all five gated opportunity cases. 2026-10-05, 32 fresh real applications: Opus 2/99 edits unsupported, Sol 0/123. 2026-10-04 34-case eval: Sol passed all cases; Opus passed 63/68 trap checks, then 67/68 after the round-2 prompt. Writing quality favored Opus: on the 2026-10-04 22-application holdout (older prompt), Opus High beat Sol Medium 11–5 where Astra and Opus agreed (Astra alone 11–11, Opus judge 17–5); Opus High also beat Sonnet Medium 17–1 there. | A user-directed safety-first choice. One run per synthetic case; the only fact-check judge is Astra (OpenAI family, same vendor as Sol). The quality comparison predates the current prompt and its arm labels (`opus-high-space` vs `sol-medium`) suggest unmatched guidance. A paired real-application rerun on the current prompt is pending (deferred for Codex usage). Page count is not materiality or a factuality score. |
 | Cover Polish | GPT-6.1 Sol medium, existing prompt | 40 tuning applications plus 20 holdouts, sentence fact-checking and blinded Astra/Opus pairwise judging. On the 40-case same-prompt comparison, Sol beat Sonnet 25–2 and Opus 16–0 where both judges agreed. | Model judges disagreed on some comparisons. Claude-specific prompt gains did not transfer to Sol, so the shared prompt was retained. |
 | Answers | Claude Opus 5.5 high; GPT-6.1 Sol medium as OpenAI alternative | 57 synthetic cases × nine settings, 513 completed answers; 38 fresh cases and 19 regressions. Astra High and Opus High agreed the rubric before independent judging. | Opus High's fresh mean lead over Medium was only 0.67/100. Astra slightly preferred Sol Medium to Opus High; Opus preferred Opus High. One sample per case, no human calibration. |
 | Final review | Claude Sonnet 5.5 low | Retained user preference. | No comparative benchmark supporting a winner. |
@@ -104,7 +105,8 @@ These are observed workload averages, not a quote for every new question.
 | Answers — Sonnet 5.5 low | 57 | 58 | $0.0199 | $0.0133–$0.0199 |
 | Answers — Sonnet 5.5 medium | 57 | 58 | $0.0202 | $0.0135–$0.0202 |
 | Answers — Sonnet 5.5 high | 57 | 58 | $0.0232 | $0.0165–$0.0232 |
-| Resume Polish — Opus 5.5 high | Historical corpora | Not reconstructed | Unknown | Unknown |
+| Resume Polish — Opus 5.5 high (default until 2026-10-07) | Historical corpora | Not reconstructed | Unknown | Unknown |
+| Resume Polish — GPT-6.1 Sol medium | 39-case baseline | Not retained | Unknown | Unknown |
 | Cover Polish — GPT-6.1 Sol medium | Historical corpora | Not reconstructed | Unknown | Unknown |
 
 At the current defaults, **Prepare + one Answer has a measured partial average
@@ -118,8 +120,8 @@ for the historical Answers runs.
 ### Single-sample Resume and Cover follow-up
 
 On 2026-10-07 the user requested one sample of each. Both used the production
-prompt, workflow and validators with existing synthetic fixtures and the current
-recommended models. Neither changed user documents or saved settings. The local
+prompt, workflow and validators with existing synthetic fixtures and the
+then-recommended models (Resume: Opus 5.5 high, replaced 2026-10-07). Neither changed user documents or saved settings. The local
 observer captured Claude's numeric JSON envelope and added Codex's `--json`
 telemetry flag in memory; no production source file was edited. No judge was
 called, and there were exactly two successful CLI requests, with no retries or
@@ -131,6 +133,8 @@ format repairs.
 | Cover Polish — GPT-6.1 Sol medium | 19,631 | 7,168 / 0 | 492 | 22.59 s | Not reported | $0.0305628 |
 
 The combined Standard API equivalent is **$0.1530348**, about **15.30 cents**.
+It reflects the former Opus Resume default, not the current Sol default, whose
+cost is unmeasured.
 Resume's cache writes were explicitly one-hour writes. Its calculation is
 `(2 × 4 + 540 × 0.20 + 8,777 × 8 + 2,607 × 20) / 1,000,000`.
 Cover's is
@@ -236,6 +240,8 @@ usage fields. Their retained JSON does not contain input/output token counts or
 provider dollar estimates. Their per-task and full-session costs are **unknown**.
 Stored answer length, timing, file count and model name cannot recover hidden
 reasoning, retries or cache behavior. File count is not a provider-call count.
+The 2026-10-07 39-case Resume baseline (78 generations, 63 Astra fact-checks
+across Opus 5.5 high and Sol 6.1 medium) retained no usage fields either.
 
 Across the six Answers runs, paired grading, judge consensus and four Prepare
 receipt directories, **$35.7473 is the known reported subtotal** for 840/1,600

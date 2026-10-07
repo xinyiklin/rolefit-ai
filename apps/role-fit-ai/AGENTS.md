@@ -239,8 +239,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   proposals. Do not add a second selector: a pre-fit picker plus a post-Prepare
   ranking effect is what made Fit Assessment describe one resume while the editor
   held another. Its terminal states are: a real current document is
-  authoritative; exactly one saved variant is adopted; several variants rank and
-  a meaningful unique winner is adopted; otherwise no resume resolves. Ranking
+  authoritative; exactly one eligible saved variant is adopted; several eligible
+  variants rank and a meaningful unique winner is adopted; otherwise no resume
+  resolves. Ranking
   uses the LOCAL brief (the ranker weights section headings the raw posting does
   not have) while the provider still receives the raw posting. **"The workspace
   is still loading" is never "no resume"** — resolution awaits hydration rather
@@ -260,10 +261,18 @@ or workspace state, keep it here and expose the smallest host seam instead.
   `running` must settle it to ready or unavailable. A
   tie or incomplete comparison returns no recommendation and keeps the current
   selection. Cover letters resolve independently after Prepare: wait for
-  workspace startup, adopt the sole saved letter or a meaningful
+  workspace startup, adopt the sole eligible letter or a meaningful
   unique winner, and preserve Prepare's output title. Body/style edits,
   application ownership, saves, and manual selection still block replacement.
-  Do not add persisted variant metadata or another schema for either choice.
+  The only persisted input to either choice is the Settings > Automation
+  eligibility pool (`excludedResumeVariants` / `excludedCoverLetterVariants`
+  file-name exclusions in workspace preferences; absent means every saved
+  variant is eligible and a newly saved name is eligible). Each resolver filters
+  its options by that pool before any candidate read, counts only eligible
+  variants for its terminal states, and includes the eligible set in its
+  snapshot so a pool change cancels a pending adoption; a pool change never
+  re-resolves a settled preparation. Do not add other persisted variant
+  metadata, metadata inside `.resume`/`.cover`, or a second selector.
 - Proposal decisions are keyed by proposal run and outcome plus each target's id,
   kind, original text, proposed text, bullet orders, and reason. A mismatched key derives an empty decision map
   without setting state during render; the first decision initializes the new

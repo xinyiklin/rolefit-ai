@@ -1,5 +1,6 @@
 import { AUTO_POLISH_THRESHOLD_OPTIONS, type AutoPolishThreshold } from "../../lib/autoPolishPolicy.ts";
-import type { SettingsDialogProps } from "../SettingsDialog";
+import type { VariantExclusions } from "../../lib/variantPool.ts";
+import type { SettingsDialogProps, SettingsVariantOption } from "../SettingsDialog";
 
 type AutomationPageProps = Pick<SettingsDialogProps,
   | "fitAssessmentAuto" | "onFitAssessmentAutoChange"
@@ -7,6 +8,8 @@ type AutomationPageProps = Pick<SettingsDialogProps,
   | "resumePolishAutoThreshold" | "onResumePolishAutoThresholdChange"
   | "coverPolishAuto" | "onCoverPolishAutoChange"
   | "coverPolishAutoThreshold" | "onCoverPolishAutoThresholdChange"
+  | "resumeVariants" | "coverLetterVariants"
+  | "excludedResumeVariants" | "excludedCoverLetterVariants" | "onVariantEligibilityChange"
 >;
 
 type DocumentRowProps = {
@@ -48,6 +51,39 @@ function DocumentRow({ label, enabled, checked, onCheckedChange, threshold, onTh
   );
 }
 
+type VariantListProps = {
+  legend: string;
+  emptyText: string;
+  variants: SettingsVariantOption[] | null;
+  excluded: VariantExclusions;
+  onEligibleChange: (fileName: string, eligible: boolean) => void;
+};
+
+// One checkbox per saved variant; checked means Prepare may pick it.
+function VariantList({ legend, emptyText, variants, excluded, onEligibleChange }: VariantListProps) {
+  return (
+    <fieldset className="settings-automation__variants">
+      <legend>{legend}</legend>
+      {variants === null ? (
+        <p className="settings-automation__empty">Loading…</p>
+      ) : variants.length ? (
+        variants.map((variant) => (
+          <label key={variant.fileName} className="check-row" title={variant.fileName}>
+            <input
+              type="checkbox"
+              checked={!Object.prototype.hasOwnProperty.call(excluded, variant.fileName)}
+              onChange={(event) => onEligibleChange(variant.fileName, event.target.checked)}
+            />
+            <span>{variant.label}</span>
+          </label>
+        ))
+      ) : (
+        <p className="settings-automation__empty">{emptyText}</p>
+      )}
+    </fieldset>
+  );
+}
+
 export function AutomationPage({
   fitAssessmentAuto,
   onFitAssessmentAutoChange,
@@ -58,7 +94,12 @@ export function AutomationPage({
   coverPolishAuto,
   onCoverPolishAutoChange,
   coverPolishAutoThreshold,
-  onCoverPolishAutoThresholdChange
+  onCoverPolishAutoThresholdChange,
+  resumeVariants,
+  coverLetterVariants,
+  excludedResumeVariants,
+  excludedCoverLetterVariants,
+  onVariantEligibilityChange
 }: AutomationPageProps) {
   return (
     <>
@@ -93,6 +134,29 @@ export function AutomationPage({
           onThresholdChange={onCoverPolishAutoThresholdChange}
         />
       </div>
+
+      <section className="settings-automation__pool" aria-labelledby="settings-variant-pool-title">
+        <div className="menu-subhead">
+          <span className="menu-subhead__title" id="settings-variant-pool-title">Prepare picks from</span>
+        </div>
+        <p className="settings-automation__note">Unchecked variants still open by hand.</p>
+        <div className="settings-automation__variant-lists">
+          <VariantList
+            legend="Resumes"
+            emptyText="No saved resumes."
+            variants={resumeVariants}
+            excluded={excludedResumeVariants}
+            onEligibleChange={(fileName, eligible) => onVariantEligibilityChange("resume", fileName, eligible)}
+          />
+          <VariantList
+            legend="Cover letters"
+            emptyText="No saved cover letters."
+            variants={coverLetterVariants}
+            excluded={excludedCoverLetterVariants}
+            onEligibleChange={(fileName, eligible) => onVariantEligibilityChange("cover-letter", fileName, eligible)}
+          />
+        </div>
+      </section>
 
       <p className="settings-automation__note">
         Resume Polish uses one proposal request and leaves the current resume unchanged until you accept edits.
