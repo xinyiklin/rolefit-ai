@@ -122,6 +122,10 @@ const CONDITIONAL_AFTER = /\b(?:only\s+(?:if|when|where)|unless|if\s+(?:necessar
 // A count introduced as a suggestion or a typical length is advice, not the
 // employer's limit ("Up to 500 words; we suggest 200-300 words").
 const ADVISORY_BEFORE = /\b(?:suggest(?:ed|s)?|recommend(?:ed|s)?|ideally|typical(?:ly)?|usually|often|tend\s+to|prefer(?:ably|red|s)?|target|aim\s+for|most\s+(?:answers|responses|candidates|applicants|people|submissions)|(?:strong|good|great)\s+(?:answers|responses))\b/i;
+// A penalty or suggestion belongs to the nearest count: the window stops at a
+// contrastive conjunction, a comma-joined "and", or the next count.
+const SEGMENT_BREAK = /\b(?:and|but|though|although|however|while|whereas|with)\b|,/i;
+const FLOOR_QUALIFIER = /^(?:under|below|fewer than|less than|shorter than)$/;
 // An un-negated "more than N words" is a hard floor only after a positive
 // instruction, with no negation or condition earlier in the clause; otherwise
 // it is not a limit at all, so an unrecognised negation can never drive a
@@ -152,7 +156,7 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
       if (built === null) continue;
       occupied.push([start, end]);
       if (built === false) continue;
-      if (ADVISORY_BEFORE.test(before)) built.hard = false;
+      if (ADVISORY_BEFORE.test(before.split(SEGMENT_BREAK).pop() ?? "")) built.hard = false;
       const context = `${before.slice(-35)} ${match[0]} ${after.slice(0, 45)}`;
       const scope = /\b(?:each|per)\s+(?:answer|response|field)|\b(?:answer|response|field)\s+each\b/i.test(context) ? "each"
         : /\b(?:total|combined|altogether|across (?:both|all))\b/i.test(context) ? "total" : "answer";
@@ -180,8 +184,14 @@ export function extractAnswerConstraints(question: string): AnswerConstraint[] {
     const n = numberValue(match[2]);
     const qualifier = match[1].toLowerCase().replace(/\s+/g, " ");
     const approximate = /^(?:about|around|approximately|roughly)$/.test(qualifier);
+    const nextCount = clause.after.search(new RegExp(`${NUMBER}\\s*[-‐‑]?\\s*${UNIT}`, "i"));
+    const penaltyAfter = (nextCount >= 0 ? clause.after.slice(0, nextCount) : clause.after).split(/\b(?:but|though|although|however|while|whereas)\b|,\s*and\b/i)[0];
+    const penaltyBefore = clause.before.split(/\b(?:but|though|although|however|while|whereas)\b/i).pop() ?? "";
+    const penalised = PENALTY_CLAUSE.test(penaltyAfter) || PENALTY_CLAUSE.test(penaltyBefore);
+    // "Responses under 50 words will not be considered" states a floor.
+    if (FLOOR_QUALIFIER.test(qualifier) && penalised) return { unit: unitValue(match[3]), min: n, hard: true };
     if (CEILING_QUALIFIER.test(qualifier)) {
-      if (NEGATED_BEFORE.test(clause.before) || PENALTY_CLAUSE.test(clause.after) || PENALTY_CLAUSE.test(clause.before)) return { unit: unitValue(match[3]), max: n, hard: true };
+      if (NEGATED_BEFORE.test(clause.before) || penalised) return { unit: unitValue(match[3]), max: n, hard: true };
       const instructed = INSTRUCTION_BEFORE.test(clause.before) && !PERMISSIVE_BEFORE.test(clause.before)
         && !NEGATION_IN_CLAUSE.test(clause.before) && !CONDITIONAL_IN_CLAUSE.test(clause.before) && !CONDITIONAL_AFTER.test(clause.after);
       return instructed ? { unit: unitValue(match[3]), min: n + 1, hard: true } : false;
