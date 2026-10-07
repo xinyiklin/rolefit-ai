@@ -450,7 +450,7 @@ Fresh settings and **Reset all settings** use these recommendations:
 | Stage | Provider | Model | Effort |
 | --- | --- | --- | --- |
 | Job analysis + Fit Assessment | Claude Code CLI | Sonnet 5.5 | Low |
-| Resume Polish | Claude Code CLI | Opus 5.5 | High |
+| Resume Polish | Codex CLI | GPT-6.1 Sol | Medium |
 | Cover letter | Codex CLI | GPT-6.1 Sol | Medium |
 | Application questions | Claude Code CLI | Opus 5.5 | High |
 | Final application review | Claude Code CLI | Sonnet 5.5 | Low |

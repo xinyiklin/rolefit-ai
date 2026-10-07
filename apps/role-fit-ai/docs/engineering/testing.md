@@ -264,7 +264,8 @@ hard-limit validation and bounded format repair remain in place.
 The other stage defaults adopt earlier decisions: Sonnet 5.5 low for Job
 analysis/Fit (the prior 20-posting, three-repeat Prepare comparison), Opus 5.5
 high for Resume Polish (prior user-adopted quality setting; high versus medium
-was not a decisive win), and Sol 6.1 medium for Cover (the prior 40-case paired
+was not a decisive win; superseded 2026-10-07 by GPT-6.1 Sol medium, see
+[Benchmarks](benchmarks.md)), and Sol 6.1 medium for Cover (the prior 40-case paired
 comparison). Final review retains the user's Sonnet 5.5 low choice, without a
 comparative benchmark claim. `src/lib/stageSettings.ts` owns fresh, reset and
 recommended-provider selection defaults. Supported saved choices are preserved;
