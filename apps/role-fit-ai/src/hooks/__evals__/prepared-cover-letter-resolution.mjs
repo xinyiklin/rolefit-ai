@@ -56,6 +56,7 @@ function baseState(overrides = {}) {
     documentFingerprint: "blank-body",
     workspaceSaving: false,
     candidateRevision: 1,
+    excludedVariants: {},
     ...overrides
   };
 }
@@ -69,6 +70,7 @@ function harness({
 } = {}) {
   let live = state;
   let reads = 0;
+  const readNames = [];
   const adopted = [];
   const deps = {
     jobText: [
@@ -84,6 +86,7 @@ function harness({
     readState: () => live,
     readCandidates: async (options) => {
       reads += 1;
+      readNames.push(options.map((option) => option.fileName));
       return onReadCandidates
         ? onReadCandidates(options, live, reads, (next) => {
             live = next;
@@ -105,6 +108,7 @@ function harness({
     deps,
     adopted,
     reads: () => reads,
+    readNames,
     setState(next) {
       live = next;
     }
@@ -202,6 +206,7 @@ for (const [label, blocked] of [
   const result = await resolvePreparedCoverLetterSelection(run.deps);
   check(result?.adoptedFileName, null, "an edit that lands during adoption cancels replacement");
   check(run.adopted, [], "the editor loader rechecks live body ownership before commit");
+  check(result?.recommendation?.fileName, backend.fileName, "an edit-cancelled adoption keeps its non-mutating recommendation");
 }
 
 {
@@ -232,6 +237,68 @@ for (const [label, blocked] of [
   check(run.adopted, [], "a tie keeps the current selection");
 }
 
+// ── The Settings pool limits what Prepare may read, rank, and adopt ────────
+{
+  const readOnly = (options) => [frontend, backend].filter((letter) => options.some((option) => option.fileName === letter.fileName));
+
+  const stale = harness({ state: baseState({ excludedVariants: { "deleted.cover": true } }), onReadCandidates: readOnly });
+  const staleResult = await resolvePreparedCoverLetterSelection(stale.deps);
+  check(staleResult?.adoptedFileName, backend.fileName, "a pool naming a deleted letter ranks exactly as an unset pool");
+
+  const excluded = harness({ state: baseState({ excludedVariants: { "backend.cover": true } }), onReadCandidates: readOnly });
+  const excludedResult = await resolvePreparedCoverLetterSelection(excluded.deps);
+  check(excluded.readNames, [[frontend.fileName]], "an excluded letter is never read, even when it would rank first");
+  check(excludedResult?.recommendation, null, "the sole eligible letter carries no ranking receipt");
+  check(excluded.adopted, [frontend.fileName], "the sole eligible letter is adopted, never the excluded one");
+
+  const none = harness({
+    state: baseState({ excludedVariants: { "frontend.cover": true, "backend.cover": true } }),
+    onReadCandidates: readOnly
+  });
+  const noneResult = await resolvePreparedCoverLetterSelection(none.deps);
+  check(none.reads(), 0, "with no eligible letter nothing is read");
+  check([noneResult?.adoptedFileName, noneResult?.recommendation], [null, null], "with no eligible letter the current one is kept");
+
+  const changedWhileReading = harness({
+    onReadCandidates: (options, state, readNumber, setState) => {
+      if (readNumber === 1) setState({ ...state, excludedVariants: { "backend.cover": true } });
+      return readOnly(options);
+    }
+  });
+  await resolvePreparedCoverLetterSelection(changedWhileReading.deps);
+  check(
+    changedWhileReading.readNames,
+    [[frontend.fileName, backend.fileName], [frontend.fileName]],
+    "a pool change during the read retries under the new pool"
+  );
+  check(changedWhileReading.adopted, [frontend.fileName], "the winner under the old pool is never adopted");
+
+  let flips = 0;
+  const changedTwice = harness({
+    onReadCandidates: (options, state, _readNumber, setState) => {
+      flips += 1;
+      setState({ ...state, excludedVariants: flips === 1 ? { "backend.cover": true } : { "frontend.cover": true } });
+      return readOnly(options);
+    }
+  });
+  const changedTwiceResult = await resolvePreparedCoverLetterSelection(changedTwice.deps);
+  check(
+    [changedTwiceResult?.recommendation, changedTwiceResult?.adoptedFileName],
+    [null, null],
+    "a pool that keeps changing reports and adopts nothing"
+  );
+  check(changedTwice.adopted, [], "a pool that keeps changing never reaches the editor loader");
+
+  const changedBeforeAdopt = harness({
+    onReadCandidates: readOnly,
+    onBeforeAdopt: (state) => ({ ...state, excludedVariants: { "backend.cover": true } })
+  });
+  const changedBeforeAdoptResult = await resolvePreparedCoverLetterSelection(changedBeforeAdopt.deps);
+  check(changedBeforeAdopt.adopted, [], "excluding the winner at the editor boundary cancels its adoption");
+  check(changedBeforeAdoptResult?.adoptedFileName, null, "a cancelled adoption is not reported as selected");
+  check(changedBeforeAdoptResult?.recommendation, null, "the just-excluded winner is not offered as a recommendation");
+}
+
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const toolbarSource = readFileSync(
   new URL("../../sections/cover-letter/CoverLetterToolbar.tsx", import.meta.url),
@@ -245,6 +312,27 @@ assert.match(
   appSource,
   /const preparedCoverLetterState = \{[\s\S]{0,350}?documentDirty: coverLetterEditor\.dirty,[\s\S]{0,120}?documentFingerprint: coverLetterEditor\.draftPayload \?\? ""/,
   "Prepare guards replacement with body/style identity rather than the output title"
+);
+const coverHookSource = readFileSync(new URL("../usePreparedCoverLetter.ts", import.meta.url), "utf8");
+const inputKeySource = coverHookSource.slice(
+  coverHookSource.indexOf("const inputKey ="),
+  coverHookSource.indexOf("const inputKeyRef")
+);
+assert.ok(inputKeySource.includes("JSON.stringify"), "the cover hook's input key was located");
+assert.doesNotMatch(
+  inputKeySource,
+  /excluded|pool/i,
+  "the pool is a snapshot input, never a trigger that re-resolves a settled preparation"
+);
+assert.match(
+  appSource,
+  /options: baseResumeOptions,\s*excludedVariants: excludedResumeVariants,/,
+  "the resume resolver reads only the resume pool"
+);
+assert.match(
+  appSource,
+  /const preparedCoverLetterState = \{[\s\S]{0,500}?excludedVariants: excludedCoverLetterVariants\s*\};/,
+  "the cover-letter resolver reads only the cover-letter pool"
 );
 assert.match(
   appSource,

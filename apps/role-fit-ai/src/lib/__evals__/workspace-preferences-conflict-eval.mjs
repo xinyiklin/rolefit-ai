@@ -100,6 +100,14 @@ assert.deepEqual(
   "key order and an absent setting's default value are not edits"
 );
 assert.deepEqual(changedSettingKeys({ major: "Physics" }, { major: "Math" }), ["major"]);
+assert.deepEqual(
+  changedSettingKeys(
+    { excludedResumeVariants: { "a.resume": true } },
+    { excludedResumeVariants: { "a.resume": true, "b.resume": true }, excludedCoverLetterVariants: {} }
+  ),
+  ["excludedResumeVariants.b.resume"],
+  "a variant exclusion is its own setting entry, and an empty pool is no edit"
+);
 
 try {
   await mkdir(workspace, { recursive: true });
@@ -286,6 +294,36 @@ try {
     "a removed stage entry stays removed without dropping another stage's edit"
   );
   assert.equal(cache.has(PENDING), false);
+
+  // Variant exclusions rebase per variant, the same way.
+  await writeExternal({ excludedResumeVariants: { "old-draft.resume": true } });
+  sync = await reloadClient();
+  saveSettings({ ...loadSettings(), excludedResumeVariants: { "old-draft.resume": true, "experiment.resume": true } });
+  await writeExternal({ excludedResumeVariants: { "old-draft.resume": true, "growth.resume": true } });
+  await flushTimers();
+  assert.deepEqual(
+    (await readRecord()).settings.excludedResumeVariants,
+    { "old-draft.resume": true, "growth.resume": true, "experiment.resume": true },
+    "one tab's exclusion keeps another tab's newer exclusion"
+  );
+  saveSettings({ ...loadSettings(), excludedResumeVariants: { "growth.resume": true, "experiment.resume": true } });
+  await writeExternal({
+    excludedResumeVariants: { "old-draft.resume": true, "growth.resume": true, "experiment.resume": true, "newest.resume": true }
+  });
+  await flushTimers();
+  assert.deepEqual(
+    (await readRecord()).settings.excludedResumeVariants,
+    { "growth.resume": true, "experiment.resume": true, "newest.resume": true },
+    "a re-included variant stays eligible without dropping another tab's exclusion"
+  );
+  assert.equal(cache.has(PENDING), false);
+  const beforeMalformed = await readFile(file, "utf8");
+  const malformed = await fetch("/api/workspace/preferences", {
+    method: "POST",
+    body: JSON.stringify({ settings: { excludedResumeVariants: ["growth.resume"] }, lastBaseResume: "", baseRevision: null })
+  });
+  assert.equal(malformed.status, 400, "the route rejects an exclusion list that is not a record");
+  assert.equal(await readFile(file, "utf8"), beforeMalformed, "a rejected exclusion write leaves the record untouched");
 
   // Another tab acknowledges a restore while this tab still holds pre-restore edits.
   saveSettings({ ...loadSettings(), customInstructions: "Suspended tab edit" });

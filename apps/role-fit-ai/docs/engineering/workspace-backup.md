@@ -77,8 +77,8 @@ fails and the sibling saves a newer value, the new tab can later write the older
 
 When a push is refused as stale, the tab rebases onto the returned record: its
 user's changed settings keep their local values, and every other setting takes
-the newer record's value. Per-stage instructions merge per stage, including
-removals. It then shows the merged result, keeping edits still inside the
+the newer record's value. Per-stage instructions merge per stage, and Prepare's
+variant exclusions merge per variant, including removals. It then shows the merged result, keeping edits still inside the
 settings UI's debounce on top, and retries once; a second refusal leaves the
 edit pending until the next focus. A restore that carries preferences replaces
 every pending edit, as it clears pre-restore drafts. Each tab tracks the restore

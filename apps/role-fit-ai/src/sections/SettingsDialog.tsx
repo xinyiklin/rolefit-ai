@@ -18,6 +18,7 @@ import type {
 import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
+import type { VariantExclusions, VariantKind } from "../lib/variantPool.ts";
 import type { ProfileNoteFocus } from "./settings/ProfileNotes.tsx";
 import { AutomationPage } from "./settings/AutomationPage.tsx";
 import { BackgroundPage } from "./settings/BackgroundPage.tsx";
@@ -34,6 +35,8 @@ export const SETTINGS_GROUPS: { label: string; sections: { id: SettingsSection; 
 ];
 
 export const SETTINGS_SECTIONS = SETTINGS_GROUPS.flatMap((group) => group.sections);
+
+export type SettingsVariantOption = { fileName: string; label: string };
 
 export type SettingsDialogProps = {
   section: SettingsSection;
@@ -60,6 +63,12 @@ export type SettingsDialogProps = {
   onCoverPolishAutoChange: (value: boolean) => void;
   coverPolishAutoThreshold: AutoPolishThreshold;
   onCoverPolishAutoThresholdChange: (value: AutoPolishThreshold) => void;
+  // Saved variants for "Prepare picks from"; null while that workspace loads.
+  resumeVariants: SettingsVariantOption[] | null;
+  coverLetterVariants: SettingsVariantOption[] | null;
+  excludedResumeVariants: VariantExclusions;
+  excludedCoverLetterVariants: VariantExclusions;
+  onVariantEligibilityChange: (kind: VariantKind, fileName: string, eligible: boolean) => void;
 
   // ----- Profile -----
   citizenshipStatus: CitizenshipStatus;

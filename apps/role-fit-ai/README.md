@@ -152,8 +152,8 @@ font, size and wrapping changes still reflow the page normally.
   excluded. The captured posting remains unchanged behind **View** and
   **Prepare again**; Apply stores the complete corrected brief, while resume
   polishing continues to use the benefits-excluded projection.
-- **Evidence-based variant recommendation** — when multiple saved variants
-  exist, Prepare compares the actual strict `.resume` and `.cover` contents with
+- **Evidence-based variant recommendation** — when multiple eligible saved
+  variants exist, Prepare compares the actual strict `.resume` and `.cover` contents with
   weighted role, requirement, responsibility, and technology signals from the
   prepared job. A meaningful unique winner is selected automatically for either
   document while its editor is clean and not application-owned. A tie or
@@ -162,7 +162,10 @@ font, size and wrapping changes still reflow the page normally.
   are resolved from one snapshot, with one retry if the saved option set changes
   or any saved candidate is overwritten mid-read—even under the same filename;
   a failed load keeps the current resume without advertising an unloaded winner.
-  Neither document persists parallel variant metadata.
+  Settings > Automation **Prepare picks from** chooses which saved resumes and
+  cover letters are eligible; unchecked ones are never picked automatically but
+  still open by hand, and newly saved variants start eligible. Apart from that
+  list, neither document persists variant metadata.
 - **Job-link preparation** — paste a posting URL on Prepare and fetch the
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper and embedded

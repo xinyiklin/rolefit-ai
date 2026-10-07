@@ -50,6 +50,10 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `preparedCoverLetter.ts` owns the deterministic Prepare decision and async
   resolution sequence for saved cover-letter variants. It compares one snapshot
   and delegates adoption to the editor's guarded loader; React and HTTP stay out.
+- `variantPool.ts` owns Prepare's variant eligibility: the per-kind exclusion
+  record stored in settings, its strict file-name validation, and the
+  eligibility filter both resolvers apply before reading candidates. It stays
+  dependency-free because `settings.ts` is imported by the server.
 - `jobIdentity.ts` owns both duplicate matching and the dependency-free
   candidate cache version. The key must use the matcher's effective text/role
   selectors and conservatively invalidate every observable verdict input; safe

@@ -10,6 +10,7 @@
 import { contentFingerprint } from "./contentFingerprint.ts";
 import { recommendVariant, type VariantCandidate, type VariantRecommendation } from "./variantRecommendation.ts";
 import type { ResumeOrigin } from "./resumeOrigin.ts";
+import { eligibleVariantKey, eligibleVariantOptions, type VariantExclusions } from "./variantPool.ts";
 export type { ResumeOrigin } from "./resumeOrigin.ts";
 
 // The same floor the variant ranker uses for a resume: anything shorter is a
@@ -61,8 +62,8 @@ export type PreparedResumeInput = Readonly<{
   // The local job-analysis brief, not the raw posting: the ranker weights
   // section headings, and the raw page text has none of them.
   jobText: string;
-  // How many saved variants the workspace reports. An incomplete candidate read
-  // must not be ranked as if it were the whole set.
+  // How many eligible saved variants the workspace reports. An incomplete
+  // candidate read must not be ranked as if it were the whole set.
   savedOptionCount: number;
   candidates: VariantCandidate[];
   loadedFileName: string;
@@ -139,6 +140,8 @@ export function decidePreparedResume(input: PreparedResumeInput): {
 export type PreparedResumeState = {
   baseResumeName: string;
   options: { fileName: string; label: string }[];
+  // Settings' resume pool: excluded variants are never read, ranked, or adopted.
+  excludedVariants: VariantExclusions;
   resumeOrigin: ResumeOrigin;
   applicationOwned: boolean;
   currentText: string;
@@ -201,6 +204,7 @@ export function preparedResumeOptionSnapshotKey(state: PreparedResumeState): str
   return JSON.stringify({
     orderedFileNames: state.options.map((option) => option.fileName),
     optionCount: state.options.length,
+    eligibleFileNames: eligibleVariantOptions(state.options, state.excludedVariants).map((option) => option.fileName),
     loadedFileName: state.baseResumeName,
     candidateRevision: state.candidateRevision
   });
@@ -228,8 +232,9 @@ export type PreparedResumeResolutionDeps = {
   readState: () => PreparedResumeState;
   readCandidates: (options: { fileName: string; label: string }[]) => Promise<VariantCandidate[]>;
   // The guarded workspace loader. A successful receipt carries the exact
-  // document committed to the editor, not the earlier ranking candidate.
-  adopt: (fileName: string) => Promise<PreparedResumeAdoption | null>;
+  // document committed to the editor, not the earlier ranking candidate. It
+  // must not commit once `poolChanged` reports a different eligible set.
+  adopt: (fileName: string, poolChanged: () => boolean) => Promise<PreparedResumeAdoption | null>;
   // False once this resolution has been superseded by a newer one.
   isCurrent: () => boolean;
 };
@@ -245,8 +250,9 @@ export async function resolvePreparedResumeSelection(
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const snapshot = settled;
     const snapshotKey = preparedResumeOptionSnapshotKey(snapshot);
-    candidates = documentIsReplaceable(snapshot) && snapshot.options.length
-      ? await deps.readCandidates(snapshot.options)
+    const eligible = eligibleVariantOptions(snapshot.options, snapshot.excludedVariants);
+    candidates = documentIsReplaceable(snapshot) && eligible.length
+      ? await deps.readCandidates(eligible)
       : [];
     if (!deps.isCurrent()) return null;
 
@@ -261,7 +267,7 @@ export async function resolvePreparedResumeSelection(
 
   const { decision, recommendation } = decidePreparedResume({
     jobText: deps.jobText,
-    savedOptionCount: settled.options.length,
+    savedOptionCount: eligibleVariantOptions(settled.options, settled.excludedVariants).length,
     candidates,
     loadedFileName: settled.baseResumeName,
     currentText: settled.currentText,
@@ -271,7 +277,12 @@ export async function resolvePreparedResumeSelection(
 
   if (decision.kind === "adopt") {
     const candidate = candidates.find((entry) => entry.fileName === decision.fileName);
-    const adopted = candidate ? await deps.adopt(decision.fileName) : null;
+    const decidedPool = eligibleVariantKey(settled.options, settled.excludedVariants);
+    const poolChanged = () => {
+      const latest = deps.readState();
+      return eligibleVariantKey(latest.options, latest.excludedVariants) !== decidedPool;
+    };
+    const adopted = candidate ? await deps.adopt(decision.fileName, poolChanged) : null;
     if (!deps.isCurrent()) return null;
     if (
       adopted

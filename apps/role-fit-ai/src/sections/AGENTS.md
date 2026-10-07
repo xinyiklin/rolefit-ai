@@ -68,6 +68,10 @@ and `docs/engineering/ui-principles.md`.
   one collapsed override per stage that accepts one (previewed when set), and
   Bold keywords in bullets. Settings > Models is one hairline `SettingsStage`
   row per stage under column heads shown once.
+- Settings > Automation also holds **Prepare picks from**: one checkbox per
+  saved variant in two independent lists, Resumes and Cover letters (checked =
+  eligible), one short line, and an empty or loading line per list. It lists
+  only existing variants and never explains counts or zero-eligible states.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.
@@ -142,14 +146,16 @@ and `docs/engineering/ui-principles.md`.
   restate it. Show one note at a time: the blocker while an action is
   unavailable, the live status otherwise. Keep note text wrapping rather than
   ellipsed — the trailing clause is recovery guidance.
-- Both materials rank actual saved document contents with one weighted
-  prepared-job scorer and auto-select a meaningful unique winner while the
+- Both materials rank the actual contents of their eligible saved documents
+  with one weighted prepared-job scorer and auto-select a meaningful unique
+  winner while the
   corresponding editor is clean and not application-owned. The selector is the
   receipt; do not repeat counts or explanations underneath it. Only a blocked
   automatic replacement gets the compact `PreparedVariantRecommendation`
   fallback. A tie or incomplete comparison returns no recommendation and keeps
-  the current selection. Do not add persisted variant metadata to support this
-  UI.
+  the current selection. The selector still lists every saved variant,
+  eligible or not. Apart from the Settings > Automation eligibility pool, do not
+  add persisted variant metadata to support this UI.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.

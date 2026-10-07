@@ -51,7 +51,59 @@ bounded; app-only operational detail belongs in the affected app documentation.
     (two rail messages, stale testing docs, this entry), all fixed. Full RoleFit
     check passed after the fixes. No browser QA (rail copy and one button;
     flag-first policy).
-- [USER] Briefs drafted, awaiting approval (tasks
+- [USER+CODE] Prepare's variant pick has a user-chosen eligible pool (task
+  `variant-source-pool-20261007`; the user approved Product Brief v1 and
+  Delivery Plan v1, which supersedes that task's "awaiting approval" note
+  below). Settings > Automation **Prepare picks from** lists saved resumes and
+  cover letters independently; unchecked variants are never read, ranked, or
+  adopted automatically but still open by hand, and a manual choice wins. It
+  is stored as `excludedResumeVariants` / `excludedCoverLetterVariants`
+  file-name exclusion records in workspace preferences: absent means every
+  variant is eligible, newly saved or renamed names are eligible, names of
+  deleted variants are inert, and edits rebase per variant across tabs. The
+  strict preferences/backup parse rejects malformed records; the preferences
+  schema version is unchanged. Both resolvers filter before candidate reads,
+  and the eligible set joins their snapshots: a pool change during the read
+  retries under the new pool, one before the loader commits cancels adoption,
+  and a pool change never re-resolves a settled preparation. The app guide's
+  "no persisted variant metadata" rule now allows only this pool. Rollback:
+  before reverting, run Settings Reset (it clears every setting) or delete both
+  `excludedResumeVariants` and `excludedCoverLetterVariants` from
+  `workspace-preferences.json`; otherwise an older build treats the preferences
+  file as invalid and refuses settings saves. Re-checking variants is not
+  enough, because a deleted or renamed excluded variant can no longer be
+  re-checked. Backups taken while a pool was customized need a newer build to
+  restore.
+  - [TOOL] Self-verification in the feature worktree: full RoleFit check
+    (client and server `tsc`, Vite build, landing build, desktop probes,
+    154/154 offline evals including the new `variant-pool-eval.mjs` and the
+    extended resolver, backup-contract, preferences-conflict, server
+    preferences/backup, and Settings markup probes) and `git diff --check`
+    passed. Mutation checks confirmed the resolver evals fail when excluded
+    variants are read, counted, left out of the snapshot, or not cancelled at
+    commit.
+  - [TOOL] Two independent reviews (resolver; persistence), no high
+    findings. Two medium, fixed: a cover-letter pick cancelled at commit by a
+    pool change still returned its recommendation, so Prepare could offer a
+    letter the user had just excluded (now cleared when the option or pool
+    snapshot changed; edit or ownership cancels keep it); and the rollback note
+    above, which had said to re-check every variant. Three low, fixed: the
+    resume eval pins that the hook passes the pool check to the loader, the
+    cover eval pins that the hook's input key holds no pool and adds a
+    twice-changed pool case, and excluded names may be up to 255 characters
+    (was 200, shorter than names the workspace can list). The full RoleFit
+    check (154/154) and `git diff --check` passed after the fixes.
+  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
+    synthetic workspace (three resumes, one with a long name, and two cover
+    letters).
+    - "Prepare picks from" lists every variant checked by default.
+    - Unchecking one resume persisted only that exclusion.
+    - The lists sit side by side at 1040 px and stack at 375 px, with no
+      overflow.
+    - The only console errors were Vite's live-reload socket.
+    - QA ran before the review fixes, which changed no UI.
+- [USER] Briefs approved 2026-10-07 (the source pool is implemented above; the
+  Polish review step is in progress) (tasks
   `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
   user-originated **eligible source pool** for Prepare's resume/cover variant
   pick — conflicts with the app guide's "no persisted variant metadata" rule,

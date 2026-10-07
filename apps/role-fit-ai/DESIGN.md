@@ -468,17 +468,18 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   mechanics belong to the
   [technical contract](server/ai/README.md#fit-assessment-technical-contract).
   Resume Polish started from Prepare also completes there. Rank the actual
-  contents of saved resume and cover-letter variants against weighted
-  prepared-job sections. Either material may auto-select a meaningful unique
-  winner while its editor has no unsaved document changes and is not
-  application-owned; a sole saved variant is selected without ranking. The
+  contents of the saved resume and cover-letter variants left eligible in
+  Settings > Automation against weighted prepared-job sections. Either material
+  may auto-select a meaningful unique winner while its editor has no unsaved
+  document changes and is not application-owned; a sole eligible variant is
+  selected without ranking. The
   cover-letter resolver waits for its workspace snapshot and preserves the
   application-output title that Prepare assigns, so that title-only change does
   not masquerade as an edited letter body. A tie or
   incomplete read keeps the current selection and shows no recommendation.
   The selector is the normal receipt; show one compact recommendation line only
-  when unsaved work blocks replacement. Neither comparison needs persisted
-  variant metadata. Resume and Cover Letter automatic Polish controls remain
+  when unsaved work blocks replacement. Neither comparison persists variant
+  metadata beyond that eligibility list. Resume and Cover Letter automatic Polish controls remain
   independent. Only the first Fit Assessment launched by the current Prepare may
   start either automatic action; reassessment, retry, resume-change assessment,
   and restored history stay advisory. Manual Polish remains available in every
