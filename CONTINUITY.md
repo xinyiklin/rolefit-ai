@@ -5,6 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-06
 
+- [USER+CODE] RoleFit landing redesigned as "the galley proof" (done in a
+  separate landing session alongside CareFlow's; recorded here at commit).
+  The hero sets the real editor capture as a cropped sheet beside a labelled
+  proof slip of one synthetic proposed edit; the workflow is four ruled
+  editorial spreads, not cards; a Forest Ink band carries the local runtime
+  boundary; downloads are ledger rows. Type is bundled from `@typeset/engine`
+  (Source Serif 4, Source Sans 3) under the page's `font-src 'self'`; the card
+  hover-lift is gone and a one-shot proof-mark draw joins the scroll reveal,
+  both collapsing under reduced motion. `DESIGN.md` and `landing/AGENTS.md`
+  updated. No release-catalog or CSP change.
+  - [TOOL] `npm run build:rolefit:landing` (tsc, release-catalog probes, Vite
+    build, public build-boundary check) passed; `git diff --check` clean.
+    [USER] asked that the review of the day's other work stay separate from
+    this redesign, so no independent review of the landing diff ran in this
+    session. UNCONFIRMED here: browser QA of the landing at desktop and phone
+    widths (the landing session's own checks are not recorded in this repo).
+
 - [USER] Base documents refreshed (task `base-docs-refresh-20261006`, user
   data only, no code change): the general base resume's RoleFit AI entry now
   states evidence-grounded tailoring with user approval and the benchmark
