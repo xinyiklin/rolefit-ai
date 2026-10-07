@@ -63,6 +63,17 @@ try {
   const repaired = await readStoredWorkspacePreferences(workspace);
   assert.equal(repaired.status, "ok", "an explicit removal makes the next settings write a valid seed");
   assert.deepEqual(repaired.status === "ok" ? repaired.value.settings : null, replacement.settings);
+
+  const pooled = {
+    settings: { excludedResumeVariants: { "experiment.resume": true }, excludedCoverLetterVariants: { "old-growth.cover": true } },
+    lastBaseResume: "default.resume"
+  };
+  await persistWorkspacePreferences(workspace, pooled, new Date("2026-10-07T12:00:00.000Z"));
+  const pooledRead = await readStoredWorkspacePreferences(workspace);
+  assert.deepEqual(pooledRead.status === "ok" ? pooledRead.value.settings : null, pooled.settings, "the Prepare variant pools persist across restarts");
+  const pooledRecord = JSON.parse(await readFile(file, "utf8"));
+  await writeFile(file, JSON.stringify({ ...pooledRecord, settings: { excludedResumeVariants: { "growth.cover": true } } }), "utf8");
+  assert.equal((await readStoredWorkspacePreferences(workspace)).status, "invalid", "a malformed pool makes the canonical record invalid, never silently repaired");
 } finally {
   await rm(root, { recursive: true, force: true });
 }

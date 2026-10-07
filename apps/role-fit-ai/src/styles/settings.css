@@ -661,6 +661,58 @@
   line-height: 1.4;
 }
 
+/* "Prepare picks from": two independent checkbox lists under one hairline,
+   side by side when the panel is wide enough and stacked otherwise. */
+.settings-automation__pool {
+  display: grid;
+  gap: var(--s2);
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
+.settings-automation__pool .settings-automation__note {
+  margin: 0;
+}
+
+.settings-automation__variant-lists {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--s2) var(--s4);
+}
+
+.settings-automation__variants {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings-automation__variants legend {
+  margin-bottom: var(--s1);
+  padding: 0;
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.settings-automation__variants .check-row {
+  padding: 6px 0;
+}
+
+.settings-automation__variants .check-row span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.settings-automation__empty {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
 /* -------- Models: one row per stage -------- */
 
 /* Hairline rows, not cards (the Drafting Desk rejects card-in-card). Column

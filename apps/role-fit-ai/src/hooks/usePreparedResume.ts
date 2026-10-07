@@ -5,7 +5,7 @@
  * It runs once per Prepare, immediately after the deterministic local job
  * analysis and before the combined AI Job analysis + Fit Assessment request, and
  * it owns every step of that answer: wait for workspace hydration, protect a
- * real current document, adopt the sole saved variant or the ranked winner
+ * real current document, adopt the sole eligible variant or the ranked winner
  * through the guarded workspace loader, and return the exact text (plus its
  * content fingerprint) that the provider request will carry.
  *
@@ -95,14 +95,15 @@ export function usePreparedResume({
           readCandidates: (options) => readBaseResumeCandidates(options as BaseResumeOption[]),
           // Adoption always goes through the guarded workspace loader, and
           // cancels the moment the document stops being safe to replace.
-          adopt: (fileName) =>
+          adopt: (fileName, poolChanged) =>
             loadBaseResumeVersion(fileName, true, () => {
               const latest = readState();
               return (
                 !isCurrent() ||
                 latest.applicationOwned ||
                 latest.documentDirty ||
-                latest.manualSelectionInFlight
+                latest.manualSelectionInFlight ||
+                poolChanged()
               );
             }),
           isCurrent

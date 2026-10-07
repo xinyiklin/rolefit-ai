@@ -17,6 +17,8 @@ export function materializeAiSettings(settings: PersistedSettings): PersistedSet
     resumePolishAutoThreshold: settings.resumePolishAutoThreshold ?? "REASONABLE",
     coverPolishAuto: settings.coverPolishAuto ?? false,
     coverPolishAutoThreshold: settings.coverPolishAutoThreshold ?? "STRONG",
+    excludedResumeVariants: settings.excludedResumeVariants ?? {},
+    excludedCoverLetterVariants: settings.excludedCoverLetterVariants ?? {},
     citizenshipStatus: settings.citizenshipStatus ?? "unspecified",
     legallyAuthorizedToWork: settings.legallyAuthorizedToWork ?? "unspecified",
     requiresSponsorship: settings.requiresSponsorship ?? "unspecified",

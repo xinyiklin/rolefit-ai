@@ -654,19 +654,28 @@ disappears into the task. Quiet competence, not salesmanship.
     for exactly once, before the provider request: it waits for the local
     workspace to finish loading, keeps a real current document (including an
     explicitly uploaded resume), and otherwise
-    adopts the sole saved variant or a meaningful unique winner while the editor
-    is clean and not application-owned; that selection is not tailoring. A tie or
-    incomplete comparison keeps the current selection. Candidate bytes, option
-    metadata, and the live candidate revision form one resolution snapshot, so
-    overwriting a saved variant under the same filename forces a fresh read. Do
-    not add persisted variant metadata or another document schema for this
-    decision. Stop, source replacement, application restore, and unmount cancel
-    that resume resolution before it can adopt a document or start Fit
-    Assessment. Cover Letter resolves once after the prepared brief is current:
-    it waits for workspace startup, adopts the sole saved letter or a meaningful
-    unique winner, and preserves Prepare's output title. Body/style edits,
-    application ownership, saves, manual selection, source replacement, and
-    unmount cancel or preempt replacement.
+    adopts the sole eligible saved variant or a meaningful unique winner while
+    the editor is clean and not application-owned; that selection is not
+    tailoring. A tie or incomplete comparison keeps the current selection.
+    Candidate bytes, option metadata, the eligible set, and the live candidate
+    revision form one resolution snapshot, so overwriting a saved variant under
+    the same filename forces a fresh read. Stop, source replacement, application
+    restore, and unmount cancel that resume resolution before it can adopt a
+    document or start Fit Assessment. Cover Letter resolves once after the
+    prepared brief is current: it waits for workspace startup, adopts the sole
+    eligible letter or a meaningful unique winner, and preserves Prepare's
+    output title. Body/style edits, application ownership, saves, manual
+    selection, source replacement, and unmount cancel or preempt replacement.
+    Settings > Automation **Prepare picks from** lists every saved resume and
+    cover letter with a checkbox; the two lists are independent. Unchecked
+    variants are never read, recommended, or adopted automatically, but still
+    open by hand, and a manual choice wins. Newly saved variants start checked;
+    a deleted or renamed variant drops out of the list without error, and a
+    renamed one is eligible under its new name. With none checked, Prepare keeps
+    the current document. Changing the lists while Prepare is choosing cancels
+    that pick rather than adopting under the old lists. That eligibility list is
+    the only persisted input; do not add other variant metadata or another
+    document schema for this decision.
 12. Keep the complete prepared job correctable without another AI run. Along
     with role, company, location, type, source, work authorization,
     compensation, and one role context, expose responsibilities,

@@ -109,6 +109,46 @@ assert.throws(
   "retired strict-review settings are rejected instead of becoming permanent readers"
 );
 
+const variantPoolPortable = {
+  settings: {
+    excludedResumeVariants: { "experiment.resume": true, "default.resume": true },
+    excludedCoverLetterVariants: { "old-growth.cover": true }
+  },
+  lastBaseResume: "default.resume"
+};
+assert.deepEqual(
+  parsePortableWorkspacePreferences(variantPoolPortable),
+  variantPoolPortable,
+  "both variant pools round-trip unchanged, including their entry order"
+);
+const longNamePortable = { settings: { excludedResumeVariants: { [`${"x".repeat(248)}.resume`]: true } }, lastBaseResume: "" };
+assert.deepEqual(
+  parsePortableWorkspacePreferences(longNamePortable),
+  longNamePortable,
+  "a 255-character variant name the workspace can list is a valid exclusion"
+);
+for (const [name, excludedResumeVariants] of [
+  ["a list instead of a record", ["experiment.resume"]],
+  ["null", null],
+  ["an empty record", {}],
+  ["a false entry", { "experiment.resume": false }],
+  ["a cover-letter name", { "growth.cover": true }],
+  ["a traversal name", { "../experiment.resume": true }],
+  ["a nested path", { "drafts/experiment.resume": true }],
+  ["a hidden name", { ".experiment.resume": true }],
+  ["a name over 255 characters", { [`${"x".repeat(249)}.resume`]: true }],
+  ["more than 200 entries", Object.fromEntries(Array.from({ length: 201 }, (_, index) => [`v${index}.resume`, true]))]
+]) {
+  assert.throws(
+    () => parsePortableWorkspacePreferences({ settings: { excludedResumeVariants }, lastBaseResume: "" }),
+    `the resume pool rejects ${name}`
+  );
+}
+assert.throws(
+  () => parsePortableWorkspacePreferences({ settings: { excludedCoverLetterVariants: { "base.resume": true } }, lastBaseResume: "" }),
+  "the cover-letter pool rejects a resume name"
+);
+
 for (const [name, bad] of [
   ["null", null],
   ["a string", "settings"],

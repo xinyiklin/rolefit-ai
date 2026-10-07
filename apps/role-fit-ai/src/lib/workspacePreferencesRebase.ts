@@ -3,9 +3,10 @@
 import { normalizeSettings, type PersistedSettings } from "./settings.ts";
 import { materializeAiSettings } from "./aiSettingsPersistence.ts";
 
-// Per-stage instructions change entry by entry ("stageCustomInstructions.<stage>"),
-// so one stage's edit never carries a stale copy of another stage's text.
-const ENTRY_SETTINGS = ["stageCustomInstructions"];
+// Per-stage instructions and variant exclusions change entry by entry
+// ("stageCustomInstructions.<stage>", "excludedResumeVariants.<file>"), so one
+// entry's edit never carries a stale copy of another entry.
+const ENTRY_SETTINGS = ["stageCustomInstructions", "excludedResumeVariants", "excludedCoverLetterVariants"];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);

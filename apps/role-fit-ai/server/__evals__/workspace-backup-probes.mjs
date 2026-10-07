@@ -159,7 +159,12 @@ try {
   const withPreferences = parseWorkspaceBackupEnvelope({
     ...backup,
     preferences: {
-      settings: { resumePolishAuto: true, profileBackground: "Grounded experience only" },
+      settings: {
+        resumePolishAuto: true,
+        profileBackground: "Grounded experience only",
+        excludedResumeVariants: { "experiment.resume": true },
+        excludedCoverLetterVariants: { "old-growth.cover": true }
+      },
       lastBaseResume: "default.resume"
     }
   });
@@ -220,6 +225,16 @@ try {
   assert.equal(restoredPreferences.schemaVersion, 1);
   assert.equal(restoredPreferences.settings.resumePolishAuto, true, "restored preferences carry the envelope settings");
   assert.equal(restoredPreferences.lastBaseResume, "default.resume");
+  assert.deepEqual(
+    [restoredPreferences.settings.excludedResumeVariants, restoredPreferences.settings.excludedCoverLetterVariants],
+    [{ "experiment.resume": true }, { "old-growth.cover": true }],
+    "restored preferences carry both Prepare variant pools"
+  );
+  assert.deepEqual(
+    roundTrip.preferences?.settings.excludedResumeVariants,
+    { "experiment.resume": true },
+    "a backup of the restored workspace carries the pool again"
+  );
   const restoredMarker = parseStoredWorkspaceRestoreMarker(
     JSON.parse(await readFile(join(targetDir, WORKSPACE_RESTORE_MARKER_FILE_NAME), "utf8"))
   );
