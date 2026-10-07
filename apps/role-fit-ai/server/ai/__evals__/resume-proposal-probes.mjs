@@ -6,10 +6,16 @@ import { flattenResumeTargets, sanitizeResumePolishWireResult } from "../../../s
 import { buildResumeProposalPrompts, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 
 const proposalSource = readFileSync(new URL("../resumeProposal.ts", import.meta.url), "utf8");
+const reviewSource = readFileSync(new URL("../resumeProposalReview.ts", import.meta.url), "utf8");
 assert.equal(
-  proposalSource.match(/await callConfiguredProvider\(/g)?.length,
+  proposalSource.match(/await (?:dispatch|callConfiguredProvider)\(/g)?.length,
   1,
-  "the normal resume proposal owns exactly one provider dispatch"
+  "the normal resume proposal owns exactly one generation dispatch"
+);
+assert.equal(
+  reviewSource.match(/await (?:dispatch|callConfiguredProvider)\(/g)?.length,
+  1,
+  "the opt-in edit review owns exactly one review dispatch"
 );
 
 const scope = {
@@ -930,5 +936,23 @@ assert.match(
   /useResumePolishPipeline\(\{[^}]*?\n\s*boldBulletKeywords[,\n]/,
   "the host hands the live preference to the polish pipeline"
 );
+// The opt-in review rides the same request: toggling it cancels an in-flight run,
+// the host hands over the live setting, and off sends exactly today's body.
+assert.match(
+  polishPipelineSource,
+  /workflowInputFingerprint\(\{[^}]*?\n\s*resumePolishReview[,\n]/,
+  "toggling the review preference invalidates an in-flight proposal"
+);
+assert.match(
+  appSource,
+  /useResumePolishPipeline\(\{[^}]*?\n\s*resumePolishReview[,\n]/,
+  "the host hands the live review preference to the polish pipeline"
+);
+assert.match(
+  polishPipelineSource,
+  /boldBulletKeywords,\n[^\n]*\n\s*\.\.\.\(resumePolishReview \? \{ reviewEdits: true \} : \{\}\)\n\s*\}\),/,
+  "the review flag is sent only when on, so the off request is unchanged"
+);
+assert.equal(polishPipelineSource.match(/fetch\("\/api\/resume-polish"/g)?.length, 1, "the browser still makes one Resume Polish request");
 
 console.log("one-pass resume proposal probes: passed");

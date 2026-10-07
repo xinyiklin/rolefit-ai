@@ -11,6 +11,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { ResumeProposalTarget } from "../../resume/types";
 import { ProposalDiff } from "../document/ProposalDiff";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
+import { ResumeHeldBackEdits } from "./ResumeHeldBackEdits";
 
 type ResumeProposalReviewProps = {
   result: PolishedResume;
@@ -106,7 +107,7 @@ export function ResumeProposalReview({
 }: ResumeProposalReviewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
-  const { suggestions, decisions, decided, isPending, accept, discard, revert, applyAll, discardAll } = proposal;
+  const { suggestions, decisions, decided, isPending, accept, discard, revert, applyAll, discardAll, heldBack, isRestored, restore } = proposal;
   const groups = PROPOSAL_GROUPS
     .map((group) => ({ ...group, items: suggestions.filter((suggestion) => suggestion.kind === group.kind) }))
     .filter((group) => group.items.length);
@@ -146,8 +147,23 @@ export function ResumeProposalReview({
     <ProposalFeedbackList title="Proposed improvements" items={result.changeSummary?.slice(0, 3) ?? []} />
   </>;
   const terminologyLimits = result.terminology ? <details className="prepare-note"><summary>Terminology check limits</summary><ul>{result.terminology.limitations.map((note) => <li key={note}>{note}</li>)}</ul></details> : null;
-  if (result.polishOutcome === "NO_CHANGES") {
-    return <><p className="resume-proposal__empty" role="status">No material changes were suggested.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
+  const heldBackTotal = result.heldBack?.length ?? 0;
+  const reviewNote = result.review === "UNAVAILABLE"
+    ? <p className="resume-proposal__omitted">Review unavailable; showing all edits.</p>
+    : result.review === "REVIEWED" && !heldBackTotal
+      ? <p className="resume-proposal__omitted">Review kept all {suggestions.length} edit{suggestions.length === 1 ? "" : "s"}.</p>
+      : null;
+  const heldBackEdits = (
+    <ResumeHeldBackEdits
+      total={heldBackTotal}
+      items={heldBack}
+      disabled={proposalStale || proposal.documentReplaced}
+      locationOf={(suggestion) => editLocation(resume, suggestion)}
+      onRestore={restore}
+    />
+  );
+  if (result.polishOutcome === "NO_CHANGES" && !suggestions.length) {
+    return <><p className="resume-proposal__empty" role="status">{heldBackTotal ? "No worthwhile changes after review." : "No material changes were suggested."}</p>{feedback}{heldBackEdits}{advice}{omittedNote}{terminologyLimits}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
     return <><p className="resume-proposal__empty is-warn" role="status">No usable edits were returned. Your resume is unchanged.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
@@ -211,6 +227,7 @@ export function ResumeProposalReview({
                           <p className="resume-proposal__where">{editLocation(resume, suggestion)}</p>
                           <span className="resume-proposal__chips">
                             {suggestion.evidence === "profile" ? <span className="proposal-chip">Profile</span> : null}
+                            {isRestored(suggestion.id) ? <span className="proposal-chip">Restored</span> : null}
                             {state === "pending" ? null : (
                               <span className="proposal-chip" data-state={state}>
                                 {state === "accepted" ? "Accepted" : state === "discarded" ? "Discarded" : "Changed in editor"}
@@ -303,6 +320,8 @@ export function ResumeProposalReview({
       ) : null}
 
 
+      {reviewNote}
+      {heldBackEdits}
       {result.withheld?.count ? (
         <p className="resume-proposal__withheld">
           {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be applied safely.

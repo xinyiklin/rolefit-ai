@@ -11,7 +11,8 @@ warnings across RoleFit generation, assessment, and review paths. Job analysis
 is structured JD extraction: retain truthful prompts and basic shape/markup/size
 validation, but no post-extraction fact checks, source matching, condition
 replacement, or evidence warnings. Other stages retain their existing checks;
-do not add an AI analysis stage or policy engine. Unknown source references or unconfirmed excerpts are evidence
+do not add an AI analysis stage or policy engine. The one user-directed
+exception is the opt-in Resume Polish review (`resumeProposalReview.ts`). Unknown source references or unconfirmed excerpts are evidence
 warnings, never verified citations or links to unrelated sources. Invalid edit
 targets, unsafe markup, unusable structures, unauthorized mutations, and stale
 application retain blocking technical guards.
@@ -31,7 +32,7 @@ application retain blocking technical guards.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
 - `sanitize.ts` owns shared deterministic markup and numeric-claim guards. Stage
   modules own their response schemas and outcome derivation.
-- `resumeProposal.ts` owns normal Resume Polish: one provider dispatch, flat
+- `resumeProposal.ts` owns normal Resume Polish: one generation dispatch, flat
   target IDs, deterministic mutation grounding, tolerant optional feedback,
   and truthful Proposal / No changes / Withheld outcomes. Oversized target sets
   are ranked by materiality and job relevance into complete JSON; the response
@@ -42,6 +43,21 @@ application retain blocking technical guards.
   changes in the model's order, and the prefix is re-examined without the cut
   tail until stable so a cut change never knocks out an earlier one. Do not let
   the kind order rank value.
+- `resumeProposalReview.ts` owns the opt-in Resume Polish review (request field
+  `reviewEdits`, default off): one keep/drop dispatch after sanitizing, only when
+  at least one change survives, on the generation's resolved provider, model,
+  effort, and abort signal, with no unreadable-output retry. The reviewer sees
+  review-local `edit-N` ids, each edit's before/after and its own evidence, never
+  server target ids, generator reasons, or deterministic warnings. Its new fence
+  is registered in `prompts.ts` (`RESUME_REVIEW_FENCE_NAMES`) and the firewall
+  line names exactly its five fences. The reply parser is strict: one KEEP or
+  DROP (`LOW_IMPACT` | `INCORRECT`) per sent id and nothing else, else the whole
+  reply is rejected; only the optional display note is tolerant (plain text,
+  160 characters, never re-sent). Kept changes are the sanitized objects
+  themselves, warnings included; review never certifies. Every failure except
+  cancellation fails open to the full proposal as `review.outcome:
+  "UNAVAILABLE"`; holding back everything returns No changes with an empty
+  summary. Held-back changes travel in `review.heldBack` for Restore.
 - `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
 - `applicationAnswerConversation.ts` owns Answers chat (`mode: "conversation"`);
@@ -386,7 +402,8 @@ application retain blocking technical guards.
   is the stronger lever: a rewrite in a plain first-person voice (one short
   clinic story, one small engineering decision, no stack lists, no
   "I would bring X, Y, and Z") won 35-0 over the previous template on Sol.
-- Polish failures fail plainly without changing the document.
+- Polish failures fail plainly without changing the document. A failed opt-in
+  review is not a Polish failure: it fails open to the unreviewed proposal.
   Job analysis and Fit Assessment failures are advisory to Prepare: the local brief
   remains usable, invalid fit never invalidates valid job fields, and neither
   failure authorizes silent fabrication or a substitute AI result.

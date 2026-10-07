@@ -22,6 +22,13 @@ export function resolveBoldBulletKeywords(value: unknown): boolean | null {
   return typeof value === "boolean" ? value : null;
 }
 
+// The opt-in edit review: absent (every client before it, and the setting off)
+// is off; a present non-boolean is a client bug, as above.
+export function resolveReviewEdits(value: unknown): boolean | null {
+  if (value === undefined) return false;
+  return typeof value === "boolean" ? value : null;
+}
+
 export async function handleResumePolish(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "Use POST." });
@@ -55,6 +62,13 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       });
       return;
     }
+    const reviewEdits = resolveReviewEdits(body.reviewEdits);
+    if (reviewEdits === null) {
+      sendJson(res, 400, {
+        error: "Resume Polish received an invalid review preference. Reload the page and try again."
+      });
+      return;
+    }
     if (!resumeScope.sections.length || !editableText.trim() || jobText.trim().length < 40) {
       sendJson(res, 400, {
         error: "Select at least one editable resume section and add a job description before polishing."
@@ -70,6 +84,7 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       candidateContext,
       customInstructions,
       boldBulletKeywords,
+      reviewEdits,
       signal: request.signal
     });
     provider = proposal.provider;

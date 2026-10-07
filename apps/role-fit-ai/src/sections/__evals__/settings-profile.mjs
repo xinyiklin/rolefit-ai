@@ -63,6 +63,8 @@ const bundled = await build({
             workspacePreferencesStatus="idle"
             boldBulletKeywords={true}
             onBoldBulletKeywordsChange={noop}
+            resumePolishReview={false}
+            onResumePolishReviewChange={noop}
             customInstructions=""
             onCustomInstructionsChange={noop}
             stageCustomInstructions={{ "cover-polish": "Keep it to three paragraphs." }}
@@ -136,6 +138,7 @@ assert.match(byEntry, /id="profile-background-notice" role="status"><\/p>/, "the
 const guidance = render("guidance", "Stored Background text.");
 assert.match(guidance, /Custom instructions/);
 assert.match(guidance, /Bold keywords in bullets/);
+assert.match(guidance, /Bold keywords in bullets[\s\S]*?<input type="checkbox"\/><span><strong>Review edits before showing them<\/strong>/, "the off-by-default review toggle sits beside Bold keywords");
 for (const stage of ["Resume Polish", "Cover letter Polish", "Application questions"]) {
   assert.match(guidance, new RegExp(`<strong>${stage}</strong>`), `Guidance holds the ${stage} override`);
 }

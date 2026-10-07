@@ -28,6 +28,28 @@ export type StageAiUsage = {
 
 export type ApplicationAiUsage = Record<string, StageAiUsage>;
 
+export const RESUME_POLISH_REVIEW_USAGE_KEY = "resume-polish-review";
+
+// The opt-in Polish review's receipt follows the run it belongs to: a run without
+// a review clears it, so an earlier review never attaches to a later Apply. The
+// review runs on the Resume Polish stage's own provider, model, and effort.
+export function withReviewUsage(
+  usage: ApplicationAiUsage,
+  review?: { outcome: "REVIEWED" | "UNAVAILABLE"; attempts: number }
+): ApplicationAiUsage {
+  const rest = { ...usage };
+  delete rest[RESUME_POLISH_REVIEW_USAGE_KEY];
+  if (!review) return rest;
+  const { provider, model, reasoningEffort, completedAt } = usage["resume-polish"] ?? {};
+  const receipt: StageAiUsage = review.outcome === "REVIEWED"
+    ? { source: "ai", provider, model, reasoningEffort, attempts: review.attempts, completedAt }
+    : { source: "none", requestedProvider: provider, requestedModel: model, attempts: review.attempts, completedAt };
+  return {
+    ...rest,
+    [RESUME_POLISH_REVIEW_USAGE_KEY]: Object.fromEntries(Object.entries(receipt).filter(([, value]) => value !== undefined)) as StageAiUsage
+  };
+}
+
 // Copy at read/merge boundaries so callers can add current stage receipts
 // without mutating a stored application or recovery draft. Records saved before
 // the 2026-09-29 stage rename keep cover-letter usage under "cover".

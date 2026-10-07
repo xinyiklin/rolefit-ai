@@ -25,6 +25,7 @@ import { ApplicationFitSummary } from "../application/ApplicationFitSummary";
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
   { key: "job-analysis", label: "Job analysis" },
   { key: "resume-polish", label: "Resume Polish" },
+  { key: "resume-polish-review", label: "Resume Polish review" },
   { key: "cover-polish", label: "Cover letter Polish" }
 ];
 

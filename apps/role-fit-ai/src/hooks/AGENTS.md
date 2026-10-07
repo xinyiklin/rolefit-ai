@@ -39,15 +39,23 @@ browser-side effects; components render them and App composes them.
   it out of automation. Do not replace that receipt with a generic stale string.
 - `useResumePolishPipeline` owns the one-request Resume Polish proposal, abort/retry,
   stale-request cancellation, and progress. It must not dispatch the Review
-  provider or expose the retired Tailor/Review/Both selector. It stages flat-ID
-  edits and outcome metadata without seeding or replacing the editor.
+  provider or expose the retired Tailor/Review/Both selector. The opt-in edit
+  review runs server-side inside that same request: the hook sends
+  `reviewEdits: true` only when the setting is on, maps held-back edits once on
+  arrival (ids included), and keeps the `resume-polish-review` usage receipt
+  only for a run that reviewed. It stages flat-ID edits and outcome metadata
+  without seeding or replacing the editor.
 - `useResumeProposalDecisions` owns accept/edit/discard for the proposal's
   individual edits. It lives above the review list because the resulting resume
   only exists once every edit has a decision, and that is when the check runs;
   `outstanding` re-derives from the live document so an undo makes an edit
   pending again. Its proposal key includes run identity, outcome, target id, original text,
-  replacement text, and reason. A changed key derives empty decisions during
-  render and initializes keyed state only from the next user decision.
+  replacement text, and reason, plus the review outcome and every held-back edit
+  when a review ran. A changed key derives empty decisions during
+  render and initializes keyed state only from the next user decision. Restore
+  is decision state under that same key, never a change to the result, so it
+  keeps earlier decisions, their Undo, and open edit drafts; Accept all never
+  reaches an unrestored held-back edit.
   For terminology preservation, a warned field may retain a term supported by
   both its original and current wording. An unrelated metric/quality warning
   must not erase that support; newly added uncertain terms do not count.

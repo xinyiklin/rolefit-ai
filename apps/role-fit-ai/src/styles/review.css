@@ -372,3 +372,26 @@
 .proposal-feedback--warning {
   color: var(--warm);
 }
+
+/* Edits the opt-in Polish review held back: folded, quiet, restorable. */
+.resume-proposal__held-back > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.resume-proposal__held-back ul {
+  display: grid;
+  gap: var(--s3);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.resume-proposal__held-back li {
+  display: grid;
+  justify-items: start;
+  gap: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}

@@ -73,9 +73,14 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
   `FIT_ASSESSMENT_RULES` in `server/ai/fitAssessment.ts`. Do not add numeric scoring,
   a visible or persisted requirement ledger, a server-derived fallback verdict, tracker
   application-priority fields, or a second assessment path.
-- Normal Resume Polish is one proposal request, never Tailor followed by Review.
-  It uses flat server-owned target IDs and returns Proposal, No changes, or
-  Withheld. Mutation fields validate strictly; malformed optional feedback is
+- Normal Resume Polish is one generation request, never Tailor followed by Review.
+  With the opt-in Settings > Guidance review on (default off), the same
+  `/api/resume-polish` request adds exactly one keep/drop review dispatch on the
+  Resume Polish provider, model, and effort over the sanitized changes. It can
+  only hold edits back (shown collapsed with a reason and Restore), never
+  rewrite, add, or retarget one, and any review failure other than Stop fails
+  open to the full proposal with a note. It uses flat server-owned target IDs
+  and returns Proposal, No changes, or Withheld. Mutation fields validate strictly; malformed optional feedback is
   dropped locally without invalidating safe edits. Identity, contact,
   education, standard-entry role/employer/subtitle/date fields, and omitted
   sections and Skills category labels stay locked; only bullets, actual
@@ -94,9 +99,10 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
   not fit the prompt budget, material and job-relevant targets win without
   prefix-order bias; only sent targets may be changed, and the rail states the
   omitted count quietly.
-- **Polish is one provider request per document proposal.** Both documents use
+- **Polish is one browser request per document proposal**, and one provider
+  request except for the opt-in Resume Polish review above. Both documents use
   the shared Ready to Polish, Polishing and validating, Proposal ready, and
-  Reviewing proposal vocabulary. Before returning its JSON proposal, the model
+  Reviewing proposal vocabulary; the review adds no stage or vocabulary. Before returning its JSON proposal, the model
   silently audits evidence, claims, identifiers, and output shape. The selected
   reasoning effort controls provider reasoning and the breadth of that internal
   audit; no audit notes are exposed as a separate workflow.

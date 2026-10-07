@@ -66,7 +66,8 @@ and `docs/engineering/ui-principles.md`.
   `profileNoteFocus` so the note opens with its notes focused.
 - Settings > Guidance owns every instruction: the shared custom instructions,
   one collapsed override per stage that accepts one (previewed when set), and
-  Bold keywords in bullets. Settings > Models is one hairline `SettingsStage`
+  the two Resume Polish preferences, Bold keywords in bullets and Review edits
+  before showing them (off by default). Settings > Models is one hairline `SettingsStage`
   row per stage under column heads shown once.
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
@@ -197,7 +198,11 @@ and `docs/engineering/ui-principles.md`.
   Resume dispatches one proposal request from both its document action and
   Prepare; no stage selector exists. Its compact feedback is What improved, the
   proposed edits open in one disclosure with per-row Accept/Edit/Discard, Still
-  missing, and a quiet withheld line. Evidence, risk, and keyword chips do not
+  missing, and a quiet withheld line. When the opt-in review ran, one quiet line
+  reports it (kept all, or unavailable) or `ResumeHeldBackEdits` lists the
+  held-back edits collapsed with reason, optional note, warnings, and Restore;
+  a restored row joins its group with a Restored chip, and the disclosure's
+  summary stays mounted so focus survives the last Restore. Evidence, risk, and keyword chips do not
   belong in the normal surface; each standard-entry row folds its
   sources (the entry's current bullets and `profileEvidence`, the linked Profile
   text at proposal time) behind one collapsed Show evidence disclosure, and

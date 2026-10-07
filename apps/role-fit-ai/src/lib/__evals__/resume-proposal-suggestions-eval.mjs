@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 
-import { proposalSuggestions } from "../resumeProposalSuggestions.ts";
+import { heldBackSuggestions, proposalSuggestions } from "../resumeProposalSuggestions.ts";
 
 const scope = {
   version: 1,
@@ -90,5 +90,24 @@ for (const [label, change] of [
 ]) {
   assert.throws(() => proposalSuggestions(wire([change]), threeBullets, ""), /invalid outcome/, `${label} fails the proposal`);
 }
+
+// Held-back edits from the opt-in review map through the same checks, with ids
+// assigned on arrival and their reason and note carried.
+const reviewedWire = (heldBack) => ({ ...wire([]), status: "NO_CHANGES", review: { outcome: "REVIEWED", attempts: 1, heldBack } });
+const held = heldBackSuggestions(reviewedWire([
+  { change: { targetId: "target-1", target: { sectionId: "exp", entryId: "acme", bulletId: "b1" }, replacement: "Built JavaScript tools.", warnings: ["Not supported by provided evidence. Example."] }, reason: "LOW_IMPACT", note: "Swaps one word." },
+  { change: { targetId: "add-1", target: { sectionId: "exp", entryId: "acme" }, replacement: "Automated release notes.", evidence: "profile" }, reason: "INCORRECT" }
+]), scope, profile);
+assert.deepEqual(held.map(({ suggestion, reason, note }) => [suggestion.id, reason, note]), [["target-1", "LOW_IMPACT", "Swaps one word."], ["add-1", "INCORRECT", undefined]]);
+assert.deepEqual(held[0].suggestion.warnings, ["Not supported by provided evidence. Example."], "a held-back edit keeps its warnings");
+assert.equal(held[1].suggestion.kind, "add");
+assert.ok(held[1].suggestion.target.bulletId && held[1].suggestion.target.bulletId !== "b1", "a held-back addition gets its bullet id on arrival");
+assert.equal("note" in held[1], false);
+assert.deepEqual(heldBackSuggestions(wire([]), scope, profile), [], "no review, nothing held back");
+assert.throws(
+  () => heldBackSuggestions(reviewedWire([{ change: { targetId: "target-1", target: { sectionId: "exp", entryId: "beta", bulletId: "b1" }, replacement: "x" }, reason: "LOW_IMPACT" }]), scope, profile),
+  /invalid outcome/,
+  "a held-back change whose echo disagrees fails the proposal like a kept one"
+);
 
 console.log("resume-proposal-suggestions probes passed");

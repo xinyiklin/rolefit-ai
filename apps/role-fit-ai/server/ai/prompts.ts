@@ -264,8 +264,12 @@ export const ANSWER_CONVERSATION_FENCE_NAMES = [
   "source_concerns_advisory_not_evidence"
 ] as const;
 
+// The Resume Polish review opens this fence beside shared ones. It joins the
+// fence pattern below, and the review prompt's firewall line names it.
+export const RESUME_REVIEW_FENCE_NAMES = ["proposed_edits"] as const;
+
 const UNTRUSTED_FENCE_PATTERN = new RegExp(
-  `<(\\s*/\\s*|)(${[...UNTRUSTED_FENCE_NAMES, ...ANSWER_CONVERSATION_FENCE_NAMES].join("|")})\\b`,
+  `<(\\s*/\\s*|)(${[...UNTRUSTED_FENCE_NAMES, ...ANSWER_CONVERSATION_FENCE_NAMES, ...RESUME_REVIEW_FENCE_NAMES].join("|")})\\b`,
   "gi"
 );
 

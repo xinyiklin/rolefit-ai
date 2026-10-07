@@ -33,6 +33,39 @@ bounded; app-only operational detail belongs in the affected app documentation.
   replace the "one provider request, never Tailor followed by Review" contract
   and change the warning policy for that path. The recommendation was opt-in,
   show the dropped edits, fail open, and benchmark it after the eval fixes.
+- [USER+CODE] Opt-in **Resume Polish review** implemented (task
+  `polish-edit-review-20261007`; Product Brief v1 and Delivery Plan v1 approved
+  by the user; supersedes the review half of the entry above and, for this
+  opt-in path only, the 2026-08-07 "one proposal request" decision). Settings >
+  Guidance > **Review edits before showing them** (`resumePolishReview`, default
+  off) makes `/api/resume-polish` (body `reviewEdits: true`, sent only when on)
+  run one keep/drop dispatch (`server/ai/resumeProposalReview.ts`) after
+  sanitizing, on the Resume Polish provider, model, effort, and abort signal,
+  only when an edit survives. The reviewer sees review-local ids and each edit's
+  before/after and own evidence, never server ids, generator reasons, or
+  warnings; its `proposed_edits` fence is registered in `prompts.ts`. A strict
+  parser rejects any reply that is not exactly one KEEP/DROP per sent id; any
+  failure except Stop fails open to the full proposal with a note. Held-back
+  edits list collapsed with reason, note, warnings, and Restore; Restore is
+  decision state under the unchanged proposal key. Holding back everything reads
+  as no worthwhile changes. Usage is recorded as `resume-polish-review` (tracker
+  row) and cleared for unreviewed runs. With the setting off, the request and
+  result are byte-identical to before. PRODUCT's warning policy carries the
+  user-directed exception. An older build rejects a preferences file or backup
+  containing the new key (the existing no-downgrade policy).
+  - [USER] AC6 amended: offline probes prove the contract, fencing, parser, and
+    plumbing; model judgment is checked by the live review probes. The
+    default-on bar in `docs/engineering/testing.md` is approved; its "zero
+    key-evidence drops" item is mis-specified (a review cannot cause one) and
+    awaits restatement. Live calls are not yet authorized.
+  - [CODE] Benchmark: `EVAL_POLISH_REVIEW=paired` reviews each generated
+    proposal and grades both arms with shared Astra labels, plus two tracked
+    review probes (`fixtures/resume-proposal-review-probes.json`). UNCONFIRMED:
+    no live run exists; the setting stays off by default.
+  - [TOOL] Server `tsc`, `npm run check --workspace apps/role-fit-ai` (156/156
+    offline evals, including three new ones), root `npm run check`, and
+    `git diff --check` passed. UNCONFIRMED at this writing: the two required
+    independent reviews and the approved synthetic browser QA.
 - [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
   claims held: the no-op rewrite filter hides claim-changing deletions;
   `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;

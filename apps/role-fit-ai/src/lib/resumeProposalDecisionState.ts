@@ -9,11 +9,15 @@ export type ResumeProposalDecision =
 export type ResumeProposalDecisionState = {
   proposalKey: string;
   byTargetId: Record<string, ResumeProposalDecision>;
+  // Held-back edits the user returned to the proposal. They live under the same
+  // key as decisions, so a Restore never resets accepted rows or their Undo.
+  restored?: Readonly<Record<string, true>>;
 };
 
 export type ResumeProposalEditState = "pending" | "accepted" | "discarded" | "changed";
 
 const EMPTY_DECISIONS: Readonly<Record<string, ResumeProposalDecision>> = Object.freeze({});
+const EMPTY_RESTORED: Readonly<Record<string, true>> = Object.freeze({});
 
 function normalize(value: string): string {
   return stripInlineMarks(value).replace(/\s+/g, " ").trim().toLowerCase();
@@ -28,20 +32,30 @@ export function proposalValue(suggestion: ResumeProposalSuggestion): string {
   return suggestion.kind === "reorder" ? (suggestion.proposedOrder ?? []).join("\n") : suggestion.proposedText;
 }
 
+function suggestionIdentity(suggestion: ResumeProposalSuggestion) {
+  return {
+    targetId: suggestion.id,
+    kind: suggestion.kind ?? "",
+    target: suggestion.target,
+    originalOrder: suggestion.originalOrder ?? [],
+    proposedOrder: suggestion.proposedOrder ?? [],
+    originalText: suggestion.currentText,
+    proposedText: suggestion.proposedText,
+    reason: suggestion.reason || ""
+  };
+}
+
+// Held-back edits are part of the payload's identity from arrival, so restoring
+// one changes the visible list without changing the key.
 export function resumeProposalKey(result: PolishedResume | null): string {
   return JSON.stringify({
     runId: result?.runId ?? "",
     outcome: result?.polishOutcome ?? "",
-    changes: (result?.suggestedChanges ?? []).map((suggestion) => ({
-      targetId: suggestion.id,
-      kind: suggestion.kind ?? "",
-      target: suggestion.target,
-      originalOrder: suggestion.originalOrder ?? [],
-      proposedOrder: suggestion.proposedOrder ?? [],
-      originalText: suggestion.currentText,
-      proposedText: suggestion.proposedText,
-      reason: suggestion.reason || ""
-    }))
+    changes: (result?.suggestedChanges ?? []).map(suggestionIdentity),
+    ...(result?.review ? {
+      review: result.review,
+      heldBack: (result.heldBack ?? []).map(({ suggestion, reason }) => ({ ...suggestionIdentity(suggestion), heldBackReason: reason }))
+    } : {})
   });
 }
 
@@ -58,10 +72,32 @@ export function recordProposalDecision(
   targetId: string,
   decision: ResumeProposalDecision
 ): ResumeProposalDecisionState {
-  const byTargetId = state.proposalKey === proposalKey ? state.byTargetId : EMPTY_DECISIONS;
+  const sameProposal = state.proposalKey === proposalKey;
+  const byTargetId = sameProposal ? state.byTargetId : EMPTY_DECISIONS;
   return {
     proposalKey,
-    byTargetId: { ...byTargetId, [targetId]: decision }
+    byTargetId: { ...byTargetId, [targetId]: decision },
+    ...(sameProposal && state.restored ? { restored: state.restored } : {})
+  };
+}
+
+export function restoredForProposal(
+  state: ResumeProposalDecisionState,
+  proposalKey: string
+): Readonly<Record<string, true>> {
+  return state.proposalKey === proposalKey ? state.restored ?? EMPTY_RESTORED : EMPTY_RESTORED;
+}
+
+export function recordProposalRestore(
+  state: ResumeProposalDecisionState,
+  proposalKey: string,
+  targetId: string
+): ResumeProposalDecisionState {
+  const sameProposal = state.proposalKey === proposalKey;
+  return {
+    proposalKey,
+    byTargetId: sameProposal ? state.byTargetId : EMPTY_DECISIONS,
+    restored: { ...(sameProposal ? state.restored : undefined), [targetId]: true }
   };
 }
 
@@ -76,7 +112,7 @@ export function clearProposalDecision(
   if (state.proposalKey !== proposalKey || !(targetId in state.byTargetId)) return state;
   const byTargetId = { ...state.byTargetId };
   delete byTargetId[targetId];
-  return { proposalKey, byTargetId };
+  return { ...state, byTargetId };
 }
 
 export function resumeProposalEditIsPending(

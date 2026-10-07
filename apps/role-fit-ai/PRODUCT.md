@@ -66,9 +66,20 @@ authored words and no unresolved template slots.
 Reuse existing checks, result types, review components, and decision controls,
 adding small optional warning fields only where needed. Do not add a policy
 engine, evidence ledger, approval workflow, confidence score, review dashboard,
-or extra AI analysis stage. Provider defaults, local privacy, Fit's rubric, and
-portable document schemas remain unchanged. ATS terminology improvements are a
-separate workstream governed by this same policy.
+or extra AI analysis stage beyond the opt-in Resume Polish review below.
+Provider defaults, local privacy, Fit's rubric, and portable document schemas
+remain unchanged. ATS terminology improvements are a separate workstream
+governed by this same policy.
+
+**Opt-in Resume Polish review (2026-10-07, user-directed).** With Settings >
+Guidance > **Review edits before showing them** on (default off), Resume Polish
+reviews its own sanitized edits with the same provider, model, and effort and
+holds back the ones it judges low-impact or likely incorrect. This is the one
+place a content judgment changes what the user first sees: held-back edits are
+not deleted but listed, collapsed, with their reason, warnings, and a Restore
+action that returns them to the proposal as ordinary rows. Kept edits keep their
+warnings, and review verifies nothing. A review failure shows the full
+unreviewed proposal with a note. Cover-letter Polish has no review.
 
 Warnings stay attached to the output they describe. Editing labels retained
 concerns as referring to earlier wording; acceptance does not clear uncertainty.
@@ -128,8 +139,9 @@ gaps. Resume proposals are checked for grounding and fabrication concerns.
 Otherwise usable suggestions retain detected concerns as warnings. Normal Resume Polish is one provider
 operation that stages a proposal for human decisions; oversized documents
 prioritize material, job-relevant fields and disclose the fields outside that
-pass. It does not automatically run a second assessment over edits the user may
-never accept. "Proposed improvements" is a bounded editorial summary of the
+pass. By default it does not run a second assessment over edits the user may
+never accept; the opt-in review described in the warning policy is the one
+exception, a keep-or-hold-back pass inside the same Polish run. "Proposed improvements" is a bounded editorial summary of the
 changes, without candidate-evidence checks or the generic unsupported-summary
 warning. Proposed resume text and cited suggestions keep their own checks.
 
@@ -143,6 +155,14 @@ bold is allowed. Either way the preference governs only what Polish writes: a
 bullet Polish does not rewrite keeps its marks. Summary text is a bullet target
 and follows the same rule; skill lists are outside the preference, and entry
 titles are never Polish targets at all.
+
+Beside it, **Review edits before showing them** (off by default) adds the opt-in
+review: Polish then makes two requests to the Resume Polish provider, a
+generation and, when it proposed any edit, a keep-or-hold-back review, which
+roughly doubles its time and usage. Progress stays "Polishing and validating"; Stop cancels both. A result
+whose every edit was held back reads as no worthwhile changes, with the
+held-back list still there to restore from. The review's usage is recorded as
+its own Resume Polish review row.
 
 **Accepting a proposal works the same way for both documents.** What is being
 decided differs and stays different — the resume proposes individual edits, the
@@ -578,7 +598,9 @@ disappears into the task. Quiet competence, not salesmanship.
    immediately, then Job analysis and optional Fit Assessment settle independently.
    Resume Polish has one request and three distinct settled outcomes: Proposal,
    No changes, and Withheld. Withheld edits never receive success treatment;
-   failure and cancellation identify the cause without changing the resume.
+   failure and cancellation identify the cause without changing the resume. The
+   opt-in review keeps that one request and its outcomes; it only says when it
+   held edits back or could not run.
 7. Preserve product boundaries: RoleFit owns job/AI/tracker orchestration and
    host chrome; shared document editing, formatting, layout, files, and PDF
    remain package-owned and consistent with standalone Typeset.

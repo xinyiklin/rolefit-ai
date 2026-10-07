@@ -215,7 +215,12 @@ font, size and wrapping changes still reflow the page normally.
   resume stays unchanged until the user applies all or accepts an individual edit.
   **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
   preference; when disabled, every bullet Polish rewrites arrives without bold
-  while italic, underline, and Skills-list formatting remain untouched.
+  while italic, underline, and Skills-list formatting remain untouched. Its
+  default-off **Review edits before showing them** adds an optional review in
+  the same Polish run, on the same model: edits it judges low-impact or likely
+  wrong are held back in a collapsed list with a reason and **Restore**, and a
+  review failure shows every edit with a note. It roughly doubles Polish time
+  and usage.
 - **Optional Fit Assessment automation** — Fit Assessment runs after Prepare by
   default, while Resume and Cover Letter automatic Polish remain separate,
   default-off decisions. With the automatic run off, **Assess fit** still runs it

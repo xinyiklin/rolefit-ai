@@ -351,7 +351,8 @@ Good server verification covers:
   preservation and unsupported-term warnings)
 - normal `/api/resume-polish` accepts `mode: "resume-proposal"` plus a structured
   `resumeScope`, does not require full-resume `resumeText`, and owns exactly one
-  provider dispatch. It prompts with flat `target-N` IDs plus `order-N` bullet
+  generation dispatch (plus one review dispatch only for the opt-in review
+  below). It prompts with flat `target-N` IDs plus `order-N` bullet
   orders and `add-N` new-bullet slots for entries with linked Profile text; only
   bullets, actual Skills lists, and those orders and slots are mutable, while category labels, standard role/employer/subtitle/date,
   education, and omitted sections never become targets. Oversized fixtures prove complete
@@ -369,7 +370,34 @@ Good server verification covers:
 - the bold-in-bullets preference is enforced in both layers: the route rejects a
   present non-boolean with 400 and treats an absent flag as bold-on, and the
   sanitizer strips `<b>` from every bullet replacement when the preference is off
-- the browser makes one `/api/resume-polish` request per normal Resume Polish run,
+- the opt-in Polish review (`server/ai/__evals__/resume-proposal-review-probes.mjs`):
+  with `reviewEdits` absent or false the route makes one dispatch and returns a
+  byte-identical result with no `review` field; on, it makes one more dispatch on
+  the same provider, model, effort, and signal, never when no edit survives.
+  Probes pin the prompt rules for the named cases (synonym swap and unsupported
+  claim held back, qualifier correction and Profile addition kept, "when unsure,
+  KEEP"), the registered `proposed_edits` fence and five-fence firewall line,
+  neutralized injected fence tags in resume, Profile, posting, and guidance
+  text, review-local ids with no server ids, generator reasons, or warnings in
+  the reviewer's input, the strict reply parser (missing, unknown, duplicate,
+  server, or extra ids, extra fields, rewrite or retarget attempts, malformed
+  verdicts or reasons all reject the whole reply), by-reference partition, fail
+  open on timeout, unreadable, quota, malformed, and partial replies with
+  shape-only logs, Stop rethrown rather than failed open, the all-held-back No
+  changes outcome, and the client wire parser's held-back checks. Offline
+  probes prove the contract and plumbing only; whether a model judges these
+  edits correctly is checked by the live review probes below
+- the browser half of the review: `src/hooks/__evals__/resume-proposal-restore-hook.mjs`
+  runs the real decision hook (Restore keeps the proposal key, earlier
+  decisions and Undo; Accept all skips unrestored edits; a restored addition
+  inserts with its arrival id; a new run resets Restore),
+  `src/sections/resume/__evals__/resume-proposal-held-back.mjs` renders the
+  collapsed list, reasons, notes, warnings, Restore, and the quiet review lines,
+  and the decision, suggestion, usage, terminology, and settings evals cover the
+  key, held-back mapping, `resume-polish-review` usage receipt, warning carry,
+  and the off-by-default setting
+- the browser makes one `/api/resume-polish` request per normal Resume Polish run
+  (the opt-in review runs inside it), sends `reviewEdits` only when it is on,
   exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
   result as validation rather than `Parsing error`
 - Resume and Cover Letter Polish prompts include a silent pre-response audit of
@@ -380,7 +408,8 @@ Good server verification covers:
   neither automatic request awaits or suppresses the other, and each failure is
   confined to its own document workflow
 - `/api/resume-polish` rejects every mode except `resume-proposal` and carries no cover,
-  Review, score, or multi-stage request fields
+  Review-stage, score, or multi-stage request fields; the boolean `reviewEdits`
+  only toggles the in-request edit review
 - missing/unready configured providers and missing managed credentials surface
   a clear, user-safe error rather than a silent fallback
 - provider failures distinguish authentication, rate-limit/quota,
@@ -623,6 +652,30 @@ Good server verification covers:
   `EVAL_PROVIDER=claude-cli EVAL_MODEL=claude-opus-5-5 EVAL_REASONING_EFFORT=high npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- 3`.
   Compare the same fixtures/repetitions on another model by changing those
   environment variables; each invocation retains its own receipts.
+
+  `EVAL_POLISH_REVIEW=paired` (default `off`, which leaves receipts unchanged)
+  evaluates the opt-in Polish review against the same proposals: each generated
+  proposal is graded and fact-checked as usual, then the production review runs
+  once on that same proposal with the generator's settings, and the kept edits
+  are graded as a second arm reusing the same Astra labels (no second judge
+  call). Receipts record each held-back edit's reason and class (Astra
+  unsupported, immaterial, or valuable for replacements; trap, opportunity, or
+  unlabeled for removals and reorders), lost opportunity fixes, caught trap
+  hits, and review usage; `summary.json` adds a `review` block. A review that
+  fails open is an execution failure, never a keep-everything result. Paired
+  mode also runs the two tracked review probes in
+  `fixtures/resume-proposal-review-probes.json` (four hand-built edits, then the
+  same edits under injected resume, Profile, posting, and guidance text) and
+  reports per-edit agreement with their expected keep/drop. The default-on bar
+  (user-approved 2026-10-07; no run yet): zero lost opportunity fixes, at least
+  75% of held-back edits unsupported, immaterial, or non-opportunity structural
+  edits, at most 5% of Astra supported-and-material edits held back, and every
+  probe verdict matching. Its fifth item, "zero key-evidence (`mustKeepBullets`)
+  drops", cannot fail as written (the review only holds edits back, and holding
+  back a key-evidence removal is a caught trap) and awaits the user's
+  restatement. A paired repetition costs about 39 generations, 39
+  fact-checks, and 41 reviews; a fresh real-application sample needs separate
+  authorization because it sends private text to both providers.
 - pasted resume text reaches the structured editor as a one-time conversion into
   `ResumeData`; a `.resume` file loads its `ResumeData` directly, and export offers
   PDF + `.resume`. The Resume file picker rejects plain-text, word-processing, and

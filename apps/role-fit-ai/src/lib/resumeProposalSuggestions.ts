@@ -2,7 +2,7 @@ import { newBullet } from "@typeset/engine/lib/resumeData.ts";
 
 import { linkProfileBlocks, linkedProfileHeadings } from "../../shared/candidateProfileContract.ts";
 import { flattenResumeTargets, type ResumePolishWireResult } from "../../shared/resumePolishContract.ts";
-import type { ResumeProposalSuggestion } from "../resume/types.ts";
+import type { ResumeHeldBackEdit, ResumeProposalSuggestion } from "../resume/types.ts";
 import { ApiError } from "./failures.ts";
 import type { buildResumePolishScope } from "./resumePolishScope.ts";
 
@@ -68,4 +68,20 @@ export function proposalSuggestions(
       ...(change.evidence && sources.has(target.target.entryId) ? { profileSource: sources.get(target.target.entryId)!.join("; ") } : {})
     };
   });
+}
+
+// Edits the opt-in review held back pass the same target checks and get their
+// ids (a new bullet's too) now, with the kept ones, so a Restore reuses them.
+export function heldBackSuggestions(
+  data: ResumePolishWireResult,
+  resumeScope: ReturnType<typeof buildResumePolishScope>,
+  candidateContext: string
+): ResumeHeldBackEdit[] {
+  const heldBack = data.review?.heldBack ?? [];
+  return proposalSuggestions({ ...data, changes: heldBack.map((item) => item.change) }, resumeScope, candidateContext)
+    .map((suggestion, index) => ({
+      suggestion,
+      reason: heldBack[index].reason,
+      ...(heldBack[index].note ? { note: heldBack[index].note } : {})
+    }));
 }

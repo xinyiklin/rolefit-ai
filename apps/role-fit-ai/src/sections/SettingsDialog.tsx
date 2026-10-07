@@ -92,6 +92,8 @@ export type SettingsDialogProps = {
   // ----- Guidance -----
   boldBulletKeywords: boolean;
   onBoldBulletKeywordsChange: (value: boolean) => void;
+  resumePolishReview: boolean;
+  onResumePolishReviewChange: (value: boolean) => void;
   customInstructions: string;
   onCustomInstructionsChange: (value: string) => void;
   stageCustomInstructions: Partial<Record<AiStageId, string>>;
