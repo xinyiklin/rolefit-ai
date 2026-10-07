@@ -144,7 +144,7 @@ const PERMISSIVE_BEFORE = /\b(?:may|can|could|free\s+to|allowed\s+to|welcome\s+t
 const INSTRUCTION_BEFORE = /\b(?:please|write|writing|use|using|include|provide|give|submit|expect(?:ed|s)?|should(?:\s+be)?|must(?:\s+be)?|needs?\s+to(?:\s+be)?|ha(?:s|ve)\s+to(?:\s+be)?|(?:must|should|needs?\s+to|ha(?:s|ve)\s+to)\s+(?:contain|include|have|require|run)|minimum\s+of|at\s+least|(?:response|answer|statement|essay)\s+of)\s+$/i;
 // "Responses that exceed 250 words will not be read" states a ceiling through
 // its penalty; without the penalty the same words state a floor.
-const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being|we['’]ll|they['’]ll)\b(?:(?!\b(?:not|never)\b|n['’]t\b)[^.;!?\n]){0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread|stop\s+reading|skip|skim)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
+const PENALTY_CLAUSE = /\b(?:will|may|might|would|could|shall|is|are|get|gets|being|we['’]ll|they['’]ll)\b(?:(?!\b(?:not|never|no)\b|n['’]t\b)[^.;!?\n]){0,24}?\b(?:truncat|cut\s*off|cut\b|reject|ignor|discard|disqualif|penali[sz]|lost\b|unread|stop\s+reading|skip|skim)|\b(?:not|never|won['’]t|cannot|can['’]t)\b[^.;!?\n]{0,16}?\b(?:read|review(?:ed)?|consider(?:ed)?|accept(?:ed)?|score[sd]?|count(?:ed)?|process(?:ed)?|assess(?:ed)?)\b/i;
 
 export function extractAnswerConstraints(question: string): AnswerConstraint[] {
   const constraints: AnswerConstraint[] = [];

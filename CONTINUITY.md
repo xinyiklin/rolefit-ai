@@ -89,7 +89,15 @@ bounded; app-only operational detail belongs in the affected app documentation.
     up to four words before, or a penalty clause, makes it a hard ceiling), so an
     unrecognised negation can never drive a repair past an employer's limit;
     a lone hyphenated number word no longer claims its span as an inverted
-    range. Left as residual: no duplicate
+    range. Seven further server-review passes then closed the phrasing paths
+    that could still yield a hard minimum from a ceiling sentence or a hard
+    maximum below the stated limit (penalty windows bound to their own count,
+    negated outcomes, conditional and permissive clauses, suggested or typical
+    lengths and unworded ranges beside a stated maximum, sufficiency wording,
+    "limit/capped at/within"); the probe table now covers about 170 phrasings.
+    The limit parser remains heuristic: a rare phrasing can still misread, and
+    the safe default is that an ambiguous ceiling word yields no limit.
+    Left as residual: no duplicate
     resolution runs when the first tracker record for a posting is an
     answer-created Draft, and acknowledging that Draft replaces an earlier
     Link/Keep-separate decision for the same posting (the tracker's later
