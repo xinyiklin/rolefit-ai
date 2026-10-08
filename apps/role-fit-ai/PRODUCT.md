@@ -255,7 +255,8 @@ lightweight application pipeline tracker. Answers is an application-specific
 conversation: paste the exact employer question, receive one concise draft,
 edit or refine it, then copy or explicitly save the chosen question/answer
 revision. Generation alone creates no tracker record. First Save creates a
-Draft without an application date; later saves update that same record, and
+Draft without an application date from the posting as last prepared, never
+from unprepared source edits; later saves update that same record, and
 Apply or Skip transitions the same ID while retaining its answers. Drafts do
 not contribute to submission metrics or calendar events. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included
