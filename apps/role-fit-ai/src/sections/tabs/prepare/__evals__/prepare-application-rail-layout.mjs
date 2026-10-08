@@ -63,7 +63,7 @@ assert.match(
 
 assert.match(
   prepareSource,
-  /!canPolishResume\s*\?\s*resumePolishProviderMessage \|\| polishStatus \|\| "Mark at least one resume section Polish\."/,
+  /!canPolishResume\s*\?\s*resumePolishProviderMessage \|\| polishStatus \|\| "Set at least one editable resume section to Polish\."/,
   "a Resume card blocked only by its Polish provider names that provider's recovery step"
 );
 assert.doesNotMatch(prepareSource, /Finish the resume and AI setup/, "the vague combined blocker is gone");
@@ -72,6 +72,10 @@ assert.match(
   /resumePolishProviderMessage = resumePolishProviderReady \? "" : providerRecoveryMessage\(resumePolishStage\.provider\)/,
   "a ready Resume Polish provider never surfaces a recovery message"
 );
+assert.ok(
+  appSource.includes("resumePolishProviderMessage={resumePolishProviderMessage}"),
+  "Prepare receives the Resume Polish provider's message, not another stage's"
+);
 
 assert.match(
   prepareStyles,
@@ -79,4 +83,4 @@ assert.match(
   "Final review findings (ul.fit-assessment-list) wrap long excerpts; Fit findings wrap in FitFindings"
 );
 
-console.log("Prepare application rail layout eval: 13/13 checks passed");
+console.log("Prepare application rail layout eval: 14/14 checks passed");

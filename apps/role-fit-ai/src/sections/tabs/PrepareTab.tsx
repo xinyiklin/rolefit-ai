@@ -342,7 +342,7 @@ export function PrepareTab({
           : isPolishing
             ? "Wait for the current polish to finish."
             : !canPolishResume
-              ? resumePolishProviderMessage || polishStatus || "Mark at least one resume section Polish."
+              ? resumePolishProviderMessage || polishStatus || "Set at least one editable resume section to Polish."
               : "";
   const canStartPolishResume = canPolishResume && !isPolishStarting && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
