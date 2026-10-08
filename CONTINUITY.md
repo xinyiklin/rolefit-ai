@@ -5,8 +5,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
-- [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the four fixes of
-  #192 since `rolefit-preview-v0.9.0-beta.1`, no new capability and no
+- [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the three
+  user-facing fixes and one test fix of #192 since
+  `rolefit-preview-v0.9.0-beta.1`, no new capability and no
   stored-data or format change; the user approved the release brief and plan,
   task `2026-10-08-rolefit-0.9.1-preview`). The intended tag is
   `rolefit-preview-v0.9.1-beta.1`; extension 1.2.1 and desktop bridge API 13
@@ -18,11 +19,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
     a fresh Squirrel installer and `0.9.1-full.nupkg`; the packaged smoke
     passed against that fresh output (win32-x64, unpacked). The Electron
     development-mode smoke failed once in the main checkout without its output
-    kept, then passed twice there (the second with a full log and exit 0); the
-    0.9.0 preflight saw the same intermittent main-checkout failure, root cause
-    still not isolated.
+    kept, then passed twice there (the second with a full log and exit 0). The
+    0.9.0 preflight also saw it fail in the main checkout and pass in a clean
+    worktree; root cause still not isolated. Keep the smoke's log next time.
+  - [CODE] Open, found in the release review (pre-existing, not fixed in
+    0.9.1): `resumeIsStarterSample` requires `applicationOfRecordId === null`
+    (`App.tsx`), so once the preparation owns a record (after a first Answers
+    Save, or with a saved application open), Open > Bundled starter makes
+    `resumeReady` true and Answers can draft from the sample, contrary to
+    PRODUCT's rule that the Starter never satisfies resume readiness. The 0.9.1
+    notes disclose it as a known issue.
 - [USER+CODE] **Four open items fixed in #192** (squash `fc60489` of the
-  exact reviewed head `1f77176`, CI 15/15 green; branch
+  exact reviewed head `1f77176`, CI green: 15 checks, product-site deploy
+  skipped; branch
   `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
   approved brief v1 and plan v1). Client and test code only: no schema,
   prompt, provider, or shared-package change, and no version bump.
