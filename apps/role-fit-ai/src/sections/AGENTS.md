@@ -128,7 +128,9 @@ and `docs/engineering/ui-principles.md`.
 - Prepare is built from flat panels: a hairline-separated head (title, quiet
   meta, trailing actions) over plain content. Do not stack a card, tinted box,
   or icon tile inside a panel — the extraction/candidate gap columns and the
-  material rows are dividers and columns, not nested cards. A panel whose head
+  material rows are dividers and columns, not nested cards. The one exception
+  is the shared "Review before use" note (`components/ContentWarnings`), a
+  warm-veil inline notice under the content it qualifies. A panel whose head
   is its only content renders as a bar with no empty body.
 - Every secondary line on the page — blocked-action guidance, live status,
   safety notes, the variant recommendation — uses the one `.prepare-note`

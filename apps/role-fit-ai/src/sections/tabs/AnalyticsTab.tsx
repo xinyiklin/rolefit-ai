@@ -76,13 +76,18 @@ export function AnalyticsTab({ applications, loadError, onOpenApplications }: An
             <span className="analytics-panel__eyebrow">Current stage counts</span>
           </header>
           <div className="analytics-funnel">
-            {BOARD_STATUSES.filter((status) => status !== "withdrawn").map((status) => (
-              <div className={`analytics-funnel__row analytics-funnel__row--${status}`} key={status}>
-                <span>{STATUS_LABEL[status]}</span>
-                <i style={{ width: `${Math.max(8, Math.round((statusCount(applications, status) / Math.max(total, 1)) * 100))}%` }} />
-                <strong>{statusCount(applications, status)}</strong>
-              </div>
-            ))}
+            {BOARD_STATUSES.filter((status) => status !== "withdrawn").map((status) => {
+              const count = statusCount(applications, status);
+              return (
+                <div className={`analytics-funnel__row analytics-funnel__row--${status}`} key={status}>
+                  <span>{STATUS_LABEL[status]}</span>
+                  <span className="analytics-funnel__track">
+                    {count ? <i style={{ width: `calc((100% - 2.5rem) * ${count / Math.max(total, 1)})` }} /> : null}
+                    <strong>{count}</strong>
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
 
