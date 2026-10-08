@@ -50,7 +50,8 @@ draft and an in-flight request hold Prepare and Open, saved or empty threads do
 not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
 renders the Answers tab to prove typing and edits are read-only while Prepare
 runs. `src/hooks/__evals__/application-answers-retry-gate.mjs` fails a draft,
-then edits the Prepare source (paste or link) or opens the bundled Starter and
+then edits the Prepare source (paste or link), or swaps in Starter sample text
+with App's `resumeReady` false (and pins that formula in App's source), and
 proves send, the tab's Retry and the dock's Retry all stop at the tab's
 prepared-job or resume gate, in the tab's order, with no request.
 `src/hooks/__evals__/application-answer-draft-source.mjs` runs App's
@@ -59,8 +60,9 @@ with the production store: a first Save describes the job as last prepared and
 links only through a duplicate choice a committed Prepare run or a later
 Polish/Apply/Skip gate applied to that posting, or one the guard remembers for
 that posting from a stopped run (reused by Polish and by the first Save itself,
-where a remembered Keep separate wins as it does at Polish and Apply, and a
-Save retried after a failed link skips its own Draft), never one from a
+which looks it up for the posting as last prepared, not later source edits; a
+remembered Keep separate wins as it does at Polish and Apply, and a Save
+retried after a failed link skips its own Draft), never one from a
 different posting, straight from another posting's uncommitted run, or through
 a queued run's stale setter.
 Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers

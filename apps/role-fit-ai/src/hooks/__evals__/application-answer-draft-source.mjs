@@ -458,6 +458,25 @@ try {
     assert.equal(desk.render(deskJobA).duplicateGuard.duplicatePrompt, null, "Save never asks");
   }
 
+  // The lookup uses the posting as last prepared: pasting B afterwards, unprepared, still links
+  // A's first Save through A's remembered Link.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push(tracksAlpha);
+    await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", targetA, "link");
+    const pastedOverA = {
+      ...deskJobA, jobPrepared: false, jobDescription: postingB, preparedApplicationJobDescription: postingB,
+      jobRawText: "", jobTracking: trackingB, importedJob: null
+    };
+    const view = desk.render(pastedOverA);
+    assert.equal(view.answersConversationId, "preparation-1-prepare-1", "pasting B keeps A's conversation");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "remembered Link after pasting B");
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }],
+      "the remembered Link is looked up for A's prepared posting, not the live source fields");
+  }
+
   // As at Polish and Apply, a remembered Keep separate for the posting's top match wins over a
   // committed Link.
   {
