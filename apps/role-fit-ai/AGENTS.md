@@ -135,9 +135,11 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
 - Posting groups are presentation and relationship metadata, never collapsed
   tracker identity. Every decision or attempt keeps its own row, status, dates,
   notes, and documents. Unlinking is an atomic non-destructive group mutation;
-  merging remains separately confirmed and destructive. Skipped records
-  may count as reviewed history but never as submitted-application metrics or
-  calendar submission events, even if a legacy record carries `appliedAt`.
+  merging remains separately confirmed and destructive. A job-only Skipped
+  decision (no `appliedAt`) counts as reviewed history but never as a
+  submitted-application metric or calendar submission event; an application
+  later marked Skipped keeps its original submission in both. No Skipped record
+  counts toward follow-up hygiene.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.

@@ -893,11 +893,19 @@ Good frontend verification covers:
   it also pins destructive merge as a separate tracker operation and established
   group unlinking as one all-member revision-checked mutation.
   `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and
-  update-only Skipped commits; job-only AI provenance; decision-date
-  preservation; sent-artifact removal; exact dialog/receipt copy; and that the
-  quiet action remains in Prepare rather than the masthead. The storage probes
-  additionally verify decision metadata roundtrips while `appliedAt` and sent
-  document fields are omitted.
+  update-only Skipped commits with canonical multi-reason lists; job-only AI
+  provenance; decision-date preservation; sent-artifact removal for job-only
+  decisions while a later-skipped application keeps its date, documents, and
+  document AI receipts on re-skip and Save job updates; exact
+  dialog/receipt copy; and that the quiet action remains in Prepare rather than
+  the masthead. The storage probes additionally verify decision metadata
+  roundtrips while `appliedAt` and sent document fields are omitted.
+  `src/lib/__evals__/skip-reason-suggestions-eval.mjs` pins the local suggestion
+  rules (prior decision wins, submitted-link and Blocked pre-checks, weak marks,
+  classifier false positives, no provider path), and
+  `server/applications/__evals__/skip-reason-storage.mjs` proves legacy scalar
+  reasons load without a rewrite while unknown, mistyped, unsorted, or
+  mixed-shape stored reasons fail closed.
   `src/lib/__evals__/explicit-application-write-targets.mjs` proves answer
   generation has no tracker persistence, document-sync ID ownership, Apply/Skip
   relationship handling, and the absence of the retired `findForTarget` and
@@ -908,10 +916,11 @@ Good frontend verification covers:
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or
   provider analysis.
-  `src/lib/__evals__/application-analytics-eval.mjs` treats Skipped as
-  visible reviewed history while excluding it from the shared submitted-metric
-  denominator, monthly submissions, and missing-follow-up hygiene even when a
-  legacy record carries `appliedAt`. The preparation/session relationship eval
+  `src/lib/__evals__/application-analytics-eval.mjs` keeps Skipped visible as
+  reviewed history dated by its decision, counts only explicit `appliedAt`
+  submissions (so an application later marked Skipped keeps its original
+  submission in the shared submitted-metric denominator and monthly
+  submissions), and excludes Skipped from missing-follow-up hygiene. The preparation/session relationship eval
   pins independent multi-record groups, group counts, and two-versus-many unlink
   plans; the saved-surface probe pins linked-history presentation plus confirmed
   destructive merge controls.

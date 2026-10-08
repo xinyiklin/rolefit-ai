@@ -318,19 +318,38 @@ share one height and top alignment. Table pagination remains present for empty
 result sets so the table workspace and inspector rail retain stable vertical
 bounds. Merge accidental duplicate
 keeps the current record only after a destructive confirmation. A Skipped
-decision uses its decision date for tracker chronology and appears in All,
-Inactive, and Skipped filters, but it never contributes to submitted counts,
-submitted-month history, follow-up hygiene, or calendar submission events.
+record uses its decision date for tracker chronology and appears in All,
+Inactive, and Skipped filters. A job-only Skipped decision never contributes to
+submitted counts, submitted-month history, or calendar submission events; an
+application later marked Skipped keeps its original submission in all three,
+because a later decision does not erase a sent application. No Skipped record
+counts toward follow-up hygiene.
 Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
-work. It saves the posting as **Skipped**, with an
-optional reason and short note, without recording an application date or sent
+work. It saves the posting as **Skipped**, with any number of optional reasons
+from a grouped list (Eligibility, Logistics, Fit, Status, Personal) and a short
+note, without recording an application date or sent
 documents or additional application uploads. This job-only decision does not
 require a resume, cover letter, Fit
-Assessment, provider, or Apply readiness. Encountering the same posting again
-can update that decision's date, reason, note, and job snapshot while preserving
+Assessment, provider, or Apply readiness. The dialog suggests reasons from
+evidence already on the device and never makes a provider request: it pre-checks
+the reasons of an earlier skip of the same posting, or otherwise **Already applied**
+for a posting linked to a submitted application and the matching eligibility
+reason when the current Fit Assessment reports a **Blocked** condition whose
+cited posting text names clearance/citizenship or work authorization/sponsorship.
+Weaker evidence — eligibility **Check**, on-site/relocation or schedule/travel
+wording detected in the posting, a **Limited** verdict — is only marked as
+suggested. Each suggestion shows its basis, only a Fit Assessment the Prepare
+rail presents as current contributes, and the saved record keeps only the
+reasons the user leaves checked. The retired "Pay, location, authorization, or
+other constraint" reason remains valid on records that carry it but is not
+offered for new decisions. Encountering the same posting again
+can update that decision's date, reasons, note, and job snapshot while preserving
 its id and creation date. Opening the saved decision later is update-only:
 **Save job updates** refreshes job facts but preserves the original decision,
-and reconsidering the role creates a separate linked application attempt.
+and reconsidering the role creates a separate linked application attempt. When
+the Skipped record is an application that was later marked Skipped, both paths
+also keep its application date, sent documents, attachments, and their AI-usage
+receipts; only a job-only decision stores none of them.
 Opening a stored application restores its validated posting and documents into
 the current session, lands on Prepare, and preserves the dirty-document
 replacement guard.
@@ -677,8 +696,9 @@ disappears into the task. Quiet competence, not salesmanship.
     immutable full source opens from Job snapshot or Documents in the same focus-managed,
     stacked viewer pattern as saved PDFs, where a bounded document panel keeps
     long text readable. A skipped record names its Skipped outcome,
-    keeps its decision date in Key dates, and opens its reason and short decision
-    note from the compact one-line `Skipped · reason` control in a headerless
+    keeps its decision date in Key dates, and opens its reasons and short decision
+    note from the compact one-line `Skipped · reasons` control (at most two short
+    names, then `+N`) in a headerless
     non-modal decision popover;
     general application notes remain independent data in Prep. Application
     Detail adopts newer tracker facts when its form is clean and pauses with an

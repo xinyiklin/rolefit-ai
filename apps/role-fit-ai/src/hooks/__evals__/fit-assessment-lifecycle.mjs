@@ -20,6 +20,7 @@ const {
   dispatchFitAssessment,
   emptyFitAssessmentState,
   failFitAssessmentRun,
+  fitAssessmentCurrentResult,
   fitAssessmentMayTriggerAutoPolish,
   fitAssessmentLatestSnapshot,
   fitAssessmentPersistenceDecision,
@@ -235,6 +236,41 @@ assert.equal(
   null,
   "a completed assessment from another preparation is never persisted onto the new application"
 );
+// Skip suggestions read only the assessment the Prepare rail presents as
+// current; anything it labels previous, saved, re-running, or failed is excluded.
+const assessedSnapshot = { ...savedSnapshot, result: { ...savedSnapshot.result, status: "ASSESSED" } };
+const currentReady = completeFitAssessmentRun(
+  beginFitAssessmentRun(emptyFitAssessmentState(), { id: "fit-current-1", kind: "prepare", resumeLabel: "Backend" }),
+  "fit-current-1",
+  { snapshot: assessedSnapshot, provenance: readyProvenance }
+);
+assert.equal(fitAssessmentCurrentResult(currentReady), assessedSnapshot.result, "a current assessment is used");
+const currentReassessing = beginFitAssessmentRun(currentReady, { id: "fit-current-2", kind: "reassess", resumeLabel: "Backend" });
+const insufficientReady = completeFitAssessmentRun(
+  beginFitAssessmentRun(emptyFitAssessmentState(), { id: "fit-insufficient", kind: "prepare", resumeLabel: "Backend" }),
+  "fit-insufficient",
+  {
+    snapshot: { resumeLabel: "Backend", result: { status: "INSUFFICIENT_JOB_INFORMATION", summary: "Synthetic", matches: [], gaps: [] } },
+    provenance: readyProvenance
+  }
+);
+for (const [label, state] of [
+  ["never run", emptyFitAssessmentState()],
+  ["first run in flight", beginFitAssessmentRun(emptyFitAssessmentState(), { id: "fit-first", kind: "prepare", resumeLabel: "Backend" })],
+  ["failed first run", failFitAssessmentRun(
+    beginFitAssessmentRun(emptyFitAssessmentState(), { id: "fit-fail", kind: "prepare", resumeLabel: "Backend" }),
+    "fit-fail",
+    { resumeLabel: "Backend", message: "Synthetic provider failure" }
+  )],
+  ["re-run in flight", currentReassessing],
+  ["failed re-run", failFitAssessmentRun(currentReassessing, "fit-current-2", { resumeLabel: "Backend", message: "Synthetic provider failure" })],
+  ["inputs changed", { ...currentReady, latestCompleted: { ...currentReady.latestCompleted, changes: ["candidate-context"] } }],
+  ["previous preparation", { ...currentReady, latestCompleted: { ...currentReady.latestCompleted, previousPreparation: true } }],
+  ["saved with application", restoredFitAssessmentState("prepare-restored-skip", assessedSnapshot)],
+  ["insufficient job information", insufficientReady]
+]) {
+  assert.equal(fitAssessmentCurrentResult(state), null, `${label} offers no Fit-based skip suggestion`);
+}
 assert.deepEqual(
   fitAssessmentPersistenceDecision(emptyFitAssessmentState()),
   { action: "preserve" },

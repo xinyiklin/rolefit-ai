@@ -64,6 +64,12 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `fitAssessmentLifecycle.ts` owns exact request provenance and the structured
   list of changed assessment input groups. Keep that list domain-only; the
   Prepare rail owns its compact user-facing labels and details.
+- `notApplying.ts` owns the Skip reason list, groups, labels, canonical order,
+  and display formatting; the server sanitizer imports it, so it stays
+  dependency-free. `skipReasonSuggestions.ts` owns the Skip dialog's local
+  suggestions from the prior decision, linked record, current Fit result, and
+  posting wording; its eligibility classifier reads only Fit's cited posting
+  excerpt, and nothing in it makes a request.
 - `autoPolishPolicy.ts` owns the client-only minimum-verdict type, labels,
   ordering, and comparison used independently by Resume and Cover Letter. The
   shared Fit Assessment contract owns assessment data and must not import downstream

@@ -1,3 +1,4 @@
+import type { FitAssessmentResult } from "../../shared/fitAssessmentContract.ts";
 import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import { useRef, useState, type Dispatch, type SetStateAction } from "react";
 import {
@@ -19,15 +20,11 @@ import {
   skipApplicationForSession,
   updateNotApplyingJob
 } from "../lib/notApplyingApplication.ts";
+import { suggestSkipReasons, type SkipReasonPrompt } from "../lib/skipReasonSuggestions.ts";
 import {
   statusDetail,
   type ApplicationActionStatus
 } from "../lib/applicationActionStatus.ts";
-
-export type SkipPrompt = {
-  initialReason: NotApplyingReason | "";
-  initialNote: string;
-};
 
 type UseSkipFlowArgs = {
   canSkip: boolean;
@@ -38,6 +35,7 @@ type UseSkipFlowArgs = {
   jobRawText: string;
   pipelineAiUsage: Record<string, StageAiUsage>;
   fitAssessmentPersistence: FitAssessmentPersistenceDecision;
+  currentFitResult: Extract<FitAssessmentResult, { status: "ASSESSED" }> | null;
   preparationSession: PreparationSession;
   currentPreparationId: string;
   getCurrentPreparationId: () => string;
@@ -63,6 +61,7 @@ export function useSkipFlow({
   jobRawText,
   pipelineAiUsage,
   fitAssessmentPersistence,
+  currentFitResult,
   preparationSession,
   currentPreparationId,
   getCurrentPreparationId,
@@ -78,7 +77,7 @@ export function useSkipFlow({
   linkApplication,
   setApplicationActionStatus
 }: UseSkipFlowArgs) {
-  const [skipPrompt, setSkipPrompt] = useState<SkipPrompt | null>(null);
+  const [skipPrompt, setSkipPrompt] = useState<SkipReasonPrompt | null>(null);
   const [skipError, setSkipError] = useState("");
   const [isResolvingSkip, setIsResolvingSkip] = useState(false);
   const [isSavingSkip, setIsSavingSkip] = useState(false);
@@ -89,6 +88,9 @@ export function useSkipFlow({
   const skipPreparationIdRef = useRef<string | null>(null);
   const skipPreparationGenerationRef = useRef<number | null>(null);
   const isSkipping = isResolvingSkip || isSavingSkip;
+  // Suggestions read the Fit state current when the dialog opens, not at click.
+  const currentFitResultRef = useRef(currentFitResult);
+  currentFitResultRef.current = currentFitResult;
   const currentPreparationIdentityRef = useRef("");
   currentPreparationIdentityRef.current = preparationCommitIdentity({
     session: preparationSession,
@@ -178,21 +180,22 @@ export function useSkipFlow({
         : session;
       skipSessionRef.current = capturedSession;
       unrelatedApplicationIdRef.current = resolution.unrelatedApplicationId ?? null;
-      const matchedNotApplyingId = capturedSession.pendingRelationship?.matchedNotApplyingRecordId;
-      const matchedNotApplying = matchedNotApplyingId
-        ? getApplication(matchedNotApplyingId) ?? null
-        : null;
-      setSkipPrompt({
-        initialReason: matchedNotApplying?.notApplyingReason ?? "",
-        initialNote: matchedNotApplying?.notApplyingNote ?? ""
-      });
+      const relationship = capturedSession.pendingRelationship;
+      setSkipPrompt(suggestSkipReasons({
+        priorDecision: relationship?.matchedNotApplyingRecordId
+          ? getApplication(relationship.matchedNotApplyingRecordId) ?? null
+          : null,
+        linkedApplication: relationship ? getApplication(relationship.matchedApplicationId) ?? null : null,
+        fitResult: currentFitResultRef.current,
+        jobText: jobRawText || preparedJobDescription
+      }));
     } finally {
       skipInFlightRef.current = false;
       setIsResolvingSkip(false);
     }
   }
 
-  async function saveSkip(reason: NotApplyingReason | "", note: string): Promise<boolean> {
+  async function saveSkip(reasons: NotApplyingReason[], note: string): Promise<boolean> {
     if (skipInFlightRef.current) return false;
     const session = skipSessionRef.current ?? preparationSession;
     const existingDraft = session.applicationId ? getApplication(session.applicationId) ?? null : null;
@@ -239,7 +242,7 @@ export function useSkipFlow({
         matchedNotApplying,
         existingDraft,
         now,
-        reason,
+        reasons,
         note,
         clearFields: prepared.clearFields
       });
@@ -254,7 +257,7 @@ export function useSkipFlow({
         ? await createApplication(commit.application).catch(() => false)
         : await updateApplicationById(commit.application).catch(() => false);
       if (!saved) {
-        const message = "This decision could not be saved. The prepared job and your reason are still here; retry Save as skipped.";
+        const message = "This decision could not be saved. The prepared job and your reasons are still here; retry Save as skipped.";
         setSkipError(message);
         setApplicationActionStatus({
           tone: "error",
@@ -299,7 +302,7 @@ export function useSkipFlow({
       clearCapturedSkip();
       return true;
     } catch {
-      const message = "This decision could not be prepared or saved. The job and your reason are still here; retry Save as skipped.";
+      const message = "This decision could not be prepared or saved. The job and your reasons are still here; retry Save as skipped.";
       setSkipError(message);
       setApplicationActionStatus({
         tone: "error",

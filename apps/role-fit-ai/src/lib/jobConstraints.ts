@@ -1,17 +1,10 @@
-// Local, dependency-free scan for the job's LIFESTYLE / LOGISTICAL conditions —
-// travel, relocation, on-site/remote expectations, shifts, on-call, overtime,
-// physical demands, commute. These are candidate PREFERENCES, not
-// qualifications: they must never inflate or deflate the fit verdict (the prompt
-// rules enforce that on the AI side). Instead they surface as a "Before you
-// apply" advisory so the user can self-select out of a job whose conditions are
-// a personal dealbreaker, even when they're a strong skills match.
-//
-// This is deliberately separate from eligibility BLOCKERS (clearance, license,
-// citizenship, work authorization) — those make the candidate unable to do the
-// job and legitimately drive the fit verdict to DON'T APPLY. Preferences do not.
+// Local, dependency-free scan for a posting's logistical conditions — travel,
+// relocation, on-site policy, shifts, on-call, overtime, physical demands,
+// commute. These are preferences, not qualifications or eligibility: they only
+// mark suggested Skip reasons and never affect Fit Assessment.
 //
 // Best-effort and conservative: a curated pattern set over the JD text. False
-// negatives (a constraint phrased unusually) are acceptable for an advisory; the
+// negatives (a constraint phrased unusually) are acceptable for a suggestion; the
 // goal is to catch the common, high-impact conditions, not to be exhaustive.
 
 export type JobConstraintKind =
@@ -27,7 +20,7 @@ export type JobConstraintKind =
 
 export type JobConstraint = {
   kind: JobConstraintKind;
-  // Short headline shown in the advisory list.
+  // Short category headline.
   label: string;
   // The matched phrase from the JD (trimmed), so the user sees the real wording
   // (e.g. "up to 50% travel") rather than just the category.
@@ -42,8 +35,7 @@ type ConstraintRule = {
   patterns: RegExp[];
 };
 
-// Order matters only for display grouping; each kind reports at most once (its
-// first match), so the advisory stays compact.
+// Each kind reports at most once (its first match), in RULES order.
 const RULES: ConstraintRule[] = [
   {
     kind: "travel",

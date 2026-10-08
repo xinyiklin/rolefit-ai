@@ -5,6 +5,39 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
+  12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
+  tracker field is now `notApplyingReasons` (canonical-order list, omitted when
+  empty); `src/lib/notApplying.ts` is the single list the server sanitizer
+  imports. The retired `constraints` reason stays valid on saved records but is
+  not offered. Task `2026-10-08-skip-reasons` (local artifacts; brief v3 and plan
+  v2 approved by the user's delegation after an independent planning review).
+- [CODE] The Skip dialog suggests reasons from local evidence only, with no
+  provider request. A prior skip of the same posting supplies the only
+  pre-checks; otherwise a link to a submitted application (`already_applied`)
+  and a current Fit **Blocked** eligibility whose cited posting text names
+  clearance/citizenship or work authorization pre-check. Eligibility Check,
+  on-site/travel wording from `jobConstraints.ts` (unused since #133, now
+  live), and a Limited verdict are only marked.
+- [CODE] Compatibility: tracker reads stay strict. A pre-list scalar
+  `notApplyingReason` reads as a one-item list (comparison-only, no rewrite);
+  both shapes on one record are invalid on read and write. Once the new build
+  saves the tracker, an older build refuses it (and a newer backup) without
+  changing anything until updated, and a code revert must fix forward.
+- [USER+CODE] Fixed (task `2026-10-08-reskip-history`, user chose the
+  recommended option): re-skipping a posting matched to an application later
+  moved to Skipped, and Save job updates on that record, stripped its
+  `appliedAt`, sent-document metadata, attachments, and document AI receipts,
+  and the server accepted it. Both paths now keep that history; job-only
+  decisions still store none. Records damaged before the fix are not repaired,
+  and their files stay orphaned on disk. No server guard against removing
+  `appliedAt` was added (offered as optional, not chosen).
+- [USER+CODE] Docs now match the submitted-metrics code (user chose the code's
+  rule): a job-only Skipped decision never counts as submitted or as a calendar
+  submission, an application later marked Skipped keeps its original submission,
+  and no Skipped record counts toward follow-up hygiene. App `AGENTS.md`,
+  `PRODUCT.md`, `README.md`, and `docs/engineering/testing.md` previously said
+  no Skipped record ever counts.
 - [TOOL] Four Document workflow runs since 2026-10-06 failed one Chromium job
   with "Timed out starting Chromium" (core on `3d7f4cd` and `b35628c`, extended
   on `d37990f` and `e4d339b`): no stderr within 15s, while the other Chromium

@@ -129,6 +129,10 @@ function normalizeCompatibleApplicationFieldsForComparison(
       const { appliedAt: _emptyDate, ...preserved } = raw;
       raw = preserved;
     }
+    if (Object.hasOwn(raw, "notApplyingReason") && !Object.hasOwn(raw, "notApplyingReasons")) {
+      const { notApplyingReason, ...preserved } = raw;
+      raw = { ...preserved, notApplyingReasons: [notApplyingReason] };
+    }
     const fitAssessment = raw.fitAssessment;
     const canonicalApplication = canonical[index];
     if (

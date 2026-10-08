@@ -90,6 +90,41 @@ assert.ok(skippedDecisionPopover.includes("onClose(true)"));
 assert.ok(modal.includes("primaryInputRef.current?.focus()"));
 assert.ok(skippedDecisionPopover.includes("maxLength={2_000}"));
 
+// Skip reasons are a list everywhere: one shared checklist edits them, narrow
+// one-line surfaces cap at two short names plus "+N", and the duplicate prompt,
+// which has room, lists every name.
+const skipDialog = read("../SkipJobDialog.tsx");
+const skipChecklist = read("../application/SkipReasonChecklist.tsx");
+const duplicateGuard = read("../../hooks/useDuplicateGuard.ts");
+const applicationsHook = read("../../hooks/useApplications.ts");
+for (const [label, source] of [["Skip dialog", skipDialog], ["Skipped popover", skippedDecisionPopover]]) {
+  assert.match(source, /<SkipReasonChecklist[\s\S]{0,300}?savedReasons=/, `${label} edits reasons through the shared checklist`);
+  assert.doesNotMatch(source, /<select/, `${label} has no single-reason select`);
+}
+assert.match(skipDialog, /suggestions=\{suggestions\}/, "only the Skip dialog shows suggestions");
+assert.doesNotMatch(skippedDecisionPopover, /suggestions=/);
+assert.ok(skipDialog.includes("maxLength={2_000}"));
+assert.match(skipChecklist, /type="checkbox"/, "reasons keep native checkboxes");
+assert.match(skipChecklist, /onChange\(normalizeNotApplyingReasons\(/, "edits emit canonical order");
+assert.match(
+  skipChecklist,
+  /savedReasons\.filter\(\(reason\) => LEGACY_NOT_APPLYING_REASONS\.includes\(reason\)\)/,
+  "a retired reason is offered only when the decision was saved with it"
+);
+assert.match(modal, /formatNotApplyingReasons\(form\.notApplyingReasons, 2\) \|\| "Reason not recorded"/);
+assert.match(modal, /formatNotApplyingReasons\(related\.notApplyingReasons, 2\)/);
+assert.match(modal, /notApplyingReasons: normalizeNotApplyingReasons\(application\.notApplyingReasons\)/, "the form baseline is canonical");
+assert.equal((inspector.match(/formatNotApplyingReasons\([^)]*, 2\)/g) ?? []).length, 2, "both inspector lines cap reasons");
+assert.match(duplicateGuard, /formatNotApplyingReasons\(application\.notApplyingReasons\)/, "the duplicate prompt lists every reason");
+assert.match(
+  applicationsHook,
+  /notApplyingReasons: status === "not_applying" \? a\.notApplyingReasons : undefined/,
+  "a stage move keeps a Skipped record's reasons"
+);
+for (const source of [modal, inspector, duplicateGuard, skipDialog, skippedDecisionPopover]) {
+  assert.doesNotMatch(source, /notApplyingReason\b/, "no surface reads the retired scalar field");
+}
+
 assert.ok(modal.includes('role="tablist"'));
 assert.match(modal, /role="tab"[\s\S]{0,400}?aria-selected=\{tab === id\}/);
 assert.match(modal, /tabIndex=\{tab === id \? 0 : -1\}/, "tabs use roving tabindex");

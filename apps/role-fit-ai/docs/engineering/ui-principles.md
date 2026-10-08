@@ -99,7 +99,7 @@ before their final duplicate decision so another tab's newer record is not
 missed.
 Skip & save job is a lower-emphasis action beneath the primary Apply command in
 the Prepare rail only. It uses a neutral confirmation dialog with optional
-reason and note, and it is governed by prepared-job plus tracker readiness—not
+grouped reasons (any number, with local suggestions) and a note, and it is governed by prepared-job plus tracker readiness—not
 resume, cover-letter, Fit Assessment, provider, or Apply readiness. A restored
 Skipped decision replaces both application actions with Save job updates.
 

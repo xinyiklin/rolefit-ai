@@ -22,7 +22,6 @@ import {
   type LucideIcon
 } from "lucide-react";
 import {
-  NOT_APPLYING_REASON_LABEL,
   type Application,
   type ApplicationAnswer,
   type ApplicationContact,
@@ -50,6 +49,7 @@ import {
   splitFitWarnings
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
+import { formatNotApplyingReasons, normalizeNotApplyingReasons } from "../lib/notApplying";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
 import { useDialog } from "../hooks/useDialog";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
@@ -107,7 +107,7 @@ type FormState = {
   workAuth: string;
   appliedAt: string;
   notApplyingAt: string;
-  notApplyingReason: "" | NotApplyingReason;
+  notApplyingReasons: NotApplyingReason[];
   notApplyingNote: string;
   deadline: string;
   followupAt: string;
@@ -173,7 +173,7 @@ function formFromApplication(application: Application | null): FormState {
       workAuth: "",
       appliedAt: new Date().toISOString().slice(0, 10),
       notApplyingAt: "",
-      notApplyingReason: "",
+      notApplyingReasons: [],
       notApplyingNote: "",
       deadline: "",
       followupAt: "",
@@ -198,7 +198,7 @@ function formFromApplication(application: Application | null): FormState {
     workAuth: application.workAuth ?? "",
     appliedAt: toDateInput(application.appliedAt),
     notApplyingAt: toDateInput(application.notApplyingAt),
-    notApplyingReason: application.notApplyingReason ?? "",
+    notApplyingReasons: normalizeNotApplyingReasons(application.notApplyingReasons),
     notApplyingNote: application.notApplyingNote ?? "",
     deadline: toDateInput(application.deadline),
     followupAt: toDateInput(application.followupAt),
@@ -491,8 +491,10 @@ export function ApplicationModal({
         statusOverride === "not_applying"
           ? toIso(form.notApplyingAt) || base.notApplyingAt || now
           : undefined,
-      notApplyingReason:
-        statusOverride === "not_applying" ? form.notApplyingReason || undefined : undefined,
+      notApplyingReasons:
+        statusOverride === "not_applying" && form.notApplyingReasons.length
+          ? normalizeNotApplyingReasons(form.notApplyingReasons)
+          : undefined,
       notApplyingNote:
         statusOverride === "not_applying" ? form.notApplyingNote.trim().slice(0, 2_000) || undefined : undefined,
       deadline: toIso(form.deadline) || undefined,
@@ -879,9 +881,7 @@ export function ApplicationModal({
                             <strong id="application-skipped-trigger-label">Skipped</strong>
                             <span aria-hidden="true">·</span>
                             <span>
-                              {form.notApplyingReason
-                                ? NOT_APPLYING_REASON_LABEL[form.notApplyingReason]
-                                : "Reason not recorded"}
+                              {formatNotApplyingReasons(form.notApplyingReasons, 2) || "Reason not recorded"}
                             </span>
                           </span>
                           <ChevronDown size={14} aria-hidden="true" />
@@ -1009,8 +1009,8 @@ export function ApplicationModal({
                             <strong>{STATUS_LABEL[related.status]}</strong>
                             <span>
                               <time className="is-data">{formatDetailDate(applicationActivityDate(related))}</time>
-                              {related.status === "not_applying" && related.notApplyingReason
-                                ? ` · ${NOT_APPLYING_REASON_LABEL[related.notApplyingReason]}`
+                              {related.status === "not_applying" && related.notApplyingReasons?.length
+                                ? ` · ${formatNotApplyingReasons(related.notApplyingReasons, 2)}`
                                 : ""}
                             </span>
                           </span>
@@ -1137,9 +1137,10 @@ export function ApplicationModal({
           <SkippedDecisionPopover
             open={skipDecisionOpen}
             triggerRef={primaryInputRef}
-            reason={form.notApplyingReason}
+            reasons={form.notApplyingReasons}
+            savedReasons={activeApplication.notApplyingReasons ?? []}
             note={form.notApplyingNote}
-            onReasonChange={(value) => update("notApplyingReason", value)}
+            onReasonsChange={(value) => update("notApplyingReasons", value)}
             onNoteChange={(value) => update("notApplyingNote", value)}
             onClose={closeSkipDecision}
           />

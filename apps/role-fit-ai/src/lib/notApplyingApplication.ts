@@ -1,5 +1,6 @@
 import type { Application } from "../hooks/useApplications.ts";
-import type { NotApplyingReason } from "./notApplying.ts";
+import { isJobOnlySkippedApplication } from "./applicationDisplay.ts";
+import { normalizeNotApplyingReasons, type NotApplyingReason } from "./notApplying.ts";
 import type { PreparationSession } from "./preparationSession.ts";
 
 export type NotApplyingCommit = {
@@ -20,30 +21,48 @@ function mergeDefinedApplication(
   return merged;
 }
 
+const SUBMISSION_FIELDS = [
+  "appliedAt",
+  "resumeUsed",
+  "resumeArtifacts",
+  "coverLetterArtifacts",
+  "attachments"
+] as const satisfies readonly (keyof Application)[];
+
 export function withoutSubmittedApplicationArtifacts(application: Application): Application {
   const clean = { ...application };
-  delete clean.appliedAt;
-  delete clean.resumeUsed;
-  delete clean.resumeArtifacts;
-  delete clean.coverLetterArtifacts;
-  delete clean.attachments;
+  for (const field of SUBMISSION_FIELDS) delete clean[field];
   return clean;
+}
+
+// A Skipped record with an application date (the server's and Application
+// Detail's rule) keeps what was sent: its date, documents, and their AI receipts.
+// Drafts and job-only decisions keep none of it.
+function withSubmissionHistory(application: Application, target: Application | null): Application {
+  const jobOnly = withoutSubmittedApplicationArtifacts(application);
+  if (!target || target.status !== "not_applying" || isJobOnlySkippedApplication(target)) return jobOnly;
+  const history = Object.fromEntries(
+    SUBMISSION_FIELDS.flatMap((field) => target[field] === undefined ? [] : [[field, target[field]]])
+  ) as Partial<Application>;
+  return { ...jobOnly, ...history, aiUsage: { ...target.aiUsage, ...jobOnly.aiUsage } };
 }
 
 function withDecision(
   application: Application,
+  target: Application | null,
   now: string,
-  reason: NotApplyingReason | "",
+  reasons: readonly NotApplyingReason[],
   note: string
 ): Application {
-  const next = withoutSubmittedApplicationArtifacts({
+  const normalizedReasons = normalizeNotApplyingReasons(reasons);
+  const next = withSubmissionHistory({
     ...application,
     status: "not_applying",
     notApplyingAt: now,
-    notApplyingReason: reason || undefined,
+    notApplyingReasons: normalizedReasons,
     notApplyingNote: note.trim().slice(0, 2_000) || undefined
-  });
-  if (!reason) delete next.notApplyingReason;
+  }, target);
+  if (!normalizedReasons.length) delete next.notApplyingReasons;
   if (!note.trim()) delete next.notApplyingNote;
   return next;
 }
@@ -54,7 +73,7 @@ export function skipApplicationForSession({
   matchedNotApplying,
   existingDraft = null,
   now,
-  reason,
+  reasons,
   note,
   clearFields = []
 }: {
@@ -63,7 +82,7 @@ export function skipApplicationForSession({
   matchedNotApplying: Application | null;
   existingDraft?: Application | null;
   now: string;
-  reason: NotApplyingReason | "";
+  reasons: readonly NotApplyingReason[];
   note: string;
   clearFields?: readonly (keyof Application)[];
 }): NotApplyingCommit | null {
@@ -75,7 +94,7 @@ export function skipApplicationForSession({
   if (!target) {
     return {
       operation: "create",
-      application: withDecision(prepared, now, reason, note)
+      application: withDecision(prepared, null, now, reasons, note)
     };
   }
 
@@ -87,7 +106,7 @@ export function skipApplicationForSession({
       ...merged,
       id: target.id,
       createdAt: target.createdAt
-    }, now, reason, note)
+    }, target, now, reasons, note)
   };
 }
 
@@ -113,14 +132,14 @@ export function updateNotApplyingJob({
   for (const field of clearFields) delete merged[field];
   return {
     operation: "update",
-    application: withoutSubmittedApplicationArtifacts({
+    application: withSubmissionHistory({
       ...merged,
       id: existing.id,
       createdAt: existing.createdAt,
       status: "not_applying",
       notApplyingAt: existing.notApplyingAt,
-      notApplyingReason: existing.notApplyingReason,
+      notApplyingReasons: existing.notApplyingReasons,
       notApplyingNote: existing.notApplyingNote
-    })
+    }, existing)
   };
 }

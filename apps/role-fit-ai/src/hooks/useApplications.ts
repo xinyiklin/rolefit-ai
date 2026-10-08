@@ -23,10 +23,7 @@ import {
   type ApplicationStatus
 } from "../lib/applicationStatusTransitions.ts";
 
-export {
-  NOT_APPLYING_REASON_LABEL,
-  type NotApplyingReason
-} from "../lib/notApplying.ts";
+export type { NotApplyingReason } from "../lib/notApplying.ts";
 
 export type { ApplicationAiUsage, StageAiUsage } from "../lib/aiUsage";
 
@@ -106,7 +103,7 @@ export type Application = {
   createdAt: string;
   appliedAt?: string;
   notApplyingAt?: string;
-  notApplyingReason?: NotApplyingReason;
+  notApplyingReasons?: NotApplyingReason[];
   notApplyingNote?: string;
   updatedAt: string;
   followupAt?: string;
@@ -584,7 +581,7 @@ export function useApplications() {
               updatedAt: now,
               appliedAt: status === "draft" ? undefined : status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
               notApplyingAt: status === "not_applying" ? now : undefined,
-              notApplyingReason: status === "not_applying" ? a.notApplyingReason : undefined,
+              notApplyingReasons: status === "not_applying" ? a.notApplyingReasons : undefined,
               notApplyingNote: status === "not_applying" ? a.notApplyingNote : undefined
             }
           : a

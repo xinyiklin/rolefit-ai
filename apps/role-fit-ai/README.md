@@ -130,7 +130,8 @@ font, size and wrapping changes still reflow the page normally.
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
   Apply together. A quiet **Skip & save job** action beneath Apply saves the
-  prepared posting as **Skipped** with an optional reason and note; it does
+  prepared posting as **Skipped** with optional reasons (choose any) and a note,
+  pre-checking or marking reasons from evidence already on the device; it does
   not record an application, sent documents, or additional application uploads
   and does not depend on material,
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
@@ -306,9 +307,9 @@ font, size and wrapping changes still reflow the page normally.
   Application status and Key dates above compact read-only
   Role & company, Job details, Compensation, and Job snapshot cards. Job details
   retain Source as read-only provenance; correction belongs to
-  Prepare. For a saved Skipped record, the compact Stage control opens reason
+  Prepare. For a saved Skipped record, the compact Stage control opens reasons
   and note in a headerless anchored decision popover instead of showing a one-option
-  select and a separate decision card; its closed receipt reads `Skipped · reason`
+  select and a separate decision card; its closed receipt reads `Skipped · reasons`
   on one line, and Decision date stays in Key dates. Job snapshot remains expanded
   as a permanent section with no section count, while the immutable original
   posting is also the first artifact in Documents and opens in a focused viewer
@@ -341,9 +342,10 @@ font, size and wrapping changes still reflow the page normally.
   date-ordered related-record list. Application Detail can open a related row,
   atomically mark it unrelated without deletion, or explicitly merge an
   accidental duplicate after destructive confirmation. Skipped uses its
-  decision date in tracker chronology and filters but is excluded from submitted
-  counts, application-sent history, follow-up hygiene, and submission calendar
-  events.
+  decision date in tracker chronology and filters. A job-only Skipped decision
+  is excluded from submitted counts, application-sent history, and submission
+  calendar events, while an application later marked Skipped keeps its original
+  submission there; no Skipped record counts toward follow-up hygiene.
 - **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack

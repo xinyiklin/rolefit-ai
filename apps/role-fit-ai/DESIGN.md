@@ -534,10 +534,12 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   posting provenance, so Overview keeps it read-only under Job details rather
   than beside Stage; correction remains in Prepare. A saved Skipped record uses
   its compact dot-led Stage control as a disclosure trigger instead of showing a
-  one-option select or a second card. The trigger reads `Skipped · reason` on one
-  line and opens an accessibly labelled, visually headerless, focus-managed non-modal popover over the
+  one-option select or a second card. The trigger reads `Skipped · reasons` on one
+  line (at most two short names, then `+N`) and opens an accessibly labelled, visually headerless, focus-managed non-modal popover over the
   sheet for the bounded decision fields; at narrow widths that surface becomes
-  a viewport-safe bottom sheet. The decision date remains in Key dates, while
+  a viewport-safe bottom sheet. Skip reasons, there and in the Skip dialog, are
+  native checkboxes in labelled groups, not chips; a suggested reason carries a
+  quiet `· suggested` note and its basis is listed in a soft well below. The decision date remains in Key dates, while
   general application notes remain independent data in Prep. Prep
   also owns contacts, saved application questions, and interview preparation.
   Documents remains separate because it is the saved application record, not

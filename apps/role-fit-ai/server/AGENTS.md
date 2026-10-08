@@ -133,8 +133,10 @@ for provider, prompt, sanitizer, and review work.
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
   data. Safe tracker-read upgrades are narrow and explicit: fixed Fit Assessment
   summary copy may derive from an otherwise valid verdict, a missing Fit result
-  status may read as `ASSESSED`, and an exactly empty `appliedAt` may read as absent
-  without inventing a date. These comparison-only normalizations never rewrite
+  status may read as `ASSESSED`, an exactly empty `appliedAt` may read as absent
+  without inventing a date, and a pre-list scalar `notApplyingReason` may read as a
+  one-item `notApplyingReasons` list. A record carrying both reason shapes is
+  invalid on read and write. These comparison-only normalizations never rewrite
   the tracker or hide other differences. The exact retired
   High/Medium/Low application-priority enum may be removed, and the retired
   `interested` stage may be rewritten to a dated Skipped decision without sent
