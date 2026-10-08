@@ -35,8 +35,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
 - [USER+CODE] Docs now match the submitted-metrics code (user chose the code's
   rule): a job-only Skipped decision never counts as submitted or as a calendar
   submission, an application later marked Skipped keeps its original submission,
-  and no Skipped record counts toward follow-up hygiene. App `AGENTS.md` and
-  `PRODUCT.md` previously said no Skipped record ever counts.
+  and no Skipped record counts toward follow-up hygiene. App `AGENTS.md`,
+  `PRODUCT.md`, `README.md`, and `docs/engineering/testing.md` previously said
+  no Skipped record ever counts.
 - [TOOL] Four Document workflow runs since 2026-10-06 failed one Chromium job
   with "Timed out starting Chromium" (core on `3d7f4cd` and `b35628c`, extended
   on `d37990f` and `e4d339b`): no stderr within 15s, while the other Chromium

@@ -916,10 +916,11 @@ Good frontend verification covers:
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or
   provider analysis.
-  `src/lib/__evals__/application-analytics-eval.mjs` treats Skipped as
-  visible reviewed history while excluding it from the shared submitted-metric
-  denominator, monthly submissions, and missing-follow-up hygiene even when a
-  legacy record carries `appliedAt`. The preparation/session relationship eval
+  `src/lib/__evals__/application-analytics-eval.mjs` keeps Skipped visible as
+  reviewed history dated by its decision, counts only explicit `appliedAt`
+  submissions (so an application later marked Skipped keeps its original
+  submission in the shared submitted-metric denominator and monthly
+  submissions), and excludes Skipped from missing-follow-up hygiene. The preparation/session relationship eval
   pins independent multi-record groups, group counts, and two-versus-many unlink
   plans; the saved-surface probe pins linked-history presentation plus confirmed
   destructive merge controls.
