@@ -1612,7 +1612,7 @@ function App() {
     conversationId: answersConversationId,
     applicationId: preparationSession.applicationId ?? undefined,
     resumeText: currentResumeText || resumeText,
-    jobDescription, rawJobText: jobRawText, jobUrl, candidateContext,
+    jobDescription, jobReady, rawJobText: jobRawText, jobUrl, candidateContext,
     profileLimitMessage, sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("application-answers"),
     aiRequest: stages["application-answers"],

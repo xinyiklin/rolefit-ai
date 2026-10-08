@@ -5,6 +5,37 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
+  prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
+  `jobReady`, and `generate()`, the only path to the provider for send and
+  both Retry buttons, blocks with "Add the job on Prepare first." in the tab's
+  gate order (Profile limit, resume, job, provider; the provider check used to
+  come first). It used to check only for a non-empty job description, so a
+  draft that failed for prepared job A, Retried from the dock after job B was
+  pasted (not prepared) into Prepare's source, was drafted from B's text in
+  A's conversation. A link-only edit kept A's text but hit the same bypass. This
+  closes the "dock's Answers Retry skips the tab's prepared-job gate" Open item
+  recorded with the Draft job-source fix (`fix/rolefit-answers-draft-job-source`,
+  not on main when this landed); drop that bullet when the two meet.
+  - [TOOL] `application-answers-retry-gate.mjs` drives the real hook and Answers
+    tab: Retry still drafts while prepared; after a paste or link edit, the dock
+    Retry, send and the tab's disabled controls all name the same gate and no
+    request carries unprepared text. It fails on main (Retry sent B's text), and
+    a provider-first blocker order fails it. Four hook fixtures gained
+    `jobReady: true`. Full `npm run check --workspace apps/role-fit-ai`
+    (client and server `tsc`, builds, 162/162 offline evals) and
+    `git diff --check` passed. Browser QA was not run (no layout change).
+  - [TOOL] One independent review: no high findings, no regressions. It
+    confirmed opened applications, extension/link/paste commits and brief edits
+    keep `jobPrepared` true, so they are not blocked. It also found that
+    App passing a wrong or missing `jobReady` fails the eval, and that merges
+    with dff66ef1 are clean. Fixed from it: a comment and the hooks guide had
+    claimed full parity with the tab's gate, and an eval regex was too strict.
+  - [CODE] Open (confirmed by the review): the hook's resume check is still
+    non-empty text, while the tab's `resumeReady` also excludes the bundled
+    Starter sample. A dock Retry after Open > Bundled starter therefore drafts
+    from sample content, which PRODUCT says never counts as an applicant resume.
+    The same bug existed before this change. Not fixed here.
 - [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
   client-only; no prompt, schema, provider, or shared-package change:
   - Fixed: the Applications inspector and detail modal showed Fit gaps only,

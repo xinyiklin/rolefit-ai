@@ -49,7 +49,10 @@ production hook against App's own replacement guards: composer text, an unsaved
 draft and an in-flight request hold Prepare and Open, saved or empty threads do
 not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
 renders the Answers tab to prove typing and edits are read-only while Prepare
-runs. Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
+runs. `src/hooks/__evals__/application-answers-retry-gate.mjs` fails a draft,
+then edits the Prepare source (paste or link) and proves send, the tab's Retry
+and the dock's Retry all stop at the tab's prepared-job gate with no request.
+Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
 and backup round trips. Run the nearest probe while iterating, then the full
 RoleFit offline suite and app/server build.
 
