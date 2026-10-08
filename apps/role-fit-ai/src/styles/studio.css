@@ -581,6 +581,14 @@
   font-weight: 500;
 }
 
+/* An unrecorded value recedes behind real data. */
+.ledger-row dd.is-empty {
+  color: var(--ink-faint);
+  font-family: var(--font-ui);
+  font-size: 0.76rem;
+  font-weight: 400;
+}
+
 /* -------- Draft-restore affordance (Resume tab head) -------- */
 /* Quiet inline bar shown when an autosaved draft is available. One line,
    no visual noise, dismissible. Sits between the card head and the workbench. */

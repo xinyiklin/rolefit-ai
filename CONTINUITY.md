@@ -36,6 +36,33 @@ bounded; app-only operational detail belongs in the affected app documentation.
     Starter sample. A dock Retry after Open > Bundled starter therefore drafts
     from sample content, which PRODUCT says never counts as an applicant resume.
     The same bug existed before this change. Not fixed here.
+- [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
+  client-only; no prompt, schema, provider, or shared-package change:
+  - Fixed: the Applications inspector and detail modal showed Fit gaps only,
+    so a "Match N:" warning had nothing to attach to and rendered inside the
+    104px verdict column. One shared `components/FitFindings.tsx` now renders
+    matches, gaps, and eligibility, each with its own warning, on Prepare, the
+    inspector, and the modal. `splitFitWarnings` takes the Fit result.
+  - "Review before use" is a warm-veil hairline note instead of a dark 2px
+    side stripe, app-wide.
+  - Polish: Prepare verdict is dot plus word, its run attribution is quiet;
+    a job analysis that fell back to the local brief shows a warning mark, not
+    a success check; inspector empty values recede; Analytics stage bars use
+    stage hues and draw nothing for zero; blocked workflow-rail rows put their
+    recovery under the label; dialog titles outrank their body.
+  - [TOOL] RoleFit build, client `tsc`, and 157/157 offline evals passed;
+    before/after browser QA at 1440 and 1024px on a synthetic workspace (port
+    5183). AI-result states (Polish proposals, live Fit runs) were not
+    exercised because no provider ran. One independent review: no high or
+    medium findings; its low findings (CSS selector leaks, guide exception for
+    the warning note, eval depth) were fixed, and the new evals fail on
+    mutated wiring.
+  - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
+    which are not claim-checked; this extends the tradeoff accepted when gap
+    notes were Prepare-only.
+  - [USER] Follow-up, separate PR after this merges: with no AI provider,
+    Prepare's Resume card reads "Ready" above "Finish the resume and AI setup
+    before polishing."; give it the precise blocker.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so

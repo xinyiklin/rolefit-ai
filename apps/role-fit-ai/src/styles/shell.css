@@ -613,6 +613,7 @@
 }
 
 .ai-workflow__stage--done .ai-workflow__stage-icon { color: var(--accent); }
+.ai-workflow__stage--done.is-warn .ai-workflow__stage-icon,
 .ai-workflow__stage--failed .ai-workflow__stage-icon,
 .ai-workflow__stage--stopped .ai-workflow__stage-icon { color: var(--warm); }
 

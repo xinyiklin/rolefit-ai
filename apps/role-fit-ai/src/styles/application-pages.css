@@ -1258,45 +1258,6 @@ button.table-sort svg {
   text-decoration: underline;
 }
 
-.application-gap-list {
-  display: grid;
-  gap: 0;
-  min-width: 0;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.application-gap-list > li {
-  display: grid;
-  grid-template-columns: 4px minmax(0, 1fr);
-  gap: var(--s2);
-  min-width: 0;
-  padding: var(--s2) 0;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
-}
-
-.application-gap-list > li::before {
-  width: 4px;
-  height: 4px;
-  margin-top: 0.52em;
-  border-radius: var(--r-pill);
-  background: var(--ink-faint);
-  content: "";
-}
-
-.application-gap-list > li + li {
-  border-top: 1px solid var(--hairline-soft);
-}
-
-.application-gap-list > li > .content-warnings {
-  grid-column: 2;
-  margin-block: 0;
-}
-
 .application-side-actions {
   display: flex;
   gap: var(--s2);
@@ -1771,34 +1732,55 @@ button.table-sort svg {
 
 .analytics-funnel__row {
   display: grid;
-  grid-template-columns: 86px minmax(0, 1fr) 38px;
+  grid-template-columns: 86px minmax(0, 1fr);
   align-items: center;
   gap: var(--s2);
+  min-height: 20px;
   color: var(--ink-soft);
   font-size: 0.72rem;
 }
 
-.analytics-funnel__row i {
-  display: block;
-  height: 20px;
-  border-radius: var(--r-pill);
-  background: var(--accent-soft);
+/* The count rides the end of its bar; a zero stage draws no bar. */
+.analytics-funnel__track {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
 }
 
-.analytics-funnel__row--interviewing i,
-.analytics-funnel__row--offer i { background: var(--accent-veil); }
-.analytics-funnel__row--rejected i { background: var(--danger-soft); }
+.analytics-funnel__track i {
+  display: block;
+  flex: none;
+  min-width: 4px;
+  height: 8px;
+  border-radius: var(--r-pill);
+  background: var(--ink-faint);
+}
+
+.analytics-funnel__track strong {
+  color: var(--ink-strong);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.analytics-funnel__track:not(:has(i)) strong {
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+/* Bars take the stage-dot hue so the chart reads with the register. */
+.analytics-funnel__row--applied i { background: var(--cool); }
+.analytics-funnel__row--interviewing i { background: var(--accent); }
+.analytics-funnel__row--offer i { background: var(--accent-deep); }
+.analytics-funnel__row--rejected i { background: var(--danger); }
 
 .analytics-timeline {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
   align-items: end;
   gap: var(--s2);
   min-height: 100px;
-}
-
-.analytics-timeline {
-  grid-template-columns: repeat(auto-fill, minmax(36px, 1fr));
 }
 
 .analytics-tick {
@@ -2905,20 +2887,6 @@ button.table-sort svg {
   color: var(--ink-soft);
   font-size: 0.76rem;
   line-height: 1.5;
-}
-
-.application-match-card__gaps {
-  display: grid;
-  gap: var(--s2);
-  width: 100%;
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
-  text-align: left;
-}
-
-.application-match-card__gaps strong {
-  color: var(--ink-strong);
-  font-size: 0.74rem;
 }
 
 .application-form--prep {

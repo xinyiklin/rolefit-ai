@@ -739,44 +739,57 @@
   line-height: 1.4;
 }
 
-.prepare-fit > .prepare-fit__meta {
+.prepare-fit > p.prepare-fit__meta {
   color: var(--ink-faint);
   font-size: 0.7rem;
+}
+
+.prepare-fit > button {
+  justify-self: start;
 }
 
 .fit-assessment-verdict {
   display: inline-flex;
   align-items: center;
-  min-height: 24px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-pill);
-  font-size: 0.7rem;
+  gap: 7px;
+  color: var(--ink-strong);
+  font-size: 0.95rem;
   font-weight: 650;
+  line-height: 1.2;
 }
 
-.fit-assessment-verdict.is-strong {
-  color: var(--on-accent);
-  background: var(--accent);
-  border-color: var(--accent-deep);
+.fit-assessment-verdict::before {
+  width: 7px;
+  height: 7px;
+  border-radius: var(--r-pill);
+  background: var(--ink-faint);
+  content: "";
 }
 
+.fit-assessment-verdict.is-strong,
 .fit-assessment-verdict.is-reasonable {
   color: var(--accent-deep);
-  background: var(--accent-soft);
-  border-color: var(--accent-veil);
+}
+
+.fit-assessment-verdict.is-strong::before,
+.fit-assessment-verdict.is-reasonable::before {
+  background: var(--accent);
 }
 
 .fit-assessment-verdict.is-stretch {
   color: var(--warm);
-  background: var(--warm-veil);
-  border-color: var(--warm-soft);
+}
+
+.fit-assessment-verdict.is-stretch::before {
+  background: var(--warm);
 }
 
 .fit-assessment-verdict.is-limited {
   color: var(--danger);
-  background: var(--danger-soft);
-  border-color: var(--danger-line);
+}
+
+.fit-assessment-verdict.is-limited::before {
+  background: var(--danger);
 }
 
 .fit-assessment-list {
@@ -784,41 +797,16 @@
   gap: 4px;
 }
 
-.fit-assessment-list > strong {
-  color: var(--ink-strong);
-  font-size: 0.7rem;
-  font-weight: 650;
-}
-
-.fit-assessment-list > ul {
-  display: grid;
-  gap: 4px;
-  margin: 0;
-  padding-left: var(--s4);
-  color: var(--ink-soft);
-  font-size: 0.82rem;
-  line-height: 1.4;
-}
-
-.fit-assessment-list > ul > li,
 .fit-assessment-list > li {
   overflow-wrap: anywhere;
 }
 
-.fit-assessment-list li small,
-.fit-assessment-eligibility small {
+.fit-assessment-list li small {
   display: block;
   margin-top: 2px;
   color: var(--ink-faint);
   font-size: 0.7rem;
   line-height: 1.4;
-}
-
-.fit-assessment-eligibility {
-  padding: var(--s2);
-  color: var(--warm) !important;
-  background: var(--warm-veil);
-  border-radius: var(--r-md);
 }
 
 .fit-assessment-changes {
