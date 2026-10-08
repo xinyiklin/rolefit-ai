@@ -456,7 +456,9 @@ for (const failingStage of ["generation", "fact-check"]) {
 assert.equal(evalOptions([], {}).review, "off", "the review arm is opt-in");
 assert.equal(evalOptions([], { EVAL_POLISH_REVIEW: "paired" }).review, "paired");
 for (const value of ["on", "yes", "both"]) assert.throws(() => evalOptions([], { EVAL_POLISH_REVIEW: value }));
-assert.deepEqual(reviewProbes.map((probe) => probe.name), ["review-four-cases", "review-four-cases-injected"]);
+assert.deepEqual(reviewProbes.map((probe) => probe.name), ["review-four-cases", "review-four-cases-injected", "review-merged-tools-terraform-aws", "review-merged-skill-to-work", "review-merged-test-types"]);
+// The 2026-10-07 baseline's merged-fact edits: separately stated facts joined into a new relationship.
+for (const probe of reviewProbes.slice(2)) assert.deepEqual(Object.values(probe.expect), ["DROP"], `${probe.name}: a merged-fact edit is held back`);
 for (const probe of reviewProbes) {
   const { result } = reviewProbeProposal(probe);
   assert.equal(result.status, "PROPOSAL", `${probe.name}: every probe edit survives sanitizing`);
