@@ -26,6 +26,7 @@ export function AnswersTab({
   hasProfile, hasOriginalPosting, modelPicker
 }: AnswersTabProps) {
   const { conversation, savedAnswers, isGeneratingAnswers } = controller;
+  const locked = Boolean(controller.editBlocker);
   const [savedOpen, setSavedOpen] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -91,7 +92,7 @@ export function AnswersTab({
             {savedAnswers.length ? (
               <ol>{savedAnswers.map((answer, index) => (
                 <li key={answer.id ?? `${answer.savedAt}-${index}`}>
-                  <button type="button" onClick={() => { controller.reopen(answer); setSavedOpen(false); focusComposer(); }}>
+                  <button type="button" disabled={locked} onClick={() => { controller.reopen(answer); setSavedOpen(false); focusComposer(); }}>
                     <strong>{answer.question}</strong>
                     <span>{answer.answer}</span>
                     <small>Version {savedAnswers.slice(0, index + 1).filter((item) => (item.questionId ?? item.question) === (answer.questionId ?? answer.question)).length} · {answer.status === "draft" ? "Draft · " : ""}{answer.savedAt ? new Date(answer.savedAt).toLocaleString() : "Saved answer"}{answer.questionRevision ? ` · question revision ${answer.questionRevision}` : ""}</small>
@@ -111,7 +112,7 @@ export function AnswersTab({
             <h3>What does the application ask?</h3>
             <p>Start with the exact wording, including any word or character limit.</p>
             <div className="answers-starters">{STARTERS.map((question) => (
-              <button key={question} type="button" className="secondary-button is-compact" onClick={() => { controller.newQuestion(question); focusComposer(); }}>{question}</button>
+              <button key={question} type="button" className="secondary-button is-compact" disabled={locked} onClick={() => { controller.newQuestion(question); focusComposer(); }}>{question}</button>
             ))}</div>
           </div>
         ) : (
@@ -126,19 +127,19 @@ export function AnswersTab({
           {target || conversation.editedQuestion ? (
             <div className="answers-composer__target">
               <span title={target?.question.text}>{target ? `Refining: ${target.question.text}` : `Editing question · revision ${conversation.editedQuestion?.revision}`}</span>
-              <button type="button" className="ghost-button is-compact" onClick={() => { controller.newQuestion(); focusComposer(); }}>
+              <button type="button" className="ghost-button is-compact" disabled={locked} onClick={() => { controller.newQuestion(); focusComposer(); }}>
                 <Plus size={12} aria-hidden="true" />New question
               </button>
             </div>
           ) : null}
           <textarea ref={composerRef} rows={2} aria-label={clarifying ? "Missing detail" : target ? "Refinement" : "Application question"}
-            value={conversation.composer}
+            value={conversation.composer} readOnly={locked}
             placeholder={clarifying ? "Add the fact or detail the answer needs…" : target ? "What would you like to change?" : "Paste an application question, including any limits…"}
             onChange={(event) => controller.setComposer(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) {
                 event.preventDefault();
-                if (!gate) void controller.send();
+                if (!gate && !locked) void controller.send();
               }
             }} />
           <div className="answers-composer__footer">
@@ -148,7 +149,7 @@ export function AnswersTab({
                 onKeyDown={(event) => { if (event.key === "Enter") event.preventDefault(); }}>
                 {COMPOSER_MODES.map((mode) => (
                   <label key={mode.value} className={conversation.composerMode === mode.value ? "is-active" : undefined} title={mode.title}>
-                    <input type="radio" name={modeName} value={mode.value} checked={conversation.composerMode === mode.value}
+                    <input type="radio" name={modeName} value={mode.value} checked={conversation.composerMode === mode.value} disabled={locked}
                       onChange={() => controller.setComposerMode(mode.value)} />
                     {mode.label}
                   </label>
@@ -166,7 +167,7 @@ export function AnswersTab({
                   <Square size={14} aria-hidden="true" />
                 </button>
               ) : (
-                <button type="submit" className="answers-send primary-button" disabled={Boolean(gate) || !conversation.composer.trim()}
+                <button type="submit" className="answers-send primary-button" disabled={Boolean(gate) || locked || !conversation.composer.trim()}
                   aria-label={target ? "Refine answer" : "Draft answer"} title={target ? "Refine answer" : "Draft answer"}>
                   <ArrowUp size={18} aria-hidden="true" />
                 </button>
@@ -175,9 +176,9 @@ export function AnswersTab({
           </div>
         </form>
         <div className="answers-status" role="status">
-          <span className={isGeneratingAnswers ? "sr-only" : undefined}>{gate || conversation.status || "Draft, refine, then save the answers you want to keep."}</span>
+          <span className={isGeneratingAnswers ? "sr-only" : undefined}>{controller.editBlocker || gate || conversation.status || "Draft, refine, then save the answers you want to keep."}</span>
           {conversation.progress.status === "failed" || conversation.progress.status === "stopped" ? (
-            <button type="button" className="ghost-button is-compact" onClick={controller.retryAnswers} disabled={Boolean(gate)}>Retry</button>
+            <button type="button" className="ghost-button is-compact" onClick={controller.retryAnswers} disabled={Boolean(gate) || locked}>Retry</button>
           ) : null}
         </div>
       </div>
