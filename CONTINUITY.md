@@ -8,20 +8,29 @@ bounded; app-only operational detail belongs in the affected app documentation.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so
-  both now ask first when the current thread holds composer text, an unsaved
-  revision, or a drafting request in flight (`hasUnsavedAnswers` /
+  both ask first when the current thread holds composer text, an unsaved
+  revision, a drafting request in flight, or a failed or stopped latest turn
+  that carries typed refinement or detail text (`hasUnsavedAnswers` /
   `hasUnsavedAnswersNow()` in `useApplicationAnswers`; copy "Replace Answers?").
-  Prepare asks through `confirmPreparedSourceReplacement`; opening reuses the
-  dirty-document dialog and pauses if Answers become unsaved after approval.
-  Save, storage, and schemas are unchanged; there is no draft recovery.
-  - [TOOL] Evidence: new `application-answers-replacement-guard.mjs` runs the
-    real hook against App's guard code (mutation-checked); the intake eval now
-    covers a declined replacement on URL, paste, extension, and Retry. tsc (app +
-    server), the 158-test offline suite, and `git diff --check` passed. Build,
-    landing/desktop checks, and browser QA were not run.
-  - [CODE] Known gaps: a stopped or failed turn with no reply is not counted;
-    Answers started during an already-confirmed Prepare run are not re-checked
-    at commit.
+  Prepare asks once at run start through `confirmPreparedSourceReplacement`, and
+  that approval covers a follow-on duplicate Open for the run; opening reuses the
+  dirty-document dialog, pauses if Answers become unsaved after approval, and
+  opens the saved cover letter before the thread's key changes. While a
+  Prepare run is active `editBlocker` makes the composer, answer edits, Refine,
+  and Retry read-only ("Paused while the job is prepared."); Save and Stop stay,
+  so nothing new can appear after the ask. Declining an extension or Retry
+  payload settles the card as failed so Retry shows, under the headline
+  "Preparation paused". Save, storage, and schemas are unchanged; there is no
+  draft recovery.
+  - [TOOL] Evidence: `application-answers-replacement-guard.mjs` runs the real
+    hook against App's guard code, `answers-prepare-lock.mjs` renders the real
+    Answers tab, and the intake eval covers a declined replacement (including the
+    visible Retry) on every path; each was mutation-checked. Full
+    `npm run check --workspace apps/role-fit-ai` and both tsc gates passed.
+    Browser QA was not run.
+  - [CODE] Known gaps: a bare failed question (nothing typed beyond it) is not
+    counted; a decline of a typed link or paste source stays "stopped" because
+    the source fields still hold it.
 - [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
   medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
   Saved choices stay; the user's own saved selection was switched too (app

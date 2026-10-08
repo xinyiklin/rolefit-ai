@@ -19,6 +19,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
   const [copyStatus, setCopyStatus] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const response = message.response;
+  const locked = Boolean(controller.editBlocker);
   // Only a response that lands while this message is on screen animates in; remounts and reopened answers do not.
   const [animateArrival] = useState(() => !response);
   const validation = response ? validateAnswerConstraints(response.answer, response.constraints) : null;
@@ -64,7 +65,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
   const question = <>
     <div className="answers-message__question-label">
       <span>{questionLabel}</span>
-      <button type="button" className="ghost-button is-compact" onClick={() => onEditQuestion(message.id)}>Edit question</button>
+      <button type="button" className="ghost-button is-compact" disabled={locked} onClick={() => onEditQuestion(message.id)}>Edit question</button>
     </div>
     <h3>{message.question.text}</h3>
   </>;
@@ -88,7 +89,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
         <div className={`answers-message__response${animateArrival ? " is-arriving" : ""}`}>
           {response.answer || message.edited ? (
             <textarea ref={textareaRef} className="answers-message__text" value={response.answer}
-              aria-label={`Answer to: ${message.question.text}`} rows={3} spellCheck
+              aria-label={`Answer to: ${message.question.text}`} rows={3} spellCheck readOnly={locked}
               onChange={(event) => controller.editAnswer(message.id, event.target.value)} />
           ) : null}
           {response.clarification ? (
@@ -117,7 +118,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
               <button type="button" className="ghost-button" disabled={!nonempty || saving || saved || Boolean(controller.saveBlocker)} onClick={() => { save(); setMenuOpen(false); }}>
                 {saveDraft ? "Save draft to application" : "Save answer to application"}
               </button>
-              <button type="button" className="ghost-button" onClick={() => { onRefine(message.id); setMenuOpen(false); }}>Refine this answer</button>
+              <button type="button" className="ghost-button" disabled={locked} onClick={() => { onRefine(message.id); setMenuOpen(false); }}>Refine this answer</button>
             </NavMenu>
             <span className="answers-message__model" title={response.generation ? `${response.generation.provider} · ${response.generation.model} · ${response.generation.reasoningEffort}` : "Original generation details are unavailable for this wording."}>
               {modelLabel}{response.generation?.reasoningEffort ? ` · ${response.generation.reasoningEffort}` : ""}
@@ -125,8 +126,8 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
           </div>
           <div className="answers-message__refinements">
             {nonempty ? ["Shorter", "More natural", "Emphasize this role"].map((instruction) => (
-              <button key={instruction} type="button" className="ghost-button is-compact" onClick={() => onRefine(message.id, instruction)}>{instruction}</button>
-            )) : <button type="button" className="ghost-button is-compact" onClick={() => onRefine(message.id)}>Add the detail</button>}
+              <button key={instruction} type="button" className="ghost-button is-compact" disabled={locked} onClick={() => onRefine(message.id, instruction)}>{instruction}</button>
+            )) : <button type="button" className="ghost-button is-compact" disabled={locked} onClick={() => onRefine(message.id)}>Add the detail</button>}
           </div>
           {copyStatus && copyStatus !== "Copied" ? <p className="answers-note" role="status">{copyStatus}</p> : null}
           {message.saveError ? <p className="answers-note answers-note--error" role="alert">{message.saveError}</p> : null}

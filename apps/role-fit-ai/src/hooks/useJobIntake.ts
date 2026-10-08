@@ -788,17 +788,19 @@ export function useJobIntake({
     };
   }
 
+  // Extension and Retry payloads exist only in jobAnalysisImportRef, so a declined
+  // replacement settles as failed there: the card shows Retry only for failed.
   function settleSourceReplacementStop(
     choice: "keep-current" | "cancel",
-    setStatus: (value: string) => void
+    setStatus: (value: string) => void,
+    retainsPayload = false
   ) {
-    const keptCurrent = choice === "keep-current";
-    const message = keptCurrent
+    const message = choice === "keep-current"
       ? "Kept the posting attached to the saved record."
-      : "Replacement canceled. Nothing was changed.";
+      : committedPreparationRef.current ? "Kept the current preparation." : "Nothing was prepared.";
     setJobAnalysisProgress({
-      status: "stopped",
-      errorHeadline: "Posting replacement paused",
+      status: retainsPayload && choice === "cancel" ? "failed" : "stopped",
+      errorHeadline: "Preparation paused",
       error: message
     });
     setJobAnalysisProgressVisible(true);
@@ -1319,7 +1321,7 @@ export function useJobIntake({
       });
       if (outcome.status === "stale") return;
       if (outcome.status === "source-replacement-stopped") {
-        settleSourceReplacementStop(outcome.choice, setPolishStatus);
+        settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
         return;
       }
       if (outcome.status === "duplicate-handled") {
@@ -1391,7 +1393,7 @@ export function useJobIntake({
         });
         if (outcome.status === "stale") return;
         if (outcome.status === "source-replacement-stopped") {
-          settleSourceReplacementStop(outcome.choice, setPolishStatus);
+          settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
           return;
         }
         if (outcome.status === "duplicate-handled") {

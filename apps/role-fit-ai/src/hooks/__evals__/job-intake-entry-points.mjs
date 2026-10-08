@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { Buffer } from "node:buffer";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import * as esbuild from "esbuild";
 
@@ -33,6 +35,36 @@ const bundled = await esbuild.build({
     }
   }]
 });
+
+const cardBundle = await esbuild.build({
+  stdin: {
+    contents: `
+      import React from "react";
+      import { renderToStaticMarkup } from "react-dom/server";
+      import { TaskProgress } from "../../sections/AiWorkflowProgress.tsx";
+      export const card = (state, onRetry) => renderToStaticMarkup(
+        <TaskProgress stageKey="job-analysis" state={state} onRetry={onRetry} onDismiss={() => {}} />
+      );
+    `,
+    resolveDir: fileURLToPath(new URL(".", import.meta.url)),
+    loader: "tsx"
+  },
+  bundle: true,
+  format: "cjs",
+  platform: "node",
+  write: false,
+  logLevel: "silent"
+});
+const cardModule = { exports: {} };
+new Function("require", "module", "exports", cardBundle.outputFiles[0].text)(
+  createRequire(import.meta.url), cardModule, cardModule.exports
+);
+const { card } = cardModule.exports;
+assert.match(
+  readFileSync(new URL("../../App.tsx", import.meta.url), "utf8"),
+  /stageKey="job-analysis"[\s\S]{0,120}?onRetry=\{jobAnalysisRetry\}/,
+  "the Job analysis card receives the same Retry the hook returns"
+);
 
 const { useJobIntake } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
@@ -425,20 +457,22 @@ const sharedCommitOrder = [
     "duplicate:before", "resolvePreparedResume", "fetch:/api/job-analysis", "setImportedJob", "setJobDescription",
     "setResult", "resetCoverWorkflow", "setPipelineAiUsage", "setJobRawText"
   ];
-  const assertDeclined = (harness, committed, label) => {
+  // Extension and Retry payloads live only in memory, so the card must offer Retry; typed sources can just Prepare again.
+  const assertDeclined = (harness, committed, label, retryable) => {
     for (const event of untouched) {
       assert.equal(harness.log.some((entry) => entry.event === event), false, `${label}: a declined replacement never reaches ${event}`);
     }
     assert.equal(harness.state[7], committed, `${label}: the committed preparation is unchanged`);
-    assert.equal(harness.state[3].status, "stopped", `${label}: the workflow card reports the paused replacement`);
-    assert.equal(harness.state[3].errorHeadline, "Posting replacement paused");
-    assert.equal(
-      harness.log.some((entry) => entry.value === "Replacement canceled. Nothing was changed."),
-      true,
-      `${label}: status says nothing changed`
-    );
+    const message = committed ? "Kept the current preparation." : "Nothing was prepared.";
+    assert.equal(harness.state[3].status, retryable ? "failed" : "stopped", `${label}: the workflow card reports the paused preparation`);
+    assert.equal(harness.state[3].errorHeadline, "Preparation paused");
+    assert.equal(harness.state[3].error, message);
+    assert.equal(harness.log.some((entry) => entry.value === message), true, `${label}: status names what was kept`);
+    const html = card(harness.state[3], harness.render().jobAnalysisRetry);
+    assert.match(html, /Preparation paused/);
+    assert.equal(/Retry<\/button>/.test(html), retryable, `${label}: the visible card ${retryable ? "offers" : "omits"} Retry`);
   };
-  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension]]) {
+  for (const [label, run, retryable] of [["URL", runUrl, false], ["paste", runPaste, false], ["extension", runExtension, true]]) {
     const harness = createHarness();
     await run(harness);
     const committed = harness.state[7];
@@ -446,16 +480,29 @@ const sharedCommitOrder = [
     harness.args.confirmPreparedSourceReplacement = declineReplacement;
     harness.log.length = 0;
     await run(harness);
-    assertDeclined(harness, committed, label);
+    assertDeclined(harness, committed, label, retryable);
     if (label === "extension") {
       harness.log.length = 0;
       await harness.render().jobAnalysisRetry();
-      assertDeclined(harness, committed, "extension Retry");
+      assertDeclined(harness, committed, "extension Retry", true);
       harness.args.confirmPreparedSourceReplacement = async () => ({ choice: "continue", isCurrent: () => true });
       await harness.render().jobAnalysisRetry();
       assert.notEqual(harness.state[7], committed, "extension Retry prepares once the replacement is accepted");
     }
+
+    // A fresh session has nothing to "keep"; the card still reads sensibly.
+    const fresh = createHarness();
+    fresh.args.confirmPreparedSourceReplacement = declineReplacement;
+    await run(fresh);
+    assertDeclined(fresh, null, `${label} (fresh session)`, retryable);
   }
+
+  // A keep-current choice is deliberate, so it never turns an extension payload into a failure.
+  const kept = createHarness();
+  kept.args.confirmPreparedSourceReplacement = async () => ({ choice: "keep-current", isCurrent: () => true });
+  await runExtension(kept);
+  assert.equal(kept.state[3].status, "stopped");
+  assert.equal(kept.state[3].error, "Kept the posting attached to the saved record.");
 }
 
 {

@@ -41,9 +41,11 @@ coordination and failure recovery.
 `src/hooks/__evals__/application-answers-replacement-guard.mjs` runs the
 production hook against App's own replacement guards: composer text, an unsaved
 draft and an in-flight request hold Prepare and Open, saved or empty threads do
-not, and declining keeps the thread. Persistence probes cover Draft dates,
-same-ID Apply/Skip, legacy answers and backup round trips. Run the nearest probe
-while iterating, then the full RoleFit offline suite and app/server build.
+not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
+renders the Answers tab to prove typing and edits are read-only while Prepare
+runs. Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
+and backup round trips. Run the nearest probe while iterating, then the full
+RoleFit offline suite and app/server build.
 
 The opt-in writing benchmark uses nine settings: Opus 5.5, Sonnet 5.5 and
 GPT-6.1 Sol, each at low/medium/high. `--expanded` selects 57 synthetic cases:

@@ -61,13 +61,16 @@ type UseApplicationAnswersArgs = {
   savedAnswers: ApplicationAnswer[];
   onSaveAnswer: (answer: ApplicationAnswerRevision, conversationId: string, preserveDraft: boolean) => Promise<{ id: string }>;
   saveBlocker?: string;
+  editBlocker?: string;
 };
 // One idle object, so an untouched conversation keeps a stable progress identity across renders.
 const IDLE_PROGRESS: AiStageState = { status: "idle" };
 const emptyConversation = (): Conversation => ({ messages: [], composer: "", targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: 0, status: "", progress: IDLE_PROGRESS });
-// Work only this thread holds: composer text, an unsaved revision, or a drafting request in flight.
+// Work only this thread holds: composer text, an unsaved revision, a drafting request in flight, or a failed or
+// stopped latest turn whose refinement or detail text exists nowhere else (a bare failed question is not counted).
 const hasUnsavedWork = (conversation: Conversation) => conversation.progress.status === "running" || Boolean(conversation.composer.trim())
-  || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id);
+  || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id)
+  || conversation.messages.slice(-1).some((message) => !message.response && Boolean(message.instruction?.trim() || message.facts.length));
 
 export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   const { conversationId, applicationId, savedAnswers, onSaveAnswer } = args;
@@ -78,6 +81,11 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   const saveRequests = useRef(new Set<string>());
   const currentIdentityRef = useRef(conversationId);
   currentIdentityRef.current = conversationId;
+  const editBlockerRef = useRef(args.editBlocker);
+  editBlockerRef.current = args.editBlocker;
+  // Edits wait while a Prepare run owns the preparation; Stop and Save stay available.
+  const unlessBlocked = <Args extends unknown[], Result>(action: (...actionArgs: Args) => Result) =>
+    (...actionArgs: Args): Result | undefined => (editBlockerRef.current ? undefined : action(...actionArgs));
   const fingerprint = workflowInputFingerprint({
     resumeText: args.resumeText, jobDescription: args.jobDescription, rawJobText: args.rawJobText,
     jobUrl: args.jobUrl, candidateContext: args.candidateContext, customInstructions: args.customInstructions,
@@ -263,10 +271,11 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   }
   return {
     conversationId, conversation, savedAnswers, stageConfig: args.aiRequest,
-    saveBlocker: args.saveBlocker, isSavePending: () => saveRequests.current.size > 0,
+    saveBlocker: args.saveBlocker, editBlocker: args.editBlocker, isSavePending: () => saveRequests.current.size > 0,
     providerReady: args.providerReady, providerMessage: args.providerMessage, profileLimitMessage: args.profileLimitMessage,
-    setComposer, newQuestion, refine, editQuestion, editAnswer, send, save, reopen,
-    setComposerMode: (composerMode: Conversation["composerMode"]) => update(conversationId, (current) => ({ ...current, composerMode })),
+    setComposer: unlessBlocked(setComposer), newQuestion: unlessBlocked(newQuestion), refine: unlessBlocked(refine),
+    editQuestion: unlessBlocked(editQuestion), editAnswer: unlessBlocked(editAnswer), send: unlessBlocked(send), save, reopen: unlessBlocked(reopen),
+    setComposerMode: unlessBlocked((composerMode: Conversation["composerMode"]) => update(conversationId, (current) => ({ ...current, composerMode }))),
     isGeneratingAnswers: conversation.progress.status === "running",
     isSavingAnswers: Object.values(conversations).some((current) => current.messages.some((message) => Boolean(message.savingRevisionId))),
     // Only the current thread can still be saved; earlier preparations' threads are unreachable.
@@ -275,7 +284,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     hasUnsavedAnswersNow: () => hasUnsavedWork(conversationsRef.current[currentIdentityRef.current] ?? emptyConversation()),
     answersStatus: conversation.status, answersProgress: conversation.progress,
     stopAnswers: () => stopAnswers(),
-    retryAnswers: () => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); }
+    retryAnswers: unlessBlocked(() => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); })
   };
 }
 export type ApplicationAnswersController = ReturnType<typeof useApplicationAnswers>;

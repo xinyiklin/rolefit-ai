@@ -36,13 +36,13 @@ export { extractAnswerConstraints, validateAnswerConstraints } from "./shared/ap
 export { preparedSourceAppearsDifferent } from "./src/lib/preparedSourceReplacement.ts";
 export { render, unmount } from "react";
 export function bindSourceGuard(context) {
-  const { useCallback, confirm, answersUnsavedRef, getPreparationOwner, preparationSessionRef, getApplication,
+  const { useCallback, confirm, answersUnsavedRef, answersDiscardApprovedRef, getPreparationOwner, preparationSessionRef, getApplication,
     preparedSourceAppearsDifferent, sourceReplacementResolverRef, sourceReplacementOwnerRef, setSourceReplacementPromptOpen } = context;
   ${sourceGuard}
   return confirmPreparedSourceReplacement;
 }
 export function bindOpenGuard(context) {
-  const { confirm, answersUnsavedRef, applicationOpenInFlightRef, resumeReplacementStateRef, coverReplacementStateRef } = context;
+  const { confirm, answersUnsavedRef, answersDiscardApprovedRef, applicationOpenInFlightRef, resumeReplacementStateRef, coverReplacementStateRef } = context;
   ${confirmMaterials}
   ${openGuard}
       return true;
@@ -81,6 +81,7 @@ function answerFor(request, text = "Useful software.") {
     sources: { resumeFingerprint: "a".repeat(64), profileFingerprint: "b".repeat(64), jobFingerprint: "c".repeat(64), rawJobFingerprint: "d".repeat(64), factsFingerprint: "e".repeat(64) } };
 }
 const respond = (request) => request.resolve(new Response(JSON.stringify({ answer: answerFor(request) })));
+const fail = (request) => request.resolve(new Response(JSON.stringify({ error: "Provider unavailable." }), { status: 500 }));
 
 // App reads the live predicate through this ref, so the guards run against exactly what App wires.
 const answersUnsavedRef = { current: () => false };
@@ -93,7 +94,9 @@ const hook = () => {
 const owner = { generation: 0 };
 const dialogs = [];
 let decision = true;
-const confirm = async (options) => { dialogs.push(options); return decision; };
+let whileDialogOpen = null;
+const confirm = async (options) => { dialogs.push(options); await whileDialogOpen?.(); return decision; };
+const approvedRef = { current: false };
 const savedApplication = {
   id: "saved-1", title: "Software Engineer at Acme", company: "Acme", role: "Software Engineer", jobUrl: "https://careers.acme.test/jobs/software-engineer",
   rawJobDescription: "platform typescript delivery ownership", status: "applied", createdAt: "2026-05-04T12:00:00.000Z", updatedAt: "2026-05-04T12:00:00.000Z"
@@ -102,14 +105,14 @@ const differentPosting = { url: "https://careers.globex.test/jobs/data-scientist
 const session = { current: { mode: "new", applicationId: null, pendingRelationship: null } };
 const prompts = { opened: 0, resolver: { current: null }, owner: { current: "" } };
 const sourceGuardFor = () => bindSourceGuard({
-  useCallback: (callback) => callback, confirm, answersUnsavedRef, getPreparationOwner: () => `${owner.generation}`, preparationSessionRef: session,
+  useCallback: (callback) => callback, confirm, answersUnsavedRef, answersDiscardApprovedRef: approvedRef, getPreparationOwner: () => `${owner.generation}`, preparationSessionRef: session,
   getApplication: (id) => (id === savedApplication.id ? savedApplication : undefined), preparedSourceAppearsDifferent,
   sourceReplacementResolverRef: prompts.resolver, sourceReplacementOwnerRef: prompts.owner, setSourceReplacementPromptOpen: (open) => { if (open) prompts.opened += 1; }
 });
 const documents = { resume: { current: { dirty: false, version: "r1" } }, cover: { current: { dirty: false, version: "c1" } } };
 const openInFlight = { current: false };
 const openGuardFor = () => bindOpenGuard({
-  confirm, answersUnsavedRef, applicationOpenInFlightRef: openInFlight, resumeReplacementStateRef: documents.resume, coverReplacementStateRef: documents.cover
+  confirm, answersUnsavedRef, answersDiscardApprovedRef: approvedRef, applicationOpenInFlightRef: openInFlight, resumeReplacementStateRef: documents.resume, coverReplacementStateRef: documents.cover
 });
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
@@ -132,12 +135,40 @@ const conditions = [
     await state.save(id); hook();
     hook().editAnswer(id, "Edited after saving."); hook();
   } },
-  { name: "saved conversation", atRisk: false, setup: async () => {
-    hook().setComposer(QUESTION); const sent = hook().send(); respond(requests[0]); await sent; hook();
-    await state.save(state.conversation.messages[0].id); hook();
+  { name: "saved conversation", atRisk: false, setup: async () => { await savedAnswer(); } },
+  // A turn that fails or stops keeps what the user typed only on its message, so it counts once it carries typed text.
+  { name: "failed detail turn", atRisk: true, setup: async () => {
+    await savedAnswer();
+    hook().setComposerMode("clarification"); hook().setComposer("I can start on November 1."); hook();
+    const sent = state.send(); fail(requests[1]); await sent; hook();
+    assert.equal(state.conversation.progress.status, "failed");
+    assert.equal(state.conversation.composer, "", "the typed detail left the composer");
+    assert.deepEqual(state.conversation.messages.at(-1).facts, ["I can start on November 1."]);
+  } },
+  { name: "stopped refinement turn", atRisk: true, setup: async () => {
+    await savedAnswer();
+    hook().setComposer("Shorter"); hook().send(); state.stopAnswers(); hook();
+    assert.equal(state.conversation.progress.status, "stopped");
+    assert.equal(state.conversation.messages.at(-1).instruction, "Shorter");
+  } },
+  { name: "failed bare question", atRisk: false, setup: async () => {
+    hook().setComposer(QUESTION); const sent = hook().send(); fail(requests[0]); await sent; hook();
+    assert.equal(state.conversation.progress.status, "failed");
+    assert.equal(state.conversation.messages.length, 1, "the question stays visible and retryable");
+  } },
+  { name: "failed turn followed by a saved retry", atRisk: false, setup: async () => {
+    await savedAnswer();
+    hook().setComposer("Shorter"); const failed = hook().send(); fail(requests[1]); await failed; hook();
+    assert.equal(state.hasUnsavedAnswers, true, "the failed refinement counts until it is retried");
+    hook().setComposer("Shorter, please"); const retried = hook().send(); respond(requests[2]); await retried; hook();
+    await state.save(state.conversation.messages.at(-1).id); hook();
   } }
 ];
 
+async function savedAnswer() {
+  hook().setComposer(QUESTION); const sent = hook().send(); respond(requests[0]); await sent; hook();
+  await state.save(state.conversation.messages[0].id); hook();
+}
 const snapshot = () => { hook(); return JSON.stringify({ id: state.conversationId, conversation: state.conversation }); };
 try {
   for (const { name, atRisk, setup } of conditions) {
@@ -150,6 +181,7 @@ try {
     assert.equal(state.hasUnsavedAnswers, atRisk, `${name}: render-time flag`);
     assert.equal(state.hasUnsavedAnswersNow(), atRisk, `${name}: live flag`);
     const before = snapshot();
+    const abortedBefore = requests.map((request) => request.options.signal.aborted);
 
     // Prepare by link, paste, extension, or Retry: all reach the one source-replacement guard.
     const prepare = sourceGuardFor();
@@ -162,7 +194,7 @@ try {
       assert.match(dialogs[0].title, /Answers/);
       assert.match(dialogs[0].message, /^Replace the current Answers\? Unsaved work will be lost\.$/);
       assert.equal(snapshot(), before, `${name}: cancelling keeps the thread exactly as it was`);
-      assert.equal(requests.every((request) => !request.options.signal.aborted), true, `${name}: cancelling does not stop an in-flight request`);
+      assert.deepEqual(requests.map((request) => request.options.signal.aborted), abortedBefore, `${name}: cancelling does not stop an in-flight request`);
     }
     dialogs.length = 0;
     decision = true;
@@ -171,6 +203,8 @@ try {
     assert.equal(approved.choice, "continue", `${name}: confirming lets Prepare proceed`);
 
     // Opening a saved application (tracker, detail modal, or duplicate review's open-existing).
+    assert.equal(approvedRef.current, atRisk, `${name}: only an asked-and-approved Prepare records the approval`);
+    approvedRef.current = false;
     const open = openGuardFor();
     decision = false;
     dialogs.length = 0;
@@ -196,6 +230,42 @@ try {
       ? "Replace the current resume, cover letter, and Answers? Unsaved work will be lost."
       : "Replace the current resume and cover letter? Unsaved edits will be lost.");
   }
+
+  // The owner can change while the Answers dialog is open (a first Save links the record); the run follows the new owner.
+  for (const answer of [false, true]) {
+    unmount();
+    args = baseArgs(); requests = []; dialogs.length = 0; decision = answer;
+    hook().setComposer(QUESTION); hook();
+    whileDialogOpen = async () => { owner.generation += 1; };
+    const result = await sourceGuardFor()(differentPosting);
+    whileDialogOpen = null;
+    assert.equal(result.choice, answer ? "continue" : "cancel");
+    assert.equal(result.isCurrent(), true, `owner changes during the dialog (${answer ? "approved" : "declined"}) do not strand the run as stale`);
+    owner.generation += 1;
+    assert.equal(result.isCurrent(), false, "a later owner change still supersedes the run");
+  }
+
+  // One approval per Prepare run: a follow-on Open (duplicate review's open-existing) does not ask about Answers again.
+  unmount();
+  args = baseArgs(); requests = []; dialogs.length = 0; decision = true; approvedRef.current = false;
+  documents.resume.current = { dirty: false, version: "r1" }; openInFlight.current = false;
+  hook().setComposer(QUESTION); hook();
+  await sourceGuardFor()(differentPosting);
+  assert.equal(dialogs.length, 1);
+  assert.equal(approvedRef.current, true, "approving Replace Answers is remembered for the run");
+  dialogs.length = 0;
+  assert.equal(await openGuardFor()({ id: "saved-1" }), true);
+  assert.equal(dialogs.length, 0, "the follow-on Open skips the Answers it was already told about");
+  documents.resume.current = { dirty: true, version: "r2" };
+  decision = false;
+  assert.equal(await openGuardFor()({ id: "saved-1" }), false, "Cancel on the remaining dialog still stops the open");
+  assert.equal(dialogs.at(-1).message, "Replace the current resume and cover letter? Unsaved edits will be lost.", "the second dialog is about documents only");
+  documents.resume.current = { dirty: false, version: "r1" };
+  approvedRef.current = false;
+  decision = true;
+  dialogs.length = 0;
+  await openGuardFor()({ id: "saved-1" });
+  assert.equal(dialogs.length, 1, "once the run ends the approval no longer covers a later Open");
 
   // Confirmed replacement: the old thread's request is stopped and its late reply cannot reach the new thread.
   unmount();
@@ -235,9 +305,13 @@ try {
   assert.ok(openStart > 0 && openEnd > openStart);
   const handlerBody = appSource.slice(openStart, openEnd);
   assert.match(handlerBody, /preparationGenerationRef\.current \+= 1/, "the open bump runs inside the guarded handler");
+  assert.ok(
+    handlerBody.indexOf("coverLetterEditor.openApplicationSource(") < handlerBody.indexOf("preparationGenerationRef.current += 1"),
+    "a malformed saved cover letter fails the open before the Answers thread's key changes"
+  );
   assert.equal(appSource.match(/restorePreparedFitAssessment\(/g)?.length, 1, "the restored-preparation commit has one caller");
   assert.match(handlerBody, /restorePreparedFitAssessment\(/, "that caller is the guarded open");
-  assert.match(handlerBody, /\(!answersAtRisk && answersUnsavedRef\.current\(\)\)[\s\S]{0,200}?title: "Open paused"/, "Answers that appear after approval pause the open instead of being replaced");
+  assert.match(handlerBody, /\(!answersUnsaved && answersUnsavedRef\.current\(\)\)[\s\S]{0,200}?title: "Open paused"/, "Answers that appear after approval pause the open instead of being replaced");
   const replacingPublishes = [];
   for (let at = appSource.indexOf("publishPreparationSession("); at >= 0; at = appSource.indexOf("publishPreparationSession(", at + 1)) {
     let depth = 0, close = at + "publishPreparationSession".length;
@@ -255,5 +329,11 @@ try {
   assert.equal(intakeSource.match(/\bcommitPreparation\(/g)?.length, 3, "commitPreparation is declared once and called from the guarded run and the guarded open");
   assert.match(appSource, /answerController\.hasUnsavedAnswers \|\| applicationUnloadGuardActive\(/, "the unload guard shares the same predicate");
   assert.match(appSource, /answersUnsavedRef\.current = answerController\.hasUnsavedAnswersNow/, "App wires the live predicate to the guards");
+  assert.match(
+    appSource,
+    /useEffect\(\(\) => \{\s*if \(!jobPreparationActive\) answersDiscardApprovedRef\.current = false;\s*\}, \[jobPreparationActive\]\)/,
+    "the approval ends with the Prepare run"
+  );
+  assert.match(appSource, /editBlocker: jobPreparationActive \?/, "Answers edits are locked while a Prepare run is active");
   console.log("Answers replacement guard passed: composer, draft and in-flight work hold Prepare and Open; saved and empty threads do not");
 } finally { unmount(); globalThis.fetch = originalFetch; }

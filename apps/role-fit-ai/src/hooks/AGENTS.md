@@ -29,7 +29,10 @@ browser-side effects; components render them and App composes them.
   extracted candidate before duplicate review or provider analysis. Same-posting
   corrections retain the id; a materially different source pauses for Keep the
   current posting / Start a new preparation / Cancel, and only the explicit new
-  choice detaches the record. Opening a tracked application hydrates the same
+  choice detaches the record. The same guard asks before discarding unsaved
+  Answers; declining an extension or Retry payload settles the card as failed,
+  because that payload lives only here and the card shows Retry only for
+  failed. Opening a tracked application hydrates the same
   retained prepared-job receipt. Its compact saved assessment is historical —
   visible and reassessable, but never eligible to trigger automatic Polish —
   because tracker storage cannot reconstruct exact current-input provenance.
@@ -156,9 +159,14 @@ browser-side effects; components render them and App composes them.
   must never infer that target. `useApplicationAnswers` owns per-preparation
   conversation state, question/revision binding, generation, cancellation and
   edits. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
-  composer text, any unsaved revision, and an in-flight request; App holds every
-  path that mints a new conversation key (committed Prepare through the
-  source-replacement guard, opening a saved application) behind that predicate.
+  composer text, any unsaved revision, an in-flight request, and a failed or
+  stopped latest turn that carries typed refinement or detail text (a bare
+  failed question is not counted). App asks before the two paths that
+  change the conversation key: a committed Prepare (once, at run start, in
+  `confirmPreparedSourceReplacement`; that approval also covers a follow-on
+  duplicate Open for the run) and opening a saved application. While Prepare is
+  active `editBlocker` makes typing, answer edits, Refine, and Retry no-ops, so
+  nothing new appears after the ask; Save and Stop stay.
   Only explicit Save calls the injected persistence callback;
   `useApplications.saveApplicationAnswer` owns serialized, revision-checked
   saves. First Save uses a stable per-preparation Draft ID; the captured target
