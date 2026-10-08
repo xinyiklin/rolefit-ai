@@ -30,8 +30,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
     Browser QA was not run.
   - [CODE] A Prepare run that goes stale only because the owner changed (a
     first Answers Save during the locked run) now settles its card as failed
-    "Preparation paused" with Retry, clears the preview and Fit run, and lifts the
-    lock; it previously left the card running and Answers locked until reload.
+    "Preparation paused" with Retry, clears the preview, Fit run, and resume
+    recommendation, and lifts the lock; it previously left the card running and
+    Answers locked until reload. The card's Retry now ignores the click event it
+    is handed: the paste Retry (`handleAnalyzePaste`) took it as the source text
+    and threw `raw.trim is not a function` (pre-existing). With no source, it
+    now prepares what the Prepare posting button shows (captured posting, else
+    the visible text).
+  - [TOOL] Evidence: `job-intake-entry-points.mjs` bumps the owner at each of
+    five re-check sites (replacement dialog, duplicate review before and after
+    analysis, resume resolution, provider response) on URL, paste, and
+    extension; before the fix every row left the card running, and each site was
+    mutation-checked. Every Retry in that eval is called with a click-shaped
+    argument, which reproduces the paste TypeError when the wrapper is removed.
   - [CODE] Known gaps: a bare failed question (nothing typed beyond it) is not
     counted; a decline of a typed link or paste source stays "stopped" because
     the source fields still hold it.

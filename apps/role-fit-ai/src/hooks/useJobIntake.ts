@@ -810,6 +810,7 @@ export function useJobIntake({
 
   function settleOwnerChange(setStatus: (value: string) => void) {
     const message = "The application changed while preparing. Retry when ready.";
+    cancelPreparedResumeResolution();
     setLocalPreparedPreview(null);
     settlePreparationFit({ status: "inputs-changed" });
     setJobAnalysisProgress({ status: "failed", errorHeadline: "Preparation paused", error: message });
@@ -1175,7 +1176,8 @@ export function useJobIntake({
   // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
   // their browser, pastes it in, and gets the structured brief plus tracking.
   async function handleAnalyzePaste(sourceOverride?: string) {
-    const raw = sourceOverride ?? jobDescription;
+    // Same source the Prepare posting button shows, so Retry prepares what the user sees.
+    const raw = sourceOverride ?? (jobRawText || jobDescription);
     if (!raw.trim() || jobAnalysisBusyRef.current) return;
     // Strip HTML tags only if the paste looks tag-shaped (text from "View
     // source" or a copied editor block). Plain copy-paste from a rendered page
@@ -1492,13 +1494,14 @@ export function useJobIntake({
 
   // Resolve the job analysis card's Retry to the live handler for the last action, so
   // it re-runs against the CURRENT url / paste rather than a stale captured one.
+  // Zero-argument wrappers: the card passes its click event, which must never reach a handler as input.
   const jobAnalysisRetry =
     jobAnalysisRetrySource === "link"
-      ? handleExtractFromLink
+      ? () => handleExtractFromLink()
       : jobAnalysisRetrySource === "paste"
-        ? handleAnalyzePaste
+        ? () => handleAnalyzePaste()
         : jobAnalysisRetrySource === "import"
-          ? retryImportedJobAnalysis
+          ? () => retryImportedJobAnalysis()
           : undefined;
 
   return {
