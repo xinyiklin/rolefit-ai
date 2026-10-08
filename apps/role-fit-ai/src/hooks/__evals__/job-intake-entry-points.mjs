@@ -419,6 +419,46 @@ const sharedCommitOrder = [
 }
 
 {
+  // A declined replacement (for example unsaved Answers work) leaves the committed preparation untouched on every intake path.
+  const declineReplacement = async () => ({ choice: "cancel", isCurrent: () => true });
+  const untouched = [
+    "duplicate:before", "resolvePreparedResume", "fetch:/api/job-analysis", "setImportedJob", "setJobDescription",
+    "setResult", "resetCoverWorkflow", "setPipelineAiUsage", "setJobRawText"
+  ];
+  const assertDeclined = (harness, committed, label) => {
+    for (const event of untouched) {
+      assert.equal(harness.log.some((entry) => entry.event === event), false, `${label}: a declined replacement never reaches ${event}`);
+    }
+    assert.equal(harness.state[7], committed, `${label}: the committed preparation is unchanged`);
+    assert.equal(harness.state[3].status, "stopped", `${label}: the workflow card reports the paused replacement`);
+    assert.equal(harness.state[3].errorHeadline, "Posting replacement paused");
+    assert.equal(
+      harness.log.some((entry) => entry.value === "Replacement canceled. Nothing was changed."),
+      true,
+      `${label}: status says nothing changed`
+    );
+  };
+  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension]]) {
+    const harness = createHarness();
+    await run(harness);
+    const committed = harness.state[7];
+    assert.ok(committed, `${label}: the first Prepare commits a preparation`);
+    harness.args.confirmPreparedSourceReplacement = declineReplacement;
+    harness.log.length = 0;
+    await run(harness);
+    assertDeclined(harness, committed, label);
+    if (label === "extension") {
+      harness.log.length = 0;
+      await harness.render().jobAnalysisRetry();
+      assertDeclined(harness, committed, "extension Retry");
+      harness.args.confirmPreparedSourceReplacement = async () => ({ choice: "continue", isCurrent: () => true });
+      await harness.render().jobAnalysisRetry();
+      assert.notEqual(harness.state[7], committed, "extension Retry prepares once the replacement is accepted");
+    }
+  }
+}
+
+{
   const harness = createHarness({ jobRawText: POSTING });
   await runPaste(harness);
   harness.args.jobDescription = `${POSTING}\nCorrected required qualification: Helm.`;

@@ -155,7 +155,11 @@ browser-side effects; components render them and App composes them.
   its historical material but cannot change it until reactivated. Job URL or text matching
   must never infer that target. `useApplicationAnswers` owns per-preparation
   conversation state, question/revision binding, generation, cancellation and
-  edits. Only explicit Save calls the injected persistence callback;
+  edits. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
+  composer text, any unsaved revision, and an in-flight request; App holds every
+  path that mints a new conversation key (committed Prepare through the
+  source-replacement guard, opening a saved application) behind that predicate.
+  Only explicit Save calls the injected persistence callback;
   `useApplications.saveApplicationAnswer` owns serialized, revision-checked
   saves. First Save uses a stable per-preparation Draft ID; the captured target
   survives navigation and completion never relinks a different preparation.

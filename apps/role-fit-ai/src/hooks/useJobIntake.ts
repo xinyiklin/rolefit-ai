@@ -795,7 +795,7 @@ export function useJobIntake({
     const keptCurrent = choice === "keep-current";
     const message = keptCurrent
       ? "Kept the posting attached to the saved record."
-      : "Replacement canceled. The saved record was not changed.";
+      : "Replacement canceled. Nothing was changed.";
     setJobAnalysisProgress({
       status: "stopped",
       errorHeadline: "Posting replacement paused",

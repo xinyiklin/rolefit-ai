@@ -115,9 +115,11 @@ repeated saves do not duplicate it, and newer saved revisions preserve older
 ones. Show Saved only after persistence succeeds. Failed/conflicting saves keep
 the draft and explain recovery. Saved answers survive restart and backup/restore;
 legacy answers keep unknown provenance. Unsaved conversation remains across tab
-navigation, but is not a durable transcript. The model menu shares Application
-Answers settings; changes affect future requests and preserve historical
-configuration. Generation and saving never rerun Prepare or generate documents.
+navigation, but is not a durable transcript; preparing a posting or opening a
+saved application asks before discarding unsaved Answers text, a draft, or a
+drafting request in flight. The model menu shares Application Answers settings;
+changes affect future requests and preserve historical configuration.
+Generation and saving never rerun Prepare or generate documents.
 
 ## Product Purpose
 

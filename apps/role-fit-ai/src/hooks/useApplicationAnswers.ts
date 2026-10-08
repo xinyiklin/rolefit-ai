@@ -65,6 +65,9 @@ type UseApplicationAnswersArgs = {
 // One idle object, so an untouched conversation keeps a stable progress identity across renders.
 const IDLE_PROGRESS: AiStageState = { status: "idle" };
 const emptyConversation = (): Conversation => ({ messages: [], composer: "", targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: 0, status: "", progress: IDLE_PROGRESS });
+// Work only this thread holds: composer text, an unsaved revision, or a drafting request in flight.
+const hasUnsavedWork = (conversation: Conversation) => conversation.progress.status === "running" || Boolean(conversation.composer.trim())
+  || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id);
 
 export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   const { conversationId, applicationId, savedAnswers, onSaveAnswer } = args;
@@ -267,7 +270,9 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     isGeneratingAnswers: conversation.progress.status === "running",
     isSavingAnswers: Object.values(conversations).some((current) => current.messages.some((message) => Boolean(message.savingRevisionId))),
     // Only the current thread can still be saved; earlier preparations' threads are unreachable.
-    hasUnsavedAnswers: Boolean(conversation.composer.trim()) || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id),
+    hasUnsavedAnswers: hasUnsavedWork(conversation),
+    // Live read for async replacement guards that run between renders.
+    hasUnsavedAnswersNow: () => hasUnsavedWork(conversationsRef.current[currentIdentityRef.current] ?? emptyConversation()),
     answersStatus: conversation.status, answersProgress: conversation.progress,
     stopAnswers: () => stopAnswers(),
     retryAnswers: () => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); }
