@@ -258,7 +258,8 @@ revision. Generation alone creates no tracker record. First Save creates a
 Draft without an application date from the posting as last prepared, never
 from unprepared source edits, and links it to a tracked posting only through a
 duplicate choice that a committed Prepare or a later Polish/Apply/Skip check applied
-to that same posting (a check may reuse a choice from a stopped Prepare of it),
+to that same posting; like those checks, the first Save itself reuses, without
+asking, a choice remembered for that posting from a stopped Prepare of it, and
 never one from a different posting; later saves update that same record, and
 Apply or Skip transitions the same ID while retaining its answers. Drafts do
 not contribute to submission metrics or calendar events. Prepare gives Resume and Cover Letter matching material cards, each

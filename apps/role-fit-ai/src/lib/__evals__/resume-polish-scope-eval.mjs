@@ -17,6 +17,7 @@ import {
   buildResumePolishScope,
   defaultResumePolishScopeMode,
   defaultResumePolishScopeModes,
+  editablePolishSectionCount,
   resumePolishScopeFromModes,
   resumePolishScopeToText
 } from "../resumePolishScope.ts";
@@ -63,6 +64,20 @@ assert.deepEqual(
 );
 assert.deepEqual(defaultResumePolishScopeModes(null), {}, "a null resume yields an empty mode map, not a throw");
 assert.deepEqual(defaultResumePolishScopeModes({ header: null, sections: [] }), {}, "an empty resume yields an empty mode map");
+
+// ── editablePolishSectionCount: the one count Prepare and the Resume tab gate on ──
+assert.equal(editablePolishSectionCount(modesResume, defaultResumePolishScopeModes(modesResume)), 3, "Summary, Skills, and Experience are editable by default");
+assert.equal(
+  editablePolishSectionCount(modesResume, { edu: "polish", awd: "include", hob: "off" }),
+  0,
+  "a leftover Polish mode on a locked Education heading, Include, and Off are never editable sections"
+);
+assert.equal(
+  editablePolishSectionCount({ ...modesResume, sections: [section("contact", "<b>Contact</b>", "standard", [])] }, { contact: "polish" }),
+  0,
+  "a marked-up contact heading stays locked"
+);
+assert.equal(editablePolishSectionCount(modesResume, { exp: "polish", removed: "polish" }), 1, "a mode for a section no longer in the resume is not counted");
 
 // ── resumePolishScopeFromModes: the pipeline's and Settings' one scope ──
 assert.deepEqual(

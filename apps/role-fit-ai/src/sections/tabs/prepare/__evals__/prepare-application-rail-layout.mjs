@@ -7,6 +7,7 @@ const prepareStyles = readFileSync(
 );
 const prepareSource = readFileSync(new URL("../../PrepareTab.tsx", import.meta.url), "utf8");
 const appSource = readFileSync(new URL("../../../../App.tsx", import.meta.url), "utf8");
+const resumeTabSource = readFileSync(new URL("../../ResumeTab.tsx", import.meta.url), "utf8");
 
 const preparedHeightBlock = prepareStyles.slice(
   prepareStyles.indexOf("@media (min-width: 1081px)"),
@@ -63,8 +64,8 @@ assert.match(
 
 assert.match(
   prepareSource,
-  /!canPolishResume\s*\?\s*resumePolishProviderMessage \|\| polishStatus \|\| "Set at least one editable resume section to Polish\."/,
-  "a Resume card blocked only by its Polish provider names that provider's recovery step"
+  /!canPolishResume\s*\?\s*resumePolishBlocker \|\| polishStatus \|\| "Set at least one editable resume section to Polish\."/,
+  "a current Resume Polish blocker outranks an earlier Polish status"
 );
 assert.doesNotMatch(prepareSource, /Finish the resume and AI setup/, "the vague combined blocker is gone");
 assert.match(
@@ -72,9 +73,25 @@ assert.match(
   /resumePolishProviderMessage = resumePolishProviderReady \? "" : providerRecoveryMessage\(resumePolishStage\.provider\)/,
   "a ready Resume Polish provider never surfaces a recovery message"
 );
+assert.match(
+  appSource,
+  /resumePolishBlocker = resumePolishProviderMessage\s*\|\| \(editablePolishSections \? "" : "Set at least one editable resume section to Polish\."\)/,
+  "the provider's recovery step comes first, then the no-editable-section blocker"
+);
 assert.ok(
-  appSource.includes("resumePolishProviderMessage={resumePolishProviderMessage}"),
-  "Prepare receives the Resume Polish provider's message, not another stage's"
+  appSource.includes("resumePolishBlocker={resumePolishBlocker}"),
+  "Prepare receives the Resume Polish blocker, not another stage's"
+);
+// Prepare, the Resume tab, and its rail count the same editable Polish sections.
+assert.match(
+  appSource,
+  /const editablePolishSections = editedResume \? editablePolishSectionCount\(editedResume, polishScopeModes\) : 0;[\s\S]{0,200}?editablePolishSections > 0 &&/,
+  "Prepare's Polish gate uses the shared editable-section count"
+);
+assert.match(
+  resumeTabSource,
+  /const polishSectionCount = editablePolishSectionCount\(editedResume, polishScopeModes\);/,
+  "the Resume tab and its rail use the same count"
 );
 
 assert.match(
@@ -83,4 +100,4 @@ assert.match(
   "Final review findings (ul.fit-assessment-list) wrap long excerpts; Fit findings wrap in FitFindings"
 );
 
-console.log("Prepare application rail layout eval: 14/14 checks passed");
+console.log("Prepare application rail layout eval: 17/17 checks passed");

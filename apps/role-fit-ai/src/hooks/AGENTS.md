@@ -74,7 +74,11 @@ browser-side effects; components render them and App composes them.
   session's `pendingRelationship`: an unfinished run's choice reaches it only
   when such a gate reuses it for the same posting, a different posting starts
   from that run's own choice (none after a pre-analysis duplicate stop), and a
-  same-posting re-prepare that resolved nothing keeps the current one.
+  same-posting re-prepare that resolved nothing keeps the current one. A fresh
+  preparation's first Answers Save, which creates the record Apply otherwise
+  would, reads that same remembered choice through `rememberedRelationship`
+  (never prompting or publishing, and skipping its own Draft on a retry) and
+  falls back to the committed relationship only when none is remembered.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
   scan on unmount or a changed scan identity, and rehydrates the cached
@@ -171,10 +175,10 @@ browser-side effects; components render them and App composes them.
   must never infer that target. `useApplicationAnswers` owns per-preparation
   conversation state, question/revision binding, generation, cancellation and
   edits. Send and both Retry buttons (the tab's and the progress dock's) reach
-  the provider only through `generate()`, which uses the Answers tab's
-  prepared-job gate and blocker order, with App's `jobPrepared` as `jobReady`:
-  a source edit keeps the conversation but unprepares the job. Its resume check
-  is still non-empty text, not the tab's `resumeReady`. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
+  the provider only through `generate()`, which uses the Answers tab's resume
+  and prepared-job gates and blocker order, with App's `resumeReady` (never the
+  unowned bundled Starter) and its `jobPrepared` as `jobReady`: a source edit
+  keeps the conversation but unprepares the job. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
   composer text, any unsaved revision, an in-flight request, and a failed or
   stopped latest turn that carries typed refinement or detail text (a bare
   failed question is not counted). App asks before the two paths that

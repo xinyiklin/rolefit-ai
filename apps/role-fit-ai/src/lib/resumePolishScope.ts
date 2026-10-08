@@ -1,7 +1,7 @@
 import type { ResumeData, ResumeEntry, ResumeSectionData, ResumeSectionType } from "@typeset/engine/lib/resumeData.ts";
 
 import { normalizeOmittedEntryNames, profileTextOnResume } from "../../shared/candidateProfileContract.ts";
-import type { ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
+import { resumePolishSectionIsLocked, type ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
 
 export type ResumePolishScopeBullet = {
   id: string;
@@ -135,6 +135,12 @@ export function resumePolishScopeFromModes(data: ResumeData, modes: Record<strin
   const resolved = Object.keys(modes).length ? modes : defaultResumePolishScopeModes(data);
   const ids = (mode: ResumePolishScopeMode) => Object.keys(resolved).filter((id) => resolved[id] === mode);
   return buildResumePolishScope(data, ids("polish"), ids("include"));
+}
+
+// The one count Prepare and the Resume tab gate Polish on: a locked heading (Education,
+// contact) is never editable, even when a leftover mode still says Polish.
+export function editablePolishSectionCount(data: ResumeData, modes: Record<string, ResumePolishScopeMode>): number {
+  return data.sections.filter((section) => modes[section.id] === "polish" && !resumePolishSectionIsLocked(section.heading)).length;
 }
 
 function appendScopeSectionLines(lines: string[], section: ResumePolishScopeSection): void {

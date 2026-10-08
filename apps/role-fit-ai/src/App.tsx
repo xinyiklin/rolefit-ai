@@ -92,6 +92,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import {
   defaultResumePolishScopeModes,
+  editablePolishSectionCount,
   type ResumePolishScopeMode
 } from "./lib/resumePolishScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
@@ -1259,16 +1260,20 @@ function App() {
   );
   // Everything except provider readiness. Resume Polish needs at least one
   // editable section; provider readiness is gated separately.
+  const editablePolishSections = editedResume ? editablePolishSectionCount(editedResume, polishScopeModes) : 0;
   const polishInputsReady = useMemo(() => {
     return Boolean(
       jobPrepared &&
       editedResume &&
       resumeReady &&
-      Object.values(polishScopeModes).some((mode) => mode === "polish") &&
+      editablePolishSections > 0 &&
       jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, jobPrepared, resumeReady, polishScopeModes]);
+  }, [editedResume, jobDescription, jobPrepared, resumeReady, editablePolishSections]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
+  // Prepare names a current blocker before any earlier Polish status.
+  const resumePolishBlocker = resumePolishProviderMessage
+    || (editablePolishSections ? "" : "Set at least one editable resume section to Polish.");
 
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
 
@@ -1612,12 +1617,22 @@ function App() {
       draftId = crypto.randomUUID();
       answersDraftIds.current.set(conversationId, draftId);
     }
+    // As at Polish, Apply and Skip, a choice remembered for this exact posting wins over the committed one.
+    const remembered = session.mode === "new" && draftSource
+      ? duplicateGuard.rememberedRelationship({
+        jobUrl: draftSource.target.jobUrl.trim(),
+        jobText: draftSource.target.rawJobDescription?.trim() || draftSource.target.jobDescription,
+        company: draftSource.target.metadata?.company,
+        role: draftSource.target.metadata?.role,
+        location: draftSource.target.metadata?.location
+      }, draftId)
+      : undefined;
+    const relationship = remembered === undefined ? draftSource?.relationship : remembered;
     let saved = await saveApplicationAnswer({
       answer, preserveDraft,
       target: session.applicationId ? { applicationId: session.applicationId } : { draftId, ...draftSource!.target }
     });
-    if (session.mode === "new" && draftSource?.relationship) {
-      const relationship = draftSource.relationship;
+    if (session.mode === "new" && relationship) {
       const linked = await linkPostingRecords(
         [saved.id, relationship.matchedApplicationId], relationship.jobPostingGroupId
       );
@@ -1634,7 +1649,7 @@ function App() {
   const answerController = useApplicationAnswers({
     conversationId: answersConversationId,
     applicationId: preparationSession.applicationId ?? undefined,
-    resumeText: currentResumeText || resumeText,
+    resumeText: currentResumeText || resumeText, resumeReady,
     jobDescription, jobReady, rawJobText: jobRawText, jobUrl, candidateContext,
     profileLimitMessage, sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("application-answers"),
@@ -2842,7 +2857,7 @@ function App() {
               preparationStatus={linkStatus}
               jobAnalysisProviderReady={jobAnalysisProviderReady}
               jobAnalysisProviderMessage={jobAnalysisProviderMessage}
-              resumePolishProviderMessage={resumePolishProviderMessage}
+              resumePolishBlocker={resumePolishBlocker}
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}

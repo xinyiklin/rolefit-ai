@@ -48,6 +48,8 @@ type UseApplicationAnswersArgs = {
   conversationId: string;
   applicationId?: string;
   resumeText: string;
+  // App's resumeReady: the bundled Starter sample is never the applicant's resume.
+  resumeReady: boolean;
   jobDescription: string;
   jobReady: boolean;
   rawJobText?: string;
@@ -126,8 +128,8 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
 
   async function generate(turn: SubmittedTurn) {
     if (requestRef.current || turn.conversationId !== currentIdentityRef.current) return;
-    // The Answers tab's prepared-job gate and order, so send and both Retry buttons block alike.
-    const blocker = args.profileLimitMessage || (!args.resumeText.trim() ? "Add your resume first." : "")
+    // The Answers tab's resume and prepared-job gates and order, so send and both Retry buttons block alike.
+    const blocker = args.profileLimitMessage || (!args.resumeReady ? "Add your resume first." : "")
       || (!args.jobReady ? "Add the job on Prepare first." : "")
       || (!args.providerReady ? args.providerMessage : "");
     lastRequestRef.current[turn.conversationId] = turn;

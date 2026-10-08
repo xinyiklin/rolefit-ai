@@ -5,6 +5,44 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] **Four open items fixed in one PR** (branch
+  `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
+  approved brief v1 and plan v1). Client and test code only: no schema,
+  prompt, provider, or shared-package change, and no version bump.
+  - Answers' `generate()` gates on App's `resumeReady`, so send and both Retry
+    buttons stop at "Add your resume first." while the unowned bundled Starter
+    is loaded. A Retry used to send the sample as the applicant's resume.
+  - A fresh preparation's first Answers Save reuses the duplicate choice the
+    guard remembers for that exact posting's top match
+    (`rememberedRelationship`: no prompt, no publish), as Polish, Apply and
+    Skip do, and falls back to the committed relationship only when none is
+    remembered. A remembered Keep separate wins (user-accepted, matches
+    Polish/Apply), and a Save retried after a failed link skips its own Draft.
+    Apply's update mode is unchanged.
+  - Prepare, the Resume tab and its rail share `editablePolishSectionCount`
+    (locked Education/contact headings never count). Prepare's Resume note
+    shows App's `resumePolishBlocker` (provider recovery step, then "Set at
+    least one editable resume section to Polish.") before any earlier Polish
+    status.
+  - The companion version test slices `loadRuntimeInfo` to its own end and
+    asserts the version write; the old test passed with the function moved
+    and its write removed.
+  - Still open: no duplicate resolution runs for an answer-created Draft with
+    no remembered or committed choice, and Answers' first Save does not
+    persist a Keep separate (`markPostingRecordsUnrelated`) as Apply's create
+    path does. The first Save's lookup reads the in-memory tracker without a
+    refresh (another tab's change can make it link a deleted record, which
+    fails with the existing Retry Save error). Prepare still counts a Polish
+    section that has no usable targets (non-goal).
+  - [TOOL] Full `npm run check --workspace apps/role-fit-ai` (client, server
+    and desktop `tsc`, builds, desktop probes, 165/165 offline evals), the
+    release-contract test (12/12), and `git diff --check` passed. Each fix's
+    new assertions fail under targeted mutations; the old companion-version
+    test passed with `loadRuntimeInfo` moved and its write removed. Browser QA
+    was not run (no layout change). One independent review: ready to merge, no
+    high or medium findings; its eval gap (the first Save's lookup source) and
+    a testing.md wording were fixed, and a second reviewer was judged not
+    warranted.
 - [TOOL] **RoleFit 0.9.0 preview released.** Annotated tag
   `rolefit-preview-v0.9.0-beta.1` on `ea8cc6a` (#190, squash of reviewed head
   `33f1f3e`). Release workflow run 37827489011 succeeded (validate, macOS arm64
@@ -16,9 +54,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   packaged smoke (win32-x64, unpacked) passed; the Electron development-mode
   smoke failed only in the main checkout and passed for `main` and the release
   head in a clean worktree (local state, root cause not isolated). Two
-  independent reviewers plus exact-head reviews of their fix commits. Open
-  follow-up: assert `loadRuntimeInfo` still writes `elements.runtimeVersion` so
-  the companion-version test cannot pass on an empty slice after a reorder.
+  independent reviewers plus exact-head reviews of their fix commits. Its
+  follow-up (the companion-version test could pass on an empty slice after a
+  reorder) is closed by the four open fixes entry above.
 - [USER+CODE] RoleFit 0.9.0 preview prepared (minor: Answers, multiple Skip
   reasons, and a one-way tracker format since 0.8.0-beta.1). Versioning now
   follows `docs/git-workflow.md`: patch for fix-only releases, minor for new
@@ -129,10 +167,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
     (which includes a duplicate stop after analysis) or a Polish/Apply/Skip
     check, the intake eval covers imported-posting Retry, the
     `DuplicateGateResult` comment is exact, and this receipt.
-  - Still open: after such a stopped re-prepare, a first Answers Save that
-    comes before any Polish, Apply or Skip creates an unlinked Draft (Answers never
-    uses an uncommitted run's choice directly), and a later Apply in update
-    mode never links it: the recorded "answer-created Draft" duplicate gap.
+  - Closed 2026-10-08 (four open fixes): after such a stopped re-prepare, a
+    first Answers Save that came before any Polish, Apply or Skip created an
+    unlinked Draft, and a later Apply in update mode never linked it. The first
+    Save now reuses the remembered choice itself.
 - [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
   prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
   `jobReady`, and `generate()`, the only path to the provider for send and
@@ -158,11 +196,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
     App passing a wrong or missing `jobReady` fails the eval, and that merges
     with dff66ef1 are clean. Fixed from it: a comment and the hooks guide had
     claimed full parity with the tab's gate, and an eval regex was too strict.
-  - [CODE] Open (confirmed by the review): the hook's resume check is still
-    non-empty text, while the tab's `resumeReady` also excludes the bundled
-    Starter sample. A dock Retry after Open > Bundled starter therefore drafts
-    from sample content, which PRODUCT says never counts as an applicant resume.
-    The same bug existed before this change. Not fixed here.
+  - [CODE] Closed 2026-10-08 (four open fixes): the hook's resume check was
+    non-empty text, so a dock Retry after Open > Bundled starter drafted from
+    sample content; it now uses App's `resumeReady`.
 - [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
   client-only; no prompt, schema, provider, or shared-package change:
   - Fixed: the Applications inspector and detail modal showed Fit gaps only,
@@ -196,10 +232,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
     - [TOOL] Client `tsc`, RoleFit build, and 161/161 offline evals passed;
       browser QA of the no-provider state on synthetic data; one independent
       review (no high or medium findings).
-    - Still open (pre-existing, not in that PR): with a ready provider and no
-      Polish section, a leftover Polish status can outrank that blocker; and
-      Prepare's gate counts a locked section's leftover Polish mode while the
-      Resume tab's does not.
+    - Closed 2026-10-08 (four open fixes): a leftover Polish status could
+      outrank the no-section blocker with a ready provider, and Prepare's gate
+      counted a locked section's leftover Polish mode while the Resume tab's
+      did not.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so

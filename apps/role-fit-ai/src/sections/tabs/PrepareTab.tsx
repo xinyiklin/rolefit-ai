@@ -95,7 +95,8 @@ export type PrepareTabProps = {
   preparationStatus: string;
   jobAnalysisProviderReady: boolean;
   jobAnalysisProviderMessage: string;
-  resumePolishProviderMessage: string;
+  // The Resume Polish provider's recovery step, else the no-editable-section blocker, else empty.
+  resumePolishBlocker: string;
   onFetchPosting: () => void | Promise<void>;
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
   resumeReady: boolean;
@@ -171,7 +172,7 @@ export function PrepareTab({
   preparationStatus,
   jobAnalysisProviderReady,
   jobAnalysisProviderMessage,
-  resumePolishProviderMessage,
+  resumePolishBlocker,
   onFetchPosting,
   onPreparePosting,
   resumeReady,
@@ -342,7 +343,7 @@ export function PrepareTab({
           : isPolishing
             ? "Wait for the current polish to finish."
             : !canPolishResume
-              ? resumePolishProviderMessage || polishStatus || "Set at least one editable resume section to Polish."
+              ? resumePolishBlocker || polishStatus || "Set at least one editable resume section to Polish."
               : "";
   const canStartPolishResume = canPolishResume && !isPolishStarting && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =
