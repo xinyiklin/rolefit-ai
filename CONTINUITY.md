@@ -3,6 +3,18 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-08
+
+- [TOOL] Four Document workflow runs since 2026-10-06 failed one Chromium job
+  with "Timed out starting Chromium" (core on `3d7f4cd` and `b35628c`, extended
+  on `d37990f` and `e4d339b`): no stderr within 15s, while the other Chromium
+  job started on the same SHA. A rerun of `e4d339b` passed. No earlier failure
+  in the last 100 runs was a startup timeout.
+- [CODE] The browser-contract launcher now waits 30s for DevTools and retries
+  startup once with a fresh profile, logging the first failure; a browser that
+  cannot start still fails after the second attempt. Contract assertions are
+  unchanged.
+
 ## 2026-10-07
 
 - [CODE] A fresh preparation's posting relationship is now scoped to the
