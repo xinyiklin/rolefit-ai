@@ -83,7 +83,48 @@ bounded; app-only operational detail belongs in the affected app documentation.
       BambooHR, Breezy, JazzHR, Recruitee, Personio, and Rippling boards of
       other companies.
 
-- [USER+CODE] **Four open items fixed in one PR** (branch
+- [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the three
+  user-facing fixes and one test fix of #192 since
+  `rolefit-preview-v0.9.0-beta.1`, no new capability and no
+  stored-data or format change; the user approved the release brief and plan,
+  task `2026-10-08-rolefit-0.9.1-preview`). The intended tag is
+  `rolefit-preview-v0.9.1-beta.1`; extension 1.2.1 and desktop bridge API 13
+  are unchanged, and the landing screenshot manifest stays empty. Release notes
+  are `apps/role-fit-ai/docs/releases/0.9.1-beta.1.md`.
+  - [TOOL] Preflight on Windows x64 with Node 24.18.0: release tests
+    (`test:desktop:release`) 14/14; full `npm run check --workspace
+    apps/role-fit-ai` (165/165 offline evals); `make:rolefit:desktop` produced
+    a fresh Squirrel installer and `0.9.1-full.nupkg`; the packaged smoke
+    passed against that fresh output (win32-x64, unpacked). The Electron
+    development-mode smoke failed once in the main checkout without its output
+    kept, then passed twice there (the second with a full log and exit 0). The
+    0.9.0 preflight also saw it fail in the main checkout and pass in a clean
+    worktree; root cause still not isolated. Keep the smoke's log next time.
+  - [USER+TOOL] After that preflight, the landing companion screenshot was
+    retaken on macOS arm64 (user request) to replace the 0.9.0 Windows
+    capture with macOS system fonts: smoke screenshot hook, development mode,
+    isolated user data, empty workspace, port 5181 with the user's companion
+    quit, 2x, 1800x1176, converted from Display P3 to sRGB so the brand green
+    matches the CSS. The empty workspace and port 5181 depart from
+    `landing/AGENTS.md`'s synthetic-pack/spare-port rule, as at 0.8.0; the
+    Overview shows no workspace content. The `<img>` now declares 1800x1176.
+    It shows no version, so the manifest stays empty. After the swap,
+    `build:landing` (with its boundary guard) and `test:desktop:release`
+    (14/14) passed on macOS. No landing browser QA ran for this image-only
+    swap. One independent review: no blocking findings.
+  - [CODE] Open, found in the release review (pre-existing, not fixed in
+    0.9.1): `resumeIsStarterSample` requires `applicationOfRecordId === null`
+    (`App.tsx`), so once the preparation owns a record (after a first Answers
+    Save, Apply, or Skip & save job, or with a saved application open), Open >
+    Bundled starter makes `resumeReady` true. Answers, Resume and Cover Letter
+    Polish, Apply readiness, and the automatic-proposal inputs can then treat
+    the sample as the applicant's resume (`usePreparedResume` has the same
+    application-owned exception in `lib/preparedResume.ts`), contrary to
+    PRODUCT's rule that the Starter never satisfies resume readiness. The 0.9.1
+    notes disclose it as a known issue.
+- [USER+CODE] **Four open items fixed in #192** (squash `fc60489` of the
+  exact reviewed head `1f77176`, CI green: 15 checks, product-site deploy
+  skipped; branch
   `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
   approved brief v1 and plan v1). Client and test code only: no schema,
   prompt, provider, or shared-package change, and no version bump.
@@ -147,7 +188,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   test pins the version out of the sidebar. The companion screenshot was
   recaptured on Windows (1784x1202, isolated user data, empty workspace, port
   5181, 2x), so its type renders in Windows fallback fonts rather than the
-  macOS ones used at 0.8.0.
+  macOS ones used at 0.8.0 (superseded 2026-10-08 by the 0.9.1-prep macOS
+  recapture, 1800x1176).
 - [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
   12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
   tracker field is now `notApplyingReasons` (canonical-order list, omitted when
