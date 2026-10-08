@@ -220,20 +220,20 @@ const OWNERSHIP_LEVEL_BY_PAST = new Map<string, number>([
   ...["assisted", "supported", "contributed", "helped", "collaborated", "coordinated", "participated"].map((verb) => [verb, 1] as const)
 ]);
 // Line-opening nouns that share a verb's spelling.
-const PRESENT_LEAD_NOUN = /^(?:head\s+count|direct\s+(?:reports?|mail|deposit|experience|feedback|to)|design\s+(?:reviews?|docs?|documents?|systems?|patterns?|tokens?)|build\s+(?:systems?|times?|tools?|scripts?|pipelines?|failures?)|support\s+(?:tickets?|engineers?|team|rotation|queue)|help\s+desk|leads\s+(?:from|were|are|data|pipeline|import|list))\b/i;
+const PRESENT_LEAD_NOUN = /^(?:head\s+count|heads[-\s]+up|create\s+react|direct\s+(?:reports?|mail|deposit|experience|feedback|messag\w*|to)|design\s+(?:reviews?|docs?|documents?|systems?|patterns?|tokens?)|build\s+(?:systems?|times?|tools?|scripts?|pipelines?|failures?)|support\s+(?:tickets?|engineers?|team|rotation|queue)|help\s+desk|leads\s+(?:from|were|are|data|pipeline|import|list))\b/i;
 
-function presentLeadOwnership(line: string): number {
+function presentLeadOwnership(line: string): { past: string; level: number } | null {
   const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").replace(/^[\s\u2022\u00b7*\-\u2013\u2014]+/, "");
   const word = clause.match(/^([A-Z][a-z]+)(?=\s)/)?.[1]?.toLowerCase();
-  if (!word || VERB_NAMED_PRODUCTS.has(word) || PRESENT_LEAD_NOUN.test(clause)) return 0;
-  let strongest = 0;
+  if (!word || VERB_NAMED_PRODUCTS.has(word) || PRESENT_LEAD_NOUN.test(clause)) return null;
   for (const base of new Set([word, word.replace(/es$/, ""), word.replace(/s$/, "")])) {
     if (base.length < 3) continue;
     for (const past of [IRREGULAR_PAST.get(base), base === "oversee" ? "oversaw" : undefined, `${base}ed`, `${base}d`]) {
-      strongest = Math.max(strongest, (past && OWNERSHIP_LEVEL_BY_PAST.get(past)) || 0);
+      const level = past ? OWNERSHIP_LEVEL_BY_PAST.get(past) : undefined;
+      if (past && level) return { past, level };
     }
   }
-  return strongest;
+  return null;
 }
 
 const OWNERSHIP_CONTEXT_STOPWORDS = new Set([
@@ -371,7 +371,17 @@ export function hasUnsupportedOwnershipIncrease(
   semanticTarget = currentText || proposed,
   { presentLead = false }: { presentLead?: boolean } = {}
 ): boolean {
-  const strength = (value: string) => presentLead ? Math.max(ownershipStrength(value), presentLeadOwnership(value)) : ownershipStrength(value);
+  // The proposal's own present-tense lead counts in full. On the current bullet
+  // and evidence it counts only for the same verb ("Build…" supports "Built…"),
+  // so a verb-shaped noun ("Direct messaging…") never stands in for another claim.
+  const proposedPresent = presentLead ? presentLeadOwnership(proposed) : null;
+  const proposedPast = proposedPresent?.past ?? actionVerbPast(leadingWord(proposed));
+  const strength = (value: string) => {
+    if (!presentLead) return ownershipStrength(value);
+    const present = value === proposed ? proposedPresent : presentLeadOwnership(value);
+    const counts = present && (value === proposed || present.past === proposedPast);
+    return Math.max(ownershipStrength(value), counts ? present.level : 0);
+  };
   const currentLevel = strength(currentText);
   const singleLine = !/[\r\n]/.test(currentText);
   // Claiming the assisted work itself ("Migrated…" from "Assisted … in migrating…")

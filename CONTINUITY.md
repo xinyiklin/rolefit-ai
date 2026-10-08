@@ -11,19 +11,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
     "three") or a number; such an edit is a correction to review. Words are
     matched on the raw word. Deleting a negation or hedge widens the claim and
     stays a dropped no-op, as do filler trims.
-  - Resume Polish bullets read a capitalised, whole-word, plain or -s present
-    ownership verb ("Build…", "Owns…") at its past form's level, so
-    "Assisted…" → "Build…" warns like "Built…", and present-tense evidence
-    supports the matching claim. This is an option of
-    `hasUnsupportedOwnershipIncrease`, kept out of the shared
-    `ownershipStrength`. "lead time/generation/scoring" no longer count as
-    leadership anywhere.
+  - Resume Polish proposals that open with a capitalised, whole-word, plain or
+    -s present ownership verb ("Build…", "Owns…") claim its past form's level,
+    so "Assisted…" → "Build…" warns like "Built…".
+    - A present-tense current bullet or evidence line supports only the same
+      verb ("Build…" → "Built…"); "Direct messaging…" or a role title never
+      supports "Led…".
+    - This is a `presentLead` option forwarded through `candidateClaimIssue`,
+      kept out of the shared `ownershipStrength`.
+    - "lead time/generation/scoring" no longer count as leadership anywhere.
   - [TOOL] Two independent reviews. A first version put the present-tense
     reading in `ownershipStrength`. That made "L2", "Direct3D", "Design
     reviews", role titles and words after a semicolon count as ownership: it
     hid real inflation and added warnings to Fit, cover letters and Skills.
-    The no-op version also surfaced hedge and negation deletions unwarned. All
-    findings were fixed with a probe each.
+    The no-op version also surfaced hedge, negation and partial-quantity
+    deletions ("40% of", "most") unwarned. A re-review found the support side
+    was overruled by the shared check, and that nouns could still stand in for
+    other verbs. All findings were fixed with probes, including end-to-end
+    sanitizer probes.
   - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
     - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
     - Five new synthetic old-prompt flags, all labelled supported. They are

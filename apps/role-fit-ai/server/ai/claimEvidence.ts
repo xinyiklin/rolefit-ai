@@ -44,7 +44,8 @@ export function candidateClaimIssue(
   claim: string,
   evidence: string,
   original = "",
-  ownershipEvidence = evidence
+  ownershipEvidence = evidence,
+  ownershipOptions: { presentLead?: boolean } = {}
 ): string | null {
   if (hasContradictoryClaimEvidence(claim, evidence)) return "Conflicting candidate evidence";
   const affirmative = affirmativeEvidence(evidence);
@@ -52,7 +53,7 @@ export function candidateClaimIssue(
   if (term) return `Unsupported technology or skill: ${term}`;
   const number = findUngroundedNumericClaim(claim, affirmative);
   if (number) return `Unsupported measurement or duration: ${number}`;
-  if (hasUnsupportedOwnershipIncrease(claim, original, affirmativeEvidence(ownershipEvidence)))
+  if (hasUnsupportedOwnershipIncrease(claim, original, affirmativeEvidence(ownershipEvidence), undefined, ownershipOptions))
     return OWNERSHIP_ISSUE;
   const outcome = findUngroundedOutcomeClaim(claim, affirmative, { candidateProse: true });
   return outcome ? `Unsupported outcome: ${outcome}` : null;

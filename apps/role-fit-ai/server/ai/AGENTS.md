@@ -312,10 +312,14 @@ application retain blocking technical guards.
   - A single line that leads with assisting others, in any tense ("Assist
     engineers in migrating…"), rewritten to lead with that assisted verb is an
     ownership increase unless evidence leads with the same verb.
-  - Resume Polish bullets only (the `presentLead` option of
-    `hasUnsupportedOwnershipIncrease`): a bullet, current bullet or evidence
-    line that opens with a capitalised, whole-word, plain or -s present
-    ownership verb ("Build…", "Owns…") claims its past form's level.
+  - Resume Polish bullets only: the `presentLead` option of
+    `hasUnsupportedOwnershipIncrease`, which `candidateClaimIssue` forwards.
+    - A proposal that opens with a capitalised, whole-word, plain or -s present
+      ownership verb ("Build…", "Owns…") claims its past form's level.
+    - A current bullet or evidence line read that way counts only for the same
+      verb: "Build Go services…" supports "Built Go services…". A verb-shaped
+      noun, title or abbreviation split therefore never supports a different
+      claim.
     - Not read that way: product names that are verbs, line-opening nouns such
       as "Design reviews" or "Direct-to-consumer", tokens glued to a hyphen,
       apostrophe or digit, and bases shorter than three letters ("L2").

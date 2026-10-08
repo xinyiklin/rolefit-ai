@@ -896,6 +896,26 @@ assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
   );
 }
 
+// Present-tense ownership end to end: a bullet's own lead verb counts, a current
+// bullet or evidence line counts only for the same verb, and nouns or titles never
+// stand in for a different claim.
+{
+  const ownershipWarned = (bullets, role, targetIndex, replacement) => {
+    const targets = flattenResumeTargets({
+      sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [{ id: "role-1", titleLeft: "Acme", titleRight: "2024", subtitleLeft: role, subtitleRight: "", bullets: bullets.map((text, i) => ({ id: `b${i}`, text })) }] }],
+      contextSections: []
+    }).filter((target) => target.kind === "bullet");
+    const scope = bullets.join("\n");
+    const result = sanitizeResumeProposal({ status: "PROPOSAL", changes: [{ targetId: targets[targetIndex].targetId, replacement }] }, targets, jobText, scope, "", 0, false);
+    return (result.changes[0]?.warnings ?? []).some((warning) => /ownership/i.test(warning));
+  };
+  assert.equal(ownershipWarned(["Build internal dashboards with React for the finance team."], "Engineer", 0, "Built React dashboards for the internal finance team."), false, "the same verb in another tense is not an increase");
+  assert.equal(ownershipWarned(["Maintained Go services that price insurance quotes.", "Build Go services that price insurance quotes for brokers."], "Engineer", 0, "Built Go services that price insurance quotes."), false, "a present-tense evidence line supports the same verb");
+  assert.equal(ownershipWarned(["Assisted a team developing payment reconciliation services."], "Engineer", 0, "Build payment reconciliation services."), true, "a present-tense direct verb from assisted work warns");
+  assert.equal(ownershipWarned(["Direct messaging feature with WebSockets and Redis."], "Engineer", 0, "Led the direct messaging feature with WebSockets and Redis."), true, "a verb-shaped noun does not support leadership");
+  assert.equal(ownershipWarned(["Maintained the release pipeline for the mobile apps."], "Build and Release Engineer", 0, "Led the release pipeline for the mobile apps."), true, "a role title does not support leadership");
+}
+
 // Drive the real route over loopback rather than pattern-matching its source. A
 // text match proved it could pass on a handler that returns without writing a
 // response, and it rejected behaviour-preserving key reordering.

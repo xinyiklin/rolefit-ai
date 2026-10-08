@@ -480,11 +480,13 @@ function replacementIssues(
   // skill, not an ownership claim; a role phrase such as "Team Lead" still is.
   const practice = (value: string) => target.kind === "skill-list" ? value.replace(/\b(?!co-)[\w.+#]+-(?:assisted|supported|driven|led|managed|owned|leading)\b/gi, "") : value;
   const baseline = target.kind === "skill-list" ? replacement : target.currentText;
-  const claimIssue = candidateClaimIssue(replacement, grounding, baseline, ownershipEvidence);
+  // Bullets read a present-tense lead verb ("Build…"); Skills rows never do.
+  const ownershipOptions = { presentLead: target.kind !== "skill-list" };
+  const claimIssue = candidateClaimIssue(replacement, grounding, baseline, ownershipEvidence, ownershipOptions);
   const ownWork = standard && withProfile && Boolean(target.profileText) && declaresSoloProject(target.profileText)
     && soloProjectSupportsAuthorship(replacement, target.currentText, ownershipEvidence);
   const ownership = !ownWork && (claimIssue === OWNERSHIP_ISSUE
-    || hasUnsupportedOwnershipIncrease(replacement, baseline, ownershipEvidence, undefined, { presentLead: target.kind !== "skill-list" })
+    || hasUnsupportedOwnershipIncrease(replacement, baseline, ownershipEvidence, undefined, ownershipOptions)
     || (target.kind === "skill-list" && hasUnsupportedOwnershipIncrease(practice(replacement), practice(target.currentText), ownershipEvidence)));
   // The entry uses a verb this strong elsewhere, but no one line ties it to this claim.
   const level = ownershipStrength(replacement);
