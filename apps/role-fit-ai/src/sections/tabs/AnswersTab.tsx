@@ -67,7 +67,7 @@ export function AnswersTab({
     if (scroller) scroller.scrollTop = atBottomRef.current ? scroller.scrollHeight : scrollTop;
   }
   function focusComposer() { requestAnimationFrame(() => composerRef.current?.focus()); }
-  function refine(id: string, instruction?: string, mode?: "refinement") { controller.refine(id, instruction, mode); focusComposer(); }
+  function refine(...args: Parameters<ApplicationAnswersController["refine"]>) { controller.refine(...args); focusComposer(); }
 
   return (
     <section className={`answers-page${empty ? " is-empty" : ""}`} aria-label="Application answers">

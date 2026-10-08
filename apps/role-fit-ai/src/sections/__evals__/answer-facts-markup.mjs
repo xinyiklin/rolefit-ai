@@ -42,4 +42,6 @@ assert.doesNotMatch(render({ facts: [] }), /answers-message__facts/, "a saved an
 assert.doesNotMatch(render({ facts: ["I led the postmortem."], instruction: "Shorter" }), /answers-message__facts/, "a refinement turn shows its own instruction, not the list");
 const messageSource = await readFile(new URL("../tabs/answers/AnswerMessage.tsx", import.meta.url), "utf8");
 assert.match(messageSource, /onRefine\(message\.id, "", "refinement"\);[^<]*>Refine this answer</, "the menu item opens Refine, so a typed instruction is never a fact");
+const tabSource = await readFile(new URL("../tabs/AnswersTab.tsx", import.meta.url), "utf8");
+assert.match(tabSource, /controller\.refine\(\.\.\.args\)/, "the tab forwards refine's mode instead of dropping it");
 console.log("Answer facts markup passed: collapsed Your facts list on a reopened answer only, escaped and in order; Refine this answer opens Refine");

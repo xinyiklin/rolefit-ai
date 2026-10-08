@@ -208,6 +208,7 @@ try {
   assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
   // "Refine this answer" asks for Refine explicitly, so a typed wording instruction is never a fact.
   hook().reopen(stored[6]);
+  assert.equal(hook().conversation.composerMode, "clarification", "Reopen of an open draft with a follow-up keeps Add a detail");
   hook().refine(hook().conversation.targetMessageId, "", "refinement");
   assert.equal(hook().conversation.composerMode, "refinement", "Refine this answer opens Refine even on a draft with a follow-up");
   hook().setComposer("Make it warmer.");

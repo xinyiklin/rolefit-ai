@@ -10,7 +10,7 @@ type Props = {
   message: Message;
   index: number;
   controller: ApplicationAnswersController;
-  onRefine: (messageId: string, instruction?: string, mode?: "refinement") => void;
+  onRefine: ApplicationAnswersController["refine"];
   onEditQuestion: (messageId: string) => void;
 };
 
