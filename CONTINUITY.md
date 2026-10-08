@@ -25,8 +25,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [CODE] Open, found in the release review (pre-existing, not fixed in
     0.9.1): `resumeIsStarterSample` requires `applicationOfRecordId === null`
     (`App.tsx`), so once the preparation owns a record (after a first Answers
-    Save, or with a saved application open), Open > Bundled starter makes
-    `resumeReady` true and Answers can draft from the sample, contrary to
+    Save, Apply, or Skip & save job, or with a saved application open), Open >
+    Bundled starter makes `resumeReady` true. Answers, Resume and Cover Letter
+    Polish, Apply readiness, and the automatic-proposal inputs can then treat
+    the sample as the applicant's resume (`usePreparedResume` has the same
+    application-owned exception in `lib/preparedResume.ts`), contrary to
     PRODUCT's rule that the Starter never satisfies resume readiness. The 0.9.1
     notes disclose it as a known issue.
 - [USER+CODE] **Four open items fixed in #192** (squash `fc60489` of the
