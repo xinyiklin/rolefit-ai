@@ -10,7 +10,7 @@ type Props = {
   message: Message;
   index: number;
   controller: ApplicationAnswersController;
-  onRefine: (messageId: string, instruction?: string) => void;
+  onRefine: ApplicationAnswersController["refine"];
   onEditQuestion: (messageId: string) => void;
 };
 
@@ -84,7 +84,16 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
           {question}
         </details>
         <p className="answers-message__instruction">{message.instruction}</p>
-      </> : <div className="answers-message__question">{question}</div>}
+      </> : <div className="answers-message__question">
+        {question}
+        {/* Only a reopened saved answer has facts without an instruction bubble showing them. */}
+        {message.facts.length ? (
+          <details className="answers-message__facts">
+            <summary title="Details you added. Refinements use them as your own statements.">Your facts ({message.facts.length})</summary>
+            <ul>{message.facts.map((fact, factIndex) => <li key={factIndex}>{fact}</li>)}</ul>
+          </details>
+        ) : null}
+      </div>}
       {response ? (
         <div className={`answers-message__response${animateArrival ? " is-arriving" : ""}`}>
           {response.answer || message.edited ? (
@@ -118,7 +127,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
               <button type="button" className="ghost-button" disabled={!nonempty || saving || saved || Boolean(controller.saveBlocker)} onClick={() => { save(); setMenuOpen(false); }}>
                 {saveDraft ? "Save draft to application" : "Save answer to application"}
               </button>
-              <button type="button" className="ghost-button" disabled={locked} onClick={() => { onRefine(message.id); setMenuOpen(false); }}>Refine this answer</button>
+              <button type="button" className="ghost-button" disabled={locked} onClick={() => { onRefine(message.id, "", "refinement"); setMenuOpen(false); }}>Refine this answer</button>
             </NavMenu>
             <span className="answers-message__model" title={response.generation ? `${response.generation.provider} · ${response.generation.model} · ${response.generation.reasoningEffort}` : "Original generation details are unavailable for this wording."}>
               {modelLabel}{response.generation?.reasoningEffort ? ` · ${response.generation.reasoningEffort}` : ""}

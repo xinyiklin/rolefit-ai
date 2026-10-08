@@ -702,6 +702,9 @@ auto-grows without a resize grip; its footer holds the picker, a Refine / Add a
 detail switch while refining, and the question's limits beside Send. Employer
 questions use quiet right-aligned bubbles whose Edit question appears on hover or
 focus for pointer devices; answers stay on an open editable reading surface.
+A reopened saved answer with facts shows a collapsed **Your facts (N)**
+disclosure inside its question bubble: a muted summary, then a plain list of the
+facts as typed.
 While drafting, the pending answer slot shows three pulsing dots and "Drafting
 your answer" (no simulated streaming: responses arrive whole and fade in), and
 the progress dock omits the Answers card while that thread is in view.

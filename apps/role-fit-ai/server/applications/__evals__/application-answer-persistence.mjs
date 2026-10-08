@@ -53,6 +53,41 @@ assert.equal(edited.status, "draft");
 assert.equal(edited.questionRevision, 2);
 assert.equal(edited.previousAnswerId, revision.id);
 assert.ok(parseSavedApplicationAnswers([saved, edited], draft.id));
+
+// Saved user facts: optional and strict, within the request's explicit-fact limits.
+const facts = ["I led the postmortem after the March outage."];
+const factRevision = { ...revision, id: "response-2", questionId: "question-2", userFacts: { provenance: "user-declared", facts } };
+const factSaved = { ...factRevision, savedAt: later };
+assert.deepEqual(parseApplicationAnswerRevision(factRevision), factRevision);
+assert.equal(parseApplicationAnswerRevision(revision).userFacts, undefined, "a revision saved before facts were kept stays valid without them");
+const withFacts = (userFacts) => ({ ...factRevision, userFacts });
+for (const list of [Array.from({ length: 20 }, (_, n) => `Fact ${n}.`), ["x".repeat(4_000)], ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(3_998)], ["Tab\tand\nnewline\r\nkept."], ["Same fact.", "Same fact."]]) {
+  assert.ok(parseApplicationAnswerRevision(withFacts({ provenance: "user-declared", facts: list })), `boundary accepted: ${list.length} facts, ${list.join("\n").length} characters`);
+}
+for (const [label, userFacts] of [
+  ["string container", "I led the postmortem."], ["array container", facts], ["null container", null], ["number container", 1],
+  ["extra key", { provenance: "user-declared", facts, note: "x" }], ["missing provenance", { facts }],
+  ["generated provenance", { provenance: "generated", facts }], ["case-changed provenance", { provenance: "User-declared", facts }],
+  ["profile provenance", { provenance: "profile", facts }], ["missing facts", { provenance: "user-declared" }],
+  ["string facts", { provenance: "user-declared", facts: "x" }], ["empty facts", { provenance: "user-declared", facts: [] }],
+  ["number fact", { provenance: "user-declared", facts: [1] }], ["null fact", { provenance: "user-declared", facts: [null] }],
+  ["object fact", { provenance: "user-declared", facts: [{}] }], ["empty fact", { provenance: "user-declared", facts: [""] }],
+  ["blank fact", { provenance: "user-declared", facts: ["   "] }], ["4,001-character fact", { provenance: "user-declared", facts: ["x".repeat(4_001)] }],
+  ["vertical tab", { provenance: "user-declared", facts: ["a\u000bb"] }], ["NUL", { provenance: "user-declared", facts: ["a\u0000b"] }],
+  ["21 facts", { provenance: "user-declared", facts: Array.from({ length: 21 }, (_, n) => `Fact ${n}.`) }],
+  ["12,001 joined characters", { provenance: "user-declared", facts: ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(3_999)] }],
+  ["12,002 joined characters", { provenance: "user-declared", facts: ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(4_000)] }]
+]) assert.equal(parseApplicationAnswerRevision(withFacts(userFacts)), null, label);
+assert.equal(parseSavedApplicationAnswers([legacy, saved, { ...factSaved, userFacts: { provenance: "user-declared", facts: [] } }], draft.id), null, "one malformed fact list invalidates the record");
+const factEdit = editedSavedApplicationAnswer(factSaved, factSaved.question, "A manual answer in my own words.", "manual-facts", later);
+assert.deepEqual(factEdit.userFacts, factSaved.userFacts, "a manual edit keeps the question's facts");
+assert.equal(factEdit.generation, undefined);
+const factQuestionEdit = editedSavedApplicationAnswer(factSaved, "Why this team? Maximum 150 words.", "A manual answer in my own words.", "manual-facts-2", later);
+assert.equal(factQuestionEdit.questionRevision, 2);
+assert.deepEqual(factQuestionEdit.userFacts, factSaved.userFacts, "a question-text edit keeps the same question's facts");
+assert.equal(editedSavedApplicationAnswer(saved, saved.question, "Edited text.", "manual-no-facts", later).userFacts, undefined, "an edit never creates facts");
+assert.equal(editedSavedApplicationAnswer(legacy, legacy.question, "Edited text.", "manual-legacy", later).userFacts, undefined);
+assert.ok(parseSavedApplicationAnswers([legacy, saved, factSaved, factEdit, factQuestionEdit], draft.id));
 assert.equal(sanitizeApplications([{ ...draft, appliedAt: now }]).length, 0);
 assert.equal(sanitizeApplications([{ ...draft, resumeUsed: "base" }]).length, 0);
 assert.equal(isSubmittedApplication({ ...draft, appliedAt: now }), false, "even malformed Draft dates never count as submissions");
@@ -108,4 +143,31 @@ try {
 } finally {
   await rm(root, { recursive: true, force: true });
 }
-console.log("Application answer persistence passed: shape-checked stored receipts, verified new revisions, exact legacy/new round-trip and backup, Draft lifecycle, immutable revisions, rejection and conflicts");
+
+const factRoot = await mkdtemp(join(tmpdir(), "rolefit-answer-facts-"));
+async function saveFactsRoute(applications, mutations) {
+  const req = Readable.from([Buffer.from(JSON.stringify({ applications, mutations }))]);
+  let code; let body;
+  await handleSaveApplications(req, { writeHead(status) { code = status; }, end(text) { body = JSON.parse(text); } }, join(factRoot, "source"));
+  return { code, body };
+}
+try {
+  const factDraft = { ...draft, applicationAnswers: [legacy, saved, factSaved] };
+  const [written] = await writeApplications(join(factRoot, "source"), [factDraft]);
+  assert.deepEqual((await readApplications(join(factRoot, "source")))[0].applicationAnswers, factDraft.applicationAnswers, "legacy, pre-change and fact-bearing revisions load together");
+  await restoreWorkspaceBackup(join(factRoot, "restored"), await createWorkspaceBackup(join(factRoot, "source")), new Date(later), 0);
+  const restored = (await readApplications(join(factRoot, "restored")))[0].applicationAnswers;
+  assert.deepEqual(restored, factDraft.applicationAnswers, "backup/restore keeps saved facts exactly");
+  assert.deepEqual(restored[2].userFacts, { provenance: "user-declared", facts });
+  const upsert = [{ id: draft.id, operation: "upsert", baseUpdatedAt: written.updatedAt }];
+  const rewritten = await saveFactsRoute([{ ...written, updatedAt: later, applicationAnswers: [legacy, saved, { ...factSaved, userFacts: { provenance: "user-declared", facts: ["A different fact."] } }] }], upsert);
+  assert.equal(rewritten.code, 400, "a saved revision's facts are immutable");
+  const malformed = await saveFactsRoute([{ ...written, updatedAt: later, applicationAnswers: [legacy, saved, factSaved, { ...factEdit, userFacts: { provenance: "user-declared", facts: Array.from({ length: 21 }, (_, n) => `Fact ${n}.`) } }] }], upsert);
+  assert.equal(malformed.code, 400, "the tracker route rejects malformed facts");
+  const appended = await saveFactsRoute([{ ...written, updatedAt: later, applicationAnswers: [legacy, saved, factSaved, factEdit] }], upsert);
+  assert.equal(appended.code, 200);
+  assert.deepEqual((await readApplications(join(factRoot, "source")))[0].applicationAnswers.at(-1).userFacts, factSaved.userFacts, "a new revision's facts persist through the route");
+} finally {
+  await rm(factRoot, { recursive: true, force: true });
+}
+console.log("Application answer persistence passed: shape-checked stored receipts, verified new revisions, exact legacy/new round-trip and backup, saved user facts, Draft lifecycle, immutable revisions, rejection and conflicts");

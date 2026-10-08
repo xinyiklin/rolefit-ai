@@ -33,6 +33,12 @@ new external-network or model eval must be added to `LIVE` so it stays out of `n
 
 ### Application Answers
 
+Saved user facts have their own checks: the hook eval
+`src/hooks/__evals__/application-answer-facts.mjs` (Save, reload, Reopen,
+refinement resend, per-question scope, nothing taken from answer text), the
+persistence and backup probes (strict shape, limits, immutability, restore) and
+`src/sections/__evals__/answer-facts-markup.mjs`.
+
 The offline conversation probes exercise the production generator with injected
 dispatch, including constraints, bounded repair, factual scope, missing facts,
 question identity, cancellation and usage accounting. Client probes hold requests

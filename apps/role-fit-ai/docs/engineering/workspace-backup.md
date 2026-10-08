@@ -130,8 +130,10 @@ Only files owned and validated by RoleFit enter the bundle:
   tracked `applications/<id>/` directories;
 - the canonical allowlisted workspace preferences described above.
 
-Generated cover letters, application answers, job targets, and tailored resume
-snapshots already stored on tracker records travel inside `applications.json`.
+Generated cover letters, application answers (with the facts the user added to
+each saved revision), job targets, and tailored resume snapshots already stored
+on tracker records travel inside `applications.json`. A backup holding saved
+answer facts restores only into a build that understands them.
 Candidate-authored `cover-letters/*.cover` files and their local `.trash`
 history remain standalone editable documents outside the portable workspace
 contract. Download those `.cover` variants separately when moving devices.

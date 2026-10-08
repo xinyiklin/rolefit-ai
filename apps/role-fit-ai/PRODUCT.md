@@ -122,6 +122,20 @@ prepared. The model menu shares Application Answers settings;
 changes affect future requests and preserve historical configuration.
 Generation and saving never rerun Prepare or generate documents.
 
+Facts added with **Add a detail** belong to their question. Each saved revision
+keeps them as the user's own statements, separate from the answer text.
+Reopening a saved answer restores that revision's facts under a collapsed
+**Your facts** list, and refinements send them again as explicit user facts to
+the selected Answers provider. Generated, edited or saved answer text, the
+model's follow-up questions, refinement instructions and the refinement chips
+never become facts. A follow-up defaults the composer to Add a detail even when
+the draft kept its text, so a typed reply is saved as a fact; a chip or Refine
+this answer opens Refine. Facts stay with their question's id: an
+Applications-modal edit, even of the question text, keeps them, and they never
+reach another question or application. Answers saved before facts were kept
+reopen without them. A tracker holding saved facts cannot be opened by an older
+RoleFit build.
+
 ## Product Purpose
 
 Applications and Analytics show structured loading placeholders while their

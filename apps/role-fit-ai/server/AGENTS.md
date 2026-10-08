@@ -53,7 +53,11 @@ for provider, prompt, sanitizer, and review work.
   saves create or update one revision-checked Draft; Apply/Skip promote that same
   ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across
   browser, server and backup validation (shape only on load; reconcile verifies
-  a new revision's count receipt); legacy pairs keep unknown provenance.
+  a new revision's count receipt); legacy pairs keep unknown provenance. A
+  revision may carry `userFacts` (`provenance: "user-declared"`, 1-20 facts
+  within the request's explicit-fact limits, checked by the shared
+  `answerFactsWithinLimits`); it is immutable like the rest of the revision, and
+  a build without the field rejects any tracker or backup that holds it.
 - `extension/` owns extension-origin routes and inbox handoff.
 - The provider-connections boundary owns the validated in-memory companion
   snapshot, managed API-credential resolution, and the shape-only same-origin

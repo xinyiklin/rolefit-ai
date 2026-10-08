@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
+  ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
   extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText,
   validateAnswerConstraints, type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
@@ -152,7 +152,8 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       if (!isCurrent()) return;
       if (!response.ok) throw new ApiError(data.error ?? "Could not draft an answer.", response.status);
       const answer = parseApplicationAnswerRevision(data.answer);
-      if (!answer || !answer.generation || !answer.sources || answer.id !== turn.answerRevisionId || answer.applicationId !== turn.applicationId
+      // Saved facts come only from the user, so a generated revision may never carry them.
+      if (!answer || !answer.generation || !answer.sources || answer.userFacts !== undefined || answer.id !== turn.answerRevisionId || answer.applicationId !== turn.applicationId
         || answer.questionId !== turn.question.id || answer.questionRevision !== turn.question.revision || answer.question !== turn.question.text) {
         throw new Error("The answer did not match this question. Retry to create a new draft.");
       }
@@ -175,9 +176,10 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   }
   function setComposer(composer: string) { update(conversationId, (current) => ({ ...current, composer })); }
   function newQuestion(text = "") { update(conversationId, (current) => ({ ...current, composer: text, targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: current.targetIntent + 1 })); }
-  function refine(messageId: string, instruction = "") {
+  function refine(messageId: string, instruction = "", mode?: Conversation["composerMode"]) {
+    // A follow-up defaults to Add a detail, but an instruction (a chip) edits the text and is never a fact.
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: instruction, targetIntent: current.targetIntent + 1,
-      composerMode: current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement" }));
+      composerMode: instruction ? "refinement" : mode ?? (current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement") }));
   }
   function editQuestion(messageId: string) {
     update(conversationId, (current) => {
@@ -196,7 +198,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       return;
     }
     const explicitFacts = [...(target?.facts ?? []), ...(target && current.composerMode === "clarification" ? [current.composer] : [])];
-    if (explicitFacts.length > 20 || explicitFacts.join("\n").length > 12_000) {
+    if (explicitFacts.length > ANSWER_FACTS_MAX || explicitFacts.join("\n").length > ANSWER_FACTS_MAX_CHARS) {
       update(conversationId, (state) => ({ ...state, status: "This question has reached its context limit. Move the supporting facts into Profile before starting a new question. Your message has been kept." }));
       return;
     }
@@ -238,8 +240,9 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     // Generated and reopened revisions anchor lineage even when unsaved; only a
     // failed manual edit should drop out of the chain.
     const failedEditCollapses = Boolean(message.edited);
-    const captured = { ...response, answer: text, counts: validation.counts, compliant: validation.compliant,
-      status: saveAsDraft ? "draft" as const : "ready" as const };
+    // The question's facts are the user's Add a detail text; answer text never joins them.
+    const captured = { ...response, ...(message.facts.length ? { userFacts: { provenance: "user-declared" as const, facts: [...message.facts] } } : {}),
+      answer: text, counts: validation.counts, compliant: validation.compliant, status: saveAsDraft ? "draft" as const : "ready" as const };
     saveRequests.current.add(response.id);
     updateMessage(conversationId, messageId, (item) => ({ ...item, savingRevisionId: response.id, saveError: undefined }));
     try {
@@ -261,13 +264,13 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     const validation = validateAnswerConstraints(answer.answer, constraints);
     const id = answer.id ?? crypto.randomUUID();
     const question = { id: answer.questionId ?? crypto.randomUUID(), revision: answer.questionRevision ?? 1, text: answer.question };
-    const { savedAt: _savedAt, ...savedRevision } = answer;
+    const { savedAt: _savedAt, userFacts, ...savedRevision } = answer;
     const response: ApplicationAnswerRevision = { ...savedRevision, id, applicationId: answer.applicationId ?? applicationId ?? conversationId,
       questionId: question.id, questionRevision: question.revision, constraints, counts: validation.counts, compliant: validation.compliant,
       status: answer.status ?? (validation.compliant ? "ready" : "draft") };
     const messageId = crypto.randomUUID();
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: response.clarification ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
-      messages: [...current.messages, { id: messageId, question, facts: [], response, savedRevisionId: id }] }));
+      messages: [...current.messages, { id: messageId, question, facts: [...(userFacts?.facts ?? [])], response, savedRevisionId: id }] }));
   }
   return {
     conversationId, conversation, savedAnswers, stageConfig: args.aiRequest,

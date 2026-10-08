@@ -584,7 +584,9 @@ Save creates a Draft application; Apply or Skip keeps that same record. Drafts
 have no submission date and are excluded from submission analytics. Explicit
 employer limits are counted locally; an unresolved answer can be kept with
 **Save draft**. Evidence warnings remain advisory. Saved revisions survive
-restart and workspace backup; unsaved conversation is session-only.
+restart and workspace backup, together with the facts you added with **Add a
+detail**; reopening a saved answer lists them under **Your facts** and uses them
+again when you refine it. Unsaved conversation is session-only.
 
 The opt-in synthetic writing benchmark uses nine settings: Opus 5.5,
 Sonnet 5.5 and GPT-6.1 Sol, each at low, medium and high effort.
