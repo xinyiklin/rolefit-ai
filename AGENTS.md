@@ -28,7 +28,8 @@ update the owning guide and documentation in the same change.
 - `README.md` / `docs/README.md` — workspace entry point and doc index.
 - `docs/` — `architecture.md` (boundaries, dependency direction,
   shared-versus-host ownership), `development.md` (commands, ports, generated
-  assets, verification matrix), `git-workflow.md` (branch, commit, PR, staging).
+  assets, verification matrix), `git-workflow.md` (branch, commit, PR, staging,
+  versioning).
 - `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` + `docs/engineering/` — RoleFit
   behavior and engineering contracts.
 - `apps/typeset/AGENTS.md` + `{README,PRODUCT,DESIGN}.md` — Typeset shell,
@@ -274,6 +275,9 @@ every user-facing reference, then — during the requested push, merge, or deplo
 — trigger the matching release/publish workflow and required tag, wait for it
 to finish successfully, and retain the workflow or live-environment receipt.
 **A versioned change is incomplete until that completion is confirmed.**
+Choose the bump and decide when to suggest a release with the versioning rules
+in `docs/git-workflow.md`: suggest one unprompted when they apply, and bump only
+after the user agrees.
 
 ## Continuity
 

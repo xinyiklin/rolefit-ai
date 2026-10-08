@@ -80,6 +80,54 @@ release/publish workflow, wait for successful completion, and retain the
 workflow or live-environment receipt. A versioned change is incomplete until
 that release/deploy completion is confirmed.
 
+## Versioning and release suggestions
+
+Versioned products use Semantic Versioning, `MAJOR.MINOR.PATCH`. Below 1.0,
+MINOR is the "new capability or data change" number and PATCH is the "fixes
+only" number. Pick the smallest bump the release honestly needs; do not raise
+MINOR by habit.
+
+- **Patch** (`0.8.0` -> `0.8.1`): only fixes, copy, performance, or dependency
+  refreshes, with no new user-facing capability and no change to stored data
+  or file format.
+- **Minor** (`0.8.x` -> `0.9.0`): a new user-facing capability; any change to
+  stored data or file format (the release notes say when older builds cannot
+  read the result); removed or renamed behavior; or a provider/default change
+  users will notice.
+- **Major** (`1.0.0` and later breaking releases): only on the user's explicit
+  decision. Agents never propose it on their own.
+- **RoleFit preview tag:** the package version stays canonical `X.Y.Z` and the
+  tag is `rolefit-preview-vX.Y.Z-beta.N`, starting at `beta.1` for each new
+  version. Tags are immutable: increment `N` only to retry a version whose
+  earlier tag failed before publishing. Any change after a published preview
+  needs a new version.
+
+Release suggestions apply to RoleFit, the only product with release tags.
+Typeset deploys on merge, and Typeset and package versions change only when the
+user asks.
+
+Agents never bump a version or push a release tag on their own, because a bump
+is a release with the obligations above. They suggest one, unprompted, in the
+report of a task that merges a qualifying RoleFit change, and do not repeat a
+declined suggestion until another qualifying change lands:
+
+- a user-visible capability or a stored-data/format change since the last
+  release: suggest the next **minor**;
+- otherwise, shipped fixes since the last release (especially data-integrity or
+  security fixes): suggest the next **patch**.
+
+To check, run `git fetch --tags origin`, find the last release with
+`git describe --abbrev=0 --match "rolefit-*" origin/main`, and list shipped
+changes with `git log --oneline <tag>..origin/main -- apps/role-fit-ai packages`.
+The suggestion names the proposed version and the rule that picks it, the
+commit range, and what blocks the release: missing browser QA, open review
+findings, release notes under `apps/role-fit-ai/docs/releases/`, any image
+listed in `apps/role-fit-ai/landing/screenshot-manifest.json`, and the rest of
+the preview preflight in
+`apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md`. Bump only after
+the user agrees, in a dedicated release PR that also gets the second
+independent reviewer `AGENTS.md` requires for release-triggering bumps.
+
 ## Minimum PR receipt
 
 Report:

@@ -1,7 +1,5 @@
 {
   "schemaVersion": 1,
-  "note": "Screenshots whose pixels contain the RoleFit version. The page also renders the live release version from GitHub, so a stale stamp contradicts the same page. Retake the image and update its version here in the same change as a version bump; the release contract fails otherwise.",
-  "versionStamped": {
-    "public/assets/desktop-app.png": "0.8.0"
-  }
+  "note": "Screenshots whose pixels contain the RoleFit version. Keep product chrome shown in screenshots version-free so this stays empty; the companion shows its version only in Settings. An image listed here must be retaken and its version updated in the same change as a version bump, because the page also renders the live release version from GitHub; the release contract fails otherwise.",
+  "versionStamped": {}
 }

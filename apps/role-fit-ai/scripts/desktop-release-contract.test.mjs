@@ -29,9 +29,9 @@ import {
 } from "../desktop/runtime-versions.mjs";
 
 const VERSION = "0.1.0";
-const RELEASE_VERSION = "0.8.0";
+const RELEASE_VERSION = "0.9.0";
 const EXTENSION_VERSION = "1.2.1";
-// 0.8.0 keeps 0.7.0's desktop API; a released/current split must be deliberate.
+// 0.9.0 keeps the desktop API 0.7.0 introduced; a released/current split must be deliberate.
 const RELEASED_DESKTOP_API_VERSION = 13;
 const CURRENT_DESKTOP_API_VERSION = 13;
 const PREVIEW_LABEL = "beta.1";
@@ -52,7 +52,7 @@ function readDesktopApiVersion() {
   return Number(match[1]);
 }
 
-test("0.8.0 beta.1 release tuple stays frozen and publishes the current desktop API", () => {
+test("0.9.0 beta.1 release tuple stays frozen and publishes the current desktop API", () => {
   const appPackage = readJson(new URL("../package.json", import.meta.url));
   const extensionManifest = readJson(new URL("../extension/manifest.json", import.meta.url));
   const releaseNotes = readFileSync(
@@ -90,17 +90,28 @@ async function makeScreenshotFixture(manifest, { imageName = "public/assets/desk
   return root;
 }
 
+test("the companion shows its version only in Settings, so shell screenshots survive a version bump", () => {
+  const html = readFileSync(new URL("../desktop/companion.html", import.meta.url), "utf8");
+  const renderer = readFileSync(new URL("../desktop/companion-renderer.js", import.meta.url), "utf8");
+  const start = html.indexOf('data-companion-panel="settings"');
+  const end = html.indexOf("</section>", start);
+  assert.ok(start > 0 && end > start, "the companion keeps its Settings panel");
+  assert.equal(html.match(/runtime-version/g)?.length, 1, "one version element");
+  assert.match(html.slice(start, end), /id="runtime-version"/, "the version element is inside Settings");
+  assert.equal(renderer.match(/getRuntimeInfo\(|appVersion/g)?.length, 2, "only loadRuntimeInfo reads the version");
+  const load = renderer.slice(
+    renderer.indexOf("async function loadRuntimeInfo"),
+    renderer.indexOf("function initializeUnavailableState"),
+  );
+  assert.doesNotMatch(load, /elements\.(?!runtimeVersion\b)\w+\.textContent/, "the version is written only to its Settings row");
+});
+
 test("version-stamped screenshots must be recaptured when the package version moves", async () => {
   const committed = assertScreenshotVersionStamps();
   const appPackage = readJson(new URL("../package.json", import.meta.url));
-  assert.ok(committed.length > 0, "the manifest must claim at least one version-stamped image");
   for (const { capturedVersion } of committed) {
     assert.equal(capturedVersion, appPackage.version);
   }
-  assert.ok(
-    committed.some((entry) => entry.imagePath === "public/assets/desktop-app.png"),
-    "the companion screenshot prints the version in its footer and must stay covered",
-  );
 
   const valid = await makeScreenshotFixture({
     schemaVersion: 1,
@@ -137,7 +148,7 @@ test("version-stamped screenshots must be recaptured when the package version mo
     assert.throws(() => assertScreenshotVersionStamps(missing), /not a file under landing\//);
     assert.throws(() => assertScreenshotVersionStamps(unknownKey), /only schemaVersion, note, and versionStamped/);
     assert.throws(() => assertScreenshotVersionStamps(escaping), /relative to the landing directory/);
-    assert.throws(() => assertScreenshotVersionStamps(empty), /at least one version-stamped image/);
+    assert.deepEqual(assertScreenshotVersionStamps(empty), [], "no version-stamped screenshot is a valid state");
     assert.throws(() => assertScreenshotVersionStamps(futureSchema), /schemaVersion must be 1/);
   } finally {
     await Promise.all(

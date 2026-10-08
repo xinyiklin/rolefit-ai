@@ -51,13 +51,18 @@ root and RoleFit app guides first.
   pixel on an ordinary HiDPI screen and reads blurry; the companion shot was the
   worst at 0.68x. Keep each `<img>` `width`/`height` equal to the file's real
   intrinsic size (2880x1800 for the app, whatever the Electron window yields for
-  the companion) — the aspect ratio is unchanged, so layout does not move.
+  the companion); the app shots keep their aspect ratio, so layout does not
+  move, and a companion recapture may change its height slightly.
 - A screenshot whose pixels contain the app version belongs in
   `screenshot-manifest.json` with the version it was captured at. The page also
   renders the live release version from GitHub, so a stale stamp contradicts the
   same page; `assertScreenshotVersionStamps` fails the release and Pages deploy
   gates until the image is retaken and the manifest updated. The manifest sits
   outside `public/`, so it never ships.
+- Keep the version out of product chrome that marketing screenshots show
+  (user decision, 2026-10-08). The companion shows it only in Settings, so the
+  Overview screenshot is retaken when its UI changes, not on every version
+  bump, and the manifest may be empty. Prefer this over adding a stamped image.
 - `npm run build:landing --workspace apps/role-fit-ai` must typecheck the
   landing, run the release-catalog probes, build only `dist-landing/`, and pass
   the output-boundary guard.

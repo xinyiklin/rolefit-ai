@@ -6,7 +6,7 @@ Use the narrowest document that owns the question.
 | --- | --- |
 | [Architecture](architecture.md) | Workspace boundaries, dependency direction, package/app ownership, and extraction rules. |
 | [Development](development.md) | Commands, ports, generated assets, verification matrix, and docs checks. |
-| [Git workflow](git-workflow.md) | Branch, commit, PR, staging, and monorepo scope conventions. |
+| [Git workflow](git-workflow.md) | Branch, commit, PR, staging, versioning, and monorepo scope conventions. |
 | [RoleFit README](../apps/role-fit-ai/README.md) | Local workbench setup, providers, extension, tracker, and workspace. |
 | [RoleFit PRODUCT](../apps/role-fit-ai/PRODUCT.md) | Browser-primary product behavior, provider setup, and priorities. |
 | [RoleFit DESIGN](../apps/role-fit-ai/DESIGN.md) | RoleFit visual and interaction contract. |

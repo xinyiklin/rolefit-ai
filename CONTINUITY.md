@@ -5,6 +5,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] RoleFit 0.9.0 preview prepared (minor: Answers, multiple Skip
+  reasons, and a one-way tracker format since 0.8.0-beta.1). Versioning now
+  follows `docs/git-workflow.md`: patch for fix-only releases, minor for new
+  capability or stored-data changes, and agents suggest releases but bump only
+  on the user's go-ahead.
+- [USER+CODE] The desktop companion shows its version only in Settings, not in
+  the sidebar (the sidebar keeps "Running on <port>"), so the landing
+  screenshot of the shell no longer needs a retake on every version bump.
+  `landing/screenshot-manifest.json` may be empty and is empty now; a release
+  test pins the version out of the sidebar. The companion screenshot was
+  recaptured on Windows (1784x1202, isolated user data, empty workspace, port
+  5181, 2x), so its type renders in Windows fallback fonts rather than the
+  macOS ones used at 0.8.0.
 - [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
   12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
   tracker field is now `notApplyingReasons` (canonical-order list, omitted when
@@ -339,10 +352,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   retries under the new pool, one before the loader commits cancels adoption,
   and a pool change never re-resolves a settled preparation. The app guide's
   "no persisted variant metadata" rule now allows only this pool. Rollback:
-  before reverting, run Settings Reset (it clears every setting) or delete both
-  `excludedResumeVariants` and `excludedCoverLetterVariants` from
-  `workspace-preferences.json`; otherwise an older build treats the preferences
-  file as invalid and refuses settings saves. Re-checking variants is not
+  an older build treats preferences with these keys as invalid and refuses
+  settings saves. Settings Reset no longer avoids that (superseded 2026-10-08:
+  since #179, Reset's auto-save re-writes `resumePolishReview`, which 0.8.0 also
+  rejects); restore a backup made by the older build instead. Re-checking variants is not
   enough, because a deleted or renamed excluded variant can no longer be
   re-checked. Backups taken while a pool was customized need a newer build to
   restore.

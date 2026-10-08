@@ -174,14 +174,6 @@ summary:focus-visible {
   padding: 0 9px;
 }
 
-.companion-sidebar__local span {
-  color: var(--ink-faint);
-  font-family: var(--mono);
-  font-size: 9px;
-  letter-spacing: .08em;
-  text-transform: uppercase;
-}
-
 .sidebar-service {
   display: inline-flex;
   min-width: 0;
@@ -643,6 +635,9 @@ code { padding: 1px 3px; border-radius: 3px; background: #edf0eb; color: var(--f
 .site-port-form input { width: 118px; }
 .site-port-form p { grid-column: 1 / -1; margin: -3px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.45; }
 .site-port-form button { font-size: 11px; }
+.settings-about { display: grid; gap: 7px; margin: 12px 0 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
+.settings-about dt { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
+.settings-about dd { margin: 0; color: var(--ink-strong); font-size: 12px; }
 
 .workspace-card {
   max-width: 640px;
@@ -853,7 +848,7 @@ code { padding: 1px 3px; border-radius: 3px; background: #edf0eb; color: var(--f
 
 @media (forced-colors: active) {
   .brand__mark, .provider-card__state::before, .companion-nav__badge, .companion-nav__dot, .sidebar-service::before, .extension-origin__dot, .overview-card[data-tone="attention"] strong::before { forced-color-adjust: none; }
-  .overview-card, .provider-card, .extension-access, .extension-install, .extension-origin, .site-port-form, .workspace-card, .connection-state-block { background: Canvas; }
+  .overview-card, .provider-card, .extension-access, .extension-install, .extension-origin, .site-port-form, .workspace-card, .connection-state-block, .settings-about { background: Canvas; }
   .extension-browser-switch__tab[aria-selected="true"] { forced-color-adjust: none; background: Highlight; color: HighlightText; }
   .extension-install__copy { border-color: ButtonText; background: ButtonFace; color: ButtonText; }
   .extension-install__copy:hover:not(:disabled) { border-color: Highlight; }

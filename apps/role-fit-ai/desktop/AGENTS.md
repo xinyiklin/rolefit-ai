@@ -47,8 +47,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   override; settings never contain secrets or workspace paths.
 - The companion window is a fixed 900x620 sidebar shell (Overview / Providers /
   Workspace / Browser extension / Settings). The selected section survives a
-  renderer refresh for the current window session. The Workspace section is
-  the product home of portable workspace backup and
+  renderer refresh for the current window session. The app version appears
+  only in Settings, never in the sidebar shell or Overview, so the landing
+  screenshot of the shell survives version bumps; the sidebar service line
+  keeps the port. The Workspace section is the product home of portable
+  workspace backup and
   restore (`docs/engineering/workspace-backup.md` owns the wire contract). Main
   owns the whole flow: it sends backup/restore only over the owned server's
   private utility-process channel, fetches only shape-only activity over the
@@ -269,7 +272,7 @@ npm run test:desktop:package-layout --workspace apps/role-fit-ai
 npm run package:rolefit:desktop
 npm run test:rolefit:desktop:packaged
 npm run make:rolefit:desktop
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.8.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.9.0-windows-x64.exe
 npm run test:rolefit:release
 ```
 
