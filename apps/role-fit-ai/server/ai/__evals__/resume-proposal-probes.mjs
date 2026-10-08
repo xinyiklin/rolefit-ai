@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { flattenResumeTargets, sanitizeResumePolishWireResult } from "../../../shared/resumePolishContract.ts";
-import { buildResumeProposalPrompts, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
+import { buildResumeProposalPrompts, NARROWING_CLAIM_WORDS, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 
 const proposalSource = readFileSync(new URL("../resumeProposal.ts", import.meta.url), "utf8");
 const reviewSource = readFileSync(new URL("../resumeProposalReview.ts", import.meta.url), "utf8");
@@ -855,6 +855,72 @@ const paddedEcho = sanitizeResumeProposal(
 );
 assert.equal(paddedEcho.status, "NO_CHANGES", "irregular spacing around a stripped tag is still UNCHANGED");
 assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
+
+// A deletion-only rewrite is a no-op only when it removes filler; deleting a
+// claim-bearing qualifier, negation or number is a correction the user reviews.
+{
+  const deletionTarget = (text) => flattenResumeTargets({
+    sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [{ id: "role-1", titleLeft: "Engineer", titleRight: "Acme", subtitleLeft: "", subtitleRight: "2024", bullets: [{ id: "b1", text }] }] }],
+    contextSections: []
+  });
+  const outcome = (current, replacement) => {
+    const targets = deletionTarget(current);
+    return sanitizeResumeProposal({ status: "PROPOSAL", changes: [{ targetId: targets[0].targetId, replacement }] }, targets, jobText, current, "", 0, false).status;
+  };
+  for (const [current, replacement, label] of [
+    ["Built 12 critical Python tools for scheduled invoice imports and nightly reconciliations.", "Built 12 Python tools for scheduled invoice imports and nightly reconciliations.", "removing critical"],
+    ["Solely designed and built the scheduling service that books every clinic appointment across the region.", "Designed and built the scheduling service that books every clinic appointment across the region.", "removing solely"],
+    ["Migrated all production Postgres databases to managed instances with zero downtime windows.", "Migrated production Postgres databases to managed instances with zero downtime windows.", "removing all"],
+    ["Cut nightly report runtime from 40 minutes to 12 minutes by caching warehouse queries.", "Cut nightly report runtime from minutes to 12 minutes by caching warehouse queries.", "removing a number"],
+    ["Mentored three junior engineers through their first production deployments and on-call shifts.", "Mentored junior engineers through their first production deployments and on-call shifts.", "removing a number word"]
+  ]) assert.equal(outcome(current, replacement), "PROPOSAL", `${label} reaches review`);
+  // Deleting a negation or hedge widens the claim; it stays a dropped no-op, never an unwarned inflation.
+  for (const [current, replacement, label] of [
+    ["Wrote integration tests for the billing service but not the payments gateway adapters.", "Wrote integration tests for the billing service but the payments gateway adapters.", "removing a negation"],
+    ["Reduced nightly reconciliation failures by nearly 40% after adding schema checks to the importer.", "Reduced nightly reconciliation failures by 40% after adding schema checks to the importer.", "removing a hedge"],
+    ["Wrote release notes and runbooks for the billing service and its payment gateway adapters.", "Wrote release and runbooks for the billing service and its payment gateway adapters.", "a word that only stems like a list word"],
+    ["Migrated 40% of production traffic from the legacy load balancers to the new ingress controllers.", "Migrated production traffic from the legacy load balancers to the new ingress controllers.", "removing a partial percentage"],
+    ["Built 2 of the 5 ingestion services that load partner feeds into the analytics warehouse nightly.", "Built the ingestion services that load partner feeds into the analytics warehouse nightly.", "removing a partial count"],
+    ["Led half the platform team through the migration of billing jobs to the new scheduler cluster.", "Led the platform team through the migration of billing jobs to the new scheduler cluster.", "removing half"],
+    ["Migrated most legacy services from the shared VM fleet to containers on the managed Kubernetes cluster.", "Migrated legacy services from the shared VM fleet to containers on the managed Kubernetes cluster.", "removing most"]
+  ]) assert.equal(outcome(current, replacement), "NO_CHANGES", `${label} stays a no-op`);
+  // A long bullet keeps each deletion under the 15% cut, so only the word list decides.
+  const longTail = "reporting tools that reconcile invoices, refunds, and payouts for the finance, billing, and operations teams in the main office.";
+  for (const word of NARROWING_CLAIM_WORDS) {
+    assert.equal(outcome(`Built ${word} ${longTail}`, `Built ${longTail}`), "PROPOSAL", `deleting "${word}" reaches review`);
+  }
+  assert.equal(
+    outcome("Successfully built Python tools for scheduled invoice imports and nightly reconciliations.", "Built Python tools for scheduled invoice imports and nightly reconciliations."),
+    "NO_CHANGES",
+    "trimming filler stays a no-op"
+  );
+}
+
+// Present-tense ownership end to end: a bullet's own lead verb counts, a current
+// bullet or evidence line counts only for the same verb, and nouns or titles never
+// stand in for a different claim.
+{
+  const ownershipWarned = (bullets, role, targetIndex, replacement) => {
+    const targets = flattenResumeTargets({
+      sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [{ id: "role-1", titleLeft: "Acme", titleRight: "2024", subtitleLeft: role, subtitleRight: "", bullets: bullets.map((text, i) => ({ id: `b${i}`, text })) }] }],
+      contextSections: []
+    }).filter((target) => target.kind === "bullet");
+    const scope = bullets.join("\n");
+    const result = sanitizeResumeProposal({ status: "PROPOSAL", changes: [{ targetId: targets[targetIndex].targetId, replacement }] }, targets, jobText, scope, "", 0, false);
+    return (result.changes[0]?.warnings ?? []).some((warning) => /ownership/i.test(warning));
+  };
+  assert.equal(ownershipWarned(["Build internal dashboards with React for the finance team."], "Engineer", 0, "Built React dashboards for the internal finance team."), false, "the same verb in another tense is not an increase");
+  assert.equal(ownershipWarned(["Maintained Go services that price insurance quotes.", "Build Go services that price insurance quotes for brokers."], "Engineer", 0, "Built Go services that price insurance quotes."), false, "a present-tense evidence line supports the same verb");
+  assert.equal(ownershipWarned(["Assisted a team developing payment reconciliation services."], "Engineer", 0, "Build payment reconciliation services."), true, "a present-tense direct verb from assisted work warns");
+  assert.equal(ownershipWarned(["Direct messaging feature with WebSockets and Redis."], "Engineer", 0, "Led the direct messaging feature with WebSockets and Redis."), true, "a verb-shaped noun does not support leadership");
+  assert.equal(ownershipWarned(["Maintained the release pipeline for the mobile apps."], "Build and Release Engineer", 0, "Led the release pipeline for the mobile apps."), true, "a role title does not support leadership");
+  for (const [bullets, replacement, label] of [
+    [["Builds and releases for the iOS app via fastlane on Bitrise."], "Built the iOS app release flow on Bitrise with fastlane.", "a plural noun opening the current bullet"],
+    [["Leads routing rules in Salesforce for the SDR team."], "Led leads routing rules in Salesforce for the SDR team.", "a plural noun that spells the verb"],
+    [["Maintained the iOS app release process on Bitrise.", "Builds of the iOS app release process on Bitrise were flaky."], "Built the iOS app release process on Bitrise.", "a plural noun in evidence"],
+    [["Lead generation forms for the marketing site."], "Led the lead generation forms for the marketing site.", "lead generation"]
+  ]) assert.equal(ownershipWarned(bullets, "Engineer", 0, replacement), true, `${label} does not support the verb`);
+}
 
 // Drive the real route over loopback rather than pattern-matching its source. A
 // text match proved it could pass on a handler that returns without writing a

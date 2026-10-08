@@ -43,9 +43,15 @@ The offline conversation probes exercise the production generator with injected
 dispatch, including constraints, bounded repair, factual scope, missing facts,
 question identity, cancellation and usage accounting. Client probes hold requests
 across source/application changes and test exact revision saves, retries, Apply
-coordination and failure recovery. Persistence probes cover Draft dates, same-ID
-Apply/Skip, legacy answers and backup round trips. Run the nearest probe while
-iterating, then the full RoleFit offline suite and app/server build.
+coordination and failure recovery.
+`src/hooks/__evals__/application-answers-replacement-guard.mjs` runs the
+production hook against App's own replacement guards: composer text, an unsaved
+draft and an in-flight request hold Prepare and Open, saved or empty threads do
+not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
+renders the Answers tab to prove typing and edits are read-only while Prepare
+runs. Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
+and backup round trips. Run the nearest probe while iterating, then the full
+RoleFit offline suite and app/server build.
 
 The opt-in writing benchmark uses nine settings: Opus 5.5, Sonnet 5.5 and
 GPT-6.1 Sol, each at low/medium/high. `--expanded` selects 57 synthetic cases:
@@ -684,17 +690,22 @@ Good server verification covers:
   execution failure; an unreadable review reply is counted (`reviewUnreadable`)
   and the run continues. Neither rewrites the unreviewed arm's result, and
   neither ever counts as a review that kept everything. Paired
-  mode also runs the two tracked review probes in
-  `fixtures/resume-proposal-review-probes.json` (four hand-built edits, then the
-  same edits under injected resume, Profile, posting, and guidance text) and
-  reports per-edit agreement with their expected keep/drop. The default-on bar
+  mode also runs the five tracked review probes in
+  `fixtures/resume-proposal-review-probes.json` and reports per-edit agreement
+  with their expected keep/drop:
+  - four hand-built edits;
+  - the same edits under injected resume, Profile, posting and guidance text;
+  - three merged-fact edits from Opus 5.5 High's 2026-10-07 baseline
+    (separately listed facts joined into a new relationship), each expected
+    to be held back. These measure whether the review covers that failure
+    before any deterministic check is built. The default-on bar
   (user-approved 2026-10-07; no run yet): zero lost opportunity fixes, zero
   held-back edits to `mustKeepBullets` bullets that Astra labels supported and
   material (`keyEvidenceValuableHeldBack`), at least 75% of held-back edits
   unsupported, immaterial, or non-opportunity structural edits, at most 5% of
   Astra supported-and-material edits held back, and every probe verdict
   matching. A paired repetition costs about 39 generations, 39
-  fact-checks, and 41 reviews; a fresh real-application sample needs separate
+  fact-checks, and 44 reviews; a fresh real-application sample needs separate
   authorization because it sends private text to both providers.
 - pasted resume text reaches the structured editor as a one-time conversion into
   `ResumeData`; a `.resume` file loads its `ResumeData` directly, and export offers

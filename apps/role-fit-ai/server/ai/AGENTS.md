@@ -315,6 +315,29 @@ application retain blocking technical guards.
   - A single line that leads with assisting others, in any tense ("Assist
     engineers in migrating…"), rewritten to lead with that assisted verb is an
     ownership increase unless evidence leads with the same verb.
+  - Resume Polish bullets only: the `presentLead` option of
+    `hasUnsupportedOwnershipIncrease`, which `candidateClaimIssue` forwards.
+    - A proposal that opens with a capitalised, whole-word, plain or -s present
+      ownership verb ("Build…", "Owns…") claims its past form's level.
+    - A current bullet or evidence line read that way counts only for the same
+      verb: "Build Go services…" supports "Built Go services…". A verb-shaped
+      noun, title or abbreviation split therefore never supports a different
+      claim.
+    - That side reads only the plain form, and never before a preposition,
+      conjunction or "to be" verb, so "Builds for…" and "Leads were…" are
+      nouns. Known limit: a pun such as "Design work…" can still read as the
+      verb.
+    - Not read that way: product names that are verbs, line-opening nouns such
+      as "Design reviews" or "Direct-to-consumer", tokens glued to a hyphen,
+      apostrophe or digit, and bases shorter than three letters ("L2").
+    - The shared `ownershipStrength` keeps sentence and noun semantics for Fit,
+      cover letters, Answers and review. A 2026-10-07 first version put the
+      reading there and made nouns and titles count as ownership.
+    - "lead time", "lead generation" and "lead scoring" are nouns everywhere;
+      "lead time-series" still leads.
+    - A 2026-10-07 replay showed no change on real applications. Six
+      synthetic old-prompt flags are present-tense forms of the existing
+      "Added/Wrote → Implemented/Developed" ownership rule.
   - Specific evidence entails its category or language (PostgreSQL→database,
     ARIA labels→accessibility, Docker→containerization, Django/pytest→Python,
     AWS/Azure/GCP→cloud, CI→continuous integration; CI evidence never
@@ -374,7 +397,16 @@ application retain blocking technical guards.
   checked.
 - Churn settles as an `UNCHANGED` no-op, never a reviewable edit: a bullet
   rewrite that adds no word as written (only tense and number inflect), keeps
-  the remaining words in order and marked alike, and cuts under 15%; and a
+  the remaining words in order and marked alike, cuts under 15%, and deletes no
+  narrowing claim word or count. Narrowing words, matched on the raw word, are
+  exclusivity or scope ("solely", "all"), importance ("critical",
+  "production"), seniority ("senior", "lead") and counts ("three engineers",
+  digits). Such a deletion is a correction the user reviews. Some deletions
+  widen the claim instead, so they stay a dropped no-op rather than an unwarned
+  inflation: a negation or hedge ("not", "nearly"), or a partial quantity
+  ("most", "half", or any deletion that removes "of" or a percentage, as in
+  "40% of", "2 of the 5"). Stored benchmark receipts hold only surviving
+  edits, so a replay cannot measure this rule. The same no-op rule covers a
   Skills row with the same items, written and marked the same, that moves no
   skill the posting names forward. Casing, spelling, symbol, and preposition
   changes are new words and stay reviewable. Dropping is safe because the resume
