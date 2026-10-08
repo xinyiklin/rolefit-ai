@@ -16,7 +16,8 @@ import {
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
   hasUnsupportedOwnershipIncrease,
-  isClaimTermGroundedInSource
+  isClaimTermGroundedInSource,
+  ownershipStrength
 } from "../grounding.ts";
 import { findUngroundedNumericClaim } from "../sanitize.ts";
 import { candidateClaimIssue } from "../claimEvidence.ts";
@@ -116,6 +117,14 @@ const checks = [
     hasUnsupportedOwnershipIncrease("Migrated the payouts service from a cron script to Celery workers backed by Redis, working alongside senior engineers.", assisted, assisted)],
   ["assisted validation rewritten as Added is inflation",
     hasUnsupportedOwnershipIncrease("Added input validation to the Java Spring claims intake service alongside senior engineers.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.")],
+  ["present-tense direct verbs from assisted work are inflation like their past forms",
+    ["Build", "Builds", "Own", "Owns"].every((verb) => hasUnsupportedOwnershipIncrease(`${verb} payment reconciliation services.`, "Assisted a team developing payment reconciliation services.", "Assisted a team developing payment reconciliation services."))],
+  ["present-tense evidence supports the same claim in past tense",
+    !hasUnsupportedOwnershipIncrease("Built Go services that price insurance quotes.", "Build Go services that price insurance quotes.", "Build Go services that price insurance quotes.")],
+  ["a build noun, an own adjective, and lead time claim no ownership",
+    ownershipStrength("Maintain the build pipeline.") === 0 && ownershipStrength("Keep their own notes.") === 0 && ownershipStrength("Lead time fell 30% after the rollout.") === 0],
+  ["a leading gerund is a participial phrase, not a claim",
+    ownershipStrength("Helping members at the desk led me to develop Atlas.") === 0],
   ["helping framing kept is not inflation",
     !hasUnsupportedOwnershipIncrease("Helped migrate the payouts service from a cron script to Celery workers backed by Redis.", assisted, assisted)],
   ["tied direct-action evidence supports the direct rewrite",
@@ -303,7 +312,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 119, `grounding probe count dropped below the floor (119): found ${checks.length}`);
+assert(checks.length >= 123, `grounding probe count dropped below the floor (123): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {

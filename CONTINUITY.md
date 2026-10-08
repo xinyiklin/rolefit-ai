@@ -5,6 +5,25 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] Stage 2 of the external-review follow-up, sanitizer slice:
+  - The Resume Polish no-op filter no longer drops a deletion-only rewrite that
+    removes a claim-bearing word ("solely", "all", "critical", "production",
+    negation, approximation) or a number. Such an edit is a correction to
+    review. Filler trims stay `UNCHANGED`.
+  - Ownership checks read a line-initial plain or -s present verb ("Build",
+    "Owns") at its past form's level, so "Assisted…" → "Build…" warns like
+    "Built…". Present-tense evidence now supports the matching claim, and
+    "lead time" / "lead generation" no longer count as leadership.
+  - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
+    - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
+    - The no-op change moved no stored edit.
+    - Five new synthetic flags on old-prompt runs, all labelled supported. They
+      are present-tense versions of the existing "Added/Wrote →
+      Implemented/Developed" ownership rule.
+    - New probes fail on the old code. Full RoleFit check passed.
+  - Still open from that review: claims that recombine separate facts, saving
+    Answers' declared facts (storage change, needs approval), and the Answers
+    unsaved-work guard (separate fix).
 - [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
   medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
   Saved choices stay; the user's own saved selection was switched too (app

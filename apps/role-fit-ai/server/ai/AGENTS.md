@@ -312,6 +312,13 @@ application retain blocking technical guards.
   - A single line that leads with assisting others, in any tense ("Assist
     engineers in migrating…"), rewritten to lead with that assisted verb is an
     ownership increase unless evidence leads with the same verb.
+  - A line-initial ownership verb in the plain or -s present ("Build", "Owns",
+    "Leads") claims the same level as its past form, in proposals and evidence
+    alike. A leading gerund does not ("Helping members… led me to" is a
+    participial phrase in prose), and "lead time", "lead generation" and
+    "lead scoring" are nouns. A 2026-10-07 replay showed no change on real
+    applications. The few new synthetic flags were present-tense forms of the
+    existing "Added/Wrote → Implemented/Developed" ownership rule.
   - Specific evidence entails its category or language (PostgreSQL→database,
     ARIA labels→accessibility, Docker→containerization, Django/pytest→Python,
     AWS/Azure/GCP→cloud, CI→continuous integration; CI evidence never
@@ -371,7 +378,11 @@ application retain blocking technical guards.
   checked.
 - Churn settles as an `UNCHANGED` no-op, never a reviewable edit: a bullet
   rewrite that adds no word as written (only tense and number inflect), keeps
-  the remaining words in order and marked alike, and cuts under 15%; and a
+  the remaining words in order and marked alike, cuts under 15%, and deletes no
+  claim-bearing word (exclusivity or scope such as "solely" or "all",
+  importance such as "critical" or "production", negation, approximation) or
+  number. Such a deletion is a correction the user reviews. A 2026-10-07 replay
+  changed no stored edit's outcome. The same no-op rule covers a
   Skills row with the same items, written and marked the same, that moves no
   skill the posting names forward. Casing, spelling, symbol, and preposition
   changes are new words and stay reviewable. Dropping is safe because the resume

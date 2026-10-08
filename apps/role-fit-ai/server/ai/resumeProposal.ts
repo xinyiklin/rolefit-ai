@@ -423,16 +423,31 @@ function rewriteWords(value: string): string[] {
     .map((word) => actionVerbPast(word) ?? word.replace(/(?:ing|ed|es|s)$/, ""));
 }
 
-// A rewrite that adds no word, keeps the rest in order and marked alike, and cuts
-// under 15% leaves the resume saying the same thing: a no-op, never a reviewable edit.
+// Deleting one of these changes what a bullet claims ("Solely built", "critical
+// tools", "not"), so the edit is a reviewable correction, never a no-op trim.
+const CLAIM_BEARING_WORDS = new Set([
+  "solely", "sole", "alone", "only", "single-handedly", "independently", "personally", "entirely", "fully",
+  "all", "every", "each", "entire", "whole", "critical", "key", "major", "primary", "core", "mission-critical",
+  "production", "enterprise", "large-scale", "company-wide", "org-wide", "not", "no", "never", "without",
+  "nearly", "approximately", "about", "over", "under", "more", "less", "first", "most", "many", "multiple", "several"
+]);
+
+// A rewrite that adds no word, keeps the rest in order and marked alike, cuts
+// under 15%, and deletes no claim-bearing word or number leaves the resume saying
+// the same thing: a no-op, never a reviewable edit.
 function isImmaterialRewrite(replacement: string, current: string): boolean {
   const before = rewriteWords(current);
+  const kept = new Set<number>();
   let next = 0;
   for (const word of rewriteWords(replacement)) {
     next = before.indexOf(word, next) + 1;
     if (!next) return false;
+    kept.add(next - 1);
   }
-  return markedText(replacement) === markedText(current)
+  const deletesClaim = before.some((word, index) => !kept.has(index)
+    && (CLAIM_BEARING_WORDS.has(word.toLowerCase()) || /\d/.test(word)));
+  return !deletesClaim
+    && markedText(replacement) === markedText(current)
     && stripInlineMarks(replacement).length >= stripInlineMarks(current).length * 0.85;
 }
 

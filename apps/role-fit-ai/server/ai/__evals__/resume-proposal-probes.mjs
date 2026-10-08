@@ -856,6 +856,31 @@ const paddedEcho = sanitizeResumeProposal(
 assert.equal(paddedEcho.status, "NO_CHANGES", "irregular spacing around a stripped tag is still UNCHANGED");
 assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
 
+// A deletion-only rewrite is a no-op only when it removes filler; deleting a
+// claim-bearing qualifier, negation or number is a correction the user reviews.
+{
+  const deletionTarget = (text) => flattenResumeTargets({
+    sections: [{ id: "exp", heading: "Experience", type: "standard", entries: [{ id: "role-1", titleLeft: "Engineer", titleRight: "Acme", subtitleLeft: "", subtitleRight: "2024", bullets: [{ id: "b1", text }] }] }],
+    contextSections: []
+  });
+  const outcome = (current, replacement) => {
+    const targets = deletionTarget(current);
+    return sanitizeResumeProposal({ status: "PROPOSAL", changes: [{ targetId: targets[0].targetId, replacement }] }, targets, jobText, current, "", 0, false).status;
+  };
+  for (const [current, replacement, label] of [
+    ["Built 12 critical Python tools for scheduled invoice imports and nightly reconciliations.", "Built 12 Python tools for scheduled invoice imports and nightly reconciliations.", "removing critical"],
+    ["Solely designed and built the scheduling service that books every clinic appointment across the region.", "Designed and built the scheduling service that books every clinic appointment across the region.", "removing solely"],
+    ["Migrated all production Postgres databases to managed instances with zero downtime windows.", "Migrated production Postgres databases to managed instances with zero downtime windows.", "removing all"],
+    ["Wrote integration tests for the billing service but not the payments gateway adapters.", "Wrote integration tests for the billing service but the payments gateway adapters.", "removing a negation"],
+    ["Cut nightly report runtime from 40 minutes to 12 minutes by caching warehouse queries.", "Cut nightly report runtime from minutes to 12 minutes by caching warehouse queries.", "removing a number"]
+  ]) assert.equal(outcome(current, replacement), "PROPOSAL", `${label} reaches review`);
+  assert.equal(
+    outcome("Successfully built Python tools for scheduled invoice imports and nightly reconciliations.", "Built Python tools for scheduled invoice imports and nightly reconciliations."),
+    "NO_CHANGES",
+    "trimming filler stays a no-op"
+  );
+}
+
 // Drive the real route over loopback rather than pattern-matching its source. A
 // text match proved it could pass on a handler that returns without writing a
 // response, and it rejected behaviour-preserving key reordering.

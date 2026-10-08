@@ -199,13 +199,39 @@ const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
 // "test-driven", "community-led": compound adjectives, not responsibility.
 const CAUSAL_LED = /(?<!\b(?:i|we)\s+)\bled\s+(?:(?:me|us)\s+)?to\b/gi;
 const COMPOUND_OWNERSHIP = /\b(?!co-|self-)[\w]+-(?:driven|led|owned|directed|headed)\b/gi;
+// "Lead time" and "lead generation" are nouns, not leadership.
+const LEAD_NOUN = /\blead\s+(?:time|times|generation|scoring)\b/gi;
+
+// The past forms above, by level, so a line-initial present-tense verb ("Build",
+// "Owns") claims what its past form would. A leading gerund is often a
+// participial phrase in prose ("Helping members… led me to"), so it is not read.
+const OWNERSHIP_LEVEL_BY_PAST = new Map<string, number>([
+  ...["architected", "led", "owned", "drove", "directed", "headed", "spearheaded", "oversaw", "orchestrated"].map((verb) => [verb, 3] as const),
+  ...["built", "designed", "implemented", "developed", "delivered", "created", "engineered", "managed"].map((verb) => [verb, 2] as const),
+  ...["assisted", "supported", "contributed", "helped", "collaborated", "coordinated", "participated"].map((verb) => [verb, 1] as const)
+]);
+
+function leadingVerbOwnership(text: string): number {
+  let strongest = 0;
+  for (const line of text.split(/[\r\n]+|(?<=[.!?;])\s+/)) {
+    const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").trim();
+    const word = clause.match(/^[A-Za-z]+/)?.[0]?.toLowerCase();
+    if (!word) continue;
+    const bases = [word, word.replace(/e?s$/, ""), word.replace(/s$/, "")];
+    for (const base of bases) {
+      const level = [IRREGULAR_PAST.get(base), base === "oversee" ? "oversaw" : undefined, `${base}ed`, `${base}d`]
+        .map((past) => (past ? OWNERSHIP_LEVEL_BY_PAST.get(past) ?? 0 : 0))
+        .reduce((max, next) => Math.max(max, next), 0);
+      strongest = Math.max(strongest, level);
+    }
+  }
+  return strongest;
+}
 
 export function ownershipStrength(value: string): number {
-  const text = value.replace(CAUSAL_LED, " ").replace(COMPOUND_OWNERSHIP, " ");
-  for (const { level, pattern } of OWNERSHIP_LEVELS) {
-    if (pattern.test(text)) return level;
-  }
-  return 0;
+  const text = value.replace(CAUSAL_LED, " ").replace(COMPOUND_OWNERSHIP, " ").replace(LEAD_NOUN, " ");
+  const anywhere = OWNERSHIP_LEVELS.find(({ pattern }) => pattern.test(text))?.level ?? 0;
+  return Math.max(anywhere, leadingVerbOwnership(text));
 }
 
 const OWNERSHIP_CONTEXT_STOPWORDS = new Set([
