@@ -99,9 +99,13 @@ test("the companion shows its version only in Settings, so shell screenshots sur
   assert.equal(html.match(/runtime-version/g)?.length, 1, "one version element");
   assert.match(html.slice(start, end), /id="runtime-version"/, "the version element is inside Settings");
   assert.equal(renderer.match(/getRuntimeInfo\(|appVersion/g)?.length, 2, "only loadRuntimeInfo reads the version");
-  const load = renderer.slice(
-    renderer.indexOf("async function loadRuntimeInfo"),
-    renderer.indexOf("function initializeUnavailableState"),
+  const loadStart = renderer.indexOf("async function loadRuntimeInfo");
+  assert.ok(loadStart >= 0, "the companion keeps loadRuntimeInfo");
+  const load = renderer.slice(loadStart, renderer.indexOf("\n}\n", loadStart) + 2);
+  assert.match(
+    load,
+    /elements\.runtimeVersion\.textContent = version \? `RoleFit \$\{version\}`/,
+    "loadRuntimeInfo writes the version to its Settings row",
   );
   assert.doesNotMatch(load, /elements\.(?!runtimeVersion\b)\w+\.textContent/, "the version is written only to its Settings row");
 });
