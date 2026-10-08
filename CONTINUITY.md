@@ -60,9 +60,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
     which are not claim-checked; this extends the tradeoff accepted when gap
     notes were Prepare-only.
-  - [USER] Follow-up, separate PR after this merges: with no AI provider,
-    Prepare's Resume card reads "Ready" above "Finish the resume and AI setup
-    before polishing."; give it the precise blocker.
+  - [USER+CODE] Follow-up done (`fix/rolefit-prepare-polish-blocker`): the
+    Resume card on Prepare still reads "Ready", but its Polish note no longer
+    says "Finish the resume and AI setup before polishing." The note is the
+    Resume Polish provider's recovery step while that provider is not ready,
+    otherwise the current Polish status, otherwise "Set at least one editable
+    resume section to Polish." (the pipeline's own wording).
+    - [TOOL] Client `tsc`, RoleFit build, and 161/161 offline evals passed;
+      browser QA of the no-provider state on synthetic data; one independent
+      review (no high or medium findings).
+    - Still open (pre-existing, not in that PR): with a ready provider and no
+      Polish section, a leftover Polish status can outrank that blocker; and
+      Prepare's gate counts a locked section's leftover Polish mode while the
+      Resume tab's does not.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so
