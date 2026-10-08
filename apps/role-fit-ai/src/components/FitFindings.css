@@ -1,0 +1,77 @@
+.fit-findings {
+  display: grid;
+  gap: var(--s3);
+  justify-self: stretch;
+  min-width: 0;
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.fit-findings__group {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+/* Raised specificity so host paragraph rules (e.g. the modal card's) cannot restyle it. */
+.fit-findings__group > .fit-findings__label {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.72rem;
+  font-weight: 650;
+}
+
+/* Scoped to the findings list so a nested warning's list keeps its own indent. */
+.fit-findings__group > ul {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fit-finding {
+  display: grid;
+  grid-template-columns: 13px minmax(0, 1fr);
+  column-gap: var(--s2);
+  min-width: 0;
+  padding: 6px 0;
+}
+
+.fit-finding + .fit-finding {
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.fit-finding__mark {
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+.fit-finding--gap .fit-finding__mark,
+.fit-finding--eligibility .fit-finding__mark {
+  color: var(--warm);
+}
+
+.fit-finding__body {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  color: var(--ink);
+  font-size: 0.78rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.fit-finding__body > span strong {
+  font-weight: 600;
+}
+
+.fit-finding__body small {
+  color: var(--ink-soft);
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.fit-finding__body .content-warnings {
+  margin-block: var(--s1) 0;
+}

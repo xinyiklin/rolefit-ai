@@ -90,6 +90,20 @@
   overflow-wrap: anywhere;
 }
 
+/* A blocked row's detail is its recovery step, so it reads under the label at
+   full width instead of wrapping in a narrow right-hand column. */
+.workflow-rail__checks > li.is-blocked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
+}
+
+.workflow-rail__checks > li.is-blocked small {
+  max-width: none;
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  text-align: start;
+}
+
 .workflow-rail__failure {
   display: grid;
   gap: var(--s1);

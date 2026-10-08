@@ -5,6 +5,7 @@ const read = (path) => readFileSync(new URL(path, import.meta.url), "utf8");
 const app = read("../../App.tsx");
 const modal = read("../ApplicationModal.tsx");
 const fitSummary = read("../application/ApplicationFitSummary.tsx");
+const fitFindings = read("../../components/FitFindings.tsx");
 const jobSnapshot = read("../application/ApplicationJobSnapshot.tsx");
 const skippedDecisionPopover = read("../application/SkippedDecisionPopover.tsx");
 const postingOverlay = read("../application/ApplicationPostingOverlay.tsx");
@@ -53,13 +54,26 @@ assert.ok(!modal.includes("form.priority"));
 
 for (const surface of [modal, inspector]) {
   assert.ok(surface.includes("<ApplicationFitSummary"), "saved views share the Fit advisory");
-  assert.ok(surface.includes('<ul className="application-gap-list">'));
   assert.ok(surface.includes("warnings={fitWarnings.general}"), "Fit summary keeps only warnings no shown finding owns");
-  assert.ok(surface.includes("<li key={index}>{gap}<ContentWarnings warnings={fitWarnings.gaps[index]} /></li>"), "gap warnings sit beside their gap");
+  assert.match(surface, /<FitFindings result=\{[^}]*\.result\} warnings=\{fitWarnings\} \/>/, "saved views show every finding beside its warnings");
+  assert.match(surface, /splitFitWarnings\([^)]*\.result\)/, "warnings split against the findings this surface shows");
   assert.ok(surface.includes('<ul className="application-related-records">'));
   assert.ok(surface.includes('className="application-related-records__marker"'));
 }
 assert.ok(fitSummary.includes(">Verdict<"));
+assert.match(
+  fitSummary,
+  /application-fit-summary__copy[\s\S]{0,120}?<\/div>\s*<ContentWarnings warnings=\{warnings\} \/>/,
+  "general warnings render after the two-column verdict grid, never inside its verdict column"
+);
+for (const wiring of [
+  /result\.matches\.map\(\(match, index\)[\s\S]{0,160}?warnings=\{warnings\.matches\[index\]\}/,
+  /result\.gaps\.map\(\(gap, index\)[\s\S]{0,260}?warnings=\{warnings\.gaps\[index\]\}/,
+  /<Finding kind="eligibility" warnings=\{warnings\.eligibility\}>/
+]) {
+  assert.match(fitFindings, wiring, "each finding carries the warnings labelled for it");
+}
+assert.ok(rail.includes("<FitFindings result={assessmentSnapshot.result} warnings={fitWarnings} />"), "Prepare shares the saved views' findings");
 assert.ok(!modal.includes("application-fit--ring"));
 assert.ok(!modal.includes("application-fit-summary__resume"));
 assert.ok(!modal.includes("Selected resume"));

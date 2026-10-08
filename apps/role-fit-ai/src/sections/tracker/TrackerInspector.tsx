@@ -1,4 +1,4 @@
-import { ContentWarnings } from "../../components/ContentWarnings";
+import { FitFindings } from "../../components/FitFindings";
 import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Files, History } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
 import { NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
@@ -63,7 +63,7 @@ export function TrackerInspector({
 
   const verdict = appFitVerdict(selected);
   const fitAssessmentMeta = selected.fitAssessment ? fitAssessmentRunLabel(selected.fitAssessment) : "";
-  const fitWarnings = splitFitWarnings(selected.fitAssessment?.result.warnings, { gaps: selected.fitAssessment?.result.gaps.length ?? 0 });
+  const fitWarnings = splitFitWarnings(selected.fitAssessment?.result);
   const foundOnUrls = safeExternalUrls([
     selected.jobUrl,
     ...(selected.sourceUrls ?? []).map((source) => source.url)
@@ -118,27 +118,27 @@ export function TrackerInspector({
         <div className="ledger-row">
           <dt>{statusDateLabel}</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd>{statusDate ? formatCompactDate(statusDate) : "Not recorded"}</dd>
+          <dd className={statusDate ? undefined : "is-empty"}>{statusDate ? formatCompactDate(statusDate) : "Not recorded"}</dd>
         </div>
         <div className="ledger-row">
           <dt>Deadline</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd>{selected.deadline ? formatCompactDate(selected.deadline) : "Not recorded"}</dd>
+          <dd className={selected.deadline ? undefined : "is-empty"}>{selected.deadline ? formatCompactDate(selected.deadline) : "Not recorded"}</dd>
         </div>
         <div className="ledger-row">
           <dt>Next step</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd>{selected.followupAt ? formatCompactDate(selected.followupAt) : "Not recorded"}</dd>
+          <dd className={selected.followupAt ? undefined : "is-empty"}>{selected.followupAt ? formatCompactDate(selected.followupAt) : "Not recorded"}</dd>
         </div>
         <div className="ledger-row">
           <dt>{posting?.label ?? "Posting ID"}</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd>{posting?.id ?? "Not recorded"}</dd>
+          <dd className={posting ? undefined : "is-empty"}>{posting?.id ?? "Not recorded"}</dd>
         </div>
         <div className="ledger-row">
           <dt>Source</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd>{selected.source || "Not recorded"}</dd>
+          <dd className={selected.source ? "is-prose" : "is-empty"}>{selected.source || "Not recorded"}</dd>
         </div>
         {foundOnUrls.length ? (
           <div className="ledger-row">
@@ -166,18 +166,8 @@ export function TrackerInspector({
           summary={selected.fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
         />
         {fitAssessmentMeta ? <p className="application-inspector-fit__meta">{fitAssessmentMeta}</p> : null}
+        {selected.fitAssessment ? <FitFindings result={selected.fitAssessment.result} warnings={fitWarnings} /> : null}
       </section>
-
-      {selected.fitAssessment?.result.gaps.length ? (
-        <section className="side-section">
-          <p className="side-section__label"><ClipboardCheck size={12} aria-hidden="true" /> Top gaps</p>
-          <ul className="application-gap-list">
-            {selected.fitAssessment.result.gaps.map((gap, index) => (
-              <li key={index}>{gap}<ContentWarnings warnings={fitWarnings.gaps[index]} /></li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
 
       <section className="side-section">
         <p className="side-section__label">
@@ -255,12 +245,12 @@ export function TrackerInspector({
           <div className="ledger-row">
             <dt>Job posting</dt>
             <span className="ledger-row__leader" aria-hidden="true" />
-            <dd>{hasPosting ? "Saved" : "Not saved"}</dd>
+            <dd className={hasPosting ? "is-prose" : "is-empty"}>{hasPosting ? "Saved" : "Not saved"}</dd>
           </div>
           <div className="ledger-row">
             <dt>Resume</dt>
             <span className="ledger-row__leader" aria-hidden="true" />
-            <dd className="inspector-sent__value">
+            <dd className={`inspector-sent__value ${hasResume || selected.resumeUsed ? "is-prose" : "is-empty"}`}>
               <span>
                 {selected.resumeUsed === "tailored"
                   ? "Tailored"
@@ -286,7 +276,7 @@ export function TrackerInspector({
           <div className="ledger-row">
             <dt>Cover letter</dt>
             <span className="ledger-row__leader" aria-hidden="true" />
-            <dd>{hasCoverLetter ? "Saved" : "Not saved"}</dd>
+            <dd className={hasCoverLetter ? "is-prose" : "is-empty"}>{hasCoverLetter ? "Saved" : "Not saved"}</dd>
           </div>
           <div className="ledger-row">
             <dt>Additional documents</dt>
@@ -306,7 +296,7 @@ export function TrackerInspector({
                 <div className="ledger-row" key={key}>
                   <dt>{label}</dt>
                   <span className="ledger-row__leader" aria-hidden="true" />
-                  <dd>
+                  <dd className={usage.source === "ai" ? undefined : usage.source === "local" ? "is-prose" : "is-empty"}>
                     {usage.source === "ai"
                       ? describeProviderModel(usage.provider ?? "", usage.model ?? "")
                       : usage.source === "local"

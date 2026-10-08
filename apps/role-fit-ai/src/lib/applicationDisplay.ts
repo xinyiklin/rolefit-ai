@@ -1,5 +1,9 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications";
-import type { FitAssessmentSnapshot, FitAssessmentVerdict } from "../../shared/fitAssessmentContract.ts";
+import type {
+  FitAssessmentResult,
+  FitAssessmentSnapshot,
+  FitAssessmentVerdict
+} from "../../shared/fitAssessmentContract.ts";
 import { describeProviderModel } from "../config/aiOptions.ts";
 import { displayCompany, parseDate } from "./applicationFacts.ts";
 import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
@@ -153,22 +157,23 @@ export function fitAssessmentRunLabel(snapshot: FitAssessmentSnapshot): string {
   return parts.join(" · ");
 }
 
+export type FitWarnings = ReturnType<typeof splitFitWarnings>;
+
 // fitAssessment.ts labels finding warnings "Match N: ", "Gap N: ", or "Eligibility: ".
-// Warnings for findings this surface does not show stay general with their label.
-export function splitFitWarnings(
-  warnings: readonly string[] | undefined,
-  shown: { matches?: number; gaps: number; eligibility?: boolean }
-) {
-  const matches: string[][] = Array.from({ length: shown.matches ?? 0 }, () => []);
-  const gaps: string[][] = Array.from({ length: shown.gaps }, () => []);
+// Every Fit surface shows each finding, so a labelled warning stays general only
+// when its finding is absent: out of range, or a CLEAR eligibility.
+export function splitFitWarnings(result: FitAssessmentResult | undefined) {
+  const matches: string[][] = (result?.matches ?? []).map(() => []);
+  const gaps: string[][] = (result?.gaps ?? []).map(() => []);
+  const showsEligibility = Boolean(result?.eligibility && result.eligibility.status !== "CLEAR");
   const eligibility: string[] = [];
   const general: string[] = [];
-  for (const warning of warnings ?? []) {
+  for (const warning of result?.warnings ?? []) {
     const parsed = /^(?:(Match|Gap) ([1-9]\d*)|Eligibility): (.+)$/.exec(warning);
     const finding = !parsed ? undefined
       : parsed[1] === "Match" ? matches[Number(parsed[2]) - 1]
       : parsed[1] === "Gap" ? gaps[Number(parsed[2]) - 1]
-      : shown.eligibility ? eligibility : undefined;
+      : showsEligibility ? eligibility : undefined;
     if (parsed && finding) finding.push(parsed[3].charAt(0).toUpperCase() + parsed[3].slice(1));
     else general.push(warning);
   }

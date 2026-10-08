@@ -1,5 +1,5 @@
 import { editedSavedApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
-import { ContentWarnings } from "../components/ContentWarnings";
+import { FitFindings } from "../components/FitFindings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Building2,
@@ -681,7 +681,7 @@ export function ApplicationModal({
   const openPreparationBlocked = (formHasUnsavedChanges || recordWasRemoved) && !canSave;
   const fitAssessment = activeApplication.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
-  const fitWarnings = splitFitWarnings(fitAssessment?.result.warnings, { gaps: fitAssessment?.result.gaps.length ?? 0 });
+  const fitWarnings = splitFitWarnings(fitAssessment?.result);
   const fitVerdict = appFitVerdict(activeApplication);
   const headerName = [form.company.trim(), form.role.trim()].filter(Boolean).join(" · ") || "New application";
   const downloadBase = (form.company.trim() || form.role.trim() || "Resume").replace(/[^A-Za-z0-9_-]+/g, "_");
@@ -993,16 +993,7 @@ export function ApplicationModal({
                     summary={fitAssessment?.result.summary ?? "Run a Fit Assessment from Prepare to save this snapshot."}
                   />
                   {fitAssessmentMeta ? <p className="application-match-card__meta">{fitAssessmentMeta}</p> : null}
-                  {fitAssessment?.result.gaps.length ? (
-                    <div className="application-match-card__gaps">
-                      <strong>Top gaps</strong>
-                      <ul className="application-gap-list">
-                        {fitAssessment.result.gaps.map((gap, index) => (
-                          <li key={index}>{gap}<ContentWarnings warnings={fitWarnings.gaps[index]} /></li>
-                        ))}
-                      </ul>
-                    </div>
-                  ) : null}
+                  {fitAssessment ? <FitFindings result={fitAssessment.result} warnings={fitWarnings} /> : null}
                 </section>
 
                 <section className="application-side-card" aria-labelledby="application-job-activity-title">
