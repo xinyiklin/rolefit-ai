@@ -99,8 +99,26 @@ async function chromiumExecutable() {
   );
 }
 
+const CHROMIUM_START_TIMEOUT_MS = 30_000;
+const CHROMIUM_START_ATTEMPTS = 2;
+
 async function launchChromium() {
   const executable = await chromiumExecutable();
+  for (let attempt = 1; ; attempt += 1) {
+    try {
+      return await startChromium(executable);
+    } catch (error) {
+      if (attempt >= CHROMIUM_START_ATTEMPTS) throw error;
+      // Hosted runners occasionally stall startup with no output; a fresh-profile
+      // retry separates that from a browser that cannot start.
+      console.warn(
+        `Chromium startup attempt ${attempt} failed; retrying with a fresh profile.\n${error.message}`
+      );
+    }
+  }
+}
+
+async function startChromium(executable) {
   const profileDir = await mkdtemp(
     join(tmpdir(), "rolefit-editor-browser-")
   );
@@ -137,7 +155,7 @@ async function launchChromium() {
               }`
             )
           ),
-        15_000
+        CHROMIUM_START_TIMEOUT_MS
       );
       child.stderr.setEncoding("utf8");
       child.stderr.on("data", (chunk) => {
