@@ -1,3 +1,44 @@
-.content-warnings { margin-block: .5rem; padding: .5rem .65rem; border-inline-start: 2px solid currentColor; font-size: .8rem; line-height: 1.5; overflow-wrap: anywhere; min-width: 0; }
-.content-warnings strong { font-weight: 600; }
-.content-warnings ul { margin: .25rem 0 0; padding-inline-start: 1.1rem; }
+.content-warnings {
+  display: grid;
+  gap: 2px;
+  justify-self: stretch;
+  min-width: 0;
+  margin-block: 0.4rem;
+  padding: 0.35rem 0.55rem 0.4rem;
+  border: 1px solid oklch(0.52 0.1 75 / 0.24);
+  border-radius: var(--r-md);
+  background: var(--warm-veil);
+  color: var(--ink-muted);
+  font-size: 0.74rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.content-warnings strong {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+.content-warnings strong::before {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: var(--r-pill);
+  background: var(--warm);
+  content: "";
+}
+
+/* Concerns indent past the dot so they align with the label text. */
+.content-warnings ul {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 0 0 12px;
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+  list-style: none;
+}

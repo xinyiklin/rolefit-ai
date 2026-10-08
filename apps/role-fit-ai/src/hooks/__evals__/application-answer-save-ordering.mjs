@@ -158,4 +158,12 @@ stored = stored.filter((record) => record.id !== target.draftId);
 await assert.rejects(app.saveApplicationAnswer({ target, answer: answer("revision-a") }), (error) => error.code === "conflict", "even a repeated revision must confirm that its application still exists");
 await app.refresh();
 await assert.rejects(app.saveApplicationAnswer({ target, answer: answer("revision-deleted") }), (error) => error.code === "deleted", "a previously confirmed Draft is never recreated after deletion");
-console.log("Application answer save ordering passed: first-save concurrency, exact snapshots, revision history, response-loss retry, conflicts, identity and deletion");
+
+const userFacts = { provenance: "user-declared", facts: ["I led the postmortem after the March outage."] };
+const factsTarget = { ...target, draftId: "draft-facts", jobUrl: "https://example.test/facts" };
+const writesBeforeFacts = writes;
+await assert.rejects(app.saveApplicationAnswer({ target: factsTarget, answer: { ...answer("revision-bad-facts"), userFacts: { ...userFacts, facts: Array.from({ length: 21 }, (_, n) => `Fact ${n}.`) } } }), (error) => error.code === "invalid");
+assert.equal(writes, writesBeforeFacts, "malformed saved facts are refused before any tracker write");
+await app.saveApplicationAnswer({ target: factsTarget, answer: { ...answer("revision-facts"), userFacts } });
+assert.deepEqual(stored.find((record) => record.id === factsTarget.draftId).applicationAnswers[0].userFacts, userFacts, "browser save and server reconcile keep saved facts exactly");
+console.log("Application answer save ordering passed: first-save concurrency, exact snapshots, revision history, response-loss retry, conflicts, identity, deletion and saved facts");

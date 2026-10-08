@@ -213,6 +213,7 @@ type PreparedResumeAndFit = {
 
 type PreparedJobAnalysisOutcome =
   | { status: "stale" }
+  | { status: "owner-changed" }
   | { status: "source-replacement-stopped"; choice: "keep-current" | "cancel" }
   | { status: "duplicate-handled" }
   | { status: "duplicate-before" }
@@ -788,19 +789,31 @@ export function useJobIntake({
     };
   }
 
+  // Extension and Retry payloads exist only in jobAnalysisImportRef, so a declined
+  // replacement settles as failed there: the card shows Retry only for failed.
   function settleSourceReplacementStop(
     choice: "keep-current" | "cancel",
-    setStatus: (value: string) => void
+    setStatus: (value: string) => void,
+    retainsPayload = false
   ) {
-    const keptCurrent = choice === "keep-current";
-    const message = keptCurrent
+    const message = choice === "keep-current"
       ? "Kept the posting attached to the saved record."
-      : "Replacement canceled. The saved record was not changed.";
+      : committedPreparationRef.current ? "Kept the current preparation." : "Nothing was prepared.";
     setJobAnalysisProgress({
-      status: "stopped",
-      errorHeadline: "Posting replacement paused",
+      status: retainsPayload && choice === "cancel" ? "failed" : "stopped",
+      errorHeadline: "Preparation paused",
       error: message
     });
+    setJobAnalysisProgressVisible(true);
+    setStatus(message);
+  }
+
+  function settleOwnerChange(setStatus: (value: string) => void) {
+    const message = "The application changed while preparing. Retry when ready.";
+    cancelPreparedResumeResolution();
+    setLocalPreparedPreview(null);
+    settlePreparationFit({ status: "inputs-changed" });
+    setJobAnalysisProgress({ status: "failed", errorHeadline: "Preparation paused", error: message });
     setJobAnalysisProgressVisible(true);
     setStatus(message);
   }
@@ -894,6 +907,8 @@ export function useJobIntake({
     execution: JobAnalysisExecutionContext;
     request: PreparedJobAnalysisRequest;
   }): Promise<PreparedJobAnalysisOutcome> {
+    // A request that is still current lost only its owner (a first Save linked the record): nothing else will settle its card.
+    const superseded = (): PreparedJobAnalysisOutcome => request.isCurrent() ? { status: "owner-changed" } : { status: "stale" };
     const localExtracted = extractJobPosting(localSourceText, { url: url || undefined });
     const replacement = await confirmPreparedSourceReplacement({
       url,
@@ -901,7 +916,7 @@ export function useJobIntake({
       tracking: localExtracted.tracking
     });
     const runIsCurrent = () => request.isCurrent() && replacement.isCurrent();
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
     if (replacement.choice !== "continue") {
       return { status: "source-replacement-stopped", choice: replacement.choice };
     }
@@ -911,7 +926,7 @@ export function useJobIntake({
       localExtracted.tracking,
       runIsCurrent
     );
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
     if (!duplicateBefore.proceed) {
       if (duplicateBefore.handled) return { status: "duplicate-handled" };
       // Extension delivery can contain a short intermediate payload. The URL
@@ -939,7 +954,7 @@ export function useJobIntake({
       request,
       prepareIdentity
     );
-    if (!runIsCurrent() || !preparedResume) return { status: "stale" };
+    if (!runIsCurrent() || !preparedResume) return superseded();
     const { selection, fitRequest, fitRunId } = preparedResume;
     // Preserve Prepare's one-call fast path only when the two independently
     // configured stages resolve to the exact same provider request. A distinct
@@ -962,7 +977,7 @@ export function useJobIntake({
           fitAssessmentRequested: combineFitAssessment,
           failure: classifyFailure(new ApiError(execution.readiness.message, 503))
         });
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
 
     const relevant = result.extracted.tailoringText;
     if (relevant.trim().length < 40) {
@@ -978,7 +993,7 @@ export function useJobIntake({
           result.extracted.tracking,
           runIsCurrent
         );
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
 
     // Extension payloads are not already bound to the live URL input.
     if (source === "extension" || source === "retry") setJobUrl(url);
@@ -1098,6 +1113,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setLinkStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
         settleSourceReplacementStop(outcome.choice, setLinkStatus);
         return;
@@ -1157,7 +1176,8 @@ export function useJobIntake({
   // wd1 tenants, ADP, anything JS-only): user copies the visible page text from
   // their browser, pastes it in, and gets the structured brief plus tracking.
   async function handleAnalyzePaste(sourceOverride?: string) {
-    const raw = sourceOverride ?? jobDescription;
+    // Same source the Prepare posting button shows, so Retry prepares what the user sees.
+    const raw = sourceOverride ?? (jobRawText || jobDescription);
     if (!raw.trim() || jobAnalysisBusyRef.current) return;
     // Strip HTML tags only if the paste looks tag-shaped (text from "View
     // source" or a copied editor block). Plain copy-paste from a rendered page
@@ -1206,6 +1226,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setLinkStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
         settleSourceReplacementStop(outcome.choice, setLinkStatus);
         return;
@@ -1318,8 +1342,12 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setPolishStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
-        settleSourceReplacementStop(outcome.choice, setPolishStatus);
+        settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
         return;
       }
       if (outcome.status === "duplicate-handled") {
@@ -1390,8 +1418,12 @@ export function useJobIntake({
           request
         });
         if (outcome.status === "stale") return;
+        if (outcome.status === "owner-changed") {
+          settleOwnerChange(setPolishStatus);
+          return;
+        }
         if (outcome.status === "source-replacement-stopped") {
-          settleSourceReplacementStop(outcome.choice, setPolishStatus);
+          settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
           return;
         }
         if (outcome.status === "duplicate-handled") {
@@ -1462,13 +1494,14 @@ export function useJobIntake({
 
   // Resolve the job analysis card's Retry to the live handler for the last action, so
   // it re-runs against the CURRENT url / paste rather than a stale captured one.
+  // Zero-argument wrappers: the card passes its click event, which must never reach a handler as input.
   const jobAnalysisRetry =
     jobAnalysisRetrySource === "link"
-      ? handleExtractFromLink
+      ? () => handleExtractFromLink()
       : jobAnalysisRetrySource === "paste"
-        ? handleAnalyzePaste
+        ? () => handleAnalyzePaste()
         : jobAnalysisRetrySource === "import"
-          ? retryImportedJobAnalysis
+          ? () => retryImportedJobAnalysis()
           : undefined;
 
   return {

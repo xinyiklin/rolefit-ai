@@ -42,6 +42,11 @@
 .answers-message__original-question summary { cursor: pointer; width: fit-content; margin-left: auto; padding: var(--s1); }
 .answers-message__original-question[open] { background: var(--paper-deep); padding: var(--s3) var(--s4); border-radius: var(--r-lg); }
 .answers-message__original-question[open] summary { margin: 0 0 var(--s2); }
+.answers-message__facts { margin: var(--s2) 0 0; color: var(--ink-muted); font-size: 0.78rem; }
+.answers-message__facts summary { cursor: pointer; width: fit-content; padding: var(--s1) 0; }
+.answers-message__facts ul { margin: var(--s1) 0 0; padding-left: var(--s4); color: var(--ink); font-size: 0.88rem; line-height: 1.5; }
+.answers-message__facts li { white-space: pre-wrap; overflow-wrap: anywhere; }
+.answers-message__facts li + li { margin-top: var(--s1); }
 .answers-message__instruction { font-size: 0.94rem; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; }
 .answers-message__response { padding: 0 var(--s1); }
 .answers-message__text { display: block; width: 100%; min-height: 84px; border: 0; border-radius: var(--r-sm); background: transparent; resize: none; color: var(--ink); font-family: var(--font-ui); font-size: 1rem; line-height: 1.7; padding: var(--s1) 0; margin: 0; overflow-y: auto; }

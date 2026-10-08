@@ -11,7 +11,8 @@ import {
   WorkspaceBackupError
 } from "../workspaceBackup.ts";
 import { writeStoredWorkspacePreferences } from "../workspacePreferences.ts";
-import { writeApplications } from "../applications/storage.ts";
+import { readApplications, writeApplications } from "../applications/storage.ts";
+import { countAnswerText } from "../../shared/applicationAnswersContract.ts";
 import { countActiveTabs, isValidPresenceTabId } from "../presence.ts";
 import { withWorkspaceLock } from "../workspace.ts";
 import {
@@ -343,6 +344,33 @@ try {
     "invalid tracker data is rejected after integrity validation"
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "tracker validation failure leaves active workspace unchanged");
+
+  const trackerFile = withPreferences.files.find((file) => file.path === "applications.json");
+  const answerText = "I enjoy building reliable tools.";
+  const withSavedFacts = (facts) => {
+    const tracker = JSON.parse(trackerFile.data);
+    tracker.applications[0].applicationAnswers = [{
+      id: "answer-1", applicationId: tracker.applications[0].id, questionId: "question-1", questionRevision: 1,
+      question: "Why this role?", answer: answerText, status: "ready", constraints: [], counts: countAnswerText(answerText), compliant: true,
+      userFacts: { provenance: "user-declared", facts }, savedAt: fixedDate.toISOString()
+    }];
+    return replaceEntry(withPreferences, "applications.json", JSON.stringify(tracker));
+  };
+  const factsTarget = join(isolatedRoot, "facts-target");
+  await restoreWorkspaceBackup(factsTarget, withSavedFacts(["I led the postmortem."]), fixedDate);
+  assert.deepEqual((await readApplications(factsTarget))[0].applicationAnswers[0].userFacts, { provenance: "user-declared", facts: ["I led the postmortem."] }, "saved facts restore exactly");
+  for (const [label, facts] of [
+    ["wrong type", [1]],
+    ["over 20 facts", Array.from({ length: 21 }, (_, n) => `Fact ${n}.`)],
+    ["over the size limit", ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(4_000)]]
+  ]) {
+    await assert.rejects(
+      () => restoreWorkspaceBackup(targetDir, withSavedFacts(facts), fixedDate),
+      (error) => error instanceof WorkspaceBackupError && /tracker data is invalid/.test(error.message),
+      `malformed saved answer facts (${label}) are rejected`
+    );
+  }
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "malformed saved facts leave the active workspace unchanged");
 
   const invalidResume = replaceEntry(withPreferences, "resumes/default.resume", "{" + "x".repeat(100));
   await assert.rejects(

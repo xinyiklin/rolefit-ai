@@ -5,6 +5,105 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
+  prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
+  `jobReady`, and `generate()`, the only path to the provider for send and
+  both Retry buttons, blocks with "Add the job on Prepare first." in the tab's
+  gate order (Profile limit, resume, job, provider; the provider check used to
+  come first). It used to check only for a non-empty job description, so a
+  draft that failed for prepared job A, Retried from the dock after job B was
+  pasted (not prepared) into Prepare's source, was drafted from B's text in
+  A's conversation. A link-only edit kept A's text but hit the same bypass. This
+  closes the "dock's Answers Retry skips the tab's prepared-job gate" Open item
+  recorded with the Draft job-source fix (`fix/rolefit-answers-draft-job-source`,
+  not on main when this landed); drop that bullet when the two meet.
+  - [TOOL] `application-answers-retry-gate.mjs` drives the real hook and Answers
+    tab: Retry still drafts while prepared; after a paste or link edit, the dock
+    Retry, send and the tab's disabled controls all name the same gate and no
+    request carries unprepared text. It fails on main (Retry sent B's text), and
+    a provider-first blocker order fails it. Four hook fixtures gained
+    `jobReady: true`. Full `npm run check --workspace apps/role-fit-ai`
+    (client and server `tsc`, builds, 162/162 offline evals) and
+    `git diff --check` passed. Browser QA was not run (no layout change).
+  - [TOOL] One independent review: no high findings, no regressions. It
+    confirmed opened applications, extension/link/paste commits and brief edits
+    keep `jobPrepared` true, so they are not blocked. It also found that
+    App passing a wrong or missing `jobReady` fails the eval, and that merges
+    with dff66ef1 are clean. Fixed from it: a comment and the hooks guide had
+    claimed full parity with the tab's gate, and an eval regex was too strict.
+  - [CODE] Open (confirmed by the review): the hook's resume check is still
+    non-empty text, while the tab's `resumeReady` also excludes the bundled
+    Starter sample. A dock Retry after Open > Bundled starter therefore drafts
+    from sample content, which PRODUCT says never counts as an applicant resume.
+    The same bug existed before this change. Not fixed here.
+- [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
+  client-only; no prompt, schema, provider, or shared-package change:
+  - Fixed: the Applications inspector and detail modal showed Fit gaps only,
+    so a "Match N:" warning had nothing to attach to and rendered inside the
+    104px verdict column. One shared `components/FitFindings.tsx` now renders
+    matches, gaps, and eligibility, each with its own warning, on Prepare, the
+    inspector, and the modal. `splitFitWarnings` takes the Fit result.
+  - "Review before use" is a warm-veil hairline note instead of a dark 2px
+    side stripe, app-wide.
+  - Polish: Prepare verdict is dot plus word, its run attribution is quiet;
+    a job analysis that fell back to the local brief shows a warning mark, not
+    a success check; inspector empty values recede; Analytics stage bars use
+    stage hues and draw nothing for zero; blocked workflow-rail rows put their
+    recovery under the label; dialog titles outrank their body.
+  - [TOOL] RoleFit build, client `tsc`, and 157/157 offline evals passed;
+    before/after browser QA at 1440 and 1024px on a synthetic workspace (port
+    5183). AI-result states (Polish proposals, live Fit runs) were not
+    exercised because no provider ran. One independent review: no high or
+    medium findings; its low findings (CSS selector leaks, guide exception for
+    the warning note, eval depth) were fixed, and the new evals fail on
+    mutated wiring.
+  - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
+    which are not claim-checked; this extends the tradeoff accepted when gap
+    notes were Prepare-only.
+  - [USER] Follow-up, separate PR after this merges: with no AI provider,
+    Prepare's Resume card reads "Ready" above "Finish the resume and AI setup
+    before polishing."; give it the precise blocker.
+- [CODE] Unsaved Answers work no longer disappears silently when the
+  preparation is replaced. The conversation key changes on every committed
+  Prepare (link, paste, extension, Retry) and on opening a saved application, so
+  both ask first when the current thread holds composer text, an unsaved
+  revision, a drafting request in flight, or a failed or stopped latest turn
+  that carries typed refinement or detail text (`hasUnsavedAnswers` /
+  `hasUnsavedAnswersNow()` in `useApplicationAnswers`; copy "Replace Answers?").
+  Prepare asks once at run start through `confirmPreparedSourceReplacement`, and
+  that approval covers a follow-on duplicate Open for the run; opening reuses the
+  dirty-document dialog, pauses if Answers become unsaved after approval, and
+  opens the saved cover letter before the thread's key changes. While a
+  Prepare run is active `editBlocker` makes the composer, answer edits, Refine,
+  and Retry read-only ("Paused while the job is prepared."); Save and Stop stay,
+  so nothing new can appear after the ask. Declining an extension or Retry
+  payload settles the card as failed so Retry shows, under the headline
+  "Preparation paused". Save, storage, and schemas are unchanged; there is no
+  draft recovery.
+  - [TOOL] Evidence: `application-answers-replacement-guard.mjs` runs the real
+    hook against App's guard code, `answers-prepare-lock.mjs` renders the real
+    Answers tab, and the intake eval covers a declined replacement (including the
+    visible Retry) on every path; each was mutation-checked. Full
+    `npm run check --workspace apps/role-fit-ai` and both tsc gates passed.
+    Browser QA was not run.
+  - [CODE] A Prepare run that goes stale only because the owner changed (a
+    first Answers Save during the locked run) now settles its card as failed
+    "Preparation paused" with Retry, clears the preview, Fit run, and resume
+    recommendation, and lifts the lock; it previously left the card running and
+    Answers locked until reload. The card's Retry now ignores the click event it
+    is handed: the paste Retry (`handleAnalyzePaste`) took it as the source text
+    and threw `raw.trim is not a function` (pre-existing). With no source, it
+    now prepares what the Prepare posting button shows (the captured posting
+    when present, else the typed description).
+  - [TOOL] Evidence: `job-intake-entry-points.mjs` bumps the owner at each of
+    five re-check sites (replacement dialog, duplicate review before and after
+    analysis, resume resolution, provider response) on URL, paste, and
+    extension; before the fix every row left the card running, and each site was
+    mutation-checked. Every Retry in that eval is called with a click-shaped
+    argument, which reproduces the paste TypeError when the wrapper is removed.
+  - [CODE] Known gaps: a bare failed question (nothing typed beyond it) is not
+    counted; a decline of a typed link or paste source stays "stopped" because
+    the source fields still hold it.
 - [CODE] Stage 2 of the external-review follow-up, sanitizer slice:
   - The Resume Polish no-op filter no longer drops a deletion-only rewrite that
     removes a narrowing claim word ("solely", "all", "critical", "senior",
@@ -270,6 +369,64 @@ bounded; app-only operational detail belongs in the affected app documentation.
     it to 3 sentences" beside a cap; the judge's own fence names are not in the
     shared registry, and its score clamping still hides off-scale replies
     (benchmark-only; flagged, not changed).
+- [USER+CODE] Answers now keep the facts the user adds (task
+  `answers-declared-facts-20261007`; the user approved Product Brief v1 and
+  delegated the rest, and the Product Partner approved Delivery Plan v1 under
+  that delegation, a compressed gate). This closes the "Answers declared facts"
+  item left open above. A saved revision may carry
+  `userFacts: { provenance: "user-declared", facts }`: the Add a detail text in
+  effect for that question, 1-20 facts within the request's explicit-fact
+  limits (4,000 characters each, 12,000 joined), now shared constants and
+  `answerFactsWithinLimits` in `shared/applicationAnswersContract.ts`. The client
+  attaches `message.facts` at Save; a generated revision never carries the
+  field and the hook rejects a response that does. Reopen restores exactly that
+  revision's facts (no union across revisions) into the next request's
+  `explicitFacts` and shows them in a collapsed "Your facts (N)" list on the
+  reopened question only. Applications-modal edits carry the previous
+  revision's facts forward; Answers' Edit question still starts without facts.
+  Answer text, the model's follow-up question, refinement instructions and the
+  refinement chips never become facts. A follow-up defaults the composer to Add
+  a detail, even beside draft text, so the typed reply is saved as a fact; a
+  chip or Refine this answer (user-approved 2026-10-07) opens Refine. One
+  strict parser serves browser, tracker route/load and backup restore; older
+  revisions and legacy pairs stay valid; no migration and no prompt change (v4).
+  - [CODE] Forward-only (accepted by the Product Partner under the delegation
+    as the existing no-downgrade policy): a build without this change cannot
+    load, back up or restore a tracker holding `userFacts` (probed on
+    `2930dd59`). Rollback: keep a copy of `workspace/applications.json`, then
+    strip the field in that directory with
+    `node -e 'const fs=require("fs");const p="applications.json";const d=JSON.parse(fs.readFileSync(p,"utf8"));for(const a of d.applications)for(const r of a.applicationAnswers??[])delete r.userFacts;fs.writeFileSync(p+".tmp",JSON.stringify(d,null,2),{mode:0o600});fs.renameSync(p+".tmp",p)'`
+    (probed: the pre-change build loads the result, owner-only). The `jq`
+    equivalent `(.applications[].applicationAnswers[]?) |= del(.userFacts)`
+    refuses files with lone-surrogate escapes (loudly, nothing lost). Either
+    discards the saved facts; the copy keeps them. After upgrading, a browser
+    tab opened before the upgrade refuses to save into an application whose
+    answers hold facts, with a misleading "exceed the storage limit" message,
+    until it is reloaded.
+  - [TOOL] Self-verification in the feature worktree
+    (`fix/rolefit-answers-user-facts`): new `application-answer-facts.mjs` and
+    `answer-facts-markup.mjs`; persistence, backup, save-ordering and
+    conversation probes extended; ten source mutations each caught; client and
+    server `tsc`; full RoleFit check (builds, landing, desktop probes, 159/159
+    offline evals); `git diff --check`. A three-way merge with
+    `fix/rolefit-answers-unsaved-guard` (`37799709`) is clean for every shared
+    file, this ledger included, and the facts evals pass on the merged hook.
+  - [TOOL] Two independent reviews. Persistence: no high or medium findings.
+    Client: one medium, fixed. A refinement chip on a repaired draft that kept
+    its text and also asked a follow-up became a saved, restored "fact",
+    because the composer defaulted to Add a detail whenever a follow-up existed.
+    `refine()` with an instruction is now always a refinement. A first fix also
+    moved the no-instruction default to Refine for such drafts; the client
+    re-review found that sent the user's typed reply as a refinement (not
+    evidence, not saved, and the sentence it supports flagged unsupported), so
+    that default is back to Add a detail. Facts-eval cases cover chips and typed
+    replies on such drafts before and after Reopen; both fixes are
+    mutation-checked against the earlier hooks, and a confirmation review of the
+    second found no high or medium issues. Lows fixed: the text and fact limits
+    are marked as stored format (tightening needs a migration), PRODUCT says
+    facts stay with their question id, and the rollback recipe above. Full
+    RoleFit check passed again after the fixes (159/159 offline evals). Browser
+    QA was not run (optional; not authorized).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).

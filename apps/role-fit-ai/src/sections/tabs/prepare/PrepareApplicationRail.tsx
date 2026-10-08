@@ -1,4 +1,5 @@
 import { ContentWarnings } from "../../../components/ContentWarnings";
+import { FitFindings } from "../../../components/FitFindings";
 import type { ReactNode } from "react";
 import { Check, Circle, LoaderCircle, Minus } from "lucide-react";
 
@@ -91,11 +92,7 @@ export function PrepareApplicationRail({
   const completedAssessment = fitAssessment.latestCompleted;
   const assessmentSnapshot = completedAssessment?.snapshot ?? null;
   const assessmentRunLabel = assessmentSnapshot ? fitAssessmentRunLabel(assessmentSnapshot) : "";
-  const fitWarnings = assessmentSnapshot ? splitFitWarnings(assessmentSnapshot.result.warnings, {
-    matches: assessmentSnapshot.result.matches.length,
-    gaps: assessmentSnapshot.result.gaps.length,
-    eligibility: Boolean(assessmentSnapshot.result.eligibility && assessmentSnapshot.result.eligibility.status !== "CLEAR")
-  }) : null;
+  const fitWarnings = splitFitWarnings(assessmentSnapshot?.result);
   const assessmentIsPrevious = Boolean(
     completedAssessment && (
       completedAssessment.changes.length > 0
@@ -156,54 +153,9 @@ export function PrepareApplicationRail({
                 </strong>
               </div>
               <p>{assessmentSnapshot.result.summary}</p>
-              <ContentWarnings warnings={fitWarnings?.general} />
+              <ContentWarnings warnings={fitWarnings.general} />
               {assessmentMeta ? <p className="prepare-fit__meta">{assessmentMeta}</p> : null}
-              {assessmentSnapshot.result.matches.length ? (
-                <div className="fit-assessment-list">
-                  <strong>Matches</strong>
-                  <ul>
-                    {assessmentSnapshot.result.matches.map((match, index) => (
-                      <li key={index}>
-                        {match.jobExcerpt}
-                        <small>
-                          {match.candidateSource === "RESUME" ? "Resume" : "Profile"}: {match.candidateExcerpt}
-                        </small>
-                        <ContentWarnings warnings={fitWarnings?.matches[index]} />
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
-              {assessmentSnapshot.result.gaps.length ? (
-                <div className="fit-assessment-list">
-                  <strong>Important gaps</strong>
-                  <ul>
-                    {assessmentSnapshot.result.gaps.map((gap, index) => {
-                      const detail = assessmentSnapshot.result.gapDetails?.find((item) => item.jobExcerpt === gap);
-                      return <li key={index}>{gap}
-                        {detail?.note ? <small>{detail.note}</small> : null}
-                        {detail?.candidateExcerpt ? <small>{detail.relationship === "transferable" ? "Reported transferable evidence" : "Candidate reference"}: {detail.candidateExcerpt}</small> : null}
-                        <ContentWarnings warnings={fitWarnings?.gaps[index]} />
-                      </li>;
-                    })}
-                  </ul>
-                </div>
-              ) : null}
-              {assessmentSnapshot.result.eligibility && assessmentSnapshot.result.eligibility.status !== "CLEAR" ? (
-                <p className="fit-assessment-eligibility">
-                  <strong>
-                    {assessmentSnapshot.result.eligibility.status === "BLOCKED"
-                      ? "Reported eligibility conflict."
-                      : "Confirm eligibility."}
-                  </strong>{" "}
-                  {assessmentSnapshot.result.eligibility.jobExcerpt}
-                  {assessmentSnapshot.result.eligibility.note ? <small>{assessmentSnapshot.result.eligibility.note}</small> : null}
-                  {assessmentSnapshot.result.eligibility.candidateExcerpt ? (
-                    <small>Profile: {assessmentSnapshot.result.eligibility.candidateExcerpt}</small>
-                  ) : null}
-                </p>
-              ) : null}
-              <ContentWarnings warnings={fitWarnings?.eligibility} />
+              <FitFindings result={assessmentSnapshot.result} warnings={fitWarnings} />
               {completedAssessment?.changes.length ? (
                 <div className="fit-assessment-changes" role="status">
                   <strong>Changed since assessment</strong>

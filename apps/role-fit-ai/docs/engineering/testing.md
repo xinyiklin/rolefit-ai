@@ -33,13 +33,28 @@ new external-network or model eval must be added to `LIVE` so it stays out of `n
 
 ### Application Answers
 
+Saved user facts have their own checks: the hook eval
+`src/hooks/__evals__/application-answer-facts.mjs` (Save, reload, Reopen,
+refinement resend, per-question scope, nothing taken from answer text), the
+persistence and backup probes (strict shape, limits, immutability, restore) and
+`src/sections/__evals__/answer-facts-markup.mjs`.
+
 The offline conversation probes exercise the production generator with injected
 dispatch, including constraints, bounded repair, factual scope, missing facts,
 question identity, cancellation and usage accounting. Client probes hold requests
 across source/application changes and test exact revision saves, retries, Apply
-coordination and failure recovery. Persistence probes cover Draft dates, same-ID
-Apply/Skip, legacy answers and backup round trips. Run the nearest probe while
-iterating, then the full RoleFit offline suite and app/server build.
+coordination and failure recovery.
+`src/hooks/__evals__/application-answers-replacement-guard.mjs` runs the
+production hook against App's own replacement guards: composer text, an unsaved
+draft and an in-flight request hold Prepare and Open, saved or empty threads do
+not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
+renders the Answers tab to prove typing and edits are read-only while Prepare
+runs. `src/hooks/__evals__/application-answers-retry-gate.mjs` fails a draft,
+then edits the Prepare source (paste or link) and proves send, the tab's Retry
+and the dock's Retry all stop at the tab's prepared-job gate with no request.
+Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
+and backup round trips. Run the nearest probe while iterating, then the full
+RoleFit offline suite and app/server build.
 
 The opt-in writing benchmark uses nine settings: Opus 5.5, Sonnet 5.5 and
 GPT-6.1 Sol, each at low/medium/high. `--expanded` selects 57 synthetic cases:

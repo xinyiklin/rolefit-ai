@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
+  ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_QUESTION_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS, ANSWER_TEXT_MAX_CHARS,
   extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText,
   validateAnswerConstraints, type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
@@ -49,6 +49,7 @@ type UseApplicationAnswersArgs = {
   applicationId?: string;
   resumeText: string;
   jobDescription: string;
+  jobReady: boolean;
   rawJobText?: string;
   jobUrl: string;
   candidateContext: string;
@@ -61,10 +62,16 @@ type UseApplicationAnswersArgs = {
   savedAnswers: ApplicationAnswer[];
   onSaveAnswer: (answer: ApplicationAnswerRevision, conversationId: string, preserveDraft: boolean) => Promise<{ id: string }>;
   saveBlocker?: string;
+  editBlocker?: string;
 };
 // One idle object, so an untouched conversation keeps a stable progress identity across renders.
 const IDLE_PROGRESS: AiStageState = { status: "idle" };
 const emptyConversation = (): Conversation => ({ messages: [], composer: "", targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: 0, status: "", progress: IDLE_PROGRESS });
+// Work only this thread holds: composer text, an unsaved revision, a drafting request in flight, or a failed or
+// stopped latest turn whose refinement or detail text exists nowhere else (a bare failed question is not counted).
+const hasUnsavedWork = (conversation: Conversation) => conversation.progress.status === "running" || Boolean(conversation.composer.trim())
+  || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id)
+  || conversation.messages.slice(-1).some((message) => !message.response && Boolean(message.instruction?.trim() || message.facts.length));
 
 export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   const { conversationId, applicationId, savedAnswers, onSaveAnswer } = args;
@@ -75,6 +82,11 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   const saveRequests = useRef(new Set<string>());
   const currentIdentityRef = useRef(conversationId);
   currentIdentityRef.current = conversationId;
+  const editBlockerRef = useRef(args.editBlocker);
+  editBlockerRef.current = args.editBlocker;
+  // Edits wait while a Prepare run owns the preparation; Stop and Save stay available.
+  const unlessBlocked = <Args extends unknown[], Result>(action: (...actionArgs: Args) => Result) =>
+    (...actionArgs: Args): Result | undefined => (editBlockerRef.current ? undefined : action(...actionArgs));
   const fingerprint = workflowInputFingerprint({
     resumeText: args.resumeText, jobDescription: args.jobDescription, rawJobText: args.rawJobText,
     jobUrl: args.jobUrl, candidateContext: args.candidateContext, customInstructions: args.customInstructions,
@@ -114,9 +126,10 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
 
   async function generate(turn: SubmittedTurn) {
     if (requestRef.current || turn.conversationId !== currentIdentityRef.current) return;
-    const blocker = args.profileLimitMessage || (!args.providerReady ? args.providerMessage : "")
-      || (!args.resumeText.trim() ? "Add your resume first." : "")
-      || (!args.jobDescription.trim() ? "Add the job on Prepare first." : "");
+    // The Answers tab's prepared-job gate and order, so send and both Retry buttons block alike.
+    const blocker = args.profileLimitMessage || (!args.resumeText.trim() ? "Add your resume first." : "")
+      || (!args.jobReady ? "Add the job on Prepare first." : "")
+      || (!args.providerReady ? args.providerMessage : "");
     lastRequestRef.current[turn.conversationId] = turn;
     if (blocker) {
       update(conversationId, (current) => ({ ...current, status: blocker, progress: { status: "failed", errorHeadline: "Cannot draft yet", error: blocker } }));
@@ -141,7 +154,8 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       if (!isCurrent()) return;
       if (!response.ok) throw new ApiError(data.error ?? "Could not draft an answer.", response.status);
       const answer = parseApplicationAnswerRevision(data.answer);
-      if (!answer || !answer.generation || !answer.sources || answer.id !== turn.answerRevisionId || answer.applicationId !== turn.applicationId
+      // Saved facts come only from the user, so a generated revision may never carry them.
+      if (!answer || !answer.generation || !answer.sources || answer.userFacts !== undefined || answer.id !== turn.answerRevisionId || answer.applicationId !== turn.applicationId
         || answer.questionId !== turn.question.id || answer.questionRevision !== turn.question.revision || answer.question !== turn.question.text) {
         throw new Error("The answer did not match this question. Retry to create a new draft.");
       }
@@ -164,9 +178,10 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   }
   function setComposer(composer: string) { update(conversationId, (current) => ({ ...current, composer })); }
   function newQuestion(text = "") { update(conversationId, (current) => ({ ...current, composer: text, targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: current.targetIntent + 1 })); }
-  function refine(messageId: string, instruction = "") {
+  function refine(messageId: string, instruction = "", mode?: Conversation["composerMode"]) {
+    // A follow-up defaults to Add a detail, but an instruction (a chip) edits the text and is never a fact.
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: instruction, targetIntent: current.targetIntent + 1,
-      composerMode: current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement" }));
+      composerMode: instruction ? "refinement" : mode ?? (current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement") }));
   }
   function editQuestion(messageId: string) {
     update(conversationId, (current) => {
@@ -185,7 +200,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       return;
     }
     const explicitFacts = [...(target?.facts ?? []), ...(target && current.composerMode === "clarification" ? [current.composer] : [])];
-    if (explicitFacts.length > 20 || explicitFacts.join("\n").length > 12_000) {
+    if (explicitFacts.length > ANSWER_FACTS_MAX || explicitFacts.join("\n").length > ANSWER_FACTS_MAX_CHARS) {
       update(conversationId, (state) => ({ ...state, status: "This question has reached its context limit. Move the supporting facts into Profile before starting a new question. Your message has been kept." }));
       return;
     }
@@ -227,8 +242,9 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     // Generated and reopened revisions anchor lineage even when unsaved; only a
     // failed manual edit should drop out of the chain.
     const failedEditCollapses = Boolean(message.edited);
-    const captured = { ...response, answer: text, counts: validation.counts, compliant: validation.compliant,
-      status: saveAsDraft ? "draft" as const : "ready" as const };
+    // The question's facts are the user's Add a detail text; answer text never joins them.
+    const captured = { ...response, ...(message.facts.length ? { userFacts: { provenance: "user-declared" as const, facts: [...message.facts] } } : {}),
+      answer: text, counts: validation.counts, compliant: validation.compliant, status: saveAsDraft ? "draft" as const : "ready" as const };
     saveRequests.current.add(response.id);
     updateMessage(conversationId, messageId, (item) => ({ ...item, savingRevisionId: response.id, saveError: undefined }));
     try {
@@ -250,27 +266,30 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
     const validation = validateAnswerConstraints(answer.answer, constraints);
     const id = answer.id ?? crypto.randomUUID();
     const question = { id: answer.questionId ?? crypto.randomUUID(), revision: answer.questionRevision ?? 1, text: answer.question };
-    const { savedAt: _savedAt, ...savedRevision } = answer;
+    const { savedAt: _savedAt, userFacts, ...savedRevision } = answer;
     const response: ApplicationAnswerRevision = { ...savedRevision, id, applicationId: answer.applicationId ?? applicationId ?? conversationId,
       questionId: question.id, questionRevision: question.revision, constraints, counts: validation.counts, compliant: validation.compliant,
       status: answer.status ?? (validation.compliant ? "ready" : "draft") };
     const messageId = crypto.randomUUID();
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: response.clarification ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
-      messages: [...current.messages, { id: messageId, question, facts: [], response, savedRevisionId: id }] }));
+      messages: [...current.messages, { id: messageId, question, facts: [...(userFacts?.facts ?? [])], response, savedRevisionId: id }] }));
   }
   return {
     conversationId, conversation, savedAnswers, stageConfig: args.aiRequest,
-    saveBlocker: args.saveBlocker, isSavePending: () => saveRequests.current.size > 0,
+    saveBlocker: args.saveBlocker, editBlocker: args.editBlocker, isSavePending: () => saveRequests.current.size > 0,
     providerReady: args.providerReady, providerMessage: args.providerMessage, profileLimitMessage: args.profileLimitMessage,
-    setComposer, newQuestion, refine, editQuestion, editAnswer, send, save, reopen,
-    setComposerMode: (composerMode: Conversation["composerMode"]) => update(conversationId, (current) => ({ ...current, composerMode })),
+    setComposer: unlessBlocked(setComposer), newQuestion: unlessBlocked(newQuestion), refine: unlessBlocked(refine),
+    editQuestion: unlessBlocked(editQuestion), editAnswer: unlessBlocked(editAnswer), send: unlessBlocked(send), save, reopen: unlessBlocked(reopen),
+    setComposerMode: unlessBlocked((composerMode: Conversation["composerMode"]) => update(conversationId, (current) => ({ ...current, composerMode }))),
     isGeneratingAnswers: conversation.progress.status === "running",
     isSavingAnswers: Object.values(conversations).some((current) => current.messages.some((message) => Boolean(message.savingRevisionId))),
     // Only the current thread can still be saved; earlier preparations' threads are unreachable.
-    hasUnsavedAnswers: Boolean(conversation.composer.trim()) || conversation.messages.some((message) => Boolean(message.response?.answer.trim()) && message.savedRevisionId !== message.response?.id),
+    hasUnsavedAnswers: hasUnsavedWork(conversation),
+    // Live read for async replacement guards that run between renders.
+    hasUnsavedAnswersNow: () => hasUnsavedWork(conversationsRef.current[currentIdentityRef.current] ?? emptyConversation()),
     answersStatus: conversation.status, answersProgress: conversation.progress,
     stopAnswers: () => stopAnswers(),
-    retryAnswers: () => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); }
+    retryAnswers: unlessBlocked(() => { const turn = lastRequestRef.current[conversationId]; if (turn) void generate(turn); })
   };
 }
 export type ApplicationAnswersController = ReturnType<typeof useApplicationAnswers>;

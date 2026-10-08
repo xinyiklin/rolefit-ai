@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { splitProfileEvidence } from "../../src/lib/coverLetterEvidence.ts";
 import {
-  ANSWER_QUESTION_MAX_CHARS, ANSWER_TEXT_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS,
+  ANSWER_FACTS_MAX, ANSWER_FACTS_MAX_CHARS, ANSWER_INVALID_CONTROL, ANSWER_QUESTION_MAX_CHARS, ANSWER_TEXT_MAX_CHARS, ANSWER_REFINEMENT_MAX_CHARS,
   extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints,
   type ApplicationAnswerRevision
 } from "../../shared/applicationAnswersContract.ts";
@@ -17,7 +17,6 @@ import { recordProviderUsage, type UsageSink } from "./providerUsage.ts";
 import { hasUngroundedNumericClaim } from "./sanitize.ts";
 
 export const APPLICATION_ANSWER_PROMPT_VERSION = "application-answer-conversation-v4";
-const INVALID_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 type AnswerRequest = {
   applicationId: string;
   answerRevisionId: string;
@@ -39,7 +38,7 @@ function record(value: unknown): Record<string, unknown> {
 }
 function boundedText(value: unknown, label: string, limit: number, required = false): string {
   if (value === undefined && !required) return "";
-  if (typeof value !== "string" || (required && !value.trim()) || INVALID_CONTROL.test(value)) {
+  if (typeof value !== "string" || (required && !value.trim()) || ANSWER_INVALID_CONTROL.test(value)) {
     throw new UserSafeAiError(`${label} must be valid text.`, 400);
   }
   if (value.length > limit) throw new UserSafeAiError(`${label} exceeds the ${limit.toLocaleString("en-US")}-character limit. Shorten it before sending.`, 400);
@@ -57,9 +56,9 @@ export function parseApplicationAnswerRequest(body: Record<string, unknown>): An
   const candidateContext = boundedText(body.candidateContext, "Profile", 26_000);
   const profileError = candidateContextLimitError(candidateContext);
   if (profileError) throw new UserSafeAiError(profileError, 400);
-  if (body.explicitFacts !== undefined && (!Array.isArray(body.explicitFacts) || body.explicitFacts.length > 20)) throw new UserSafeAiError("Supply no more than 20 explicit facts.", 400);
+  if (body.explicitFacts !== undefined && (!Array.isArray(body.explicitFacts) || body.explicitFacts.length > ANSWER_FACTS_MAX)) throw new UserSafeAiError(`Supply no more than ${ANSWER_FACTS_MAX} explicit facts.`, 400);
   const explicitFacts = (Array.isArray(body.explicitFacts) ? body.explicitFacts : []).map((fact) => boundedText(fact, "Explicit fact", ANSWER_REFINEMENT_MAX_CHARS, true));
-  if (explicitFacts.join("\n").length > 12_000) throw new UserSafeAiError("Explicit facts exceed the 12,000-character limit.", 400);
+  if (explicitFacts.join("\n").length > ANSWER_FACTS_MAX_CHARS) throw new UserSafeAiError(`Explicit facts exceed the ${ANSWER_FACTS_MAX_CHARS.toLocaleString("en-US")}-character limit.`, 400);
   const previous = body.previousAnswer === undefined ? undefined : record(body.previousAnswer);
   const result: AnswerRequest = {
     applicationId: identity(body.applicationId, "Application identity"),
@@ -115,7 +114,7 @@ function readDraft(raw: unknown, input: AnswerRequest): ParsedDraft {
   if (value.questionId !== input.question.id || value.questionRevision !== input.question.revision) throw new UserSafeAiError("The response did not match this question. Try again.", 502);
   const answer = typeof value.answer === "string" ? normalizeAnswerText(value.answer).trim() : "";
   const clarification = typeof value.clarification === "string" ? normalizeAnswerText(value.clarification).trim() : "";
-  if ((!answer && !clarification) || answer.length > ANSWER_TEXT_MAX_CHARS || clarification.length > 2_000 || hasMarkupTag(answer) || hasMarkupTag(clarification) || INVALID_CONTROL.test(answer + clarification)) {
+  if ((!answer && !clarification) || answer.length > ANSWER_TEXT_MAX_CHARS || clarification.length > 2_000 || hasMarkupTag(answer) || hasMarkupTag(clarification) || ANSWER_INVALID_CONTROL.test(answer + clarification)) {
     throw new UserSafeAiError("The AI response did not include usable answer text. Try again or switch models.", 502);
   }
   if (answer && clarification) throw new UserSafeAiError("The AI response mixed an answer and a follow-up. Try again.", 502);

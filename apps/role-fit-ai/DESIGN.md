@@ -443,9 +443,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   variant. Disclose at most one note under a group — the blocker while its
   action is unavailable, its live status otherwise. Neither is labeled
   “optional.” Resume starts included and Cover Letter starts excluded. A flat
-  Fit Assessment row follows the materials: show its verdict, short summary,
-  compact run attribution, at most three matches and gaps, and an
-  eligibility warning only when relevant. A completed result offers **Reassess fit**; running, not-yet-assessed
+  Fit Assessment row follows the materials: show its verdict as a dot plus
+  word (never a filled pill), short summary, compact run attribution, at most
+  three matches and gaps, and an eligibility warning only when relevant. A completed result offers **Reassess fit**; running, not-yet-assessed
   (**Assess fit**), unavailable/retry, and out-of-date/reassess states use the
   same flat hierarchy.
   Starting or failing a new assessment keeps the latest completion visible, and
@@ -566,7 +566,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   and below 1080px they stack into one natural modal scroll. Fit remains a plain
   categorical advisory: the one-word Limited / Stretch / Reasonable / Strong
   verdict stays left while the summary sits right in one
-  quiet tinted block, with no score, ring, confidence, or implied gauge. Delete sits apart from Cancel/Close and Save changes, and closing
+  quiet tinted block, with no score, ring, confidence, or implied gauge. A
+  warning that names no shown finding sits full-width under that block, never
+  inside its verdict column. Delete sits apart from Cancel/Close and Save changes, and closing
   edited fields confirms before discarding them. It labels its handoff Edit
   preparation for every stored record. Prepare uses one flat persistent banner
   — not a live region — to
@@ -605,7 +607,9 @@ Label/value facts render as print-ledger lines: `--ink-soft` sans label, a
 dotted `--hairline-strong` leader filling the gap, mono tabular-nums
 `--ink-strong` value; 26px line rhythm. Used for analytics lists and
 side-panel facts. This, not stat cards, is the default way to show a list of
-named numbers.
+named numbers. A value that is not recorded ("Not recorded", "Not saved") drops to
+`--ink-faint` sans so it never outweighs real data, and prose values (a source
+name, "Saved") stay sans; only numbers, dates, and identifiers are mono.
 
 ### Figures Strip (signature)
 
@@ -613,7 +617,9 @@ Inline summary figures sit in one hairline-bounded strip: tiny faint label
 over a mono 0.92rem value, items separated by 1px dividers. This replaces
 hero-metric card grids everywhere. It belongs to Analytics: tracking
 surfaces lead with search, lifecycle filters, and the working register, never
-a second row of summary numbers.
+a second row of summary numbers. Below it, the Current pipeline panel draws each
+stage as a thin rule in that stage's dot hue with its count at the bar's end; a
+zero stage draws no bar.
 
 ### Tracker Control Bar (signature)
 
@@ -636,7 +642,8 @@ table-and-inspector height register.
 The inspector mirrors Application Detail's information ownership without
 repeating its form: stage and governing date sit in the identity line; key dates,
 an available posting ID with its source label, and Source are read-only; Fit reuses the same two-column verdict-and-rationale
-advisory without repeating the assessed resume, and keeps Top gaps close;
+advisory without repeating the assessed resume, and lists its matches, gaps,
+and any eligibility concern through the same shared Fit findings Prepare uses;
 Job activity always renders, including its no-other-records state; and Documents
 always summarizes posting, resume, cover letter, and additional uploads. Open
 details owns application edits, while Edit preparation owns prepared-job edits.
@@ -702,6 +709,9 @@ auto-grows without a resize grip; its footer holds the picker, a Refine / Add a
 detail switch while refining, and the question's limits beside Send. Employer
 questions use quiet right-aligned bubbles whose Edit question appears on hover or
 focus for pointer devices; answers stay on an open editable reading surface.
+A reopened saved answer with facts shows a collapsed **Your facts (N)**
+disclosure inside its question bubble: a muted summary, then a plain list of the
+facts as typed.
 While drafting, the pending answer slot shows three pulsing dots and "Drafting
 your answer" (no simulated streaming: responses arrive whole and fade in), and
 the progress dock omits the Answers card while that thread is in view.
@@ -804,7 +814,11 @@ condition-review disclosure, including when reopening saved jobs.
 Use one compact "Review before use" note beside affected generated content or
 assessment findings, visible before acceptance, listing specific concerns;
 evidence concerns use **Not supported by provided evidence**, with a short
-specific reason only when useful. Keep existing Accept, Edit, and Reject
+specific reason only when useful. The note is a small warm-veil box with a
+hairline border and a warm dot before its label — never a thick side stripe —
+and a Fit finding's note sits under that finding. Every Fit surface (Prepare,
+inspector, detail modal) renders the same findings, so no warning ever names a
+match or gap the user cannot see. Keep existing Accept, Edit, and Reject
 controls and downstream actions available. Do not require dismissal, added
 evidence, confirmation, or a separate review step. Accepting never changes a
 warning into a Verified label. Unknown citations remain unconfirmed text without
