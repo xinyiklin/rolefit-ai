@@ -120,7 +120,9 @@ saved application asks before discarding unsaved Answers text, a draft, or a
 drafting request in flight, and Answers are read-only while a posting is being
 prepared. The model menu shares Application Answers settings;
 changes affect future requests and preserve historical configuration.
-Generation and saving never rerun Prepare or generate documents.
+Generation and saving never rerun Prepare or generate documents. Drafting,
+refining and every Retry, including the progress dock's, need the posting
+prepared: an edit to the Prepare source blocks them until it is prepared again.
 
 Facts added with **Add a detail** belong to their question. Each saved revision
 keeps them as the user's own statements, separate from the answer text.

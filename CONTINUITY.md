@@ -5,6 +5,73 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
+  prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
+  `jobReady`, and `generate()`, the only path to the provider for send and
+  both Retry buttons, blocks with "Add the job on Prepare first." in the tab's
+  gate order (Profile limit, resume, job, provider; the provider check used to
+  come first). It used to check only for a non-empty job description, so a
+  draft that failed for prepared job A, Retried from the dock after job B was
+  pasted (not prepared) into Prepare's source, was drafted from B's text in
+  A's conversation. A link-only edit kept A's text but hit the same bypass. This
+  closes the "dock's Answers Retry skips the tab's prepared-job gate" Open item
+  first recorded with the Draft job-source fix below.
+  - [TOOL] `application-answers-retry-gate.mjs` drives the real hook and Answers
+    tab: Retry still drafts while prepared; after a paste or link edit, the dock
+    Retry, send and the tab's disabled controls all name the same gate and no
+    request carries unprepared text. It fails on main (Retry sent B's text), and
+    a provider-first blocker order fails it. Four hook fixtures gained
+    `jobReady: true`. Full `npm run check --workspace apps/role-fit-ai`
+    (client and server `tsc`, builds, 162/162 offline evals) and
+    `git diff --check` passed. Browser QA was not run (no layout change).
+  - [TOOL] One independent review: no high findings, no regressions. It
+    confirmed opened applications, extension/link/paste commits and brief edits
+    keep `jobPrepared` true, so they are not blocked. It also found that
+    App passing a wrong or missing `jobReady` fails the eval, and that merges
+    with dff66ef1 are clean. Fixed from it: a comment and the hooks guide had
+    claimed full parity with the tab's gate, and an eval regex was too strict.
+  - [CODE] Open (confirmed by the review): the hook's resume check is still
+    non-empty text, while the tab's `resumeReady` also excludes the bundled
+    Starter sample. A dock Retry after Open > Bundled starter therefore drafts
+    from sample content, which PRODUCT says never counts as an applicant resume.
+    The same bug existed before this change. Not fixed here.
+- [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
+  client-only; no prompt, schema, provider, or shared-package change:
+  - Fixed: the Applications inspector and detail modal showed Fit gaps only,
+    so a "Match N:" warning had nothing to attach to and rendered inside the
+    104px verdict column. One shared `components/FitFindings.tsx` now renders
+    matches, gaps, and eligibility, each with its own warning, on Prepare, the
+    inspector, and the modal. `splitFitWarnings` takes the Fit result.
+  - "Review before use" is a warm-veil hairline note instead of a dark 2px
+    side stripe, app-wide.
+  - Polish: Prepare verdict is dot plus word, its run attribution is quiet;
+    a job analysis that fell back to the local brief shows a warning mark, not
+    a success check; inspector empty values recede; Analytics stage bars use
+    stage hues and draw nothing for zero; blocked workflow-rail rows put their
+    recovery under the label; dialog titles outrank their body.
+  - [TOOL] RoleFit build, client `tsc`, and 157/157 offline evals passed;
+    before/after browser QA at 1440 and 1024px on a synthetic workspace (port
+    5183). AI-result states (Polish proposals, live Fit runs) were not
+    exercised because no provider ran. One independent review: no high or
+    medium findings; its low findings (CSS selector leaks, guide exception for
+    the warning note, eval depth) were fixed, and the new evals fail on
+    mutated wiring.
+  - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
+    which are not claim-checked; this extends the tradeoff accepted when gap
+    notes were Prepare-only.
+  - [USER+CODE] Follow-up done (`fix/rolefit-prepare-polish-blocker`): the
+    Resume card on Prepare still reads "Ready", but its Polish note no longer
+    says "Finish the resume and AI setup before polishing." The note is the
+    Resume Polish provider's recovery step while that provider is not ready,
+    otherwise the current Polish status, otherwise "Set at least one editable
+    resume section to Polish." (the pipeline's own wording).
+    - [TOOL] Client `tsc`, RoleFit build, and 161/161 offline evals passed;
+      browser QA of the no-provider state on synthetic data; one independent
+      review (no high or medium findings).
+    - Still open (pre-existing, not in that PR): with a ready provider and no
+      Polish section, a leftover Polish status can outrank that blocker; and
+      Prepare's gate counts a locked section's leftover Polish mode while the
+      Resume tab's does not.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so
@@ -103,8 +170,6 @@ bounded; app-only operational detail belongs in the affected app documentation.
     - An extension or Retry Prepare keeps A's source fields while it runs, so
       a Link or Keep separate choice for B still reaches the relationship
       Answers' first Save uses if that Prepare stops.
-    - After a failed draft, the dock's Answers Retry skips the tab's
-      prepared-job gate, so it can draft against unprepared source text.
     - A Link chosen for A stays the session's pending relationship when a
       later fresh Prepare of B finds no duplicate, so B's first Answers Save
       joins A's posting group. Apply and Skip resolve their own relationship.

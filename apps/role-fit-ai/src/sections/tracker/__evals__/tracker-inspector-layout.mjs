@@ -13,6 +13,10 @@ const inspector = readFileSync(
   new URL("../TrackerInspector.tsx", import.meta.url),
   "utf8"
 );
+const findingsCss = readFileSync(
+  new URL("../../../components/FitFindings.css", import.meta.url),
+  "utf8"
+);
 
 const inspectorBlocks = [...css.matchAll(/\.pipeline-inspector\s*\{([^}]*)\}/g)]
   .map((match) => match[1]);
@@ -94,13 +98,13 @@ assert.match(
   "the independently scrolling inspector is not sticky"
 );
 assert.match(
-  css,
-  /\.application-gap-list > li\s*\{[\s\S]{0,300}?min-width:\s*0;[\s\S]{0,300}?overflow-wrap:\s*anywhere/,
-  "semantic assessment gap rows wrap instead of widening the inspector"
+  findingsCss,
+  /\.fit-finding__body\s*\{[\s\S]{0,300}?min-width:\s*0;[\s\S]{0,300}?overflow-wrap:\s*anywhere/,
+  "sentence-length findings wrap instead of widening the inspector"
 );
 assert.ok(
-  inspector.includes('<ul className="application-gap-list">'),
-  "the inspector presents sentence-length gaps as a reading list rather than chips"
+  inspector.includes("<FitFindings "),
+  "the inspector presents findings as a reading list rather than chips"
 );
 assert.match(
   inspector,

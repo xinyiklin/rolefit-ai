@@ -95,6 +95,7 @@ export type PrepareTabProps = {
   preparationStatus: string;
   jobAnalysisProviderReady: boolean;
   jobAnalysisProviderMessage: string;
+  resumePolishProviderMessage: string;
   onFetchPosting: () => void | Promise<void>;
   onPreparePosting: (sourceOverride?: string) => void | Promise<void>;
   resumeReady: boolean;
@@ -170,6 +171,7 @@ export function PrepareTab({
   preparationStatus,
   jobAnalysisProviderReady,
   jobAnalysisProviderMessage,
+  resumePolishProviderMessage,
   onFetchPosting,
   onPreparePosting,
   resumeReady,
@@ -340,7 +342,7 @@ export function PrepareTab({
           : isPolishing
             ? "Wait for the current polish to finish."
             : !canPolishResume
-              ? polishStatus || "Finish the resume and AI setup before polishing."
+              ? resumePolishProviderMessage || polishStatus || "Set at least one editable resume section to Polish."
               : "";
   const canStartPolishResume = canPolishResume && !isPolishStarting && !isPolishing && jobPrepared;
   const resumeWorkflowNeedsAttention =

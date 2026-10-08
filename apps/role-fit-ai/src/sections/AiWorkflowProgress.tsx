@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { AlertCircle, Check, Circle, RotateCcw, Square, X } from "lucide-react";
+import { AlertCircle, Check, Circle, RotateCcw, Square, TriangleAlert, X } from "lucide-react";
 import {
   AI_STAGE_COPY,
   AI_WORKFLOW_TITLE,
@@ -17,9 +17,9 @@ function formatElapsed(ms: number): string {
   return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
-function StageIcon({ status }: { status: AiStageState["status"] }) {
+function StageIcon({ status, warn }: { status: AiStageState["status"]; warn: boolean }) {
   if (status === "running") return <span className="ai-workflow__spinner" />;
-  if (status === "done") return <Check size={13} strokeWidth={2.5} />;
+  if (status === "done") return warn ? <TriangleAlert size={13} strokeWidth={2.25} /> : <Check size={13} strokeWidth={2.5} />;
   if (status === "failed") return <AlertCircle size={13} />;
   if (status === "stopped") return <Square size={10} fill="currentColor" strokeWidth={0} />;
   return <Circle size={10} />;
@@ -53,13 +53,15 @@ function StageRow({
   const statusCopy = state.status === "idle"
     ? "Waiting"
     : AI_STAGE_COPY[stage.key][state.status];
-  const meta = state.status === "running" || elapsedMs > 0 ? formatElapsed(elapsedMs) : "";
+  const meta = state.status === "running" || elapsedMs >= 1000 ? formatElapsed(elapsedMs) : "";
+  // A completed stage whose note carries a warning (e.g. a local fallback) is not a clean success.
+  const doneWithWarning = state.status === "done" && state.noteTone === "warn";
   const showFailure = state.status === "failed" || state.status === "stopped";
 
   return (
-    <div className={`ai-workflow__stage ai-workflow__stage--${state.status}`}>
+    <div className={`ai-workflow__stage ai-workflow__stage--${state.status}${doneWithWarning ? " is-warn" : ""}`}>
       <span className="ai-workflow__stage-icon" aria-hidden="true">
-        <StageIcon status={state.status} />
+        <StageIcon status={state.status} warn={doneWithWarning} />
       </span>
       <div className="ai-workflow__stage-body">
         <span className="ai-workflow__stage-title">{statusCopy}</span>

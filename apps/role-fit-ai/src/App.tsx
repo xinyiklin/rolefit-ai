@@ -521,6 +521,7 @@ function App() {
   const coverProviderReady = providerReady(stages["cover-polish"].provider);
   const answersProviderReady = providerReady(stages["application-answers"].provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
+  const resumePolishProviderMessage = resumePolishProviderReady ? "" : providerRecoveryMessage(resumePolishStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages["cover-polish"].provider);
   const answersProviderMessage = providerRecoveryMessage(stages["application-answers"].provider);
   const ensureJobAnalysisProvider = useCallback(
@@ -1630,7 +1631,7 @@ function App() {
     conversationId: answersConversationId,
     applicationId: preparationSession.applicationId ?? undefined,
     resumeText: currentResumeText || resumeText,
-    jobDescription, rawJobText: jobRawText, jobUrl, candidateContext,
+    jobDescription, jobReady, rawJobText: jobRawText, jobUrl, candidateContext,
     profileLimitMessage, sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("application-answers"),
     aiRequest: stages["application-answers"],
@@ -2836,6 +2837,7 @@ function App() {
               preparationStatus={linkStatus}
               jobAnalysisProviderReady={jobAnalysisProviderReady}
               jobAnalysisProviderMessage={jobAnalysisProviderMessage}
+              resumePolishProviderMessage={resumePolishProviderMessage}
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}

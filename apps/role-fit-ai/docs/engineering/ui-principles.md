@@ -68,7 +68,7 @@ matches and gaps, and a relevant eligibility warning. It has distinct running,
 disabled, and retryable-unavailable states and never shows scores, confidence,
 evidence ledgers, quotations, recommendations, or historical audit state. Nothing on
 the page is a card inside a card, and no status earns its own tinted panel or
-icon tile. Preparation
+icon tile; the shared "Review before use" warning note is the only inline tint. Preparation
 progress is already a readiness check, so it takes rail space only while work is
 running or a status message is outstanding. A restored application returns to
 Prepare after its job and documents pass their existing source validation and

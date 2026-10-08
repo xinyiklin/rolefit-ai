@@ -54,4 +54,17 @@ assert.match(
   "manual task dismissal restores focus when no dock control remains"
 );
 
+assert.match(
+  progressSource,
+  /doneWithWarning = state\.status === "done" && state\.noteTone === "warn"[\s\S]{0,400}?<StageIcon status=\{state\.status\} warn=\{doneWithWarning\} \/>/,
+  "a completed stage with a warning note (e.g. local-brief fallback) does not show a success check"
+);
+assert.match(progressSource, /warn \? <TriangleAlert/, "the warning mark replaces the check");
+assert.match(
+  progressSource,
+  /state\.status === "running" \|\| elapsedMs >= 1000/,
+  "a settled stage hides a sub-second elapsed time instead of showing 0s"
+);
+assert.match(shellStyles, /\.ai-workflow__stage--done\.is-warn \.ai-workflow__stage-icon/, "the warning mark takes the warm tone");
+
 console.log("AI workflow progress contract passed");

@@ -220,21 +220,40 @@ const fitWarnings = [
   "Verdict: not supported by provided evidence; no supporting candidate finding was supplied.",
   "Gap 3: this requirement overlaps another finding."
 ];
+const fitResult = (eligibility) => ({
+  status: "ASSESSED",
+  verdict: "STRETCH",
+  summary: "Relevant overlap with important gaps.",
+  matches: [{ jobExcerpt: "Python services", candidateSource: "RESUME", candidateExcerpt: "Built Python services" }],
+  gaps: ["Kubernetes", "On-call ownership"],
+  eligibility,
+  warnings: fitWarnings
+});
 assert.deepEqual(
-  splitFitWarnings(fitWarnings, { matches: 1, gaps: 2, eligibility: true }),
+  splitFitWarnings(fitResult({ status: "CHECK", jobExcerpt: "US work authorization" })),
   {
     general: [fitWarnings[3], fitWarnings[4]],
     matches: [["This requirement is repeated."]],
     gaps: [[], ["Source reference could not be confirmed. Quoted text is unconfirmed."]],
     eligibility: ["Reported conflict was downgraded to Check; the supplied context does not establish a clear conflict."]
   },
-  "finding warnings move beside their finding; unshown findings and verdict warnings stay general"
+  "finding warnings move beside their finding; out-of-range findings and verdict warnings stay general"
 );
 assert.deepEqual(
-  splitFitWarnings(fitWarnings, { gaps: 2 }).general,
-  [fitWarnings[0], fitWarnings[2], fitWarnings[3], fitWarnings[4]],
-  "a gaps-only surface keeps match and eligibility warnings, labels intact"
+  splitFitWarnings(fitResult({ status: "CLEAR" })).general,
+  [fitWarnings[2], fitWarnings[3], fitWarnings[4]],
+  "a CLEAR eligibility is not shown, so its warning stays general with its label"
 );
-assert.deepEqual(splitFitWarnings(undefined, { gaps: 0 }), { general: [], matches: [], gaps: [], eligibility: [] });
+assert.deepEqual(splitFitWarnings(undefined), { general: [], matches: [], gaps: [], eligibility: [] });
+assert.deepEqual(
+  splitFitWarnings({ ...fitResult(undefined) }).general,
+  [fitWarnings[2], fitWarnings[3], fitWarnings[4]],
+  "an Eligibility warning without an eligibility finding stays general"
+);
+assert.deepEqual(
+  splitFitWarnings({ status: "INSUFFICIENT_JOB_INFORMATION", summary: "Add details.", matches: [], gaps: [], warnings: fitWarnings }),
+  { general: fitWarnings, matches: [], gaps: [], eligibility: [] },
+  "insufficient job information shows no findings, so every warning stays general"
+);
 
 console.log("application display probes: passed");
