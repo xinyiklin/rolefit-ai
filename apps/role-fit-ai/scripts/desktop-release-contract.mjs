@@ -72,11 +72,11 @@ export function readRolefitPackageVersion(repoRoot) {
   return assertRolefitReleaseVersion(packageJson.version);
 }
 
-// Some landing screenshots contain the version in their pixels, where no text
-// search can find it. The page also renders the live release version from the
-// GitHub catalog, so a stale stamp contradicts the same page. The manifest
-// records the version each of those images was captured at; this fails the
-// release and site-deploy gates until the image is retaken.
+// A landing screenshot whose pixels contain the version cannot be found by a
+// text search, and a stale stamp contradicts the live release version the page
+// renders. The manifest records each such image's captured version; this fails
+// the release and site-deploy gates until it is retaken. The companion shell no
+// longer shows a version, so the manifest may be empty.
 const SCREENSHOT_MANIFEST_PATH = ["apps", "role-fit-ai", "landing", "screenshot-manifest.json"];
 const SCREENSHOT_MANIFEST_KEYS = new Set(["schemaVersion", "note", "versionStamped"]);
 const SCREENSHOT_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
@@ -109,9 +109,6 @@ export function assertScreenshotVersionStamps(
   }
 
   const entries = Object.entries(manifest.versionStamped);
-  if (entries.length === 0) {
-    fail("screenshot manifest must list at least one version-stamped image");
-  }
 
   const landingRoot = resolve(repoRoot, "apps", "role-fit-ai", "landing");
   const stale = [];

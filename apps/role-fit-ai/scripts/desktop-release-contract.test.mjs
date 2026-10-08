@@ -90,17 +90,21 @@ async function makeScreenshotFixture(manifest, { imageName = "public/assets/desk
   return root;
 }
 
+test("the companion shell shows no version, so its screenshot survives a version bump", () => {
+  const html = readFileSync(new URL("../desktop/companion.html", import.meta.url), "utf8");
+  const sidebar = html.slice(html.indexOf('<aside class="companion-sidebar"'), html.indexOf("</aside>"));
+  const settings = html.slice(html.indexOf('data-companion-panel="settings"'), html.indexOf("</main>"));
+  assert.ok(sidebar.length > 0 && settings.length > 0, "the companion keeps its sidebar shell and Settings panel");
+  assert.doesNotMatch(sidebar, /id="runtime-version"/, "the version is not in the sidebar shell");
+  assert.match(settings, /id="runtime-version"/, "the version lives in Settings");
+});
+
 test("version-stamped screenshots must be recaptured when the package version moves", async () => {
   const committed = assertScreenshotVersionStamps();
   const appPackage = readJson(new URL("../package.json", import.meta.url));
-  assert.ok(committed.length > 0, "the manifest must claim at least one version-stamped image");
   for (const { capturedVersion } of committed) {
     assert.equal(capturedVersion, appPackage.version);
   }
-  assert.ok(
-    committed.some((entry) => entry.imagePath === "public/assets/desktop-app.png"),
-    "the companion screenshot prints the version in its footer and must stay covered",
-  );
 
   const valid = await makeScreenshotFixture({
     schemaVersion: 1,
@@ -137,7 +141,7 @@ test("version-stamped screenshots must be recaptured when the package version mo
     assert.throws(() => assertScreenshotVersionStamps(missing), /not a file under landing\//);
     assert.throws(() => assertScreenshotVersionStamps(unknownKey), /only schemaVersion, note, and versionStamped/);
     assert.throws(() => assertScreenshotVersionStamps(escaping), /relative to the landing directory/);
-    assert.throws(() => assertScreenshotVersionStamps(empty), /at least one version-stamped image/);
+    assert.deepEqual(assertScreenshotVersionStamps(empty), [], "no version-stamped screenshot is a valid state");
     assert.throws(() => assertScreenshotVersionStamps(futureSchema), /schemaVersion must be 1/);
   } finally {
     await Promise.all(

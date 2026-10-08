@@ -5,6 +5,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] The desktop companion shows its version only in Settings, not in
+  the sidebar (the sidebar keeps "Running on <port>"), so the landing
+  screenshot of the shell no longer needs a retake on every version bump.
+  `landing/screenshot-manifest.json` may be empty and is empty now; a release
+  test pins the version out of the sidebar. The companion screenshot was
+  recaptured on Windows (1784x1202, isolated user data, empty workspace, port
+  5181, 2x), so its type renders in Windows fallback fonts rather than the
+  macOS ones used at 0.8.0.
 - [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
   12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
   tracker field is now `notApplyingReasons` (canonical-order list, omitted when

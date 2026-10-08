@@ -58,6 +58,10 @@ root and RoleFit app guides first.
   same page; `assertScreenshotVersionStamps` fails the release and Pages deploy
   gates until the image is retaken and the manifest updated. The manifest sits
   outside `public/`, so it never ships.
+- Keep the version out of product chrome that marketing screenshots show
+  (user decision, 2026-10-08). The companion shows it only in Settings, so the
+  Overview screenshot is retaken when its UI changes, not on every version
+  bump, and the manifest may be empty. Prefer this over adding a stamped image.
 - `npm run build:landing --workspace apps/role-fit-ai` must typecheck the
   landing, run the release-catalog probes, build only `dist-landing/`, and pass
   the output-boundary guard.

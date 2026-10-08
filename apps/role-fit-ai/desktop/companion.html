@@ -34,7 +34,6 @@
 
         <div class="companion-sidebar__footer">
           <div class="companion-sidebar__local">
-            <span id="runtime-version">RoleFit</span>
             <strong class="sidebar-service" id="sidebar-runtime-status" data-state="unknown">Checking service</strong>
           </div>
           <button class="sidebar-open-app" id="open-rolefit-browser" type="button">
@@ -250,6 +249,11 @@
               <button id="apply-local-site-port" type="submit" disabled>Apply &amp; restart</button>
               <p id="local-site-port-status" role="status" aria-live="polite">Loading port setting&#8230;</p>
             </form>
+
+            <dl class="settings-about">
+              <dt>Version</dt>
+              <dd id="runtime-version">RoleFit</dd>
+            </dl>
           </section>
         </main>
         <p class="visually-hidden" id="extension-setup-status" role="status" aria-live="polite"></p>
