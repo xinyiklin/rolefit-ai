@@ -74,7 +74,11 @@ browser-side effects; components render them and App composes them.
   session's `pendingRelationship`: an unfinished run's choice reaches it only
   when such a gate reuses it for the same posting, a different posting starts
   from that run's own choice (none after a pre-analysis duplicate stop), and a
-  same-posting re-prepare that resolved nothing keeps the current one.
+  same-posting re-prepare that resolved nothing keeps the current one. A fresh
+  preparation's first Answers Save, which creates the record Apply otherwise
+  would, reads that same remembered choice through `rememberedRelationship`
+  (never prompting or publishing, and skipping its own Draft on a retry) and
+  falls back to the committed relationship only when none is remembered.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
   scan on unmount or a changed scan identity, and rehydrates the cached

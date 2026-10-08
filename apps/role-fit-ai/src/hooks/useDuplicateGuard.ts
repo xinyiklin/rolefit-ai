@@ -192,6 +192,21 @@ export function useDuplicateGuard({
     resolve(choice);
   }
 
+  function rememberedResolution(
+    match: DuplicateMatch<Application>,
+    target: DuplicateTarget
+  ): Extract<DuplicateResolution, { action: "continue" }> | null {
+    const priorDecision = acknowledgedDecision(match.application.id, target);
+    if (!priorDecision) return null;
+    return {
+      action: "continue",
+      relationship: priorDecision === "link" ? relationshipFor(match) : null,
+      ...(priorDecision === "separate"
+        ? { unrelatedApplicationId: match.application.id }
+        : {})
+    };
+  }
+
   // Only gates on the current prepared job publish to the session, a remembered choice for
   // that posting included. A Prepare run's choice returns with its gate result for its commit.
   async function resolveMatch(
@@ -201,17 +216,10 @@ export function useDuplicateGuard({
     publishRelationship: boolean
   ): Promise<DuplicateResolution> {
     if (!isCurrent()) return { action: "cancel" };
-    const priorDecision = acknowledgedDecision(match.application.id, target);
-    if (priorDecision) {
-      const relationship = priorDecision === "link" ? relationshipFor(match) : null;
-      if (publishRelationship) onRelationshipResolved(relationship);
-      return {
-        action: "continue",
-        relationship,
-        ...(priorDecision === "separate"
-          ? { unrelatedApplicationId: match.application.id }
-          : {})
-      };
+    const remembered = rememberedResolution(match, target);
+    if (remembered) {
+      if (publishRelationship) onRelationshipResolved(remembered.relationship);
+      return remembered;
     }
 
     const choice = await requestChoice(promptFor(match));
@@ -306,6 +314,16 @@ export function useDuplicateGuard({
       : { action: "continue", relationship: null };
   }
 
+  // What a gate would reuse for this posting's top match (other than `ownApplicationId`) without
+  // asking; undefined when nothing is remembered. Never prompts or publishes.
+  function rememberedRelationship(
+    target: DuplicateTarget,
+    ownApplicationId?: string
+  ): JobPostingRelationship | null | undefined {
+    const match = findDuplicatesForTarget(target).find(({ application }) => application.id !== ownApplicationId);
+    return match ? rememberedResolution(match, target)?.relationship : undefined;
+  }
+
   return {
     duplicatePrompt,
     chooseDuplicate,
@@ -314,6 +332,7 @@ export function useDuplicateGuard({
     confirmDuplicateAfterJobAnalysis: confirmDuplicateForJobAnalysis,
     confirmDuplicateBeforePolish,
     resolveApplyDuplicate,
+    rememberedRelationship,
     ackApplication
   };
 }

@@ -173,7 +173,7 @@ async function freshDesk(initialRelationship = null) {
       saveApplicationAnswer: applications.saveApplicationAnswer, getApplication: applications.getApplication,
       linkPostingRecords: async (ids, groupId) => { links.push({ ids, groupId }); return true; },
       publishPreparationSession: (next) => { session.current = next; },
-      duplicateGuard: { ackApplication: (application) => acknowledged.push(application) }
+      duplicateGuard: { ackApplication: (application) => acknowledged.push(application), rememberedRelationship: () => undefined }
     });
   });
   renderDesk(preparedJobA);
@@ -225,7 +225,7 @@ async function preparationDesk() {
   reset();
   stored = [];
   writes = 0;
-  const desk = { tracked: [], links: [], committedId: "" };
+  const desk = { tracked: [], links: [], linkOk: true, committedId: "" };
   let applications;
   desk.render = (state) => render(() => {
     applications = useApplications();
@@ -236,7 +236,7 @@ async function preparationDesk() {
       saveApplicationAnswer: applications.saveApplicationAnswer, getApplication: applications.getApplication,
       refreshApplications: async () => true,
       findDuplicatesForTarget: (target) => desk.tracked.map((tracks) => tracks(target)).filter(Boolean),
-      linkPostingRecords: async (ids, groupId) => { desk.links.push({ ids, groupId }); return true; },
+      linkPostingRecords: async (ids, groupId) => { desk.links.push({ ids, groupId }); return desk.linkOk; },
       setImportedJob: () => undefined
     });
   });
@@ -423,7 +423,7 @@ try {
   }
 
   // A Link chosen in a stopped re-prepare of the same posting is remembered; the next Polish
-  // gate reuses it for that posting, and only then does it reach the first Save.
+  // gate reuses it for that posting without asking and publishes it.
   {
     const desk = await preparationDesk();
     await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
@@ -440,6 +440,63 @@ try {
     await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
     assertDescribesJobA(stored[0], "Polish reuse after a stopped re-prepare");
     assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // The first Answers Save reuses that remembered Link the same way when it comes before any
+  // Polish, Apply or Skip gate, without asking.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push(tracksAlpha);
+    await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", targetA, "link");
+    const view = desk.render(deskJobA);
+    assert.equal(view.preparationSession.pendingRelationship, null, "the stopped run publishes nothing");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "first Save after a stopped re-prepare");
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }],
+      "the remembered Link reaches the Draft with no later gate");
+    assert.equal(desk.render(deskJobA).duplicateGuard.duplicatePrompt, null, "Save never asks");
+  }
+
+  // As at Polish and Apply, a remembered Keep separate for the posting's top match wins over a
+  // committed Link.
+  {
+    const desk = await preparationDesk();
+    desk.tracked.push(tracksAlpha);
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA, "link");
+    const repost = (target) => target.jobUrl === urlA && {
+      application: trackedRecord("tracked-alpha-repost", "group-alpha-repost", "Alpha Health", "Platform Engineer", urlA),
+      level: "same-posting", confidence: "exact", evidence: ["Same canonical posting URL"]
+    };
+    desk.tracked.unshift(repost);
+    await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", targetA, "separate");
+    const view = desk.render(deskJobA);
+    assert.deepEqual(view.preparationSession.pendingRelationship, relationshipA, "the committed Link is unchanged");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "remembered Keep separate");
+    assert.deepEqual(desk.links, [], "the Draft is saved unlinked");
+  }
+
+  // A Save retried after its link failed finds the remembered match, not its own Draft.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push((target) => target.jobUrl === urlA && stored[0] && {
+      application: stored[0], level: "same-posting", confidence: "exact", evidence: ["Same canonical posting URL"]
+    }, tracksAlpha);
+    await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", targetA, "link");
+    desk.linkOk = false;
+    const view = desk.render(deskJobA);
+    await assert.rejects(view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false),
+      /Retry Save to finish linking/);
+    desk.linkOk = true;
+    const retry = desk.render(deskJobA);
+    await retry.handleSaveAnswer(answerIn(retry.answersConversationId), retry.answersConversationId, false);
+    assert.equal(stored.length, 1, "the retry updates the same Draft");
+    assert.deepEqual(desk.links, [
+      { ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" },
+      { ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }
+    ], "the retry links the Draft to the remembered match");
   }
 
   // A remembered choice belongs to its posting: B's in-flight Link to a record that also
@@ -513,7 +570,7 @@ try {
     assert.deepEqual(desk.links, []);
   }
 
-  console.log("Answers Draft source passed: pasted source, typed link with an uncommitted relationship, no prepared job, and run-scoped posting relationships");
+  console.log("Answers Draft source passed: pasted source, typed link with an uncommitted relationship, no prepared job, run-scoped posting relationships, and remembered choices for the same posting");
 } finally {
   globalThis.fetch = originalFetch;
   reset();

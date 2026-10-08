@@ -1612,12 +1612,22 @@ function App() {
       draftId = crypto.randomUUID();
       answersDraftIds.current.set(conversationId, draftId);
     }
+    // As at Polish, Apply and Skip, a choice remembered for this exact posting wins over the committed one.
+    const remembered = session.mode === "new" && draftSource
+      ? duplicateGuard.rememberedRelationship({
+        jobUrl: draftSource.target.jobUrl.trim(),
+        jobText: draftSource.target.rawJobDescription?.trim() || draftSource.target.jobDescription,
+        company: draftSource.target.metadata?.company,
+        role: draftSource.target.metadata?.role,
+        location: draftSource.target.metadata?.location
+      }, draftId)
+      : undefined;
+    const relationship = remembered === undefined ? draftSource?.relationship : remembered;
     let saved = await saveApplicationAnswer({
       answer, preserveDraft,
       target: session.applicationId ? { applicationId: session.applicationId } : { draftId, ...draftSource!.target }
     });
-    if (session.mode === "new" && draftSource?.relationship) {
-      const relationship = draftSource.relationship;
+    if (session.mode === "new" && relationship) {
       const linked = await linkPostingRecords(
         [saved.id, relationship.matchedApplicationId], relationship.jobPostingGroupId
       );

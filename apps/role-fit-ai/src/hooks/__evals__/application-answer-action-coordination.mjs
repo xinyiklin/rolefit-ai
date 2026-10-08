@@ -122,7 +122,7 @@ async function scenario({ failWrite = false, prompt = false } = {}) {
     } } },
     saveApplicationAnswer: applications.saveApplicationAnswer, linkPostingRecords: applications.linkPostingRecords,
     getApplication: applications.getApplication, publishPreparationSession: publishSession,
-    duplicateGuard: { ackApplication: (application) => acknowledged.push(application.id) }
+    duplicateGuard: { ackApplication: (application) => acknowledged.push(application.id), rememberedRelationship: () => undefined }
   });
   const applying = flow.handleApply();
   if (prompt) await applying;

@@ -57,9 +57,12 @@ prepared-job or resume gate, in the tab's order, with no request.
 Answers save, preparation session, committed-intake setter and duplicate guard
 with the production store: a first Save describes the job as last prepared and
 links only through a duplicate choice a committed Prepare run or a later
-Polish/Apply/Skip gate applied to that posting (Polish may reuse a stopped run's
-remembered choice), never one from a different posting, straight from an
-uncommitted run, or through a queued run's stale setter.
+Polish/Apply/Skip gate applied to that posting, or one the guard remembers for
+that posting from a stopped run (reused by Polish and by the first Save itself,
+where a remembered Keep separate wins as it does at Polish and Apply, and a
+Save retried after a failed link skips its own Draft), never one from a
+different posting, straight from another posting's uncommitted run, or through
+a queued run's stale setter.
 Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
 and backup round trips. Run the nearest probe while iterating, then the full
 RoleFit offline suite and app/server build.
