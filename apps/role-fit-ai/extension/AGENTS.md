@@ -77,8 +77,18 @@ V3 client of the local RoleFit server.
   blank popup with nothing to act on.
 - Request only permissions required by the current import/container behavior.
   The keyboard path added none.
-- The extension may extract the visible posting and query duplicate status. It
-  never reads the workspace resume and never calculates a fit score/verdict.
+- The extension may extract the posting on the page and query duplicate status.
+  It never reads the workspace resume and never calculates a fit score/verdict.
+- The generic capture reads the page's visible text. A site adapter inside the
+  injected `extractPageData` may click the posting's own section toggles
+  (never one inside a link or form, at most four, each wait bounded, each
+  section left open) and keeps only that posting's sections, dropping other
+  postings and other people's profiles. It never fetches, navigates, or
+  submits, and an unrecognized layout falls back to the generic capture, which
+  keeps whatever the page shows. Handshake is the one adapter: signed-in pages
+  the server cannot fetch, a "More" toggle that re-renders on every click,
+  then Similar Jobs and alumni profiles. Its probes live in
+  `__evals__/extension-handshake-capture.mjs`.
 - Keep all server access fixed to local RoleFit routes. The localhost server
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an

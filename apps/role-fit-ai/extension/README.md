@@ -112,7 +112,13 @@ the keyboard command is an ES module.
 
 1. On open, the popup injects a small extractor into the active tab
    (`document.body.innerText`, with site-specific selectors for LinkedIn,
-   Indeed, Lever, Greenhouse, and Workday tried first).
+   Indeed, Lever, Greenhouse, and Workday tried first). On a signed-in
+   Handshake posting (`/jobs/<id>` or the search view's selected job), it
+   opens the shortened description, captures only that posting's sections
+   (leaving out Similar Jobs and alumni profiles), and sends the posting's
+   canonical `/jobs/<id>` URL with a `<Role> | <Employer> | Handshake` title.
+   If Handshake's layout is not recognized, it captures the whole page as for
+   any other site.
 2. It POSTs the text to `POST /api/extension/analyze`, which extracts job
    identity and checks the application tracker with a layered
    duplicate match (ATS posting id / normalized URL / requisition id in the

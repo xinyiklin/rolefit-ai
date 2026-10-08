@@ -5,6 +5,84 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] **Extension imports signed-in Handshake postings** (branch
+  `feature/rolefit-handshake-import`; the user asked to check and add
+  support). Before, the extension captured the whole page: about 300
+  characters of a description Handshake shortens in JavaScript behind
+  **More**, plus site navigation, other jobs' "Similar Jobs" listings, and
+  "Alumni in similar roles" names. The server cannot fetch these pages (sign-in
+  required). `extractPageData` (now async and exported) adds a Handshake
+  adapter for `*.joinhandshake.com/jobs/<id>` and `/job-search/<id>`. It clicks
+  up to four section toggles, skipping any inside a link or form; it re-finds
+  each toggle (Handshake re-renders it on every click) and reopens one it
+  closed. It keeps the pane's sections up to Similar Jobs, drops any section
+  linking to `/profiles/`, and sends the canonical `/jobs/<id>` URL taken from
+  the pane's title link. Its title is `<Role> | <Employer> | Handshake`, with
+  whitespace collapsed. `extractJobMeta` now parses that title by splitting on
+  `|`, ahead of the LinkedIn pattern. Before, it read no employer and cut the
+  role at " - ". An unrecognized layout falls back to the generic capture. No
+  permission, manifest, server route, or extension version change.
+  - [TOOL] The real function ran in the user's signed-in Chrome on the three
+    reported postings and the search view. It captured 3,683 / 4,816 / 2,096
+    characters with no Similar Jobs, alumni, nav, or other result cards. The
+    first posting gave identical lengths from collapsed, already-open, and
+    search-view starts. The first live run exposed the re-rendered toggle (an
+    open description was closed and left closed), and the stub now models it.
+    Firefox was not exercised live (no automation available). The unpacked
+    extension needs a reload to pick this up.
+    `__evals__/extension-handshake-capture.mjs` has 11 probes on synthetic
+    data, and each fails under its targeted mutation. Full
+    `npm run check --workspace apps/role-fit-ai` passed.
+  - [TOOL] One independent review found two blockers, both fixed:
+    - The first eval fixture copied live session values (school subdomain,
+      the user's Handshake user id, real posting and employer ids, and
+      description text), and the repo is public. It was replaced with
+      synthetic values before anything was staged.
+    - A first regex title parse backtracked: a whitespace-heavy 500-character
+      `document.title` from any site took up to about 9 s in the
+      synchronous analyze handler.
+
+    The review's low findings (toggle guard, cap test, whitespace collapse,
+    doc overclaims) are also fixed. A second reviewer is not required (no
+    shared package, schema, prompt, or version change).
+  - Residual: an already-open description closes and reopens on capture (the
+    toggle exposes no `aria-expanded`); capture clicks before the pairing check
+    (no text leaves the browser); Similar Jobs is the only stop marker; a
+    hidden kept section would contribute its text; `atsPostingKey` has no
+    Handshake key, so one posting seen under two school subdomains matches only
+    through the description tier.
+  - [USER+CODE] `extractJobMeta` no longer stalls the analyze route (the user
+    asked for this in the same branch). The Indeed title regex took 10-34 s
+    on a crafted 500-character title, and the body `Role:`/`Company:`/intro
+    patterns about 4 s on 50,000 blank lines (`^\s*` crossed lines). Any
+    site's popup open stalled the whole local server. LinkedIn and Indeed
+    titles are now split and indexed, and the body patterns no longer cross
+    line breaks. A differential run over 225 title/body pairs changed only
+    two junk titles and the Handshake format. Probes:
+    `server/extension/__evals__/job-meta-probes.mjs`.
+  - [USER+TOOL] Supported job sites are documented in the app README (the
+    user asked). A live October 2026 check sent one public posting per site
+    through the real link import. Full description: Greenhouse (board and
+    company wrapper), Lever, Ashby, Workday, SmartRecruiters, Workable,
+    iCIMS, Oracle Recruiting, LinkedIn, Amazon, Google, Apple, Built In, Dice,
+    YC, Wellfound, Teamtailor, SAP SuccessFactors and Radancy sites. Refused
+    the server: Indeed 401, Glassdoor 403, ZipRecruiter 403, Meta 400.
+  - Open (found by that check, not fixed; each needs the user's go-ahead):
+    - Microsoft Careers link import keeps only a 1,792-character summary of a
+      5,692-character posting (no Responsibilities or Qualifications). The
+      extension captures it fully, and its public `position_details` JSON
+      has the full text.
+    - Generic link import accepts a page reached by redirect: Rippling's
+      own board 308-redirects every posting to its general careers page,
+      which imports as the job.
+    - The extension reads only the top frame. On an iCIMS job page the top
+      frame holds 15 characters and the description sits in a same-origin
+      frame, so only the server fetch of `*.icims.com` saves it, and company
+      sites that embed an ATS in a frame capture nothing useful.
+    - Unverified (no live posting found): Jobvite, Taleo, Paylocity, ADP,
+      BambooHR, Breezy, JazzHR, Recruitee, Personio, and Rippling boards of
+      other companies.
+
 - [USER+CODE] **Four open items fixed in one PR** (branch
   `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
   approved brief v1 and plan v1). Client and test code only: no schema,

@@ -32,26 +32,41 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
 
 // Best-effort title/company extraction from a job page title and body text.
 // Conservative: returns only what it can read; never guesses an employer.
+// Any site supplies both inputs and the analyze route runs this synchronously,
+// so every parse is a split or a line-anchored match that cannot backtrack.
 export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: string; company?: string } {
   const meta: { title?: string; company?: string } = {};
   const title = typeof pageTitle === "string" ? pageTitle.trim() : "";
   const body = typeof text === "string" ? text : "";
 
-  // 1. LinkedIn: "<Title> at <Company> | ... LinkedIn"
+  // 1. Handshake: "<Title> | <Company> | Handshake" (a title may contain "|").
+  // LinkedIn: "<Title> at <Company> | ... LinkedIn".
   if (title) {
-    const linkedin = title.match(/^(.+?)\s+at\s+(.+?)\s*[|–\-].*linkedin/i);
-    if (linkedin) {
-      meta.title = linkedin[1].trim();
-      meta.company = linkedin[2].trim();
+    const segments = title.split("|");
+    const at = /\s+at\s+/i.exec(title);
+    const afterAt = at ? title.slice(at.index + at[0].length) : "";
+    const separator = afterAt.search(/[|–-]/);
+    if (segments.length >= 3 && segments.at(-1)?.trim().toLowerCase() === "handshake") {
+      const role = segments.slice(0, -2).join("|").trim();
+      const company = segments.at(-2)?.trim() ?? "";
+      if (role && company) {
+        meta.title = role;
+        meta.company = company;
+      }
+    } else if (at && at.index > 0 && separator > 0 && /linkedin/i.test(afterAt.slice(separator))) {
+      meta.title = title.slice(0, at.index).trim();
+      meta.company = afterAt.slice(0, separator).trim();
     }
   }
 
   // 2. Indeed: "<Title> - <Company> - <Location> | ..."
   if ((!meta.title || !meta.company) && title) {
-    const indeed = title.match(/^(.+?)\s*-\s*(.+?)\s*-\s*.+\|/);
-    if (indeed) {
-      if (!meta.title) meta.title = indeed[1].trim();
-      if (!meta.company) meta.company = indeed[2].trim();
+    const dashed = title.slice(0, Math.max(0, title.lastIndexOf("|"))).split("-");
+    const role = dashed[0]?.trim() ?? "";
+    const company = dashed[1]?.trim() ?? "";
+    if (dashed.length >= 3 && role && company && dashed.slice(2).join("-")) {
+      if (!meta.title) meta.title = role;
+      if (!meta.company) meta.company = company;
     }
   }
 
@@ -61,10 +76,10 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
   // clobber a correctly-parsed employer. These still win over the generic
   // page-title fallback (step 4) because that step is guarded on an empty field.
   if (body) {
-    const roleLine = body.match(/^\s*(?:Role|Title):\s*(.+)$/im);
+    const roleLine = body.match(/^[^\S\r\n\u2028\u2029]*(?:Role|Title):\s*(.+)$/im);
     if (roleLine && !meta.title) meta.title = roleLine[1].trim();
 
-    const companyLine = body.match(/^\s*Company:\s*(.+)$/im);
+    const companyLine = body.match(/^[^\S\r\n\u2028\u2029]*Company:\s*(.+)$/im);
     if (companyLine && !meta.company) meta.company = companyLine[1].trim();
   }
 
@@ -76,7 +91,7 @@ export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: str
 
   // 5. Body company cues for a still-missing employer.
   if (!meta.company && body) {
-    const introMatch = body.match(/^\s*([A-Z][A-Za-z0-9 .&-]{2,60})\s+is\b/m);
+    const introMatch = body.match(/^[^\S\r\n\u2028\u2029]*([A-Z][A-Za-z0-9 .&-]{2,60})\s+is\b/m);
     if (introMatch) meta.company = introMatch[1].trim();
   }
   if (!meta.company && body) {
