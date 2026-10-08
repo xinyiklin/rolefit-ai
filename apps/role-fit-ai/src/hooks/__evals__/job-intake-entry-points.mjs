@@ -157,7 +157,9 @@ function createHarness({
   readiness = { ready: true },
   beforeProceed = true,
   beforeHandled = false,
+  beforeRelationship,
   afterProceed = true,
+  afterRelationship,
   sourceReplacementChoice = "continue",
   sourceReplacementCurrent = true,
   providerStatus = 200,
@@ -218,7 +220,7 @@ function createHarness({
     jobDescription,
     setJobDescription: record("setJobDescription"),
     jobRawText,
-    setImportedJob: record("setImportedJob"),
+    setImportedJob: (value, relationship) => log.push({ event: "setImportedJob", value, relationship }),
     setResult: record("setResult"),
     resetCoverWorkflow: () => log.push({ event: "resetCoverWorkflow" }),
     setPipelineAiUsage: (update) => log.push({
@@ -237,13 +239,18 @@ function createHarness({
       return {
         proceed: beforeProceed,
         note: beforeProceed ? null : "existing application",
-        ...(beforeHandled ? { handled: true } : {})
+        ...(beforeHandled ? { handled: true } : {}),
+        ...(beforeRelationship !== undefined ? { relationship: beforeRelationship } : {})
       };
     },
     confirmDuplicateAfterJobAnalysis: async () => {
       log.push({ event: "duplicate:after" });
       if (afterError) throw afterError;
-      return { proceed: afterProceed, note: afterProceed ? null : "normalized duplicate" };
+      return {
+        proceed: afterProceed,
+        note: afterProceed ? null : "normalized duplicate",
+        ...(afterRelationship !== undefined ? { relationship: afterRelationship } : {})
+      };
     },
     jobAnalysisRequestFields: () => requestFieldsRef?.current ?? ({
       provider: "codex-cli",
@@ -979,5 +986,37 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
     "reassessing with an over-limit Profile makes no Fit request"
   );
   assert.match(harness.state[5].lastError?.message ?? "", /Profile Background is over 12,000 characters/);
+}
+{
+  // A run's duplicate choice reaches the session only through that run's commit: the later gate wins,
+  // a gate with no match leaves the earlier one, and Keep separate commits as no relationship.
+  const linkBefore = { matchedApplicationId: "tracked-before", confidence: "exact" };
+  const linkAfter = { matchedApplicationId: "tracked-after", jobPostingGroupId: "group-after", confidence: "high" };
+  const committedRelationship = (harness) => {
+    const commits = harness.log.filter(({ event, value }) => event === "setImportedJob" && value);
+    assert.equal(commits.length, 1, "the run commits one prepared job");
+    return commits[0].relationship;
+  };
+  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension]]) {
+    for (const [before, after, expected] of [
+      [undefined, undefined, undefined],
+      [linkBefore, undefined, linkBefore],
+      [linkBefore, linkAfter, linkAfter],
+      [linkBefore, null, null],
+      [null, linkAfter, linkAfter]
+    ]) {
+      const harness = createHarness({ beforeRelationship: before, afterRelationship: after });
+      await run(harness);
+      assert.deepEqual(committedRelationship(harness), expected, `${label}: before ${before?.matchedApplicationId ?? before}, after ${after?.matchedApplicationId ?? after}`);
+    }
+  }
+  const failedAnalysis = createHarness({ providerStatus: 503, beforeRelationship: linkBefore, afterRelationship: linkAfter });
+  await runPaste(failedAnalysis);
+  assert.equal(failedAnalysis.log.some(({ event }) => event === "duplicate:after"), false);
+  assert.deepEqual(committedRelationship(failedAnalysis), linkBefore, "a local-fallback brief commits the pre-analysis choice");
+  const stoppedBefore = createHarness({ beforeProceed: false, beforeRelationship: linkBefore });
+  await runPaste(stoppedBefore);
+  assert.equal(stoppedBefore.state[7], null, "a duplicate stop commits no preparation");
+  assert.equal(committedRelationship(stoppedBefore), undefined, "the retained raw posting carries no relationship");
 }
 console.log("Job intake entry-point characterization: passed");

@@ -147,6 +147,7 @@ import {
   newPreparationSession,
   preparationPrimaryAction,
   preparationSessionForApplication,
+  type JobPostingRelationship,
   type PreparationSession
 } from "./lib/preparationSession";
 import type { ApplicationActionStatus } from "./lib/applicationActionStatus.ts";
@@ -739,13 +740,17 @@ function App() {
     }
   }, [documentTitle]);
 
+  // A queued extension run commits through the setter from its delivery render; compare with the live job.
+  const importedJobRef = useRef(importedJob);
+  importedJobRef.current = importedJob;
   const setImportedJobAndDocumentTitle = useCallback(
-    (snapshot: ImportedJobSnapshot | null) => {
+    (snapshot: ImportedJobSnapshot | null, relationship?: JobPostingRelationship | null) => {
+      const previous = importedJobRef.current;
       const continuesPreparedSource = Boolean(
         snapshot &&
-          importedJob &&
-          snapshot.url === importedJob.url &&
-          snapshot.sourceText === importedJob.sourceText
+          previous &&
+          snapshot.url === previous.url &&
+          snapshot.sourceText === previous.sourceText
       );
       setImportedJob(snapshot);
       // A source draft is not a write-target decision. Keep an explicit saved
@@ -754,18 +759,17 @@ function App() {
       // This setter is owned by committed intake paths. A guarded, same-posting
       // update retains its exact id; choosing Start a new preparation clears it
       // before this setter receives the replacement snapshot.
+      const current = preparationSessionRef.current;
       if (!continuesPreparedSource) {
-        const current = preparationSessionRef.current;
         publishPreparationSession(
-          current.mode === "update"
-            ? current
-            : current.mode === "new" && current.pendingRelationship
-            ? current
-            : newPreparationSession(),
+          current.mode === "update" ? current : newPreparationSession(relationship ?? null),
           true
         );
         setMaterialSelection(DEFAULT_MATERIAL_SELECTION);
         clearPreparedResumeRecommendationRef.current();
+      } else if (current.mode === "new" && relationship !== undefined) {
+        // A same-posting re-prepare keeps the current relationship unless its own run chose one.
+        publishPreparationSession(newPreparationSession(relationship));
       }
       const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
       setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
@@ -776,7 +780,6 @@ function App() {
     [
       currentResumeText,
       editedResume?.header?.name,
-      importedJob,
       publishPreparationSession,
       resumeText,
       setCoverLetterTitle
