@@ -318,9 +318,12 @@ share one height and top alignment. Table pagination remains present for empty
 result sets so the table workspace and inspector rail retain stable vertical
 bounds. Merge accidental duplicate
 keeps the current record only after a destructive confirmation. A Skipped
-decision uses its decision date for tracker chronology and appears in All,
-Inactive, and Skipped filters, but it never contributes to submitted counts,
-submitted-month history, follow-up hygiene, or calendar submission events.
+record uses its decision date for tracker chronology and appears in All,
+Inactive, and Skipped filters. A job-only Skipped decision never contributes to
+submitted counts, submitted-month history, or calendar submission events; an
+application later marked Skipped keeps its original submission in all three,
+because a later decision does not erase a sent application. No Skipped record
+counts toward follow-up hygiene.
 Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
 work. It saves the posting as **Skipped**, with any number of optional reasons
 from a grouped list (Eligibility, Logistics, Fit, Status, Personal) and a short
