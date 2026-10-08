@@ -50,8 +50,9 @@ draft and an in-flight request hold Prepare and Open, saved or empty threads do
 not, and declining keeps the thread. `src/sections/__evals__/answers-prepare-lock.mjs`
 renders the Answers tab to prove typing and edits are read-only while Prepare
 runs. `src/hooks/__evals__/application-answers-retry-gate.mjs` fails a draft,
-then edits the Prepare source (paste or link) and proves send, the tab's Retry
-and the dock's Retry all stop at the tab's prepared-job gate with no request.
+then edits the Prepare source (paste or link) or opens the bundled Starter and
+proves send, the tab's Retry and the dock's Retry all stop at the tab's
+prepared-job or resume gate, in the tab's order, with no request.
 `src/hooks/__evals__/application-answer-draft-source.mjs` runs App's
 Answers save, preparation session, committed-intake setter and duplicate guard
 with the production store: a first Save describes the job as last prepared and

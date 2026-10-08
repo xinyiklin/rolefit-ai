@@ -171,10 +171,10 @@ browser-side effects; components render them and App composes them.
   must never infer that target. `useApplicationAnswers` owns per-preparation
   conversation state, question/revision binding, generation, cancellation and
   edits. Send and both Retry buttons (the tab's and the progress dock's) reach
-  the provider only through `generate()`, which uses the Answers tab's
-  prepared-job gate and blocker order, with App's `jobPrepared` as `jobReady`:
-  a source edit keeps the conversation but unprepares the job. Its resume check
-  is still non-empty text, not the tab's `resumeReady`. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
+  the provider only through `generate()`, which uses the Answers tab's resume
+  and prepared-job gates and blocker order, with App's `resumeReady` (never the
+  unowned bundled Starter) and its `jobPrepared` as `jobReady`: a source edit
+  keeps the conversation but unprepares the job. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
   composer text, any unsaved revision, an in-flight request, and a failed or
   stopped latest turn that carries typed refinement or detail text (a bare
   failed question is not counted). App asks before the two paths that

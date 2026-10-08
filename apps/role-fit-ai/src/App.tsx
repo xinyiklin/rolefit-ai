@@ -1634,7 +1634,7 @@ function App() {
   const answerController = useApplicationAnswers({
     conversationId: answersConversationId,
     applicationId: preparationSession.applicationId ?? undefined,
-    resumeText: currentResumeText || resumeText,
+    resumeText: currentResumeText || resumeText, resumeReady,
     jobDescription, jobReady, rawJobText: jobRawText, jobUrl, candidateContext,
     profileLimitMessage, sourceWarnings: resumeSourceWarnings,
     customInstructions: customInstructionsFor("application-answers"),

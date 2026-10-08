@@ -21,7 +21,7 @@ const bundle = await build({
 });
 const { useApplicationAnswers, extractAnswerConstraints, validateAnswerConstraints, parseApplicationAnswerRevision, render, unmount } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 let args = {
-  conversationId: "preparation-a", resumeText: "Built a clinic app.", jobDescription: "Build accessible apps.", jobReady: true, rawJobText: "Original accessible app role.", jobUrl: "https://example.test/job", candidateContext: "Clinic software project.", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
+  conversationId: "preparation-a", resumeText: "Built a clinic app.", resumeReady: true, jobDescription: "Build accessible apps.", jobReady: true, rawJobText: "Original accessible app role.", jobUrl: "https://example.test/job", candidateContext: "Clinic software project.", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
   aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: (answer, conversationId, preserveDraft) => new Promise((resolve, reject) => saves.push({ answer, conversationId, preserveDraft, resolve, reject }))
 };

@@ -1,6 +1,7 @@
 // Every Answers generation path (tab send, tab Retry, the progress dock's Retry) shares the tab's
-// prepared-job gate. Source edits keep the conversation but unprepare the job, so a Retry of a failed
-// draft must not reach the provider with unprepared text. Drives the production hook and Answers tab.
+// resume and prepared-job gates. Source edits keep the conversation but unprepare the job, and the
+// bundled Starter sample is never the applicant's resume, so a Retry of a failed draft must reach the
+// provider with neither. Drives the production hook and Answers tab.
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -37,8 +38,8 @@ const tabBundle = await build({
       import React from "react";
       import { renderToStaticMarkup } from "react-dom/server";
       import { AnswersTab } from "../tabs/AnswersTab.tsx";
-      export const tab = (controller, jobReady) => renderToStaticMarkup(
-        <AnswersTab controller={controller} resumeReady jobReady={jobReady} modelPicker={null} />
+      export const tab = (controller, jobReady, resumeReady = true) => renderToStaticMarkup(
+        <AnswersTab controller={controller} resumeReady={resumeReady} jobReady={jobReady} modelPicker={null} />
       );`
   },
   bundle: true, write: false, format: "cjs", platform: "node", logLevel: "silent"
@@ -48,20 +49,24 @@ new Function("require", "module", "exports", tabBundle.outputFiles[0].text)(crea
 const { tab } = tabModule.exports;
 
 const GATE = "Add the job on Prepare first.";
+const RESUME_GATE = "Add your resume first.";
+const STARTER = "Starter sample: Jordan Lee, software engineer.";
 const JOB_A = "Build accessible clinic apps with React and TypeScript for care teams.";
 const JOB_B = "Unprepared marker: operate payroll batch jobs for a finance team.";
 const originalFetch = globalThis.fetch;
 let requests = [];
 const sentJobTexts = [];
+const sentResumeTexts = [];
 globalThis.fetch = (_url, options) => new Promise((resolve) => {
   const body = JSON.parse(options.body);
   sentJobTexts.push(body.jobText);
+  sentResumeTexts.push(body.resumeText);
   requests.push({ body, options, resolve });
 });
 const fail = (request) => request.resolve(new Response(JSON.stringify({ error: "Provider unavailable." }), { status: 500 }));
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 const preparedArgs = (conversationId) => ({
-  conversationId, resumeText: "Built a clinic app.", jobDescription: JOB_A, jobReady: true, rawJobText: "Original clinic app posting.",
+  conversationId, resumeText: "Built a clinic app.", resumeReady: true, jobDescription: JOB_A, jobReady: true, rawJobText: "Original clinic app posting.",
   jobUrl: "https://example.test/job-a", candidateContext: "", profileLimitMessage: null, customInstructions: "", sourceWarnings: [],
   aiRequest: { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "low" }, providerReady: true, providerMessage: "", savedAnswers: [],
   onSaveAnswer: async () => ({ id: "application-a" })
@@ -144,12 +149,41 @@ try {
   assert.equal(state.answersProgress.error, GATE);
   assert.ok(sentJobTexts.length && sentJobTexts.every((text) => text === JOB_A), "unprepared source text never reaches a request");
 
+  // Open > Bundled starter after a failed draft: App's resumeReady is false for the sample.
+  state = await failedDraft("preparation-0-starter");
+  args = { ...args, resumeText: STARTER, resumeReady: false };
+  state = hook();
+  assert.equal(state.answersProgress.status, "failed", "starter: the dock still offers Retry");
+  state.retryAnswers();
+  state = hook();
+  assert.equal(requests.length, 1, "starter: Retry sends nothing");
+  assert.deepEqual(state.answersProgress, { status: "failed", errorHeadline: "Cannot draft yet", error: RESUME_GATE }, "starter: Retry names the resume gate");
+  state.setComposer("Why this company?");
+  state = hook();
+  const starterView = markup(tab(state, true, false));
+  assert.equal(starterView.status, RESUME_GATE, "starter: the tab names the same gate");
+  assert.ok(disabled(starterView.retry) && disabled(starterView.send), "starter: the tab's Retry and send are disabled");
+  await state.send();
+  assert.equal(requests.length, 1, "starter: send is blocked by the same gate");
+  // The tab's order: the resume gate comes before the prepared-job gate.
+  args = { ...args, jobDescription: JOB_B, jobReady: false };
+  state = hook();
+  state.retryAnswers();
+  state = hook();
+  assert.equal(requests.length, 1);
+  assert.equal(state.answersProgress.error, markup(tab(state, false, false)).status, "starter: the dock and the tab name the same blocker");
+  assert.equal(state.answersProgress.error, RESUME_GATE);
+  assert.ok(sentResumeTexts.length && !sentResumeTexts.includes(STARTER), "the Starter sample never reaches a request");
+
   // App gives the hook and the tab the one prepared-job signal, and the dock Retry is the controller's.
   const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
   const hookCall = appSource.slice(appSource.indexOf("useApplicationAnswers({"), appSource.indexOf("onSaveAnswer: handleSaveAnswer"));
   assert.match(hookCall, /[{,]\s*jobReady\s*[,}]/, "App passes jobReady to the hook");
+  assert.match(hookCall, /[{,]\s*resumeReady\s*[,}]/, "App passes resumeReady to the hook");
+  assert.match(appSource, /<AnswersTab[^>]*?\bresumeReady=\{resumeReady\}/, "the tab reads the same resumeReady");
+  assert.match(appSource, /const resumeReady = Boolean\(\s*resumeHasContent && !resumeIsStarterSample\s*\);/, "resumeReady excludes the unowned Starter");
   assert.match(appSource, /<AnswersTab[^>]*?\bjobReady=\{jobReady\}/, "the tab reads the same jobReady");
   assert.match(appSource, /const jobReady = jobPrepared;/);
   assert.match(appSource, /stageKey="application-answers"[^>]*?onRetry=\{retryAnswers\}/, "the dock's Retry is the controller's");
-  console.log("Answers Retry gate passed: tab send, tab Retry, and the dock Retry share the prepared-job gate");
+  console.log("Answers Retry gate passed: tab send, tab Retry, and the dock Retry share the resume and prepared-job gates");
 } finally { unmount(); globalThis.fetch = originalFetch; }
