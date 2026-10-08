@@ -332,7 +332,7 @@ application retain blocking technical guards.
       reading there and made nouns and titles count as ownership.
     - "lead time", "lead generation" and "lead scoring" are nouns everywhere;
       "lead time-series" still leads.
-    - A 2026-10-07 replay showed no change on real applications. Five
+    - A 2026-10-07 replay showed no change on real applications. Six
       synthetic old-prompt flags are present-tense forms of the existing
       "Added/Wrote → Implemented/Developed" ownership rule.
   - Specific evidence entails its category or language (PostgreSQL→database,
