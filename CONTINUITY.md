@@ -5,6 +5,20 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [TOOL] **RoleFit 0.9.0 preview released.** Annotated tag
+  `rolefit-preview-v0.9.0-beta.1` on `ea8cc6a` (#190, squash of reviewed head
+  `33f1f3e`). Release workflow run 37827489011 succeeded (validate, macOS arm64
+  and x64, Windows x64, publish) and published the prerelease "RoleFit AI 0.9.0
+  — unsigned preview beta.1" at 2026-10-08T18:58:16Z with the arm64/x64 `.dmg`
+  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
+  Typeset, and Document workflow runs on `ea8cc6a` succeeded. Preflight before
+  the tag: release-contract tests 14/14, the RoleFit check gate, and the Windows
+  packaged smoke (win32-x64, unpacked) passed; the Electron development-mode
+  smoke failed only in the main checkout and passed for `main` and the release
+  head in a clean worktree (local state, root cause not isolated). Two
+  independent reviewers plus exact-head reviews of their fix commits. Open
+  follow-up: assert `loadRuntimeInfo` still writes `elements.runtimeVersion` so
+  the companion-version test cannot pass on an empty slice after a reorder.
 - [USER+CODE] RoleFit 0.9.0 preview prepared (minor: Answers, multiple Skip
   reasons, and a one-way tracker format since 0.8.0-beta.1). Versioning now
   follows `docs/git-workflow.md`: patch for fix-only releases, minor for new
