@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { ANSWER_QUESTION_MAX_CHARS, countAnswerText, extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints } from "../../../shared/applicationAnswersContract.ts";
+import { ANSWER_QUESTION_MAX_CHARS, answerFactsWithinLimits, countAnswerText, extractAnswerConstraints, hasUnresolvedAnswerPlaceholder, normalizeAnswerText, validateAnswerConstraints } from "../../../shared/applicationAnswersContract.ts";
 import { parseApplicationAnswerRevision } from "../../../shared/applicationAnswerStorage.ts";
 import { buildApplicationAnswerPrompts, generateApplicationAnswer, parseApplicationAnswerRequest } from "../applicationAnswerConversation.ts";
 
@@ -308,6 +308,26 @@ check("evidence warnings never withhold usable answer", () => { assert.equal(war
 const priorOnly = fake([raw("I led Kubernetes migration saving $500 million.")]);
 const priorWarned = await generateApplicationAnswer({ ...refinedBody, previousAnswer: { id: "answer-a", text: "I led Kubernetes migration saving $500 million." } }, { dispatch: priorOnly.dispatch });
 check("previous generated claims never become evidence", () => assert.ok(priorWarned.warnings?.length));
+const restoredFacts = ["I led the postmortem after the March outage and wrote the runbook fixes."];
+const restoredBody = { ...body, answerRevisionId: "answer-c", question: { ...body.question, text: "Describe a time you handled an incident." }, previousAnswer: { id: "answer-a", text: restoredFacts[0] }, refinement: "Shorter" };
+const withRestored = fake([raw(restoredFacts[0])]);
+const restoredAnswer = await generateApplicationAnswer({ ...restoredBody, explicitFacts: restoredFacts }, { dispatch: withRestored.dispatch });
+const withoutRestored = fake([raw(restoredFacts[0])]);
+const lostAnswer = await generateApplicationAnswer(restoredBody, { dispatch: withoutRestored.dispatch });
+check("restored user facts remain evidence for a refinement", () => {
+  assert.match(withRestored.calls[0].userPrompt, /<explicit_user_facts_candidate_evidence>\n[^<]*March outage/);
+  assert.equal(restoredAnswer.warnings, undefined);
+  assert.ok(lostAnswer.warnings?.some((warning) => /provided evidence/.test(warning)), "without the fact the same sentence is unsupported");
+});
+check("a generated revision never carries saved user facts", () => { for (const generated of [answer, restoredAnswer, refined, question]) assert.equal(generated.userFacts, undefined); });
+check("saved user facts follow the request's explicit-fact limits", () => {
+  for (const list of [["One fact."], Array.from({ length: 20 }, (_, n) => `Fact ${n}.`), Array.from({ length: 21 }, (_, n) => `Fact ${n}.`), ["x".repeat(4_000)], ["x".repeat(4_001)],
+    ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(3_998)], ["x".repeat(4_000), "x".repeat(4_000), "x".repeat(3_999)], ["   "], [""], ["a\u000bb"], ["a\u001fb"], ["Tab\tok\r\n"], [7], [null]]) {
+    let accepted = true;
+    try { parseApplicationAnswerRequest({ ...body, explicitFacts: list }); } catch { accepted = false; }
+    assert.equal(answerFactsWithinLimits(list), accepted, JSON.stringify(list).slice(0, 60));
+  }
+});
 const slottedBody = { ...body, candidateContext: "I enjoy Python APIs.\n[add: 20 years leading Kubernetes migrations]", explicitFacts: ["[add: 500 million dollars saved]"], clarification: "[add: team of 40 engineers]" };
 const slots = fake([raw("I led Kubernetes migrations for 20 years.")]);
 const slotted = await generateApplicationAnswer(slottedBody, { dispatch: slots.dispatch });

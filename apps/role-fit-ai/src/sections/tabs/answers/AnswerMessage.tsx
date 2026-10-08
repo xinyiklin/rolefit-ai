@@ -83,7 +83,16 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
           {question}
         </details>
         <p className="answers-message__instruction">{message.instruction}</p>
-      </> : <div className="answers-message__question">{question}</div>}
+      </> : <div className="answers-message__question">
+        {question}
+        {/* Only a reopened saved answer has facts without an instruction bubble showing them. */}
+        {message.facts.length ? (
+          <details className="answers-message__facts">
+            <summary title="Details you added. Refinements use them as your own statements.">Your facts ({message.facts.length})</summary>
+            <ul>{message.facts.map((fact, factIndex) => <li key={factIndex}>{fact}</li>)}</ul>
+          </details>
+        ) : null}
+      </div>}
       {response ? (
         <div className={`answers-message__response${animateArrival ? " is-arriving" : ""}`}>
           {response.answer || message.edited ? (

@@ -159,6 +159,11 @@ browser-side effects; components render them and App composes them.
   `useApplications.saveApplicationAnswer` owns serialized, revision-checked
   saves. First Save uses a stable per-preparation Draft ID; the captured target
   survives navigation and completion never relinks a different preparation.
+  Each message's `facts` is the one in-memory owner of its question's user
+  facts (Add a detail text only): Save attaches them as `userFacts`, Reopen
+  restores exactly that revision's facts, and a generation response carrying
+  `userFacts` is rejected, so answer text, model follow-ups and refinement
+  instructions never become facts.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

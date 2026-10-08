@@ -2,6 +2,9 @@ export const ANSWER_QUESTION_MAX_CHARS = 12_000;
 export const ANSWER_TEXT_MAX_CHARS = 16_000;
 export const ANSWER_REFINEMENT_MAX_CHARS = 4_000;
 export const ANSWER_CONVERSATION_MAX_REVISIONS = 60;
+export const ANSWER_FACTS_MAX = 20;
+export const ANSWER_FACTS_MAX_CHARS = 12_000;
+export const ANSWER_INVALID_CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f]/;
 
 export type AnswerCounts = { words: number; characters: number; sentences: number };
 export type AnswerConstraint = {
@@ -14,6 +17,7 @@ export type AnswerConstraint = {
   source: string;
   unresolvedScope?: true;
 };
+export type AnswerUserFacts = { provenance: "user-declared"; facts: string[] };
 export type ApplicationAnswerRevision = {
   id: string;
   applicationId: string;
@@ -45,10 +49,20 @@ export type ApplicationAnswerRevision = {
     rawJobFingerprint: string;
     factsFingerprint: string;
   };
+  // The user's own statements for this question; only Save attaches them.
+  userFacts?: AnswerUserFacts;
 };
 
 export function normalizeAnswerText(text: string): string {
   return text.replace(/\r\n?/g, "\n");
+}
+
+// The request's explicit-fact limits. Saved facts follow the same rule, so a
+// restored set can always be sent again.
+export function answerFactsWithinLimits(facts: readonly unknown[]): facts is string[] {
+  return facts.length <= ANSWER_FACTS_MAX
+    && facts.every((fact) => typeof fact === "string" && Boolean(fact.trim()) && fact.length <= ANSWER_REFINEMENT_MAX_CHARS && !ANSWER_INVALID_CONTROL.test(fact))
+    && facts.join("\n").length <= ANSWER_FACTS_MAX_CHARS;
 }
 
 export function countAnswerText(value: string): AnswerCounts {

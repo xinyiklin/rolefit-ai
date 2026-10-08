@@ -208,6 +208,42 @@ bounded; app-only operational detail belongs in the affected app documentation.
     it to 3 sentences" beside a cap; the judge's own fence names are not in the
     shared registry, and its score clamping still hides off-scale replies
     (benchmark-only; flagged, not changed).
+- [USER+CODE] Answers now keep the facts the user adds (task
+  `answers-declared-facts-20261007`; the user approved Product Brief v1 and
+  delegated the rest, and the Product Partner approved Delivery Plan v1 under
+  that delegation, a compressed gate). This closes the "Answers declared facts"
+  item left open above. A saved revision may carry
+  `userFacts: { provenance: "user-declared", facts }`: the Add a detail text in
+  effect for that question, 1-20 facts within the request's explicit-fact
+  limits (4,000 characters each, 12,000 joined), now shared constants and
+  `answerFactsWithinLimits` in `shared/applicationAnswersContract.ts`. The client
+  attaches `message.facts` at Save; a generated revision never carries the
+  field and the hook rejects a response that does. Reopen restores exactly that
+  revision's facts (no union across revisions) into the next request's
+  `explicitFacts` and shows them in a collapsed "Your facts (N)" list on the
+  reopened question only. Applications-modal edits carry the previous
+  revision's facts forward; Answers' Edit question still starts without facts.
+  Answer text, the model's follow-up question and refinement instructions never
+  become facts. One strict parser serves browser, tracker route/load and backup
+  restore; older revisions and legacy pairs stay valid; no migration and no
+  prompt change (v4).
+  - [CODE] Forward-only (accepted by the Product Partner under the delegation
+    as the existing no-downgrade policy): a build without this change cannot
+    load, back up or restore a tracker holding `userFacts` (probed on
+    `2930dd59`). Rollback: keep a copy of `workspace/applications.json`, then
+    strip the field, e.g.
+    `jq '(.applications[].applicationAnswers[]?) |= del(.userFacts)' applications.json`
+    written back owner-only. That discards the saved facts; the copy keeps them.
+  - [TOOL] Self-verification in the feature worktree
+    (`fix/rolefit-answers-user-facts`): new `application-answer-facts.mjs` and
+    `answer-facts-markup.mjs`; persistence, backup, save-ordering and
+    conversation probes extended; ten source mutations each caught; client and
+    server `tsc`; full RoleFit check (builds, landing, desktop probes, 159/159
+    offline evals); `git diff --check`. A three-way merge with
+    `fix/rolefit-answers-unsaved-guard` (`37799709`) is clean for every shared
+    file, this ledger included, and the facts evals pass on the merged hook.
+    UNCONFIRMED: the two required independent reviews (persistence, client)
+    are pending. Browser QA was not run (optional; not authorized this run).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).

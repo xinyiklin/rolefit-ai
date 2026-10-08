@@ -2,6 +2,7 @@ import {
   ANSWER_QUESTION_MAX_CHARS,
   ANSWER_REFINEMENT_MAX_CHARS,
   ANSWER_TEXT_MAX_CHARS,
+  answerFactsWithinLimits,
   extractAnswerConstraints,
   normalizeAnswerText,
   validateAnswerConstraints,
@@ -18,7 +19,7 @@ export type ApplicationAnswer = {
 
 const ID = /^[A-Za-z0-9_-]{1,120}$/;
 const HASH = /^[a-f0-9]{64}$/;
-const REVISION_KEYS = ["id", "applicationId", "originId", "questionId", "questionRevision", "question", "answer", "clarification", "status", "constraints", "counts", "compliant", "warnings", "previousAnswerId", "refinement", "generation", "sources"];
+const REVISION_KEYS = ["id", "applicationId", "originId", "questionId", "questionRevision", "question", "answer", "clarification", "status", "constraints", "counts", "compliant", "warnings", "previousAnswerId", "refinement", "generation", "sources", "userFacts"];
 const isObject = (value: unknown): value is Record<string, unknown> => Boolean(value && typeof value === "object" && !Array.isArray(value));
 const boundedText = (value: unknown, max: number, nonempty = true): value is string => typeof value === "string" && value.length <= max && (!nonempty || Boolean(value.trim()));
 const exactKeys = (value: Record<string, unknown>, keys: readonly string[]) => Object.keys(value).every((key) => keys.includes(key));
@@ -72,6 +73,11 @@ export function parseApplicationAnswerRevision(raw: unknown): ApplicationAnswerR
     const sources = raw.sources;
     if (!isObject(sources) || !exactKeys(sources, keys) || !keys.every((key) => typeof sources[key] === "string" && HASH.test(sources[key] as string))) return null;
   }
+  if (raw.userFacts !== undefined) {
+    const userFacts = raw.userFacts;
+    if (!isObject(userFacts) || !exactKeys(userFacts, ["provenance", "facts"]) || userFacts.provenance !== "user-declared"
+      || !Array.isArray(userFacts.facts) || !userFacts.facts.length || !answerFactsWithinLimits(userFacts.facts)) return null;
+  }
   return raw as ApplicationAnswerRevision;
 }
 
@@ -107,7 +113,8 @@ export function parseSavedApplicationAnswers(raw: unknown, applicationId: string
 }
 
 // Manual tracker edits keep the prior saved revision and get fresh validation.
-// AI metadata describes the prior text, so it does not migrate to this revision.
+// AI metadata describes the prior text, so it does not migrate to this revision;
+// the user's facts for the question do, and the edited text never joins them.
 export function editedSavedApplicationAnswer(
   previous: ApplicationAnswer,
   question: string,
@@ -135,6 +142,7 @@ export function editedSavedApplicationAnswer(
     constraints,
     counts: validation.counts,
     compliant: validation.compliant,
-    status: validation.compliant ? "ready" : "draft"
+    status: validation.compliant ? "ready" : "draft",
+    ...(previous.userFacts ? { userFacts: previous.userFacts } : {})
   };
 }
