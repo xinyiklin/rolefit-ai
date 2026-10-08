@@ -56,7 +56,7 @@ and the dock's Retry all stop at the tab's prepared-job gate with no request.
 Answers save, preparation session, committed-intake setter and duplicate guard
 with the production store: a first Save describes the job as last prepared and
 links only through a duplicate choice a committed Prepare run or a later
-Polish/Apply gate applied to that posting (Polish may reuse a stopped run's
+Polish/Apply/Skip gate applied to that posting (Polish may reuse a stopped run's
 remembered choice), never one from a different posting, straight from an
 uncommitted run, or through a queued run's stale setter.
 Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
@@ -493,7 +493,8 @@ Good server verification covers:
 - `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
   extension, and imported-posting Retry intake with both duplicate gates, local
   and provider fallback, prepared-resume resolution, Fit Assessment on/off, and
-  snapshot commit order, including the duplicate choice each run commits with. They also prove the separate first Fit remains awaited,
+  snapshot commit order, including the duplicate choice each path, Retry included,
+  commits with. They also prove the separate first Fit remains awaited,
   identical Prepare runs receive distinct automation receipts, queued intake
   captures settings only after it owns the lock, and settings changes during
   readiness invalidate stale execution context. Stop, source changes, and restore

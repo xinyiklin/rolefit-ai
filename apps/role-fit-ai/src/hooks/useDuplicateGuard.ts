@@ -42,7 +42,8 @@ export type DuplicateGateResult = {
   proceed: boolean;
   note: string | null;
   handled?: boolean;
-  // Present when a match resolved to continue: its Link, or null when kept separate or already acknowledged.
+  // Present when a match resolved to continue: its Link, or null when kept separate or the
+  // match is this preparation's own acknowledged record.
   relationship?: JobPostingRelationship | null;
 };
 

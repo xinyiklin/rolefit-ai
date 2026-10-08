@@ -16,7 +16,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   and Apply/Skip gates, which judge the current prepared job, publish through
   `onRelationshipResolved`; at the user's request (2026-10-07) they also
   publish a choice the guard remembers for that exact posting, so a Link chosen in a
-  stopped re-prepare of the same posting reaches the session once Polish or
+  stopped re-prepare of the same posting reaches the session once Polish, Skip or
   Apply reuses it (previously Apply linked it silently while the first Answers
   Save did not). Fixed: B's first Answers Save joined A's
   posting group when B was prepared after A's unsaved Link and found no
@@ -49,9 +49,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
     entry's first insertion swallowed the next entry's opening line. Lows fixed:
     the queued-run staleness above, an untested same-posting guard, docs that
     overstated the rule, and (at the user's request) the stopped same-posting
-    Link that Polish and Apply remembered but never published.
+    Link that Polish and Apply remembered but never published. Two
+    confirmation passes found no high or medium issues.
+  - [TOOL] Exact-head review of PR #187's first head (`f537cdd2`): no high or
+    medium findings, all CI green, fit to merge. Its four lows were fixed in
+    the follow-up commit: PRODUCT and testing.md now say a committed Prepare
+    (which includes a duplicate stop after analysis) or a Polish/Apply/Skip
+    check, the intake eval covers imported-posting Retry, the
+    `DuplicateGateResult` comment is exact, and this receipt.
   - Still open: after such a stopped re-prepare, a first Answers Save that
-    comes before any Polish or Apply creates an unlinked Draft (Answers never
+    comes before any Polish, Apply or Skip creates an unlinked Draft (Answers never
     uses an uncommitted run's choice directly), and a later Apply in update
     mode never links it: the recorded "answer-created Draft" duplicate gap.
 - [CODE] Answers' Retry, including the progress dock's, now stops at the tab's

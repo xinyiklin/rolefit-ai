@@ -997,7 +997,13 @@ for (const fitProvider of ["codex-cli", "anthropic"]) {
     assert.equal(commits.length, 1, "the run commits one prepared job");
     return commits[0].relationship;
   };
-  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension]]) {
+  // Imported-posting Retry re-runs the last extension payload; only its own commit is checked.
+  const runImportRetry = async (harness) => {
+    await runExtension(harness);
+    harness.log.length = 0;
+    await clickRetry(harness);
+  };
+  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension], ["Retry", runImportRetry]]) {
     for (const [before, after, expected] of [
       [undefined, undefined, undefined],
       [linkBefore, undefined, linkBefore],
