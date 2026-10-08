@@ -66,6 +66,40 @@ assert.match(
   "the Job analysis card receives the same Retry the hook returns"
 );
 
+// The Answers hook gets its own tiny scheduler so the lock can be checked against the real intake state.
+const answersBundle = await esbuild.build({
+  stdin: {
+    loader: "ts", resolveDir: fileURLToPath(new URL("../../../", import.meta.url)),
+    contents: 'export { useApplicationAnswers } from "./src/hooks/useApplicationAnswers.ts"; export { render, unmount } from "react";'
+  },
+  bundle: true, write: false, format: "esm", platform: "node", logLevel: "silent",
+  plugins: [{
+    name: "answers-scheduler",
+    setup(build) {
+      build.onResolve({ filter: /^react$/ }, () => ({ path: "react", namespace: "answers-scheduler" }));
+      build.onLoad({ filter: /.*/, namespace: "answers-scheduler" }, () => ({ loader: "js", contents: `
+        let slots = [], cursor = 0;
+        export function useState(initial) { const i = cursor++; if (!(i in slots)) slots[i] = typeof initial === "function" ? initial() : initial; return [slots[i], (v) => { slots[i] = typeof v === "function" ? v(slots[i]) : v; }]; }
+        export function useRef(initial) { const i = cursor++; if (!(i in slots)) slots[i] = { current: initial }; return slots[i]; }
+        export function useEffect() {}
+        export function render(callback) { cursor = 0; return callback(); }
+        export function unmount() { slots = []; }` }));
+    }
+  }]
+});
+const { useApplicationAnswers, render: renderAnswers } = await import(
+  `data:text/javascript;base64,${Buffer.from(answersBundle.outputFiles[0].text).toString("base64")}`
+);
+const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
+// App's own definitions of "a Prepare run is active" and of the Answers lock it drives.
+const activeExpression = appSource.match(/const jobPreparationActive =([\s\S]*?);\n/)?.[1];
+const lockReason = appSource.match(/editBlocker: jobPreparationActive \? "([^"]+)" : undefined/)?.[1];
+assert.ok(activeExpression && lockReason, "App derives the Answers lock from jobPreparationActive");
+const prepareActive = ({ isExtractingLink, extensionImportPhase, jobAnalysisProgress, preparationAutomationPending }) =>
+  new Function("isExtractingLink", "extensionImportPhase", "jobAnalysisProgress", "preparationAutomationPending", `return (${activeExpression});`)(
+    isExtractingLink, extensionImportPhase, jobAnalysisProgress, preparationAutomationPending
+  );
+
 const { useJobIntake } = await import(
   `data:text/javascript;base64,${Buffer.from(bundled.outputFiles[0].text).toString("base64")}`
 );
@@ -503,6 +537,57 @@ const sharedCommitOrder = [
   await runExtension(kept);
   assert.equal(kept.state[3].status, "stopped");
   assert.equal(kept.state[3].error, "Kept the posting attached to the saved record.");
+}
+
+{
+  // A first Answers Save during a locked Prepare run publishes update mode, which changes the owner under a run
+  // whose request is still current. Nothing else settles that card, so the run must: retryable, lock lifted, B uncommitted.
+  for (const [label, run] of [["URL", runUrl], ["paste", runPaste], ["extension", runExtension]]) {
+    const gate = deferred();
+    const harness = createHarness({ jobAnalysisGate: gate });
+    let owner = 0;
+    const sameOwner = async () => { const mine = owner; return { choice: "continue", isCurrent: () => owner === mine }; };
+    harness.args.confirmPreparedSourceReplacement = sameOwner;
+    const answersArgs = () => ({
+      conversationId: "preparation-0-", resumeText: RESUME, jobDescription: POSTING, rawJobText: POSTING, jobUrl: JOB_URL, candidateContext: "",
+      profileLimitMessage: null, customInstructions: "", sourceWarnings: [], aiRequest: { provider: "codex-cli", selectedModel: "synthetic-model", cliReasoningEffort: "low" },
+      providerReady: true, providerMessage: "", savedAnswers: [], onSaveAnswer: async () => ({ id: "application-a" }),
+      editBlocker: prepareActive({ ...intakeView }) ? lockReason : undefined
+    });
+    let intakeView = harness.render();
+    renderAnswers(() => useApplicationAnswers(answersArgs())).setComposer("Why this role?");
+    const answersNow = () => renderAnswers(() => useApplicationAnswers(answersArgs()));
+
+    const pending = run(harness);
+    await settleAsyncWork();
+    intakeView = harness.render();
+    assert.equal(prepareActive(intakeView), true, `${label}: the run is active while its request is in flight`);
+    assert.equal(answersNow().editBlocker, lockReason, `${label}: Answers are locked during the run`);
+    answersNow().setComposer("typed during Prepare");
+    assert.equal(answersNow().conversation.composer, "Why this role?", `${label}: the locked composer keeps what was typed before Prepare`);
+
+    owner += 1; // the Save's publish
+    gate.resolve();
+    await pending;
+    intakeView = harness.render();
+    assert.equal(harness.log.some((entry) => entry.event === "setImportedJob"), false, `${label}: job B is never committed`);
+    assert.equal(harness.state[7], null, `${label}: no preparation was committed`);
+    assert.equal(harness.state[5].activeRun, null, `${label}: the run's Fit request is terminalized`);
+    assert.equal(harness.state[2], null, `${label}: the preview is cleared`);
+    assert.equal(harness.state[0], false, `${label}: the run is no longer extracting`);
+    assert.equal(harness.state[3].status, "failed", `${label}: the card settles instead of staying running`);
+    assert.equal(harness.state[3].errorHeadline, "Preparation paused");
+    assert.match(card(harness.state[3], intakeView.jobAnalysisRetry), /Retry<\/button>/, `${label}: the visible card offers Retry`);
+    assert.equal(prepareActive(intakeView), false, `${label}: nothing keeps the run active`);
+    assert.equal(answersNow().editBlocker, undefined, `${label}: the Answers lock lifts`);
+    answersNow().setComposer("typed after Prepare");
+    assert.equal(answersNow().conversation.composer, "typed after Prepare", `${label}: Answers are editable again`);
+
+    harness.args.confirmPreparedSourceReplacement = async () => ({ choice: "continue", isCurrent: () => true });
+    harness.log.length = 0;
+    await harness.render().jobAnalysisRetry();
+    assert.ok(harness.state[7], `${label}: Retry prepares job B`);
+  }
 }
 
 {

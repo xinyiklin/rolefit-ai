@@ -32,10 +32,13 @@ browser-side effects; components render them and App composes them.
   choice detaches the record. The same guard asks before discarding unsaved
   Answers; declining an extension or Retry payload settles the card as failed,
   because that payload lives only here and the card shows Retry only for
-  failed. Opening a tracked application hydrates the same
-  retained prepared-job receipt. Its compact saved assessment is historical —
-  visible and reassessable, but never eligible to trigger automatic Polish —
-  because tracker storage cannot reconstruct exact current-input provenance.
+  failed. A run whose request is still current but whose preparation owner
+  changed (a first Answers Save links the record) settles the same way instead
+  of returning silently, which would leave the card running and Answers locked.
+  Opening a tracked application hydrates the same retained prepared-job
+  receipt. Its compact saved assessment is historical — visible and
+  reassessable, but never eligible to trigger automatic Polish — because tracker
+  storage cannot reconstruct exact current-input provenance.
   Current-result provenance derives a structured job/resume/candidate-context/
   assessment-setup change list. An out-of-date state retains the timestamped
   snapshot for display as a previous assessment, while its non-ready status keeps

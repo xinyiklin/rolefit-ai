@@ -213,6 +213,7 @@ type PreparedResumeAndFit = {
 
 type PreparedJobAnalysisOutcome =
   | { status: "stale" }
+  | { status: "owner-changed" }
   | { status: "source-replacement-stopped"; choice: "keep-current" | "cancel" }
   | { status: "duplicate-handled" }
   | { status: "duplicate-before" }
@@ -807,6 +808,15 @@ export function useJobIntake({
     setStatus(message);
   }
 
+  function settleOwnerChange(setStatus: (value: string) => void) {
+    const message = "The application changed while preparing. Retry when ready.";
+    setLocalPreparedPreview(null);
+    settlePreparationFit({ status: "inputs-changed" });
+    setJobAnalysisProgress({ status: "failed", errorHeadline: "Preparation paused", error: message });
+    setJobAnalysisProgressVisible(true);
+    setStatus(message);
+  }
+
   function clearHandledDuplicateState(): void {
     setJobAnalysisProgress({ status: "idle" });
     setJobAnalysisProgressVisible(false);
@@ -896,6 +906,8 @@ export function useJobIntake({
     execution: JobAnalysisExecutionContext;
     request: PreparedJobAnalysisRequest;
   }): Promise<PreparedJobAnalysisOutcome> {
+    // A request that is still current lost only its owner (a first Save linked the record): nothing else will settle its card.
+    const superseded = (): PreparedJobAnalysisOutcome => request.isCurrent() ? { status: "owner-changed" } : { status: "stale" };
     const localExtracted = extractJobPosting(localSourceText, { url: url || undefined });
     const replacement = await confirmPreparedSourceReplacement({
       url,
@@ -903,7 +915,7 @@ export function useJobIntake({
       tracking: localExtracted.tracking
     });
     const runIsCurrent = () => request.isCurrent() && replacement.isCurrent();
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
     if (replacement.choice !== "continue") {
       return { status: "source-replacement-stopped", choice: replacement.choice };
     }
@@ -913,7 +925,7 @@ export function useJobIntake({
       localExtracted.tracking,
       runIsCurrent
     );
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
     if (!duplicateBefore.proceed) {
       if (duplicateBefore.handled) return { status: "duplicate-handled" };
       // Extension delivery can contain a short intermediate payload. The URL
@@ -941,7 +953,7 @@ export function useJobIntake({
       request,
       prepareIdentity
     );
-    if (!runIsCurrent() || !preparedResume) return { status: "stale" };
+    if (!runIsCurrent() || !preparedResume) return superseded();
     const { selection, fitRequest, fitRunId } = preparedResume;
     // Preserve Prepare's one-call fast path only when the two independently
     // configured stages resolve to the exact same provider request. A distinct
@@ -964,7 +976,7 @@ export function useJobIntake({
           fitAssessmentRequested: combineFitAssessment,
           failure: classifyFailure(new ApiError(execution.readiness.message, 503))
         });
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
 
     const relevant = result.extracted.tailoringText;
     if (relevant.trim().length < 40) {
@@ -980,7 +992,7 @@ export function useJobIntake({
           result.extracted.tracking,
           runIsCurrent
         );
-    if (!runIsCurrent()) return { status: "stale" };
+    if (!runIsCurrent()) return superseded();
 
     // Extension payloads are not already bound to the live URL input.
     if (source === "extension" || source === "retry") setJobUrl(url);
@@ -1100,6 +1112,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setLinkStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
         settleSourceReplacementStop(outcome.choice, setLinkStatus);
         return;
@@ -1208,6 +1224,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setLinkStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
         settleSourceReplacementStop(outcome.choice, setLinkStatus);
         return;
@@ -1320,6 +1340,10 @@ export function useJobIntake({
         request
       });
       if (outcome.status === "stale") return;
+      if (outcome.status === "owner-changed") {
+        settleOwnerChange(setPolishStatus);
+        return;
+      }
       if (outcome.status === "source-replacement-stopped") {
         settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
         return;
@@ -1392,6 +1416,10 @@ export function useJobIntake({
           request
         });
         if (outcome.status === "stale") return;
+        if (outcome.status === "owner-changed") {
+          settleOwnerChange(setPolishStatus);
+          return;
+        }
         if (outcome.status === "source-replacement-stopped") {
           settleSourceReplacementStop(outcome.choice, setPolishStatus, true);
           return;

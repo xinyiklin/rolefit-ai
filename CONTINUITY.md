@@ -28,6 +28,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
     visible Retry) on every path; each was mutation-checked. Full
     `npm run check --workspace apps/role-fit-ai` and both tsc gates passed.
     Browser QA was not run.
+  - [CODE] A Prepare run that goes stale only because the owner changed (a
+    first Answers Save during the locked run) now settles its card as failed
+    "Preparation paused" with Retry, clears the preview and Fit run, and lifts the
+    lock; it previously left the card running and Answers locked until reload.
   - [CODE] Known gaps: a bare failed question (nothing typed beyond it) is not
     counted; a decline of a typed link or paste source stays "stopped" because
     the source fields still hold it.
