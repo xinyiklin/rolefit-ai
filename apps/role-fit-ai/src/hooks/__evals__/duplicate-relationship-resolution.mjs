@@ -142,20 +142,28 @@ async function pendingGate(harness) {
   assert.equal(prompted.duplicatePrompt.kind, "existing-application");
   prompted.chooseDuplicate("continue-new");
   const result = await pending;
-  assert.deepEqual(result, {
-    proceed: true,
-    note: "Applied · May 4: Same canonical posting URL"
-  });
-  assert.deepEqual(harness.relationships, [{
+  const linked = {
     matchedApplicationId: "application-1",
     jobPostingGroupId: "posting-existing",
     confidence: "exact"
-  }]);
+  };
+  assert.deepEqual(result, {
+    proceed: true,
+    note: "Applied · May 4: Same canonical posting URL",
+    relationship: linked
+  });
+  assert.deepEqual(harness.relationships, [], "a Prepare gate returns its choice for that run's commit instead of publishing it");
+  const rerun = await harness.render().confirmDuplicateBeforeJobAnalysis(
+    targetUrl, targetText, { company: "Acme", role: "Software Engineer" }, harness.isCurrent
+  );
+  assert.deepEqual(rerun.relationship, linked, "a later Prepare of the posting reuses the remembered choice");
+  assert.deepEqual(harness.relationships, [], "and still leaves it to that run's commit");
   const acknowledged = await harness.render().resolveApplyDuplicate(harness.isCurrent);
   assert.deepEqual(acknowledged, {
     action: "continue",
-    relationship: harness.relationships[0]
+    relationship: linked
   }, "Apply reuses the confirmed relationship without another prompt");
+  assert.deepEqual(harness.relationships, [linked], "Apply publishes the reused choice for the prepared posting");
 }
 
 {
@@ -163,8 +171,10 @@ async function pendingGate(harness) {
   const { pending, prompted } = await pendingGate(harness);
   assert.equal(prompted.duplicatePrompt.kind, "similar");
   prompted.chooseDuplicate("separate");
-  assert.equal((await pending).proceed, true);
-  assert.deepEqual(harness.relationships, [null]);
+  const result = await pending;
+  assert.equal(result.proceed, true);
+  assert.equal(result.relationship, null, "Keep separate resolves the run to no relationship");
+  assert.deepEqual(harness.relationships, []);
   assert.deepEqual(
     await harness.render().resolveApplyDuplicate(harness.isCurrent),
     {
@@ -181,11 +191,46 @@ async function pendingGate(harness) {
   const { pending, prompted } = await pendingGate(harness);
   assert.equal(prompted.duplicatePrompt.kind, "similar");
   prompted.chooseDuplicate("link");
-  assert.equal((await pending).proceed, true);
-  assert.deepEqual(harness.relationships[0], {
+  const result = await pending;
+  assert.equal(result.proceed, true);
+  assert.deepEqual(result.relationship, {
     matchedApplicationId: "application-1",
     confidence: "possible"
   }, "a possible match links only after an explicit Yes choice");
+  assert.deepEqual(harness.relationships, []);
+}
+
+{
+  // Gates on the current prepared job (Polish, Apply/Skip) publish their choice to the session.
+  const harness = createHarness(duplicate({ confidence: "high" }));
+  const polish = harness.render().confirmDuplicateBeforePolish(harness.isCurrent);
+  await new Promise((resolve) => setImmediate(resolve));
+  harness.render().chooseDuplicate("link");
+  assert.equal(await polish, true);
+  assert.deepEqual(harness.relationships, [{ matchedApplicationId: "application-1", confidence: "high" }]);
+  assert.equal(await harness.render().confirmDuplicateBeforePolish(harness.isCurrent), true);
+  assert.deepEqual(harness.relationships.at(-1), { matchedApplicationId: "application-1", confidence: "high" },
+    "a remembered choice for the same posting is republished without another prompt");
+  assert.equal(harness.render().duplicatePrompt, null);
+}
+
+{
+  // A choice remembered from a stopped Prepare reaches the session through Polish, never through the stopped run.
+  const harness = createHarness(duplicate({ confidence: "high" }));
+  const { pending, prompted } = await pendingGate(harness);
+  prompted.chooseDuplicate("separate");
+  assert.equal((await pending).relationship, null);
+  assert.deepEqual(harness.relationships, []);
+  assert.equal(await harness.render().confirmDuplicateBeforePolish(harness.isCurrent), true);
+  assert.deepEqual(harness.relationships, [null], "the remembered Keep separate is published by the Polish gate");
+}
+
+{
+  const harness = createHarness(duplicate({ confidence: "high" }));
+  const apply = harness.render().resolveApplyDuplicate(harness.isCurrent);
+  harness.render().chooseDuplicate("separate");
+  assert.deepEqual(await apply, { action: "continue", relationship: null, unrelatedApplicationId: "application-1" });
+  assert.deepEqual(harness.relationships, [null]);
 }
 
 {

@@ -66,6 +66,15 @@ browser-side effects; components render them and App composes them.
   both its original and current wording. An unrelated metric/quality warning
   must not erase that support; newly added uncertain terms do not count.
 - `useDuplicateGuard` owns duplicate acknowledgments and pipeline/apply gates.
+  A Prepare run's gates return their Link/Keep separate choice with the gate
+  result, and `useJobIntake` passes it to the commit setter; only Polish and
+  Apply/Skip gates, which judge the current prepared job, publish through
+  `onRelationshipResolved`, including a choice remembered for that exact
+  posting. So only a run's commit or one of those gates changes a fresh
+  session's `pendingRelationship`: an unfinished run's choice reaches it only
+  when such a gate reuses it for the same posting, a different posting starts
+  from that run's own choice (none after a pre-analysis duplicate stop), and a
+  same-posting re-prepare that resolved nothing keeps the current one.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
   clusters: it schedules the O(n²) scan after first paint, cancels a pending
   scan on unmount or a changed scan identity, and rehydrates the cached

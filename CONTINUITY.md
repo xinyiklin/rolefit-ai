@@ -5,6 +5,62 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] A fresh preparation's posting relationship is now scoped to the
+  Prepare run that resolved it (branch `fix/rolefit-answers-relationship-scope`,
+  on top of the Draft job-source fix, #186). A Prepare
+  run's duplicate gates return their Link / Keep separate choice with the gate
+  result instead of publishing it; `useJobIntake` commits it with the run (the
+  later gate's choice wins, a gate with no match keeps the earlier one), and
+  App's commit setter makes it the session's `pendingRelationship` (on a
+  same-posting re-prepare, only when the run resolved one). Only the Polish
+  and Apply/Skip gates, which judge the current prepared job, publish through
+  `onRelationshipResolved`; at the user's request (2026-10-07) they also
+  publish a choice the guard remembers for that exact posting, so a Link chosen in a
+  stopped re-prepare of the same posting reaches the session once Polish, Skip or
+  Apply reuses it (previously Apply linked it silently while the first Answers
+  Save did not). Fixed: B's first Answers Save joined A's
+  posting group when B was prepared after A's unsaved Link and found no
+  duplicate; and a Link or Keep separate choice made in an extension or Retry
+  Prepare of B reached A's first Save, whether that Save came while B ran
+  (Answers Save stays enabled during Prepare) or after B stopped, and Keep
+  separate dropped A's own Link. Apply and Skip keep
+  resolving their own relationship, unchanged. The commit setter now judges
+  "same posting" against the live prepared job (`importedJobRef`): a queued
+  extension run commits through the setter from its delivery render, so a run
+  for A that waited behind B's Link could count as continuing A and keep B's
+  Link (pre-existing staleness, found in review).
+  - [TOOL] `application-answer-draft-source.mjs` now also runs App's
+    preparation session, committed-intake setter, and duplicate guard (the real
+    hook) with the production store: carry-over, three in-flight variants, the
+    queued-run case, B's remembered Link never reused for A by Polish, and five
+    keep-working controls (A's own Link, a same-posting re-prepare with a new
+    Link, a Polish-time Link, that Link surviving a same-posting re-prepare that
+    finds no match, and Polish reusing a stopped re-prepare's Link).
+    `job-intake-entry-points.mjs` pins each path's committed relationship;
+    `duplicate-relationship-resolution.mjs` pins which gates publish, fresh or
+    remembered. The pre-fix sources failed the eval, and each of twelve
+    targeted mutations fails at least one of the three. After merging #186 the
+    eval also pins that a capture from an older conversation (Start a new
+    preparation, then a run that never commits) cannot be saved, which #186's
+    exact-head review found unpinned; dropping that conversation check fails it.
+    Full `npm run check --workspace apps/role-fit-ai` passed on the merged tree.
+    Browser QA was not run.
+  - [TOOL] One independent review: no high findings. Medium (fixed): this
+    entry's first insertion swallowed the next entry's opening line. Lows fixed:
+    the queued-run staleness above, an untested same-posting guard, docs that
+    overstated the rule, and (at the user's request) the stopped same-posting
+    Link that Polish and Apply remembered but never published. Two
+    confirmation passes found no high or medium issues.
+  - [TOOL] Exact-head review of PR #187's first head (`f537cdd2`): no high or
+    medium findings, all CI green, fit to merge. Its four lows were fixed in
+    the follow-up commit: PRODUCT and testing.md now say a committed Prepare
+    (which includes a duplicate stop after analysis) or a Polish/Apply/Skip
+    check, the intake eval covers imported-posting Retry, the
+    `DuplicateGateResult` comment is exact, and this receipt.
+  - Still open: after such a stopped re-prepare, a first Answers Save that
+    comes before any Polish, Apply or Skip creates an unlinked Draft (Answers never
+    uses an uncommitted run's choice directly), and a later Apply in update
+    mode never links it: the recorded "answer-created Draft" duplicate gap.
 - [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
   prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
   `jobReady`, and `generate()`, the only path to the provider for send and
@@ -166,13 +222,16 @@ bounded; app-only operational detail belongs in the affected app documentation.
     - Cancel at the pre-analysis duplicate check leaves B's raw posting
       reading as prepared while the committed preparation is A, so Apply,
       Skip, and a new Answers conversation can save that raw posting.
-      UNCONFIRMED whether that is intended.
-    - An extension or Retry Prepare keeps A's source fields while it runs, so
-      a Link or Keep separate choice for B still reaches the relationship
-      Answers' first Save uses if that Prepare stops.
-    - A Link chosen for A stays the session's pending relationship when a
-      later fresh Prepare of B finds no duplicate, so B's first Answers Save
-      joins A's posting group. Apply and Skip resolve their own relationship.
+      UNCONFIRMED whether that is intended. (That raw posting no longer
+      inherits A's relationship; see the run-scoped entry above.)
+  - The two relationship items once listed here (an extension or Retry run's
+    choice reaching A's first Save, mid-run or after a stop, and A's Link
+    carrying into a later fresh Prepare of B) are closed by the run-scoped
+    entry above.
+  - [TOOL] Receipt recorded by the #186 session: full RoleFit check on the
+    merged tree 163/163, `git diff --check` clean, two independent reviews
+    (pre-merge and exact head) with no blocking findings. CI on `c8385cbc` was
+    green (checked with `gh pr checks 186`).
 - [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
   medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
   Saved choices stay; the user's own saved selection was switched too (app

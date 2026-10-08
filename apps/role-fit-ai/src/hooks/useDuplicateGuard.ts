@@ -42,6 +42,9 @@ export type DuplicateGateResult = {
   proceed: boolean;
   note: string | null;
   handled?: boolean;
+  // Present when a match resolved to continue: its Link, or null when kept separate or the
+  // match is this preparation's own acknowledged record.
+  relationship?: JobPostingRelationship | null;
 };
 
 type UseDuplicateGuardArgs = {
@@ -188,17 +191,22 @@ export function useDuplicateGuard({
     resolve(choice);
   }
 
+  // Only gates on the current prepared job publish to the session, a remembered choice for
+  // that posting included. A Prepare run's choice returns with its gate result for its commit.
   async function resolveMatch(
     match: DuplicateMatch<Application>,
     target: DuplicateTarget,
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    publishRelationship: boolean
   ): Promise<DuplicateResolution> {
     if (!isCurrent()) return { action: "cancel" };
     const priorDecision = acknowledgedDecision(match.application.id, target);
     if (priorDecision) {
+      const relationship = priorDecision === "link" ? relationshipFor(match) : null;
+      if (publishRelationship) onRelationshipResolved(relationship);
       return {
         action: "continue",
-        relationship: priorDecision === "link" ? relationshipFor(match) : null,
+        relationship,
         ...(priorDecision === "separate"
           ? { unrelatedApplicationId: match.application.id }
           : {})
@@ -216,7 +224,7 @@ export function useDuplicateGuard({
     }
     if (choice === "separate") {
       acknowledge(match.application.id, target, "separate");
-      onRelationshipResolved(null);
+      if (publishRelationship) onRelationshipResolved(null);
       return {
         action: "continue",
         relationship: null,
@@ -226,13 +234,14 @@ export function useDuplicateGuard({
 
     const relationship = relationshipFor(match);
     acknowledge(match.application.id, target, "link");
-    onRelationshipResolved(relationship);
+    if (publishRelationship) onRelationshipResolved(relationship);
     return { action: "continue", relationship };
   }
 
   async function confirmDuplicateGate(
     target: DuplicateTarget,
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    publishRelationship: boolean
   ): Promise<DuplicateGateResult> {
     if (!(await refreshApplications())) {
       throw new Error("Applications could not be refreshed. Retry the action.");
@@ -241,13 +250,13 @@ export function useDuplicateGuard({
     const match = findDuplicatesForTarget(target)[0];
     if (!match) return { proceed: true, note: null };
 
-    const resolution = await resolveMatch(match, target, isCurrent);
+    const resolution = await resolveMatch(match, target, isCurrent, publishRelationship);
     if (resolution.action === "open-existing") {
       return { proceed: false, note: duplicateNote(match), handled: true };
     }
     if (!isCurrent()) return { proceed: false, note: null };
     if (resolution.action === "continue") {
-      return { proceed: true, note: duplicateNote(match) };
+      return { proceed: true, note: duplicateNote(match), relationship: resolution.relationship };
     }
     return {
       proceed: false,
@@ -281,18 +290,18 @@ export function useDuplicateGuard({
       company: facts.company,
       role: facts.role,
       location: facts.location
-    }, isCurrent);
+    }, isCurrent, false);
   }
 
   async function confirmDuplicateBeforePolish(isCurrent: () => boolean): Promise<boolean> {
-    return (await confirmDuplicateGate(currentTarget(), isCurrent)).proceed;
+    return (await confirmDuplicateGate(currentTarget(), isCurrent, true)).proceed;
   }
 
   async function resolveApplyDuplicate(isCurrent: () => boolean): Promise<DuplicateResolution> {
     const target = currentTarget();
     const match = findDuplicatesForTarget(target)[0];
     return match
-      ? resolveMatch(match, target, isCurrent)
+      ? resolveMatch(match, target, isCurrent, true)
       : { action: "continue", relationship: null };
   }
 

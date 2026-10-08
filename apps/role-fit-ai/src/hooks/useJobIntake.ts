@@ -54,6 +54,8 @@ import {
 import type { PreparedResumeSelection } from "../lib/preparedResume.ts";
 import type { PreparedResumeResolutionControls } from "./usePreparedResume.ts";
 import type { PreparedSourceCandidate } from "../lib/preparedSourceReplacement.ts";
+import type { JobPostingRelationship } from "../lib/preparationSession.ts";
+import type { DuplicateGateResult } from "./useDuplicateGuard.ts";
 import {
   beginFitAssessmentRun,
   completeFitAssessmentRun,
@@ -129,7 +131,8 @@ type UseJobIntakeArgs = {
   jobDescription: string;
   setJobDescription: (value: string) => void;
   jobRawText: string;
-  setImportedJob: (value: ImportedJobSnapshot | null) => void;
+  // A committing run passes its own duplicate resolution; undefined means no gate resolved a match.
+  setImportedJob: (value: ImportedJobSnapshot | null, relationship?: JobPostingRelationship | null) => void;
   setResult: (value: PolishedResume | null) => void;
   resetCoverWorkflow: () => void;
   setPipelineAiUsage: (updater: (prev: Record<string, StageAiUsage>) => Record<string, StageAiUsage>) => void;
@@ -141,13 +144,13 @@ type UseJobIntakeArgs = {
     text: string,
     facts: ExtractedJobTracking,
     isCurrent: () => boolean
-  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
+  ) => Promise<DuplicateGateResult>;
   confirmDuplicateAfterJobAnalysis: (
     url: string,
     text: string,
     facts: ExtractedJobTracking,
     isCurrent: () => boolean
-  ) => Promise<{ proceed: boolean; note: string | null; handled?: boolean }>;
+  ) => Promise<DuplicateGateResult>;
   confirmPreparedSourceReplacement: (
     candidate: PreparedSourceCandidate
   ) => Promise<PreparedSourceReplacementResolution>;
@@ -998,7 +1001,10 @@ export function useJobIntake({
     // Extension payloads are not already bound to the live URL input.
     if (source === "extension" || source === "retry") setJobUrl(url);
     setJobDescription(relevant);
-    setImportedJob(importedJobSnapshot(url, relevant, result.extracted, screeningJobText));
+    setImportedJob(
+      importedJobSnapshot(url, relevant, result.extracted, screeningJobText),
+      duplicateAfter.relationship === undefined ? duplicateBefore.relationship : duplicateAfter.relationship
+    );
     setLocalPreparedPreview(null);
     setResult(null);
     resetCoverWorkflow();

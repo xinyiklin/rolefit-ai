@@ -52,6 +52,13 @@ renders the Answers tab to prove typing and edits are read-only while Prepare
 runs. `src/hooks/__evals__/application-answers-retry-gate.mjs` fails a draft,
 then edits the Prepare source (paste or link) and proves send, the tab's Retry
 and the dock's Retry all stop at the tab's prepared-job gate with no request.
+`src/hooks/__evals__/application-answer-draft-source.mjs` runs App's
+Answers save, preparation session, committed-intake setter and duplicate guard
+with the production store: a first Save describes the job as last prepared and
+links only through a duplicate choice a committed Prepare run or a later
+Polish/Apply/Skip gate applied to that posting (Polish may reuse a stopped run's
+remembered choice), never one from a different posting, straight from an
+uncommitted run, or through a queued run's stale setter.
 Persistence probes cover Draft dates, same-ID Apply/Skip, legacy answers
 and backup round trips. Run the nearest probe while iterating, then the full
 RoleFit offline suite and app/server build.
@@ -486,7 +493,8 @@ Good server verification covers:
 - `src/hooks/__evals__/job-intake-entry-points.mjs` executes URL, paste,
   extension, and imported-posting Retry intake with both duplicate gates, local
   and provider fallback, prepared-resume resolution, Fit Assessment on/off, and
-  snapshot commit order. They also prove the separate first Fit remains awaited,
+  snapshot commit order, including the duplicate choice each path, Retry included,
+  commits with. They also prove the separate first Fit remains awaited,
   identical Prepare runs receive distinct automation receipts, queued intake
   captures settings only after it owns the lock, and settings changes during
   readiness invalidate stale execution context. Stop, source changes, and restore
@@ -879,7 +887,9 @@ Good frontend verification covers:
   during an authoritative GET.
   `src/hooks/__evals__/duplicate-relationship-resolution.mjs` executes the
   multi-choice duplicate gate, exact-record opening, confirmed linking,
-  remembered Keep separate decisions, and the create-then-atomic-link boundary;
+  remembered Keep separate decisions, Prepare gates returning their choice for
+  the run's commit while Polish and Apply/Skip gates publish it (remembered
+  choices included), and the create-then-atomic-link boundary;
   it also pins destructive merge as a separate tracker operation and established
   group unlinking as one all-member revision-checked mutation.
   `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and

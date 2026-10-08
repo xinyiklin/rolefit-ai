@@ -256,7 +256,10 @@ conversation: paste the exact employer question, receive one concise draft,
 edit or refine it, then copy or explicitly save the chosen question/answer
 revision. Generation alone creates no tracker record. First Save creates a
 Draft without an application date from the posting as last prepared, never
-from unprepared source edits; later saves update that same record, and
+from unprepared source edits, and links it to a tracked posting only through a
+duplicate choice that a committed Prepare or a later Polish/Apply/Skip check applied
+to that same posting (a check may reuse a choice from a stopped Prepare of it),
+never one from a different posting; later saves update that same record, and
 Apply or Skip transitions the same ID while retaining its answers. Drafts do
 not contribute to submission metrics or calendar events. Prepare gives Resume and Cover Letter matching material cards, each
 with its own named-variant selector and Include toggle. Resume starts included

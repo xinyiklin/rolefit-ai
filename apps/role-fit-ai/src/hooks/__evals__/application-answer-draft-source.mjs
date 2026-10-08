@@ -9,10 +9,25 @@ import { reconcileApplicationMutations } from "../../../server/applications/reco
 // Run App's real Answers render code and save handler with the production store:
 // source edits after Prepare must not become a first-Save Draft's posting or link.
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
-const start = appSource.indexOf("  const answersConversationId = ");
-const end = appSource.indexOf("  const answerController = useApplicationAnswers(", start);
-assert.ok(start >= 0 && end > start, "App's Answers save boundary exists");
-const answersBoundary = appSource.slice(start, end);
+function appBlock(startMarker, endMarker, label) {
+  const start = appSource.indexOf(startMarker);
+  const end = appSource.indexOf(endMarker, start);
+  assert.ok(start >= 0 && end > start, `App's ${label} exists`);
+  return appSource.slice(start, end);
+}
+const answersBoundary = appBlock(
+  "  const answersConversationId = ", "  const answerController = useApplicationAnswers(", "Answers save boundary"
+);
+// The relationship's path into that save: the session owner, the committed-intake setter, and the duplicate guard.
+const sessionBlock = appBlock(
+  "  const [preparationSession, setPreparationSession] = useState(", "  const getPreparationOwner = useCallback(", "preparation session"
+);
+const commitSetterBlock = appBlock(
+  "  const importedJobRef = useRef(", "  const handlePreparedJobTrackingChange = useCallback(", "committed-intake setter"
+);
+const duplicateGuardBlock = appBlock(
+  "  const duplicateGuard = useDuplicateGuard({", "  const preparedSnapshotMatchesInputs = Boolean(", "duplicate guard"
+);
 const scheduler = `
 let slots = [], cursor = 0;
 export function useState(initial) {
@@ -34,8 +49,10 @@ const bundle = await build({
   stdin: {
     loader: "ts", resolveDir: fileURLToPath(new URL("../../../", import.meta.url)),
     contents: `
-import { useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import { fitAssessmentPersistenceDecision } from "./src/lib/fitAssessmentLifecycle.ts";
+import { newPreparationSession } from "./src/lib/preparationSession.ts";
+import { useDuplicateGuard } from "./src/hooks/useDuplicateGuard.ts";
 export { useApplications } from "./src/hooks/useApplications.ts";
 export { render, reset } from "react";
 export function renderAnswersBoundary(context) {
@@ -45,6 +62,24 @@ export function renderAnswersBoundary(context) {
     saveApplicationAnswer, linkPostingRecords, getApplication, publishPreparationSession, duplicateGuard } = context;
   ${answersBoundary}
   return { answersConversationId, handleSaveAnswer };
+}
+export function renderPreparationDesk(context) {
+  const { currentPreparationId, getCurrentPreparationId, hasLoadedApplications, jobPrepared, jobUrl, jobDescription,
+    preparedApplicationJobDescription, jobRawText, jobTracking, currentJobTracking, importedJob, pipelineAiUsage,
+    fitAssessmentState, saveApplicationAnswer, linkPostingRecords, getApplication, refreshApplications,
+    findDuplicatesForTarget, setImportedJob } = context;
+  // Document-title and material-card effects of a commit are outside this eval.
+  const setMaterialSelection = () => undefined, DEFAULT_MATERIAL_SELECTION = null;
+  const clearPreparedResumeRecommendationRef = { current: () => undefined };
+  const resolveResumeApplicantName = () => "", editedResume = null, currentResumeText = "", resumeText = "";
+  const setDocumentTitle = () => undefined, documentTitleForJob = () => "", setCoverLetterTitle = () => undefined;
+  const handleLoadApplication = async () => false;
+  ${sessionBlock}
+  ${commitSetterBlock}
+  ${duplicateGuardBlock}
+  ${answersBoundary}
+  return { preparationSession, publishPreparationSession, answersConversationId, handleSaveAnswer,
+    setImportedJobAndDocumentTitle, duplicateGuard };
 }`
   },
   bundle: true, write: false, format: "esm", platform: "node",
@@ -53,7 +88,7 @@ export function renderAnswersBoundary(context) {
     api.onLoad({ filter: /.*/, namespace: "controlled" }, () => ({ contents: scheduler, loader: "js" }));
   } }]
 });
-const { useApplications, renderAnswersBoundary, render, reset } = await import(
+const { useApplications, renderAnswersBoundary, renderPreparationDesk, render, reset } = await import(
   `data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`
 );
 
@@ -146,6 +181,92 @@ async function freshDesk(initialRelationship = null) {
   return { renderDesk, session, acknowledged, links };
 }
 
+// The composed desk runs the relationship's whole path in App: a Prepare run's duplicate gates
+// (useDuplicateGuard), its commit (setImportedJobAndDocumentTitle), any later gate on the
+// prepared job, and the first Answers Save, with App's real session generation.
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+const urlB = "https://beta.example/jobs/firmware";
+const preparedB = "Firmware Engineer at Beta Robotics\n\nResponsibilities\n- Write embedded C for motor controllers";
+const snapshotA = { url: urlA, sourceText: postingA, tracking: trackingA, jobWarnings: warningsA };
+const idleDesk = {
+  jobPrepared: false, jobUrl: "", jobDescription: "", preparedApplicationJobDescription: "", jobRawText: "",
+  jobTracking: {}, importedJob: null, pipelineAiUsage: {}, fitAssessmentState: { latestCompleted: null }
+};
+const deskJobA = { ...preparedJobA, jobDescription: tailoringA, importedJob: snapshotA };
+// Prepare's paste path: B's text with the link field cleared, so nothing tracked matches it.
+const pastedDeskB = {
+  ...idleDesk, jobDescription: postingB, preparedApplicationJobDescription: postingB, jobTracking: trackingB,
+  fitAssessmentState: { latestCompleted: { snapshot: fitA, previousPreparation: true } }
+};
+const deskJobB = {
+  ...pastedDeskB, jobPrepared: true, jobDescription: preparedB, preparedApplicationJobDescription: preparedB,
+  jobRawText: postingB, importedJob: { url: "", sourceText: postingB, tracking: trackingB, jobWarnings: [] },
+  pipelineAiUsage: { "job-analysis": { source: "local", completedAt: "2026-10-07T13:00:00.000Z" } },
+  fitAssessmentState: { latestCompleted: null }
+};
+const targetA = { url: urlA, text: postingA, tracking: trackingA };
+const trackedRecord = (id, jobPostingGroupId, company, role, jobUrl) => ({
+  id, jobPostingGroupId, company, role, title: `${role} at ${company}`, status: "applied", jobUrl,
+  jobDescription: `${role} at ${company}`, createdAt: "2026-09-01T12:00:00.000Z",
+  updatedAt: "2026-09-02T12:00:00.000Z", appliedAt: "2026-09-02T12:00:00.000Z"
+});
+const tracksAlpha = (target) => target.jobUrl === urlA && {
+  application: trackedRecord("tracked-alpha", "group-alpha", "Alpha Health", "Platform Engineer", urlA),
+  level: "same-posting", confidence: "exact", evidence: ["Same canonical posting URL"]
+};
+const tracksBeta = (target) => target.jobUrl === urlB && {
+  application: trackedRecord("tracked-beta", "group-beta", "Beta Robotics", "Firmware Engineer", urlB),
+  level: "same-posting", confidence: "exact", evidence: ["Same canonical posting URL"]
+};
+const tracksEditedAlpha = (target) => target.company === "Alpha Health Labs" && tracksAlpha({ jobUrl: urlA });
+const answerIn = (conversationId) => ({ ...answer, applicationId: conversationId });
+
+async function preparationDesk() {
+  reset();
+  stored = [];
+  writes = 0;
+  const desk = { tracked: [], links: [], committedId: "" };
+  let applications;
+  desk.render = (state) => render(() => {
+    applications = useApplications();
+    return renderPreparationDesk({
+      ...state, hasLoadedApplications: true,
+      currentPreparationId: desk.committedId, getCurrentPreparationId: () => desk.committedId,
+      currentJobTracking: () => state.jobTracking,
+      saveApplicationAnswer: applications.saveApplicationAnswer, getApplication: applications.getApplication,
+      refreshApplications: async () => true,
+      findDuplicatesForTarget: (target) => desk.tracked.map((tracks) => tracks(target)).filter(Boolean),
+      linkPostingRecords: async (ids, groupId) => { desk.links.push({ ids, groupId }); return true; },
+      setImportedJob: () => undefined
+    });
+  });
+  desk.render(idleDesk);
+  await applications.refresh();
+  return desk;
+}
+
+async function runGate(desk, state, gate, { url, text, tracking }, choice) {
+  const pending = desk.render(state).duplicateGuard[gate](url, text, tracking, () => true);
+  await settle();
+  const guard = desk.render(state).duplicateGuard;
+  if (guard.duplicatePrompt) guard.chooseDuplicate(choice);
+  return pending;
+}
+
+// useJobIntake's commit contract (pinned in job-intake-entry-points.mjs): after both gates the
+// run commits its prepared job with the later gate's resolution, else the earlier one.
+async function commitRun(desk, fromState, preparedState, preparationId, target, choice) {
+  const before = await runGate(desk, fromState, "confirmDuplicateBeforeJobAnalysis", target, choice);
+  const after = await runGate(desk, fromState, "confirmDuplicateAfterJobAnalysis", target, choice);
+  assert.ok(before.proceed && after.proceed, "the run continues to its commit");
+  desk.render(fromState).setImportedJobAndDocumentTitle(
+    preparedState.importedJob,
+    after.relationship === undefined ? before.relationship : after.relationship
+  );
+  desk.committedId = preparationId;
+  return desk.render(preparedState);
+}
+
 function assertDescribesJobA(draft, label) {
   assert.equal(draft.status, "draft", label);
   assert.equal(draft.jobUrl, urlA, `${label}: committed link`);
@@ -221,7 +342,178 @@ try {
     assert.equal(session.current.mode, "new");
   }
 
-  console.log("Answers Draft source passed: pasted source, typed link with an uncommitted relationship, and no prepared job");
+  // Baseline: a Link chosen in A's own Prepare reaches A's first Save.
+  {
+    const desk = await preparationDesk();
+    desk.tracked.push(tracksAlpha);
+    const view = await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA, "link");
+    assert.deepEqual(view.preparationSession.pendingRelationship, relationshipA, "A's Link lands with A's commit");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "A's own Link");
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // Carry-over: A linked to T and left unsaved; B pasted and prepared with no duplicate match.
+  {
+    const desk = await preparationDesk();
+    desk.tracked.push(tracksAlpha);
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA, "link");
+    desk.render(pastedDeskB).setImportedJobAndDocumentTitle(null);
+    const view = await commitRun(desk, pastedDeskB, deskJobB, "prepare-2", { url: "", text: postingB, tracking: trackingB });
+    assert.equal(view.answersConversationId, "preparation-2-prepare-2", "B's commit starts its own conversation");
+    assert.equal(view.preparationSession.pendingRelationship, null, "A's Link does not carry into B's preparation");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assert.equal(stored.length, 1);
+    assert.equal(stored[0].rawJobDescription, postingB, "the Draft describes B");
+    assert.equal(stored[0].company, "Beta Robotics");
+    assert.deepEqual(desk.links, [], "B's Draft joins no posting group");
+  }
+
+  // In-flight leak: an extension or Retry Prepare of B keeps A's source fields while it runs, so A
+  // still reads as prepared. B's duplicate choice must not reach A's first Save, made mid-run
+  // (Save stays enabled during Prepare) or after B stops.
+  for (const [label, choiceForB, aLinked] of [
+    ["B linked, A linked", "link", true],
+    ["B kept separate, A linked", "separate", true],
+    ["B linked, A unmatched", "link", false]
+  ]) {
+    const desk = await preparationDesk();
+    if (aLinked) desk.tracked.push(tracksAlpha);
+    desk.tracked.push(tracksBeta);
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA, "link");
+    const gate = await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis",
+      { url: urlB, text: postingB, tracking: trackingB }, choiceForB);
+    assert.equal(gate.proceed, true, `${label}: B's run continues past the gate`);
+    const view = desk.render(deskJobA);
+    assert.equal(view.answersConversationId, "preparation-1-prepare-1", `${label}: A's conversation is still current`);
+    assert.deepEqual(view.preparationSession.pendingRelationship, aLinked ? relationshipA : null,
+      `${label}: an uncommitted run's choice does not replace A's`);
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], label);
+    assert.deepEqual(desk.links, aLinked ? [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }] : [],
+      `${label}: A's Draft links only through A's own preparation`);
+  }
+
+  // Re-preparing the same posting keeps its generation, and a match found by that run still lands.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push(tracksAlpha);
+    const view = await commitRun(desk, deskJobA, deskJobA, "prepare-2", targetA, "link");
+    assert.equal(view.answersConversationId, "preparation-1-prepare-2");
+    assert.deepEqual(view.preparationSession.pendingRelationship, relationshipA);
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // A later Polish gate on the same prepared job may still supply the relationship.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push(tracksAlpha);
+    const polish = desk.render(deskJobA).duplicateGuard.confirmDuplicateBeforePolish(() => true);
+    await settle();
+    desk.render(deskJobA).duplicateGuard.chooseDuplicate("link");
+    assert.equal(await polish, true);
+    const view = desk.render(deskJobA);
+    assert.equal(view.answersConversationId, "preparation-1-prepare-1");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "Polish-time Link");
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // A Link chosen in a stopped re-prepare of the same posting is remembered; the next Polish
+  // gate reuses it for that posting, and only then does it reach the first Save.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push(tracksAlpha);
+    const stopped = await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", targetA, "link");
+    assert.deepEqual(stopped.relationship, relationshipA);
+    assert.equal(desk.render(deskJobA).preparationSession.pendingRelationship, null, "the stopped run publishes nothing");
+    const polish = desk.render(deskJobA).duplicateGuard.confirmDuplicateBeforePolish(() => true);
+    assert.equal(await polish, true);
+    const view = desk.render(deskJobA);
+    assert.equal(view.duplicateGuard.duplicatePrompt, null, "Polish reuses the choice without asking again");
+    assert.equal(view.answersConversationId, "preparation-1-prepare-1");
+    assert.deepEqual(view.preparationSession.pendingRelationship, relationshipA);
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "Polish reuse after a stopped re-prepare");
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // A remembered choice belongs to its posting: B's in-flight Link to a record that also
+  // matches A makes Polish on A ask again rather than reuse it.
+  {
+    const desk = await preparationDesk();
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    desk.tracked.push((target) => (target.jobUrl === urlA || target.jobUrl === urlB) && tracksBeta({ jobUrl: urlB }));
+    await runGate(desk, deskJobA, "confirmDuplicateBeforeJobAnalysis", { url: urlB, text: postingB, tracking: trackingB }, "link");
+    const polish = desk.render(deskJobA).duplicateGuard.confirmDuplicateBeforePolish(() => true);
+    await settle();
+    const asked = desk.render(deskJobA).duplicateGuard;
+    assert.ok(asked.duplicatePrompt, "Polish on A asks about the shared match instead of reusing B's Link");
+    asked.chooseDuplicate("cancel");
+    assert.equal(await polish, false);
+    const view = desk.render(deskJobA);
+    assert.equal(view.preparationSession.pendingRelationship, null);
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assert.deepEqual(desk.links, [], "B's remembered Link never reaches A's Draft");
+  }
+
+  // A capture from an older conversation never describes the current one: after Save, Start a
+  // new preparation (App's choosePreparedSourceReplacement) and a run that never commits.
+  {
+    const desk = await preparationDesk();
+    let view = await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assert.equal(desk.render(deskJobA).preparationSession.mode, "update");
+    desk.render(deskJobA).publishPreparationSession({ mode: "new", applicationId: null, pendingRelationship: null }, true);
+    view = desk.render(pastedDeskB);
+    assert.equal(view.answersConversationId, "preparation-2-prepare-1", "the new preparation has its own conversation");
+    await assert.rejects(view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false),
+      /Prepare the posting/, "A's capture belongs to the earlier conversation");
+    assert.equal(stored.length, 1, "no second Draft is created from A's posting");
+  }
+
+  // A same-posting re-prepare that resolves nothing keeps a Polish-time Link for that posting.
+  {
+    const desk = await preparationDesk();
+    desk.tracked.push(tracksEditedAlpha);
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    // Edited tracking matches T at Polish; Prepare's freshly extracted tracking does not.
+    const editedA = { ...deskJobA, jobTracking: { ...trackingA, company: "Alpha Health Labs" } };
+    const polish = desk.render(editedA).duplicateGuard.confirmDuplicateBeforePolish(() => true);
+    await settle();
+    desk.render(editedA).duplicateGuard.chooseDuplicate("link");
+    assert.equal(await polish, true);
+    const view = await commitRun(desk, editedA, editedA, "prepare-2", targetA);
+    assert.equal(view.answersConversationId, "preparation-1-prepare-2");
+    assert.deepEqual(view.preparationSession.pendingRelationship, relationshipA, "the posting's confirmed Link survives");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assert.deepEqual(desk.links, [{ ids: [stored[0].id, "tracked-alpha"], groupId: "group-alpha" }]);
+  }
+
+  // A queued extension run commits through the setter from its delivery render. When B committed
+  // in between, A is a new preparation and must not keep B's Link.
+  {
+    const desk = await preparationDesk();
+    desk.tracked.push(tracksBeta);
+    await commitRun(desk, idleDesk, deskJobA, "prepare-1", targetA);
+    const queuedSetter = desk.render(deskJobA).setImportedJobAndDocumentTitle;
+    const deskJobBLinked = { ...deskJobB, jobUrl: urlB, importedJob: { ...deskJobB.importedJob, url: urlB } };
+    await commitRun(desk, deskJobA, deskJobBLinked, "prepare-2", { url: urlB, text: postingB, tracking: trackingB }, "link");
+    queuedSetter(snapshotA, undefined);
+    desk.committedId = "prepare-3";
+    const view = desk.render(deskJobA);
+    assert.equal(view.answersConversationId, "preparation-3-prepare-3", "A after B is a new preparation");
+    assert.equal(view.preparationSession.pendingRelationship, null, "B's Link does not carry into A");
+    await view.handleSaveAnswer(answerIn(view.answersConversationId), view.answersConversationId, false);
+    assertDescribesJobA(stored[0], "queued A after B");
+    assert.deepEqual(desk.links, []);
+  }
+
+  console.log("Answers Draft source passed: pasted source, typed link with an uncommitted relationship, no prepared job, and run-scoped posting relationships");
 } finally {
   globalThis.fetch = originalFetch;
   reset();
