@@ -302,7 +302,12 @@ Polish should feel like a review queue, not a hidden overwrite. The user selects
 editable resume sections in the document; identity, contact, education, dates,
 and omitted sections stay locked. After AI returns, show What improved (up to
 three), the proposed edits open by default in one disclosure, and one quiet
-withheld line. Do not render evidence, risk, or keyword
+withheld line. The opt-in Polish review adds at most one quiet line (kept all,
+or unavailable) or one collapsed held-back disclosure with a reason, warnings,
+and Restore per edit; Restore here returns an edit to the queue, unlike the
+cover letter's post-acceptance Restore, and a restored row gets a Restored
+chip. The disclosure stays mounted through the last Restore so focus has a
+home. Do not render evidence, risk, or keyword
 chips in this normal surface; a row's source text sits behind one collapsed
 Show evidence disclosure. The editor remains the final source of truth for
 export and pipeline tracking.

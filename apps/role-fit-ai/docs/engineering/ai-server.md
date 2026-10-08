@@ -129,7 +129,17 @@ owns:
 - `/api/resume-polish` AI provider routing — subscription CLIs (Claude Code,
   Codex CLI, Antigravity CLI) shelled out to local subprocesses,
   plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
-  `mode: "resume-proposal"` and performs one provider operation. The server
+  `mode: "resume-proposal"` and performs one provider operation. An optional
+  boolean `reviewEdits` (sent only when Settings > Guidance > Review edits
+  before showing them is on; absent means off, a non-boolean is a 400) adds one
+  keep/drop review dispatch in the same request, on the same resolved provider,
+  model, effort, and abort signal, when at least one sanitized change remains.
+  The response then carries `review: { outcome: "REVIEWED" | "UNAVAILABLE",
+  attempts, heldBack: [{ change, reason: "LOW_IMPACT" | "INCORRECT", note? }] }`;
+  `changes` holds only kept edits, a fully held-back proposal settles as
+  `NO_CHANGES` with an empty summary, and any review failure except Stop returns
+  the unreviewed proposal as `UNAVAILABLE`. The browser validates held-back
+  changes exactly like kept ones. The server
   flattens mutable fields to `target-1`, `target-2`, and so on, keeps their
   document mapping private, and returns only outcome, changes with optional
   per-change warnings, short feedback, optional result warnings, withheld
@@ -543,7 +553,8 @@ closed. Each stage persists the keys declared by `src/config/aiStages.ts`.
 
 `customInstructions` is resolved PER STAGE in the browser before the request is
 sent: a stage with its own non-blank override sends that text, otherwise it sends
- the shared instructions. Resume Polish is one proposal request. Its prompt
+ the shared instructions. Resume Polish is one proposal request (the opt-in
+review runs inside it). Its prompt
  performs the internal evidence, claim, identifier, and schema audit before
  returning, with breadth adapted to the selected reasoning effort. The server
  contract remains one `customInstructions` string per request.

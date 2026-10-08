@@ -53,6 +53,8 @@ export type PersistedSettings = {
   // Whether Resume Polish may bold keywords inside a bullet it rewrites. The
   // prompt asks and the server sanitizer enforces.
   boldBulletKeywords?: boolean;
+  // Opt-in keep/drop review of Resume Polish's own edits, on the Polish stage's model.
+  resumePolishReview?: boolean;
   fitAssessmentAuto?: boolean;
   resumePolishAuto?: boolean;
   resumePolishAutoThreshold?: AutoPolishThreshold;
@@ -94,6 +96,7 @@ const PERSISTED_SETTING_KEYS = [
   "customInstructions",
   "stageCustomInstructions",
   "boldBulletKeywords",
+  "resumePolishReview",
   "fitAssessmentAuto",
   "resumePolishAuto",
   "resumePolishAutoThreshold",
@@ -241,7 +244,7 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["boldBulletKeywords", "fitAssessmentAuto", "resumePolishAuto", "coverPolishAuto"] as const) {
+  for (const key of ["boldBulletKeywords", "resumePolishReview", "fitAssessmentAuto", "resumePolishAuto", "coverPolishAuto"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);

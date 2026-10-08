@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   AI_STAGE_COPY,
   AI_WORKFLOW_TITLE,
+  resumePolishSettledNote,
   workflowInputFingerprint,
   workflowRequestIsCurrent
 } from "../aiWorkflow.ts";
@@ -77,4 +78,14 @@ assert.equal(
   "an aborted request cannot commit"
 );
 
-console.log("AI workflow eval: 22/22 checks passed");
+// The settled Resume Polish line: unchanged without a review, quiet about what the
+// opt-in review held back, and never an ok tone when edits were still withheld.
+const settled = (input) => resumePolishSettledNote({ edits: 0, heldBack: 0, withheld: 0, ...input });
+assert.deepEqual(settled({ status: "PROPOSAL", edits: 3, withheld: 1 }), { note: "3 edits ready", tone: "ok" }, "the single-pass copy is unchanged");
+assert.deepEqual(settled({ status: "NO_CHANGES" }), { note: "No material changes suggested", tone: "ok" });
+assert.deepEqual(settled({ status: "WITHHELD", withheld: 2 }), { note: "Suggestions withheld; resume unchanged", tone: "warn" });
+assert.deepEqual(settled({ status: "PROPOSAL", edits: 1, heldBack: 2, review: "REVIEWED" }), { note: "1 edit ready · 2 held back", tone: "ok" });
+assert.deepEqual(settled({ status: "PROPOSAL", edits: 4, review: "UNAVAILABLE" }), { note: "4 edits ready · review unavailable", tone: "ok" });
+assert.deepEqual(settled({ status: "NO_CHANGES", heldBack: 3, withheld: 1, review: "REVIEWED" }), { note: "No material changes suggested · 1 withheld · 3 held back", tone: "warn" }, "a withheld edit keeps a reviewed no-changes result out of the ok tone");
+
+console.log("AI workflow eval: 22/22 checks passed, plus the settled Polish line");

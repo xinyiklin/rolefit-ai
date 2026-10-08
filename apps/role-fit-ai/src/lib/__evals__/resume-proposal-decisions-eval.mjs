@@ -4,6 +4,8 @@ import {
   clearProposalDecision,
   decisionsForProposal,
   recordProposalDecision,
+  recordProposalRestore,
+  restoredForProposal,
   resumeProposalEditState,
   resumeProposalEditIsPending,
   resumeProposalKey
@@ -153,5 +155,28 @@ assert.equal(
   undoState,
   "and an undo aimed at another proposal identity cannot reach these decisions"
 );
+
+// Held-back edits from the opt-in review are part of the payload identity from
+// arrival; restoring one is decision state under the same key.
+const heldSuggestion = { ...suggestion, id: "target-2", target: { ...suggestion.target, bulletId: "bullet-2" } };
+const reviewedProposal = (overrides = {}) => proposal({ review: "REVIEWED", heldBack: [{ suggestion: heldSuggestion, reason: "LOW_IMPACT" }], ...overrides });
+const reviewedKey = resumeProposalKey(reviewedProposal());
+assert.notEqual(reviewedKey, key, "held-back edits participate in proposal identity");
+assert.equal(resumeProposalKey(proposal({ heldBack: [] })), key, "a result without a review keeps today's identity");
+assert.notEqual(resumeProposalKey(reviewedProposal({ heldBack: [{ suggestion: heldSuggestion, reason: "INCORRECT" }] })), reviewedKey, "the hold-back reason is part of identity");
+assert.notEqual(resumeProposalKey(reviewedProposal({ review: "UNAVAILABLE", heldBack: [] })), resumeProposalKey(reviewedProposal({ heldBack: [] })), "the review outcome is part of identity");
+
+let restoreState = recordProposalDecision({ proposalKey: reviewedKey, byTargetId: {} }, reviewedKey, suggestion.id, { kind: "accepted", text: suggestion.proposedText });
+restoreState = recordProposalRestore(restoreState, reviewedKey, heldSuggestion.id);
+assert.deepEqual(decisionsForProposal(restoreState, reviewedKey), { [suggestion.id]: { kind: "accepted", text: suggestion.proposedText } }, "a Restore keeps earlier decisions");
+assert.deepEqual(restoredForProposal(restoreState, reviewedKey), { [heldSuggestion.id]: true });
+assert.deepEqual(restoredForProposal(restoreState, key), {}, "another proposal identity sees nothing restored");
+restoreState = recordProposalDecision(restoreState, reviewedKey, heldSuggestion.id, { kind: "discarded" });
+assert.deepEqual(restoredForProposal(restoreState, reviewedKey), { [heldSuggestion.id]: true }, "a later decision keeps the restored set");
+restoreState = clearProposalDecision(restoreState, reviewedKey, suggestion.id);
+assert.deepEqual(restoredForProposal(restoreState, reviewedKey), { [heldSuggestion.id]: true }, "an Undo keeps the restored set");
+const freshRestore = recordProposalRestore(restoreState, key, heldSuggestion.id);
+assert.deepEqual([freshRestore.proposalKey, freshRestore.byTargetId], [key, {}], "a Restore under a new identity starts clean");
+assert.equal(recordProposalDecision(restoreState, key, suggestion.id, { kind: "discarded" }).restored, undefined, "and so does a decision");
 
 console.log("Resume proposal decision identity eval: passed");

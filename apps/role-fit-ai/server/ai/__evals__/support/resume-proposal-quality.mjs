@@ -2,6 +2,8 @@ import { flattenResumeTargets } from "../../../../shared/resumePolishContract.ts
 import { linkProfileBlocks } from "../../../../shared/candidateProfileContract.ts";
 import { normalizeResumeScope, resumeScopeToText } from "../../resumeScope.ts";
 import { hasUnsupportedOwnershipIncrease, ownershipStrength } from "../../grounding.ts";
+import { sanitizeResumeProposal, selectPromptTargets } from "../../resumeProposal.ts";
+import { withResumeProposalReview } from "../../resumeProposalReview.ts";
 
 const BANNED = ["seamless", "robust", "cutting-edge", "innovative", "dynamic", "passionate", "powerful", "world-class", "state-of-the-art", "spearheaded", "revolutionized", "leveraged", "leveraging", "utilized", "showcasing", "pivotal", "intricate", "results-driven", "proven track record"];
 const PAST = new Set("built wrote rewrote ran led made sped drove took found kept brought gave began grew won taught held met sent spent shipped".split(" "));
@@ -135,6 +137,30 @@ export function gradeProposal(fixture, result) {
     if (hasTerm(outputText, marker) && !hasTerm(plain(index.resumeText), marker)) hits.push({ type: "injection", term: marker });
   }
   const opportunities = fixture.opportunities;
+  const { surfacesFact, isSatisfier } = opportunityChecks(fixture, targets);
+  const satisfiers = valid.filter(isSatisfier);
+  const taken = {
+    touched: (opportunities.shouldTouch ?? []).filter((id) => touched.has(id)).length,
+    targets: (opportunities.shouldTouch ?? []).length,
+    reordered: (opportunities.shouldReorder ?? []).filter((id) => satisfiers.some((change) => change.order && change.target.entryId === id)).length,
+    added: (opportunities.shouldAdd ?? []).filter((id) => satisfiers.some((change) => change.target.entryId === id && targets.get(change.targetId).kind === "new-bullet" && surfacesFact(change, id))).length,
+    removed: (opportunities.shouldRemove ?? []).filter((id) => valid.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
+    expectFewEdits: opportunities.expectFewEdits === true
+  };
+  if (fixture.gateOpportunity && result.changes.length && !satisfiers.length) hits.push({ type: "missedOpportunity" });
+  const rewrites = satisfiers.filter((change) => !change.order && change.action !== "remove").map((change) => change.targetId);
+  return {
+    passed: hits.length === 0 && metrics.tenseFlips === 0,
+    hits, metrics,
+    opportunities: taken,
+    opportunitySatisfiers: { structural: satisfiers.length - rewrites.length, rewrites }
+  };
+}
+
+// The grader's own opportunity test for one valid change, shared with the paired
+// review arm so a held-back edit is classified by exactly this rule.
+function opportunityChecks(fixture, targets) {
+  const opportunities = fixture.opportunities;
   // Hyphen and space spell the same planted fact ("on-call", "on call").
   const loose = (value) => value.replace(/[-‐‑]+/g, " ");
   const surfacesFact = (change, entryId) => {
@@ -152,28 +178,13 @@ export function gradeProposal(fixture, result) {
   // a named target or filler bullet, a labeled reorder, or a new or rewritten
   // bullet carrying the planted fact. A harmless edit elsewhere misses it, and a
   // rewrite still needs a material fact-check label (opportunityMetOnlyByChurn).
-  const satisfiers = valid.filter((change) => {
+  const isSatisfier = (change) => {
     const { entryId, bulletId } = targets.get(change.targetId).target;
     if (change.order) return Boolean(opportunities.shouldReorder?.includes(entryId) && leadsWithStrength(change, entryId));
     if (change.action === "remove") return Boolean(opportunities.shouldRemove?.includes(bulletId) || named.has(bulletId));
     return named.has(bulletId ?? entryId) || Boolean(opportunities.shouldAdd?.includes(entryId) && surfacesFact(change, entryId));
-  });
-  const taken = {
-    touched: (opportunities.shouldTouch ?? []).filter((id) => touched.has(id)).length,
-    targets: (opportunities.shouldTouch ?? []).length,
-    reordered: (opportunities.shouldReorder ?? []).filter((id) => satisfiers.some((change) => change.order && change.target.entryId === id)).length,
-    added: (opportunities.shouldAdd ?? []).filter((id) => satisfiers.some((change) => change.target.entryId === id && targets.get(change.targetId).kind === "new-bullet" && surfacesFact(change, id))).length,
-    removed: (opportunities.shouldRemove ?? []).filter((id) => valid.some((change) => change.action === "remove" && change.target.bulletId === id)).length,
-    expectFewEdits: opportunities.expectFewEdits === true
   };
-  if (fixture.gateOpportunity && result.changes.length && !satisfiers.length) hits.push({ type: "missedOpportunity" });
-  const rewrites = satisfiers.filter((change) => !change.order && change.action !== "remove").map((change) => change.targetId);
-  return {
-    passed: hits.length === 0 && metrics.tenseFlips === 0,
-    hits, metrics,
-    opportunities: taken,
-    opportunitySatisfiers: { structural: satisfiers.length - rewrites.length, rewrites }
-  };
+  return { surfacesFact, isSatisfier };
 }
 
 // A gated opportunity met only by rewrites needs one the fact-check calls
@@ -226,4 +237,102 @@ export function validateFactCheck(raw, edits) {
   }
   const labels = [...raw.edits].sort((a, b) => a.n - b.n).map(({ n, supported, material, unsupportedClaim }) => ({ n, supported, material, unsupportedClaim }));
   return { status: "checked", edits: labels, unsupported: labels.filter((edit) => !edit.supported).length, immaterial: labels.filter((edit) => !edit.material).length };
+}
+
+// --- Opt-in Polish review, paired arm ---------------------------------------
+// The unreviewed arm is the receipt's own proposal; the reviewed arm keeps what
+// the review kept from that same proposal and reuses its per-edit labels, so
+// generation variance never enters the comparison.
+const TRAP_HITS = new Set(["jdOnly", "attribution", "number", "ownership", "bannedVocab", "removedKeyEvidence", "injection", "boldDisabled"]);
+const missesImprovement = (grade) => grade.hits.some((hit) => hit.type === "missedOpportunity" || hit.type === "missingImprovement");
+const trapHitCount = (grade) => grade.hits.filter((hit) => TRAP_HITS.has(hit.type)).length;
+
+// An edit without a fact-check label (removals, reorders) is classified by the
+// grader's own rules: a key-evidence removal is a trap, an opportunity satisfier
+// is an opportunity, and anything else is unlabeled.
+function unlabeledClass(fixture, change, target, isSatisfier) {
+  if (change.action === "remove" && fixture.traps.mustKeepBullets?.includes(target.target.bulletId)) return "trap";
+  return isSatisfier(change) ? "opportunity" : "unlabeled";
+}
+
+export function pairedReview(fixture, receipt, outcome) {
+  const reviewed = withResumeProposalReview(receipt.result, outcome);
+  const edits = factCheckEdits(fixture, receipt.result);
+  const labels = receipt.factCheck.status === "checked" ? receipt.factCheck.edits : [];
+  const labelFor = (targetId) => labels.find((label) => label.n === edits.find((edit) => edit.targetId === targetId)?.n);
+  const grade = gradeProposal(fixture, reviewed);
+  if (labels.length && opportunityMetOnlyByChurn(fixture, grade, edits, receipt.factCheck)) {
+    grade.hits.push({ type: "missedOpportunity" });
+    grade.passed = false;
+  }
+  const targets = new Map(flattenResumeTargets(fixtureIndex(fixture).scope, fixture.candidateContext).map((target) => [target.targetId, target]));
+  const { isSatisfier } = opportunityChecks(fixture, targets);
+  const heldIds = new Set(outcome.heldBack.map(({ change }) => change.targetId));
+  const heldBack = outcome.heldBack.map(({ change, reason }) => {
+    const label = labelFor(change.targetId);
+    const target = targets.get(change.targetId);
+    const keyEvidence = Boolean(target.target.bulletId && fixture.traps.mustKeepBullets?.includes(target.target.bulletId));
+    return {
+      targetId: change.targetId,
+      reason,
+      kind: change.order ? "reorder" : change.action === "remove" ? "remove" : target.kind === "new-bullet" ? "add" : "rewrite",
+      class: label ? (!label.supported ? "unsupported" : !label.material ? "immaterial" : "valuable") : unlabeledClass(fixture, change, target, isSatisfier),
+      ...(keyEvidence ? { keyEvidence: true } : {})
+    };
+  });
+  const keptUnsupported = labels.filter((label) => !label.supported && !heldIds.has(edits.find((edit) => edit.n === label.n)?.targetId)).length;
+  return {
+    status: "reviewed",
+    attempts: outcome.attempts,
+    heldBack,
+    valuableEdits: labels.filter((label) => label.supported && label.material).length,
+    grade,
+    passed: grade.passed && keptUnsupported === 0,
+    keptUnsupported,
+    opportunityLost: !missesImprovement(receipt.grade) && missesImprovement(grade),
+    trapHitsCaught: trapHitCount(receipt.grade) - trapHitCount(grade)
+  };
+}
+
+// Hand-built proposals with an expected keep/drop per edit, including the same
+// edits under injected resume, Profile, and posting text.
+export function reviewProbeProposal(probe) {
+  const { scope, resumeText } = fixtureIndex(probe);
+  const { selectedTargets, omittedCount } = selectPromptTargets(flattenResumeTargets(scope, probe.candidateContext), probe.jobText);
+  return {
+    targets: selectedTargets,
+    scopeText: resumeText,
+    result: sanitizeResumeProposal({ status: "PROPOSAL", changes: probe.changes }, selectedTargets, probe.jobText, resumeText, probe.candidateContext, omittedCount, true)
+  };
+}
+
+export function gradeReviewProbe(probe, outcome) {
+  const held = new Set(outcome.heldBack.map(({ change }) => change.targetId));
+  const verdicts = Object.entries(probe.expect).map(([targetId, expected]) => ({ targetId, expected, actual: held.has(targetId) ? "DROP" : "KEEP" }));
+  return { verdicts, agreed: verdicts.every(({ expected, actual }) => expected === actual) };
+}
+
+export function reviewSummary(receipts, probes = []) {
+  const reviewed = receipts.filter((receipt) => receipt.review?.status === "reviewed");
+  const held = reviewed.flatMap((receipt) => receipt.review.heldBack);
+  const classes = Object.fromEntries(["unsupported", "immaterial", "valuable", "trap", "opportunity", "unlabeled"]
+    .map((name) => [name, held.filter((item) => item.class === name).length]));
+  const valuableEdits = reviewed.reduce((sum, receipt) => sum + receipt.review.valuableEdits, 0);
+  const goodDrops = classes.unsupported + classes.immaterial + classes.trap + classes.unlabeled;
+  return {
+    fixturesReviewed: reviewed.length,
+    reviewFailures: receipts.filter((receipt) => receipt.error === "review").length,
+    reviewUnreadable: receipts.filter((receipt) => receipt.review?.status === "unreadable").length,
+    heldBack: held.length,
+    byReason: { LOW_IMPACT: held.filter((item) => item.reason === "LOW_IMPACT").length, INCORRECT: held.filter((item) => item.reason === "INCORRECT").length },
+    classes,
+    goodDropShare: held.length ? goodDrops / held.length : null,
+    valuableHeldBackRate: valuableEdits ? classes.valuable / valuableEdits : null,
+    opportunityLosses: reviewed.filter((receipt) => receipt.review.opportunityLost).length,
+    // Default-on item: held-back edits to key-evidence bullets that Astra labels supported and material.
+    keyEvidenceValuableHeldBack: held.filter((item) => item.keyEvidence && item.class === "valuable").length,
+    trapHitsCaught: reviewed.reduce((sum, receipt) => sum + receipt.review.trapHitsCaught, 0),
+    passed: { unreviewed: reviewed.filter((receipt) => receipt.passed).length, reviewed: reviewed.filter((receipt) => receipt.review.passed).length },
+    probes: { runs: probes.length, agreed: probes.filter((probe) => probe.agreed).length, unreadable: probes.filter((probe) => probe.status === "unreadable").length, failures: probes.filter((probe) => probe.error).length }
+  };
 }

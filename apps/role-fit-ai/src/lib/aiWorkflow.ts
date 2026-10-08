@@ -60,3 +60,21 @@ export function workflowRequestIsCurrent(
     signal?.aborted !== true
   );
 }
+
+// The settled Resume Polish line. Without the opt-in review it is the single-pass
+// copy; a review that held back every edit beside a safety withholding is not an
+// ok result, because edits were still withheld.
+export function resumePolishSettledNote({ status, edits, heldBack, withheld, review }: {
+  status: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
+  edits: number;
+  heldBack: number;
+  withheld: number;
+  review?: "REVIEWED" | "UNAVAILABLE";
+}): { note: string; tone: "ok" | "warn" } {
+  const reviewNote = review === "UNAVAILABLE" ? " · review unavailable" : heldBack ? ` · ${heldBack} held back` : "";
+  if (status === "PROPOSAL") return { note: `${edits} edit${edits === 1 ? "" : "s"} ready${reviewNote}`, tone: "ok" };
+  if (status === "NO_CHANGES") {
+    return { note: `No material changes suggested${withheld ? ` · ${withheld} withheld` : ""}${reviewNote}`, tone: withheld ? "warn" : "ok" };
+  }
+  return { note: "Suggestions withheld; resume unchanged", tone: "warn" };
+}

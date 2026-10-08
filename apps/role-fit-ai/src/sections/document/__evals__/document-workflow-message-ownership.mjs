@@ -44,7 +44,10 @@ const bundled = await esbuild.build({
         discard: noop,
         revert: noop,
         applyAll: noop,
-        discardAll: noop
+        discardAll: noop,
+        heldBack: [],
+        isRestored: () => false,
+        restore: noop
       };
       const resumeBase = {
         resume,

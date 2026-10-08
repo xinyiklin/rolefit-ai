@@ -1,6 +1,6 @@
 import type { ResumeSourceConcern } from "./proposalWarnings.ts";
 import type { TerminologySnapshot } from "./terminology.ts";
-import type { ResumePolishAdvice } from "../../shared/resumePolishContract.ts";
+import type { ResumePolishAdvice, ResumePolishReview, ResumePolishReviewReason } from "../../shared/resumePolishContract.ts";
 export type ResumeProposalField = "bullet" | "skill";
 
 export type ResumeProposalTarget = {
@@ -58,7 +58,17 @@ export type PolishedResume = {
     count: number;
     reasons: Array<"UNSUPPORTED" | "INVALID_TARGET" | "UNCHANGED" | "MALFORMED">;
   };
+  // Present only when the opt-in edit review ran. Held-back edits keep their
+  // suggestion identity from arrival, so Restore never changes the proposal key.
+  review?: ResumePolishReview["outcome"];
+  heldBack?: ResumeHeldBackEdit[];
   trimmedBulletGroups: number;
+};
+
+export type ResumeHeldBackEdit = {
+  suggestion: ResumeProposalSuggestion;
+  reason: ResumePolishReviewReason;
+  note?: string;
 };
 
 export type ResumeAnalysis = Omit<PolishedResume, "proposalBaselineText">;

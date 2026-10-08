@@ -1,7 +1,7 @@
 import type { JobAnalysisWarning } from "../../shared/jobAnalysisWarnings.ts";
 import type { Application } from "../hooks/useApplications.ts";
 import type { ExtractedJobTracking } from "./jobExtract.ts";
-import { copyAiUsage, type StageAiUsage } from "./aiUsage.ts";
+import { RESUME_POLISH_REVIEW_USAGE_KEY, copyAiUsage, type StageAiUsage } from "./aiUsage.ts";
 import { dedupeSourceUrls } from "./jobIdentity.ts";
 import type { FitAssessmentPersistenceDecision } from "./fitAssessmentLifecycle.ts";
 
@@ -49,6 +49,10 @@ export function preparedApplicationRecord({
   if (usage.mode === "application") {
     if (usage.includeResume) {
       aiUsage["resume-polish"] = pipelineAiUsage["resume-polish"] ?? { source: "none" };
+      // The review receipt describes that same Polish run, so an unreviewed run clears an older one.
+      const review = pipelineAiUsage[RESUME_POLISH_REVIEW_USAGE_KEY];
+      if (review) aiUsage[RESUME_POLISH_REVIEW_USAGE_KEY] = review;
+      else delete aiUsage[RESUME_POLISH_REVIEW_USAGE_KEY];
     }
     if (usage.includeCoverLetter) {
       if (pipelineAiUsage["cover-polish"]) aiUsage["cover-polish"] = pipelineAiUsage["cover-polish"];

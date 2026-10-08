@@ -302,6 +302,13 @@ assert.deepEqual(
   "a non-boolean bold preference fails closed rather than persisting"
 );
 
+// The opt-in Polish review defaults off, and older stored settings without it
+// stay valid; the same allowlist and boolean scrub apply.
+assert.equal(materializeAiSettings({}).resumePolishReview, false, "an unset review preference defaults to off");
+assert.equal(materializeAiSettings({ resumePolishReview: true }).resumePolishReview, true, "an explicit on preference survives materialization");
+assert.deepEqual(normalizeSettings({ resumePolishReview: true }), { resumePolishReview: true }, "the review preference is allowlisted for persistence");
+assert.deepEqual(normalizeSettings({ resumePolishReview: "yes" }), {}, "a non-boolean review preference fails closed");
+
 
 
 assert.deepEqual(seeded["application-review"], seeded["fit-assessment"], "new review stage copies Fit once");

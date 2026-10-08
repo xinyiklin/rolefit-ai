@@ -447,6 +447,8 @@ function App() {
     setProfileBackground,
     boldBulletKeywords,
     setBoldBulletKeywords,
+    resumePolishReview,
+    setResumePolishReview,
     fitAssessmentAuto,
     setFitAssessmentAuto,
     resumePolishAuto,
@@ -1090,7 +1092,8 @@ function App() {
     : jobDescription.trim();
 
   const resultCarriesConcerns = Boolean(result?.sourceConcerns?.length
-    || result?.suggestedChanges?.some((suggestion) => suggestion.warnings?.length));
+    || result?.suggestedChanges?.some((suggestion) => suggestion.warnings?.length)
+    || result?.heldBack?.some((item) => item.suggestion.warnings?.length));
   const resumeSourceWarnings = resultCarriesConcerns && currentResumeConcerns(result,
     flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])),
     resumeEditorActions.getDocumentGeneration()).length
@@ -1639,6 +1642,7 @@ function App() {
     profileLimitMessage,
     customInstructionsFor,
     boldBulletKeywords,
+    resumePolishReview,
     resumePolish: resumePolishStage,
     ensureResumePolishProviderReady: ensureResumePolishProvider,
     setResult,
@@ -2811,7 +2815,8 @@ function App() {
               isPolishing={isPolishing}
               polishProgress={polishProgress}
               polishOutputCurrent={polishOutputCurrent}
-              polishOutcome={result?.polishOutcome}
+              // A restored held-back edit turns a reviewed "no changes" into a proposal.
+              polishOutcome={result?.polishOutcome === "NO_CHANGES" && resumeProposalDecisions.total ? "PROPOSAL" : result?.polishOutcome}
               polishStatus={polishStatus}
               onPolishPreparedResume={handlePolishPreparedResume}
               onReviewResume={() => setActiveOutputTab("resume")}
@@ -3396,6 +3401,8 @@ function App() {
           workspacePreferencesStatus={workspacePreferencesStatus}
           boldBulletKeywords={boldBulletKeywords}
           onBoldBulletKeywordsChange={setBoldBulletKeywords}
+          resumePolishReview={resumePolishReview}
+          onResumePolishReviewChange={setResumePolishReview}
           profileBackground={profileBackground}
           onProfileBackgroundChange={setProfileBackground}
           profileBackgroundRef={profileBackgroundTextareaRef}

@@ -200,7 +200,7 @@ font, size and wrapping changes still reflow the page normally.
   estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **One-pass Resume Polish** — one provider operation proposes grounded edits
+- **One-pass Resume Polish (optional review pass)** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
   unchanged edits are no-ops. Unsupported wording stays reviewable with a warning,
@@ -218,7 +218,12 @@ font, size and wrapping changes still reflow the page normally.
   resume stays unchanged until the user applies all or accepts an individual edit.
   **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
   preference; when disabled, every bullet Polish rewrites arrives without bold
-  while italic, underline, and Skills-list formatting remain untouched.
+  while italic, underline, and Skills-list formatting remain untouched. Its
+  default-off **Review edits before showing them** adds an optional review in
+  the same Polish run, on the same model: edits it judges low-impact or likely
+  wrong are held back in a collapsed list with a reason and **Restore**, and a
+  review failure shows every edit with a note. It roughly doubles Polish time
+  and usage.
 - **Optional Fit Assessment automation** — Fit Assessment runs after Prepare by
   default, while Resume and Cover Letter automatic Polish remain separate,
   default-off decisions. With the automatic run off, **Assess fit** still runs it

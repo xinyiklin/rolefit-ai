@@ -5,9 +5,9 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 
 import { analyzeResumeText, type PolishedResume } from "../resumeEngine";
 import { buildStageRequestFields, type StageConfig, type StageId } from "../lib/aiRequest";
-import type { StageAiUsage } from "../lib/aiUsage";
+import { withReviewUsage, type StageAiUsage } from "../lib/aiUsage";
 import { ApiError, classifyFailure } from "../lib/failures";
-import { proposalSuggestions } from "../lib/resumeProposalSuggestions.ts";
+import { heldBackSuggestions, proposalSuggestions } from "../lib/resumeProposalSuggestions.ts";
 import {
   adviceNotOnResume,
   buildResumePolishScope,
@@ -16,12 +16,14 @@ import {
   type ResumePolishScopeMode
 } from "../lib/resumePolishScope";
 import {
+  resumePolishSettledNote,
   workflowInputFingerprint,
   workflowRequestIsCurrent,
   type PolishProgressState
 } from "../lib/aiWorkflow";
 import type { OutputTab } from "../sections/shared";
 import type { ProviderReadiness } from "./useAvailableProviders";
+import type { ResumeProposalSuggestion } from "../resume/types";
 import {
   flattenResumeTargets,
   sanitizeResumePolishWireResult
@@ -58,6 +60,7 @@ type UseResumePolishPipelineArgs = {
   profileLimitMessage: string | null;
   customInstructionsFor: (stage: StageId) => string;
   boldBulletKeywords: boolean;
+  resumePolishReview: boolean;
   resumePolish: StageConfig;
   ensureResumePolishProviderReady: () => Promise<ProviderReadiness>;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
@@ -88,6 +91,7 @@ export function useResumePolishPipeline({
   profileLimitMessage,
   customInstructionsFor,
   boldBulletKeywords,
+  resumePolishReview,
   resumePolish,
   ensureResumePolishProviderReady,
   setResult,
@@ -115,6 +119,7 @@ export function useResumePolishPipeline({
     candidateContext,
     customInstructions: customInstructionsFor("resume-polish"),
     boldBulletKeywords,
+    resumePolishReview,
     resumePolish: buildStageRequestFields(resumePolish)
   });
   const inputFingerprintRef = useRef(inputFingerprint);
@@ -217,7 +222,9 @@ export function useResumePolishPipeline({
           sourceWarnings: context.sourceConcerns.length
             ? ["Some current resume wording came from earlier generated edits with unresolved evidence concerns. Candidate-supplied text is not independently verified; check every claim against the original supplied sources."] : undefined,
           customInstructions: customInstructionsFor("resume-polish"),
-          boldBulletKeywords
+          boldBulletKeywords,
+          // Omitted when off, so the request stays exactly the single-pass one.
+          ...(resumePolishReview ? { reviewEdits: true } : {})
         }),
         signal
       });
@@ -228,11 +235,14 @@ export function useResumePolishPipeline({
       if (!data || data.omittedTargetCount > flattenResumeTargets(context.resumeScope, context.candidateContext).length) {
         throw new ApiError("Resume Polish returned an invalid outcome", 422);
       }
-      const suggestions = proposalSuggestions(data, context.resumeScope, context.candidateContext).map((suggestion) => {
+      const withPriorConcerns = (suggestion: ResumeProposalSuggestion): ResumeProposalSuggestion => {
         const prior = context.sourceConcerns.find((concern) => sameProposalTarget(concern.target, suggestion.target));
         // A removal deletes that wording rather than vouching for it.
         return prior && suggestion.kind !== "remove" ? { ...suggestion, warnings: [...(suggestion.warnings ?? []), "Earlier wording in this field had unresolved evidence concerns; editing or repeating Polish does not verify it.", ...prior.warnings] } : suggestion;
-      });
+      };
+      const suggestions = proposalSuggestions(data, context.resumeScope, context.candidateContext).map(withPriorConcerns);
+      const heldBack = heldBackSuggestions(data, context.resumeScope, context.candidateContext)
+        .map((item) => ({ ...item, suggestion: withPriorConcerns(item.suggestion) }));
       if (data.status === "PROPOSAL" && !suggestions.length) {
         throw new ApiError("Resume Polish returned no usable proposal edits", 422);
       }
@@ -257,14 +267,17 @@ export function useResumePolishPipeline({
         changeSummary: Array.isArray(data.summary) ? data.summary : [],
         omittedTargetCount: data.omittedTargetCount,
         suggestedChanges: suggestions,
-        withheld: data.withheld
+        withheld: data.withheld,
+        ...(data.review ? { review: data.review.outcome, heldBack } : {})
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
-      const note = data.status === "PROPOSAL"
-        ? `${suggestions.length} edit${suggestions.length === 1 ? "" : "s"} ready`
-        : data.status === "NO_CHANGES"
-          ? "No material changes suggested"
-          : "Suggestions withheld; resume unchanged";
+      const { note, tone } = resumePolishSettledNote({
+        status: data.status,
+        edits: suggestions.length,
+        heldBack: heldBack.length,
+        withheld: data.withheld.count,
+        review: data.review?.outcome
+      });
       setPolishProgress(data.status === "WITHHELD"
         ? {
             polish: {
@@ -274,10 +287,10 @@ export function useResumePolishPipeline({
             }
           }
         : {
-            polish: { status: "done", note, noteTone: "ok" }
+            polish: { status: "done", note, noteTone: tone }
           });
       setPolishStatus(note);
-      setPipelineAiUsage((current) => ({
+      setPipelineAiUsage((current) => withReviewUsage({
         ...current,
         "resume-polish": {
           source: "ai",
@@ -287,7 +300,7 @@ export function useResumePolishPipeline({
           ...(typeof raw.attempts === "number" ? { attempts: raw.attempts } : {}),
           completedAt: new Date().toISOString()
         }
-      }));
+      }, data.review));
       return true;
     } catch (error) {
       if (signal.aborted) return false;
@@ -297,7 +310,7 @@ export function useResumePolishPipeline({
         polish: { status: "failed", errorHeadline: failure.headline, error: failure.detail }
       });
       setPolishStatus(`${failure.headline}: ${failure.detail}`);
-      setPipelineAiUsage((current) => ({
+      setPipelineAiUsage((current) => withReviewUsage({
         ...current,
         "resume-polish": {
           source: "none",

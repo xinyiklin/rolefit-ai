@@ -8,9 +8,11 @@ export function sameProposalTarget(a: ResumeProposalTarget, b: ResumeProposalTar
 
 export function currentResumeConcerns(previous: PolishedResume | null, targets: FlatResumeTarget[], generation: number): ResumeSourceConcern[] {
   if (!previous || previous.documentGeneration !== generation) return [];
+  // A held-back edit can be restored and accepted, so its warnings carry like a kept edit's.
   const candidates = [
     ...(previous.sourceConcerns ?? []),
-    ...(previous.suggestedChanges ?? []).filter((suggestion) => suggestion.warnings?.length)
+    ...[...(previous.suggestedChanges ?? []), ...(previous.heldBack ?? []).map((item) => item.suggestion)]
+      .filter((suggestion) => suggestion.warnings?.length)
       .map((suggestion) => ({ target: suggestion.target, originalText: suggestion.currentText, warnings: suggestion.warnings! }))
   ];
   const concerns: ResumeSourceConcern[] = [];

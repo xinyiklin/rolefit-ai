@@ -8,6 +8,7 @@ type GuidancePageProps = Pick<SettingsDialogProps,
   | "customInstructions" | "onCustomInstructionsChange"
   | "stageCustomInstructions" | "onStageCustomInstructionChange"
   | "boldBulletKeywords" | "onBoldBulletKeywordsChange"
+  | "resumePolishReview" | "onResumePolishReviewChange"
 >;
 
 type StageInstructionsProps = {
@@ -56,7 +57,9 @@ export function GuidancePage({
   stageCustomInstructions,
   onStageCustomInstructionChange,
   boldBulletKeywords,
-  onBoldBulletKeywordsChange
+  onBoldBulletKeywordsChange,
+  resumePolishReview,
+  onResumePolishReviewChange
 }: GuidancePageProps) {
   return (
     <>
@@ -103,6 +106,17 @@ export function GuidancePage({
         <span>
           <strong>Bold keywords in bullets</strong>
           <small>Off keeps bullets Resume Polish rewrites unbolded.</small>
+        </span>
+      </label>
+      <label className="check-row">
+        <input
+          type="checkbox"
+          checked={resumePolishReview}
+          onChange={(event) => onResumePolishReviewChange(event.target.checked)}
+        />
+        <span>
+          <strong>Review edits before showing them</strong>
+          <small>Holds back low-impact or likely wrong edits. About doubles Polish time and usage.</small>
         </span>
       </label>
     </>

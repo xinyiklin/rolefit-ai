@@ -37,6 +37,7 @@ import {
   polishSelfAuditInstructions
 } from "./prompts.ts";
 import { resolveProviderRequest } from "./providers.ts";
+import { reviewResumeProposal, withResumeProposalReview } from "./resumeProposalReview.ts";
 import { containsStructuredMarkup, findUngroundedNumericClaim } from "./sanitize.ts";
 import type { NormalizedResumeScope } from "./resumeScope.ts";
 import { UserSafeAiError } from "./errors.ts";
@@ -789,7 +790,9 @@ export async function generateResumeProposal({
   candidateContext,
   customInstructions,
   boldBulletKeywords = true,
-  signal
+  reviewEdits = false,
+  signal,
+  dispatch = callConfiguredProvider
 }: {
   body: Record<string, unknown>;
   resumeScope: unknown;
@@ -798,7 +801,9 @@ export async function generateResumeProposal({
   candidateContext: string;
   customInstructions: string;
   boldBulletKeywords?: boolean;
+  reviewEdits?: boolean;
   signal?: AbortSignal;
+  dispatch?: typeof callConfiguredProvider;
 }) {
   const targets = flattenResumeTargets(resumeScope as Parameters<typeof flattenResumeTargets>[0], candidateContext);
   if (!targets.length) {
@@ -827,7 +832,7 @@ export async function generateResumeProposal({
     adviceSources: JSON.stringify(adviceSources)
   });
   const stats: AttemptStats = {};
-  const parsed = await callConfiguredProvider({
+  const parsed = await dispatch({
     provider,
     apiKey,
     model,
@@ -836,7 +841,7 @@ export async function generateResumeProposal({
     userPrompt: prompts.userPrompt,
     signal
   }, stats);
-  return {
+  const proposal = {
     ...sanitizeResumeProposal(
       parsed,
       prompts.selectedTargets,
@@ -852,4 +857,17 @@ export async function generateResumeProposal({
     reasoningEffort,
     attempts: stats.attempts ?? 1
   };
+  if (!reviewEdits || !proposal.changes.length) return proposal;
+  const review = await reviewResumeProposal({
+    changes: proposal.changes,
+    targets: prompts.selectedTargets,
+    jobText,
+    scopeText,
+    candidateContext,
+    customInstructions,
+    config: { provider, apiKey, model, reasoningEffort },
+    signal,
+    dispatch
+  });
+  return withResumeProposalReview(proposal, review);
 }

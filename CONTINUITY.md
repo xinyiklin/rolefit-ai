@@ -102,8 +102,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
       overflow.
     - The only console errors were Vite's live-reload socket.
     - QA ran before the review fixes, which changed no UI.
-- [USER] Briefs approved 2026-10-07 (the source pool is implemented above; the
-  Polish review step is in progress) (tasks
+- [USER] Briefs approved 2026-10-07 (both implemented: the source pool above,
+  the Polish review step below) (tasks
   `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
   user-originated **eligible source pool** for Prepare's resume/cover variant
   pick — conflicts with the app guide's "no persisted variant metadata" rule,
@@ -112,6 +112,68 @@ bounded; app-only operational detail belongs in the affected app documentation.
   replace the "one provider request, never Tailor followed by Review" contract
   and change the warning policy for that path. The recommendation was opt-in,
   show the dropped edits, fail open, and benchmark it after the eval fixes.
+- [USER+CODE] Opt-in **Resume Polish review** implemented (task
+  `polish-edit-review-20261007`; Product Brief v1 and Delivery Plan v1 approved
+  by the user; supersedes the review half of the entry above and, for this
+  opt-in path only, the 2026-08-07 "one proposal request" decision). Settings >
+  Guidance > **Review edits before showing them** (`resumePolishReview`, default
+  off) makes `/api/resume-polish` (body `reviewEdits: true`, sent only when on)
+  run one keep/drop dispatch (`server/ai/resumeProposalReview.ts`) after
+  sanitizing, on the Resume Polish provider, model, effort, and abort signal,
+  only when an edit survives. The reviewer sees review-local ids and each edit's
+  before/after with its whole entry and linked Profile evidence, never server
+  ids, generator reasons, or warnings; its `proposed_edits` fence is registered
+  in `prompts.ts`. A strict
+  parser rejects any reply that is not exactly one KEEP/DROP per sent id; any
+  failure except Stop fails open to the full proposal with a note. Held-back
+  edits list collapsed with reason, note, warnings, and Restore; Restore is
+  decision state under the unchanged proposal key. Holding back everything reads
+  as no worthwhile changes. Usage is recorded as `resume-polish-review` (tracker
+  row) and cleared for unreviewed runs. With the setting off, the request and
+  result are byte-identical to before. PRODUCT's warning policy carries the
+  user-directed exception. An older build rejects a preferences file or backup
+  containing the new key (the existing no-downgrade policy).
+  - [USER] AC6 amended: offline probes prove the contract, fencing, parser, and
+    plumbing; model judgment is checked by the live review probes. The
+    default-on bar in `docs/engineering/testing.md` is approved, with its
+    key-evidence item restated by the user as zero held-back edits to
+    `mustKeepBullets` bullets that Astra labels supported and material
+    (`keyEvidenceValuableHeldBack`). Live calls are not yet authorized.
+  - [CODE] Benchmark: `EVAL_POLISH_REVIEW=paired` reviews each generated
+    proposal and grades both arms with shared Astra labels, plus two tracked
+    review probes (`fixtures/resume-proposal-review-probes.json`). Provider
+    failures wait and retry, unreadable reviews are counted, and neither
+    rewrites the unreviewed arm. UNCONFIRMED: no live run exists; the setting
+    stays off by default.
+  - [TOOL] Two independent reviews (server/benchmark; client/docs) found no
+    path that mutates or retargets an edit. Fixed from them: the review usage
+    receipt now reaches the application on Apply and a later unreviewed run
+    clears an older one; an all-held-back result stays in the proposal root (no
+    remount or focus loss on Restore) and keeps the withheld line, with a warn
+    note tone; distinct Restore names; held-back edits are classified by the
+    grader's own opportunity rule, with a `keyEvidence` marker; bounded,
+    control-character-free notes; whole entry and Profile evidence for the
+    reviewer; the review prompt follows the materiality rubric (filler cuts
+    kept). After merging main, server `tsc`, `npm run check --workspace
+    apps/role-fit-ai` (157/157 offline evals), and `git diff --check` passed.
+  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
+    synthetic workspace, at 1440 px.
+    - The page's network calls were stubbed in the browser, so no AI provider
+      was called: provider status, Job analysis unavailable, and two synthetic
+      Polish results.
+    - The Guidance toggle sent `reviewEdits: true`.
+    - A run with one kept and two held-back edits showed a collapsed "2 held
+      back by review" list, with location, reason and the bounded note.
+      Restore names were distinct.
+    - Accept the kept edit, Restore one, Accept it, Undo it: Undo restored
+      exactly that bullet, the earlier acceptance survived, and the restored
+      edit went back to the queue.
+    - All held back with one withheld edit: "No worthwhile changes after
+      review" plus the withheld line, with the warning tone.
+    - Restoring the first and then the last held-back edit kept the same open
+      disclosure node, and focus stayed on its summary.
+    - Console errors were only Vite live-reload polling, which is unreachable
+      from the QA pane.
 - [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
   claims held: the no-op rewrite filter hides claim-changing deletions;
   `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;
@@ -4576,7 +4638,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   analytics regression all passed. The UI detector reported only advisory
   font-size matches already permitted by the documented body/label ramps.
   Live-provider and real-browser visual QA were not run.
-- [USER+CODE] 2026-08-07: Normal Resume Polish is one proposal request from
+- [USER+CODE] 2026-08-07 (superseded 2026-10-07 for the opt-in Resume Polish
+  review only; see that entry): Normal Resume Polish is one proposal request from
   Resume or Prepare; the Tailor / Review / Both selector and reviewer readiness
   gate are absent from that path. The server flattens editable fields to opaque
   `target-N` ids, keeps identity, contact, education, dates, and omitted sections

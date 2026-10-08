@@ -68,6 +68,24 @@ export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
   });
 }
 
+// The opt-in Polish review only keeps or holds back sanitized changes. A held-back
+// change stays restorable; UNAVAILABLE means the review failed open.
+export const RESUME_POLISH_REVIEW_OUTCOMES = ["REVIEWED", "UNAVAILABLE"] as const;
+export const RESUME_POLISH_REVIEW_REASONS = ["LOW_IMPACT", "INCORRECT"] as const;
+export const RESUME_POLISH_REVIEW_NOTE_LIMIT = 160;
+
+export type ResumePolishReviewReason = (typeof RESUME_POLISH_REVIEW_REASONS)[number];
+export type ResumePolishHeldBackChange = {
+  change: ResumePolishWireChange;
+  reason: ResumePolishReviewReason;
+  note?: string;
+};
+export type ResumePolishReview = {
+  outcome: (typeof RESUME_POLISH_REVIEW_OUTCOMES)[number];
+  attempts: number;
+  heldBack: ResumePolishHeldBackChange[];
+};
+
 export type ResumePolishWireResult = {
   advice?: ResumePolishAdvice[];
   warnings?: string[];
@@ -79,6 +97,7 @@ export type ResumePolishWireResult = {
     count: number;
     reasons: ResumePolishWithheldReason[];
   };
+  review?: ResumePolishReview;
 };
 
 export type ResumePolishEditorTarget = {
@@ -254,6 +273,64 @@ export function flattenResumeTargets(scope: ScopeLike, candidateContext = ""): F
   ];
 }
 
+function parseWireChange(item: unknown): ResumePolishWireChange | null {
+  if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+  const change = item as Record<string, unknown>;
+  const targetId = clean(change.targetId, 40);
+  const remove = change.action === "remove";
+  const order = Array.isArray(change.order) ? change.order.map((id) => clean(id, 40)) : null;
+  const replacement = clean(change.replacement, 1400);
+  const operations = [change.replacement, change.action, change.order].filter((value) => value !== undefined).length;
+  if (!targetId || operations !== 1 || (change.action !== undefined && !remove)) return null;
+  if (order ? !order.length || order.length > 40 || order.some((id) => !id) : !remove && !replacement) return null;
+  const reason = clean(change.reason, 240);
+  const echo = change.target && typeof change.target === "object" && !Array.isArray(change.target)
+    ? change.target as Record<string, unknown>
+    : null;
+  return {
+    targetId,
+    ...(echo ? {
+      target: {
+        sectionId: clean(echo.sectionId, 120),
+        entryId: clean(echo.entryId, 120),
+        ...(echo.bulletId ? { bulletId: clean(echo.bulletId, 120) } : {})
+      }
+    } : {}),
+    ...(order ? { order } : remove ? { action: "remove" as const } : { replacement }),
+    ...(reason ? { reason } : {}),
+    ...(change.evidence === "profile" ? { evidence: "profile" as const } : {}),
+    ...(change.warnings !== undefined ? { warnings: sanitizeContentWarnings(change.warnings) } : {})
+  };
+}
+
+// Held-back changes pass the same checks as kept ones, never share a target with
+// them, and exist only beside a review the server actually ran.
+function parseWireReview(raw: unknown, status: ResumePolishStatus, changes: ResumePolishWireChange[]): ResumePolishReview | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const source = raw as Record<string, unknown>;
+  const outcome = source.outcome;
+  if (!(RESUME_POLISH_REVIEW_OUTCOMES as readonly unknown[]).includes(outcome)) return null;
+  if (typeof source.attempts !== "number" || !Number.isInteger(source.attempts) || source.attempts < 0 || source.attempts > 10) return null;
+  if (!Array.isArray(source.heldBack) || changes.length + source.heldBack.length > 12) return null;
+  const targetIds = new Set(changes.map((change) => change.targetId));
+  const heldBack: ResumePolishHeldBackChange[] = [];
+  for (const item of source.heldBack) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const entry = item as Record<string, unknown>;
+    const change = parseWireChange(entry.change);
+    if (!change || targetIds.has(change.targetId)) return null;
+    if (!(RESUME_POLISH_REVIEW_REASONS as readonly unknown[]).includes(entry.reason)) return null;
+    if (entry.note !== undefined && (typeof entry.note !== "string" || !entry.note.trim()
+      || entry.note.length > RESUME_POLISH_REVIEW_NOTE_LIMIT || hasMarkupTag(entry.note))) return null;
+    targetIds.add(change.targetId);
+    heldBack.push({ change, reason: entry.reason as ResumePolishReviewReason, ...(entry.note ? { note: entry.note as string } : {}) });
+  }
+  if (status === "WITHHELD" || changes.length + heldBack.length === 0) return null;
+  if (outcome === "UNAVAILABLE" && (heldBack.length || status !== "PROPOSAL")) return null;
+  if (outcome === "REVIEWED" && !changes.length && (status !== "NO_CHANGES" || !heldBack.length)) return null;
+  return { outcome: outcome as ResumePolishReview["outcome"], attempts: source.attempts, heldBack };
+}
+
 export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireResult | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
   const source = raw as Record<string, unknown>;
@@ -263,33 +340,9 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
   const changes: ResumePolishWireChange[] = [];
   if (!Array.isArray(source.changes)) return null;
   for (const item of source.changes) {
-    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
-    const change = item as Record<string, unknown>;
-    const targetId = clean(change.targetId, 40);
-    const remove = change.action === "remove";
-    const order = Array.isArray(change.order) ? change.order.map((id) => clean(id, 40)) : null;
-    const replacement = clean(change.replacement, 1400);
-    const operations = [change.replacement, change.action, change.order].filter((value) => value !== undefined).length;
-    if (!targetId || operations !== 1 || (change.action !== undefined && !remove)) return null;
-    if (order ? !order.length || order.length > 40 || order.some((id) => !id) : !remove && !replacement) return null;
-    const reason = clean(change.reason, 240);
-    const echo = change.target && typeof change.target === "object" && !Array.isArray(change.target)
-      ? change.target as Record<string, unknown>
-      : null;
-    changes.push({
-      targetId,
-      ...(echo ? {
-        target: {
-          sectionId: clean(echo.sectionId, 120),
-          entryId: clean(echo.entryId, 120),
-          ...(echo.bulletId ? { bulletId: clean(echo.bulletId, 120) } : {})
-        }
-      } : {}),
-      ...(order ? { order } : remove ? { action: "remove" as const } : { replacement }),
-      ...(reason ? { reason } : {}),
-      ...(change.evidence === "profile" ? { evidence: "profile" as const } : {}),
-      ...(change.warnings !== undefined ? { warnings: sanitizeContentWarnings(change.warnings) } : {})
-    });
+    const change = parseWireChange(item);
+    if (!change) return null;
+    changes.push(change);
     if (changes.length === 12) break;
   }
   if ((status === "PROPOSAL") !== (changes.length > 0)) return null;
@@ -316,6 +369,9 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     ? Math.max(0, Math.min(1_000_000, source.omittedTargetCount))
     : 0;
 
+  const review = source.review === undefined ? undefined : parseWireReview(source.review, status as ResumePolishStatus, changes);
+  if (review === null) return null;
+
   return {
     advice: sanitizeResumePolishAdvice(source.advice),
     ...(source.warnings !== undefined ? { warnings: sanitizeContentWarnings(source.warnings) } : {}),
@@ -323,6 +379,7 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     changes,
     summary: list(source.summary, 260),
     omittedTargetCount,
-    withheld: { count, reasons }
+    withheld: { count, reasons },
+    ...(review ? { review } : {})
   };
 }

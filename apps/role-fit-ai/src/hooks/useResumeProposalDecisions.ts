@@ -25,6 +25,8 @@ import {
   proposalBaseline,
   proposalValue,
   recordProposalDecision,
+  recordProposalRestore,
+  restoredForProposal,
   resumeProposalEditState,
   resumeProposalEditIsPending,
   resumeProposalKey,
@@ -137,7 +139,6 @@ export function useResumeProposalDecisions({
   const isDocumentReplaced = useCallback(() => result?.documentGeneration !== undefined
     && result.documentGeneration !== actions.getDocumentGeneration(), [actions, result]);
   const documentReplaced = isDocumentReplaced();
-  const suggestions = useMemo(() => result?.suggestedChanges ?? [], [result]);
   // Suggestion ids are unique within one proposal but not across proposals, so
   // decisions reset on the proposal's own identity rather than on any single id.
   const proposalKey = useMemo(() => resumeProposalKey(result), [result]);
@@ -148,6 +149,15 @@ export function useResumeProposalDecisions({
   // A changed key exposes an empty map immediately without mutating React state
   // during render. The first decision atomically initializes the new key.
   const decisions = decisionsForProposal(decisionState, proposalKey);
+  const restored = restoredForProposal(decisionState, proposalKey);
+  const heldBackEdits = useMemo(() => result?.heldBack ?? [], [result]);
+  // Restored edits join the decidable list; the rest stay held back and are never
+  // touched by Accept all or a group's Accept.
+  const suggestions = useMemo(() => [
+    ...(result?.suggestedChanges ?? []),
+    ...heldBackEdits.filter((item) => restored[item.suggestion.id]).map((item) => item.suggestion)
+  ], [heldBackEdits, restored, result]);
+  const heldBack = useMemo(() => heldBackEdits.filter((item) => !restored[item.suggestion.id]), [heldBackEdits, restored]);
 
   const isPending = useCallback(
     (suggestion: ResumeProposalSuggestion): boolean => {
@@ -199,6 +209,13 @@ export function useResumeProposalDecisions({
     }
     setDecisionState((current) => clearProposalDecision(current, proposalKey, suggestion.id));
   }, [actions, decisions, proposalKey, resume, isDocumentReplaced]);
+
+  // Return a held-back edit to the proposal as a pending row. It records state
+  // only: the document and the result are untouched.
+  const restore = useCallback((suggestionId: string) => {
+    if (isDocumentReplaced() || !heldBackEdits.some((item) => item.suggestion.id === suggestionId)) return;
+    setDecisionState((current) => recordProposalRestore(current, proposalKey, suggestionId));
+  }, [heldBackEdits, isDocumentReplaced, proposalKey]);
 
   // Accept every pending row, or only `subset` (one operation group).
   const applyAll = useCallback((subset: readonly ResumeProposalSuggestion[] = suggestions) => {
@@ -279,6 +296,9 @@ export function useResumeProposalDecisions({
     discard,
     revert,
     applyAll,
-    discardAll
+    discardAll,
+    heldBack,
+    isRestored: (suggestionId: string) => Boolean(restored[suggestionId]),
+    restore
   };
 }

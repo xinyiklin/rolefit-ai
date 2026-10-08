@@ -69,6 +69,15 @@ assert.deepEqual(
   knownSettingPortable,
   "a settings bag of known, already-normalized keys/values round-trips unchanged"
 );
+assert.deepEqual(
+  parsePortableWorkspacePreferences({ settings: { resumePolishReview: true }, lastBaseResume: "" }).settings,
+  { resumePolishReview: true },
+  "the opt-in Polish review preference round-trips through a backup"
+);
+assert.throws(
+  () => parsePortableWorkspacePreferences({ settings: { resumePolishReview: "yes" }, lastBaseResume: "" }),
+  "a wrong-typed review preference is rejected"
+);
 const legacyRows = [{
   category: "professional",
   years: 2.5,

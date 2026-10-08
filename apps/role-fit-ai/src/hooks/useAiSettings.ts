@@ -41,6 +41,7 @@ export function useAiSettings() {
     () => saved.stageCustomInstructions ?? {}
   );
   const [boldBulletKeywords, setBoldBulletKeywords] = useState(saved.boldBulletKeywords ?? true);
+  const [resumePolishReview, setResumePolishReview] = useState(saved.resumePolishReview ?? false);
   const [fitAssessmentAuto, setFitAssessmentAuto] = useState(saved.fitAssessmentAuto ?? true);
   const [resumePolishAuto, setResumePolishAuto] = useState(saved.resumePolishAuto ?? false);
   const [resumePolishAutoThreshold, setResumePolishAutoThreshold] = useState<AutoPolishThreshold>(
@@ -90,6 +91,7 @@ export function useAiSettings() {
       setCustomInstructions(next.customInstructions ?? "");
       setStageCustomInstructions(next.stageCustomInstructions ?? {});
       setBoldBulletKeywords(next.boldBulletKeywords ?? true);
+      setResumePolishReview(next.resumePolishReview ?? false);
       setFitAssessmentAuto(next.fitAssessmentAuto ?? true);
       setResumePolishAuto(next.resumePolishAuto ?? false);
       setResumePolishAutoThreshold(next.resumePolishAutoThreshold ?? "REASONABLE");
@@ -141,6 +143,7 @@ export function useAiSettings() {
       customInstructions,
       stageCustomInstructions,
       boldBulletKeywords,
+      resumePolishReview,
       fitAssessmentAuto,
       resumePolishAuto,
       resumePolishAutoThreshold,
@@ -174,6 +177,7 @@ export function useAiSettings() {
     customInstructions,
     stageCustomInstructions,
     boldBulletKeywords,
+    resumePolishReview,
     fitAssessmentAuto,
     resumePolishAuto,
     resumePolishAutoThreshold,
@@ -262,6 +266,7 @@ export function useAiSettings() {
     setCustomInstructions("");
     setStageCustomInstructions({});
     setBoldBulletKeywords(true);
+    setResumePolishReview(false);
     setFitAssessmentAuto(true);
     setResumePolishAuto(false);
     setResumePolishAutoThreshold("REASONABLE");
@@ -288,6 +293,8 @@ export function useAiSettings() {
     setProfileBackground,
     boldBulletKeywords,
     setBoldBulletKeywords,
+    resumePolishReview,
+    setResumePolishReview,
     fitAssessmentAuto,
     setFitAssessmentAuto,
     resumePolishAuto,
