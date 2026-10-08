@@ -55,10 +55,32 @@ export async function reviewWithProduction(fixture, config, changes, stats = {})
   });
 }
 
+// A provider failure (limit, auth, timeout) may clear, so the review waits and
+// retries; an unreadable reply is a review result in its own right and is counted.
+export const REVIEW_RETRY_DELAYS_MS = [60_000, 300_000, 900_000];
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function runReview(review, subject, config, changes, { retryDelays = REVIEW_RETRY_DELAYS_MS, wait = sleep } = {}) {
+  for (let retries = 0; ; retries += 1) {
+    const stats = {};
+    let outcome;
+    try {
+      outcome = await review(subject, config, changes, stats);
+    } catch {
+      outcome = { outcome: "UNAVAILABLE", attempts: stats.attempts ?? 0, failure: "provider" };
+    }
+    if (outcome.outcome === "REVIEWED") return { outcome, stats, retries };
+    if (outcome.failure === "unreadable") return { status: "unreadable", attempts: outcome.attempts, retries };
+    if (retries >= retryDelays.length) return { status: "error", retries };
+    await wait(retryDelays[retries]);
+  }
+}
+
 export async function evaluateCase(fixture, config, {
   generate = generateResumeProposal,
   judge = callConfiguredProvider,
-  review = null
+  review = null,
+  retry = {}
 } = {}) {
   const started = Date.now();
   const receipt = { fixture: fixture.name, config: publicConfig(config), judge: JUDGE, humanReviewed: false };
@@ -87,23 +109,24 @@ export async function evaluateCase(fixture, config, {
       }
     }
     receipt.passed = receipt.grade.passed && receipt.factCheck.unsupported === 0;
-    if (review) {
-      receipt.review = { status: "not-needed" };
-      if (receipt.result.changes.length) {
-        stage = "review";
-        const stats = {};
-        const outcome = await review(fixture, config, receipt.result.changes, stats);
-        // The product fails open; a benchmark must never count that as a review that kept everything.
-        if (outcome.outcome !== "REVIEWED") throw new Error("Review unavailable");
-        receipt.review = { ...pairedReview(fixture, receipt, outcome), usage: stats.usage ?? null };
-      }
-    }
   } catch {
     // Provider errors can contain response excerpts. Keep only the failing stage.
     receipt.error = stage;
     if (stage.startsWith("fact-check")) receipt.factCheck = { status: "error", edits: [], unsupported: null, immaterial: null };
-    if (stage === "review") receipt.review = { status: "error" };
     receipt.passed = false;
+  }
+  // The reviewed arm never rewrites the unreviewed arm's result. The product fails
+  // open; here a failed review is unreadable (counted) or an execution failure,
+  // never a review that kept everything.
+  if (review && !receipt.error) {
+    if (!receipt.result.changes.length) receipt.review = { status: "not-needed" };
+    else {
+      const run = await runReview(review, fixture, config, receipt.result.changes, retry);
+      receipt.review = run.outcome
+        ? { ...pairedReview(fixture, receipt, run.outcome), usage: run.stats.usage ?? null, retries: run.retries }
+        : { status: run.status, ...(run.attempts !== undefined ? { attempts: run.attempts } : {}), retries: run.retries };
+      if (run.status === "error") receipt.error = "review";
+    }
   }
   receipt.seconds = (Date.now() - started) / 1000;
   return receipt;
@@ -126,22 +149,16 @@ export function summaryRow(receipt, run) {
             opportunityLost: receipt.review.opportunityLost, trapHitsCaught: receipt.review.trapHitsCaught, attempts: receipt.review.attempts }
         : { status: receipt.review.status }
     } : {}),
+    ...(receipt.review?.heldBack?.some((item) => item.keyEvidence) ? { keyEvidenceHeldBack: receipt.review.heldBack.filter((item) => item.keyEvidence).map(({ class: label }) => label) } : {}),
     seconds: receipt.seconds
   };
 }
 
-export async function evaluateReviewProbe(probe, config, { review = reviewWithProduction } = {}) {
+export async function evaluateReviewProbe(probe, config, { review = reviewWithProduction, retry = {} } = {}) {
   const receipt = { probe: probe.name, config: publicConfig(config), humanReviewed: false };
-  try {
-    const { result } = reviewProbeProposal(probe);
-    const stats = {};
-    const outcome = await review(probe, config, result.changes, stats);
-    if (outcome.outcome !== "REVIEWED") throw new Error("Review unavailable");
-    Object.assign(receipt, gradeReviewProbe(probe, outcome), { attempts: outcome.attempts, usage: stats.usage ?? null });
-  } catch {
-    receipt.error = "review";
-    receipt.agreed = false;
-  }
+  const run = await runReview(review, probe, config, reviewProbeProposal(probe).result.changes, retry);
+  if (run.outcome) Object.assign(receipt, gradeReviewProbe(probe, run.outcome), { attempts: run.outcome.attempts, usage: run.stats.usage ?? null, retries: run.retries });
+  else Object.assign(receipt, { status: run.status, agreed: false, retries: run.retries, ...(run.status === "error" ? { error: "review" } : {}) });
   return receipt;
 }
 
@@ -199,7 +216,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
       const receipt = await evaluateReviewProbe(probe, options.config);
       save(`review-probe-${probe.name}-run-${run}.json`, receipt);
       probeReceipts.push(receipt);
-      console.log(JSON.stringify({ probe: probe.name, run, agreed: receipt.agreed, ...(receipt.error ? { error: receipt.error } : {}) }));
+      console.log(JSON.stringify({ probe: probe.name, run, agreed: receipt.agreed, ...(receipt.status ? { status: receipt.status } : {}), ...(receipt.error ? { error: receipt.error } : {}) }));
       if (receipt.error) break outer;
     }
   }

@@ -657,7 +657,13 @@ Resume's primary Polish action runs one grounded proposal request from either
 Resume or Prepare. Its rail shows What improved, the proposed edits open in one
 disclosure, and one quiet withheld line; when the prompt budget
 excludes editable fields, one equally quiet neutral line reports that count.
-Proposal, No changes, and Withheld remain visibly distinct.
+With the opt-in Polish review on, one more quiet line says the review kept every
+edit or could not run, or a collapsed "N held back by review" disclosure lists
+the held-back edits with their reason and a Restore action (this resume Restore
+returns an edit to the queue; the cover letter's Restore reverts an accepted
+letter). A restored row carries a neutral Restored chip, and a result whose
+every edit was held back reads "No worthwhile changes after review." above the
+same disclosure. Proposal, No changes, and Withheld remain visibly distinct.
 Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.

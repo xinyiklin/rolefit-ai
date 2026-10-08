@@ -102,8 +102,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
       overflow.
     - The only console errors were Vite's live-reload socket.
     - QA ran before the review fixes, which changed no UI.
-- [USER] Briefs approved 2026-10-07 (the source pool is implemented above; the
-  Polish review step is in progress) (tasks
+- [USER] Briefs approved 2026-10-07 (both implemented: the source pool above,
+  the Polish review step below) (tasks
   `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
   user-originated **eligible source pool** for Prepare's resume/cover variant
   pick — conflicts with the app guide's "no persisted variant metadata" rule,
@@ -121,8 +121,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   run one keep/drop dispatch (`server/ai/resumeProposalReview.ts`) after
   sanitizing, on the Resume Polish provider, model, effort, and abort signal,
   only when an edit survives. The reviewer sees review-local ids and each edit's
-  before/after and own evidence, never server ids, generator reasons, or
-  warnings; its `proposed_edits` fence is registered in `prompts.ts`. A strict
+  before/after with its whole entry and linked Profile evidence, never server
+  ids, generator reasons, or warnings; its `proposed_edits` fence is registered
+  in `prompts.ts`. A strict
   parser rejects any reply that is not exactly one KEEP/DROP per sent id; any
   failure except Stop fails open to the full proposal with a note. Held-back
   edits list collapsed with reason, note, warnings, and Restore; Restore is
@@ -134,17 +135,28 @@ bounded; app-only operational detail belongs in the affected app documentation.
   containing the new key (the existing no-downgrade policy).
   - [USER] AC6 amended: offline probes prove the contract, fencing, parser, and
     plumbing; model judgment is checked by the live review probes. The
-    default-on bar in `docs/engineering/testing.md` is approved; its "zero
-    key-evidence drops" item is mis-specified (a review cannot cause one) and
-    awaits restatement. Live calls are not yet authorized.
+    default-on bar in `docs/engineering/testing.md` is approved, with its
+    key-evidence item restated by the user as zero held-back edits to
+    `mustKeepBullets` bullets that Astra labels supported and material
+    (`keyEvidenceValuableHeldBack`). Live calls are not yet authorized.
   - [CODE] Benchmark: `EVAL_POLISH_REVIEW=paired` reviews each generated
     proposal and grades both arms with shared Astra labels, plus two tracked
-    review probes (`fixtures/resume-proposal-review-probes.json`). UNCONFIRMED:
-    no live run exists; the setting stays off by default.
-  - [TOOL] Server `tsc`, `npm run check --workspace apps/role-fit-ai` (156/156
-    offline evals, including three new ones), root `npm run check`, and
-    `git diff --check` passed. UNCONFIRMED at this writing: the two required
-    independent reviews and the approved synthetic browser QA.
+    review probes (`fixtures/resume-proposal-review-probes.json`). Provider
+    failures wait and retry, unreadable reviews are counted, and neither
+    rewrites the unreviewed arm. UNCONFIRMED: no live run exists; the setting
+    stays off by default.
+  - [TOOL] Two independent reviews (server/benchmark; client/docs) found no
+    path that mutates or retargets an edit. Fixed from them: the review usage
+    receipt now reaches the application on Apply and a later unreviewed run
+    clears an older one; an all-held-back result stays in the proposal root (no
+    remount or focus loss on Restore) and keeps the withheld line, with a warn
+    note tone; distinct Restore names; held-back edits are classified by the
+    grader's own opportunity rule, with a `keyEvidence` marker; bounded,
+    control-character-free notes; whole entry and Profile evidence for the
+    reviewer; the review prompt follows the materiality rubric (filler cuts
+    kept). After merging main, server `tsc`, `npm run check --workspace
+    apps/role-fit-ai` (157/157 offline evals), and `git diff --check` passed.
+    UNCONFIRMED at this writing: the approved synthetic browser QA.
 - [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
   claims held: the no-op rewrite filter hides claim-changing deletions;
   `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;
@@ -4609,7 +4621,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   analytics regression all passed. The UI detector reported only advisory
   font-size matches already permitted by the documented body/label ramps.
   Live-provider and real-browser visual QA were not run.
-- [USER+CODE] 2026-08-07: Normal Resume Polish is one proposal request from
+- [USER+CODE] 2026-08-07 (superseded 2026-10-07 for the opt-in Resume Polish
+  review only; see that entry): Normal Resume Polish is one proposal request from
   Resume or Prepare; the Tailor / Review / Both selector and reviewer readiness
   gate are absent from that path. The server flattens editable fields to opaque
   `target-N` ids, keeps identity, contact, education, dates, and omitted sections

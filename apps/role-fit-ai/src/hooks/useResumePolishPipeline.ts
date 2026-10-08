@@ -16,6 +16,7 @@ import {
   type ResumePolishScopeMode
 } from "../lib/resumePolishScope";
 import {
+  resumePolishSettledNote,
   workflowInputFingerprint,
   workflowRequestIsCurrent,
   type PolishProgressState
@@ -270,14 +271,13 @@ export function useResumePolishPipeline({
         ...(data.review ? { review: data.review.outcome, heldBack } : {})
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
-      const reviewNote = data.review?.outcome === "UNAVAILABLE"
-        ? " · review unavailable"
-        : heldBack.length ? ` · ${heldBack.length} held back` : "";
-      const note = data.status === "PROPOSAL"
-        ? `${suggestions.length} edit${suggestions.length === 1 ? "" : "s"} ready${reviewNote}`
-        : data.status === "NO_CHANGES"
-          ? `No material changes suggested${reviewNote}`
-          : "Suggestions withheld; resume unchanged";
+      const { note, tone } = resumePolishSettledNote({
+        status: data.status,
+        edits: suggestions.length,
+        heldBack: heldBack.length,
+        withheld: data.withheld.count,
+        review: data.review?.outcome
+      });
       setPolishProgress(data.status === "WITHHELD"
         ? {
             polish: {
@@ -287,7 +287,7 @@ export function useResumePolishPipeline({
             }
           }
         : {
-            polish: { status: "done", note, noteTone: "ok" }
+            polish: { status: "done", note, noteTone: tone }
           });
       setPolishStatus(note);
       setPipelineAiUsage((current) => withReviewUsage({

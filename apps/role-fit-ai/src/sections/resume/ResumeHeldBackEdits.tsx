@@ -2,6 +2,7 @@ import { useRef } from "react";
 import { Undo2 } from "lucide-react";
 
 import { ContentWarnings } from "../../components/ContentWarnings.tsx";
+import { stripInlineMarks } from "../../lib/inlineMarks";
 import type { ResumeHeldBackEdit, ResumeProposalSuggestion } from "../../resume/types";
 import { ProposalDiff } from "../document/ProposalDiff";
 
@@ -18,6 +19,13 @@ const REASON_LABELS: Record<ResumeHeldBackEdit["reason"], string> = {
   LOW_IMPACT: "Low impact",
   INCORRECT: "Likely incorrect"
 };
+
+// Several held-back edits can share an entry, so each Restore names its own text.
+function restoreSubject(suggestion: ResumeProposalSuggestion): string {
+  if (suggestion.kind === "reorder") return "new bullet order";
+  const text = stripInlineMarks(suggestion.kind === "remove" ? suggestion.currentText : suggestion.proposedText).trim();
+  return text.length > 60 ? `${text.slice(0, 59).trimEnd()}…` : text;
+}
 
 // Edits the opt-in review held back, folded away. Restore returns one to the
 // proposal as an ordinary pending row; holding back verifies nothing.
@@ -60,7 +68,7 @@ export function ResumeHeldBackEdits({ total, items, disabled, locationOf, onRest
                   }}
                 >
                   <Undo2 size={13} aria-hidden="true" /> Restore
-                  <span className="sr-only"> {location}</span>
+                  <span className="sr-only"> {location}: {restoreSubject(suggestion)}</span>
                 </button>
               </li>
             );

@@ -162,8 +162,10 @@ export function ResumeProposalReview({
       onRestore={restore}
     />
   );
-  if (result.polishOutcome === "NO_CHANGES" && !suggestions.length) {
-    return <><p className="resume-proposal__empty" role="status">{heldBackTotal ? "No worthwhile changes after review." : "No material changes were suggested."}</p>{feedback}{heldBackEdits}{advice}{omittedNote}{terminologyLimits}</>;
+  // A review that held back every edit keeps the proposal root below, so a Restore
+  // never remounts the held-back list (dropping focus) and the withheld line stays.
+  if (result.polishOutcome === "NO_CHANGES" && !suggestions.length && !heldBackTotal) {
+    return <><p className="resume-proposal__empty" role="status">No material changes were suggested.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
     return <><p className="resume-proposal__empty is-warn" role="status">No usable edits were returned. Your resume is unchanged.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
@@ -171,6 +173,7 @@ export function ResumeProposalReview({
 
   return (
     <div className="resume-proposal">
+      {result.polishOutcome === "NO_CHANGES" && !suggestions.length ? <p className="resume-proposal__empty" role="status">No worthwhile changes after review.</p> : null}
       {feedback}
 
       {suggestions.length ? (

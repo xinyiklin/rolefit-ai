@@ -75,9 +75,11 @@ assert.ok(prompts.systemPrompt.includes(inputFirewallRule(REVIEW_FENCES)), "the 
 assert.match(prompts.systemPrompt, /Never rewrite, merge, add, reorder, or retarget an edit, and never write new resume text\./);
 assert.match(prompts.userPrompt, /DROP with reason LOW_IMPACT when the edit does not change what a screener learns[^\n]*tense-only changes, synonym swaps \(Cut to Reduced, Moved to Migrated\)/, "synonym swaps are named LOW_IMPACT");
 assert.match(prompts.userPrompt, /DROP with reason INCORRECT when the edit states something its evidence does not support[^\n]*a skill named only in the job description/, "unsupported claims are named INCORRECT");
-assert.match(prompts.userPrompt, /KEEP every other edit, including a qualifier correction that makes a claim more accurate, a new bullet that adds job-relevant facts from its entry's linkedProfile/, "qualifier corrections and Profile additions are kept");
+assert.match(prompts.userPrompt, /KEEP every other edit, including a qualifier correction that makes a claim more accurate, a cut of filler or a redundant clause that makes the claim read faster, a new bullet that adds job-relevant facts from its entry's linkedProfile/, "qualifier corrections, filler cuts, and Profile additions are kept");
+assert.match(prompts.userPrompt, /LOW_IMPACT[^\n]*rephrasing that adds nothing/, "only rephrasing that adds nothing is low impact");
+assert.doesNotMatch(prompts.userPrompt, /already specific and relevant/);
 assert.match(prompts.userPrompt, /When unsure, KEEP\. Keeping an edit does not verify it\./);
-assert.match(prompts.userPrompt, /Length is never a reason in either direction\./);
+assert.match(prompts.userPrompt, /Length alone is never a reason in either direction\./, "the materiality rubric's length rule");
 assert.match(prompts.userPrompt, /they never make an INCORRECT edit acceptable/);
 assert.match(prompts.userPrompt, /Return exactly one item for every id in proposed_edits\.edits and no other ids\./);
 assert.deepEqual(prompts.ids, ["edit-1", "edit-2", "edit-3", "edit-4"]);
@@ -138,6 +140,13 @@ assert.equal(reorder.after[0], "Built internal JavaScript tools for support team
 const skills = structuralPayload.edits.find((edit) => edit.section === "Skills");
 assert.equal(skills.evidence, "whole resume", "Skills edits are judged against the whole resume and Profile");
 assert.equal(skills.entry, undefined);
+const longProfile = `## Acme Corp (internship, 2024)\n${"Joined the on-call rotation for the payments API. ".repeat(220)}`;
+const longPayload = JSON.parse(buildResumeProposalReviewPrompts({
+  changes: proposal.changes, ...inputs,
+  targets: targets.map((target) => (target.target.entryId === "acme" ? { ...target, profileText: longProfile } : target))
+}).userPrompt.match(/<proposed_edits>\n([\s\S]*?)\n<\/proposed_edits>/)[1]);
+assert.ok(longProfile.length > 10_000);
+assert.equal(longPayload.entries[0].linkedProfile, longProfile, "a long linked Profile reaches the reviewer whole, as the generator saw it");
 const removal = sanitize([{ targetId: "target-2", action: "remove", reason: "cut" }]);
 const removalPayload = JSON.parse(buildResumeProposalReviewPrompts({ changes: removal.changes, ...inputs })
   .userPrompt.match(/<proposed_edits>\n([\s\S]*?)\n<\/proposed_edits>/)[1]);
@@ -185,6 +194,8 @@ assert.deepEqual(noteOf("<b>Synonym</b> swap"), { reason: "LOW_IMPACT" }, "a not
 assert.deepEqual(noteOf(42), { reason: "LOW_IMPACT" }, "a non-string note is dropped");
 assert.deepEqual(noteOf("   "), { reason: "LOW_IMPACT" });
 assert.equal(noteOf(`Synonym\nswap ${"x".repeat(400)}`).note.length, 160, "a long note is clipped");
+assert.deepEqual(noteOf(`Synonym swap ${"<a ".repeat(1_000)}`), { reason: "LOW_IMPACT" }, "an oversized note is dropped before any markup scan");
+assert.equal(noteOf("Swaps\u202e one\u2066 verb\u0085.").note, "Swaps one verb.", "bidi and C1 control characters are stripped");
 assert.ok(!noteOf(`Synonym\nswap ${"x".repeat(400)}`).note.includes("\n"));
 
 // --- Partition: only removal, by reference ---------------------------------
@@ -229,20 +240,21 @@ const originalWarn = console.warn;
 console.warn = (...args) => warnings.push(args);
 try {
   const failures = {
-    "a timeout": () => { throw new FetchTimeoutError("The request timed out."); },
-    "an unreadable reply": () => { throw new UserSafeAiError("AI returned an unreadable response.", 502); },
-    "a quota failure": () => { throw new UserSafeAiError("Rate limited.", 429); },
-    "an unexpected error": () => { throw new TypeError("boom"); },
-    "a malformed reply": () => malformed["a rewrite attempt"],
-    "a reply naming unknown ids": () => malformed["an unknown id"],
-    "a partial reply": () => malformed["a missing id (partial reply)"]
+    "a timeout": [() => { throw new FetchTimeoutError("The request timed out."); }, "provider"],
+    "an unreadable reply": [() => { throw new UserSafeAiError("AI returned an unreadable response.", 502); }, "unreadable"],
+    "a quota failure": [() => { throw new UserSafeAiError("Rate limited.", 429); }, "provider"],
+    "an unexpected error": [() => { throw new TypeError("boom"); }, "provider"],
+    "a malformed reply": [() => malformed["a rewrite attempt"], "unreadable"],
+    "a reply naming unknown ids": [() => malformed["an unknown id"], "unreadable"],
+    "a partial reply": [() => malformed["a missing id (partial reply)"], "unreadable"]
   };
-  for (const [label, reply] of Object.entries(failures)) {
+  for (const [label, [reply, failure]] of Object.entries(failures)) {
     const outcome = await reviewResumeProposal({ changes: proposal.changes, ...inputs, config, signal, dispatch: scripted(reply) });
     assert.equal(outcome.outcome, "UNAVAILABLE", `${label} fails open`);
+    assert.equal(outcome.failure, failure, `${label} is a ${failure} failure for benchmarks`);
     assert.equal(outcome.kept, proposal.changes, `${label} keeps the full unreviewed proposal`);
     assert.deepEqual(outcome.heldBack, []);
-    assert.deepEqual(withResumeProposalReview(proposal, outcome), { ...proposal, review: { outcome: "UNAVAILABLE", attempts: 1, heldBack: [] } });
+    assert.deepEqual(withResumeProposalReview(proposal, outcome), { ...proposal, review: { outcome: "UNAVAILABLE", attempts: 1, heldBack: [] } }, "the failure kind stays off the wire");
   }
   assert.equal(warnings.length, Object.keys(failures).length);
   for (const [tag, detail] of warnings) {
@@ -281,6 +293,19 @@ const keptAll = withResumeProposalReview(proposal, { outcome: "REVIEWED", attemp
 const { review: keptAllReview, ...keptAllRest } = keptAll;
 assert.deepEqual(keptAllRest, proposal, "a review that keeps everything changes nothing else");
 assert.deepEqual(keptAllReview, { outcome: "REVIEWED", attempts: 1, heldBack: [] });
+
+// Safety withholding survives a review that holds back every kept edit, so the
+// rail can still say edits were withheld.
+const withWithheld = sanitize([...proposal.changes.map(({ targetId, target, replacement, reason }) => ({ targetId, ...(targetId.startsWith("add-") ? { entryId: target.entryId, evidence: "profile" } : {}), replacement, reason })), { targetId: "target-99", replacement: "x" }]);
+assert.deepEqual([withWithheld.status, withWithheld.changes.length, withWithheld.withheld.count], ["PROPOSAL", 4, 1], "fixture: one safety drop beside four edits");
+const withheldThenHeld = withResumeProposalReview(withWithheld, {
+  outcome: "REVIEWED", attempts: 1, kept: [], heldBack: withWithheld.changes.map((change) => ({ change, reason: "LOW_IMPACT" }))
+});
+assert.equal(withheldThenHeld.status, "NO_CHANGES");
+assert.deepEqual(withheldThenHeld.withheld, { count: 1, reasons: ["INVALID_TARGET"] }, "the withheld count is kept when review holds back the rest");
+const withheldWire = sanitizeResumePolishWireResult(JSON.parse(JSON.stringify(withheldThenHeld)));
+assert.ok(withheldWire, "the client accepts a reviewed no-changes result with a withheld count");
+assert.equal(withheldWire.withheld.count, 1);
 
 // --- Through generateResumeProposal: off is today's single request ----------
 const generationReply = {

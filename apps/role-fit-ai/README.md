@@ -200,7 +200,7 @@ font, size and wrapping changes still reflow the page normally.
   estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
 - **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
-- **One-pass Resume Polish** — one provider operation proposes grounded edits
+- **One-pass Resume Polish (optional review pass)** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
   unchanged edits are no-ops. Unsupported wording stays reviewable with a warning,

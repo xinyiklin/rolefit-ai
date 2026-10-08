@@ -376,16 +376,19 @@ Good server verification covers:
   byte-identical result with no `review` field; on, it makes one more dispatch on
   the same provider, model, effort, and signal, never when no edit survives.
   Probes pin the prompt rules for the named cases (synonym swap and unsupported
-  claim held back, qualifier correction and Profile addition kept, "when unsure,
-  KEEP"), the registered `proposed_edits` fence and five-fence firewall line,
+  claim held back; qualifier correction, filler cut, and Profile addition kept;
+  "when unsure, KEEP"; length alone is never a reason), whole entry and linked
+  Profile evidence in the reviewer's input, the registered `proposed_edits` fence and five-fence firewall line,
   neutralized injected fence tags in resume, Profile, posting, and guidance
   text, review-local ids with no server ids, generator reasons, or warnings in
   the reviewer's input, the strict reply parser (missing, unknown, duplicate,
   server, or extra ids, extra fields, rewrite or retarget attempts, malformed
   verdicts or reasons all reject the whole reply), by-reference partition, fail
   open on timeout, unreadable, quota, malformed, and partial replies with
-  shape-only logs, Stop rethrown rather than failed open, the all-held-back No
-  changes outcome, and the client wire parser's held-back checks. Offline
+  shape-only logs and a provider/unreadable failure kind that never reaches the
+  wire, bounded and control-character-free notes, Stop rethrown rather than
+  failed open, the all-held-back No changes outcome (keeping any withheld
+  count), and the client wire parser's held-back checks. Offline
   probes prove the contract and plumbing only; whether a model judges these
   edits correctly is checked by the live review probes below
 - the browser half of the review: `src/hooks/__evals__/resume-proposal-restore-hook.mjs`
@@ -393,10 +396,16 @@ Good server verification covers:
   decisions and Undo; Accept all skips unrestored edits; a restored addition
   inserts with its arrival id; a new run resets Restore),
   `src/sections/resume/__evals__/resume-proposal-held-back.mjs` renders the
-  collapsed list, reasons, notes, warnings, Restore, and the quiet review lines,
-  and the decision, suggestion, usage, terminology, and settings evals cover the
-  key, held-back mapping, `resume-polish-review` usage receipt, warning carry,
-  and the off-by-default setting
+  collapsed list, reasons, notes, warnings, per-edit Restore names, and the quiet
+  review lines, and proves an all-held-back result keeps the proposal root and
+  the list's child slot across a Restore (so focus is not dropped) with the
+  withheld line intact; `src/lib/__evals__/ai-workflow-eval.mjs` pins the
+  settled note and its warn tone when edits were still withheld,
+  `src/lib/__evals__/not-applying-application.mjs` the review receipt on Apply
+  (carried when reviewed, cleared by a later unreviewed run, untouched for an
+  excluded resume), and the decision, suggestion, usage, terminology, and
+  settings evals cover the key, held-back mapping, `resume-polish-review` usage
+  receipt, warning carry, and the off-by-default setting
 - the browser makes one `/api/resume-polish` request per normal Resume Polish run
   (the opt-in review runs inside it), sends `reviewEdits` only when it is on,
   exposes no Tailor/Review/Both selector, and classifies a parsed invalid wire
@@ -660,21 +669,25 @@ Good server verification covers:
   once on that same proposal with the generator's settings, and the kept edits
   are graded as a second arm reusing the same Astra labels (no second judge
   call). Receipts record each held-back edit's reason and class (Astra
-  unsupported, immaterial, or valuable for replacements; trap, opportunity, or
-  unlabeled for removals and reorders), lost opportunity fixes, caught trap
-  hits, and review usage; `summary.json` adds a `review` block. A review that
-  fails open is an execution failure, never a keep-everything result. Paired
+  unsupported, immaterial, or valuable for replacements; for removals and
+  reorders, trap when it removes key evidence, opportunity when the grader's own
+  satisfier rule counts it, otherwise unlabeled), a `keyEvidence` marker on
+  edits to `mustKeepBullets` bullets, lost opportunity fixes, caught trap hits,
+  and review usage; `summary.json` adds a `review` block. A provider failure
+  waits and retries (after 1, 5, and 15 minutes) and then stops the run as an
+  execution failure; an unreadable review reply is counted (`reviewUnreadable`)
+  and the run continues. Neither rewrites the unreviewed arm's result, and
+  neither ever counts as a review that kept everything. Paired
   mode also runs the two tracked review probes in
   `fixtures/resume-proposal-review-probes.json` (four hand-built edits, then the
   same edits under injected resume, Profile, posting, and guidance text) and
   reports per-edit agreement with their expected keep/drop. The default-on bar
-  (user-approved 2026-10-07; no run yet): zero lost opportunity fixes, at least
-  75% of held-back edits unsupported, immaterial, or non-opportunity structural
-  edits, at most 5% of Astra supported-and-material edits held back, and every
-  probe verdict matching. Its fifth item, "zero key-evidence (`mustKeepBullets`)
-  drops", cannot fail as written (the review only holds edits back, and holding
-  back a key-evidence removal is a caught trap) and awaits the user's
-  restatement. A paired repetition costs about 39 generations, 39
+  (user-approved 2026-10-07; no run yet): zero lost opportunity fixes, zero
+  held-back edits to `mustKeepBullets` bullets that Astra labels supported and
+  material (`keyEvidenceValuableHeldBack`), at least 75% of held-back edits
+  unsupported, immaterial, or non-opportunity structural edits, at most 5% of
+  Astra supported-and-material edits held back, and every probe verdict
+  matching. A paired repetition costs about 39 generations, 39
   fact-checks, and 41 reviews; a fresh real-application sample needs separate
   authorization because it sends private text to both providers.
 - pasted resume text reaches the structured editor as a one-time conversion into

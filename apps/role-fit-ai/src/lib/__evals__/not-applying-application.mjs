@@ -151,4 +151,40 @@ assert.match(
   "Skip uses the shared tracker readiness recovery copy before pending-write checks"
 );
 
+// The opt-in Polish review's receipt follows the Polish run it describes into the
+// record: a reviewed run carries it, an unreviewed run clears an older one, and
+// an excluded resume leaves the stored pair alone.
+const reviewedPolish = { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "medium", attempts: 1 };
+const reviewReceipt = { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol", reasoningEffort: "medium", attempts: 1 };
+const applyRecord = (existing, pipelineAiUsage, includeResume = true) => preparedApplicationRecord({
+  base: base({ id: existing?.id ?? "fresh-2", status: "applied", createdAt: now, updatedAt: now }),
+  existing,
+  jobUrl: "https://example.com/jobs/1",
+  preparedJobDescription: "Prepared job",
+  jobRawText: "Captured source text",
+  tracking: { company: "Acme", role: "Engineer" },
+  pipelineAiUsage,
+  fitAssessmentPersistence: { action: "preserve" },
+  now,
+  usage: { mode: "application", includeResume, includeCoverLetter: false, resumeUsed: "tailored" }
+}).application.aiUsage;
+assert.deepEqual(
+  applyRecord(null, { "job-analysis": { source: "local" }, "resume-polish": reviewedPolish, "resume-polish-review": reviewReceipt })["resume-polish-review"],
+  reviewReceipt,
+  "a new application records the review that ran on its resume"
+);
+const draftWithReview = base({
+  id: "draft-1",
+  status: "draft",
+  aiUsage: { "job-analysis": { source: "local" }, "resume-polish": reviewedPolish, "resume-polish-review": reviewReceipt }
+});
+const unreviewed = applyRecord(draftWithReview, { "job-analysis": { source: "local" }, "resume-polish": { ...reviewedPolish, attempts: 2 } });
+assert.equal("resume-polish-review" in unreviewed, false, "a later unreviewed Polish clears the earlier review receipt");
+assert.equal(unreviewed["resume-polish"].attempts, 2);
+assert.deepEqual(
+  applyRecord(draftWithReview, { "job-analysis": { source: "local" } }, false)["resume-polish-review"],
+  reviewReceipt,
+  "an excluded resume leaves its stored Polish and review receipts alone"
+);
+
 console.log("Skipped decision paths passed");

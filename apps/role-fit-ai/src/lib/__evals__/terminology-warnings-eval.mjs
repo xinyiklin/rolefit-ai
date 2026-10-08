@@ -126,10 +126,11 @@ assert.equal(currentResumeConcerns(prior,currentTargets,1).length,1);
 assert.equal(currentResumeConcerns(prior,currentTargets,2).length,0);
 assert.equal(currentResumeConcerns(prior,[target],1).length,0);
 assert.equal(currentResumeConcerns({...prior,sourceConcerns:currentResumeConcerns(prior,currentTargets,1),suggestedChanges:[]},currentTargets,1).length,1);
-// A held-back edit the user restored and accepted carries its warnings like a kept one.
+// A held-back edit's warnings carry exactly like a kept edit's: by whether its field
+// still holds the original text, not by whether it was restored or accepted.
 const heldPrior = {documentGeneration:1,suggestedChanges:[],review:'REVIEWED',heldBack:[{reason:'INCORRECT',suggestion:prior.suggestedChanges[0]}]};
-assert.equal(currentResumeConcerns(heldPrior,currentTargets,1).length,1);
-assert.equal(currentResumeConcerns(heldPrior,[target],1).length,0,'an unrestored held-back edit never reached the document');
+assert.equal(currentResumeConcerns(heldPrior,currentTargets,1).length,1,'a held-back edit whose field changed carries its warnings');
+assert.equal(currentResumeConcerns(heldPrior,[target],1).length,0,'a held-back edit carries no concern while its field keeps the original text');
 const fit = sanitizeFitAssessmentResponse({status:'ASSESSED',verdict:'STRONG',summary:'The candidate has 10 years of Kubernetes experience.',matches:[{jobExcerpt:'Build Python services.',candidateExcerpt:'Built Python services.',candidateSource:'resume'}],gaps:[]},{jobText:'Build Python services.',resumeText:'Built Python services.',candidateContext:''});
 assert.ok(fit?.warnings?.some(w => w.startsWith('Summary:')));
 console.log('Reviewer regressions passed: punctuation, ordinary Go, absent advice references, repeated Polish source concerns, and unsupported Fit summary.');

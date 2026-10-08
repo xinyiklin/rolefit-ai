@@ -3,9 +3,10 @@
 // useApplications.ts's Application.aiUsage). Whole-map-replace semantics: an
 // incoming aiUsage snapshot always wins on upsert — no deep per-stage merge.
 //
-// Stage keys are plain strings ("job-analysis" | "resume-polish" | "cover-polish" today)
-// so a future stage can be added without a schema migration; the server sanitizer
-// constrains keys to /^[a-z][a-z0-9-]{0,23}$/.
+// Stage keys are plain strings ("job-analysis" | "resume-polish" |
+// "resume-polish-review" | "cover-polish" today) so a future stage can be added
+// without a schema migration; the server sanitizer constrains keys to
+// /^[a-z][a-z0-9-]{0,23}$/.
 
 export type StageAiUsage = {
   // What produced the ACCEPTED output; "none" = stage skipped / completed

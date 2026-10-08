@@ -519,22 +519,66 @@ assert.equal(caught.review.heldBack[0].class, "trap");
 const summary = reviewSummary([pairedValuable, lost, caught], [{ agreed: true }, { agreed: false }]);
 assert.deepEqual(
   { heldBack: summary.heldBack, classes: summary.classes, opportunityLosses: summary.opportunityLosses, trapHitsCaught: summary.trapHitsCaught, passed: summary.passed, probes: summary.probes },
-  { heldBack: 3, classes: { unsupported: 0, immaterial: 0, valuable: 1, trap: 1, opportunity: 1, unlabeled: 0 }, opportunityLosses: 1, trapHitsCaught: 1, passed: { unreviewed: 2, reviewed: 2 }, probes: { runs: 2, agreed: 1, failures: 0 } }
+  { heldBack: 3, classes: { unsupported: 0, immaterial: 0, valuable: 1, trap: 1, opportunity: 1, unlabeled: 0 }, opportunityLosses: 1, trapHitsCaught: 1, passed: { unreviewed: 2, reviewed: 2 }, probes: { runs: 2, agreed: 1, unreadable: 0, failures: 0 } }
 );
+assert.equal(caught.review.heldBack[0].keyEvidence, true, "a held-back edit to a key-evidence bullet is marked");
+assert.equal(lost.review.heldBack[0].keyEvidence, undefined);
+assert.equal(summary.keyEvidenceValuableHeldBack, 0, "a held-back key-evidence removal is a caught trap, not a valuable edit lost");
+
+// Opportunity gating relies on a required proposal: holding back every edit of a
+// gated case must register as a loss.
+for (const fixture of fixtures.filter((item) => item.gateOpportunity)) assert.equal(fixture.requiresProposal, true, `${fixture.name}: gated cases require a proposal`);
+
+// A held-back filler removal is the grader's own opportunity satisfier, never an
+// unlabeled good drop.
+const fillerRemoval = removal("marlow-b4");
+const heldFiller = await evaluateCase(duplicate, config, {
+  generate: async () => proposal([satisfier, fillerRemoval]), judge: noJudge,
+  review: async (fixture, reviewConfig, changes) => reviewedOutcome(changes, [{ targetId: fillerRemoval.targetId, reason: "LOW_IMPACT" }])
+});
+assert.deepEqual(heldFiller.review.heldBack.map((item) => item.class), ["opportunity"]);
+
+// A supported, material rewrite of a key-evidence bullet that review holds back is
+// the restated default-on item.
+const keyRewrite = change("duplicate-achievement", "marlow-b1", "Rewrote the nightly reconciliation job so finance sees mismatches by 7 a.m.");
+const heldKey = await evaluateCase(duplicate, config, {
+  generate: async () => proposal([keyRewrite]),
+  judge: async () => ({ edits: [label] }),
+  review: async (fixture, reviewConfig, changes) => reviewedOutcome(changes, [{ targetId: keyRewrite.targetId, reason: "LOW_IMPACT" }])
+});
+assert.deepEqual(heldKey.review.heldBack.map(({ class: kind, keyEvidence }) => [kind, keyEvidence]), [["valuable", true]]);
+assert.equal(reviewSummary([heldKey]).keyEvidenceValuableHeldBack, 1);
+assert.deepEqual(summaryRow(heldKey, 1).keyEvidenceHeldBack, ["valuable"]);
 assert.equal(summary.goodDropShare, 1 / 3);
 assert.equal(summary.valuableHeldBackRate, 1);
 
+// Provider failures wait and retry; an unreadable review is counted, not retried;
+// neither rewrites the unreviewed arm's result. No real waiting offline.
+const waits = [];
+const retry = { retryDelays: [5, 7], wait: async (ms) => { waits.push(ms); } };
+const backend = (review) => evaluateCase(byName.get("backend-platform"), config, { generate: async () => proposal([safe]), judge: async () => ({ edits: [label] }), review, retry });
 for (const [what, review] of [
-  ["a fail-open review", async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [safe], heldBack: [] })],
+  ["a provider failure", async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [safe], heldBack: [], failure: "provider" })],
   ["a thrown review", async () => { throw new Error("SENSITIVE RESPONSE"); }]
 ]) {
-  const failed = await evaluateCase(byName.get("backend-platform"), config, { generate: async () => proposal([safe]), judge: async () => ({ edits: [label] }), review });
+  waits.length = 0;
+  const failed = await backend(review);
+  assert.deepEqual(waits, [5, 7], `${what} waits and retries before giving up`);
   assert.equal(failed.error, "review", `${what} is an execution failure, never a keep-everything result`);
-  assert.equal(failed.passed, false);
-  assert.deepEqual(failed.review, { status: "error" });
+  assert.equal(failed.passed, true, "the unreviewed arm keeps its own result");
+  assert.deepEqual(failed.review, { status: "error", retries: 2 });
   assert.ok(!JSON.stringify(failed).includes("SENSITIVE RESPONSE"));
 }
-assert.equal(reviewSummary([await evaluateCase(byName.get("backend-platform"), config, { generate: async () => proposal([safe]), judge: async () => ({ edits: [label] }), review: async () => { throw new Error("x"); } })]).reviewFailures, 1);
+assert.equal(reviewSummary([await backend(async () => { throw new Error("x"); })]).reviewFailures, 1);
+waits.length = 0;
+let flaky = 0;
+const recovered = await backend(async (fixture, reviewConfig, changes) => (flaky++ ? reviewedOutcome(changes) : { outcome: "UNAVAILABLE", attempts: 1, kept: changes, heldBack: [], failure: "provider" }));
+assert.deepEqual([recovered.review.status, recovered.review.retries, waits], ["reviewed", 1, [5]], "a provider failure that clears is retried once");
+waits.length = 0;
+const unreadable = await backend(async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [safe], heldBack: [], failure: "unreadable" }));
+assert.deepEqual([unreadable.error, unreadable.passed, unreadable.review, waits], [undefined, true, { status: "unreadable", attempts: 1, retries: 0 }, []], "an unreadable review is a counted result, not a retry or a stop");
+assert.equal(summaryRow(unreadable, 1).review.status, "unreadable");
+assert.equal(reviewSummary([unreadable]).reviewUnreadable, 1);
 const notNeeded = await evaluateCase(byName.get("aligned-data"), config, { generate: async () => noChanges(), judge: unusedJudge, review: async () => assert.fail("no edits, no review") });
 assert.deepEqual(notNeeded.review, { status: "not-needed" });
 const unpaired = await evaluateCase(byName.get("backend-platform"), config, { generate: async () => proposal([safe]), judge: async () => ({ edits: [label] }) });
@@ -548,8 +592,11 @@ assert.equal(probeAgreed.agreed, true);
 assert.deepEqual(probeAgreed.verdicts.map(({ targetId, actual }) => [targetId, actual]), Object.entries(reviewProbes[0].expect));
 const probeMissed = await evaluateReviewProbe(reviewProbes[1], config, { review: async (probe, reviewConfig, changes) => reviewedOutcome(changes) });
 assert.equal(probeMissed.agreed, false, "keeping the injected-for edits is a probe miss");
-const probeFailed = await evaluateReviewProbe(reviewProbes[0], config, { review: async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [], heldBack: [] }) });
+const probeFailed = await evaluateReviewProbe(reviewProbes[0], config, { review: async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [], heldBack: [], failure: "provider" }), retry });
 assert.deepEqual([probeFailed.error, probeFailed.agreed], ["review", false]);
+const probeUnreadable = await evaluateReviewProbe(reviewProbes[0], config, { review: async () => ({ outcome: "UNAVAILABLE", attempts: 1, kept: [], heldBack: [], failure: "unreadable" }), retry });
+assert.deepEqual([probeUnreadable.error, probeUnreadable.status, probeUnreadable.agreed], [undefined, "unreadable", false]);
+assert.deepEqual(reviewSummary([], [probeAgreed, probeUnreadable, probeFailed]).probes, { runs: 3, agreed: 1, unreadable: 1, failures: 1 });
 
 const liveSource = readFileSync(new URL("./resume-proposal-quality-eval.mjs", import.meta.url), "utf8");
 assert.match(liveSource, /"\.\.\/resumeProposalReview\.ts"/, "the review module is in the manifest hashes");

@@ -47,17 +47,22 @@ application retain blocking technical guards.
   `reviewEdits`, default off): one keep/drop dispatch after sanitizing, only when
   at least one change survives, on the generation's resolved provider, model,
   effort, and abort signal, with no unreadable-output retry. The reviewer sees
-  review-local `edit-N` ids, each edit's before/after and its own evidence, never
-  server target ids, generator reasons, or deterministic warnings. Its new fence
+  review-local `edit-N` ids, each edit's before/after and its own whole entry
+  and linked Profile evidence (as the generator saw them), never server target
+  ids, generator reasons, or deterministic warnings. Its rules follow the
+  benchmark's materiality rubric: cutting filler is kept, length alone is never
+  a reason. Its new fence
   is registered in `prompts.ts` (`RESUME_REVIEW_FENCE_NAMES`) and the firewall
   line names exactly its five fences. The reply parser is strict: one KEEP or
   DROP (`LOW_IMPACT` | `INCORRECT`) per sent id and nothing else, else the whole
-  reply is rejected; only the optional display note is tolerant (plain text,
-  160 characters, never re-sent). Kept changes are the sanitized objects
+  reply is rejected; only the optional display note is tolerant (plain text
+  without control or bidi characters, dropped past 2,000 characters before any
+  markup scan, clipped to 160, never re-sent). Kept changes are the sanitized objects
   themselves, warnings included; review never certifies. Every failure except
   cancellation fails open to the full proposal as `review.outcome:
-  "UNAVAILABLE"`; holding back everything returns No changes with an empty
-  summary. Held-back changes travel in `review.heldBack` for Restore.
+  "UNAVAILABLE"` (benchmarks also get a shape-only provider/unreadable failure
+  kind that never reaches the wire); holding back everything returns No changes
+  with an empty summary and keeps any withheld count. Held-back changes travel in `review.heldBack` for Restore.
 - `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
 - `applicationAnswerConversation.ts` owns Answers chat (`mode: "conversation"`);

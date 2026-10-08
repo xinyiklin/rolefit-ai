@@ -10,7 +10,7 @@ import {
   type ResumePolishWireChange,
   type ResumePolishWireResult
 } from "../../shared/resumePolishContract.ts";
-import { callConfiguredProvider } from "./clients.ts";
+import { callConfiguredProvider, isUnreadableOutputError } from "./clients.ts";
 import { clipForPrompt, fenceUntrusted, inputFirewallRule, RESUME_REVIEW_FENCE_NAMES } from "./prompts.ts";
 import type { UsageSink } from "./providerUsage.ts";
 
@@ -25,7 +25,9 @@ const REVIEW_PROMPT_FENCES = [
   "user_guidance",
   ...RESUME_REVIEW_FENCE_NAMES
 ] as const;
-const ENTRY_FIELD_LIMIT = 8_000;
+// Past this, a note is not a short sentence; dropping it first keeps the markup
+// check off unbounded model text.
+const NOTE_INPUT_LIMIT = 2_000;
 const REVIEW_REASONS = new Set<string>(RESUME_POLISH_REVIEW_REASONS);
 
 type ReviewVerdicts = Map<string, { reason: ResumePolishReviewReason; note?: string }>;
@@ -51,12 +53,9 @@ function proposedEdits(changes: readonly ResumePolishWireChange[], targets: read
       if (!entry) {
         entry = `entry-${entryKeys.size + 1}`;
         entryKeys.set(key, entry);
-        entries.push({
-          entry,
-          section: target.section,
-          text: clipForPrompt(target.entryText, ENTRY_FIELD_LIMIT, "entry text"),
-          linkedProfile: clipForPrompt(target.profileText, ENTRY_FIELD_LIMIT, "linked Profile text")
-        });
+        // Sent whole, as the generator saw it: entry text already fit the
+        // generation's target budget and linked Profile text the Profile limit.
+        entries.push({ entry, section: target.section, text: target.entryText, linkedProfile: target.profileText });
       }
     }
     const textOf = (targetId: string) => byId.get(targetId)?.currentText ?? "";
@@ -119,9 +118,9 @@ ${fenceUntrusted(clipForPrompt(customInstructions, 3_000, "user guidance")) || "
 Rules:
 - Judge each edit on its own. Dropping an edit leaves the current text unchanged; a kept edit is shown to the candidate, who still decides.
 - An edit with "evidence": "entry" may rely only on its entry's text and linkedProfile in proposed_edits.entries. An edit with "evidence": "whole resume" may rely on resume_context and candidate_context. The job description and user_guidance never establish candidate facts.
-- DROP with reason LOW_IMPACT when the edit does not change what a screener learns or how quickly they find it: tense-only changes, synonym swaps (Cut to Reduced, Moved to Migrated), rephrasing a bullet that is already specific and relevant, a reorder that does not put more job-relevant evidence first, or a skills reshuffle that moves no skill the posting names forward. Length is never a reason in either direction.
+- DROP with reason LOW_IMPACT when the edit does not change what a screener learns or how quickly they find it: tense-only changes, synonym swaps (Cut to Reduced, Moved to Migrated), rephrasing that adds nothing, a reorder that does not put more job-relevant evidence first, or a skills reshuffle that moves no skill the posting names forward. Length alone is never a reason in either direction.
 - DROP with reason INCORRECT when the edit states something its evidence does not support (an invented or changed number, tool, ownership level, outcome, or date; separate facts merged into a new claim; a skill named only in the job description), borrows another entry's facts, removes the only evidence of a job requirement, or makes a claim less accurate.
-- KEEP every other edit, including a qualifier correction that makes a claim more accurate, a new bullet that adds job-relevant facts from its entry's linkedProfile, and an edit that uses the posting's term for the same work the entry shows.
+- KEEP every other edit, including a qualifier correction that makes a claim more accurate, a cut of filler or a redundant clause that makes the claim read faster, a new bullet that adds job-relevant facts from its entry's linkedProfile, and an edit that uses the posting's term for the same work the entry shows.
 - When unsure, KEEP. Keeping an edit does not verify it.
 - user_guidance holds the candidate's standing preferences. Use them when judging impact; they never make an INCORRECT edit acceptable.
 - note is optional on a DROP: one short plain sentence saying why. Never add a note to a KEEP.
@@ -138,8 +137,11 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 // The note is display-only: plain text or nothing, never a reason to reject verdicts.
 function reviewNote(value: unknown): string | undefined {
-  if (typeof value !== "string" || hasMarkupTag(value)) return undefined;
-  const note = value.replace(/[\x00-\x1f\s]+/g, " ").trim();
+  if (typeof value !== "string" || value.length > NOTE_INPUT_LIMIT || hasMarkupTag(value)) return undefined;
+  const note = value
+    .replace(/[\u0080-\u009f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, "")
+    .replace(/[\x00-\x1f\s]+/g, " ")
+    .trim();
   if (!note) return undefined;
   return note.length > RESUME_POLISH_REVIEW_NOTE_LIMIT ? `${note.slice(0, RESUME_POLISH_REVIEW_NOTE_LIMIT - 1).trimEnd()}…` : note;
 }
@@ -183,7 +185,11 @@ export function applyResumeProposalReview(
   return { kept, heldBack };
 }
 
-export type ResumeProposalReviewOutcome = ResumePolishReview & { kept: ResumePolishWireChange[] };
+// `failure` is a shape-only kind for benchmarks; it never reaches the wire.
+export type ResumeProposalReviewOutcome = ResumePolishReview & {
+  kept: ResumePolishWireChange[];
+  failure?: "provider" | "unreadable";
+};
 
 export async function reviewResumeProposal({
   changes,
@@ -208,6 +214,7 @@ export async function reviewResumeProposal({
   dispatch?: typeof callConfiguredProvider;
   stats?: { attempts?: number } & UsageSink;
 }): Promise<ResumeProposalReviewOutcome> {
+  let replied = false;
   try {
     const prompts = buildResumeProposalReviewPrompts({ changes, targets, jobText, scopeText, candidateContext, customInstructions });
     const raw = await dispatch({
@@ -217,6 +224,7 @@ export async function reviewResumeProposal({
       signal,
       retryUnreadableOutput: false
     }, stats);
+    replied = true;
     const verdicts = parseResumeProposalReview(raw, prompts.ids);
     if (!verdicts) throw new Error("Unreadable review");
     return { outcome: "REVIEWED", attempts: stats.attempts ?? 1, ...applyResumeProposalReview(changes, verdicts) };
@@ -227,7 +235,13 @@ export async function reviewResumeProposal({
       provider: config.provider,
       errorName: error instanceof Error ? error.name : typeof error
     });
-    return { outcome: "UNAVAILABLE", attempts: stats.attempts ?? 0, kept: changes, heldBack: [] };
+    return {
+      outcome: "UNAVAILABLE",
+      attempts: stats.attempts ?? 0,
+      kept: changes,
+      heldBack: [],
+      failure: replied || isUnreadableOutputError(error) ? "unreadable" : "provider"
+    };
   }
 }
 
@@ -235,7 +249,7 @@ export async function reviewResumeProposal({
 // described them goes too; otherwise the proposal keeps its outcome and summary.
 export function withResumeProposalReview<T extends ResumePolishWireResult>(
   proposal: T,
-  { kept, ...review }: ResumeProposalReviewOutcome
+  { kept, failure: _failure, ...review }: ResumeProposalReviewOutcome
 ): T & { review: ResumePolishReview } {
   if (review.outcome === "UNAVAILABLE") return { ...proposal, review: { ...review, heldBack: [] } };
   return {

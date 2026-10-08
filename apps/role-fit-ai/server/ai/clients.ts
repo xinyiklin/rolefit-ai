@@ -287,6 +287,12 @@ async function dispatchProvider({ provider, model, reasoningEffort, apiKey, syst
 // many provider calls a pass took (1 = no retry, 2 = the JSON-only retry
 // fired), and `usage` collects reported token counts. Purely observational —
 // it never changes retry or error behavior.
+// The dispatch's own unreadable-output failure, as opposed to auth, quota,
+// timeout, or transport errors.
+export function isUnreadableOutputError(error: unknown): boolean {
+  return error instanceof UserSafeAiError && error.status === 502 && /^AI returned/.test(error.message);
+}
+
 export async function callConfiguredProvider(args: ProviderCallArgs, stats?: AttemptStats): Promise<unknown> {
   const bump = (): void => {
     if (stats && typeof stats === "object") stats.attempts = (stats.attempts ?? 0) + 1;
@@ -295,9 +301,7 @@ export async function callConfiguredProvider(args: ProviderCallArgs, stats?: Att
     bump();
     return await dispatchProvider(args, stats);
   } catch (error) {
-    const unreadableOutput =
-      error instanceof UserSafeAiError && error.status === 502 && /^AI returned/.test(error.message);
-    if (!unreadableOutput || args.retryUnreadableOutput === false) throw error;
+    if (!isUnreadableOutputError(error) || args.retryUnreadableOutput === false) throw error;
     bump();
     return dispatchProvider({
       ...args,
