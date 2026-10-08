@@ -163,7 +163,9 @@ browser-side effects; components render them and App composes them.
   facts (Add a detail text only): Save attaches them as `userFacts`, Reopen
   restores exactly that revision's facts, and a generation response carrying
   `userFacts` is rejected, so answer text, model follow-ups and refinement
-  instructions never become facts.
+  instructions never become facts. Add a detail is the composer's default only
+  for a follow-up with no draft text (`awaitsDetail`); a refinement chip or any
+  instruction on existing text is always a refinement.
   `useApplicationFiles` sends the current application revision and refreshes
   the authoritative tracker after the server atomically commits one strict
   source or explicit PDF with that document's metadata. Saved-state comparison

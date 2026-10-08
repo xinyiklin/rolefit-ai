@@ -29,9 +29,10 @@ const optional = (value: unknown, check: (entry: unknown) => boolean) => value =
 
 // This parser serves the provider response and tracker boundary. Returning the
 // original value preserves exact text and metadata; invalid entries never clip.
-// Receipts are checked by shape only, so a later count or limit rule never
+// Receipts are checked by shape only, so a later count or constraint rule never
 // invalidates a stored tracker; `answerReceiptIsCurrent` verifies a new
-// revision at save time.
+// revision at save time. Text and fact limits do apply on load, so tightening
+// them needs a migration.
 export function parseApplicationAnswerRevision(raw: unknown): ApplicationAnswerRevision | null {
   if (!isObject(raw) || !exactKeys(raw, REVISION_KEYS)) return null;
   if (![raw.id, raw.applicationId, raw.questionId].every((id) => typeof id === "string" && ID.test(id))

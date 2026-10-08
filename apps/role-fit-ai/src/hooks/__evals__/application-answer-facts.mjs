@@ -113,11 +113,47 @@ try {
   assert.equal(lastMessage().response, undefined, "a generated response carrying facts is rejected");
   assert.match(hook().conversation.status, /did not match/);
 
+  // A repaired draft can keep its text and still ask a follow-up; a chip on it is
+  // an instruction, never a fact.
+  const followUpDraft = { status: "draft", clarification: "Which project should this mention?" };
+  hook().newQuestion("Describe a project you are proud of.");
+  await exchange("I built a scheduling tool for a clinic.", followUpDraft);
+  const draftOnly = lastMessage();
+  assert.equal(hook().conversation.composerMode, "refinement", "a follow-up beside draft text does not default to Add a detail");
+  const savedDraftOnly = await saveMessage(draftOnly.id);
+  assert.equal(savedDraftOnly.userFacts, undefined);
+  hook().refine(draftOnly.id, "Shorter");
+  assert.equal(hook().conversation.composerMode, "refinement");
+  const chipRequest = await exchange("I built a clinic scheduling tool.");
+  assert.deepEqual(chipRequest.explicitFacts, [], "a chip is never sent as a fact");
+  assert.equal(chipRequest.refinement, "Shorter");
+  assert.equal(chipRequest.clarification, undefined);
+  assert.equal((await saveMessage(lastMessage().id)).userFacts, undefined, "a chip is never saved as a fact");
+  const factC = "The tool cut double-bookings for the front desk.";
+  hook().newQuestion("What impact did your work have?");
+  await exchange("", { status: "needs-input", clarification: "What changed for users?" });
+  hook().refine(lastMessage().id, "Shorter");
+  assert.equal(hook().conversation.composerMode, "refinement", "an instruction is never a fact, even on a follow-up");
+  hook().refine(lastMessage().id);
+  assert.equal(hook().conversation.composerMode, "clarification", "Add the detail on an empty follow-up still expects a fact");
+  hook().setComposer(factC);
+  await exchange("It reduced double-bookings.", followUpDraft);
+  const draftWithFact = lastMessage();
+  const savedDraftWithFact = await saveMessage(draftWithFact.id);
+  assert.deepEqual(savedDraftWithFact.userFacts.facts, [factC]);
+  hook().refine(draftWithFact.id, "More natural");
+  assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC], "a chip keeps the question's facts and adds none");
+  assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
+  hook().refine(draftWithFact.id);
+  hook().setComposerMode("clarification");
+  hook().setComposer("It was the clinic scheduling project.");
+  assert.deepEqual((await exchange("It cut double-bookings at the clinic.")).explicitFacts, [factC, "It was the clinic scheduling project."], "answering the follow-up stays an explicit Add a detail choice");
+
   // Reload: a fresh hook opens the saved tracker revisions.
   const preChange = { id: "older-revision", applicationId: "application-a", questionId: "older-question", questionRevision: 1, question: "Why engineering?", answer: "I like practical problems.",
     constraints: [], counts: validateAnswerConstraints("I like practical problems.", []).counts, compliant: true, status: "ready", savedAt: "2026-10-01T00:00:00.000Z" };
   const legacy = { question: "Where are you based?", answer: "Toronto.", savedAt: "2026-09-01T00:00:00.000Z" };
-  const stored = [legacy, preChange, savedRecord(savedQ1, 1), savedRecord(savedQ2, 2), savedRecord(savedPlain, 3)];
+  const stored = [legacy, preChange, savedRecord(savedQ1, 1), savedRecord(savedQ2, 2), savedRecord(savedPlain, 3), savedRecord(savedDraftOnly, 5), savedRecord(savedDraftWithFact, 6)];
   assert.ok(parseSavedApplicationAnswers(stored, "application-a"), "the saved revisions are valid tracker records");
   unmount();
   args = { ...args, savedAnswers: stored };
@@ -147,7 +183,16 @@ try {
     hook().reopen(record);
     assert.deepEqual(lastMessage().facts, [], `${label} reopens without facts`);
   }
+  hook().reopen(stored[5]);
+  assert.equal(hook().conversation.composerMode, "refinement", "a reopened draft with a follow-up does not default to Add a detail");
+  hook().refine(lastMessage().id, "Shorter");
+  assert.deepEqual((await exchange("I built a clinic scheduling tool.")).explicitFacts, []);
+  assert.equal((await saveMessage(lastMessage().id)).userFacts, undefined, "after Reopen a chip is still never saved as a fact");
+  hook().reopen(stored[6]);
+  hook().refine(lastMessage().id, "Shorter");
+  assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC]);
+  assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
   hook().newQuestion("What else should we know?");
   assert.deepEqual((await exchange("Nothing else.")).explicitFacts, [], "a new question after a reopen starts without facts");
-  console.log("Answers saved facts passed: user-declared Save, reload and Reopen, refinement resend, per-question scope, older answers, and no facts from answer text");
+  console.log("Answers saved facts passed: user-declared Save, reload and Reopen, refinement resend, per-question scope, older answers, and no facts from answer text or chips");
 } finally { unmount(); globalThis.fetch = originalFetch; }

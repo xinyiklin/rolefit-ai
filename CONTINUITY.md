@@ -223,17 +223,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
   `explicitFacts` and shows them in a collapsed "Your facts (N)" list on the
   reopened question only. Applications-modal edits carry the previous
   revision's facts forward; Answers' Edit question still starts without facts.
-  Answer text, the model's follow-up question and refinement instructions never
-  become facts. One strict parser serves browser, tracker route/load and backup
+  Answer text, the model's follow-up question, refinement instructions and the
+  refinement chips never become facts; Add a detail is the composer default only
+  when a follow-up has no draft text. One strict parser serves browser, tracker route/load and backup
   restore; older revisions and legacy pairs stay valid; no migration and no
   prompt change (v4).
   - [CODE] Forward-only (accepted by the Product Partner under the delegation
     as the existing no-downgrade policy): a build without this change cannot
     load, back up or restore a tracker holding `userFacts` (probed on
     `2930dd59`). Rollback: keep a copy of `workspace/applications.json`, then
-    strip the field, e.g.
-    `jq '(.applications[].applicationAnswers[]?) |= del(.userFacts)' applications.json`
-    written back owner-only. That discards the saved facts; the copy keeps them.
+    strip the field in that directory with
+    `node -e 'const fs=require("fs");const p="applications.json";const d=JSON.parse(fs.readFileSync(p,"utf8"));for(const a of d.applications)for(const r of a.applicationAnswers??[])delete r.userFacts;fs.writeFileSync(p+".tmp",JSON.stringify(d,null,2),{mode:0o600});fs.renameSync(p+".tmp",p)'`
+    (probed: the pre-change build loads the result, owner-only). The `jq`
+    equivalent `(.applications[].applicationAnswers[]?) |= del(.userFacts)`
+    refuses files with lone-surrogate escapes (loudly, nothing lost). Either
+    discards the saved facts; the copy keeps them. After upgrading, a browser
+    tab opened before the upgrade refuses to save into an application whose
+    answers hold facts, with a misleading "exceed the storage limit" message,
+    until it is reloaded.
   - [TOOL] Self-verification in the feature worktree
     (`fix/rolefit-answers-user-facts`): new `application-answer-facts.mjs` and
     `answer-facts-markup.mjs`; persistence, backup, save-ordering and
@@ -242,8 +249,17 @@ bounded; app-only operational detail belongs in the affected app documentation.
     offline evals); `git diff --check`. A three-way merge with
     `fix/rolefit-answers-unsaved-guard` (`37799709`) is clean for every shared
     file, this ledger included, and the facts evals pass on the merged hook.
-    UNCONFIRMED: the two required independent reviews (persistence, client)
-    are pending. Browser QA was not run (optional; not authorized this run).
+  - [TOOL] Two independent reviews. Persistence: no high or medium findings.
+    Client: one medium, fixed. A refinement chip on a repaired draft that kept
+    its text and also asked a follow-up became a saved, restored "fact",
+    because the composer defaulted to Add a detail whenever a follow-up existed;
+    it now does so only when the follow-up has no draft text (`awaitsDetail`),
+    and an instruction is always a refinement (new facts-eval cases before and
+    after Reopen, mutation-checked). Lows fixed: the text and fact limits are
+    marked as stored format (tightening needs a migration), PRODUCT says facts
+    stay with their question id, and the rollback recipe above. Full RoleFit
+    check passed again after the fixes (159/159 offline evals). Browser QA was
+    not run (optional; not authorized).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).
