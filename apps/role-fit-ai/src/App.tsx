@@ -351,10 +351,12 @@ function App() {
       message: "Replace the current cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
-  const confirmReplacePreparedMaterials = () =>
+  const confirmReplacePreparedMaterials = (answers = false) =>
     confirm({
       title: "Replace prepared materials?",
-      message: "Replace the current resume and cover letter? Unsaved edits will be lost.",
+      message: answers
+        ? "Replace the current resume, cover letter, and Answers? Unsaved work will be lost."
+        : "Replace the current resume and cover letter? Unsaved edits will be lost.",
       confirmLabel: "Replace"
     });
 
@@ -591,6 +593,10 @@ function App() {
     result: PreparedSourceReplacementResolution
   ) => void) | null>(null);
   const sourceReplacementOwnerRef = useRef("");
+  // Set once the Answers controller exists; replacement guards read it live.
+  const answersUnsavedRef = useRef<() => boolean>(() => false);
+  // The user already agreed to discard unsaved Answers in this Prepare run; a follow-on open must not ask again.
+  const answersDiscardApprovedRef = useRef(false);
   const applicationOfRecordId = preparationSession.applicationId;
 
   useEffect(() => () => {
@@ -1400,8 +1406,18 @@ function App() {
   }, [importedJob, jobDescription, jobRawText, jobUrl, pipelineAiUsage, preparationSession.mode]);
 
   const confirmPreparedSourceReplacement = useCallback(
-    (candidate: PreparedSourceCandidate): Promise<PreparedSourceReplacementResolution> => {
+    async (candidate: PreparedSourceCandidate): Promise<PreparedSourceReplacementResolution> => {
+      // A new preparation starts a new Answers conversation; unsaved work needs the same consent as a dirty document.
+      const answersAtRisk = answersUnsavedRef.current();
+      const approved = !answersAtRisk || await confirm({
+        title: "Replace Answers?",
+        message: "Replace the current Answers? Unsaved work will be lost.",
+        confirmLabel: "Replace"
+      });
+      // Read after the dialog: the owner can change while it is open (a first Save links the record).
       const owner = getPreparationOwner();
+      if (!approved) return { choice: "cancel", isCurrent: () => getPreparationOwner() === owner };
+      if (answersAtRisk) answersDiscardApprovedRef.current = true;
       const currentSession = preparationSessionRef.current;
       const currentApplication = currentSession.applicationId
         ? getApplication(currentSession.applicationId) ?? null
@@ -1426,7 +1442,7 @@ function App() {
         setSourceReplacementPromptOpen(true);
       });
     },
-    [getApplication, getPreparationOwner]
+    [confirm, getApplication, getPreparationOwner]
   );
 
   const choosePreparedSourceReplacement = useCallback(
@@ -1546,6 +1562,9 @@ function App() {
     || extensionImportPhase !== null
     || jobAnalysisProgress.status === "running"
     || preparationAutomationPending;
+  useEffect(() => {
+    if (!jobPreparationActive) answersDiscardApprovedRef.current = false;
+  }, [jobPreparationActive]);
 
   const answersConversationId = `preparation-${preparationGenerationRef.current}-${currentPreparationId}`;
   const answersDraftIds = useRef(new Map<string, string>());
@@ -1600,8 +1619,11 @@ function App() {
     providerReady: answersProviderReady, providerMessage: answersProviderMessage,
     savedAnswers: preparationApplication?.applicationAnswers ?? [],
     saveBlocker: applicationActionPendingRef.current() ? "Finish or cancel Apply / Skip before saving an answer." : undefined,
+    // Prepare commits a new conversation, so nothing may be typed or edited once it has asked.
+    editBlocker: jobPreparationActive ? "Paused while the job is prepared." : undefined,
     onSaveAnswer: handleSaveAnswer
   });
+  answersUnsavedRef.current = answerController.hasUnsavedAnswersNow;
   const { answersProgress, stopAnswers, retryAnswers } = answerController;
   // The Answers thread shows its own drafting state; the dock reports only what
   // happened while that thread was out of view. Hiding the card never resets the
@@ -2286,7 +2308,7 @@ function App() {
     receipt: applicationPersistenceReceipt
   });
   useBeforeUnloadGuard(
-    answerController.hasUnsavedAnswers || answerController.isGeneratingAnswers || applicationUnloadGuardActive({
+    answerController.hasUnsavedAnswers || applicationUnloadGuardActive({
       resumeNeedsUnloadGuard,
       coverLetterNeedsUnloadGuard,
       isGeneratingCover,
@@ -2308,8 +2330,10 @@ function App() {
     if (applicationOpenInFlightRef.current) return false;
     applicationOpenInFlightRef.current = true;
     try {
-      if (resumeReplacementStateRef.current.dirty || coverReplacementStateRef.current.dirty) {
-        if (!(await confirmReplacePreparedMaterials())) return false;
+      const answersUnsaved = answersUnsavedRef.current();
+      const answersAtRisk = answersUnsaved && !answersDiscardApprovedRef.current;
+      if (resumeReplacementStateRef.current.dirty || coverReplacementStateRef.current.dirty || answersAtRisk) {
+        if (!(await confirmReplacePreparedMaterials(answersAtRisk))) return false;
       }
       preemptPreparedCoverLetterResolution();
       const approvedResumeVersion = resumeReplacementStateRef.current.version;
@@ -2339,12 +2363,13 @@ function App() {
       }
       if (
         resumeReplacementStateRef.current.version !== approvedResumeVersion ||
-        coverReplacementStateRef.current.version !== approvedCoverVersion
+        coverReplacementStateRef.current.version !== approvedCoverVersion ||
+        (!answersUnsaved && answersUnsavedRef.current())
       ) {
         await alert({
           title: "Open paused",
           message:
-            "The resume or cover letter changed while the saved application was loading. Your current drafts were kept; open the preparation again when you are ready."
+            "The resume, cover letter, or Answers changed while the saved application was loading. Your current work was kept; open the preparation again when you are ready."
         });
         return false;
       }
@@ -2404,7 +2429,6 @@ function App() {
       const restoredTailoringText = assemblePreparedJobTailoringText(restoredTracking, restoredBrief);
       const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
       const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
-      preparationGenerationRef.current += 1;
       if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
         await alert({
           title: "Open failed",
@@ -2412,6 +2436,7 @@ function App() {
         });
         return false;
       }
+      preparationGenerationRef.current += 1;
 
       // Opening a tracked application supersedes any recovery prompt from the
       // previous desk state, even when that state happened to be clean.
