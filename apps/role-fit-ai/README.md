@@ -322,9 +322,10 @@ font, size and wrapping changes still reflow the page normally.
   Fit remains categorical and shows no score or gauge;
   the two panes scroll independently and become one stacked modal scroll on
   narrow screens. Prepared job facts remain read-only because structured
-  posting correction belongs to Prepare. Stage
-  choices move forward through the supported workflow and cannot rewrite a
-  submitted record as Skipped. A materially different replacement source
+  posting correction belongs to Prepare. Application Detail's stage choices
+  only move forward; moving a submitted record to Skipped happens from the
+  tracker row menu and keeps its application date and materials. A materially
+  different replacement source
   must explicitly start a new preparation before analysis continues; keeping the
   current posting restores its prepared snapshot. Apply saves only the
   materials included for that action; excluding a document on a later update
