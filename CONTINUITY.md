@@ -5,7 +5,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
-- [USER+CODE] **Four open items fixed in one PR** (branch
+- [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the four fixes of
+  #192 since `rolefit-preview-v0.9.0-beta.1`, no new capability and no
+  stored-data or format change; the user approved the release brief and plan,
+  task `2026-10-08-rolefit-0.9.1-preview`). The intended tag is
+  `rolefit-preview-v0.9.1-beta.1`; extension 1.2.1 and desktop bridge API 13
+  are unchanged, and the landing screenshot manifest stays empty. Release notes
+  are `apps/role-fit-ai/docs/releases/0.9.1-beta.1.md`.
+  - [TOOL] Preflight on Windows x64 with Node 24.18.0: release tests
+    (`test:desktop:release`) 14/14; full `npm run check --workspace
+    apps/role-fit-ai` (165/165 offline evals); `make:rolefit:desktop` produced
+    a fresh Squirrel installer and `0.9.1-full.nupkg`; the packaged smoke
+    passed against that fresh output (win32-x64, unpacked). The Electron
+    development-mode smoke failed once in the main checkout without its output
+    kept, then passed twice there (the second with a full log and exit 0); the
+    0.9.0 preflight saw the same intermittent main-checkout failure, root cause
+    still not isolated.
+- [USER+CODE] **Four open items fixed in #192** (squash `fc60489` of the
+  exact reviewed head `1f77176`, CI 15/15 green; branch
   `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
   approved brief v1 and plan v1). Client and test code only: no schema,
   prompt, provider, or shared-package change, and no version bump.
