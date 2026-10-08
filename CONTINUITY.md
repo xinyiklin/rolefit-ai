@@ -226,9 +226,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   Answer text, the model's follow-up question, refinement instructions and the
   refinement chips never become facts. A follow-up defaults the composer to Add
   a detail, even beside draft text, so the typed reply is saved as a fact; a
-  chip is always a refinement. One strict parser serves browser, tracker
-  route/load and backup restore; older revisions and legacy pairs stay valid;
-  no migration and no prompt change (v4).
+  chip or Refine this answer (user-approved 2026-10-07; previously it opened
+  Add a detail on such drafts) is always a refinement. One strict parser
+  serves browser, tracker route/load and backup restore; older revisions and
+  legacy pairs stay valid; no migration and no prompt change (v4).
   - [CODE] Forward-only (accepted by the Product Partner under the delegation
     as the existing no-downgrade policy): a build without this change cannot
     load, back up or restore a tracker holding `userFacts` (probed on

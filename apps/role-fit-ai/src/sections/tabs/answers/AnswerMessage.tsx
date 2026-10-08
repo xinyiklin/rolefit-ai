@@ -10,7 +10,7 @@ type Props = {
   message: Message;
   index: number;
   controller: ApplicationAnswersController;
-  onRefine: (messageId: string, instruction?: string) => void;
+  onRefine: (messageId: string, instruction?: string, mode?: "refinement") => void;
   onEditQuestion: (messageId: string) => void;
 };
 
@@ -126,7 +126,7 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
               <button type="button" className="ghost-button" disabled={!nonempty || saving || saved || Boolean(controller.saveBlocker)} onClick={() => { save(); setMenuOpen(false); }}>
                 {saveDraft ? "Save draft to application" : "Save answer to application"}
               </button>
-              <button type="button" className="ghost-button" onClick={() => { onRefine(message.id); setMenuOpen(false); }}>Refine this answer</button>
+              <button type="button" className="ghost-button" onClick={() => { onRefine(message.id, "", "refinement"); setMenuOpen(false); }}>Refine this answer</button>
             </NavMenu>
             <span className="answers-message__model" title={response.generation ? `${response.generation.provider} · ${response.generation.model} · ${response.generation.reasoningEffort}` : "Original generation details are unavailable for this wording."}>
               {modelLabel}{response.generation?.reasoningEffort ? ` · ${response.generation.reasoningEffort}` : ""}

@@ -206,6 +206,16 @@ try {
   hook().refine(hook().conversation.targetMessageId, "Shorter");
   assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC], "after Reopen a chip keeps the restored facts and adds none");
   assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
+  // "Refine this answer" asks for Refine explicitly, so a typed wording instruction is never a fact.
+  hook().reopen(stored[6]);
+  hook().refine(hook().conversation.targetMessageId, "", "refinement");
+  assert.equal(hook().conversation.composerMode, "refinement", "Refine this answer opens Refine even on a draft with a follow-up");
+  hook().setComposer("Make it warmer.");
+  const menuRefine = await exchange("It warmly cut double-bookings.");
+  assert.equal(menuRefine.refinement, "Make it warmer.");
+  assert.equal(menuRefine.clarification, undefined);
+  assert.deepEqual(menuRefine.explicitFacts, [factC], "a typed instruction from Refine this answer is never a fact");
+  assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
   hook().newQuestion("What else should we know?");
   assert.deepEqual((await exchange("Nothing else.")).explicitFacts, [], "a new question after a reopen starts without facts");
   console.log("Answers saved facts passed: user-declared Save, reload and Reopen, refinement resend, per-question scope, older answers, and no facts from answer text or chips");

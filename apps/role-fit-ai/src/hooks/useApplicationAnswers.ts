@@ -165,10 +165,10 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   }
   function setComposer(composer: string) { update(conversationId, (current) => ({ ...current, composer })); }
   function newQuestion(text = "") { update(conversationId, (current) => ({ ...current, composer: text, targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: current.targetIntent + 1 })); }
-  function refine(messageId: string, instruction = "") {
+  function refine(messageId: string, instruction = "", mode?: Conversation["composerMode"]) {
     // A follow-up defaults to Add a detail, but an instruction (a chip) edits the text and is never a fact.
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: instruction, targetIntent: current.targetIntent + 1,
-      composerMode: !instruction && current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement" }));
+      composerMode: instruction ? "refinement" : mode ?? (current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement") }));
   }
   function editQuestion(messageId: string) {
     update(conversationId, (current) => {
