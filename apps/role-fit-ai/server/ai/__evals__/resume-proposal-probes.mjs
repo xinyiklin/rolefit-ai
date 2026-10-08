@@ -878,7 +878,11 @@ assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
   for (const [current, replacement, label] of [
     ["Wrote integration tests for the billing service but not the payments gateway adapters.", "Wrote integration tests for the billing service but the payments gateway adapters.", "removing a negation"],
     ["Reduced nightly reconciliation failures by nearly 40% after adding schema checks to the importer.", "Reduced nightly reconciliation failures by 40% after adding schema checks to the importer.", "removing a hedge"],
-    ["Wrote release notes and runbooks for the billing service and its payment gateway adapters.", "Wrote release and runbooks for the billing service and its payment gateway adapters.", "a word that only stems like a list word"]
+    ["Wrote release notes and runbooks for the billing service and its payment gateway adapters.", "Wrote release and runbooks for the billing service and its payment gateway adapters.", "a word that only stems like a list word"],
+    ["Migrated 40% of production traffic from the legacy load balancers to the new ingress controllers.", "Migrated production traffic from the legacy load balancers to the new ingress controllers.", "removing a partial percentage"],
+    ["Built 2 of the 5 ingestion services that load partner feeds into the analytics warehouse nightly.", "Built the ingestion services that load partner feeds into the analytics warehouse nightly.", "removing a partial count"],
+    ["Led half the platform team through the migration of billing jobs to the new scheduler cluster.", "Led the platform team through the migration of billing jobs to the new scheduler cluster.", "removing half"],
+    ["Migrated most legacy services from the shared VM fleet to containers on the managed Kubernetes cluster.", "Migrated legacy services from the shared VM fleet to containers on the managed Kubernetes cluster.", "removing most"]
   ]) assert.equal(outcome(current, replacement), "NO_CHANGES", `${label} stays a no-op`);
   // A long bullet keeps each deletion under the 15% cut, so only the word list decides.
   const longTail = "reporting tools that reconcile invoices, refunds, and payouts for the finance, billing, and operations teams in the main office.";

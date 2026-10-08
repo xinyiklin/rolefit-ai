@@ -424,16 +424,17 @@ function rewriteTokens(value: string): { raw: string; stem: string }[] {
 }
 
 // Deleting one of these narrows what a bullet claims ("Solely built", "critical
-// tools", "senior", "three"), so the edit is a correction to review, never a no-op
-// trim. Deleting a negation or hedge ("not", "nearly") widens the claim instead;
-// that stays a dropped no-op rather than an unwarned inflation.
+// tools", "senior", "three engineers"), so the edit is a correction to review,
+// never a no-op trim. Deleting a negation, hedge or partial quantity ("not",
+// "nearly", "40% of", "2 of the 5", "most") widens the claim instead; that stays a
+// dropped no-op rather than an unwarned inflation.
 export const NARROWING_CLAIM_WORDS = new Set([
   "solely", "sole", "alone", "only", "single-handedly", "independently", "personally", "entirely", "fully",
   "all", "every", "each", "entire", "whole", "critical", "key", "major", "primary", "core", "mission-critical",
-  "production", "enterprise", "large-scale", "company-wide", "org-wide", "first", "most", "many", "multiple", "several",
+  "production", "enterprise", "large-scale", "company-wide", "org-wide", "first",
   "senior", "lead", "principal", "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
   "dozen", "dozens", "hundred", "hundreds", "thousand", "thousands", "million", "millions", "billion", "billions",
-  "double", "triple", "half"
+  "double", "triple"
 ]);
 
 // A rewrite that adds no word, keeps the rest in order and marked alike, cuts
@@ -448,8 +449,9 @@ function isImmaterialRewrite(replacement: string, current: string): boolean {
     if (!next) return false;
     kept.add(next - 1);
   }
-  const deletesClaim = before.some(({ raw }, index) => !kept.has(index)
-    && (NARROWING_CLAIM_WORDS.has(raw.toLowerCase()) || /\d/.test(raw)));
+  const deleted = before.filter((_, index) => !kept.has(index)).map(({ raw }) => raw.toLowerCase());
+  const removesPart = deleted.some((word) => word === "of" || word.endsWith("%"));
+  const deletesClaim = !removesPart && deleted.some((word) => NARROWING_CLAIM_WORDS.has(word) || /\d/.test(word));
   return !deletesClaim
     && markedText(replacement) === markedText(current)
     && stripInlineMarks(replacement).length >= stripInlineMarks(current).length * 0.85;

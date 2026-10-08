@@ -387,12 +387,14 @@ application retain blocking technical guards.
 - Churn settles as an `UNCHANGED` no-op, never a reviewable edit: a bullet
   rewrite that adds no word as written (only tense and number inflect), keeps
   the remaining words in order and marked alike, cuts under 15%, and deletes no
-  narrowing claim word or number. Narrowing words, matched on the raw word, are
+  narrowing claim word or count. Narrowing words, matched on the raw word, are
   exclusivity or scope ("solely", "all"), importance ("critical",
-  "production"), seniority ("senior", "lead") and number words; digits count
-  too. Such a deletion is a correction the user reviews. Deleting a negation or
-  hedge ("not", "nearly") widens the claim, so it stays a dropped no-op rather
-  than an unwarned inflation. Stored benchmark receipts hold only surviving
+  "production"), seniority ("senior", "lead") and counts ("three engineers",
+  digits). Such a deletion is a correction the user reviews. Some deletions
+  widen the claim instead, so they stay a dropped no-op rather than an unwarned
+  inflation: a negation or hedge ("not", "nearly"), or a partial quantity
+  ("most", "half", or any deletion that removes "of" or a percentage, as in
+  "40% of", "2 of the 5"). Stored benchmark receipts hold only surviving
   edits, so a replay cannot measure this rule. The same no-op rule covers a
   Skills row with the same items, written and marked the same, that moves no
   skill the posting names forward. Casing, spelling, symbol, and preposition
