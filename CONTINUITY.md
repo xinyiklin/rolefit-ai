@@ -40,6 +40,33 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - Still open from that review: claims that recombine separate facts, saving
     Answers' declared facts (storage change, needs approval), and the Answers
     unsaved-work guard (separate fix).
+- [CODE] Answers' first Save in a fresh preparation creates its Draft from the
+  posting as last prepared in that conversation: link, prepared brief, captured
+  posting, tracking, job warnings, AI usage, Fit, and posting relationship. App
+  captures these on each render where the job is prepared. It used to read the
+  live source fields. Pasting job B after preparing A, without preparing B,
+  saved A's answer under B's text and tracking. A stopped Prepare of B that had
+  chosen Link also joined A's Draft to B's posting group. With nothing
+  prepared in the conversation, Save now refuses instead of saving draft text.
+  - Apply and Skip were already safe from source edits: both need a prepared job
+    at click and recheck a commit identity before writing. Unchanged.
+  - [TOOL] `application-answer-draft-source.mjs` runs App's real Answers save
+    code with the production store. It fails on main, and three mutations
+    (live relationship, capture without a prepared job, no missing-capture
+    guard) each fail it.
+  - Open, unchanged:
+    - Cancel at the pre-analysis duplicate check leaves B's raw posting
+      reading as prepared while the committed preparation is A, so Apply,
+      Skip, and a new Answers conversation can save that raw posting.
+      UNCONFIRMED whether that is intended.
+    - An extension or Retry Prepare keeps A's source fields while it runs, so
+      a Link or Keep separate choice for B still reaches the relationship
+      Answers' first Save uses if that Prepare stops.
+    - After a failed draft, the dock's Answers Retry skips the tab's
+      prepared-job gate, so it can draft against unprepared source text.
+    - A Link chosen for A stays the session's pending relationship when a
+      later fresh Prepare of B finds no duplicate, so B's first Answers Save
+      joins A's posting group. Apply and Skip resolve their own relationship.
 - [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
   medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
   Saved choices stay; the user's own saved selection was switched too (app
