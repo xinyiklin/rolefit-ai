@@ -118,7 +118,9 @@ the keyboard command is an ES module.
    (leaving out Similar Jobs and alumni profiles), and sends the posting's
    canonical `/jobs/<id>` URL with a `<Role> | <Employer> | Handshake` title.
    If Handshake's layout is not recognized, it captures the whole page as for
-   any other site.
+   any other site. The app README's
+   [Supported job sites](../README.md#supported-job-sites) table lists what
+   each site gets.
 2. It POSTs the text to `POST /api/extension/analyze`, which extracts job
    identity and checks the application tracker with a layered
    duplicate match (ATS posting id / normalized URL / requisition id in the
