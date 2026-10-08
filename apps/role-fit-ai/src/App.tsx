@@ -92,6 +92,7 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import {
   defaultResumePolishScopeModes,
+  editablePolishSectionCount,
   type ResumePolishScopeMode
 } from "./lib/resumePolishScope";
 import { resumeDocumentVersion as resumeDocumentVersionFor } from "./lib/resumeDocumentVersion";
@@ -1259,16 +1260,20 @@ function App() {
   );
   // Everything except provider readiness. Resume Polish needs at least one
   // editable section; provider readiness is gated separately.
+  const editablePolishSections = editedResume ? editablePolishSectionCount(editedResume, polishScopeModes) : 0;
   const polishInputsReady = useMemo(() => {
     return Boolean(
       jobPrepared &&
       editedResume &&
       resumeReady &&
-      Object.values(polishScopeModes).some((mode) => mode === "polish") &&
+      editablePolishSections > 0 &&
       jobDescription.trim().length > 40
     );
-  }, [editedResume, jobDescription, jobPrepared, resumeReady, polishScopeModes]);
+  }, [editedResume, jobDescription, jobPrepared, resumeReady, editablePolishSections]);
   const canPolish = polishInputsReady && selectedPolishProvidersReady;
+  // Prepare names a current blocker before any earlier Polish status.
+  const resumePolishBlocker = resumePolishProviderMessage
+    || (editablePolishSections ? "" : "Set at least one editable resume section to Polish.");
 
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
 
@@ -2852,7 +2857,7 @@ function App() {
               preparationStatus={linkStatus}
               jobAnalysisProviderReady={jobAnalysisProviderReady}
               jobAnalysisProviderMessage={jobAnalysisProviderMessage}
-              resumePolishProviderMessage={resumePolishProviderMessage}
+              resumePolishBlocker={resumePolishBlocker}
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}

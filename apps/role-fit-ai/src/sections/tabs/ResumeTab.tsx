@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode, type RefObject } from
 
 import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import type { ResumePolishScopeMode } from "../../lib/resumePolishScope";
+import { editablePolishSectionCount, type ResumePolishScopeMode } from "../../lib/resumePolishScope";
 import type { ResumeEditorActions } from "../../hooks/useResumeEditor";
 import type { ResumeProposalTarget } from "../../resume/types";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
@@ -18,7 +18,6 @@ import {
 import type { PolishProgressState } from "../../lib/aiWorkflow";
 import type { AutosavedDraft } from "../../hooks/useAutosaveDraft";
 import type { DraftAutosaveState } from "../../hooks/useAutosaveDraft";
-import { resumePolishSectionIsLocked } from "../../../shared/resumePolishContract.ts";
 import type { useResumeProposalDecisions } from "../../hooks/useResumeProposalDecisions";
 import { fieldKeyForReviewTarget } from "../../lib/reviewTarget.ts";
 import { useRestoredScroll } from "../../hooks/useRestoredScroll";
@@ -170,14 +169,7 @@ export function ResumeTab({
   );
 
   const selectedSectionCount = Object.values(polishScopeModes).filter((mode) => mode !== "off").length;
-  const lockedSectionIds = new Set(
-    editedResume.sections
-      .filter((section) => resumePolishSectionIsLocked(section.heading))
-      .map((section) => section.id)
-  );
-  const polishSectionCount = Object.entries(polishScopeModes)
-    .filter(([sectionId, mode]) => mode === "polish" && !lockedSectionIds.has(sectionId))
-    .length;
+  const polishSectionCount = editablePolishSectionCount(editedResume, polishScopeModes);
   const canPolish =
     resumeReady &&
     jobReady &&
