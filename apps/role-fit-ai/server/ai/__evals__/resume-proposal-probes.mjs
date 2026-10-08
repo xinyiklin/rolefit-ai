@@ -914,6 +914,12 @@ assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
   assert.equal(ownershipWarned(["Assisted a team developing payment reconciliation services."], "Engineer", 0, "Build payment reconciliation services."), true, "a present-tense direct verb from assisted work warns");
   assert.equal(ownershipWarned(["Direct messaging feature with WebSockets and Redis."], "Engineer", 0, "Led the direct messaging feature with WebSockets and Redis."), true, "a verb-shaped noun does not support leadership");
   assert.equal(ownershipWarned(["Maintained the release pipeline for the mobile apps."], "Build and Release Engineer", 0, "Led the release pipeline for the mobile apps."), true, "a role title does not support leadership");
+  for (const [bullets, replacement, label] of [
+    [["Builds and releases for the iOS app via fastlane on Bitrise."], "Built the iOS app release flow on Bitrise with fastlane.", "a plural noun opening the current bullet"],
+    [["Leads routing rules in Salesforce for the SDR team."], "Led leads routing rules in Salesforce for the SDR team.", "a plural noun that spells the verb"],
+    [["Maintained the iOS app release process on Bitrise.", "Builds of the iOS app release process on Bitrise were flaky."], "Built the iOS app release process on Bitrise.", "a plural noun in evidence"],
+    [["Lead generation forms for the marketing site."], "Led the lead generation forms for the marketing site.", "lead generation"]
+  ]) assert.equal(ownershipWarned(bullets, "Engineer", 0, replacement), true, `${label} does not support the verb`);
 }
 
 // Drive the real route over loopback rather than pattern-matching its source. A

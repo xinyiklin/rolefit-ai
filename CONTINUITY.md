@@ -31,7 +31,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
     sanitizer probes.
   - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
     - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
-    - Five new synthetic old-prompt flags, all labelled supported. They are
+    - Six new synthetic old-prompt flags, all labelled supported. They are
       present-tense forms of the existing "Added/Wrote → Implemented/Developed"
       ownership rule.
     - Stored receipts hold only surviving edits, so the no-op rule is not

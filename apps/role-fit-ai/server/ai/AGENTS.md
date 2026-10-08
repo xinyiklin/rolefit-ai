@@ -320,6 +320,10 @@ application retain blocking technical guards.
       verb: "Build Go services…" supports "Built Go services…". A verb-shaped
       noun, title or abbreviation split therefore never supports a different
       claim.
+    - That side reads only the plain form, and never before a preposition,
+      conjunction or "to be" verb, so "Builds for…" and "Leads were…" are
+      nouns. Known limit: a pun such as "Design work…" can still read as the
+      verb.
     - Not read that way: product names that are verbs, line-opening nouns such
       as "Design reviews" or "Direct-to-consumer", tokens glued to a hyphen,
       apostrophe or digit, and bases shorter than three letters ("L2").

@@ -222,11 +222,19 @@ const OWNERSHIP_LEVEL_BY_PAST = new Map<string, number>([
 // Line-opening nouns that share a verb's spelling.
 const PRESENT_LEAD_NOUN = /^(?:head\s+count|heads[-\s]+up|create\s+react|direct\s+(?:reports?|mail|deposit|experience|feedback|messag\w*|to)|design\s+(?:reviews?|docs?|documents?|systems?|patterns?|tokens?)|build\s+(?:systems?|times?|tools?|scripts?|pipelines?|failures?)|support\s+(?:tickets?|engineers?|team|rotation|queue)|help\s+desk|leads\s+(?:from|were|are|data|pipeline|import|list))\b/i;
 
-function presentLeadOwnership(line: string): { past: string; level: number } | null {
-  const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").replace(/^[\s\u2022\u00b7*\-\u2013\u2014]+/, "");
+// A word this opens is a noun phrase, not a verb ("Builds for the iOS app",
+// "Leads were routed"): read only on the current bullet and evidence.
+const NOUN_FOLLOWER = /^\s+(?:for|of|and|from|in|on|at|to|with|was|were|is|are)\b/i;
+
+// `asSupport` reads a current bullet or evidence line: only the plain form, and
+// never before a preposition, conjunction or "to be" verb. Puns such as "Design
+// work…" can still read as the verb (a known limit).
+function presentLeadOwnership(line: string, asSupport = false): { past: string; level: number } | null {
+  const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").replace(/^[\s\u2022\u00b7*\-\u2013\u2014]+/, "").replace(LEAD_NOUN, " ").trimStart();
   const word = clause.match(/^([A-Z][a-z]+)(?=\s)/)?.[1]?.toLowerCase();
   if (!word || VERB_NAMED_PRODUCTS.has(word) || PRESENT_LEAD_NOUN.test(clause)) return null;
-  for (const base of new Set([word, word.replace(/es$/, ""), word.replace(/s$/, "")])) {
+  if (asSupport && NOUN_FOLLOWER.test(clause.slice(word.length))) return null;
+  for (const base of new Set(asSupport ? [word] : [word, word.replace(/es$/, ""), word.replace(/s$/, "")])) {
     if (base.length < 3) continue;
     for (const past of [IRREGULAR_PAST.get(base), base === "oversee" ? "oversaw" : undefined, `${base}ed`, `${base}d`]) {
       const level = past ? OWNERSHIP_LEVEL_BY_PAST.get(past) : undefined;
@@ -378,7 +386,7 @@ export function hasUnsupportedOwnershipIncrease(
   const proposedPast = proposedPresent?.past ?? actionVerbPast(leadingWord(proposed));
   const strength = (value: string) => {
     if (!presentLead) return ownershipStrength(value);
-    const present = value === proposed ? proposedPresent : presentLeadOwnership(value);
+    const present = value === proposed ? proposedPresent : presentLeadOwnership(value, true);
     const counts = present && (value === proposed || present.past === proposedPast);
     return Math.max(ownershipStrength(value), counts ? present.level : 0);
   };
