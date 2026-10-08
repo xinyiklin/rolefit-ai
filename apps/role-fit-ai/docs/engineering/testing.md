@@ -894,7 +894,9 @@ Good frontend verification covers:
   group unlinking as one all-member revision-checked mutation.
   `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and
   update-only Skipped commits with canonical multi-reason lists; job-only AI
-  provenance; decision-date preservation; sent-artifact removal; exact
+  provenance; decision-date preservation; sent-artifact removal for job-only
+  decisions while a later-skipped application keeps its date, documents, and
+  document AI receipts on re-skip and Save job updates; exact
   dialog/receipt copy; and that the quiet action remains in Prepare rather than
   the masthead. The storage probes additionally verify decision metadata
   roundtrips while `appliedAt` and sent document fields are omitted.

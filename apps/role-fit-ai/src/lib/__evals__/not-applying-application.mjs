@@ -154,6 +154,113 @@ const longNote = skipApplicationForSession({
 });
 assert.equal(longNote?.application.notApplyingNote?.length, 2_000, "the decision note is capped at 2,000 characters");
 
+// An application later moved to Skipped keeps what was sent when the same
+// posting is skipped again or its job facts are saved: only job-only skips
+// drop application date, documents, and their AI receipts.
+const sentArtifacts = {
+  appliedAt: "2026-08-02T12:00:00.000Z",
+  resumeUsed: "tailored",
+  resumeArtifacts: { hasPdf: false, hasSource: true, fileName: "Resume.resume", savedAt: "2026-08-02T12:00:00.000Z" },
+  coverLetterArtifacts: { hasPdf: true, hasSource: false, fileName: "Cover.pdf", savedAt: "2026-08-02T12:00:00.000Z" },
+  attachments: [{ fileName: "sample.pdf", label: "Sample", size: 10, contentType: "application/pdf", savedAt: "2026-08-02T12:00:00.000Z" }]
+};
+const laterSkipped = base({
+  id: "later-skipped",
+  status: "not_applying",
+  notApplyingAt: createdAt,
+  notApplyingReasons: ["interest"],
+  notApplyingNote: "Lost interest after applying",
+  ...sentArtifacts,
+  aiUsage: {
+    "job-analysis": { source: "local" },
+    "resume-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol" },
+    "cover-polish": { source: "ai", provider: "codex-cli", model: "gpt-6.1-sol" }
+  }
+});
+const keptHistory = (application) => ({
+  appliedAt: application?.appliedAt,
+  resumeUsed: application?.resumeUsed,
+  resumeArtifacts: application?.resumeArtifacts,
+  coverLetterArtifacts: application?.coverLetterArtifacts,
+  attachments: application?.attachments
+});
+const reskipped = skipApplicationForSession({
+  session: newPreparationSession({
+    matchedApplicationId: laterSkipped.id,
+    matchedNotApplyingRecordId: laterSkipped.id,
+    confidence: "exact"
+  }),
+  prepared: prepared.application,
+  matchedNotApplying: laterSkipped,
+  now,
+  reasons: ["compensation"],
+  note: "Pay changed"
+});
+assert.equal(reskipped?.operation, "update");
+assert.equal(reskipped?.application.id, laterSkipped.id);
+assert.deepEqual(keptHistory(reskipped?.application), sentArtifacts, "re-skipping keeps the application date and sent documents");
+assert.deepEqual(reskipped?.application.notApplyingReasons, ["compensation"], "the decision itself still updates");
+assert.equal(reskipped?.application.notApplyingAt, now);
+assert.equal(reskipped?.application.notApplyingNote, "Pay changed");
+assert.deepEqual(
+  Object.keys(reskipped?.application.aiUsage ?? {}).sort(),
+  ["cover-polish", "job-analysis", "resume-polish"],
+  "document AI receipts survive while Job analysis is refreshed"
+);
+assert.equal(reskipped?.application.aiUsage["job-analysis"], prepared.application.aiUsage["job-analysis"]);
+assert.equal(reskipped?.application.aiUsage["resume-polish"], laterSkipped.aiUsage["resume-polish"], "the kept receipt is the record's own");
+
+const laterSkippedJobUpdate = updateNotApplyingJob({
+  session: preparationSessionForApplication(laterSkipped),
+  prepared: prepared.application,
+  existing: laterSkipped
+});
+assert.deepEqual(keptHistory(laterSkippedJobUpdate?.application), sentArtifacts, "Save job updates keeps the sent application");
+assert.equal(laterSkippedJobUpdate?.application.notApplyingAt, createdAt);
+assert.deepEqual(laterSkippedJobUpdate?.application.notApplyingReasons, ["interest"]);
+assert.equal(laterSkippedJobUpdate?.application.notApplyingNote, "Lost interest after applying");
+assert.equal(laterSkippedJobUpdate?.application.aiUsage["resume-polish"]?.source, "ai");
+
+// Job-only decisions still store nothing an application would, even when the
+// Draft being skipped carries Polish receipts from its Answers session.
+const polishedDraft = base({
+  id: "draft-2",
+  status: "draft",
+  aiUsage: { "job-analysis": { source: "local" }, "resume-polish": { source: "ai" }, "cover-polish": { source: "ai" } }
+});
+const draftSkipped = skipApplicationForSession({
+  session: preparationSessionForApplication(polishedDraft),
+  prepared: { ...prepared.application, ...sentArtifacts },
+  matchedNotApplying: null,
+  existingDraft: polishedDraft,
+  now,
+  reasons: [],
+  note: ""
+});
+assert.equal(draftSkipped?.operation, "update");
+assert.deepEqual(Object.keys(draftSkipped?.application.aiUsage ?? {}), ["job-analysis"], "a skipped Draft keeps no document receipts");
+const undatedSkip = skipApplicationForSession({
+  session: newPreparationSession({ matchedApplicationId: "undated", matchedNotApplyingRecordId: "undated", confidence: "exact" }),
+  prepared: prepared.application,
+  matchedNotApplying: base({ id: "undated", status: "not_applying", notApplyingAt: createdAt, aiUsage: polishedDraft.aiUsage }),
+  now,
+  reasons: [],
+  note: ""
+});
+assert.deepEqual(Object.keys(undatedSkip?.application.aiUsage ?? {}), ["job-analysis"], "a job-only decision keeps no document receipts");
+for (const [label, application] of [
+  ["a new skip", created?.application],
+  ["a repeated job-only skip", repeated?.application],
+  ["a skipped Draft", draftSkipped?.application],
+  ["job-only Save job updates", jobUpdate?.application]
+]) {
+  assert.deepEqual(
+    keptHistory(application),
+    { appliedAt: undefined, resumeUsed: undefined, resumeArtifacts: undefined, coverLetterArtifacts: undefined, attachments: undefined },
+    `${label} stores no application date or documents`
+  );
+}
+
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const railSource = readFileSync(
   new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),

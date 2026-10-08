@@ -24,9 +24,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
   both shapes on one record are invalid on read and write. Once the new build
   saves the tracker, an older build refuses it (and a newer backup) without
   changing anything until updated, and a code revert must fix forward.
-- [TOOL] Out of scope, unverified: re-skipping a matched application that was
-  later moved to Skipped runs `withoutSubmittedApplicationArtifacts`, which may
-  drop its `appliedAt` and document metadata. Flagged as a separate task.
+- [USER+CODE] Fixed (task `2026-10-08-reskip-history`, user chose the
+  recommended option): re-skipping a posting matched to an application later
+  moved to Skipped, and Save job updates on that record, stripped its
+  `appliedAt`, sent-document metadata, attachments, and document AI receipts,
+  and the server accepted it. Both paths now keep that history; job-only
+  decisions still store none. Records damaged before the fix are not repaired,
+  and their files stay orphaned on disk. No server guard against removing
+  `appliedAt` was added (offered as optional, not chosen).
 - [TOOL] Four Document workflow runs since 2026-10-06 failed one Chromium job
   with "Timed out starting Chromium" (core on `3d7f4cd` and `b35628c`, extended
   on `d37990f` and `e4d339b`): no stderr within 15s, while the other Chromium

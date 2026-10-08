@@ -343,7 +343,10 @@ offered for new decisions. Encountering the same posting again
 can update that decision's date, reasons, note, and job snapshot while preserving
 its id and creation date. Opening the saved decision later is update-only:
 **Save job updates** refreshes job facts but preserves the original decision,
-and reconsidering the role creates a separate linked application attempt.
+and reconsidering the role creates a separate linked application attempt. When
+the Skipped record is an application that was later marked Skipped, both paths
+also keep its application date, sent documents, attachments, and their AI-usage
+receipts; only a job-only decision stores none of them.
 Opening a stored application restores its validated posting and documents into
 the current session, lands on Prepare, and preserves the dirty-document
 replacement guard.
