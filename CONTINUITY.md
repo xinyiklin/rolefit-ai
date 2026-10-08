@@ -5,6 +5,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] RoleFit 0.9.0 preview prepared (minor: Answers, multiple Skip
+  reasons, and a one-way tracker format since 0.8.0-beta.1). Versioning now
+  follows `docs/git-workflow.md`: patch for fix-only releases, minor for new
+  capability or stored-data changes, and agents suggest releases but bump only
+  on the user's go-ahead.
 - [USER+CODE] The desktop companion shows its version only in Settings, not in
   the sidebar (the sidebar keeps "Running on <port>"), so the landing
   screenshot of the shell no longer needs a retake on every version bump.
