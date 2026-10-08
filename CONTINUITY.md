@@ -26,9 +26,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
     medium findings; its low findings (CSS selector leaks, guide exception for
     the warning note, eval depth) were fixed, and the new evals fail on
     mutated wiring.
-  - UNCONFIRMED: saved views now also show Fit gap notes, which are not
-    claim-checked. The user accepted that tradeoff when gap notes were
-    Prepare-only.
+  - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
+    which are not claim-checked; this extends the tradeoff accepted when gap
+    notes were Prepare-only.
+  - [USER] Follow-up, separate PR after this merges: with no AI provider,
+    Prepare's Resume card reads "Ready" above "Finish the resume and AI setup
+    before polishing."; give it the precise blocker.
 - [CODE] Unsaved Answers work no longer disappears silently when the
   preparation is replaced. The conversation key changes on every committed
   Prepare (link, paste, extension, Retry) and on opening a saved application, so
