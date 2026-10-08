@@ -52,7 +52,7 @@ import {
 import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
-import { useApplications, type Application } from "./hooks/useApplications";
+import { useApplications, type Application, type SaveApplicationAnswerTarget } from "./hooks/useApplications";
 import { useResumeEditor } from "./hooks/useResumeEditor";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
@@ -1569,6 +1569,26 @@ function App() {
   const answersConversationId = `preparation-${preparationGenerationRef.current}-${currentPreparationId}`;
   const answersDraftIds = useRef(new Map<string, string>());
   const applicationActionPendingRef = useRef<() => boolean>(() => false);
+  // Source edits clear the prepared job but keep the conversation, so a first
+  // Save describes the job as last prepared here, never unprepared draft input.
+  const answersDraftSourceRef = useRef<{
+    conversationId: string;
+    relationship: PreparationSession["pendingRelationship"];
+    target: Omit<Extract<SaveApplicationAnswerTarget, { draftId: string }>, "draftId">;
+  } | null>(null);
+  if (jobPrepared) {
+    const fit = fitAssessmentPersistenceDecision(fitAssessmentState);
+    answersDraftSourceRef.current = {
+      conversationId: answersConversationId,
+      relationship: preparationSession.pendingRelationship,
+      target: {
+        jobUrl, jobDescription: preparedApplicationJobDescription,
+        rawJobDescription: jobRawText, metadata: jobTracking,
+        jobWarnings: importedJob?.jobWarnings, aiUsage: pipelineAiUsage,
+        ...(fit.action === "set" ? { fitAssessment: fit.snapshot } : {})
+      }
+    };
+  }
   async function handleSaveAnswer(answer: ApplicationAnswerRevision, conversationId: string, preserveDraft: boolean) {
     if (applicationActionPendingRef.current()) throw new Error("Finish or cancel Apply / Skip before saving an answer. Your draft is still here.");
     if (conversationId !== `preparation-${preparationGenerationRef.current}-${getCurrentPreparationId()}`) {
@@ -1578,23 +1598,21 @@ function App() {
     const session = preparationSessionRef.current;
     const generation = preparationGenerationRef.current;
     const preparationId = getCurrentPreparationId();
+    const draftSource = answersDraftSourceRef.current;
+    if (!session.applicationId && draftSource?.conversationId !== conversationId) {
+      throw new Error("Prepare the posting before saving this answer. Your draft is still here.");
+    }
     let draftId = answersDraftIds.current.get(conversationId);
     if (!draftId) {
       draftId = crypto.randomUUID();
       answersDraftIds.current.set(conversationId, draftId);
     }
-    const fit = fitAssessmentPersistenceDecision(fitAssessmentState);
     let saved = await saveApplicationAnswer({
       answer, preserveDraft,
-      target: session.applicationId ? { applicationId: session.applicationId } : {
-        draftId, jobUrl, jobDescription: preparedApplicationJobDescription,
-        rawJobDescription: jobRawText, metadata: currentJobTracking(),
-        jobWarnings: importedJob?.jobWarnings, aiUsage: pipelineAiUsage,
-        ...(fit.action === "set" ? { fitAssessment: fit.snapshot } : {})
-      }
+      target: session.applicationId ? { applicationId: session.applicationId } : { draftId, ...draftSource!.target }
     });
-    if (session.mode === "new" && session.pendingRelationship) {
-      const relationship = session.pendingRelationship;
+    if (session.mode === "new" && draftSource?.relationship) {
+      const relationship = draftSource.relationship;
       const linked = await linkPostingRecords(
         [saved.id, relationship.matchedApplicationId], relationship.jobPostingGroupId
       );

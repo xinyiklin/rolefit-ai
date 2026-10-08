@@ -39,9 +39,8 @@ export { useApplyFlow } from "./src/hooks/useApplyFlow.ts";
 export { render, reset } from "react";
 export function bindSave(context) {
   const { applicationActionPendingRef, preparationGenerationRef, getCurrentPreparationId,
-    hasLoadedApplications, preparationSessionRef, answersDraftIds, fitAssessmentPersistenceDecision,
-    fitAssessmentState, saveApplicationAnswer, jobUrl, preparedApplicationJobDescription, jobRawText,
-    currentJobTracking, importedJob, pipelineAiUsage, linkPostingRecords, getApplication,
+    hasLoadedApplications, preparationSessionRef, answersDraftIds, answersDraftSourceRef,
+    saveApplicationAnswer, linkPostingRecords, getApplication,
     publishPreparationSession, duplicateGuard } = context;
   ${handler}
   return handleSaveAnswer;
@@ -117,10 +116,11 @@ async function scenario({ failWrite = false, prompt = false } = {}) {
     applicationActionPendingRef: { current: () => flow.isApplyPending() },
     preparationGenerationRef: { current: 0 }, getCurrentPreparationId: config.getCurrentPreparationId,
     hasLoadedApplications: true, preparationSessionRef: session, answersDraftIds: { current: new Map() },
-    fitAssessmentPersistenceDecision: () => ({ action: "preserve" }), fitAssessmentState: {},
-    saveApplicationAnswer: applications.saveApplicationAnswer, jobUrl: config.jobUrl,
-    preparedApplicationJobDescription: config.preparedJobDescription, jobRawText: config.jobRawText,
-    currentJobTracking, importedJob: null, pipelineAiUsage: {}, linkPostingRecords: applications.linkPostingRecords,
+    answersDraftSourceRef: { current: { conversationId: "preparation-0-prep1", relationship: null, target: {
+      jobUrl: config.jobUrl, jobDescription: config.preparedJobDescription,
+      rawJobDescription: config.jobRawText, metadata: currentJobTracking(), aiUsage: {}
+    } } },
+    saveApplicationAnswer: applications.saveApplicationAnswer, linkPostingRecords: applications.linkPostingRecords,
     getApplication: applications.getApplication, publishPreparationSession: publishSession,
     duplicateGuard: { ackApplication: (application) => acknowledged.push(application.id) }
   });
