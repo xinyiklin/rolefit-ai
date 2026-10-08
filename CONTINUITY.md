@@ -15,8 +15,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   pasted (not prepared) into Prepare's source, was drafted from B's text in
   A's conversation. A link-only edit kept A's text but hit the same bypass. This
   closes the "dock's Answers Retry skips the tab's prepared-job gate" Open item
-  recorded with the Draft job-source fix (`fix/rolefit-answers-draft-job-source`,
-  not on main when this landed); drop that bullet when the two meet.
+  first recorded with the Draft job-source fix below.
   - [TOOL] `application-answers-retry-gate.mjs` drives the real hook and Answers
     tab: Retry still drafts while prepared; after a paste or link edit, the dock
     Retry, send and the tab's disabled controls all name the same gate and no
@@ -161,8 +160,6 @@ bounded; app-only operational detail belongs in the affected app documentation.
     - An extension or Retry Prepare keeps A's source fields while it runs, so
       a Link or Keep separate choice for B still reaches the relationship
       Answers' first Save uses if that Prepare stops.
-    - After a failed draft, the dock's Answers Retry skips the tab's
-      prepared-job gate, so it can draft against unprepared source text.
     - A Link chosen for A stays the session's pending relationship when a
       later fresh Prepare of B finds no duplicate, so B's first Answers Save
       joins A's posting group. Apply and Skip resolve their own relationship.
