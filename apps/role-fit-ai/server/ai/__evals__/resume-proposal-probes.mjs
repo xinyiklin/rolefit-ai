@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { createServer } from "node:http";
 
 import { flattenResumeTargets, sanitizeResumePolishWireResult } from "../../../shared/resumePolishContract.ts";
-import { buildResumeProposalPrompts, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
+import { buildResumeProposalPrompts, NARROWING_CLAIM_WORDS, sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 
 const proposalSource = readFileSync(new URL("../resumeProposal.ts", import.meta.url), "utf8");
 const reviewSource = readFileSync(new URL("../resumeProposalReview.ts", import.meta.url), "utf8");
@@ -871,9 +871,20 @@ assert.deepEqual(paddedEcho.withheld.reasons, ["UNCHANGED"]);
     ["Built 12 critical Python tools for scheduled invoice imports and nightly reconciliations.", "Built 12 Python tools for scheduled invoice imports and nightly reconciliations.", "removing critical"],
     ["Solely designed and built the scheduling service that books every clinic appointment across the region.", "Designed and built the scheduling service that books every clinic appointment across the region.", "removing solely"],
     ["Migrated all production Postgres databases to managed instances with zero downtime windows.", "Migrated production Postgres databases to managed instances with zero downtime windows.", "removing all"],
-    ["Wrote integration tests for the billing service but not the payments gateway adapters.", "Wrote integration tests for the billing service but the payments gateway adapters.", "removing a negation"],
-    ["Cut nightly report runtime from 40 minutes to 12 minutes by caching warehouse queries.", "Cut nightly report runtime from minutes to 12 minutes by caching warehouse queries.", "removing a number"]
+    ["Cut nightly report runtime from 40 minutes to 12 minutes by caching warehouse queries.", "Cut nightly report runtime from minutes to 12 minutes by caching warehouse queries.", "removing a number"],
+    ["Mentored three junior engineers through their first production deployments and on-call shifts.", "Mentored junior engineers through their first production deployments and on-call shifts.", "removing a number word"]
   ]) assert.equal(outcome(current, replacement), "PROPOSAL", `${label} reaches review`);
+  // Deleting a negation or hedge widens the claim; it stays a dropped no-op, never an unwarned inflation.
+  for (const [current, replacement, label] of [
+    ["Wrote integration tests for the billing service but not the payments gateway adapters.", "Wrote integration tests for the billing service but the payments gateway adapters.", "removing a negation"],
+    ["Reduced nightly reconciliation failures by nearly 40% after adding schema checks to the importer.", "Reduced nightly reconciliation failures by 40% after adding schema checks to the importer.", "removing a hedge"],
+    ["Wrote release notes and runbooks for the billing service and its payment gateway adapters.", "Wrote release and runbooks for the billing service and its payment gateway adapters.", "a word that only stems like a list word"]
+  ]) assert.equal(outcome(current, replacement), "NO_CHANGES", `${label} stays a no-op`);
+  // A long bullet keeps each deletion under the 15% cut, so only the word list decides.
+  const longTail = "reporting tools that reconcile invoices, refunds, and payouts for the finance, billing, and operations teams in the main office.";
+  for (const word of NARROWING_CLAIM_WORDS) {
+    assert.equal(outcome(`Built ${word} ${longTail}`, `Built ${longTail}`), "PROPOSAL", `deleting "${word}" reaches review`);
+  }
   assert.equal(
     outcome("Successfully built Python tools for scheduled invoice imports and nightly reconciliations.", "Built Python tools for scheduled invoice imports and nightly reconciliations."),
     "NO_CHANGES",

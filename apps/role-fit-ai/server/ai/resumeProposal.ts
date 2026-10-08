@@ -415,37 +415,41 @@ function isImmaterialSkillOrder(replacement: string, current: string, jobText: s
 }
 
 // Whole words as written, so a casing, symbol, or spelling change is a new word;
-// only tense and number inflect ("Builds", "Built").
-function rewriteWords(value: string): string[] {
+// only tense and number inflect ("Builds", "Built"). `raw` keeps the word itself.
+function rewriteTokens(value: string): { raw: string; stem: string }[] {
   return stripInlineMarks(value).split(/\s+/)
     .map((word) => word.replace(/^[("'\u201c]+|[)"'\u201d.,;:!?]+$/g, ""))
     .filter(Boolean)
-    .map((word) => actionVerbPast(word) ?? word.replace(/(?:ing|ed|es|s)$/, ""));
+    .map((raw) => ({ raw, stem: actionVerbPast(raw) ?? raw.replace(/(?:ing|ed|es|s)$/, "") }));
 }
 
-// Deleting one of these changes what a bullet claims ("Solely built", "critical
-// tools", "not"), so the edit is a reviewable correction, never a no-op trim.
-const CLAIM_BEARING_WORDS = new Set([
+// Deleting one of these narrows what a bullet claims ("Solely built", "critical
+// tools", "senior", "three"), so the edit is a correction to review, never a no-op
+// trim. Deleting a negation or hedge ("not", "nearly") widens the claim instead;
+// that stays a dropped no-op rather than an unwarned inflation.
+export const NARROWING_CLAIM_WORDS = new Set([
   "solely", "sole", "alone", "only", "single-handedly", "independently", "personally", "entirely", "fully",
   "all", "every", "each", "entire", "whole", "critical", "key", "major", "primary", "core", "mission-critical",
-  "production", "enterprise", "large-scale", "company-wide", "org-wide", "not", "no", "never", "without",
-  "nearly", "approximately", "about", "over", "under", "more", "less", "first", "most", "many", "multiple", "several"
+  "production", "enterprise", "large-scale", "company-wide", "org-wide", "first", "most", "many", "multiple", "several",
+  "senior", "lead", "principal", "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten",
+  "dozen", "dozens", "hundred", "hundreds", "thousand", "thousands", "million", "millions", "billion", "billions",
+  "double", "triple", "half"
 ]);
 
 // A rewrite that adds no word, keeps the rest in order and marked alike, cuts
-// under 15%, and deletes no claim-bearing word or number leaves the resume saying
-// the same thing: a no-op, never a reviewable edit.
+// under 15%, and deletes no narrowing claim word or number leaves the resume
+// saying the same thing: a no-op, never a reviewable edit.
 function isImmaterialRewrite(replacement: string, current: string): boolean {
-  const before = rewriteWords(current);
+  const before = rewriteTokens(current);
   const kept = new Set<number>();
   let next = 0;
-  for (const word of rewriteWords(replacement)) {
-    next = before.indexOf(word, next) + 1;
+  for (const { stem } of rewriteTokens(replacement)) {
+    next = before.findIndex((token, index) => index >= next && token.stem === stem) + 1;
     if (!next) return false;
     kept.add(next - 1);
   }
-  const deletesClaim = before.some((word, index) => !kept.has(index)
-    && (CLAIM_BEARING_WORDS.has(word.toLowerCase()) || /\d/.test(word)));
+  const deletesClaim = before.some(({ raw }, index) => !kept.has(index)
+    && (NARROWING_CLAIM_WORDS.has(raw.toLowerCase()) || /\d/.test(raw)));
   return !deletesClaim
     && markedText(replacement) === markedText(current)
     && stripInlineMarks(replacement).length >= stripInlineMarks(current).length * 0.85;
@@ -478,7 +482,7 @@ function replacementIssues(
   const ownWork = standard && withProfile && Boolean(target.profileText) && declaresSoloProject(target.profileText)
     && soloProjectSupportsAuthorship(replacement, target.currentText, ownershipEvidence);
   const ownership = !ownWork && (claimIssue === OWNERSHIP_ISSUE
-    || hasUnsupportedOwnershipIncrease(replacement, baseline, ownershipEvidence)
+    || hasUnsupportedOwnershipIncrease(replacement, baseline, ownershipEvidence, undefined, { presentLead: target.kind !== "skill-list" })
     || (target.kind === "skill-list" && hasUnsupportedOwnershipIncrease(practice(replacement), practice(target.currentText), ownershipEvidence)));
   // The entry uses a verb this strong elsewhere, but no one line ties it to this claim.
   const level = ownershipStrength(replacement);

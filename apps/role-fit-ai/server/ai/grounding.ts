@@ -199,39 +199,41 @@ const OWNERSHIP_LEVELS: ReadonlyArray<{ level: number; pattern: RegExp }> = [
 // "test-driven", "community-led": compound adjectives, not responsibility.
 const CAUSAL_LED = /(?<!\b(?:i|we)\s+)\bled\s+(?:(?:me|us)\s+)?to\b/gi;
 const COMPOUND_OWNERSHIP = /\b(?!co-|self-)[\w]+-(?:driven|led|owned|directed|headed)\b/gi;
-// "Lead time" and "lead generation" are nouns, not leadership.
-const LEAD_NOUN = /\blead\s+(?:time|times|generation|scoring)\b/gi;
+// "Lead time" and "lead generation" are nouns, not leadership ("lead time-series"
+// still leads).
+const LEAD_NOUN = /\blead\s+(?:time|times|generation|scoring)\b(?!-)/gi;
 
-// The past forms above, by level, so a line-initial present-tense verb ("Build",
-// "Owns") claims what its past form would. A leading gerund is often a
-// participial phrase in prose ("Helping members… led me to"), so it is not read.
+export function ownershipStrength(value: string): number {
+  const text = value.replace(CAUSAL_LED, " ").replace(COMPOUND_OWNERSHIP, " ").replace(LEAD_NOUN, " ");
+  for (const { level, pattern } of OWNERSHIP_LEVELS) {
+    if (pattern.test(text)) return level;
+  }
+  return 0;
+}
+
+// Resume Polish only: a bullet that opens with a plain or -s present ownership verb
+// ("Build…", "Owns…") claims its past form's level. Kept out of ownershipStrength,
+// whose other readers (Fit, cover letters, Answers) see sentences, titles and nouns.
 const OWNERSHIP_LEVEL_BY_PAST = new Map<string, number>([
   ...["architected", "led", "owned", "drove", "directed", "headed", "spearheaded", "oversaw", "orchestrated"].map((verb) => [verb, 3] as const),
   ...["built", "designed", "implemented", "developed", "delivered", "created", "engineered", "managed"].map((verb) => [verb, 2] as const),
   ...["assisted", "supported", "contributed", "helped", "collaborated", "coordinated", "participated"].map((verb) => [verb, 1] as const)
 ]);
+// Line-opening nouns that share a verb's spelling.
+const PRESENT_LEAD_NOUN = /^(?:head\s+count|direct\s+(?:reports?|mail|deposit|experience|feedback|to)|design\s+(?:reviews?|docs?|documents?|systems?|patterns?|tokens?)|build\s+(?:systems?|times?|tools?|scripts?|pipelines?|failures?)|support\s+(?:tickets?|engineers?|team|rotation|queue)|help\s+desk|leads\s+(?:from|were|are|data|pipeline|import|list))\b/i;
 
-function leadingVerbOwnership(text: string): number {
+function presentLeadOwnership(line: string): number {
+  const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").replace(/^[\s\u2022\u00b7*\-\u2013\u2014]+/, "");
+  const word = clause.match(/^([A-Z][a-z]+)(?=\s)/)?.[1]?.toLowerCase();
+  if (!word || VERB_NAMED_PRODUCTS.has(word) || PRESENT_LEAD_NOUN.test(clause)) return 0;
   let strongest = 0;
-  for (const line of text.split(/[\r\n]+|(?<=[.!?;])\s+/)) {
-    const clause = line.replace(/<\/?(?:b|i|u)>/gi, "").trim();
-    const word = clause.match(/^[A-Za-z]+/)?.[0]?.toLowerCase();
-    if (!word) continue;
-    const bases = [word, word.replace(/e?s$/, ""), word.replace(/s$/, "")];
-    for (const base of bases) {
-      const level = [IRREGULAR_PAST.get(base), base === "oversee" ? "oversaw" : undefined, `${base}ed`, `${base}d`]
-        .map((past) => (past ? OWNERSHIP_LEVEL_BY_PAST.get(past) ?? 0 : 0))
-        .reduce((max, next) => Math.max(max, next), 0);
-      strongest = Math.max(strongest, level);
+  for (const base of new Set([word, word.replace(/es$/, ""), word.replace(/s$/, "")])) {
+    if (base.length < 3) continue;
+    for (const past of [IRREGULAR_PAST.get(base), base === "oversee" ? "oversaw" : undefined, `${base}ed`, `${base}d`]) {
+      strongest = Math.max(strongest, (past && OWNERSHIP_LEVEL_BY_PAST.get(past)) || 0);
     }
   }
   return strongest;
-}
-
-export function ownershipStrength(value: string): number {
-  const text = value.replace(CAUSAL_LED, " ").replace(COMPOUND_OWNERSHIP, " ").replace(LEAD_NOUN, " ");
-  const anywhere = OWNERSHIP_LEVELS.find(({ pattern }) => pattern.test(text))?.level ?? 0;
-  return Math.max(anywhere, leadingVerbOwnership(text));
 }
 
 const OWNERSHIP_CONTEXT_STOPWORDS = new Set([
@@ -366,19 +368,21 @@ export function hasUnsupportedOwnershipIncrease(
   proposed: string,
   currentText: string,
   supportText: string,
-  semanticTarget = currentText || proposed
+  semanticTarget = currentText || proposed,
+  { presentLead = false }: { presentLead?: boolean } = {}
 ): boolean {
-  const currentLevel = ownershipStrength(currentText);
+  const strength = (value: string) => presentLead ? Math.max(ownershipStrength(value), presentLeadOwnership(value)) : ownershipStrength(value);
+  const currentLevel = strength(currentText);
   const singleLine = !/[\r\n]/.test(currentText);
   // Claiming the assisted work itself ("Migrated…" from "Assisted … in migrating…")
   // is an increase; only evidence led by that same verb supports it.
   const assistedVerbs = singleLine && currentLevel <= 1 && assistsOthersWork(currentText) ? assistedWorkVerbs(currentText) : new Set<string>();
   const proposedLead = actionVerbPast(leadingWord(proposed));
   const claimsAssistedWork = Boolean(proposedLead && assistedVerbs.has(proposedLead) && !SHARED_WORK_LEAD.test(leadingWord(proposed)))
-    && ownershipStrength(proposed) < 2;
+    && strength(proposed) < 2;
   const level = (value: string) => claimsAssistedWork && actionVerbPast(leadingWord(value)) === proposedLead
-    ? Math.max(2, ownershipStrength(value))
-    : ownershipStrength(value);
+    ? Math.max(2, strength(value))
+    : strength(value);
   const proposedLevel = level(proposed);
   if (proposedLevel <= currentLevel) return false;
   if (proposedLevel === 2 && currentLevel === 0 && AUTHORSHIP_VERBS.has(proposedLead ?? "")

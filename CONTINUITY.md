@@ -7,20 +7,31 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 - [CODE] Stage 2 of the external-review follow-up, sanitizer slice:
   - The Resume Polish no-op filter no longer drops a deletion-only rewrite that
-    removes a claim-bearing word ("solely", "all", "critical", "production",
-    negation, approximation) or a number. Such an edit is a correction to
-    review. Filler trims stay `UNCHANGED`.
-  - Ownership checks read a line-initial plain or -s present verb ("Build",
-    "Owns") at its past form's level, so "Assisted…" → "Build…" warns like
-    "Built…". Present-tense evidence now supports the matching claim, and
-    "lead time" / "lead generation" no longer count as leadership.
+    removes a narrowing claim word ("solely", "all", "critical", "senior",
+    "three") or a number; such an edit is a correction to review. Words are
+    matched on the raw word. Deleting a negation or hedge widens the claim and
+    stays a dropped no-op, as do filler trims.
+  - Resume Polish bullets read a capitalised, whole-word, plain or -s present
+    ownership verb ("Build…", "Owns…") at its past form's level, so
+    "Assisted…" → "Build…" warns like "Built…", and present-tense evidence
+    supports the matching claim. This is an option of
+    `hasUnsupportedOwnershipIncrease`, kept out of the shared
+    `ownershipStrength`. "lead time/generation/scoring" no longer count as
+    leadership anywhere.
+  - [TOOL] Two independent reviews. A first version put the present-tense
+    reading in `ownershipStrength`. That made "L2", "Direct3D", "Design
+    reviews", role titles and words after a semicolon count as ownership: it
+    hid real inflation and added warnings to Fit, cover letters and Skills.
+    The no-op version also surfaced hedge and negation deletions unwarned. All
+    findings were fixed with a probe each.
   - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
     - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
-    - The no-op change moved no stored edit.
-    - Five new synthetic flags on old-prompt runs, all labelled supported. They
-      are present-tense versions of the existing "Added/Wrote →
-      Implemented/Developed" ownership rule.
-    - New probes fail on the old code. Full RoleFit check passed.
+    - Five new synthetic old-prompt flags, all labelled supported. They are
+      present-tense forms of the existing "Added/Wrote → Implemented/Developed"
+      ownership rule.
+    - Stored receipts hold only surviving edits, so the no-op rule is not
+      measurable from them.
+    - New probes fail on main.
   - Still open from that review: claims that recombine separate facts, saving
     Answers' declared facts (storage change, needs approval), and the Answers
     unsaved-work guard (separate fix).
