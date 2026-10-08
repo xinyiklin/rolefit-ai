@@ -224,9 +224,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   reopened question only. Applications-modal edits carry the previous
   revision's facts forward; Answers' Edit question still starts without facts.
   Answer text, the model's follow-up question, refinement instructions and the
-  refinement chips never become facts; Add a detail is the composer default only
-  when a follow-up has no draft text. One strict parser serves browser, tracker route/load and backup
-  restore; older revisions and legacy pairs stay valid; no migration and no
+  refinement chips never become facts. A follow-up defaults the composer to Add
+  a detail, even beside draft text, so the typed reply is saved as a fact; a
+  chip is always a refinement. One strict parser serves browser, tracker
+  route/load and backup restore; older revisions and legacy pairs stay valid; no migration and no
   prompt change (v4).
   - [CODE] Forward-only (accepted by the Product Partner under the delegation
     as the existing no-downgrade policy): a build without this change cannot
@@ -252,10 +253,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [TOOL] Two independent reviews. Persistence: no high or medium findings.
     Client: one medium, fixed. A refinement chip on a repaired draft that kept
     its text and also asked a follow-up became a saved, restored "fact",
-    because the composer defaulted to Add a detail whenever a follow-up existed;
-    it now does so only when the follow-up has no draft text (`awaitsDetail`),
-    and an instruction is always a refinement (new facts-eval cases before and
-    after Reopen, mutation-checked). Lows fixed: the text and fact limits are
+    because the composer defaulted to Add a detail whenever a follow-up existed.
+    `refine()` with an instruction is now always a refinement. A first fix also
+    moved the no-instruction default to Refine for such drafts; the client
+    re-review found that sent the user's typed reply as a refinement (not
+    evidence, not saved, and the sentence it supports flagged unsupported), so
+    that default is back to Add a detail. Facts-eval cases cover chips and typed
+    replies on such drafts before and after Reopen; both fixes are
+    mutation-checked against the earlier hooks. Lows fixed: the text and fact limits are
     marked as stored format (tightening needs a migration), PRODUCT says facts
     stay with their question id, and the rollback recipe above. Full RoleFit
     check passed again after the fixes (159/159 offline evals). Browser QA was

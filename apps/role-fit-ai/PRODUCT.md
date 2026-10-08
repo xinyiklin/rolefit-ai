@@ -125,8 +125,9 @@ Reopening a saved answer restores that revision's facts under a collapsed
 **Your facts** list, and refinements send them again as explicit user facts to
 the selected Answers provider. Generated, edited or saved answer text, the
 model's follow-up questions, refinement instructions and the refinement chips
-never become facts; Add a detail is the default only when a follow-up has no
-draft text. Facts stay with their question's id: an Applications-modal edit,
+never become facts. A follow-up defaults the composer to Add a detail even when
+the draft kept its text, so a typed reply is saved as a fact; a chip is always
+a refinement. Facts stay with their question's id: an Applications-modal edit,
 even of the question text, keeps them, and they never reach another question
 or application. Answers saved before facts were kept reopen without them. A
 tracker holding saved facts cannot be opened by an older RoleFit build.

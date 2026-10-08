@@ -22,9 +22,6 @@ export type AnswerMessage = {
   savingRevisionId?: string;
   saveError?: string;
 };
-// Only a follow-up with no draft text defaults the composer to Add a detail; an
-// instruction about existing text (a chip or a refinement) is never a fact.
-const awaitsDetail = (response?: ApplicationAnswerRevision) => Boolean(response?.clarification && !response.answer.trim());
 type Conversation = {
   messages: AnswerMessage[];
   composer: string;
@@ -151,7 +148,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       }
       update(turn.conversationId, (current) => ({ ...current,
         messages: current.messages.map((message) => message.id === turn.messageId ? { ...message, response: answer } : message),
-        ...(current.targetIntent === turn.targetIntent && !current.composer ? { targetMessageId: turn.messageId, composerMode: awaitsDetail(answer) ? "clarification" as const : "refinement" as const } : {}),
+        ...(current.targetIntent === turn.targetIntent && !current.composer ? { targetMessageId: turn.messageId, composerMode: answer.clarification ? "clarification" as const : "refinement" as const } : {}),
         status: answer.clarification || (answer.compliant ? "Answer drafted. Edit, copy, or save it below." : "Draft kept. Adjust the requested format before copying or saving as ready."),
         progress: { status: "done", note: answer.clarification ? "A detail is needed" : "Answer drafted", noteTone: answer.compliant ? "ok" : "warn" }
       }));
@@ -169,8 +166,9 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
   function setComposer(composer: string) { update(conversationId, (current) => ({ ...current, composer })); }
   function newQuestion(text = "") { update(conversationId, (current) => ({ ...current, composer: text, targetMessageId: null, editedQuestion: null, composerMode: "refinement", targetIntent: current.targetIntent + 1 })); }
   function refine(messageId: string, instruction = "") {
+    // A follow-up defaults to Add a detail, but an instruction (a chip) edits the text and is never a fact.
     update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: instruction, targetIntent: current.targetIntent + 1,
-      composerMode: !instruction && awaitsDetail(current.messages.find((item) => item.id === messageId)?.response) ? "clarification" : "refinement" }));
+      composerMode: !instruction && current.messages.find((item) => item.id === messageId)?.response?.clarification ? "clarification" : "refinement" }));
   }
   function editQuestion(messageId: string) {
     update(conversationId, (current) => {
@@ -260,7 +258,7 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
       questionId: question.id, questionRevision: question.revision, constraints, counts: validation.counts, compliant: validation.compliant,
       status: answer.status ?? (validation.compliant ? "ready" : "draft") };
     const messageId = crypto.randomUUID();
-    update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: awaitsDetail(response) ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
+    update(conversationId, (current) => ({ ...current, targetMessageId: messageId, editedQuestion: null, composer: "", composerMode: response.clarification ? "clarification" : "refinement", targetIntent: current.targetIntent + 1,
       messages: [...current.messages, { id: messageId, question, facts: [...(userFacts?.facts ?? [])], response, savedRevisionId: id }] }));
   }
   return {

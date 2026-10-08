@@ -113,13 +113,13 @@ try {
   assert.equal(lastMessage().response, undefined, "a generated response carrying facts is rejected");
   assert.match(hook().conversation.status, /did not match/);
 
-  // A repaired draft can keep its text and still ask a follow-up; a chip on it is
-  // an instruction, never a fact.
+  // A repaired draft can keep its text and still ask a follow-up. The detail the
+  // user types in reply is a fact; a chip on that draft is an instruction.
   const followUpDraft = { status: "draft", clarification: "Which project should this mention?" };
   hook().newQuestion("Describe a project you are proud of.");
   await exchange("I built a scheduling tool for a clinic.", followUpDraft);
   const draftOnly = lastMessage();
-  assert.equal(hook().conversation.composerMode, "refinement", "a follow-up beside draft text does not default to Add a detail");
+  assert.equal(hook().conversation.composerMode, "clarification", "a follow-up beside draft text defaults to Add a detail");
   const savedDraftOnly = await saveMessage(draftOnly.id);
   assert.equal(savedDraftOnly.userFacts, undefined);
   hook().refine(draftOnly.id, "Shorter");
@@ -129,6 +129,15 @@ try {
   assert.equal(chipRequest.refinement, "Shorter");
   assert.equal(chipRequest.clarification, undefined);
   assert.equal((await saveMessage(lastMessage().id)).userFacts, undefined, "a chip is never saved as a fact");
+  const clinic = "It was for the Riverside clinic.";
+  hook().newQuestion("Which project best shows your skills?");
+  await exchange("I built a scheduling tool for a clinic.", { status: "draft", clarification: "Which clinic was it for?" });
+  hook().setComposer(clinic);
+  const typedDetail = await exchange("I built a scheduling tool for the Riverside clinic.");
+  assert.deepEqual(typedDetail.explicitFacts, [clinic], "a detail typed in reply to a follow-up on draft text is sent as a fact");
+  assert.equal(typedDetail.clarification, clinic);
+  assert.equal(typedDetail.refinement, undefined);
+  assert.deepEqual((await saveMessage(lastMessage().id)).userFacts, { provenance: "user-declared", facts: [clinic] }, "and saved as one");
   const factC = "The tool cut double-bookings for the front desk.";
   hook().newQuestion("What impact did your work have?");
   await exchange("", { status: "needs-input", clarification: "What changed for users?" });
@@ -145,9 +154,9 @@ try {
   assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC], "a chip keeps the question's facts and adds none");
   assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
   hook().refine(draftWithFact.id);
-  hook().setComposerMode("clarification");
+  assert.equal(hook().conversation.composerMode, "clarification", "Add the detail on a draft with a follow-up expects a fact");
   hook().setComposer("It was the clinic scheduling project.");
-  assert.deepEqual((await exchange("It cut double-bookings at the clinic.")).explicitFacts, [factC, "It was the clinic scheduling project."], "answering the follow-up stays an explicit Add a detail choice");
+  assert.deepEqual((await exchange("It cut double-bookings at the clinic.")).explicitFacts, [factC, "It was the clinic scheduling project."]);
 
   // Reload: a fresh hook opens the saved tracker revisions.
   const preChange = { id: "older-revision", applicationId: "application-a", questionId: "older-question", questionRevision: 1, question: "Why engineering?", answer: "I like practical problems.",
@@ -184,13 +193,18 @@ try {
     assert.deepEqual(lastMessage().facts, [], `${label} reopens without facts`);
   }
   hook().reopen(stored[5]);
-  assert.equal(hook().conversation.composerMode, "refinement", "a reopened draft with a follow-up does not default to Add a detail");
+  assert.equal(hook().conversation.composerMode, "clarification", "a reopened draft with a follow-up defaults to Add a detail");
   hook().refine(lastMessage().id, "Shorter");
   assert.deepEqual((await exchange("I built a clinic scheduling tool.")).explicitFacts, []);
   assert.equal((await saveMessage(lastMessage().id)).userFacts, undefined, "after Reopen a chip is still never saved as a fact");
   hook().reopen(stored[6]);
-  hook().refine(lastMessage().id, "Shorter");
-  assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC]);
+  assert.equal(hook().conversation.composerMode, "clarification");
+  hook().setComposer(clinic);
+  assert.deepEqual((await exchange("It cut double-bookings at the Riverside clinic.")).explicitFacts, [factC, clinic], "after Reopen a typed detail joins the restored facts");
+  assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC, clinic]);
+  hook().reopen(stored[6]);
+  hook().refine(hook().conversation.targetMessageId, "Shorter");
+  assert.deepEqual((await exchange("It cut double-bookings.")).explicitFacts, [factC], "after Reopen a chip keeps the restored facts and adds none");
   assert.deepEqual((await saveMessage(lastMessage().id)).userFacts.facts, [factC]);
   hook().newQuestion("What else should we know?");
   assert.deepEqual((await exchange("Nothing else.")).explicitFacts, [], "a new question after a reopen starts without facts");
