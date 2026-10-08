@@ -1258,9 +1258,9 @@ async function loadRuntimeInfo() {
   try {
     const info = await bridge.getRuntimeInfo();
     const version = info && typeof info === "object" ? String(info.appVersion ?? "").trim() : "";
-    elements.runtimeVersion.textContent = version ? `RoleFit ${version}` : "RoleFit";
+    elements.runtimeVersion.textContent = version ? `RoleFit ${version}` : "Unavailable";
   } catch {
-    elements.runtimeVersion.textContent = "RoleFit";
+    elements.runtimeVersion.textContent = "Unavailable";
   }
 }
 
@@ -1276,7 +1276,7 @@ function initializeUnavailableState() {
   elements.sitePortStatus.textContent = "Port setting unavailable.";
   extensionPairingSettings = null;
   extensionPairingLoadState = "error";
-  elements.runtimeVersion.textContent = "RoleFit";
+  elements.runtimeVersion.textContent = "Unavailable";
   workspaceOverview = null;
   workspaceOverviewLoaded = true;
   renderWorkspaceOverview();

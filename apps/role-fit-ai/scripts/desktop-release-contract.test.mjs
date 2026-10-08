@@ -90,13 +90,20 @@ async function makeScreenshotFixture(manifest, { imageName = "public/assets/desk
   return root;
 }
 
-test("the companion shell shows no version, so its screenshot survives a version bump", () => {
+test("the companion shows its version only in Settings, so shell screenshots survive a version bump", () => {
   const html = readFileSync(new URL("../desktop/companion.html", import.meta.url), "utf8");
-  const sidebar = html.slice(html.indexOf('<aside class="companion-sidebar"'), html.indexOf("</aside>"));
-  const settings = html.slice(html.indexOf('data-companion-panel="settings"'), html.indexOf("</main>"));
-  assert.ok(sidebar.length > 0 && settings.length > 0, "the companion keeps its sidebar shell and Settings panel");
-  assert.doesNotMatch(sidebar, /id="runtime-version"/, "the version is not in the sidebar shell");
-  assert.match(settings, /id="runtime-version"/, "the version lives in Settings");
+  const renderer = readFileSync(new URL("../desktop/companion-renderer.js", import.meta.url), "utf8");
+  const start = html.indexOf('data-companion-panel="settings"');
+  const end = html.indexOf("</section>", start);
+  assert.ok(start > 0 && end > start, "the companion keeps its Settings panel");
+  assert.equal(html.match(/runtime-version/g)?.length, 1, "one version element");
+  assert.match(html.slice(start, end), /id="runtime-version"/, "the version element is inside Settings");
+  assert.equal(renderer.match(/getRuntimeInfo\(|appVersion/g)?.length, 2, "only loadRuntimeInfo reads the version");
+  const load = renderer.slice(
+    renderer.indexOf("async function loadRuntimeInfo"),
+    renderer.indexOf("function initializeUnavailableState"),
+  );
+  assert.doesNotMatch(load, /elements\.(?!runtimeVersion\b)\w+\.textContent/, "the version is written only to its Settings row");
 });
 
 test("version-stamped screenshots must be recaptured when the package version moves", async () => {

@@ -51,7 +51,8 @@ root and RoleFit app guides first.
   pixel on an ordinary HiDPI screen and reads blurry; the companion shot was the
   worst at 0.68x. Keep each `<img>` `width`/`height` equal to the file's real
   intrinsic size (2880x1800 for the app, whatever the Electron window yields for
-  the companion) — the aspect ratio is unchanged, so layout does not move.
+  the companion); the app shots keep their aspect ratio, so layout does not
+  move, and a companion recapture may change its height slightly.
 - A screenshot whose pixels contain the app version belongs in
   `screenshot-manifest.json` with the version it was captured at. The page also
   renders the live release version from GitHub, so a stale stamp contradicts the

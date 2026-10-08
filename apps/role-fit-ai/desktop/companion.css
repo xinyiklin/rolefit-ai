@@ -635,8 +635,6 @@ code { padding: 1px 3px; border-radius: 3px; background: #edf0eb; color: var(--f
 .site-port-form input { width: 118px; }
 .site-port-form p { grid-column: 1 / -1; margin: -3px 0 0; color: var(--ink-faint); font-size: 11px; line-height: 1.45; }
 .site-port-form button { font-size: 11px; }
-/* The version lives here, not in the sidebar, so marketing screenshots of the
-   shell stay valid across releases (see landing/AGENTS.md). */
 .settings-about { display: grid; gap: 7px; margin: 12px 0 0; padding: 14px 18px; border: 1px solid var(--line); border-radius: 8px; background: var(--card); }
 .settings-about dt { color: var(--ink-soft); font-family: var(--mono); font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .settings-about dd { margin: 0; color: var(--ink-strong); font-size: 12px; }

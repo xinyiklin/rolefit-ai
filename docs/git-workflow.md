@@ -121,8 +121,9 @@ To check, run `git fetch --tags origin`, find the last release with
 changes with `git log --oneline <tag>..origin/main -- apps/role-fit-ai packages`.
 The suggestion names the proposed version and the rule that picks it, the
 commit range, and what blocks the release: missing browser QA, open review
-findings, release notes under `apps/role-fit-ai/docs/releases/`, the
-version-stamped landing screenshots, and the rest of the preview preflight in
+findings, release notes under `apps/role-fit-ai/docs/releases/`, any image
+listed in `apps/role-fit-ai/landing/screenshot-manifest.json`, and the rest of
+the preview preflight in
 `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md`. Bump only after
 the user agrees, in a dedicated release PR that also gets the second
 independent reviewer `AGENTS.md` requires for release-triggering bumps.

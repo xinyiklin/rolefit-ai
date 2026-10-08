@@ -75,8 +75,8 @@ export function readRolefitPackageVersion(repoRoot) {
 // A landing screenshot whose pixels contain the version cannot be found by a
 // text search, and a stale stamp contradicts the live release version the page
 // renders. The manifest records each such image's captured version; this fails
-// the release and site-deploy gates until it is retaken. The companion shell no
-// longer shows a version, so the manifest may be empty.
+// the release and site-deploy gates until it is retaken. The manifest may be
+// empty when no screenshot shows the version.
 const SCREENSHOT_MANIFEST_PATH = ["apps", "role-fit-ai", "landing", "screenshot-manifest.json"];
 const SCREENSHOT_MANIFEST_KEYS = new Set(["schemaVersion", "note", "versionStamped"]);
 const SCREENSHOT_PATH_PATTERN = /^[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/;
