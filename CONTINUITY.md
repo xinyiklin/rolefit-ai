@@ -22,6 +22,18 @@ bounded; app-only operational detail belongs in the affected app documentation.
     kept, then passed twice there (the second with a full log and exit 0). The
     0.9.0 preflight also saw it fail in the main checkout and pass in a clean
     worktree; root cause still not isolated. Keep the smoke's log next time.
+  - [USER+TOOL] After that preflight, the landing companion screenshot was
+    retaken on macOS arm64 (user request) to replace the 0.9.0 Windows
+    capture with macOS system fonts: smoke screenshot hook, development mode,
+    isolated user data, empty workspace, port 5181 with the user's companion
+    quit, 2x, 1800x1176, converted from Display P3 to sRGB so the brand green
+    matches the CSS. The empty workspace and port 5181 depart from
+    `landing/AGENTS.md`'s synthetic-pack/spare-port rule, as at 0.8.0; the
+    Overview shows no workspace content. The `<img>` now declares 1800x1176.
+    It shows no version, so the manifest stays empty. After the swap,
+    `build:landing` (with its boundary guard) and `test:desktop:release`
+    (14/14) passed on macOS. No landing browser QA ran for this image-only
+    swap. One independent review: no blocking findings.
   - [CODE] Open, found in the release review (pre-existing, not fixed in
     0.9.1): `resumeIsStarterSample` requires `applicationOfRecordId === null`
     (`App.tsx`), so once the preparation owns a record (after a first Answers
@@ -98,7 +110,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   test pins the version out of the sidebar. The companion screenshot was
   recaptured on Windows (1784x1202, isolated user data, empty workspace, port
   5181, 2x), so its type renders in Windows fallback fonts rather than the
-  macOS ones used at 0.8.0.
+  macOS ones used at 0.8.0 (superseded 2026-10-08 by the 0.9.1-prep macOS
+  recapture, 1800x1176).
 - [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
   12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
   tracker field is now `notApplyingReasons` (canonical-order list, omitted when
