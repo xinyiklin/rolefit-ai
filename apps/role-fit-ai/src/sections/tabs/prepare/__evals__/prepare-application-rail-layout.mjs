@@ -6,6 +6,7 @@ const prepareStyles = readFileSync(
   "utf8"
 );
 const prepareSource = readFileSync(new URL("../../PrepareTab.tsx", import.meta.url), "utf8");
+const appSource = readFileSync(new URL("../../../../App.tsx", import.meta.url), "utf8");
 
 const preparedHeightBlock = prepareStyles.slice(
   prepareStyles.indexOf("@media (min-width: 1081px)"),
@@ -61,9 +62,21 @@ assert.match(
 );
 
 assert.match(
+  prepareSource,
+  /!canPolishResume\s*\?\s*resumePolishProviderMessage \|\| polishStatus \|\| "Mark at least one resume section Polish\."/,
+  "a Resume card blocked only by its Polish provider names that provider's recovery step"
+);
+assert.doesNotMatch(prepareSource, /Finish the resume and AI setup/, "the vague combined blocker is gone");
+assert.match(
+  appSource,
+  /resumePolishProviderMessage = resumePolishProviderReady \? "" : providerRecoveryMessage\(resumePolishStage\.provider\)/,
+  "a ready Resume Polish provider never surfaces a recovery message"
+);
+
+assert.match(
   prepareStyles,
   /\.fit-assessment-list > li\s*\{\s*overflow-wrap:\s*anywhere/,
   "Final review findings (ul.fit-assessment-list) wrap long excerpts; Fit findings wrap in FitFindings"
 );
 
-console.log("Prepare application rail layout eval: 10/10 checks passed");
+console.log("Prepare application rail layout eval: 13/13 checks passed");

@@ -521,6 +521,7 @@ function App() {
   const coverProviderReady = providerReady(stages["cover-polish"].provider);
   const answersProviderReady = providerReady(stages["application-answers"].provider);
   const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
+  const resumePolishProviderMessage = resumePolishProviderReady ? "" : providerRecoveryMessage(resumePolishStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages["cover-polish"].provider);
   const answersProviderMessage = providerRecoveryMessage(stages["application-answers"].provider);
   const ensureJobAnalysisProvider = useCallback(
@@ -2818,6 +2819,7 @@ function App() {
               preparationStatus={linkStatus}
               jobAnalysisProviderReady={jobAnalysisProviderReady}
               jobAnalysisProviderMessage={jobAnalysisProviderMessage}
+              resumePolishProviderMessage={resumePolishProviderMessage}
               onFetchPosting={handleExtractFromLink}
               onPreparePosting={handleAnalyzePaste}
               resumeReady={resumeReady}
