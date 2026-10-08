@@ -80,6 +80,42 @@ release/publish workflow, wait for successful completion, and retain the
 workflow or live-environment receipt. A versioned change is incomplete until
 that release/deploy completion is confirmed.
 
+## Versioning and release suggestions
+
+Versioned products (RoleFit; Typeset and the shared packages carry versions
+too) use Semantic Versioning, `MAJOR.MINOR.PATCH`. Below 1.0, MINOR is the
+"new capability or compatibility" number and PATCH is the "fixes only" number.
+Pick the smallest bump the release honestly needs; do not raise MINOR by habit.
+
+- **Patch** (`0.8.0` -> `0.8.1`): only fixes, copy, performance, or dependency
+  refreshes, with no new user-facing capability and no change to how existing
+  data is stored or read.
+- **Minor** (`0.8.x` -> `0.9.0`): a new user-facing capability; any change to
+  stored data or file format that older builds cannot read (for example a
+  one-way tracker, settings, or backup change); removed or renamed behavior; or
+  a provider/default change users will notice.
+- **Major** (`1.0.0` and later breaking releases): only on the user's explicit
+  decision. Agents never propose it on their own.
+- **RoleFit preview label:** the package version stays canonical `X.Y.Z`; the
+  preview tag is `rolefit-preview-vX.Y.Z-beta.N`. A new package version starts
+  at `beta.1`; re-cutting a preview of the same version only increments `N`.
+
+Agents never bump a version or push a release tag on their own, because a bump
+is a release with the obligations above. They do suggest one, unprompted, at
+the end of a task report when either holds:
+
+- a user-visible capability or a one-way data/format change has merged to
+  `main` since the last release tag: suggest the next **minor**;
+- fixes have accumulated on `main` since the last release tag (especially a
+  data-integrity or security fix): suggest the next **patch**.
+
+Find the last RoleFit release with
+`git tag --list "rolefit-preview-v*" --sort=-v:refname` and review
+`git log <tag>..main`. The suggestion names the proposed version and the rule
+that picks it, the commit range it covers, and anything that should block the
+release (missing browser QA, open review findings, unfinished docs). Bump only
+after the user agrees, in a dedicated release PR.
+
 ## Minimum PR receipt
 
 Report:

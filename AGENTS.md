@@ -274,6 +274,9 @@ every user-facing reference, then — during the requested push, merge, or deplo
 — trigger the matching release/publish workflow and required tag, wait for it
 to finish successfully, and retain the workflow or live-environment receipt.
 **A versioned change is incomplete until that completion is confirmed.**
+Choose the bump and decide when to suggest a release with the versioning rules
+in `docs/git-workflow.md`: suggest one unprompted when they apply, and bump only
+after the user agrees.
 
 ## Continuity
 
