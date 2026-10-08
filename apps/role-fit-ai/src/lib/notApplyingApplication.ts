@@ -1,5 +1,5 @@
 import type { Application } from "../hooks/useApplications.ts";
-import type { NotApplyingReason } from "./notApplying.ts";
+import { normalizeNotApplyingReasons, type NotApplyingReason } from "./notApplying.ts";
 import type { PreparationSession } from "./preparationSession.ts";
 
 export type NotApplyingCommit = {
@@ -33,17 +33,18 @@ export function withoutSubmittedApplicationArtifacts(application: Application): 
 function withDecision(
   application: Application,
   now: string,
-  reason: NotApplyingReason | "",
+  reasons: readonly NotApplyingReason[],
   note: string
 ): Application {
+  const normalizedReasons = normalizeNotApplyingReasons(reasons);
   const next = withoutSubmittedApplicationArtifacts({
     ...application,
     status: "not_applying",
     notApplyingAt: now,
-    notApplyingReason: reason || undefined,
+    notApplyingReasons: normalizedReasons,
     notApplyingNote: note.trim().slice(0, 2_000) || undefined
   });
-  if (!reason) delete next.notApplyingReason;
+  if (!normalizedReasons.length) delete next.notApplyingReasons;
   if (!note.trim()) delete next.notApplyingNote;
   return next;
 }
@@ -54,7 +55,7 @@ export function skipApplicationForSession({
   matchedNotApplying,
   existingDraft = null,
   now,
-  reason,
+  reasons,
   note,
   clearFields = []
 }: {
@@ -63,7 +64,7 @@ export function skipApplicationForSession({
   matchedNotApplying: Application | null;
   existingDraft?: Application | null;
   now: string;
-  reason: NotApplyingReason | "";
+  reasons: readonly NotApplyingReason[];
   note: string;
   clearFields?: readonly (keyof Application)[];
 }): NotApplyingCommit | null {
@@ -75,7 +76,7 @@ export function skipApplicationForSession({
   if (!target) {
     return {
       operation: "create",
-      application: withDecision(prepared, now, reason, note)
+      application: withDecision(prepared, now, reasons, note)
     };
   }
 
@@ -87,7 +88,7 @@ export function skipApplicationForSession({
       ...merged,
       id: target.id,
       createdAt: target.createdAt
-    }, now, reason, note)
+    }, now, reasons, note)
   };
 }
 
@@ -119,7 +120,7 @@ export function updateNotApplyingJob({
       createdAt: existing.createdAt,
       status: "not_applying",
       notApplyingAt: existing.notApplyingAt,
-      notApplyingReason: existing.notApplyingReason,
+      notApplyingReasons: existing.notApplyingReasons,
       notApplyingNote: existing.notApplyingNote
     })
   };

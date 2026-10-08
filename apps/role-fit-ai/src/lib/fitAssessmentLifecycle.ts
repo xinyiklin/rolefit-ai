@@ -5,6 +5,7 @@ import {
   type FitAssessmentCompleted,
   type FitAssessmentInputChange,
   type FitAssessmentProvenance,
+  type FitAssessmentResult,
   type FitAssessmentSnapshot,
   type FitAssessmentState
 } from "../../shared/fitAssessmentContract.ts";
@@ -46,6 +47,24 @@ export function fitAssessmentLatestSnapshot(
 ): FitAssessmentSnapshot | null {
   const completed = state.latestCompleted;
   return completed && !completed.previousPreparation ? completed.snapshot : null;
+}
+
+// The assessment the Prepare rail presents as current: this preparation, live
+// origin, unchanged inputs, and no re-run in flight or failed since.
+export function fitAssessmentCurrentResult(
+  state: FitAssessmentState
+): Extract<FitAssessmentResult, { status: "ASSESSED" }> | null {
+  const completed = state.latestCompleted;
+  const result = completed?.snapshot.result;
+  return completed
+    && completed.origin === "current"
+    && !completed.previousPreparation
+    && completed.changes.length === 0
+    && !state.activeRun
+    && !state.lastError
+    && result?.status === "ASSESSED"
+    ? result
+    : null;
 }
 
 export function fitAssessmentPersistenceDecision(

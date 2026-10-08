@@ -520,14 +520,96 @@
   font-weight: 400;
 }
 
-.skip-job-dialog__field select,
 .skip-job-dialog__field textarea {
   width: 100%;
-}
-
-.skip-job-dialog__field textarea {
   min-height: 76px;
   resize: vertical;
+}
+
+/* Grouped native checkboxes shared by the Skip dialog and the Skipped
+   decision popover; reuses the flat .check-row without its row dividers. */
+.skip-reason-checklist,
+.skip-reason-checklist__group {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.skip-reason-checklist {
+  display: grid;
+  gap: var(--s2);
+}
+
+.skip-reason-checklist > legend {
+  margin-bottom: var(--s1);
+  padding: 0;
+  color: var(--ink-soft);
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.skip-reason-checklist > legend small {
+  margin-left: var(--s1);
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-weight: 400;
+}
+
+.skip-reason-checklist__group legend {
+  padding: 0;
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+  font-weight: 600;
+}
+
+.skip-reason-checklist__options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: var(--s3);
+}
+
+.skip-reason-checklist .check-row {
+  padding: 4px 0;
+  border-bottom: 0;
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  line-height: 1.3;
+}
+
+.skip-reason-checklist .check-row > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.skip-reason-checklist__suggested {
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+}
+
+.skip-reason-checklist__basis {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: var(--s2) var(--s3);
+  list-style: none;
+  border-radius: var(--r-md);
+  background: var(--card-soft);
+  color: var(--ink-soft);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.skip-reason-checklist__basis strong {
+  color: var(--ink-strong);
+  font-weight: 600;
+}
+
+@media (max-width: 520px) {
+  .skip-reason-checklist__options {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .prepare-skip-action {

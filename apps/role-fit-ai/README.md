@@ -130,7 +130,8 @@ font, size and wrapping changes still reflow the page normally.
   keywords, seniority and domain signals, benefits, and any extraction gaps—while
   the Application rail keeps Resume, Cover Letter, Fit Assessment, readiness, and
   Apply together. A quiet **Skip & save job** action beneath Apply saves the
-  prepared posting as **Skipped** with an optional reason and note; it does
+  prepared posting as **Skipped** with optional reasons (choose any) and a note,
+  pre-checking or marking reasons from evidence already on the device; it does
   not record an application, sent documents, or additional application uploads
   and does not depend on material,
   Fit, or provider readiness. Fit Assessment is a reusable compact advisory for the selected resume,
@@ -306,9 +307,9 @@ font, size and wrapping changes still reflow the page normally.
   Application status and Key dates above compact read-only
   Role & company, Job details, Compensation, and Job snapshot cards. Job details
   retain Source as read-only provenance; correction belongs to
-  Prepare. For a saved Skipped record, the compact Stage control opens reason
+  Prepare. For a saved Skipped record, the compact Stage control opens reasons
   and note in a headerless anchored decision popover instead of showing a one-option
-  select and a separate decision card; its closed receipt reads `Skipped · reason`
+  select and a separate decision card; its closed receipt reads `Skipped · reasons`
   on one line, and Decision date stays in Key dates. Job snapshot remains expanded
   as a permanent section with no section count, while the immutable original
   posting is also the first artifact in Documents and opens in a focused viewer

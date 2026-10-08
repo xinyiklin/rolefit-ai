@@ -127,6 +127,7 @@ import {
   fitAssessmentMeetsThreshold
 } from "./lib/autoPolishPolicy";
 import {
+  fitAssessmentCurrentResult,
   fitAssessmentPersistenceDecision,
   fitAssessmentMayTriggerAutoPolish
 } from "./lib/fitAssessmentLifecycle";
@@ -2250,6 +2251,7 @@ function App() {
     jobRawText,
     pipelineAiUsage,
     fitAssessmentPersistence: fitAssessmentPersistenceDecision(fitAssessmentState),
+    currentFitResult: fitAssessmentCurrentResult(fitAssessmentState),
     preparationSession,
     currentPreparationId,
     getCurrentPreparationId,
@@ -3526,13 +3528,14 @@ function App() {
 
       {skipPrompt ? (
         <SkipJobDialog
-          initialReason={skipPrompt.initialReason}
+          initialReasons={skipPrompt.initialReasons}
           initialNote={skipPrompt.initialNote}
+          suggestions={skipPrompt.suggestions}
           busy={isSkipping}
           error={skipError}
           returnFocusRef={primaryActionRef}
-          onSave={(reason, note) => {
-            void saveSkip(reason, note);
+          onSave={(reasons, note) => {
+            void saveSkip(reasons, note);
           }}
           onCancel={cancelSkip}
         />

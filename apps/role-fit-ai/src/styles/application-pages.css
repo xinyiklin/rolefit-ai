@@ -2252,6 +2252,8 @@ button.table-sort svg {
   display: grid;
   gap: var(--s3);
   width: var(--skip-popover-width);
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
   padding: var(--s4);
   border-radius: var(--r-lg);
   background: var(--card-elev);

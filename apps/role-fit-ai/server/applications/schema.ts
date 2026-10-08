@@ -10,6 +10,7 @@ import {
 import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
 import { APPLICATION_STATUSES } from "../../src/lib/applicationStatusTransitions.ts";
 import { JOB_POSTING_GROUP_ID_RE } from "../../src/lib/applicationRelationships.ts";
+import { normalizeNotApplyingReasons } from "../../src/lib/notApplying.ts";
 
 // Narrowing form of filter(Boolean): drops null/undefined AND narrows the element
 // type. Behaviour-identical to filter(Boolean) for these truthy-object arrays.
@@ -20,7 +21,6 @@ const isPresent = <T>(v: T): v is NonNullable<T> => Boolean(v);
 const inList = <T extends string>(list: readonly T[], value: unknown): value is T =>
   typeof value === "string" && (list as readonly string[]).includes(value);
 
-const NOT_APPLYING_REASONS = ["fit", "interest", "constraints", "other"] as const;
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
@@ -339,6 +339,13 @@ function sanitizeApplication(raw: unknown) {
   // write supplies this timestamp, and the one legacy upgrade derives it from
   // the row's canonical revision before the sanitizer runs.
   if (status === "not_applying" && !notApplyingAt) return null;
+  // The scalar is the pre-list form. A record carrying both shapes (an outdated
+  // tab's save) is rejected rather than silently resolved in favor of either.
+  if (r.notApplyingReason !== undefined && r.notApplyingReasons !== undefined) return null;
+  const reasons = normalizeNotApplyingReasons(
+    r.notApplyingReasons !== undefined ? r.notApplyingReasons : [r.notApplyingReason]
+  );
+  const notApplyingReasons = reasons.length ? reasons : undefined;
   const source = inList(APPLICATION_SOURCES, r.source) ? r.source : "";
   const createdAt = r.createdAt;
   const updatedAt = r.updatedAt;
@@ -363,10 +370,7 @@ function sanitizeApplication(raw: unknown) {
     createdAt,
     appliedAt: appliedAt || undefined,
     notApplyingAt,
-    notApplyingReason:
-      status === "not_applying" && inList(NOT_APPLYING_REASONS, r.notApplyingReason)
-        ? r.notApplyingReason
-        : undefined,
+    notApplyingReasons: status === "not_applying" ? notApplyingReasons : undefined,
     notApplyingNote:
       status === "not_applying" && typeof r.notApplyingNote === "string"
         ? r.notApplyingNote.slice(0, 2_000)

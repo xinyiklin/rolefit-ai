@@ -69,13 +69,17 @@ const created = skipApplicationForSession({
   prepared: prepared.application,
   matchedNotApplying: null,
   now,
-  reason: "fit",
+  reasons: ["other", "fit", "location", "fit"],
   note: "Requirements are too far from my background."
 });
 assert.equal(created?.operation, "create");
 assert.equal(created?.application.status, "not_applying");
 assert.equal(created?.application.notApplyingAt, now);
-assert.equal(created?.application.notApplyingReason, "fit");
+assert.deepEqual(
+  created?.application.notApplyingReasons,
+  ["location", "fit", "other"],
+  "every checked reason is stored once, in canonical order"
+);
 assert.equal(created?.application.appliedAt, undefined);
 assert.equal(created?.application.resumeArtifacts, undefined);
 assert.equal(created?.application.coverLetterArtifacts, undefined);
@@ -85,7 +89,7 @@ const priorDecision = base({
   id: "prior-skip",
   status: "not_applying",
   notApplyingAt: createdAt,
-  notApplyingReason: "interest",
+  notApplyingReasons: ["interest"],
   notApplyingNote: "Not the right product area"
 });
 const repeated = skipApplicationForSession({
@@ -97,14 +101,14 @@ const repeated = skipApplicationForSession({
   prepared: prepared.application,
   matchedNotApplying: priorDecision,
   now,
-  reason: "constraints",
+  reasons: ["constraints", "compensation"],
   note: "Location changed"
 });
 assert.equal(repeated?.operation, "update");
 assert.equal(repeated?.application.id, priorDecision.id, "a repeated skip refreshes the prior decision record");
 assert.equal(repeated?.application.createdAt, createdAt);
 assert.equal(repeated?.application.notApplyingAt, now);
-assert.equal(repeated?.application.notApplyingReason, "constraints");
+assert.deepEqual(repeated?.application.notApplyingReasons, ["compensation", "constraints"]);
 
 const jobUpdate = updateNotApplyingJob({
   session: preparationSessionForApplication(priorDecision),
@@ -113,7 +117,8 @@ const jobUpdate = updateNotApplyingJob({
 });
 assert.equal(jobUpdate?.operation, "update");
 assert.equal(jobUpdate?.application.notApplyingAt, createdAt, "job-only updates preserve the decision date");
-assert.equal(jobUpdate?.application.notApplyingReason, "interest");
+assert.deepEqual(jobUpdate?.application.notApplyingReasons, ["interest"], "job-only updates preserve the decision reasons");
+assert.equal(jobUpdate?.application.notApplyingNote, "Not the right product area");
 assert.equal(jobUpdate?.application.jobDescription, "Updated prepared job");
 
 assert.equal(
@@ -122,12 +127,32 @@ assert.equal(
     prepared: prepared.application,
     matchedNotApplying: priorDecision,
     now,
-    reason: "other",
+    reasons: ["other"],
     note: ""
   }),
   null,
   "an opened historical decision cannot be skipped again in update-only mode"
 );
+
+const unexplained = skipApplicationForSession({
+  session: newPreparationSession(),
+  prepared: prepared.application,
+  matchedNotApplying: null,
+  now,
+  reasons: [],
+  note: "   "
+});
+assert.equal("notApplyingReasons" in (unexplained?.application ?? {}), false, "no reasons stores no reason field");
+assert.equal("notApplyingNote" in (unexplained?.application ?? {}), false, "a blank note is not stored");
+const longNote = skipApplicationForSession({
+  session: newPreparationSession(),
+  prepared: prepared.application,
+  matchedNotApplying: null,
+  now,
+  reasons: ["other"],
+  note: "x".repeat(2_500)
+});
+assert.equal(longNote?.application.notApplyingNote?.length, 2_000, "the decision note is capped at 2,000 characters");
 
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const railSource = readFileSync(

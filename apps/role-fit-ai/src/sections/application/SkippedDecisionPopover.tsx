@@ -6,17 +6,16 @@ import {
   type CSSProperties,
   type RefObject
 } from "react";
-import {
-  NOT_APPLYING_REASON_LABEL,
-  type NotApplyingReason
-} from "../../hooks/useApplications";
+import type { NotApplyingReason } from "../../lib/notApplying";
+import { SkipReasonChecklist } from "./SkipReasonChecklist";
 
 type SkippedDecisionPopoverProps = {
   open: boolean;
   triggerRef: RefObject<HTMLElement | null>;
-  reason: "" | NotApplyingReason;
+  reasons: NotApplyingReason[];
+  savedReasons: NotApplyingReason[];
   note: string;
-  onReasonChange: (value: "" | NotApplyingReason) => void;
+  onReasonsChange: (value: NotApplyingReason[]) => void;
   onNoteChange: (value: string) => void;
   onClose: (restoreFocus?: boolean) => void;
 };
@@ -30,14 +29,15 @@ type PopoverPosition = {
 export function SkippedDecisionPopover({
   open,
   triggerRef,
-  reason,
+  reasons,
+  savedReasons,
   note,
-  onReasonChange,
+  onReasonsChange,
   onNoteChange,
   onClose
 }: SkippedDecisionPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
-  const reasonRef = useRef<HTMLSelectElement>(null);
+  const reasonRef = useRef<HTMLInputElement>(null);
   const [position, setPosition] = useState<PopoverPosition>({ top: 0, left: 0, width: 420 });
 
   useLayoutEffect(() => {
@@ -110,19 +110,13 @@ export function SkippedDecisionPopover({
       }}
     >
       <div className="application-skip-popover__fields">
-        <label className="field">
-          <span>Reason</span>
-          <select
-            ref={reasonRef}
-            value={reason}
-            onChange={(event) => onReasonChange(event.target.value as "" | NotApplyingReason)}
-          >
-            <option value="">No reason recorded</option>
-            {Object.entries(NOT_APPLYING_REASON_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
+        <SkipReasonChecklist
+          legend="Reasons"
+          value={reasons}
+          savedReasons={savedReasons}
+          onChange={onReasonsChange}
+          firstInputRef={reasonRef}
+        />
         <label className="field">
           <span>Decision note <small>Optional</small></span>
           <textarea

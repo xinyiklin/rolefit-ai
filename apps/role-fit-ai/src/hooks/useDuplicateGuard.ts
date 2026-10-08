@@ -1,7 +1,7 @@
 /** Reviews duplicate evidence without choosing a tracker write target. */
 import { useEffect, useRef, useState } from "react";
 import type { Application } from "./useApplications";
-import { NOT_APPLYING_REASON_LABEL } from "../lib/notApplying.ts";
+import { formatNotApplyingReasons } from "../lib/notApplying.ts";
 import type { DuplicateMatch, DuplicateTarget } from "../lib/jobIdentity";
 import type { JobPostingRelationship } from "../lib/preparationSession";
 import {
@@ -98,8 +98,9 @@ function promptFor(match: DuplicateMatch<Application>): DuplicatePreparationProm
     };
   }
   if (String(application.status) === "not_applying") {
-    const reason = application.notApplyingReason
-      ? `\nReason: ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
+    const reasons = formatNotApplyingReasons(application.notApplyingReasons);
+    const reason = reasons
+      ? `\n${application.notApplyingReasons?.length === 1 ? "Reason" : "Reasons"}: ${reasons}`
       : "";
     return {
       kind: "existing-not-applying",

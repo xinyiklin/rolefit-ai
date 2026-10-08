@@ -1,39 +1,40 @@
 import { useId, useRef, useState, type RefObject } from "react";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
-import {
-  NOT_APPLYING_REASON_LABEL,
-  type NotApplyingReason
-} from "../lib/notApplying.ts";
+import type { NotApplyingReason } from "../lib/notApplying.ts";
+import type { SkipReasonSuggestion } from "../lib/skipReasonSuggestions.ts";
+import { SkipReasonChecklist } from "./application/SkipReasonChecklist";
 
 type SkipJobDialogProps = {
-  initialReason: NotApplyingReason | "";
+  initialReasons: NotApplyingReason[];
   initialNote: string;
+  suggestions: SkipReasonSuggestion[];
   busy: boolean;
   error: string;
   returnFocusRef: RefObject<HTMLElement | null>;
-  onSave: (reason: NotApplyingReason | "", note: string) => void | Promise<void>;
+  onSave: (reasons: NotApplyingReason[], note: string) => void | Promise<void>;
   onCancel: () => void;
 };
 
 export function SkipJobDialog({
-  initialReason,
+  initialReasons,
   initialNote,
+  suggestions,
   busy,
   error,
   returnFocusRef,
   onSave,
   onCancel
 }: SkipJobDialogProps) {
-  const [reason, setReason] = useState<NotApplyingReason | "">(initialReason);
+  const [reasons, setReasons] = useState<NotApplyingReason[]>(initialReasons);
   const [note, setNote] = useState(initialNote);
   const cardRef = useRef<HTMLFormElement>(null);
-  const reasonRef = useRef<HTMLSelectElement>(null);
+  const firstReasonRef = useRef<HTMLInputElement>(null);
   const titleId = useId();
   const detailId = useId();
   const handleKeyDown = useModalFocus({
     active: true,
     containerRef: cardRef,
-    initialFocusRef: reasonRef,
+    initialFocusRef: firstReasonRef,
     returnFocusRef,
     onClose: busy ? () => undefined : onCancel
   });
@@ -58,7 +59,7 @@ export function SkipJobDialog({
         tabIndex={-1}
         onSubmit={(event) => {
           event.preventDefault();
-          if (!busy) void onSave(reason, note);
+          if (!busy) void onSave(reasons, note);
         }}
       >
         <p className="rename-dialog__head" id={titleId}>Skip this job?</p>
@@ -66,20 +67,15 @@ export function SkipJobDialog({
           Save this posting as Skipped so RoleFit can recognize it if you encounter it again. No application is recorded.
         </p>
 
-        <label className="skip-job-dialog__field">
-          <span>Reason <small>Optional</small></span>
-          <select
-            ref={reasonRef}
-            value={reason}
-            onChange={(event) => setReason(event.target.value as NotApplyingReason | "")}
-            disabled={busy}
-          >
-            <option value="">No reason selected</option>
-            {Object.entries(NOT_APPLYING_REASON_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </label>
+        <SkipReasonChecklist
+          legend={<>Reasons <small>Optional</small></>}
+          value={reasons}
+          savedReasons={initialReasons}
+          onChange={setReasons}
+          suggestions={suggestions}
+          disabled={busy}
+          firstInputRef={firstReasonRef}
+        />
 
         <label className="skip-job-dialog__field">
           <span>Short note <small>Optional</small></span>

@@ -266,7 +266,7 @@ try {
   if (
     passedJob?.status !== "not_applying"
     || passedJob.notApplyingAt !== "2026-07-29T10:00:00.000Z"
-    || passedJob.notApplyingReason !== "constraints"
+    || JSON.stringify(passedJob.notApplyingReasons) !== JSON.stringify(["constraints"])
     || passedJob.notApplyingNote !== "Location requirement"
   ) {
     failures.push("Not applying decision metadata did not roundtrip");

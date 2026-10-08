@@ -1,7 +1,7 @@
 import { FitFindings } from "../../components/FitFindings";
 import { BriefcaseBusiness, CalendarClock, ClipboardCheck, Copy, Eye, Files, History } from "lucide-react";
 import type { Application } from "../../hooks/useApplications";
-import { NOT_APPLYING_REASON_LABEL } from "../../hooks/useApplications";
+import { formatNotApplyingReasons } from "../../lib/notApplying";
 import type { DuplicateGroup } from "../../lib/jobIdentity";
 import {
   STATUS_LABEL,
@@ -72,8 +72,8 @@ export function TrackerInspector({
   const displayedAiUsage = copyAiUsage(selected.aiUsage);
   const statusDateLabel = selected.status === "draft" ? "Draft created" : selected.status === "not_applying" ? "Decision date" : "Application date";
   const statusDate = selected.status === "draft" ? selected.createdAt : selected.status === "not_applying" ? selected.notApplyingAt : selected.appliedAt;
-  const statusDetail = selected.status === "not_applying" && selected.notApplyingReason
-    ? `${STATUS_LABEL[selected.status]} · ${NOT_APPLYING_REASON_LABEL[selected.notApplyingReason]}`
+  const statusDetail = selected.status === "not_applying" && selected.notApplyingReasons?.length
+    ? `${STATUS_LABEL[selected.status]} · ${formatNotApplyingReasons(selected.notApplyingReasons, 2)}`
     : STATUS_LABEL[selected.status];
   const hasPosting = Boolean(selected.rawJobDescription?.trim() || selected.jobDescription?.trim());
   const hasResume = Boolean(selected.resumeArtifacts?.hasPdf || selected.resumeArtifacts?.hasSource);
@@ -187,8 +187,8 @@ export function TrackerInspector({
                   <strong>{STATUS_LABEL[application.status]}</strong>
                   <span>
                     <time className="is-data">{formatCompactDate(applicationActivityDate(application))}</time>
-                    {application.status === "not_applying" && application.notApplyingReason
-                      ? ` · ${NOT_APPLYING_REASON_LABEL[application.notApplyingReason]}`
+                    {application.status === "not_applying" && application.notApplyingReasons?.length
+                      ? ` · ${formatNotApplyingReasons(application.notApplyingReasons, 2)}`
                       : ""}
                   </span>
                 </span>

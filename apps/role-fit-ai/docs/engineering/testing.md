@@ -893,11 +893,17 @@ Good frontend verification covers:
   it also pins destructive merge as a separate tracker operation and established
   group unlinking as one all-member revision-checked mutation.
   `src/lib/__evals__/not-applying-application.mjs` proves new, repeated, and
-  update-only Skipped commits; job-only AI provenance; decision-date
-  preservation; sent-artifact removal; exact dialog/receipt copy; and that the
-  quiet action remains in Prepare rather than the masthead. The storage probes
-  additionally verify decision metadata roundtrips while `appliedAt` and sent
-  document fields are omitted.
+  update-only Skipped commits with canonical multi-reason lists; job-only AI
+  provenance; decision-date preservation; sent-artifact removal; exact
+  dialog/receipt copy; and that the quiet action remains in Prepare rather than
+  the masthead. The storage probes additionally verify decision metadata
+  roundtrips while `appliedAt` and sent document fields are omitted.
+  `src/lib/__evals__/skip-reason-suggestions-eval.mjs` pins the local suggestion
+  rules (prior decision wins, submitted-link and Blocked pre-checks, weak marks,
+  classifier false positives, no provider path), and
+  `server/applications/__evals__/skip-reason-storage.mjs` proves legacy scalar
+  reasons load without a rewrite while unknown, mistyped, unsorted, or
+  mixed-shape stored reasons fail closed.
   `src/lib/__evals__/explicit-application-write-targets.mjs` proves answer
   generation has no tracker persistence, document-sync ID ownership, Apply/Skip
   relationship handling, and the absence of the retired `findForTarget` and

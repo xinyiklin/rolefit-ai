@@ -372,6 +372,44 @@ try {
   }
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "malformed saved facts leave the active workspace unchanged");
 
+  // Skip reasons travel as a list; a backup written before the list (one
+  // scalar reason) still restores, and an unknown stored reason is refused.
+  const withSkipDecision = (reasonFields) => {
+    const tracker = JSON.parse(trackerFile.data);
+    Object.assign(tracker.applications[0], {
+      status: "not_applying",
+      appliedAt: fixedDate.toISOString(),
+      notApplyingAt: fixedDate.toISOString(),
+      notApplyingNote: "Synthetic decision note",
+      ...reasonFields
+    });
+    return replaceEntry(withPreferences, "applications.json", JSON.stringify(tracker));
+  };
+  const skipReasonsTarget = join(isolatedRoot, "skip-reasons-target");
+  await restoreWorkspaceBackup(skipReasonsTarget, withSkipDecision({ notApplyingReasons: ["clearance", "compensation"] }), fixedDate);
+  const [restoredSkip] = await readApplications(skipReasonsTarget);
+  assert.deepEqual(restoredSkip.notApplyingReasons, ["clearance", "compensation"], "every skip reason restores");
+  assert.equal(restoredSkip.notApplyingNote, "Synthetic decision note");
+  const reExported = await createWorkspaceBackup(skipReasonsTarget, fixedDate);
+  assert.deepEqual(
+    JSON.parse(reExported.files.find((file) => file.path === "applications.json").data).applications[0].notApplyingReasons,
+    ["clearance", "compensation"],
+    "a re-export keeps every skip reason"
+  );
+  const legacySkipTarget = join(isolatedRoot, "legacy-skip-target");
+  await restoreWorkspaceBackup(legacySkipTarget, withSkipDecision({ notApplyingReason: "constraints" }), fixedDate);
+  assert.deepEqual(
+    (await readApplications(legacySkipTarget))[0].notApplyingReasons,
+    ["constraints"],
+    "a backup written before reason lists restores"
+  );
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, withSkipDecision({ notApplyingReasons: ["clearance", "bogus"] }), fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /tracker data is invalid/.test(error.message),
+    "an unknown stored skip reason is refused"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "a refused skip reason leaves the active workspace unchanged");
+
   const invalidResume = replaceEntry(withPreferences, "resumes/default.resume", "{" + "x".repeat(100));
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidResume, fixedDate),
