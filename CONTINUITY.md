@@ -227,8 +227,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   refinement chips never become facts. A follow-up defaults the composer to Add
   a detail, even beside draft text, so the typed reply is saved as a fact; a
   chip is always a refinement. One strict parser serves browser, tracker
-  route/load and backup restore; older revisions and legacy pairs stay valid; no migration and no
-  prompt change (v4).
+  route/load and backup restore; older revisions and legacy pairs stay valid;
+  no migration and no prompt change (v4).
   - [CODE] Forward-only (accepted by the Product Partner under the delegation
     as the existing no-downgrade policy): a build without this change cannot
     load, back up or restore a tracker holding `userFacts` (probed on
@@ -260,11 +260,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
     evidence, not saved, and the sentence it supports flagged unsupported), so
     that default is back to Add a detail. Facts-eval cases cover chips and typed
     replies on such drafts before and after Reopen; both fixes are
-    mutation-checked against the earlier hooks. Lows fixed: the text and fact limits are
-    marked as stored format (tightening needs a migration), PRODUCT says facts
-    stay with their question id, and the rollback recipe above. Full RoleFit
-    check passed again after the fixes (159/159 offline evals). Browser QA was
-    not run (optional; not authorized).
+    mutation-checked against the earlier hooks, and a confirmation review of the
+    second found no high or medium issues. Lows fixed: the text and fact limits
+    are marked as stored format (tightening needs a migration), PRODUCT says
+    facts stay with their question id, and the rollback recipe above. Full
+    RoleFit check passed again after the fixes (159/159 offline evals). Browser
+    QA was not run (optional; not authorized).
 - [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
   Product Brief/Delivery Plan gates in those sessions and supplied the draft).
