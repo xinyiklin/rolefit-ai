@@ -5,6 +5,41 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-07
 
+- [CODE] Stage 2 of the external-review follow-up, sanitizer slice:
+  - The Resume Polish no-op filter no longer drops a deletion-only rewrite that
+    removes a narrowing claim word ("solely", "all", "critical", "senior",
+    "three") or a number; such an edit is a correction to review. Words are
+    matched on the raw word. Deleting a negation or hedge widens the claim and
+    stays a dropped no-op, as do filler trims.
+  - Resume Polish proposals that open with a capitalised, whole-word, plain or
+    -s present ownership verb ("Build…", "Owns…") claim its past form's level,
+    so "Assisted…" → "Build…" warns like "Built…".
+    - A present-tense current bullet or evidence line supports only the same
+      verb ("Build…" → "Built…"); "Direct messaging…" or a role title never
+      supports "Led…".
+    - This is a `presentLead` option forwarded through `candidateClaimIssue`,
+      kept out of the shared `ownershipStrength`.
+    - "lead time/generation/scoring" no longer count as leadership anywhere.
+  - [TOOL] Two independent reviews. A first version put the present-tense
+    reading in `ownershipStrength`. That made "L2", "Direct3D", "Design
+    reviews", role titles and words after a semicolon count as ownership: it
+    hid real inflation and added warnings to Fit, cover letters and Skills.
+    The no-op version also surfaced hedge, negation and partial-quantity
+    deletions ("40% of", "most") unwarned. A re-review found the support side
+    was overruled by the shared check, and that nouns could still stand in for
+    other verbs. All findings were fixed with probes, including end-to-end
+    sanitizer probes.
+  - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
+    - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
+    - Six new synthetic old-prompt flags, all labelled supported. They are
+      present-tense forms of the existing "Added/Wrote → Implemented/Developed"
+      ownership rule.
+    - Stored receipts hold only surviving edits, so the no-op rule is not
+      measurable from them.
+    - New probes fail on main.
+  - Still open from that review: claims that recombine separate facts, saving
+    Answers' declared facts (storage change, needs approval), and the Answers
+    unsaved-work guard (separate fix).
 - [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
   medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
   Saved choices stay; the user's own saved selection was switched too (app

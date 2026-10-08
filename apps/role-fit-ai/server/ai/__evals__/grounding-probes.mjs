@@ -16,13 +16,15 @@ import {
   findUngroundedJdTerm,
   findUngroundedOutcomeClaim,
   hasUnsupportedOwnershipIncrease,
-  isClaimTermGroundedInSource
+  isClaimTermGroundedInSource,
+  ownershipStrength
 } from "../grounding.ts";
 import { findUngroundedNumericClaim } from "../sanitize.ts";
 import { candidateClaimIssue } from "../claimEvidence.ts";
 
 const f = (proposed, job, grounding, opts) => findUngroundedJdTerm(proposed, job, grounding, opts);
 const assisted = "Assisted senior engineers in migrating the payouts service from a cron script to Celery workers backed by Redis.";
+const bullet = (proposed, current, support) => hasUnsupportedOwnershipIncrease(proposed, current, support, undefined, { presentLead: true });
 const qaBugs = "Fixed 14 bugs from the QA backlog in the claims intake form, a jQuery front end.";
 
 const checks = [
@@ -116,6 +118,28 @@ const checks = [
     hasUnsupportedOwnershipIncrease("Migrated the payouts service from a cron script to Celery workers backed by Redis, working alongside senior engineers.", assisted, assisted)],
   ["assisted validation rewritten as Added is inflation",
     hasUnsupportedOwnershipIncrease("Added input validation to the Java Spring claims intake service alongside senior engineers.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.", "Assisted senior engineers in adding input validation to the Java Spring claims intake service.")],
+  ["Resume Polish: present-tense direct verbs from assisted work are inflation like their past forms",
+    ["Build", "Builds", "Own", "Owns"].every((verb) => bullet(`${verb} payment reconciliation services.`, "Assisted a team developing payment reconciliation services.", "Assisted a team developing payment reconciliation services."))],
+  ["Resume Polish: present-tense evidence supports the same claim in past tense",
+    !bullet("Built Go services that price insurance quotes.", "Build Go services that price insurance quotes.", "Build Go services that price insurance quotes.")],
+  ["Resume Polish: verb-shaped tokens and nouns never raise the current bullet's level",
+    [["Led L2 support for 300 clinic users.", "L2 support for 300 clinic users across 4 sites."],
+      ["Built the release pipeline, cutting build times 40%.", "Maintained the release pipeline; build times fell 40%."],
+      ["Designed the checkout accessibility reviews.", "Design reviews for checkout accessibility."],
+      ["Led the direct-to-consumer checkout flow in React.", "Direct-to-consumer checkout flow in React."],
+      ["Owned the Drive sync integration for shared folders.", "Drive sync integration for shared folders."]
+    ].every(([proposed, current]) => bullet(proposed, current, current))],
+  ["Resume Polish: a single-word title line is not ownership evidence",
+    bullet("Engineered the quote pricing service.", "", "Engineer\nMaintained the quote pricing service.")],
+  ["the present-tense reading stays out of shared checks (Fit, cover letters, Answers)",
+    candidateClaimIssue("Direct experience with Django and PostgreSQL matches the core stack.", "Built Django REST APIs on PostgreSQL.") === null
+      && !hasUnsupportedOwnershipIncrease("Own your outcomes is a value I share.", "", "Built Django REST APIs.")],
+  ["lead time-series is still leadership",
+    ownershipStrength("Lead time-series forecasting for the ops team.") === 3],
+  ["a build noun, an own adjective, and lead time claim no ownership",
+    ownershipStrength("Maintain the build pipeline.") === 0 && ownershipStrength("Keep their own notes.") === 0 && ownershipStrength("Lead time fell 30% after the rollout.") === 0],
+  ["a leading gerund is a participial phrase, not a claim",
+    ownershipStrength("Helping members at the desk led me to develop Atlas.") === 0],
   ["helping framing kept is not inflation",
     !hasUnsupportedOwnershipIncrease("Helped migrate the payouts service from a cron script to Celery workers backed by Redis.", assisted, assisted)],
   ["tied direct-action evidence supports the direct rewrite",
@@ -303,7 +327,7 @@ const checks = [
 
 // Floor: silently deleting a check must shrink the gate loudly, not quietly.
 // Raise this number whenever you ADD a check above.
-assert(checks.length >= 119, `grounding probe count dropped below the floor (119): found ${checks.length}`);
+assert(checks.length >= 127, `grounding probe count dropped below the floor (127): found ${checks.length}`);
 
 let failures = 0;
 for (const [name, ok] of checks) {
