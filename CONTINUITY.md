@@ -156,7 +156,24 @@ bounded; app-only operational detail belongs in the affected app documentation.
     reviewer; the review prompt follows the materiality rubric (filler cuts
     kept). After merging main, server `tsc`, `npm run check --workspace
     apps/role-fit-ai` (157/157 offline evals), and `git diff --check` passed.
-    UNCONFIRMED at this writing: the approved synthetic browser QA.
+  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
+    synthetic workspace, at 1440 px.
+    - The page's network calls were stubbed in the browser, so no AI provider
+      was called: provider status, Job analysis unavailable, and two synthetic
+      Polish results.
+    - The Guidance toggle sent `reviewEdits: true`.
+    - A run with one kept and two held-back edits showed a collapsed "2 held
+      back by review" list, with location, reason and the bounded note.
+      Restore names were distinct.
+    - Accept the kept edit, Restore one, Accept it, Undo it: Undo restored
+      exactly that bullet, the earlier acceptance survived, and the restored
+      edit went back to the queue.
+    - All held back with one withheld edit: "No worthwhile changes after
+      review" plus the withheld line, with the warning tone.
+    - Restoring the first and then the last held-back edit kept the same open
+      disclosure node, and focus stayed on its summary.
+    - Console errors were only Vite live-reload polling, which is unreachable
+      from the QA pane.
 - [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
   claims held: the no-op rewrite filter hides claim-changing deletions;
   `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;
