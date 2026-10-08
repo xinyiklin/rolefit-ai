@@ -161,7 +161,11 @@ browser-side effects; components render them and App composes them.
   its historical material but cannot change it until reactivated. Job URL or text matching
   must never infer that target. `useApplicationAnswers` owns per-preparation
   conversation state, question/revision binding, generation, cancellation and
-  edits. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
+  edits. Send and both Retry buttons (the tab's and the progress dock's) reach
+  the provider only through `generate()`, which uses the Answers tab's
+  prepared-job gate and blocker order, with App's `jobPrepared` as `jobReady`:
+  a source edit keeps the conversation but unprepares the job. Its resume check
+  is still non-empty text, not the tab's `resumeReady`. Its `hasUnsavedAnswers` (and the live `hasUnsavedAnswersNow()`) count
   composer text, any unsaved revision, an in-flight request, and a failed or
   stopped latest turn that carries typed refinement or detail text (a bare
   failed question is not counted). App asks before the two paths that

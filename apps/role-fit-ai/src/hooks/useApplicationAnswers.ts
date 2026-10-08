@@ -49,6 +49,7 @@ type UseApplicationAnswersArgs = {
   applicationId?: string;
   resumeText: string;
   jobDescription: string;
+  jobReady: boolean;
   rawJobText?: string;
   jobUrl: string;
   candidateContext: string;
@@ -125,9 +126,10 @@ export function useApplicationAnswers(args: UseApplicationAnswersArgs) {
 
   async function generate(turn: SubmittedTurn) {
     if (requestRef.current || turn.conversationId !== currentIdentityRef.current) return;
-    const blocker = args.profileLimitMessage || (!args.providerReady ? args.providerMessage : "")
-      || (!args.resumeText.trim() ? "Add your resume first." : "")
-      || (!args.jobDescription.trim() ? "Add the job on Prepare first." : "");
+    // The Answers tab's prepared-job gate and order, so send and both Retry buttons block alike.
+    const blocker = args.profileLimitMessage || (!args.resumeText.trim() ? "Add your resume first." : "")
+      || (!args.jobReady ? "Add the job on Prepare first." : "")
+      || (!args.providerReady ? args.providerMessage : "");
     lastRequestRef.current[turn.conversationId] = turn;
     if (blocker) {
       update(conversationId, (current) => ({ ...current, status: blocker, progress: { status: "failed", errorHeadline: "Cannot draft yet", error: blocker } }));
