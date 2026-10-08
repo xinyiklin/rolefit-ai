@@ -352,10 +352,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   retries under the new pool, one before the loader commits cancels adoption,
   and a pool change never re-resolves a settled preparation. The app guide's
   "no persisted variant metadata" rule now allows only this pool. Rollback:
-  before reverting, run Settings Reset (it clears every setting) or delete both
-  `excludedResumeVariants` and `excludedCoverLetterVariants` from
-  `workspace-preferences.json`; otherwise an older build treats the preferences
-  file as invalid and refuses settings saves. Re-checking variants is not
+  an older build treats preferences with these keys as invalid and refuses
+  settings saves. Settings Reset no longer avoids that (superseded 2026-10-08:
+  since #179, Reset's auto-save re-writes `resumePolishReview`, which 0.8.0 also
+  rejects); restore a backup made by the older build instead. Re-checking variants is not
   enough, because a deleted or renamed excluded variant can no longer be
   re-checked. Backups taken while a pool was customized need a newer build to
   restore.
