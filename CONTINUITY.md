@@ -23,19 +23,19 @@ bounded; app-only operational detail belongs in the affected app documentation.
     parsing, supported sites) and #195 (squash `e25e55c`, Skip close
     warning, changed-only update PDFs). Each had green CI and an exact-head
     review marked ready.
-  - [USER] Firefox: the ⌘⇧U shortcut works after a Firefox restart. A
-    Handshake capture in Firefox specifically is UNCONFIRMED; Chrome was
-    verified live.
+  - [TOOL] Firefox Handshake capture (the pre-tag check #194 promised; the
+    user said not to wait for them, and the shortcut itself is the separate
+    Firefox entry below). Headless Firefox 157.0.1 in a clean profile ran the
+    1.3.0 extension's ⌘⇧U import on a synthetic Handshake posting
+    (`school.joinhandshake.com` resolved locally, stand-in RoleFit server).
+    Firefox awaited the async capture: it expanded the description, dropped
+    Similar Jobs, alumni, and navigation, sent the canonical `/jobs/<id>`
+    URL, and opened the import tab with no failure notice. The live
+    Handshake site in Firefox stays UNCONFIRMED; Chrome was verified live.
   - [TOOL] On this branch (macOS arm64, Node 24.18.0): `test:desktop:release`
     14/14 and the full `npm run check --workspace apps/role-fit-ai` 167/167.
     The preview preflight is re-run on the merged `origin/main` commit before
     the tag.
-- [TOOL] **RoleFit 0.9.1 preview released.** The annotated tag
-  `rolefit-preview-v0.9.1-beta.1` is on `4e389af` (#193). Release workflow run
-  37857689297 succeeded and published the prerelease "RoleFit AI 0.9.1 —
-  unsigned preview beta.1" at 2026-10-08T23:15:56Z, with the arm64/x64 `.dmg`
-  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
-  Typeset, and Document workflow runs on `4e389af` succeeded.
 - [USER+CODE] **A saved Skip no longer warns on close; Update offers only
   changed PDFs** (branch `fix/rolefit-saved-application-prompts`; the user
   reported both).
@@ -151,6 +151,12 @@ bounded; app-only operational detail belongs in the affected app documentation.
       BambooHR, Breezy, JazzHR, Recruitee, Personio, and Rippling boards of
       other companies.
 
+- [TOOL] **RoleFit 0.9.1 preview released.** The annotated tag
+  `rolefit-preview-v0.9.1-beta.1` is on `4e389af` (#193). Release workflow run
+  37857689297 succeeded and published the prerelease "RoleFit AI 0.9.1 —
+  unsigned preview beta.1" at 2026-10-08T23:15:56Z, with the arm64/x64 `.dmg`
+  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
+  Typeset, and Document workflow runs on `4e389af` succeeded.
 - [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the three
   user-facing fixes and one test fix of #192 since
   `rolefit-preview-v0.9.0-beta.1`, no new capability and no
