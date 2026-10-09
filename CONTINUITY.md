@@ -5,6 +5,23 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [TOOL] **RoleFit 0.10.0 preview released.** #196 squash-merged as
+  `4e33fb8`, with a tree identical to its reviewed head `2242afd`.
+  - Preflight on that tree (macOS arm64, Node 24.18.0) passed before tagging:
+    - full `npm run check --workspace apps/role-fit-ai` 167/167;
+    - `test:rolefit:desktop` (Electron development smoke);
+    - `make:rolefit:desktop` (135 staged files);
+    - `test:rolefit:desktop:packaged` (darwin-arm64);
+    - `test:desktop:release` 14/14.
+  - The annotated tag `rolefit-preview-v0.10.0-beta.1` is on `4e33fb8`. Tag
+    creation is restricted by a ruleset, which the push bypassed.
+  - Release workflow run 37873927902 succeeded: source validation, the
+    Windows x64 and macOS arm64/x64 builds, and the verified publish. It
+    published the prerelease "RoleFit AI 0.10.0 — unsigned preview beta.1" at
+    2026-10-09T02:25:20Z, with the arm64/x64 `.dmg` and `.zip`, the Windows
+    x64 `.exe`, and `SHA256SUMS.txt`.
+  - The product site, Typeset, and Document workflow runs on `4e33fb8`
+    succeeded.
 - [USER+CODE] **RoleFit 0.10.0 preview prepared** (minor: the Handshake
   import is a new capability since `rolefit-preview-v0.9.1-beta.1`, with no
   stored-data or format change). The user asked to "start the 0.10.0 release"
@@ -23,7 +40,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
     parsing, supported sites) and #195 (squash `e25e55c`, Skip close
     warning, changed-only update PDFs). Each had green CI and an exact-head
     review marked ready.
-  - [TOOL] Firefox Handshake capture (the pre-tag check #194 promised; the
+  - [USER+TOOL] Firefox Handshake capture (the pre-tag check #194 promised; the
     user said not to wait for them, and the shortcut itself is the separate
     Firefox entry below). Headless Firefox 157.0.1 in a clean profile ran the
     1.3.0 extension's ⌘⇧U import on a synthetic Handshake posting
