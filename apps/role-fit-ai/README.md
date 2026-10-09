@@ -173,9 +173,10 @@ font, size and wrapping changes still reflow the page normally.
   boards), with Greenhouse-wrapper resolution; Oracle, iCIMS, Dayforce,
   Workable, and UKG job pages; structured JobPosting data; and a generic
   HTML→text fallback for other boards ([Supported job sites](#supported-job-sites)
-  lists each). Each source must yield the exact linked
-  job; a missing posting or sign-in page fails with a prompt to paste or use the
-  extension rather than importing unrelated text. The configured Job analysis
+  lists each). Each recognized source must yield the exact linked job; a
+  missing posting or sign-in page fails with a prompt to paste or use the
+  extension rather than importing unrelated text. The generic fallback accepts
+  any readable page (see the table's known limits). The configured Job analysis
   provider extracts the posting into structured fields and concise summaries.
   The server validates response shape and bounds; extraction has no additional
   fact checks or evidence-review warnings.
@@ -722,7 +723,7 @@ the URL, so the same posting is recognized as a duplicate under different URLs.
 
 | Site | Paste a link | Extension capture | Posting ID |
 | --- | --- | --- | --- |
-| Ashby (`jobs.ashbyhq.com`, company pages with `?ashby_jid=`) | Full description from Ashby's public posting API, including embedded boards | Page text, then Ashby's API | Yes |
+| Ashby (`jobs.ashbyhq.com`, company pages with `?ashby_jid=`) | Full description from Ashby's public posting API, including embedded boards | Page text, then Ashby's API | `jobs.ashbyhq.com` links only |
 | Greenhouse (`boards.greenhouse.io`, `job-boards.greenhouse.io`, company pages with `?gh_jid=`) | Full description from the embedded board | Description selector, then Greenhouse | Yes |
 | Workday (`*.myworkdayjobs.com`) | Full description from Workday's job API | Description selector, then Workday's API | Yes |
 | Handshake job board (`<school>.joinhandshake.com/jobs/<id>`, search view) | No: it needs your sign-in | Expands the description and keeps only that posting, without Similar Jobs or alumni | No: the canonical `/jobs/<id>` URL is matched instead |

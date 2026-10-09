@@ -54,10 +54,13 @@ bounded; app-only operational detail belongs in the affected app documentation.
   - [USER+CODE] `extractJobMeta` no longer stalls the analyze route (the user
     asked for this in the same branch). The Indeed title regex took 10-34 s
     on a crafted 500-character title, and the body `Role:`/`Company:`/intro
-    patterns about 4 s on 50,000 blank lines (`^\s*` crossed lines). Any
-    site's popup open stalled the whole local server. LinkedIn and Indeed
-    titles are now split and indexed, and the body patterns no longer cross
-    line breaks. A differential run over 225 title/body pairs changed only
+    patterns 6-16 s on 50,000 blank lines (`^\s*` crossed lines). A crafted
+    title or page on any site could stall the whole local server when the
+    popup opened. LinkedIn and Indeed titles are now split and indexed, the
+    body patterns no longer cross line breaks, and the analyze route caps
+    resolved text at 50,000 characters before parsing (a recognized source's
+    resolved text was uncapped, and the unchanged `at` cue then took ~3 s on
+    2.5M characters). A differential run over 225 title/body pairs changed only
     two junk titles and the Handshake format. Probes:
     `server/extension/__evals__/job-meta-probes.mjs`.
   - [USER+TOOL] Supported job sites are documented in the app README (the

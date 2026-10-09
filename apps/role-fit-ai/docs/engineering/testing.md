@@ -1179,9 +1179,9 @@ and does not own workspace/tracker files. Focused companion probes should cover:
 - popup title/company parsing (`server/extension/__evals__/job-meta-probes.mjs`):
   LinkedIn, Indeed, and `<Role> | <Employer> | Handshake` titles (Handshake
   ahead of LinkedIn), body header lines filling only what the title left open,
-  and hostile 500-character titles and 50,000-character page text parsing in
-  under 500 ms (the replaced patterns took 4-34 s, stalling the synchronous
-  analyze route);
+  and hostile 500-character titles and 50,000-character page text (the
+  analyze route's cap) parsing in under 500 ms (the replaced patterns took
+  0.5-32 s, stalling the synchronous analyze route);
 - the loadable extension directory containing no reserved `_` name, nothing
   beyond the shipped set defined once in `desktop/extension-bundle.cts` plus its
   two guides, and no missing shipped file — while tolerating dotfiles the

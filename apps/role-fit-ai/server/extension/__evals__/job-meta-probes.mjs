@@ -63,19 +63,25 @@ probe("body header lines and cues fill only what the title left open", () => {
 });
 
 probe("hostile titles and page text parse without stalling the analyze route", () => {
+  const nbsp = "\u00a0";
+  // The replaced patterns took 20-32 s on the Indeed titles, 0.5 s on the
+  // LinkedIn title, and 6-16 s on the first three bodies; the last body holds
+  // the unchanged "at" cue to its 50,000-character cap.
   const titles = [
-    `x${`${" ".repeat(20)}-`.repeat(60)}`,
+    `x${`${nbsp.repeat(20)}-`.repeat(60)}`,
     `x${`${" ".repeat(20)}-`.repeat(60)}`,
-    `${`x at ${" ".repeat(10)}-`.repeat(40)}`,
-    `x${`${" ".repeat(240)}|`.repeat(40)}`,
-    `${`a at ${" ".repeat(30)}`.repeat(20)}`
+    `${` at ${" ".repeat(20)}`.repeat(10)}${"-".repeat(260)}`
   ].map((title) => title.slice(0, 500));
-  const bodies = ["\n".repeat(50_000), " \n".repeat(25_000), " ".repeat(50_000), " \n".repeat(25_000)];
+  const bodies = [
+    "\n".repeat(50_000),
+    " \n".repeat(25_000),
+    "\u2028".repeat(50_000),
+    `${"at Ab ".repeat(8)}${nbsp.repeat(49_900)}x`
+  ];
   for (const [text, title] of [...titles.map((title) => ["", title]), ...bodies.map((body) => [body, "Jobs"])]) {
     const started = performance.now();
     extractJobMeta(text, title);
     const elapsed = performance.now() - started;
-    // The replaced patterns took 4-34 s on these inputs.
     assert.ok(elapsed < 500, `parsed in ${elapsed.toFixed(0)} ms`);
   }
 });

@@ -32,8 +32,9 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
 
 // Best-effort title/company extraction from a job page title and body text.
 // Conservative: returns only what it can read; never guesses an employer.
-// Any site supplies both inputs and the analyze route runs this synchronously,
-// so every parse is a split or a line-anchored match that cannot backtrack.
+// Any site supplies both inputs and the analyze route runs this synchronously
+// (title <= 500, text <= 50,000 characters), so titles are split rather than
+// matched and no body pattern can cross a line; backtracking stays bounded.
 export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: string; company?: string } {
   const meta: { title?: string; company?: string } = {};
   const title = typeof pageTitle === "string" ? pageTitle.trim() : "";

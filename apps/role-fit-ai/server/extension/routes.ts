@@ -359,7 +359,8 @@ export async function handleExtensionRoutes(
     }
     const text = await resolveImportedJobText(capturedText, url);
 
-    const { title, company } = extractJobMeta(text, pageTitle);
+    // A recognized source's resolved text is not capped like the capture is.
+    const { title, company } = extractJobMeta(text.slice(0, 50_000), pageTitle);
 
     // The extension intentionally does not read or score the base resume. It
     // identifies/imports the posting; Fit Assessment in the main app owns fit.
