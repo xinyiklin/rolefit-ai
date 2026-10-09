@@ -6,8 +6,10 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
 ## Requirements
 
 - Node.js 24.18 or newer in the Node 24 line. `.node-version` pins 24.18.0,
-  matching CI and Electron's embedded runtime; direct `.ts` launchers use its
-  built-in type stripping.
+  matching CI and Docker; direct `.ts` launchers use its built-in type
+  stripping. The desktop companion instead runs on Electron's bundled Node,
+  which `apps/role-fit-ai/desktop/runtime-versions.mjs` pins and the packaged
+  smoke checks.
 - npm 11.16.0, declared by the root `packageManager` field, with the root
   lockfile. The root `devEngines` block fails the runtime and package-manager
   check before `install`, `ci`, or `run` proceeds, so a mismatched toolchain

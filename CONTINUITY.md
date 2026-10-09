@@ -25,8 +25,10 @@ win on conflict.
 - 2026-07-29 [USER+CODE+TOOL] Toolchain: Node 24.18+ below 25 (`.node-version`:
   24.18.0), npm 11.16.0, root-owned TypeScript 7.0.2/Vite/React tooling, a
   pinned install-script allowlist, and the dependency-contract gate; Electron
-  43.2.0. Actions are SHA-pinned; Dependabot has no auto-merge; Vite,
-  TypeScript, Electron, PDF/font, and Python bumps stay manual.
+  43.7.9 (bundled Node 24.21.0; superseded 43.2.0 on 2026-10-09, see that day).
+  Actions are SHA-pinned; Dependabot has no auto-merge and checks npm monthly
+  (2026-10-09); Vite, TypeScript, Electron, PDF/font, and Python bumps stay
+  manual.
 - 2026-07-29..07-31 [USER+CODE+TOOL] PDF dependencies stay `pdf-lib` 1.17.1,
   `@pdf-lib/fontkit` 1.1.1, and React-PDF 10.4.1; RoleFit declares `pdfjs-dist`
   5.4.296 (contract-pinned to React-PDF's). `devEngines` enforcement on a
@@ -542,6 +544,67 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     round-trip evals.
   - **Release notes:** an older build refuses a tracker over 500 records (fails
     closed, no data loss) and backups over its old limits.
+- [USER+CODE+TOOL] **Desktop companion Electron 43.2.0 → 43.7.9** (task
+  `2026-10-09-electron-43-security`). 43.2.0 carried four high advisories:
+  GHSA-gr2m-v5gq-v685, GHSA-j84w-jfhq-vhvj, and GHSA-9qh4-3jw8-366w (fixed in
+  43.4.1), and GHSA-qmv3-fv6v-rmhq (fixed in 43.5.0).
+  `deps:audit:production` cannot see them because `electron` is a
+  devDependency. 43.7.9 bundles Node 24.21.0 and Chromium 150.0.7871.250.
+  - [USER+CODE] Only the desktop runtime moves. `runtime-versions.mjs` expects
+    43.7.x with Node 24.21.x and esbuild target `node24.21`. `.node-version`,
+    CI, Docker, and npm stay on 24.18.0 / 11.16.0, so the README and
+    `docs/development.md` no longer say the toolchain matches Electron. Moving
+    the toolchain to Node 24.21 / npm 11.19 is a follow-up, together with #145.
+  - [CODE] Electron 43.x ships no npm install script; its binary downloads on
+    the first `require("electron")`. The `allowScripts` entry is policy that the
+    checker keeps in step.
+  - [TOOL] The lockfile changes only the `electron` entry and the RoleFit
+    workspace's declared pin, and the integrity matches the registry. The 43.2.0 → 43.7.9 `install.js` diff only makes the
+    extractor `require` lazy. `npm audit` shows no Electron entry (40 → 39).
+    `deps:check`, `deps:tree`, `deps:audit:production`, and
+    `test:desktop:release` (14/14) pass.
+  - [TOOL] Windows x64, Node 24.18.0: the root `npm run check` passed (RoleFit
+    170/170 offline evals), and so did `test:rolefit:desktop`.
+    `make:rolefit:desktop` staged 135 files, and `test:rolefit:desktop:packaged`
+    passed (win32-x64). The packaged companion reports
+    `electron=43.7.9 node=24.21.0`. No macOS host; the release workflow's
+    native jobs cover macOS.
+  - [TOOL] `test:rolefit:desktop` is flaky on Windows under machine load, on
+    both Electron versions. Its development-mode phases intermittently fail
+    the companion's 750 ms / 1 s loopback probes ("connection status
+    contract", or a pairing-settings `TimeoutError`). Measured: 0.10.0, #198,
+    and #143 passed on a quiet machine; later, 4 of 4 interleaved runs passed
+    on each of 43.2.0 and 43.7.9 on this branch. CI does not run this smoke.
+  - [TOOL] A Windows `safeStorage` probe (isolated user data, synthetic value)
+    encrypted with 43.2.0 and decrypted with 43.7.9: MATCH,
+    `shouldReEncrypt=false`. macOS upgrade decryption is UNVERIFIED.
+  - [TOOL] Quick-quit probe on Windows: the companion's `before-quit` →
+    cleanup → `app.exit()` path keeps a newly created key, at any delay.
+    - A key is lost only if `app.exit()` runs in the same task as its creation,
+      which the companion never does. It also needs no key at startup until an
+      API provider is configured (`main.cts` `readProviderConnectionState`).
+    - Residual risk, which 0.10.0 also had: a hard kill within about 10 s of the
+      first-ever API-key save loses the key. Local State commits on a timer, so
+      the probe lost it at 1 s and 5 s and kept it at 12 s. The provider then
+      shows reconnect guidance and re-entering the key recovers it. No change:
+      forcing key creation at startup would add a macOS Keychain prompt for
+      users without API keys.
+  - [TOOL] `tracker-revision-probes` failed once inside the full root check on
+    Windows ("an outside same-size edit mints a new revision"), then passed 6/6
+    alone. It is likely an NTFS timestamp-granularity race in #198's probe
+    (UNCONFIRMED; a follow-up task is checking), and it is unrelated to
+    Electron.
+- [USER+CODE+TOOL] Dependency maintenance:
+  - Dependabot now checks npm monthly (#199). The esbuild 0.28.2 allowlist
+    entry (#143) and Vite 8.3.3 (#116, which clears the nanoid, postcss, and
+    source-map-js advisories) are merged; #151 and #152 stay open as trivial.
+  - [TOOL] Dependabot alerts, and with them security updates, are **disabled**
+    for the repository (the alerts API returns 403 "disabled"). That
+    contradicts #199's text that security updates still arrive immediately.
+    Enabling them is the user's setting; whether they will be enabled is
+    UNCONFIRMED.
+  - [USER] #201 removed root `CONTINUITY.md` from the RoleFit retired-name
+    contract. The ledger is a compacted history, outside RoleFit evals.
 
 ## 2026-10-08
 

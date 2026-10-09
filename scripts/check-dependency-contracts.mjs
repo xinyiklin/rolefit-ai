@@ -26,7 +26,7 @@ const forgePackages = [
   "@electron-forge/maker-zip",
 ];
 const expectedInstallScriptPolicy = {
-  "electron@43.2.0": true,
+  "electron@43.7.9": true,
   "electron-winstaller@5.4.4": true,
   "esbuild@0.28.2": true,
   "fs-xattr@0.3.1": true,

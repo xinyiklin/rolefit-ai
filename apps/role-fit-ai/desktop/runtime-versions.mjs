@@ -1,11 +1,11 @@
 export const ROLEFIT_DESKTOP_RUNTIME_CONTRACT = Object.freeze({
-  electronVersion: "43.2.0",
+  electronVersion: "43.7.9",
   electronMajor: 43,
-  electronMinor: 2,
-  embeddedNodeVersion: "24.18.0",
+  electronMinor: 7,
+  embeddedNodeVersion: "24.21.0",
   embeddedNodeMajor: 24,
-  embeddedNodeMinor: 18,
-  esbuildTarget: "node24.18",
+  embeddedNodeMinor: 21,
+  esbuildTarget: "node24.21",
   forgeHostNodeMajor: 24,
 });
 
