@@ -89,10 +89,17 @@ export function randomClaimToken() {
 
 // ── Page capture (the function body below is injected into the active tab) ──
 
-// Injected by source, so every helper it uses is declared inside it.
-export async function extractPageData() {
-  const page = await extractHandshakePosting() ?? extractVisiblePage();
-  return { ...page, text: page.text.slice(0, 50000) };
+// Injected by source, so every helper it uses is declared inside it. Only a
+// Handshake page returns a promise; every other page's capture stays synchronous.
+export function extractPageData() {
+  const capped = (page) => ({ ...page, text: page.text.slice(0, 50000) });
+  if (!handshakePostingId()) return capped(extractVisiblePage());
+  return extractHandshakePosting().then((page) => capped(page ?? extractVisiblePage()));
+
+  function handshakePostingId() {
+    if (!/(^|\.)joinhandshake\.com$/i.test(location.hostname)) return "";
+    return location.pathname.match(/^\/(?:jobs|job-search)\/(\d+)\/?$/)?.[1] ?? "";
+  }
 
   function extractVisiblePage() {
     const selectors = [
@@ -114,9 +121,7 @@ export async function extractPageData() {
   // Signed-in Handshake shortens the description behind a toggle and follows
   // the posting with other jobs and students; keep only the posting's sections.
   async function extractHandshakePosting() {
-    if (!/(^|\.)joinhandshake\.com$/i.test(location.hostname)) return null;
-    const pathId = location.pathname.match(/^\/(?:jobs|job-search)\/(\d+)\/?$/)?.[1];
-    if (!pathId) return null;
+    const pathId = handshakePostingId();
     const pane = () => document.querySelector('[data-hook="job-details-page"], [data-hook="right-content"]');
     const sections = () => {
       let container = pane();

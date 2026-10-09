@@ -11,7 +11,7 @@ bounded; app-only operational detail belongs in the affected app documentation.
   characters of a description Handshake shortens in JavaScript behind
   **More**, plus site navigation, other jobs' "Similar Jobs" listings, and
   "Alumni in similar roles" names. The server cannot fetch these pages (sign-in
-  required). `extractPageData` (now async and exported) adds a Handshake
+  required). `extractPageData` (now exported) adds a Handshake
   adapter for `*.joinhandshake.com/jobs/<id>` and `/job-search/<id>`. It clicks
   up to four section toggles, skipping any inside a link or form; it re-finds
   each toggle (Handshake re-renders it on every click) and reopens one it
@@ -20,8 +20,11 @@ bounded; app-only operational detail belongs in the affected app documentation.
   the pane's title link. Its title is `<Role> | <Employer> | Handshake`, with
   whitespace collapsed. `extractJobMeta` now parses that title by splitting on
   `|`, ahead of the LinkedIn pattern. Before, it read no employer and cut the
-  role at " - ". An unrecognized layout falls back to the generic capture. No
-  permission, manifest, server route, or extension version change.
+  role at " - ". An unrecognized layout falls back to the generic capture.
+  Only a Handshake page's capture returns a promise (Chrome and Firefox both
+  document awaiting it); every other site's capture stays synchronous, as
+  before. No permission or new route; the analyze route only caps its parser
+  input.
   - [TOOL] The real function ran in the user's signed-in Chrome on the three
     reported postings and the search view. It captured 3,683 / 4,816 / 2,096
     characters with no Similar Jobs, alumni, nav, or other result cards. The
@@ -57,7 +60,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
     patterns 6-16 s on 50,000 blank lines (`^\s*` crossed lines). A crafted
     title or page on any site could stall the whole local server when the
     popup opened. LinkedIn and Indeed titles are now split and indexed, the
-    body patterns no longer cross line breaks, and the analyze route caps
+    whitespace before an anchored body label no longer crosses lines, and
+    the analyze route caps
     resolved text at 50,000 characters before parsing (a recognized source's
     resolved text was uncapped, and the unchanged `at` cue then took ~3 s on
     2.5M characters). A differential run over 225 title/body pairs changed only

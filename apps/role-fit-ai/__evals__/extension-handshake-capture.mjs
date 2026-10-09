@@ -271,9 +271,19 @@ await probe("other sites keep the generic capture and are never clicked", async 
   const posting = el("div", { attrs: { class: "posting" }, text: "Backend role description. ".repeat(6) });
   body.append(posting);
   installPage("https://jobs.example.com/jobs/1000001", "Backend Engineer", body);
-  const page = await extractPageData();
+  const page = extractPageData();
+  assert.ok(!(page instanceof Promise), "a non-Handshake capture stays synchronous");
   assert.equal(page.text, posting.innerText.trim());
   assert.equal(page.url, "https://jobs.example.com/jobs/1000001");
+  assert.equal(state.clicks, 0);
+});
+
+await probe("a Handshake page that is not a posting keeps the synchronous generic capture", () => {
+  const { body, state } = handshakeBody();
+  installPage(`${ORIGIN}/job-search?page=1`, "Jobs | Handshake", body);
+  const page = extractPageData();
+  assert.ok(!(page instanceof Promise));
+  assert.equal(page.url, `${ORIGIN}/job-search?page=1`);
   assert.equal(state.clicks, 0);
 });
 

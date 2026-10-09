@@ -87,8 +87,10 @@ V3 client of the local RoleFit server.
   submits, and an unrecognized layout falls back to the generic capture, which
   keeps whatever the page shows. Handshake is the one adapter: signed-in pages
   the server cannot fetch, a "More" toggle that re-renders on every click,
-  then Similar Jobs and alumni profiles. Its probes live in
-  `__evals__/extension-handshake-capture.mjs`.
+  then Similar Jobs and alumni profiles. Only an adapter page returns a
+  promise from the injected function; the generic capture stays synchronous so
+  every other site keeps working even where an engine mishandles an async
+  result. Its probes live in `__evals__/extension-handshake-capture.mjs`.
 - Keep all server access fixed to local RoleFit routes. The localhost server
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an
