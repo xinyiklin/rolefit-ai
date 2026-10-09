@@ -43,8 +43,14 @@ export function requestAbortSignal(req: IncomingMessage, res: ServerResponse): {
   };
 }
 
-export function sendJson(res: ServerResponse, status: number, payload: unknown): void {
+export function sendJson(
+  res: ServerResponse,
+  status: number,
+  payload: unknown,
+  headers: Record<string, string> = {}
+): void {
   res.writeHead(status, {
+    ...headers,
     "Content-Type": "application/json",
     "Cache-Control": "no-store"
   });

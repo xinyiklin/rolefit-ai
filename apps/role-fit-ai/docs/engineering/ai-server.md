@@ -917,7 +917,18 @@ In the response:
   concurrent local requests cannot expose a partial file. Tracker writes name
   every changed id plus its pre-edit `updatedAt`; the server keeps unmutated
   rows from the latest disk snapshot and returns `409` with that snapshot when
-  the same row changed in another tab. Creation/update timestamps are required
+  the same row changed in another tab. The tracker holds at most 2,000
+  applications (`MAX_APPLICATIONS`). The server keeps the last fully validated
+  `applications.json` in memory while the file's identity (device, inode,
+  size, mtime, ctime) is unchanged, re-validating after any outside change or
+  restore, and names each validated state with an in-memory `revision`: GET
+  answers `304` to `If-None-Match` for the current revision, and a PUT whose
+  `baseRevision` matches gets only its upserted rows plus the id `order`
+  (otherwise the full tracker, which the client adopts as-is like a GET). A
+  write is cached only when the renamed file is provably its own (same device,
+  inode, size, mtime); otherwise the cache is dropped and the response carries
+  no revision. Backup validates the exact `applications.json` bytes it
+  packages. Creation/update timestamps are required
   canonical ISO values, and an existing upsert must advance `updatedAt`
   strictly after its matched revision. Retired tracker fields, dual
   source-and-PDF artifact claims, duplicate ids, corrupt application JSON, and

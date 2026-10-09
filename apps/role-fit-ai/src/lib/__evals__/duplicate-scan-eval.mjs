@@ -1,6 +1,6 @@
 // Probes for the client-only duplicate scan cache (src/lib/duplicateScan.ts) —
-// the layer that keeps the Applications tab from rerunning the O(n²) identity
-// scan on every visit. Offline + deterministic; discovered automatically by
+// the layer that keeps the Applications tab from rerunning the tracker-wide
+// identity scan on every visit. Offline + deterministic; discovered automatically by
 // `npm test`.
 //
 // It also carries a benchmark of the underlying scan. That benchmark makes NO

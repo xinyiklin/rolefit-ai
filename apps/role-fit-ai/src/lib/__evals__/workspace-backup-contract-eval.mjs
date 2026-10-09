@@ -15,6 +15,8 @@ import {
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   WORKSPACE_RESTORE_MARKER_FORMAT,
   WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION,
+  MAX_WORKSPACE_BACKUP_BYTES,
+  MAX_WORKSPACE_BACKUP_FILE_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
   isManagedWorkspaceBackupPath,
   parsePortableWorkspacePreferences,
@@ -324,7 +326,7 @@ for (const [name, badFile] of [
   ["an encoding value outside utf8/base64", backupFile({ encoding: "binary" })],
   ["a non-integer byteLength", backupFile({ byteLength: 1.5 })],
   ["a negative byteLength", backupFile({ byteLength: -1 })],
-  ["byteLength over MAX_WORKSPACE_BACKUP_FILE_BYTES", backupFile({ byteLength: 10_000_001 })],
+  ["byteLength over MAX_WORKSPACE_BACKUP_FILE_BYTES", backupFile({ byteLength: MAX_WORKSPACE_BACKUP_FILE_BYTES + 1 })],
   ["a non-numeric byteLength", backupFile({ byteLength: "2" })],
   ["a malformed sha256 (too short)", backupFile({ sha256: "abc" })],
   ["a malformed sha256 (uppercase hex)", backupFile({ sha256: "A".repeat(64) })],
@@ -337,15 +339,18 @@ for (const [name, badFile] of [
 // Total-bytes cap: declared byteLength sums across files trip the aggregate
 // guard even though the actual `data` strings here are tiny — the contract
 // trusts the declared byteLength for this early-exit accounting. Each file
-// stays UNDER the per-file cap (10 MB) so this specifically exercises the
-// aggregate 64 MB guard rather than tripping the per-file one first.
+// stays UNDER the per-file cap so this specifically exercises the aggregate
+// guard rather than tripping the per-file one first.
 {
-  const bigFiles = Array.from({ length: 8 }, (_, i) =>
-    backupFile({ path: `resumes/variant${i}.resume`, byteLength: 9_000_000 })
-  ); // 8 x 9,000,000 = 72,000,000 > 64,000,000 aggregate cap
+  const perFile = MAX_WORKSPACE_BACKUP_FILE_BYTES - 1;
+  const count = Math.floor(MAX_WORKSPACE_BACKUP_BYTES / perFile) + 1;
+  const bigFiles = Array.from({ length: count }, (_, i) =>
+    backupFile({ path: `resumes/variant${i}.resume`, byteLength: perFile })
+  );
+  assert.ok(count * perFile > MAX_WORKSPACE_BACKUP_BYTES);
   assert.throws(
     () => parseWorkspaceBackupEnvelope({ ...validEnvelope, files: bigFiles }),
-    "declared byteLength totals over the 64 MB aggregate cap are rejected even though every individual file is under the 10 MB per-file cap"
+    "declared byteLength totals over the aggregate cap are rejected even though every individual file is under the per-file cap"
   );
 }
 

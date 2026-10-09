@@ -830,7 +830,8 @@ The workspace contains:
 - `resumes/<variant>.resume` — named resume variants; `default.resume` is first
 - `cover-letters/<variant>.cover` — named cover-letter variants
 - `resumes/.trash/` and `cover-letters/.trash/` — per-document version history
-- `applications.json` — the pipeline tracker's on-disk store
+- `applications.json` — the pipeline tracker's on-disk store (up to 2,000
+  applications; workspace backups are sized to carry a tracker at that limit)
 - `applications/<id>/` — per-application files: each Resume/Cover letter slot
   contains either editable `resume.resume` / `cover.cover` source saved from
   RoleFit or an explicitly uploaded `resume.pdf` / `cover.pdf`; additional PDF

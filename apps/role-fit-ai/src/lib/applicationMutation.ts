@@ -24,16 +24,23 @@ export function applicationMutationRecords<T extends { id: string }>(
 }
 
 /**
- * Adopt server order and sanitized changed rows after this tab's own write,
- * while retaining unchanged objects for downstream memoization.
+ * Apply a write response to the confirmed tracker. A sparse response (`order`
+ * present) is only sent when `previous` is exactly the server's pre-write
+ * state, so it keeps every unchanged object for downstream memoization; an
+ * unknown id throws rather than guessing. A full response means `previous` was
+ * stale, so it is adopted as-is, like a fresh GET: a held row with a matching
+ * updatedAt may still differ after an outside edit.
  */
-export function reconcileApplicationWriteResponse<T extends { id: string; updatedAt: string }>(
+export function applyApplicationWriteResponse<T extends { id: string }>(
   previous: readonly T[],
-  incoming: readonly T[]
+  response: { applications: readonly T[]; order?: readonly string[] }
 ): T[] {
+  if (!response.order) return [...response.applications];
+  const changed = new Map(response.applications.map((application) => [application.id, application]));
   const previousById = new Map(previous.map((application) => [application.id, application]));
-  return incoming.map((application) => {
-    const prior = previousById.get(application.id);
-    return prior?.updatedAt === application.updatedAt ? prior : application;
+  return response.order.map((id) => {
+    const application = changed.get(id) ?? previousById.get(id);
+    if (!application) throw new Error(`The save response named an unknown application ${id}.`);
+    return application;
   });
 }

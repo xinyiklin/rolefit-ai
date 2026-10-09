@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   applicationMutationRecords,
-  reconcileApplicationWriteResponse
+  applyApplicationWriteResponse
 } from "../applicationMutation.ts";
 import {
   duplicateScanIdentity,
@@ -71,8 +71,12 @@ duplicateScanStats.hashedRecords = 0;
 duplicateScanIdentity(current);
 assert.equal(duplicateScanStats.hashedRecords, 500, "the initial identity hashes every record");
 
+// A matching-revision save answers sparsely: the id order plus written rows.
 const serverResponse = optimistic.map((entry) => ({ ...entry }));
-const reconciled = reconcileApplicationWriteResponse(current, serverResponse);
+const reconciled = applyApplicationWriteResponse(current, {
+  order: serverResponse.map((entry) => entry.id),
+  applications: [serverResponse[237]]
+});
 assert.deepEqual(
   reconciled.map((entry, index) => entry === current[index]).filter(Boolean).length,
   499,
@@ -92,12 +96,35 @@ assert.equal(
   "only the changed record is rehashed after the response"
 );
 
-const reversedResponse = [...serverResponse].reverse();
-const reordered = reconcileApplicationWriteResponse(current, reversedResponse);
+const reversedOrder = serverResponse.map((entry) => entry.id).reverse();
+const reordered = applyApplicationWriteResponse(current, { order: reversedOrder, applications: [] });
 assert.deepEqual(
   reordered.map((entry) => entry.id),
-  reversedResponse.map((entry) => entry.id),
+  reversedOrder,
   "response reconciliation follows authoritative server order"
 );
+
+// A sparse response names the order and returns only the written records.
+const added = application(900);
+const sparse = applyApplicationWriteResponse(current, {
+  order: [added.id, ...current.filter((entry) => entry.id !== current[5].id).map((entry) => entry.id)],
+  applications: [added, { ...changed }]
+});
+assert.equal(sparse.length, 500, "a sparse response adds one record and drops one deleted record");
+assert.equal(sparse[0], added, "a new record comes from the response");
+assert.equal(sparse.find((entry) => entry.id === changed.id).notes, "Changed", "an edited record comes from the response");
+assert.equal(sparse[1], current[0], "unchanged records keep their references");
+assert.ok(!sparse.some((entry) => entry.id === current[5].id), "an id absent from the order is removed");
+assert.throws(
+  () => applyApplicationWriteResponse(current, { order: ["unknown"], applications: [] }),
+  /unknown application unknown/,
+  "a sparse response naming an unknown id is rejected rather than guessed"
+);
+// A full response (stale or missing base revision) is an authoritative snapshot:
+// a held row whose updatedAt matches may still differ after an outside edit.
+const outsideEdit = serverResponse.map((entry, index) => (index === 3 ? { ...entry, notes: "edited outside" } : entry));
+const full = applyApplicationWriteResponse(current, { applications: outsideEdit });
+assert.equal(full[3].notes, "edited outside", "a full response replaces a held row even when updatedAt matches");
+assert.ok(full.every((entry, index) => entry === outsideEdit[index]), "a full response is adopted as the server sent it");
 
 console.log("Application mutation reconciliation passed");

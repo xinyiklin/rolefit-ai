@@ -29,10 +29,11 @@ The file extension is `.rolefit-backup`. Its JSON envelope is strict:
 Each file record carries an allowlisted slash-separated path, `utf8` or
 `base64` encoding, decoded byte length, SHA-256 digest, and encoded data. The
 contract rejects unknown envelope/file keys, unsupported versions, duplicate or
-traversing paths, encoding mismatches, invalid sizes/checksums, more than 1,100
-files, any one file over 10 MB, and more than 64 MB of decoded workspace data.
-The companion refuses backup files over 96 MB before reading or transferring
-them, leaving room for base64 and JSON overhead.
+traversing paths, encoding mismatches, invalid sizes/checksums, more than 5,000
+files, any one file over 48 MB, and more than 256 MB of decoded workspace data.
+The companion refuses backup files over 384 MB before reading or transferring
+them, leaving room for base64 and JSON overhead. These limits are sized to carry
+a tracker at its 2,000-application limit with its saved PDFs.
 
 The bundle is intentionally plain, inspectable JSON and is **not encrypted**.
 Treat it like the resumes and application records it contains.

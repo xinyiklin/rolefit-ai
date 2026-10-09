@@ -34,8 +34,8 @@ assert.match(
 );
 assert.match(
   applications,
-  /confirmedApplications\.current = err\.applications/,
-  "a conflict adopts the server-confirmed tracker snapshot"
+  /confirmedApplications\.current = conflict\.applications;\s*confirmedRevision\.current = /,
+  "a conflict adopts the server-confirmed tracker snapshot and its revision inside the write queue"
 );
 assert.match(
   applications,
@@ -89,8 +89,13 @@ for (const contract of [
 }
 assert.equal(
   applications.match(/data\.applications\.map\(canonicalizeApplicationAiUsage\)/g)?.length,
+  2,
+  "tracker GETs (readTracker) and post-write responses copy AI-usage receipts at the boundary"
+);
+assert.equal(
+  applications.match(/await readTracker\(/g)?.length,
   3,
-  "initial, refreshed, and post-write reads copy AI-usage receipts at the boundary"
+  "initial, refreshed, and write-fallback reads all go through readTracker"
 );
 
 const documentVersionCapture = applyFlow.indexOf("const expectedDocumentVersions =");

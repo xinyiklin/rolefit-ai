@@ -6,7 +6,7 @@ import { Readable } from "node:stream";
 import { extractAnswerConstraints, validateAnswerConstraints } from "../../../shared/applicationAnswersContract.ts";
 import { answerReceiptIsCurrent, editedSavedApplicationAnswer, parseApplicationAnswerRevision, parseSavedApplicationAnswers } from "../../../shared/applicationAnswerStorage.ts";
 import { sanitizeApplications } from "../schema.ts";
-import { readApplications, writeApplications } from "../storage.ts";
+import { invalidateApplicationsSnapshot, readApplications as readCachedApplications, writeApplications } from "../storage.ts";
 import { handleSaveApplications } from "../trackerRoutes.ts";
 import { createWorkspaceBackup, restoreWorkspaceBackup } from "../../workspaceBackup.ts";
 import { appliedApplicationForSession } from "../../../src/lib/preparationApplication.ts";
@@ -14,6 +14,13 @@ import { skipApplicationForSession } from "../../../src/lib/notApplyingApplicati
 import { preparationPrimaryAction, preparationSessionForApplication } from "../../../src/lib/preparationSession.ts";
 import { applicationStatusTransitionAllowed } from "../../../src/lib/applicationStatusTransitions.ts";
 import { isSubmittedApplication, trackingHygiene } from "../../../src/lib/applicationAnalytics.ts";
+
+// Read back from disk, not the server's validated cache, so every check below
+// proves a strict round trip through applications.json.
+const readApplications = (dir) => {
+  invalidateApplicationsSnapshot();
+  return readCachedApplications(dir);
+};
 
 const now = "2026-10-07T00:00:00.000Z";
 const later = "2026-10-07T01:00:00.000Z";

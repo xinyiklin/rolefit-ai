@@ -17,11 +17,12 @@ const MIN_SCANNABLE = 2;
 /**
  * Tracker-wide duplicate clusters for the Applications tab.
  *
- * The scan is O(n²) over every stored job description and used to run
- * synchronously during render — on every visit, because the tab unmounts. Here
- * it runs AFTER the browser has painted, and its result lives in a module cache
- * that outlives the tab, so a return visit with unchanged identity data costs
- * nothing. Groups are cached by id and rehydrated against the live array each
+ * The scan reads every stored job description and used to run synchronously
+ * during render — on every visit, because the tab unmounts. Here it runs AFTER
+ * the browser has painted, and its result lives in a module cache that outlives
+ * the tab, so a return visit with unchanged identity data costs nothing, and a
+ * rescan after an edit reuses unchanged pair verdicts (see duplicateScan.ts).
+ * Groups are cached by id and rehydrated against the live array each
  * render, so status, notes, document, and attachment edits are always current
  * even when they do not justify a rescan.
  */

@@ -112,8 +112,8 @@ type TrackerTabProps = {
   onRefresh: () => Promise<boolean>;
   // Merge action for duplicate clusters, threaded from useApplications via
   // App.tsx. The clusters themselves are computed HERE (this component only
-  // mounts while the Applications tab is open), not in the hook — the O(n²)
-  // scan must not run app-wide on every applications change.
+  // mounts while the Applications tab is open), not in the hook — the
+  // tracker-wide scan must not run app-wide on every applications change.
   onMergeApplications: (memberIds: string[], canonicalId: string) => Promise<boolean>;
   onDismissDuplicateGroup: (memberIds: string[]) => void;
 };
