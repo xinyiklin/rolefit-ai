@@ -925,10 +925,15 @@ In the response:
   answers `304` to `If-None-Match` for the current revision, and a PUT whose
   `baseRevision` matches gets only its upserted rows plus the id `order`
   (otherwise the full tracker, which the client adopts as-is like a GET). A
-  write is cached only when the renamed file is provably its own (same device,
-  inode, size, mtime); otherwise the cache is dropped and the response carries
-  no revision. Backup validates the exact `applications.json` bytes it
-  packages. Creation/update timestamps are required
+  write is cached only when stat shows the renamed file as its own (same
+  device, inode, size, mtime); otherwise the cache is dropped and the response
+  carries no revision. Stat cannot observe a same-size in-place edit within one
+  file timestamp tick (up to 15.6 ms on Windows) of RoleFit's own write or
+  validated read. Every RoleFit writer replaces the file or drops the cache, so
+  only a foreign in-place writer acting within that tick can be missed; a
+  writer racing RoleFit that closely can already lose an edit to a save's own
+  rename. Backup validates the exact `applications.json` bytes it packages.
+  Creation/update timestamps are required
   canonical ISO values, and an existing upsert must advance `updatedAt`
   strictly after its matched revision. Retired tracker fields, dual
   source-and-PDF artifact claims, duplicate ids, corrupt application JSON, and

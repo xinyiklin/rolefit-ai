@@ -591,9 +591,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       users without API keys.
   - [TOOL] `tracker-revision-probes` failed once inside the full root check on
     Windows ("an outside same-size edit mints a new revision"), then passed 6/6
-    alone. It is likely an NTFS timestamp-granularity race in #198's probe
-    (UNCONFIRMED; a follow-up task is checking), and it is unrelated to
-    Electron.
+    alone. It is an NTFS timestamp race in #198's probe, unrelated to
+    Electron; confirmed and fixed the same day (see the probe entry below).
 - [USER+CODE+TOOL] Dependency maintenance:
   - Dependabot now checks npm monthly (#199). The esbuild 0.28.2 allowlist
     entry (#143) and Vite 8.3.3 (#116, which clears the nanoid, postcss, and
@@ -605,6 +604,36 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     UNCONFIRMED.
   - [USER] #201 removed root `CONTINUITY.md` from the RoleFit retired-name
     contract. The ledger is a compacted history, outside RoleFit evals.
+- [USER+CODE+TOOL] **`tracker-revision-probes` Windows flake confirmed and made
+  deterministic** (task `2026-10-09-tracker-probe-ntfs-race`).
+  - [TOOL] Cause: the probe edits `applications.json` in place, same size,
+    3–7 ms after RoleFit's cached write. When the file timestamp had not
+    advanced in that window, dev, ino, size, mtimeNs, and ctimeNs all matched
+    and the cache served the stale snapshot: in 30 instrumented runs, all 12
+    failures had an identical identity and all 18 passes a changed one.
+    Original-probe failures ranged from 0/100 to 12/30 per batch. Sampling
+    every 200 ms, the reviewer saw the Windows timer resolution flip between
+    1 ms and its 15.625 ms default within one 14 s stretch (1 ms everywhere
+    else), and all 5 failures of that loop fell inside it; what lowers the
+    resolution is UNCONFIRMED. Linux CI has not shown the failure.
+  - [CODE] Decision (a), probe only, delegated by the user. A missed edit needs
+    a foreign process rewriting the file in place, same size, within one tick
+    of RoleFit's write or validated read. Every RoleFit writer renames (new
+    inode) or invalidates, and a writer racing that closely can already lose
+    an edit to a save's own rename. (b) would need a content re-check on reads
+    near a write, since stat cannot see the edit, and would still leave that
+    race. The probe now repeats its edit until the mtime moves past the cached
+    one (same inode and size); `ai-server.md` and two `storage.ts` comments
+    state the limit.
+  - [TOOL] Receipts (Windows x64, Node 24.18.0): in a 120-run interleaved loop
+    the original probe failed 15 times and the fixed probe 0; an instrumented
+    copy absorbed 13 same-tick collisions (up to 28 rewrites) and passed every
+    run. Dropping the timestamps from the cache identity fails the fixed probe
+    10/10 at its assertion. The server TypeScript gate and the RoleFit offline
+    suite (170/170) pass. Independent review (mb-verifier): pass with three
+    low-severity wording findings, all fixed; its loops ran the fixed probe
+    200/200 while the original failed 21/200, and its mutation check failed
+    25/25.
 
 ## 2026-10-08
 

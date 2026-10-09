@@ -46,9 +46,10 @@ type StoredApplications = ReturnType<typeof sanitizeApplications>;
 
 // The last fully validated tracker file, reused while the file on disk keeps the
 // same identity. Any outside change (an edit, a restore, another server process)
-// changes the identity and forces a full read and validation again. `revision`
-// is minted per validated load or write and never persisted; clients use it to
-// skip downloading a tracker they already hold.
+// changes the identity and forces a full read and validation again, except a
+// same-size in-place edit within the cached state's timestamp tick, which stat
+// cannot see. `revision` is minted per validated load or write and never
+// persisted; clients use it to skip downloading a tracker they already hold.
 type TrackerSnapshot = {
   path: string;
   identity: string;
@@ -385,8 +386,9 @@ export async function writeApplicationsSnapshot(
     await rm(temporaryPath, { force: true }).catch(() => undefined);
   }
   // Cache only the file this write produced. An outside replace after the
-  // rename has another inode; an in-place edit changes size or mtime (rename
-  // itself may change ctime, so ctime is not compared here).
+  // rename has another inode; an in-place edit changes size or mtime unless it
+  // lands in the same timestamp tick (rename itself may change ctime, so ctime
+  // is not compared here).
   const current = await stat(path, { bigint: true }).catch(() => null);
   if (
     current &&

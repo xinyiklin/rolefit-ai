@@ -5,7 +5,7 @@
 // Offline, synthetic data only.
 
 import assert from "node:assert/strict";
-import { mkdtemp, readFile, rm, unlink, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { createRequire, syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -132,13 +132,18 @@ try {
   assert.notEqual(written[1], changed, "a new record is sanitized into a new object");
   assert.equal((await readApplicationsSnapshot(workspaceDir)).applications, written, "a write becomes the cached snapshot");
 
-  // Outside edits are detected — including one that keeps the byte size.
+  // Outside edits are detected — including one that keeps the byte size. Stat
+  // cannot see an in-place edit within the cached write's timestamp tick (up to
+  // 15.6 ms on Windows), so the edit repeats until its mtime moves on.
   const path = applicationsFilePath(workspaceDir);
   const cached = await readApplicationsSnapshot(workspaceDir);
+  const { mtimeNs: cachedMtime } = await stat(path, { bigint: true });
   const text = await readFile(path, "utf8");
   const sameSize = text.replace('"Onsite"', '"Offsit"');
   assert.equal(sameSize.length, text.length);
-  await writeFile(path, sameSize, "utf8");
+  do {
+    await writeFile(path, sameSize, "utf8");
+  } while ((await stat(path, { bigint: true })).mtimeNs === cachedMtime);
   const reread = await readApplicationsSnapshot(workspaceDir);
   assert.notEqual(reread.revision, cached.revision, "an outside same-size edit mints a new revision");
   assert.equal(reread.applications[1].notes, "Offsit", "the outside edit is read");
