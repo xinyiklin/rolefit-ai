@@ -28,7 +28,7 @@ const forgePackages = [
 const expectedInstallScriptPolicy = {
   "electron@43.2.0": true,
   "electron-winstaller@5.4.4": true,
-  "esbuild@0.28.1": true,
+  "esbuild@0.28.2": true,
   "fs-xattr@0.3.1": true,
   "fsevents@2.3.3": true,
   "macos-alias@0.2.12": true,
