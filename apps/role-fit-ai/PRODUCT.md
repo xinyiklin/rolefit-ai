@@ -66,7 +66,9 @@ authored words and no unresolved template slots.
 Reuse existing checks, result types, review components, and decision controls,
 adding small optional warning fields only where needed. Do not add a policy
 engine, evidence ledger, approval workflow, confidence score, review dashboard,
-or extra AI analysis stage beyond the opt-in Resume Polish review below.
+or extra AI analysis stage beyond the opt-in Resume Polish review below and the
+user-requested Resume import interpretation ([Resume PDF import](#resume-pdf-import)),
+which arranges a PDF's own text and never writes any.
 Provider defaults, local privacy, Fit's rubric, and portable document schemas
 remain unchanged. ATS terminology improvements are a separate workstream
 governed by this same policy.
@@ -834,3 +836,62 @@ including typing the first character into an empty name.
 Section titles also wrap inside the text margins. Their alignment and heading
 case are preserved; one section rule follows the final continuation, and tall
 headings can continue onto another page without changing saved text.
+
+## Resume PDF import
+
+**Import PDF** (Resume tab › Open, 2026-10-09, user-directed) turns a text-based
+PDF resume into an editable resume. Import reconstructs; it never improves.
+Rewording, filling gaps, and tailoring stay with Polish, which is unavailable
+while an import is under review ("Finish the import review first: save or
+discard it.") and never starts from an import.
+
+- **Local first.** The PDF is read in the browser; nothing is sent anywhere and
+  no workspace file or preference is written until the user saves (an import
+  replaced or discarded before saving leaves the remembered variant alone).
+  Scanned or image-only, password-protected, damaged, unreadable-text, over-10
+  MB, and over-10-page PDFs, and PDFs with filled form fields or added text
+  boxes, are refused with a specific reason, and nothing changes; a refusal
+  while a review is open says so, leaves that review untouched, and ends with
+  it.
+- **Nothing lost, nothing added.** Every character of the PDF's text ends up in
+  the document, in the review's **Not placed** list (page numbers, repeated
+  running headers, text that looks like editor formatting code, anything not
+  placed), or as structure (bullet markers, contact separators, a skills label's
+  colon). An import that cannot account for every character is refused rather
+  than shown. Words are never edited: lines are re-joined, and a word split
+  across lines with a hyphen is joined and listed under **Check**.
+- **Review.** The import opens as unsaved work in the editor, so the existing
+  replacement prompt, recovery draft, and unload warning protect it. The rail
+  shows the original PDF, a words-placed summary, **Check** items (uncertain
+  structure, each with its source text; **Show** highlights the field), and
+  **Not placed**. **Save variant** writes an ordinary `.resume` through the
+  existing save path; an existing name is replaced with history, as in the Save
+  menu. **Discard import** returns the editor to exactly what it held before,
+  including unsaved edits, and asks first only when the import was edited;
+  importing again before saving keeps the document from before the first
+  import as Discard's destination. Resume Polish, including a failed run's
+  Retry, is unavailable until the review ends.
+- **Formatting.** The nearest bundled family, body size, page margins, header
+  alignment, heading case (verbatim capitals or small caps), and section rules
+  are inferred within the editor's limits; spacing keeps the defaults. Content
+  accuracy comes before visual likeness.
+- **AI interpretation is optional and explicit.** **Interpret with ‹provider ·
+  model›** (Settings › Models › Resume import, default Claude CLI · Sonnet 5.5 ·
+  low) sends the extracted text, and only after that click, every time; an
+  oversized document is refused before anything is sent. The model returns
+  references to the PDF's own text pieces, never text, and each field must be
+  one run of the PDF's text in order. A reply is not used, and the local reading
+  stays, if it references unsent text, quotes anything not in the PDF, reuses
+  text, reorders text within a field, joins part of a line to other text, leaves
+  words out of the middle of a field, or splits a piece other than whole and in
+  order (only spaces, separators, and a label's colon may fall between the
+  parts, only where they land in different fields, and never a colon inside a
+  value such as "3:1"), so no word, sign, or number can be dropped, moved, or
+  spliced. Whole pieces it leaves out are listed under Not placed. A field moved
+  through the PDF's reading order gets a Check (both sides of a swap), as does a
+  field that passes over text nothing else uses. Stop is always available, **Use local
+  reading** switches back, and either switch asks first if the import was
+  edited. Refusing a reply that brings in text is a data-integrity protection,
+  not a content judgment; Check items for either reading only inform.
+- **Out of scope:** OCR, DOCX, Typeset import, cover-letter import, and
+  persisting import findings (the review is session-only).

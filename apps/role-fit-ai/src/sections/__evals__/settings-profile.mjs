@@ -179,7 +179,7 @@ assert.doesNotMatch(pooled, /deleted/, "an exclusion for a deleted variant is no
 
 const models = render("models", "");
 assert.match(models, /settings-stages__head[^>]*><span>Stage<\/span><span>Provider<\/span><span>Model<\/span><span>Effort<\/span>/, "Models heads its columns once");
-assert.equal((models.match(/<section class="settings-stage"/g) ?? []).length, 6, "one row per configurable stage");
+assert.equal((models.match(/<section class="settings-stage"/g) ?? []).length, 7, "one row per configurable stage");
 assert.match(models, /aria-label="Resume Polish provider"/, "each select names its stage");
 assert.match(models, /No providers added/);
 assert.doesNotMatch(models, /<textarea|Add instructions|Run Fit Assessment/, "instructions and automation live on their own pages");

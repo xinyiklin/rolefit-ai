@@ -1,22 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Download, Eye, X } from "lucide-react";
-import { Document, Page, pdfjs } from "react-pdf";
+import { Document, Page } from "react-pdf";
 import "react-pdf/dist/Page/TextLayer.css";
 import "react-pdf/dist/Page/AnnotationLayer.css";
 
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import { useModalFocus } from "@typeset/editor/hooks/useModalFocus.ts";
+import "../lib/browserPdfjs.ts";
 import { PreviewZoomControls, usePreviewZoom } from "./PreviewZoomControls";
 
-// Use the bundled worker so no extra static-asset config is needed.
-pdfjs.GlobalWorkerOptions.workerSrc = new URL(
-  "pdfjs-dist/build/pdf.worker.min.mjs",
-  import.meta.url
-).toString();
-
-// Views a saved application's stored PDF via react-pdf (react-pdf owns its own
-// loading/error UI). The live resume needs no compile preview — the editor is
-// its own WYSIWYG surface — so this overlay only ever shows a saved PDF URL.
+// Views an existing PDF via react-pdf (react-pdf owns its own loading/error
+// UI): a saved application's stored PDF, or the original of an imported
+// resume. The live resume needs no compile preview — the editor is its own
+// WYSIWYG surface.
 type PreviewOverlayProps = {
   isOpen: boolean;
   pdfUrl?: string;

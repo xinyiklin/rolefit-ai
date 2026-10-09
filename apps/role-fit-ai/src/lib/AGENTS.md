@@ -43,7 +43,14 @@ Applies to `apps/role-fit-ai/src/lib/`.
 - `documentOpenFiles.ts` owns browser-file preflight for the two editor document
   kinds. Resume accepts only `.resume` and Cover Letter accepts only `.cover`;
   validate the extension before reading bytes, then delegate to the strict
-  engine codec before any hook may replace document state.
+  engine codec before any hook may replace document state. Import PDF has its
+  own preflight there (`.pdf` name or type, 10 MB) that only returns bytes for
+  the importer; a PDF is never opened as a document.
+- `resumeImportSession.ts` owns the import run sequence (read, extract, guarded
+  commit; refusal, declined, and superseded outcomes), the summary line, and
+  finding locations. `browserPdfjs.ts` is an intentional React-PDF-bearing
+  boundary: the one browser pdf.js configuration, set after React-PDF assigns
+  its default worker.
 - `coverLetterWorkspaceRepository.ts` is the typed HTTP boundary for named
   letter variants and history. `coverLetterExport.ts` owns pure source/PDF
   artifact construction; neither helper owns React state or document history.

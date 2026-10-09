@@ -6,6 +6,7 @@ import {
   MAX_RESUME_FILE_BYTES,
   parseResumeFile
 } from "@typeset/engine/lib/resumeFile.ts";
+import { MAX_IMPORT_PDF_BYTES } from "../resume/pdfImport/importErrors.ts";
 
 type UploadFile = {
   name: string;
@@ -30,6 +31,22 @@ export async function prepareResumeUpload(
     throw new Error("The .resume file could not be read. Try choosing it again.");
   }
   return parseResumeFile(bytes);
+}
+
+// A PDF is never opened as a document: these bytes only feed the importer,
+// which checks the PDF signature itself and refuses anything it cannot read.
+export async function prepareResumePdfImport(file: UploadFile & { type?: string }): Promise<Uint8Array> {
+  if (!/\.pdf$/i.test(file.name) && file.type !== "application/pdf") {
+    throw new Error("Choose a .pdf file to import.");
+  }
+  if (file.size > MAX_IMPORT_PDF_BYTES) {
+    throw new Error("This PDF is larger than the 10 MB import limit.");
+  }
+  try {
+    return new Uint8Array(await file.arrayBuffer());
+  } catch {
+    throw new Error("The PDF could not be read. Try choosing it again.");
+  }
 }
 
 export async function prepareCoverLetterUpload(

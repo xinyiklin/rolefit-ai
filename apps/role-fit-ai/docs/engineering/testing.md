@@ -27,7 +27,7 @@ Each eval still runs standalone for a per-case PASS/FAIL list, e.g.
 attaches the child's last output lines to the assertion so you can see which
 case broke without re-running.
 
-The live cover-letter, Answers and Resume Proposal quality evals are excluded via the
+The live cover-letter, Answers, Resume Proposal, and Resume import evals are excluded via the
 runner's `LIVE` denylist: they drive a real provider, cost tokens, and need a configured provider. Any
 new external-network or model eval must be added to `LIVE` so it stays out of `npm test`.
 
@@ -370,6 +370,61 @@ and rebound.
   real cause and rerun the smallest meaningful check before broader
   ones.
 - If checks are skipped, explain why in the final response.
+
+## Resume PDF Import
+
+All fixtures are synthetic and generated in memory; never commit a PDF.
+
+- `src/resume/pdfImport/__evals__/pdf-import-corpus.mjs` is the gate and the
+  benchmark. Engine-rendered resumes in every bundled family and pdf-lib
+  "foreign" layouts (Word-style runs, spaced dates, symbol-font bullets, a
+  two-column sidebar, unusual headings, grouped roles, running headers, page
+  numbers, line-end hyphens, markerless bullets, tag-like text) must import
+  with zero characters lost or added, round-trip through the strict `.resume`
+  codec, export as PDF, import deterministically, and refuse non-PDF, oversized,
+  malformed, image-only, over-long, encrypted, and unreadable input with the
+  right kind. Field precision and recall must reach 0.98 on single-column
+  fixtures and 0.90 on the hard group (two-column, unusual headings, grouped
+  roles), and mean reading order (LCS) 0.98. `PDF_IMPORT_VERBOSE=1` prints every
+  miss and finding. Shared fixtures and scoring live in
+  `__evals__/support/importCorpus.mjs`.
+- `pdf-import-units.mjs` covers the audit's mutation-style rejections (invented,
+  duplicated, dropped, or smuggled-as-structure text), field rendering, separator
+  splitting, dates, the font-family table, columns, and bullet markers.
+- `pdf-import-edge-cases.mjs` holds layouts found in review: Symbol-font
+  content glyphs, filled and empty form fields and viewer-added text boxes, one
+  run per glyph (readable text, word count, and unmapped glyphs), formatting
+  code split across runs, superscripts, a role title at a page break,
+  right-aligned dates and flush-right years that must not read as a column,
+  and a same-baseline right sidebar that must.
+- `pdf-import-interpretation.mjs` feeds crafted provider replies to the client
+  rebuild: reworded or corrected substrings, free text, unknown pieces,
+  duplicated, overlapping, reordered, or partly omitted text, recombined or
+  spliced metrics and dates, skipped words, dropped signs and separators, a
+  value split at its colon, and malformed replies are rejected, each by the
+  guard named in the case; whole omissions become Not placed, swaps and moves
+  into the header get Checks on exactly the moved fields, and a field passing
+  over unused text gets a Check.
+- `src/hooks/__evals__/resume-import-lifecycle.mjs` drives `useResumeImport`
+  with controlled React state: Discard, import over import, refusals during and
+  outside a review, stale replies, and edits made during a request. It also
+  pins App's Polish gates and the workspace commit/restore seams (AC8, AC12).
+  `src/sections/resume/__evals__/resume-import-review.mjs` renders the review
+  rail's in-review reading and refusal states.
+- `server/ai/__evals__/resume-import-probes.mjs` pins the no-rewrite prompt, the
+  `resume_source_lines` firewall and fencing, request limits, and route
+  refusals that happen before any provider is resolved.
+- `src/lib/__evals__/resume-import-session.mjs` covers the read → extract →
+  guarded commit sequence (refused, declined, superseded) and review labels.
+- Live, never in `npm test`, only with explicit authorization:
+
+  ```bash
+  EVAL_PROVIDER=claude-cli EVAL_MODEL=claude-sonnet-5-5 EVAL_REASONING_EFFORT=low npm run eval:live:resume-import --workspace apps/role-fit-ai
+  ```
+
+  It interprets the same synthetic corpus, scores AI and local readings against
+  the known structure, reports latency and the provider's token counts, and
+  writes `summary.json` under the ignored `workspace/resume-import-eval/`.
 
 ## Server / AI Coverage
 

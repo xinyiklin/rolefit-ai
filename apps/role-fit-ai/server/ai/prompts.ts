@@ -268,8 +268,17 @@ export const ANSWER_CONVERSATION_FENCE_NAMES = [
 // fence pattern below, and the review prompt's firewall line names it.
 export const RESUME_REVIEW_FENCE_NAMES = ["proposed_edits"] as const;
 
+// Resume import sends the PDF's extracted text in this one fence, and its
+// prompt's firewall line names exactly it.
+export const RESUME_IMPORT_FENCE_NAMES = ["resume_source_lines"] as const;
+
 const UNTRUSTED_FENCE_PATTERN = new RegExp(
-  `<(\\s*/\\s*|)(${[...UNTRUSTED_FENCE_NAMES, ...ANSWER_CONVERSATION_FENCE_NAMES, ...RESUME_REVIEW_FENCE_NAMES].join("|")})\\b`,
+  `<(\\s*/\\s*|)(${[
+    ...UNTRUSTED_FENCE_NAMES,
+    ...ANSWER_CONVERSATION_FENCE_NAMES,
+    ...RESUME_REVIEW_FENCE_NAMES,
+    ...RESUME_IMPORT_FENCE_NAMES
+  ].join("|")})\\b`,
   "gi"
 );
 

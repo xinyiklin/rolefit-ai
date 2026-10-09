@@ -11,8 +11,9 @@ warnings across RoleFit generation, assessment, and review paths. Job analysis
 is structured JD extraction: retain truthful prompts and basic shape/markup/size
 validation, but no post-extraction fact checks, source matching, condition
 replacement, or evidence warnings. Other stages retain their existing checks;
-do not add an AI analysis stage or policy engine. The one user-directed
-exception is the opt-in Resume Polish review (`resumeProposalReview.ts`). Unknown source references or unconfirmed excerpts are evidence
+do not add an AI analysis stage or policy engine. The user-directed
+exceptions are the opt-in Resume Polish review (`resumeProposalReview.ts`) and
+the explicit Resume import interpretation (`resumeImport.ts`). Unknown source references or unconfirmed excerpts are evidence
 warnings, never verified citations or links to unrelated sources. Invalid edit
 targets, unsafe markup, unusable structures, unauthorized mutations, and stale
 application retain blocking technical guards.
@@ -63,6 +64,27 @@ application retain blocking technical guards.
   "UNAVAILABLE"` (benchmarks also get a shape-only provider/unreadable failure
   kind that never reaches the wire); holding back everything returns No changes
   with an empty summary and keeps any withheld count. Held-back changes travel in `review.heldBack` for Restore.
+- `resumeImport.ts` owns `/api/resume-import`, the Resume import stage: one
+  dispatch, no repair, on the stage's own provider/model/effort, run only from
+  the user's Interpret click. The model sees the PDF's extracted lines as
+  numbered pieces inside the registered `resume_source_lines` fence and returns
+  references to pieces (an id, or an id plus an exact substring), never text.
+  `shared/resumeImportContract.ts` owns request limits and the strict reply
+  validator: an unsent piece, a substring not found verbatim in its piece, an
+  unknown section type, or an oversized reply rejects the whole reply (422, the
+  local reading stays). The client validates again and rebuilds the document
+  from its own pieces (`importStructure.ts`). Each field must be one run of the
+  PDF's text in order: a cut piece only ends or starts it, and it may pass over
+  whole lines or another stretch of a line but never words inside its own. A
+  reply that reorders, reuses, or splices text, or splits a piece other than
+  whole and in order (only whitespace, `| • · ◦ ▪ ∙`, and a label's colon
+  followed by a space between parts, and only across fields), is rejected; the
+  rebuild then requires the same zero-loss, zero-addition audit as the local
+  import. Whole pieces the reply leaves out are listed as Not placed. Fields
+  outside every longest in-order run of their column get a reading-order Check,
+  and a field that passes over unused text gets a Check. Prompt
+  edits keep the no-rewrite rules and need `resume-import-probes.mjs` and
+  `pdf-import-interpretation.mjs`.
 - `resumePolish.ts` accepts only `mode: "resume-proposal"` and routes it to that
   contract. Cover letters and application answers use their own routes.
 - `applicationAnswerConversation.ts` owns Answers chat (`mode: "conversation"`);

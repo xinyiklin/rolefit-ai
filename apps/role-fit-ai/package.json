@@ -41,6 +41,7 @@
     "eval:live:application-answers": "node server/ai/__evals__/application-answer-quality-eval.mjs",
     "eval:live:cover-letter": "node server/ai/__evals__/cover-letter-quality-eval.mjs",
     "eval:live:fit-assessment": "node server/ai/__evals__/fit-assessment-consistency-eval.mjs",
+    "eval:live:resume-import": "node server/ai/__evals__/resume-import-live-eval.mjs",
     "eval:live:resume-proposal": "node server/ai/__evals__/resume-proposal-quality-eval.mjs",
     "test": "node --test offline-evals.test.mjs",
     "check": "npm run build && npm run build:landing && npm run check:desktop && npm test"

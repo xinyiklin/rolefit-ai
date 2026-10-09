@@ -310,8 +310,8 @@ for (const [name, source] of [
 }
 assert.match(
   resumeTab,
-  /content:\s*\([\s\S]{0,160}?<ResumeWorkflowRail/,
-  "Resume keeps workflow content available before a result exists"
+  /content:\s*importReview \?[\s\S]{0,400}?<ResumeImportReview[\s\S]{0,240}?\)\s*:\s*\(\s*<ResumeWorkflowRail/,
+  "Resume keeps workflow content available before a result exists; only an import review takes the rail over"
 );
 assert.match(
   coverTab,

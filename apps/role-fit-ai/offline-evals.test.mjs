@@ -35,6 +35,7 @@ const LIVE = new Set([
   "application-answer-quality-eval.mjs",
   "cover-letter-quality-eval.mjs",
   "fit-assessment-consistency-eval.mjs",
+  "resume-import-live-eval.mjs",
   "resume-proposal-quality-eval.mjs"
 ]);
 

@@ -2,8 +2,8 @@
  * useWorkspaceResume — the local workspace / base-resume cluster, extracted
  * from App.tsx: the workspace + base-resume state, applyWorkspaceBaseResume,
  * updateWorkspaceState, loadWorkspace, saveBaseResume, removeBaseResume,
- * restoreBaseResume, saveCurrentAsBaseResume, loadBaseResumeVersion, and
- * handleFileUpload.
+ * restoreBaseResume, saveCurrentAsBaseResume, loadBaseResumeVersion,
+ * handleFileUpload, and the PDF-import commit/restore pair.
  *
  * State ownership: workspacePath/workspaceFiles/baseResumeName/
  * baseResumeOptions/baseResumeHistory/workspaceStatus/isSavingBaseResume are
@@ -18,10 +18,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
-import { DOC_STYLE_DEFAULTS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, toDocumentStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import type { DocStyleControls } from "@typeset/editor/hooks/useDocStyle.ts";
 import type { ConfirmOptions } from "./useDialog";
+import type { SeedOptions } from "./useResumeEditor";
 import { loadLastBaseResumeName, saveLastBaseResumeName } from "../lib/baseResumePrefs.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 import type { PolishedResume } from "../resumeEngine";
@@ -74,6 +75,26 @@ export type JobWorkspace = {
   files: string[];
 };
 
+// Everything Discard import needs to put the editor back exactly as it was,
+// including whether the document had unsaved changes.
+export type ResumeDocumentSnapshot = {
+  data: ResumeData;
+  style: DocumentStyle;
+  unsaved: boolean;
+  fileName: string;
+  baseResumeName: string;
+  documentTitle: string;
+  origin: ResumeOrigin;
+  resumeText: string;
+};
+
+export type ImportedResumeDocument = {
+  data: ResumeData;
+  style: DocumentStyle;
+  fileName: string;
+  title: string;
+};
+
 export type DocumentReplacementGuard = {
   isDirtyNow: () => boolean;
   currentVersion: () => string;
@@ -97,7 +118,7 @@ type UseWorkspaceResumeArgs = {
   setExportStatus: (value: string) => void;
   // Seeds the structured editor directly from a ResumeData object after the
   // strict `.resume` codec has validated the document.
-  seedResumeData: (data: ResumeData) => void;
+  seedResumeData: (data: ResumeData, options?: SeedOptions) => void;
   // What the document in the editor actually is. App owns it because the one
   // transition this hook cannot see — restoring a tracked application — seeds
   // the editor directly; every workspace path below reports its own origin.
@@ -701,6 +722,65 @@ export function useWorkspaceResume({
     setFileStatus(".resume file loaded into the editor.");
   }
 
+  // An imported PDF replaces the editor's document as unsaved work: no
+  // workspace file changes, and the detached identity means Save never writes
+  // over the variant that was open before. `readSnapshot` is read at the commit
+  // boundary, after approval, so Discard restores what was actually replaced.
+  async function commitImportedResume(
+    imported: ImportedResumeDocument,
+    readSnapshot: () => ResumeDocumentSnapshot
+  ): Promise<ResumeDocumentSnapshot | null> {
+    const approvedVersion = await approveCurrentReplacement();
+    if (approvedVersion === null) return null;
+    if (replacementGuard.isDirtyNow() && replacementGuard.currentVersion() !== approvedVersion) return null;
+
+    const snapshot = readSnapshot();
+    replacementGuard.onReplacementCommitted();
+    // In memory only: an import nobody saved must not change which variant
+    // opens next time, and Save must not write over the variant it replaced.
+    setBaseResumeName("");
+    setResumeOrigin("uploaded");
+    setFileName(imported.fileName);
+    setDocumentTitle(imported.title);
+    setFileError("");
+    setFileStatus("");
+    setWorkspaceStatus("");
+    setPolishStatus("");
+    setResult(null);
+    resetCoverWorkflow();
+    resetExportStatuses();
+    setExportStatus("");
+    setResumeText(serializeResumeData(imported.data));
+    seedResumeData(imported.data, { unsaved: true });
+    docStyle.replaceDocumentStyle(imported.style);
+    return snapshot;
+  }
+
+  // Switches what an import review shows (the local reading or an AI
+  // interpretation of the same PDF) without touching identity or style.
+  function replaceImportedContent(data: ResumeData) {
+    setResumeText(serializeResumeData(data));
+    seedResumeData(data, { unsaved: true });
+  }
+
+  // Discard import: the import was never saved, so restoring needs no
+  // confirmation beyond the one the caller asks for when the import was edited.
+  // The import's recovery draft goes with it.
+  function restoreResumeSnapshot(snapshot: ResumeDocumentSnapshot) {
+    replacementGuard.onReplacementCommitted();
+    setBaseResumeName(snapshot.baseResumeName);
+    setResumeOrigin(snapshot.origin);
+    setFileName(snapshot.fileName);
+    setDocumentTitle(snapshot.documentTitle);
+    setFileError("");
+    setFileStatus("");
+    setWorkspaceStatus("");
+    setPolishStatus("");
+    setResumeText(snapshot.resumeText);
+    seedResumeData(snapshot.data, { unsaved: snapshot.unsaved });
+    docStyle.replaceDocumentStyle(snapshot.style);
+  }
+
   return {
     // workspacePath/workspaceFiles/saveBaseResume are consumed only inside this
     // hook (updateWorkspaceState's `?? workspacePath`/`?? workspaceFiles`
@@ -723,6 +803,9 @@ export function useWorkspaceResume({
     readBaseResumeCandidates,
     readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
-    handleFileUpload
+    handleFileUpload,
+    commitImportedResume,
+    replaceImportedContent,
+    restoreResumeSnapshot
   };
 }

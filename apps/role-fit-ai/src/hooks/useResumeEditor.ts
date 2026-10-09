@@ -8,11 +8,15 @@ import type { ResumeBullet, ResumeData } from "@typeset/engine/lib/resumeData.ts
 import { createBlankResumeData } from "../lib/blankResume.ts";
 import { parseResumeData, serializeResumeData } from "../lib/resumeText.ts";
 
+// `unsaved`: the seeded document exists only in memory (an imported PDF), so it
+// counts as unsaved work until it is saved or replaced.
+export type SeedOptions = { unsaved?: boolean };
+
 // RoleFit's thin adapter over the shared Typeset editor state. The package owns
-// the document, history, and mutations; RoleFit adds only the two pipeline
-// concepts the standalone editor does not have: plain-text AI seeding and the
-// provenance bit that distinguishes a user's free-form edit from accepting a
-// reviewed suggestion.
+// the document, history, and mutations; RoleFit adds the pipeline concepts the
+// standalone editor does not have: plain-text AI seeding, the provenance bit
+// that distinguishes a user's free-form edit from accepting a reviewed
+// suggestion, and documents seeded as unsaved.
 export function useResumeEditor(historyClock?: HistoryClock) {
   const initialResume = useMemo(createBlankResumeData, []);
   const editor = useTypesetResumeEditor(initialResume, historyClock);
@@ -28,15 +32,28 @@ export function useResumeEditor(historyClock?: HistoryClock) {
   // redo) explicitly clears it first so a stale `true` left behind by an
   // earlier no-op can never be misattributed to a later, unrelated change.
   const pendingManualRef = useRef(false);
+  // Every seed replaces the document; the revision lets a consumer tie state to
+  // one exact seeded document. The ref answers synchronously after a seed.
+  const seedRevisionRef = useRef(0);
+  const [seedRevision, setSeedRevision] = useState(0);
+  const [unsavedSeed, setUnsavedSeed] = useState(false);
 
   const seedData = useCallback(
-    (data: ResumeData) => {
+    (data: ResumeData, options: SeedOptions = {}) => {
       pendingManualRef.current = false;
       setManualEdited(false);
+      setUnsavedSeed(Boolean(options.unsaved));
+      seedRevisionRef.current += 1;
+      setSeedRevision(seedRevisionRef.current);
       editor.seedData(data);
     },
     [editor.seedData]
   );
+  const getSeedRevision = useCallback(() => seedRevisionRef.current, []);
+  const markClean = useCallback(() => {
+    setUnsavedSeed(false);
+    editor.markClean();
+  }, [editor.markClean]);
 
   const seed = useCallback(
     (text: string, sourceText?: string) => {
@@ -213,11 +230,15 @@ export function useResumeEditor(historyClock?: HistoryClock) {
 
   return {
     ...editor,
+    dirty: editor.dirty || unsavedSeed,
+    markClean,
     editedResume,
     manualEdited,
     serializedResume,
     seed,
     seedData,
+    seedRevision,
+    getSeedRevision,
     actions
   };
 }

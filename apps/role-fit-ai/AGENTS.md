@@ -140,6 +140,12 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
   submitted-application metric or calendar submission event; an application
   later marked Skipped keeps its original submission in both. No Skipped record
   counts toward follow-up hygiene.
+- Resume PDF import (`PRODUCT.md#resume-pdf-import`) reconstructs and never
+  improves: every source character is placed, listed as Not placed, or consumed
+  as structure, or the import is refused; no workspace file is written until
+  the user saves; Polish is unavailable during review. Its optional AI
+  interpretation runs only on the user's click and returns piece references,
+  never text; see `server/ai/AGENTS.md`.
 - Keep the server loopback-only by default. `HOST=0.0.0.0` exposes an
   unauthenticated local tool to the LAN and is never acceptable on an untrusted
   or public network.

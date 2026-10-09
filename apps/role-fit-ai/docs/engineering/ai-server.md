@@ -770,6 +770,33 @@ and independently unavailable when its provider output is unusable. Resume
 Polish, cover-letter tailoring, and application-answer failures have no local
 substitutes; no locally generated draft, score, review, or verdict stands in.
 
+## Resume PDF Import
+
+Product contract: [PRODUCT.md › Resume PDF import](../../PRODUCT.md#resume-pdf-import).
+
+- **Local reading.** The browser reads the PDF with the contract-pinned
+  `pdfjs-dist` (configured once in `src/lib/browserPdfjs.ts`) and builds the
+  draft in `src/resume/pdfImport/`. No request is made and no workspace file is
+  written; the server is not involved until the user saves.
+- **`POST /api/resume-import`** (`server/ai/resumeImport.ts`) runs only from the
+  review's Interpret action, on the Resume import stage's own provider, model,
+  and effort, with one dispatch and no repair. The body carries the provider
+  fields plus `lines`: page, region, x, size, bold, italic, a marker flag, and
+  the line's text pieces (`p<N>` ids). `shared/resumeImportContract.ts` refuses
+  malformed or oversized lines (400) before provider resolution: at most 1,500
+  lines, 3,000 pieces, 2,000 characters per piece, and 40,000 characters in all.
+- **Reply contract.** The model returns `{name, contact, sections}` whose
+  leaves are piece references (`"p12"` or `{"piece": "p12", "text": "exact
+  substring"}`), never text. An unsent piece, a substring not found verbatim in
+  its piece, an unknown section type, or an oversized reply rejects the reply
+  (422, user-safe message, local reading kept). Unknown fields are ignored.
+  The PDF text travels only inside the registered `resume_source_lines` fence.
+- **Client checks.** The browser validates the reply again against the lines it
+  sent, rebuilds the document from its own pieces, and requires the same
+  preservation audit as the local import (no character lost, none added or
+  duplicated); text the reply leaves out is listed as Not placed. Stop aborts
+  the request and the CLI subprocess; a late or stale reply is dropped.
+
 ## Job Posting Import
 
 Keep the import pipeline split by responsibility:

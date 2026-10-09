@@ -487,6 +487,139 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
 
 ## 2026-10-09
 
+- [USER+CODE+TOOL] **Resume PDF import** (task `2026-10-09-resume-pdf-import`;
+  the user approved brief v1 and plan v1 with the recommended D1–D7 and in-app
+  browser QA). Contract: `apps/role-fit-ai/PRODUCT.md#resume-pdf-import`.
+  - [USER] Decisions: import reconstructs and never improves (separate from
+    Polish, which is blocked during review); a new **Resume import** AI stage
+    (default Claude CLI · Sonnet 5.5 · low); the PRODUCT/`server/ai/AGENTS.md`
+    "no extra AI analysis stage" rule now records this exception; 10 MB / 10
+    pages; gates: zero characters lost or added, field P/R 0.98 single-column
+    and 0.90 hard, reading order 0.98.
+  - [CODE] Forward-only settings: this build writes the three `resumeImport*`
+    keys on its first launch (settings are materialized), so an older build
+    then refuses to save settings, omits preferences from its own backups, and
+    rejects this build's backups (reviewer probe against HEAD). Release notes
+    must say "after any launch", not "after using import".
+  - [CODE] RoleFit-only: `src/resume/pdfImport/` (injected pdf.js adapter,
+    lines/columns, structure, style, preservation audit, AI-reply rebuild,
+    `importErrors.ts`), `useResumeImport`, `useWorkspaceResume`
+    commit/replace/restore, the rail's `ResumeImportReview`,
+    `shared/resumeImportContract.ts`, and `server/ai/resumeImport.ts`
+    (`/api/resume-import`). No package, Typeset, `.resume`, or tracker change.
+    The model returns piece references, never text; both sides validate
+    verbatim, and the client rebuilds from its own pieces. Each field must be
+    one run of the PDF's text in order (a cut piece only ends or starts it; it
+    may pass over whole lines or another stretch of a line, never words inside
+    its own), so reordered, reused, spliced, or partly used text is rejected
+    (splits may drop only whitespace, separators, and a label colon followed by
+    a space, across fields); then the audit re-runs. Fields outside every
+    longest in-order run of their column get a reading-order Check, and a field
+    passing over unused text gets a Check. An import that
+    cannot account for every character, or that would form formatting code
+    once the importer's marks are removed, is refused. The import seeds the
+    editor as unsaved (`seedData(..., { unsaved: true })`) and detaches the
+    variant identity in memory only, so no workspace file or preference is
+    written until Save; the review lasts while that seed is in the editor;
+    Discard restores the exact prior document, style, identity, and unsaved
+    state and clears the import's recovery draft; a second import keeps the
+    first one's Discard destination; a refusal raised during a review ends
+    with it. Every Resume Polish route is gated during review, and the dock
+    hides a failed run's Retry. Filled form fields and viewer-added text boxes
+    refuse the import (`overlay-text`). `src/lib/browserPdfjs.ts`
+    owns the one browser pdf.js setup (React-PDF's default worker path had
+    overwritten a separately set worker when it loaded second).
+  - [TOOL] Two independent reviews (mb-verifier; content fidelity, lifecycle).
+    Reviewer 1 FAILED it with a blocker: an AI reply could splice verbatim
+    substrings (swapped metrics, reversed ranges, a dropped "not", "-", or
+    "Un") and pass both validators and the audit; plus silent leftover-glyph
+    consumption, filled form fields lost silently, a Symbol-font "≥" read as a
+    bullet, equal-width right-aligned dates read as a column, per-glyph runs
+    refused as scans, a recurring role title dropped as a running header,
+    split superscripts, and formatting code split across runs or hidden by the
+    importer's own bold marks. Reviewer 2 FAILED AC12 (the dock's failed-Polish
+    Retry bypassed the gate) and found a workspace-preference write on import,
+    an invisible refusal during a review, a stale recovery draft after
+    Discard, a declined import stopping an interpretation, import-over-import
+    losing the Discard destination, `pdfLayout` in the main bundle, and no
+    automated coverage of the AC8/AC12 guards (its mutation passed 175/175).
+    All fixed with regression tests (`pdf-import-edge-cases.mjs`,
+    `resume-import-lifecycle.mjs`, recombination cases in
+    `pdf-import-interpretation.mjs`); the reviewers' own mutations now fail.
+    Re-verification round 2: reviewer 1 FAILED it again (no blocker, two
+    High): a sentence spliced from one bullet's head and another section's
+    tail with zero findings, and a bold "not" skipped from the middle of a
+    field; also a year swap by splitting a section, a same-baseline right
+    sidebar read as one column (a regression from the dates fix), FreeText text
+    lost silently, a ratio split at its colon, per-glyph garbage imported, and
+    per-glyph word counts. Reviewer 2 passed with test gaps (snapshot reuse
+    unfalsifiable, stale-reply and edits-during-request guards untested) and
+    three small issues (a refusal outliving its review, a silent Retry, Discard
+    wording). All fixed in round 3 (one-run fields, document-wide per-column
+    reading-order Checks, row-value rule, `overlay-text`, lone-glyph adjacency,
+    joined-text word count, `endSession`, hidden Retry); 18 scripted mutations
+    each fail their eval.
+  - [TOOL] **Not merge-ready: open findings from re-verification round 3**
+    (reviewer 1 FAILED it again, no blocker; branch
+    `feature/rolefit-resume-pdf-import`). Address these, then run a fresh
+    review of both areas:
+    - **High: an AI field can pass over text other fields use without a
+      Check.** Reading order is checked only on each field's first piece
+      (`importStructure.ts`, `placed`/`movedFields`), so a field can append a
+      later whole line or segment. Two examples:
+      - one bullet's first line joined to another bullet's second line, a
+        fabricated metric sentence;
+      - a job's date moved into an Education field.
+
+      Both are accepted with zero Checks. Fix direction: order-check every
+      contiguous run inside a field per region, not just the first piece.
+      Also add evals that disable only `cutAfter` or only `cutBefore` (each
+      half of the junction rule is untested on its own).
+    - **Medium: row values at a left-aligned tab stop on consecutive rows read
+      as a column** (`layoutLines.ts` `findGutter`). Dates or locations at
+      x≈430–440 on 3+ consecutive rows are detached, silently or with only the
+      generic markerless Check. The round-3 rule (flush right, or at most two
+      consecutive rows) fixed same-baseline right sidebars but traded this
+      case. Geometry alone does not separate the two; consider a content cue
+      (date- or location-like values).
+    - **Medium: overlay text is still lost in two shapes**
+      (`pdfLayout.ts` `paintsOwnText`): a text widget with an appearance stream
+      but an empty value, and a Stamp annotation whose appearance paints text.
+      Fix direction: refuse any annotation with an appearance stream that
+      paints text, or compare it against the page text.
+    - **Low: alternating private-use glyphs import** (one lone PUA glyph
+      between readable runs, repeated; stub only), because of the neighbour
+      exemption in the unreadable ratio.
+    - **Low (reviewer 2, which otherwise PASSED round 3): untested guards.**
+      Two `|| !isCurrent(current)` checks in `useResumeImport` have no test:
+      one after the "Use interpretation" confirm, one after the Discard
+      confirm. Each needs a lifecycle case that reseeds while the dialog is
+      open (e.g. a save lands mid-dialog). The source-text pins in
+      `resume-import-lifecycle.mjs` are strict and can fail on harmless
+      rewrites.
+    - Still open for the user: whether Cover letter Polish should also wait
+      for an import review. The live benchmark (`eval:live:resume-import`) is
+      unrun; it needs authorization.
+    Not changed: whitespace is not audited (two runs abutting without a space
+    can merge words); invisible (white) text is imported like any text; the
+    shared firewall leaves zero-width or fullwidth tag variants; a tag formed
+    only across a hyphen-joined line refuses the whole import generically.
+    Open question for the user: whether Cover letter Polish should also wait
+    for an import review (the brief says "Polish"; only Resume Polish is
+    gated).
+  - [TOOL] Offline: corpus (7 engine + 6 foreign fixtures, one now truly two
+    pages with a running header, 8 refusal kinds) at P/R 1.000 and reading
+    order 1.000; units 21/21; edge cases 13/13; interpretation 28/28; lifecycle
+    13/13; session 8/8; review rail probes; server probes pass. The corpus is
+    synthetic and written alongside the parser: real-world accuracy is
+    UNCONFIRMED.
+  - [TOOL] In-app browser QA on an isolated 5183 server with a scratch
+    workspace and a synthetic PDF: guard decline/replace, review rail and
+    original preview, Show highlight, Discard with and without edits, Save
+    variant (strict file re-parsed), refusal, Prepare's Polish blocker, and the
+    Interpret running/success/rejected/Stop states against an in-page stubbed
+    reply. No provider call was made; the live benchmark
+    (`eval:live:resume-import`) is unrun and live interpretation is UNCONFIRMED.
 - [USER+CODE+TOOL] **Tracker limit 500 → 2,000; candidate-only duplicate scan;
   revision-aware saves; backup limits sized for 2,000** (task
   `2026-10-08-tracker-scale`; the user's real tracker had reached 500, a cap

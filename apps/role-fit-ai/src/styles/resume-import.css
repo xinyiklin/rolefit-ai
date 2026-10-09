@@ -1,0 +1,131 @@
+/* The Resume rail while a PDF import is reviewed: the original, then the Check
+   and Not placed lists, then the save form in the sticky footer. Rows are
+   hairline-divided like proposal rows; nothing here is a nested card. */
+.resume-import__section {
+  display: grid;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.resume-import__section h3 {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
+.resume-import__section-head,
+.resume-import__item-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  min-width: 0;
+}
+
+.resume-import__original {
+  max-height: 22rem;
+  overflow: auto;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--paper-deep);
+}
+
+.resume-import__pages {
+  display: grid;
+  gap: var(--s2);
+  padding: var(--s2);
+}
+
+/* React-PDF paints at a fixed width; the rail decides the shown size. */
+.resume-import__page canvas {
+  display: block;
+  width: 100% !important;
+  height: auto !important;
+  box-shadow: 0 0 0 1px var(--hairline);
+}
+
+.resume-import__list {
+  display: grid;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--hairline-soft);
+  list-style: none;
+}
+
+.resume-import__item {
+  display: grid;
+  gap: var(--s1);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--hairline-soft);
+}
+
+.resume-import__where {
+  margin: 0;
+  min-width: 0;
+  color: var(--ink-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.resume-import__reason,
+.resume-import__source,
+.resume-import__note {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.resume-import__reason {
+  color: var(--ink);
+}
+
+.resume-import__source {
+  color: var(--ink-soft);
+  font-family: var(--font-display);
+}
+
+.resume-import__note {
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+.resume-import__save {
+  display: grid;
+  gap: var(--s2);
+  width: 100%;
+}
+
+.resume-import__save label {
+  color: var(--ink-strong);
+  font-size: 0.76rem;
+  font-weight: 650;
+}
+
+.resume-import__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+}
+
+/* Same field as the Save menu's variant name, so both saves read alike. */
+.resume-import__save input {
+  width: 100%;
+  min-width: 0;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 0 var(--s2);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
+  background: var(--card-elev);
+  color: var(--ink);
+  font: 500 0.74rem/1 var(--font-ui);
+  outline: none;
+}
+
+.resume-import__save input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
