@@ -175,12 +175,12 @@ test("desktop runtime tuple matches the release manifest and rejects drift", () 
   });
   assert.throws(() => assertForgeHostNodeVersion("23.11.1"), /use Node 24/);
   assert.throws(
-    () => assertElectronRuntimeVersions({ electron: "43.1.9", node: "24.18.0" }),
-    /does not match expected 43\.2\.x/,
+    () => assertElectronRuntimeVersions({ electron: "43.6.9", node: "24.21.0" }),
+    /does not match expected 43\.7\.x/,
   );
   assert.throws(
-    () => assertElectronRuntimeVersions({ electron: "43.2.0", node: "24.17.9" }),
-    /does not match expected 24\.18\.x/,
+    () => assertElectronRuntimeVersions({ electron: "43.7.9", node: "24.20.9" }),
+    /does not match expected 24\.21\.x/,
   );
 });
 
