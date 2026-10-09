@@ -2205,6 +2205,8 @@ function App() {
     // only, so a text-only polish result has nothing to put in the PDF prompt.
     canExportResumePdf: Boolean(editedResume),
     canExportCoverLetter,
+    resumeSavedToApplication: resumeApplicationSync.state === "saved",
+    coverLetterSavedToApplication: coverLetterApplicationSync.state === "saved",
     handleDownloadPdf,
     handleDownloadCoverLetterPdf: coverLetterEditor.downloadPdf,
     getResumeArtifacts,
@@ -2336,6 +2338,7 @@ function App() {
     currentVersion: resumeReplacementStateRef.current.version,
     recoveryDraftSaved: draftAutosaveState === "saved",
     applicationId: preparationSession.applicationId,
+    jobOnlyRecord: resumeApplicationSync.state === "job-only",
     receipt: applicationPersistenceReceipt
   });
   const coverLetterNeedsUnloadGuard = applicationDocumentNeedsUnloadGuard({
@@ -2344,6 +2347,7 @@ function App() {
     currentVersion: coverReplacementStateRef.current.version,
     recoveryDraftSaved: coverDraftAutosaveState === "saved",
     applicationId: preparationSession.applicationId,
+    jobOnlyRecord: coverLetterApplicationSync.state === "job-only",
     receipt: applicationPersistenceReceipt
   });
   useBeforeUnloadGuard(

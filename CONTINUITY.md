@@ -5,6 +5,36 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] **A saved Skip no longer warns on close; Update offers only
+  changed PDFs** (branch `fix/rolefit-saved-application-prompts`; the user
+  reported both).
+  - Close-tab warning: Prepare's automatic cover-letter retitle makes the
+    letter recovery-dirty with no edit, and Skip writes no persistence
+    receipt, so `applicationDocumentNeedsUnloadGuard` warned despite the
+    saved recovery draft. A dirty document beside a Skipped (`not_applying`)
+    record now follows the Apply-excluded rule: it warns only until its
+    recovery write succeeds. Apply with default materials already released.
+    The retitle still counts as dirty, so a prepared, unsaved session warns.
+  - Update application's download prompt offered every included PDF. It now
+    offers only a document whose application sync state is not `saved`
+    (source fingerprint differs from the stored copy), saves directly when
+    none changed, and names the target ("Update & download cover-letter
+    PDF"; Apply reads "Apply & download resume PDF").
+  - [TOOL] Reproduced, then verified live on a 5183 dev server with a
+    synthetic workspace and temporary state logging (removed): the guard
+    after Save as skipped went from on to off; an unchanged update saved with
+    no prompt; cover-only and resume-only changes each offered just that
+    row. Full `npm run check --workspace apps/role-fit-ai` passed (167/167).
+  - [TOOL] One independent review: no blockers. Fixed its lows (one owner for
+    the Skipped rule via the `job-only` sync state, App wiring assertions that
+    fail under mutation, a Skipped-over-failed-receipt case, PRODUCT wording).
+    Its medium is a product trade-off left as built: real edits beside a
+    Skipped record also release once recovery is written, the same rule
+    Apply-excluded documents follow, and that recovery is same-tab only.
+- [USER+TOOL] The extension's Firefox ⌘⇧U import did nothing; the cause was a
+  stale Firefox session (running since its 157.0.1 update). Restarting Firefox
+  fixed it, and a clean Firefox 157 profile ran the shortcut end to end; no
+  code change.
 - [USER+CODE] **Extension imports signed-in Handshake postings** (branch
   `feature/rolefit-handshake-import`; the user asked to check and add
   support). Before, the extension captured the whole page: about 300

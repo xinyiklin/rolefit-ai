@@ -9,7 +9,7 @@ import type { PolishedResume } from "../resumeEngine";
 import type { OutputTab } from "../sections/shared";
 import { resumeUsedForApplication } from "../lib/applicationDocuments";
 import type { DocumentUpload } from "../lib/applicationDocumentRequests";
-import { runApplyPdfExports } from "../lib/applyPdfExports";
+import { applyDownloadOffered, runApplyPdfExports } from "../lib/applyPdfExports";
 import type { FitAssessmentPersistenceDecision } from "../lib/fitAssessmentLifecycle.ts";
 import {
   preparationCommitIdentity,
@@ -72,6 +72,8 @@ type UseApplyFlowArgs = {
   // polish result must not put a resume checkbox in the download prompt.
   canExportResumePdf: boolean;
   canExportCoverLetter: boolean;
+  resumeSavedToApplication: boolean;
+  coverLetterSavedToApplication: boolean;
   // Both resolve false when the export fails; the Apply flow owns the message
   // because each editor's own status surface is no longer on screen by then.
   handleDownloadPdf: (overrideBase?: string) => Promise<boolean>;
@@ -121,6 +123,8 @@ export function useApplyFlow({
   resolveApplyDuplicate,
   canExportResumePdf,
   canExportCoverLetter,
+  resumeSavedToApplication,
+  coverLetterSavedToApplication,
   handleDownloadPdf,
   handleDownloadCoverLetterPdf,
   getResumeArtifacts,
@@ -156,9 +160,8 @@ export function useApplyFlow({
     resume: string;
     coverLetter: string;
   } | null>(null);
-  // Post-Apply download prompt: holds the just-applied role's label and which
-  // included materials this Apply can actually export, so the dialog offers a
-  // cover-letter PDF whenever the letter is part of the application.
+  // Post-Apply download prompt: holds the role's label and which included
+  // materials this commit changes and can actually export.
   const [applyDownloadPrompt, setApplyDownloadPrompt] = useState<{
     label: string;
     canDownloadResume: boolean;
@@ -608,9 +611,16 @@ export function useApplyFlow({
         };
       }
 
-      const canDownloadResume = applyMaterialSelectionRef.current.resume && canExportResumePdf;
-      const canDownloadCoverLetter =
-        applyMaterialSelectionRef.current.coverLetter && canExportCoverLetter;
+      const canDownloadResume = applyDownloadOffered({
+        included: applyMaterialSelectionRef.current.resume,
+        exportable: canExportResumePdf,
+        savedToApplication: resumeSavedToApplication
+      });
+      const canDownloadCoverLetter = applyDownloadOffered({
+        included: applyMaterialSelectionRef.current.coverLetter,
+        exportable: canExportCoverLetter,
+        savedToApplication: coverLetterSavedToApplication
+      });
       if (!canDownloadResume && !canDownloadCoverLetter) {
         if (!(await commitApply())) clearCapturedApply();
         return;

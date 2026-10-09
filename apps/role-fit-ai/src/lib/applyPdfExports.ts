@@ -1,5 +1,17 @@
 export type ApplyPdfExportKind = "resume" | "cover letter";
 
+type ApplyDownloadCandidate = {
+  included: boolean;
+  exportable: boolean;
+  savedToApplication: boolean;
+};
+
+// An update offers only the PDFs it changes; an unchanged document is still
+// exportable from its own menu.
+export function applyDownloadOffered(candidate: ApplyDownloadCandidate): boolean {
+  return candidate.included && candidate.exportable && !candidate.savedToApplication;
+}
+
 type ApplyPdfExporters = {
   resume?: () => Promise<boolean>;
   coverLetter?: () => Promise<boolean>;

@@ -29,15 +29,18 @@ type ApplicationDocumentUnloadState = {
   currentVersion: string;
   recoveryDraftSaved: boolean;
   applicationId: string | null;
+  // The session's record is Skipped, which never takes an editor's document.
+  jobOnlyRecord: boolean;
   receipt: ApplicationPersistenceReceipt | null;
 };
 
-// Excluded documents rely on recovery; included documents rely on their exact
-// saved application version.
+// Excluded documents, and every document beside a Skipped record, rely on
+// recovery; included documents rely on their exact saved application version.
 export function applicationDocumentNeedsUnloadGuard(
   state: ApplicationDocumentUnloadState
 ): boolean {
   if (!state.dirty) return false;
+  if (state.jobOnlyRecord) return !state.recoveryDraftSaved;
   if (!state.receipt || state.receipt.applicationId !== state.applicationId) return true;
   const documentReceipt = state.receipt[state.kind];
   if (documentReceipt.outcome === "excluded") return !state.recoveryDraftSaved;

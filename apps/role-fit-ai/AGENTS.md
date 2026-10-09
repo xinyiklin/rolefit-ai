@@ -219,7 +219,9 @@ or workspace state, keep it here and expose the smallest host seam instead.
   while allowing either or both to be excluded. A later update must not delete or
   replace a previously saved artifact whose card is excluded.
 - The Apply download prompt covers every included, exportable material, not the
-  resume alone. Resume and cover letter stay two separate PDFs — ATS uploads are
+  resume alone, except that Update application skips a document already matching
+  the copy saved on that application; its primary action names the PDF or PDFs
+  it downloads. Resume and cover letter stay two separate PDFs — ATS uploads are
   per-document and a merged file breaks resume parsing. Each document owns one
   row carrying its own checkbox and its own editable name; the letter's name is
   seeded from the resume's through `swapDocumentTitleKind`, so the pair matches

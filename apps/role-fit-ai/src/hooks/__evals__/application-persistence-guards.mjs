@@ -234,6 +234,16 @@ assert.match(
   "the unload predicate receives the complete application persistence phase"
 );
 assert.match(
+  app.slice(unloadGuardCall - 1600, unloadGuardCall),
+  /dirty: resumeDocumentDirty,[\s\S]{0,260}?jobOnlyRecord: resumeApplicationSync\.state === "job-only",[\s\S]{0,400}?dirty: coverLetterEditor\.recoveryDirty,[\s\S]{0,260}?jobOnlyRecord: coverLetterApplicationSync\.state === "job-only",/,
+  "each document guard reads its own job-only sync state, the one owner of the Skipped rule"
+);
+assert.match(
+  app,
+  /resumeSavedToApplication: resumeApplicationSync\.state === "saved",\s*coverLetterSavedToApplication: coverLetterApplicationSync\.state === "saved",/,
+  "Apply skips a PDF only when its document matches the application's saved copy, never for a fresh preparation"
+);
+assert.match(
   app,
   /fitAssessmentPersistence:\s*fitAssessmentPersistenceDecision\(fitAssessmentState\)/,
   "Apply receives an explicit Fit Assessment persistence decision"
@@ -264,6 +274,7 @@ function deferred() {
     currentVersion: "resume-v1",
     recoveryDraftSaved: false,
     applicationId: "application-1",
+    jobOnlyRecord: false,
     receipt
   };
   const cases = [
@@ -303,6 +314,41 @@ function deferred() {
         ...receipt,
         coverLetter: { version: "cover-v1", outcome: "failed" }
       }
+    }],
+    // Skip writes no document receipt: the Skipped record itself is the signal.
+    ["a dirty resume beside a Skipped record releases once recovery is written", false, {
+      applicationId: "skipped-1",
+      jobOnlyRecord: true,
+      recoveryDraftSaved: true,
+      receipt: null
+    }],
+    ["a dirty resume beside a Skipped record warns while recovery is pending", true, {
+      applicationId: "skipped-1",
+      jobOnlyRecord: true,
+      receipt: null
+    }],
+    ["a retitled cover letter beside a Skipped record releases once recovery is written", false, {
+      kind: "coverLetter",
+      currentVersion: "cover-v2",
+      applicationId: "skipped-1",
+      jobOnlyRecord: true,
+      recoveryDraftSaved: true,
+      receipt: null
+    }],
+    ["a Skipped record outranks an earlier failed save, since it accepts no saves", false, {
+      kind: "coverLetter",
+      currentVersion: "cover-v1",
+      jobOnlyRecord: true,
+      recoveryDraftSaved: true,
+      receipt: {
+        ...receipt,
+        coverLetter: { version: "cover-v1", outcome: "failed" }
+      }
+    }],
+    ["an unsaved document with no record still warns despite its recovery draft", true, {
+      applicationId: null,
+      recoveryDraftSaved: true,
+      receipt: null
     }]
   ];
   for (const [message, expected, state] of cases) {
