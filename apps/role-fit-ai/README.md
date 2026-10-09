@@ -172,9 +172,11 @@ font, size and wrapping changes still reflow the page normally.
   its public posting API (including Handshake's branded wrapper and embedded
   boards), with Greenhouse-wrapper resolution; Oracle, iCIMS, Dayforce,
   Workable, and UKG job pages; structured JobPosting data; and a generic
-  HTML→text fallback for other boards. Each source must yield the exact linked
-  job; a missing posting or sign-in page fails with a prompt to paste or use the
-  extension rather than importing unrelated text. The configured Job analysis
+  HTML→text fallback for other boards ([Supported job sites](#supported-job-sites)
+  lists each). Each recognized source must yield the exact linked job; a
+  missing posting or sign-in page fails with a prompt to paste or use the
+  extension rather than importing unrelated text. The generic fallback accepts
+  any readable page (see the known limits under the table). The configured Job analysis
   provider extracts the posting into structured fields and concise summaries.
   The server validates response shape and bounds; extraction has no additional
   fact checks or evidence-review warnings.
@@ -709,6 +711,51 @@ request in the companion, and reopen the popup. After changing the app port,
 copy the active port from the companion and save it in the popup's **Settings**
 view; no extension reload is needed. See
 [`extension/README.md`](extension/README.md) for the complete flow.
+
+## Supported job sites
+
+RoleFit reads a posting in two ways. **Paste a link** on Prepare and the local
+server fetches the description. **Capture the page** with the browser extension
+and it sends what your browser shows. For a site the server recognizes, the
+server then fetches the full description and keeps your capture if that fails.
+The **Posting ID** column lists the sites whose posting id RoleFit reads from
+the URL, so the same posting is recognized as a duplicate under different URLs.
+
+| Site | Paste a link | Extension capture | Posting ID |
+| --- | --- | --- | --- |
+| Ashby (`jobs.ashbyhq.com`, company pages with `?ashby_jid=`) | Full description from Ashby's public posting API, including embedded boards | Page text, then Ashby's API | `jobs.ashbyhq.com` links only |
+| Greenhouse (`boards.greenhouse.io`, `job-boards.greenhouse.io`, company pages with `?gh_jid=`) | Full description from the embedded board | Description selector, then Greenhouse | Yes |
+| Workday (`*.myworkdayjobs.com`) | Full description from Workday's job API | Description selector, then Workday's API | Yes |
+| Handshake job board (`<school>.joinhandshake.com/jobs/<id>`, search view) | No: it needs your sign-in | Expands the description and keeps only that posting, without Similar Jobs or alumni | No: the canonical `/jobs/<id>` URL is matched instead |
+| LinkedIn (`linkedin.com/jobs/view/…`) | Description or structured data when LinkedIn shows it; otherwise asks you to paste or use the extension | Description selector | Yes |
+| Indeed | No: Indeed refuses the server's request (HTTP 401 in testing) | Description selector | Yes |
+| Lever (`jobs.lever.co`) | Page text or structured data | Description selector | Yes |
+| Workable (`apply.workable.com/<account>/j/<code>`) | Full description from Workable's job API | Page text, then Workable's API | No |
+| Oracle Recruiting Cloud (`*.oraclecloud.com` candidate experience) | Full requisition from Oracle's API | Page text, then Oracle's API | No |
+| iCIMS (`<tenant>.icims.com/jobs/<id>`) | Job page, including its framed job body | Page text, then the job page | No |
+| Dayforce (`jobs.dayforcehcm.com`) | Job page data | Page text, then the job page | No |
+| UKG / UltiPro (`recruiting*.ultipro.com` opportunity pages) | Job page data | Page text, then the job page | No |
+| SmartRecruiters | Page text or structured data | Page text | Yes |
+| Glassdoor | No: Glassdoor refuses the server's request (HTTP 403 in testing) | Page text | Yes |
+| Microsoft Careers (`apply.careers.microsoft.com`) | Summary only: about a third of the posting, without Responsibilities or Qualifications | Page text, complete | No |
+| Meta Careers, ZipRecruiter | No: the site refuses the server's request (HTTP 400 / 403 in testing) | Page text | No |
+| Any other site | Structured `JobPosting` data or readable page text; a page without readable text asks you to paste instead | Page text | No |
+
+Handshake's own careers page (`joinhandshake.com`, an Ashby board) is the Ashby
+row; the student job board is the Handshake row. In an October 2026 check of
+live postings, link import also returned the full description through the
+generic path for Amazon Jobs, Google Careers, Apple Jobs, Built In, Dice,
+Y Combinator, Wellfound, Teamtailor, and SAP SuccessFactors and Radancy career
+sites.
+
+Known limits:
+
+- The extension reads only the page's top frame. A description inside an
+  embedded frame is missed: iCIMS pages work only because the server fetches
+  `*.icims.com` itself, and a company site that embeds an ATS in a frame
+  captures little or nothing.
+- A posting link that redirects to a general careers page (as Rippling's own
+  board does) imports that page's text; check the brief before preparing.
 
 ## Install and local data
 

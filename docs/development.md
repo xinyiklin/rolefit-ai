@@ -118,8 +118,10 @@ npm run test:rolefit:release
 
 node apps/role-fit-ai/__evals__/extension-popup-contract.mjs
 node apps/role-fit-ai/__evals__/extension-settings-contract.mjs
+node apps/role-fit-ai/__evals__/extension-handshake-capture.mjs
 node apps/role-fit-ai/server/extension/__evals__/origin-policy-probes.mjs
 node apps/role-fit-ai/server/extension/__evals__/inbox-probes.mjs
+node apps/role-fit-ai/server/extension/__evals__/job-meta-probes.mjs
 
 # Live-provider evals: drive a real AI provider; manual-only, never part of
 # `check`/`test`, run only when explicitly authorized.

@@ -89,24 +89,84 @@ export function randomClaimToken() {
 
 // ── Page capture (the function body below is injected into the active tab) ──
 
-function extractPageData() {
-  const selectors = [
-    "#jobDescriptionText",
-    ".jobs-description",
-    ".posting",
-    "#content",
-    ".wd-JobPostingDescription"
-  ];
-  let text = "";
-  for (const selector of selectors) {
-    const node = document.querySelector(selector);
-    if (node && node.innerText && node.innerText.trim().length > 100) {
-      text = node.innerText.trim();
-      break;
-    }
+// Injected by source, so every helper it uses is declared inside it. Only a
+// Handshake posting page returns a promise; every other capture is synchronous.
+export function extractPageData() {
+  const capped = (page) => ({ ...page, text: page.text.slice(0, 50000) });
+  if (!handshakePostingId()) return capped(extractVisiblePage());
+  return extractHandshakePosting().then((page) => capped(page ?? extractVisiblePage()));
+
+  function handshakePostingId() {
+    if (!/(^|\.)joinhandshake\.com$/i.test(location.hostname)) return "";
+    return location.pathname.match(/^\/(?:jobs|job-search)\/(\d+)\/?$/)?.[1] ?? "";
   }
-  if (!text) text = document.body.innerText || "";
-  return { text: text.slice(0, 50000), url: location.href, title: document.title };
+
+  function extractVisiblePage() {
+    const selectors = [
+      "#jobDescriptionText",
+      ".jobs-description",
+      ".posting",
+      "#content",
+      ".wd-JobPostingDescription"
+    ];
+    for (const selector of selectors) {
+      const node = document.querySelector(selector);
+      if (node && node.innerText && node.innerText.trim().length > 100) {
+        return { text: node.innerText.trim(), url: location.href, title: document.title };
+      }
+    }
+    return { text: document.body.innerText || "", url: location.href, title: document.title };
+  }
+
+  // Signed-in Handshake shortens the description behind a toggle and follows
+  // the posting with other jobs and students; keep only the posting's sections.
+  async function extractHandshakePosting() {
+    const pathId = handshakePostingId();
+    const pane = () => document.querySelector('[data-hook="job-details-page"], [data-hook="right-content"]');
+    const sections = () => {
+      let container = pane();
+      while (container?.children.length === 1) container = container.firstElementChild;
+      const kept = [];
+      for (const section of container?.children ?? []) {
+        if (section.querySelector('[data-hook="similar-job-bookmark-action"]')) break;
+        if (!section.querySelector('a[href*="/profiles/"]')) kept.push(section);
+      }
+      return kept;
+    };
+    const postingText = () => sections().map((section) => section.innerText.trim()).filter(Boolean).join("\n\n");
+    const settle = async (done) => {
+      const deadline = Date.now() + 1500;
+      while (!done() && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 50));
+    };
+
+    // A click re-renders the toggle, so it is re-found by position. Its label is
+    // localized; a click that shortens the posting closed an open section.
+    const toggle = (index) => sections()
+      .flatMap((section) => [...section.querySelectorAll("button.view-more-button")])
+      .filter((button) => !button.form && !button.closest("a"))[index];
+    for (let index = 0; index < 4 && toggle(index); index += 1) {
+      const before = postingText().length;
+      toggle(index).click();
+      await settle(() => postingText().length !== before);
+      if (postingText().length < before) {
+        toggle(index)?.click();
+        await settle(() => postingText().length >= before);
+      }
+    }
+
+    const text = postingText();
+    if (text.length < 100) return null;
+    const heading = pane().querySelector("h1");
+    const jobId = heading?.closest("a")?.pathname.match(/^\/jobs\/(\d+)\/?$/)?.[1] ?? pathId;
+    const role = heading?.innerText.replace(/\s+/g, " ").trim();
+    const employer = pane().querySelector('a[href^="/e/"][aria-label]')?.getAttribute("aria-label")
+      .replace(/[\s|]+/g, " ").trim();
+    return {
+      text,
+      url: `${location.origin}/jobs/${jobId}`,
+      title: role && employer ? `${role} | ${employer} | Handshake` : document.title
+    };
+  }
 }
 
 /**

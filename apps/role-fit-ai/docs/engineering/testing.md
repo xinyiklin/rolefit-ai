@@ -1168,6 +1168,22 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   gone, and never taken on first paint. The browser-QA pane runs unfocused, so
   `.focus()` there sets `activeElement` without firing `focusin`; dispatch the
   event explicitly or the focus tracker looks broken when it is not;
+- Handshake capture against a synthetic stub of the live layout: a collapsed
+  or already-open description captured in full and left open (the toggle
+  re-renders on each click), Similar Jobs and alumni profiles excluded in
+  either order, the search view's selected posting named by its own link with
+  a single-line role and employer, no toggle clicked inside a link or form and
+  at most four clicked, a wait of only the 1.5 s deadline when the toggle never
+  responds, the 50,000-character cap, generic fallback without a posting pane,
+  no clicks on other sites, a synchronous capture on other sites and on
+  Handshake pages that are not a posting (only a posting page returns a
+  promise), and no server fetch of the signed-in page;
+- popup title/company parsing (`server/extension/__evals__/job-meta-probes.mjs`):
+  LinkedIn, Indeed, and `<Role> | <Employer> | Handshake` titles (Handshake
+  ahead of LinkedIn), body header lines filling only what the title left open,
+  and hostile 500-character titles and 50,000-character page text (the
+  analyze route's cap) parsing in under 500 ms (the replaced patterns took
+  0.5-32 s, stalling the synchronous analyze route);
 - the loadable extension directory containing no reserved `_` name, nothing
   beyond the shipped set defined once in `desktop/extension-bundle.cts` plus its
   two guides, and no missing shipped file — while tolerating dotfiles the
