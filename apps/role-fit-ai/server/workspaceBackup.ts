@@ -7,6 +7,7 @@ import {
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
   WORKSPACE_BACKUP_FORMAT,
+  WORKSPACE_BACKUP_TOO_LARGE_MESSAGE,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
   isManagedWorkspaceBackupPath,
   parseWorkspaceBackupEnvelope,
@@ -15,9 +16,12 @@ import {
   type WorkspaceBackupFile
 } from "../src/lib/workspaceBackupContract.ts";
 import {
+  invalidateApplicationsSnapshot,
+  parseStoredApplications,
   readApplications,
   withApplicationsLock
 } from "./applications/storage.ts";
+import { ApplicationsStorageError } from "./applications/schema.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
 import {
   beginWorkspaceRestore,
@@ -70,7 +74,7 @@ export function assertWorkspaceBackupCapacity(fileCount: number, totalBytes: num
     throw new WorkspaceBackupError("The workspace contains too many managed files to back up safely.", 413);
   }
   if (totalBytes > MAX_WORKSPACE_BACKUP_BYTES) {
-    throw new WorkspaceBackupError("The workspace backup is larger than the supported 64 MB limit.", 413);
+    throw new WorkspaceBackupError(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE, 413);
   }
 }
 
@@ -177,14 +181,19 @@ async function readManagedFile(
     throw new WorkspaceBackupError(`The managed workspace file ${path} is too large to back up safely.`, 413);
   }
   if (details.size > remainingBytes) {
-    throw new WorkspaceBackupError("The workspace backup is larger than the supported 64 MB limit.", 413);
+    throw new WorkspaceBackupError(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE, 413);
   }
   const data = await readFile(filePath);
   if (data.byteLength > MAX_WORKSPACE_BACKUP_FILE_BYTES || data.byteLength > remainingBytes) {
-    throw new WorkspaceBackupError("The workspace backup is larger than the supported 64 MB limit.", 413);
+    throw new WorkspaceBackupError(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE, 413);
   }
   if (path === "applications.json") {
-    await readApplications(workspaceDir);
+    // Validate the exact bytes being packaged, not the server's cached tracker.
+    try {
+      parseStoredApplications(data.toString("utf8"));
+    } catch {
+      throw new ApplicationsStorageError();
+    }
   } else if (path.endsWith(".pdf")) {
     validatePdf(data);
   } else if (path.endsWith(".cover")) {
@@ -451,6 +460,9 @@ export async function restoreWorkspaceBackup(
       if (error instanceof WorkspaceBackupError) throw error;
       throw new WorkspaceBackupError("The workspace could not be restored safely. The current workspace was kept.", 500);
     } finally {
+      // The file identity changes with the swap anyway; dropping the cache keeps
+      // that guarantee explicit for every outcome, including rollbacks.
+      invalidateApplicationsSnapshot();
       await rm(stageDir, { recursive: true, force: true }).catch(() => undefined);
     }
     }, { allowDuringRestore: true }), { allowDuringRestore: true });

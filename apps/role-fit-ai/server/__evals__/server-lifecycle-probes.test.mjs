@@ -122,10 +122,12 @@ try {
 
   const applications = await get(runtime.port, "/api/applications");
   assert.equal(applications.status, 200);
-  assert.deepEqual(JSON.parse(applications.body), {
+  const { revision, ...listed } = JSON.parse(applications.body);
+  assert.deepEqual(listed, {
     applications: [],
     path: "workspace/applications.json"
   });
+  assert.match(revision, /^[0-9a-f-]{36}$/, "the tracker list carries its revision");
   assert.doesNotMatch(
     applications.body,
     new RegExp(temporaryRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),

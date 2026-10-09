@@ -18,7 +18,7 @@ export type ApplicationMutation = {
 function parseApplicationMutations(raw: unknown): ApplicationMutation[] {
   if (!Array.isArray(raw) || raw.length === 0 || raw.length > MAX_APPLICATIONS) {
     throw new ApplicationsStorageError(
-      "Each tracker save must name between 1 and 500 application mutations.",
+      `Each tracker save must name between 1 and ${MAX_APPLICATIONS.toLocaleString("en-US")} application mutations.`,
       400
     );
   }

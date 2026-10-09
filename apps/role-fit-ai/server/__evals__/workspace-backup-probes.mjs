@@ -26,6 +26,7 @@ import {
   WORKSPACE_PREFERENCES_FILE_NAME,
   MAX_WORKSPACE_BACKUP_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
+  WORKSPACE_BACKUP_TOO_LARGE_MESSAGE,
   WORKSPACE_RESTORE_MARKER_FILE_NAME,
   parseStoredWorkspaceRestoreMarker,
   parseWorkspaceBackupEnvelope
@@ -511,7 +512,7 @@ try {
   );
   assert.throws(
     () => assertWorkspaceBackupCapacity(1, MAX_WORKSPACE_BACKUP_BYTES + 1),
-    (error) => error instanceof WorkspaceBackupError && error.status === 413 && /64 MB limit/.test(error.message)
+    (error) => error instanceof WorkspaceBackupError && error.status === 413 && error.message === WORKSPACE_BACKUP_TOO_LARGE_MESSAGE
   );
 
   // --- Presence tab-id contract ---

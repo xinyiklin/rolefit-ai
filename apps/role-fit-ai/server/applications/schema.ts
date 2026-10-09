@@ -24,7 +24,9 @@ const inList = <T extends string>(list: readonly T[], value: unknown): value is 
 // Shared with the application-tracker routes (routes.ts imports this) so the id
 // validation used for storage and for route dispatch can never drift.
 export const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
-export const MAX_APPLICATIONS = 500;
+// The one tracker limit. The workspace backup limits in
+// src/lib/workspaceBackupContract.ts are sized to carry this many applications.
+export const MAX_APPLICATIONS = 2_000;
 const MAX_FIELD = 50_000;
 const MISSING_PERSISTED_TIMESTAMP = "1970-01-01T00:00:00.000Z";
 const RETIRED_TRACKER_FIELDS = [

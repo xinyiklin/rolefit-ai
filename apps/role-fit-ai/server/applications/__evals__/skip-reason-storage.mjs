@@ -3,7 +3,14 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ApplicationsStorageError, sanitizeApplications } from "../schema.ts";
-import { applicationsFilePath, readApplications, writeApplications } from "../storage.ts";
+import { applicationsFilePath, invalidateApplicationsSnapshot, readApplications as readCachedApplications, writeApplications } from "../storage.ts";
+
+// Read back from disk, not the server's validated cache, so every check below
+// proves a strict round trip through applications.json.
+const readApplications = (dir) => {
+  invalidateApplicationsSnapshot();
+  return readCachedApplications(dir);
+};
 
 // Skip reasons are a list. Records written before the list carry one scalar
 // `notApplyingReason`; they must keep loading under the strict tracker read,

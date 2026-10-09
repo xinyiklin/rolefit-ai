@@ -3,9 +3,16 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { sanitizeApplications } from "../schema.ts";
-import { readApplications, writeApplications } from "../storage.ts";
+import { invalidateApplicationsSnapshot, readApplications as readCachedApplications, writeApplications } from "../storage.ts";
 import { preparedApplicationRecord } from "../../../src/lib/preparedApplicationRecord.ts";
 import { preparationCommitIdentity, newPreparationSession } from "../../../src/lib/preparationSession.ts";
+
+// Read back from disk, not the server's validated cache, so every check below
+// proves a strict round trip through applications.json.
+const readApplications = (dir) => {
+  invalidateApplicationsSnapshot();
+  return readCachedApplications(dir);
+};
 
 const jobWarnings = [{ field: "roleDescription", message: "Not supported by provided evidence. Check this generated field against the original posting." }];
 const base = { id: "synthetic-warning", title: "Engineer", jobUrl: "", jobDescription: "Prepared description", status: "applied", createdAt: "2026-09-18T00:00:00.000Z", updatedAt: "2026-09-18T00:00:00.000Z" };

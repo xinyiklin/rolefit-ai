@@ -98,7 +98,9 @@ export type DuplicateGroup<T extends DuplicateCandidate = DuplicateCandidate> = 
 // buildSignature reads them all defensively.
 type SignatureInput = DuplicateTarget & DuplicateCandidate;
 
-// Internal — a precomputed comparison signature for one record.
+// Internal — a precomputed comparison signature for one record. It holds only
+// cheap identity metadata plus the description text, so it stays small enough
+// for the client cache layer to keep per record across scans.
 type Signature = {
   atsKeys: Map<string, AtsPostingKey>;
   normUrls: Set<string>;
@@ -106,9 +108,11 @@ type Signature = {
   company: string;
   role: string;
   location: string | undefined;
-  fingerprint: Set<string>;
-  shingles: Set<string>;
+  text: string;
 };
+
+// Internal — description features, tokenized on first use within one call.
+type ContentFeatures = { fingerprint: Set<string>; shingles: () => Set<string> };
 
 // Internal — the outcome of comparing two signatures (before an application is
 // attached).
@@ -468,8 +472,7 @@ export const CONFIDENCE_RANK: Record<DuplicateConfidence, number> = { exact: 0, 
 // apply-time target ({ jobUrl, jobText, company, role, location }). Every known
 // URL of the record (its jobUrl AND all sourceUrls) contributes to the posting-id
 // and normalized-URL sets, so a canonical record keeps matching no matter which
-// board the other side is on. Building this once per record makes the O(n²)
-// tracker-wide grouping cheap (n fingerprints, not n²).
+// board the other side is on.
 function buildSignature(rec: SignatureInput): Signature {
   const urls = [rec?.jobUrl, ...(Array.isArray(rec?.sourceUrls) ? rec.sourceUrls.map((s) => s?.url) : [])]
     .filter((u): u is string => typeof u === "string" && !!u.trim());
@@ -481,10 +484,6 @@ function buildSignature(rec: SignatureInput): Signature {
     normUrls.add(normalizeJobUrl(url.trim()));
   }
   const text = typeof rec?.jobText === "string" ? rec.jobText : candidateText(rec ?? {});
-  // One tokenization pass feeds both sets. Calling jdFingerprint/jdShingles here
-  // instead lowercased, sliced, split, and filtered the same description twice —
-  // doubling signature cost on the tracker-wide scan for no benefit.
-  const tokens = jdTokens(text);
   return {
     atsKeys,
     normUrls,
@@ -492,8 +491,26 @@ function buildSignature(rec: SignatureInput): Signature {
     company: normalizeCompanyName(rec?.company),
     role: normalizeRoleTitle(rec?.role || roleFromTitle(rec?.title)),
     location: rec?.location,
-    fingerprint: fingerprintOf(tokens),
-    shingles: shinglesOf(tokens)
+    text
+  };
+}
+
+// One memo per scan call: each description is tokenized at most once, and only
+// when a tier reads it. Most pairs are decided by ids or metadata first. Phrase
+// shingles are rarer still (only near-identical descriptions reach them).
+function contentFeatureMemo(): (sig: Signature) => ContentFeatures {
+  const memo = new Map<Signature, ContentFeatures>();
+  return (sig) => {
+    let features = memo.get(sig);
+    if (!features) {
+      let shingles: Set<string> | undefined;
+      features = {
+        fingerprint: jdFingerprint(sig.text),
+        shingles: () => (shingles ??= shinglesOf(jdTokens(sig.text)))
+      };
+      memo.set(sig, features);
+    }
+    return features;
   };
 }
 
@@ -504,7 +521,15 @@ function buildSignature(rec: SignatureInput): Signature {
 //   confidence "exact" (definitive identity; callers may still offer a bypass)
 //              | "high" (merge with user consent)
 //              | "possible" (warn only, never auto-merge)
-function matchSignatures(a: Signature, b: Signature): MatchResult | null {
+//
+// The tracker-wide scan compares only the pairs candidatePairs produces. A tier
+// that can accept a pair outside them must extend candidatePairs too, or the
+// scan will silently miss it (duplicate-scan-scale-eval catches the gap).
+function matchSignatures(
+  a: Signature,
+  b: Signature,
+  features: (sig: Signature) => ContentFeatures
+): MatchResult | null {
   // Tier 1: a posting id shared by any URL of each side.
   for (const [key, meta] of a.atsKeys) {
     if (b.atsKeys.has(key)) {
@@ -524,28 +549,34 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
     if (!companiesConflict) return { level: "same-posting", confidence: "exact", evidence: [`Same requisition ID ${a.reqId}`] };
   }
 
-  // Everything here is O(1): set SIZES and string comparisons, no iteration.
-  const lengthRatio = setSizeRatio(a.fingerprint, b.fingerprint);
-  const descriptionsComparable =
-    a.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS &&
-    b.fingerprint.size >= COMPARABLE_FINGERPRINT_MIN_TOKENS;
   const aHasExplicitId = Boolean(a.atsKeys.size || a.reqId);
   const bHasExplicitId = Boolean(b.atsKeys.size || b.reqId);
-  const compatibleLocation = locationsCompatible(a.location, b.location);
+  let locationMemo: boolean | undefined;
+  const compatibleLocation = (): boolean =>
+    (locationMemo ??= locationsCompatible(a.location, b.location));
 
-  // The two set intersections below are the expensive part of this function —
-  // up to ~1,500 fingerprint plus ~2,000 shingle lookups per pair — and MOST
-  // PAIRS NEVER CONSUME THEM. A pair with an explicit id on only one side is
-  // rejected outright further down, and every tier that does read them is
-  // gated first on company/role/location agreement. Computing them eagerly
-  // therefore paid the full cost for the dominant pair class on an ATS-heavy
-  // tracker. Memoized so a tier that reads one twice still pays once.
+  // Description features — tokenizing, then up to ~1,500 fingerprint plus
+  // ~2,000 shingle lookups per pair — are the expensive part of this function,
+  // and MOST PAIRS NEVER CONSUME THEM. A pair with an explicit id on only one
+  // side is rejected outright further down, and every tier that does read them
+  // is gated first on company/role/location agreement. Each accessor is lazy
+  // and memoized, and every condition below orders its pure operands so the
+  // metadata comparisons run first; && short-circuits, so the order never
+  // changes a result.
+  const aFingerprint = (): Set<string> => features(a).fingerprint;
+  const bFingerprint = (): Set<string> => features(b).fingerprint;
+  const lengthRatio = (): number => setSizeRatio(aFingerprint(), bFingerprint());
+  const descriptionsComparable = (): boolean =>
+    aFingerprint().size >= COMPARABLE_FINGERPRINT_MIN_TOKENS &&
+    bFingerprint().size >= COMPARABLE_FINGERPRINT_MIN_TOKENS;
   let similarityMemo = -1;
   const similarityOf = (): number =>
-    similarityMemo >= 0 ? similarityMemo : (similarityMemo = jdSimilarity(a.fingerprint, b.fingerprint));
+    similarityMemo >= 0 ? similarityMemo : (similarityMemo = jdSimilarity(aFingerprint(), bFingerprint()));
   let sequenceMemo = -1;
   const sequenceOverlapOf = (): number =>
-    sequenceMemo >= 0 ? sequenceMemo : (sequenceMemo = setContainment(a.shingles, b.shingles));
+    sequenceMemo >= 0
+      ? sequenceMemo
+      : (sequenceMemo = setContainment(features(a).shingles(), features(b).shingles()));
   const similarityPctOf = (): number => Math.round(similarityOf() * 100);
 
   // Tier 3: different explicit ids normally identify separate postings. Keep
@@ -560,13 +591,10 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
     if (
       sameCompany &&
       sameRole &&
-      compatibleLocation &&
-      a.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
-      b.fingerprint.size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
-      // O(1) size ratio before the intersections; && is short-circuit and every
-      // operand is a pure comparison, so the order is free to favour the cheap
-      // test without changing the result.
-      lengthRatio >= CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO &&
+      compatibleLocation() &&
+      aFingerprint().size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
+      bFingerprint().size >= CONFLICTING_ID_REVIEW_MIN_TOKENS &&
+      lengthRatio() >= CONFLICTING_ID_REVIEW_MIN_LENGTH_RATIO &&
       similarityOf() >= CONFLICTING_ID_REVIEW_MIN_SIMILARITY &&
       sequenceOverlapOf() >= CONFLICTING_ID_REVIEW_MIN_SEQUENCE_OVERLAP
     ) {
@@ -598,30 +626,30 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   if (a.company && b.company && a.company === b.company) {
     const sameRole = Boolean(a.role && b.role && a.role === b.role);
     if (
-      descriptionsComparable &&
       sameRole &&
-      compatibleLocation &&
-      lengthRatio >= 0.75 &&
+      compatibleLocation() &&
+      descriptionsComparable() &&
+      lengthRatio() >= 0.75 &&
       similarityOf() >= 0.88 &&
       sequenceOverlapOf() >= 0.8
     ) {
       return { level: "repost", confidence: "high", evidence: ["Same company and title", `${similarityPctOf()}% description overlap`] };
     }
     if (
-      descriptionsComparable &&
       !sameRole &&
-      compatibleLocation &&
-      lengthRatio >= 0.82 &&
+      compatibleLocation() &&
+      descriptionsComparable() &&
+      lengthRatio() >= 0.82 &&
       similarityOf() >= 0.94 &&
       sequenceOverlapOf() >= 0.88
     ) {
       return { level: "repost", confidence: "high", evidence: ["Same company", `${similarityPctOf()}% description overlap (retitled posting)`] };
     }
     if (
-      descriptionsComparable &&
       sameRole &&
-      compatibleLocation &&
-      lengthRatio >= POSSIBLE_REPOST_MIN_LENGTH_RATIO &&
+      compatibleLocation() &&
+      descriptionsComparable() &&
+      lengthRatio() >= POSSIBLE_REPOST_MIN_LENGTH_RATIO &&
       similarityOf() >= POSSIBLE_REPOST_MIN_SIMILARITY &&
       sequenceOverlapOf() >= POSSIBLE_REPOST_MIN_SEQUENCE_OVERLAP
     ) {
@@ -644,10 +672,10 @@ function matchSignatures(a: Signature, b: Signature): MatchResult | null {
   if (
     (!a.company || !b.company) &&
     (!a.role || !b.role || a.role === b.role) &&
-    compatibleLocation &&
-    a.fingerprint.size >= 60 &&
-    b.fingerprint.size >= 60 &&
-    lengthRatio >= 0.85 &&
+    compatibleLocation() &&
+    aFingerprint().size >= 60 &&
+    bFingerprint().size >= 60 &&
+    lengthRatio() >= 0.85 &&
     similarityOf() >= 0.95 &&
     sequenceOverlapOf() >= 0.9
   ) {
@@ -706,14 +734,88 @@ export function findDuplicateApplications<T extends DuplicateCandidate>(
 ): DuplicateMatch<T>[] {
   const apps = Array.isArray(applications) ? applications : [];
   const targetSig = buildSignature(target ?? {});
+  const features = contentFeatureMemo();
   const matches: DuplicateMatch<T>[] = [];
   for (const app of apps) {
     if (!app || typeof app !== "object") continue;
-    const match = matchSignatures(targetSig, buildSignature(app));
+    const match = matchSignatures(targetSig, buildSignature(app), features);
     if (match) matches.push({ application: app, ...match });
   }
   matches.sort((a, b) => CONFIDENCE_RANK[a.confidence] - CONFIDENCE_RANK[b.confidence]);
   return matches;
+}
+
+// Every pair matchSignatures can accept shares one of these exact keys: a
+// posting id (tier 1), requisition id (tier 2), normalized company (tiers 3 and
+// 5a–c), or normalized URL (tier 4). The unknown-company tier (5d) needs no key
+// but only pairs id-less records, at least one company-less, whose roles are
+// equal or missing — so each id-less, company-less record is paired with the
+// id-less records of its role plus the role-less ones (all of them when it has
+// no role itself). Returns each pair once as i * n + j (i < j), ascending, which
+// is exactly the order the all-pairs loop visited.
+function candidatePairs(sigs: readonly Signature[]): Float64Array {
+  const n = sigs.length;
+  const buckets = new Map<string, number[]>();
+  const noIdByRole = new Map<string, number[]>();
+  const noId: number[] = [];
+  const noIdNoCompany: number[] = [];
+  const push = (map: Map<string, number[]>, key: string, index: number) => {
+    const list = map.get(key);
+    if (list) list.push(index);
+    else map.set(key, [index]);
+  };
+  sigs.forEach((sig, index) => {
+    for (const key of sig.atsKeys.keys()) push(buckets, `ats\u0000${key}`, index);
+    if (sig.reqId) push(buckets, `req\u0000${sig.reqId}`, index);
+    for (const url of sig.normUrls) push(buckets, `url\u0000${url}`, index);
+    if (sig.company) push(buckets, `company\u0000${sig.company}`, index);
+    if (sig.atsKeys.size || sig.reqId) return;
+    noId.push(index);
+    push(noIdByRole, sig.role, index);
+    if (!sig.company) noIdNoCompany.push(index);
+  });
+
+  const codes: number[] = [];
+  const add = (x: number, y: number) => {
+    if (x !== y) codes.push(x < y ? x * n + y : y * n + x);
+  };
+  for (const list of buckets.values()) {
+    for (let p = 0; p < list.length; p += 1) {
+      for (let q = p + 1; q < list.length; q += 1) add(list[p], list[q]);
+    }
+  }
+  const roleless = noIdByRole.get("") ?? [];
+  for (const index of noIdNoCompany) {
+    const role = sigs[index].role;
+    for (const other of role ? noIdByRole.get(role) ?? [] : noId) add(index, other);
+    if (role) for (const other of roleless) add(index, other);
+  }
+  // A pair can arrive through several keys; a numeric sort plus an adjacent
+  // dedupe is far cheaper than a Set once candidates reach the millions.
+  const sorted = Float64Array.from(codes).sort();
+  let unique = 0;
+  for (let k = 0; k < sorted.length; k += 1) {
+    if (k === 0 || sorted[k] !== sorted[k - 1]) sorted[unique++] = sorted[k];
+  }
+  return sorted.subarray(0, unique);
+}
+
+// Above this many candidate pairs the memo keeps matches only. A tracker of
+// mostly id-less, company-less, role-less records makes nearly every pair a
+// candidate, and keeping every "no match" verdict would hold tens of MB.
+const MEMO_NO_MATCH_PAIR_LIMIT = 250_000;
+
+/**
+ * Caller-owned reuse across repeated tracker scans (the client cache layer).
+ * Records are immutable, so a signature and a pair verdict stay valid for as
+ * long as the same record objects are passed again; new or edited records are
+ * new objects and are recomputed. Dismissals are checked on every scan.
+ */
+export class DuplicateScanMemo {
+  readonly signatures = new WeakMap<object, Signature>();
+  readonly verdicts = new WeakMap<object, WeakMap<object, MatchResult | null>>();
+  /** Pairs the last scan considered, and how many it had to compare afresh. */
+  lastScan = { candidatePairs: 0, computedPairs: 0 };
 }
 
 // Tracker-wide duplicate scan: cluster ALL stored applications into duplicate
@@ -722,14 +824,36 @@ export function findDuplicateApplications<T extends DuplicateCandidate>(
 // so a repost chain across three boards stays one group); `edges` records the
 // pairwise evidence so the UI can show WHY each pair grouped, and `confidence` is
 // the strongest edge in the group. Groups are strongest- then largest-first.
-// O(n²) over precomputed signatures — fine for a manual, on-demand scan.
+// Only candidate pairs are compared, in the same order an all-pairs loop would.
 export function groupDuplicateApplications<T extends DuplicateCandidate>(
-  applications: readonly T[] | undefined | null
+  applications: readonly T[] | undefined | null,
+  memo?: DuplicateScanMemo
 ): DuplicateGroup<T>[] {
   const apps = (Array.isArray(applications) ? applications : []).filter((a) => a && typeof a === "object");
   const n = apps.length;
-  const sigs = apps.map(buildSignature);
+  const sigs = apps.map((application) => {
+    const cached = memo?.signatures.get(application);
+    if (cached) return cached;
+    const sig = buildSignature(application);
+    memo?.signatures.set(application, sig);
+    return sig;
+  });
   const dismissedIds = apps.map((application) => new Set(application.duplicateDismissedIds ?? []));
+  const features = contentFeatureMemo();
+  const candidates = candidatePairs(sigs);
+  let computedPairs = 0;
+  const verdict = (i: number, j: number): MatchResult | null => {
+    let row = memo?.verdicts.get(apps[i]);
+    const cached = row?.get(apps[j]);
+    if (cached !== undefined) return cached;
+    computedPairs += 1;
+    const match = matchSignatures(sigs[i], sigs[j], features);
+    if (memo && (match || candidates.length <= MEMO_NO_MATCH_PAIR_LIMIT)) {
+      if (!row) memo.verdicts.set(apps[i], (row = new WeakMap()));
+      row.set(apps[j], match);
+    }
+    return match;
+  };
 
   // Union-find over app indices.
   const parent = apps.map((_, i) => i);
@@ -747,22 +871,23 @@ export function groupDuplicateApplications<T extends DuplicateCandidate>(
   };
 
   const edges: ({ i: number; j: number } & MatchResult)[] = [];
-  for (let i = 0; i < n; i += 1) {
-    for (let j = i + 1; j < n; j += 1) {
-      if (
-        apps[i].id &&
-        apps[j].id &&
-        (dismissedIds[i].has(apps[j].id) || dismissedIds[j].has(apps[i].id))
-      ) {
-        continue;
-      }
-      const match = matchSignatures(sigs[i], sigs[j]);
-      if (match) {
-        union(i, j);
-        edges.push({ i, j, ...match });
-      }
+  for (const pair of candidates) {
+    const i = Math.floor(pair / n);
+    const j = pair - i * n;
+    if (
+      apps[i].id &&
+      apps[j].id &&
+      (dismissedIds[i].has(apps[j].id) || dismissedIds[j].has(apps[i].id))
+    ) {
+      continue;
+    }
+    const match = verdict(i, j);
+    if (match) {
+      union(i, j);
+      edges.push({ i, j, ...match });
     }
   }
+  if (memo) memo.lastScan = { candidatePairs: candidates.length, computedPairs };
 
   const byRoot = new Map<number, number[]>();
   for (let i = 0; i < n; i += 1) {

@@ -4,14 +4,23 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   ApplicationsStorageError,
+  MAX_APPLICATIONS,
   sanitizeApplications
 } from "../schema.ts";
 import { reconcileApplicationMutations } from "../reconcile.ts";
 import {
   applicationsFilePath,
-  readApplications,
+  invalidateApplicationsSnapshot,
+  readApplications as readCachedApplications,
   writeApplications
 } from "../storage.ts";
+
+// Read back from disk, not the server's validated cache, so every check below
+// proves a strict round trip through applications.json.
+const readApplications = (dir) => {
+  invalidateApplicationsSnapshot();
+  return readCachedApplications(dir);
+};
 import { FIT_ASSESSMENT_SUMMARY } from "../../../shared/fitAssessmentContract.ts";
 
 const workspace = await mkdtemp(join(tmpdir(), "rolefit-applications-"));
@@ -296,19 +305,63 @@ try {
     failures.push("a later Skipped application did not persist its application date");
   }
 
-  let overflowRejected = false;
+  const limitWorkspace = await mkdtemp(join(tmpdir(), "rolefit-applications-limit-"));
   try {
-    await writeApplications(workspace, Array.from({ length: 501 }, (_, index) => ({
-      id: `overflow-${index}`,
-      title: `Overflow ${index}`,
+    const records = (count) => Array.from({ length: count }, (_, index) => ({
+      id: `limit-${index}`,
+      title: `Limit ${index}`,
       status: "applied",
       createdAt: canonicalCreatedAt,
       updatedAt: canonicalUpdatedAt
-    })));
-  } catch (error) {
-    overflowRejected = error instanceof ApplicationsStorageError && error.status === 400;
+    }));
+    await writeApplications(limitWorkspace, records(MAX_APPLICATIONS));
+    if ((await readApplications(limitWorkspace)).length !== MAX_APPLICATIONS) {
+      failures.push("a tracker at the limit did not save and load in full");
+    }
+    const atLimit = await readFile(applicationsFilePath(limitWorkspace), "utf8");
+
+    let overflowRejected = false;
+    try {
+      await writeApplications(limitWorkspace, records(MAX_APPLICATIONS + 1));
+    } catch (error) {
+      overflowRejected = error instanceof ApplicationsStorageError &&
+        error.status === 400 &&
+        error.message.includes(MAX_APPLICATIONS.toLocaleString("en-US"));
+    }
+    if (!overflowRejected) failures.push("tracker overflow was not rejected with a message naming the limit");
+    if (await readFile(applicationsFilePath(limitWorkspace), "utf8") !== atLimit) {
+      failures.push("a rejected overflow write changed the stored tracker");
+    }
+
+    // An over-limit file is refused whole rather than truncated on load.
+    await writeFile(
+      applicationsFilePath(limitWorkspace),
+      JSON.stringify({ applications: records(MAX_APPLICATIONS + 1) }),
+      "utf8"
+    );
+    let overLimitFileRejected = false;
+    try {
+      await readApplications(limitWorkspace);
+    } catch (error) {
+      overLimitFileRejected = error instanceof ApplicationsStorageError;
+    }
+    if (!overLimitFileRejected) failures.push("an over-limit tracker file loaded instead of failing closed");
+
+    let overLimitMutationsRejected = false;
+    try {
+      reconcileApplicationMutations([], [], Array.from({ length: MAX_APPLICATIONS + 1 }, (_, index) => ({
+        id: `limit-${index}`,
+        operation: "delete",
+        baseUpdatedAt: canonicalUpdatedAt
+      })));
+    } catch (error) {
+      overLimitMutationsRejected = error instanceof ApplicationsStorageError &&
+        error.message.includes(MAX_APPLICATIONS.toLocaleString("en-US"));
+    }
+    if (!overLimitMutationsRejected) failures.push("an over-limit mutation list was not rejected with the limit");
+  } finally {
+    await rm(limitWorkspace, { recursive: true, force: true });
   }
-  if (!overflowRejected) failures.push("tracker overflow was silently truncated instead of rejected");
 
   // Duplicate ids are ambiguous in both storage and request snapshots and must
   // be rejected rather than silently applying the last occurrence.

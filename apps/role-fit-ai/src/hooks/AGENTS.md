@@ -80,7 +80,8 @@ browser-side effects; components render them and App composes them.
   (never prompting or publishing, and skipping its own Draft on a retry) and
   falls back to the committed relationship only when none is remembered.
 - `useDuplicateScan` owns the Applications tab's tracker-wide duplicate
-  clusters: it schedules the O(n²) scan after first paint, cancels a pending
+  clusters: it schedules the candidate-indexed scan after first paint (the
+  `duplicateScan.ts` memo reuses unchanged pair verdicts), cancels a pending
   scan on unmount or a changed scan identity, and rehydrates the cached
   id-based result against the live applications array. It deliberately depends
   on the scan identity rather than the array, so per-keystroke notes edits

@@ -8,13 +8,13 @@ export const ROLEFIT_EXTENSION_PAIRING_REQUEST_MAX_COUNT = 8 as const;
 // Mirrors MAX_WORKSPACE_BACKUP_JSON_BYTES in src/lib/workspaceBackupContract.ts.
 // The desktop TypeScript project cannot import app src modules, so the probe
 // suite cross-checks this mirror against the shared contract source.
-export const ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES = 96_000_000 as const;
+export const ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES = 384_000_000 as const;
 export const ROLEFIT_WORKSPACE_MESSAGE_MAX_LENGTH = 240 as const;
 export const ROLEFIT_WORKSPACE_PATH_MAX_LENGTH = 1_024 as const;
 export const ROLEFIT_WORKSPACE_BACKUP_FILE_NAME_MAX_LENGTH = 255 as const;
 // Mirrors MAX_WORKSPACE_BACKUP_FILE_BYTES in src/lib/workspaceBackupContract.ts;
 // caps the applications.json read used for the shape-only application count.
-export const ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES = 10_000_000 as const;
+export const ROLEFIT_WORKSPACE_STAT_FILE_MAX_BYTES = 48_000_000 as const;
 
 // Directory-entry mirrors of the managed base-resume naming in
 // src/lib/workspaceBackupContract.ts (and server/workspaceBackup.ts). The

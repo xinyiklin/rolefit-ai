@@ -7,7 +7,7 @@ import type { DuplicateTarget } from "../lib/jobIdentity";
 import { copyAiUsage, type ApplicationAiUsage } from "../lib/aiUsage";
 import {
   applicationMutationRecords,
-  reconcileApplicationWriteResponse,
+  applyApplicationWriteResponse,
   type ApplicationMutation
 } from "../lib/applicationMutation";
 import type { ApplicationDocumentArtifacts } from "../../shared/applicationDocumentContract.ts";
@@ -268,6 +268,30 @@ class ApplicationConflictError extends Error {
   }
 }
 
+type TrackerRead =
+  | { notModified: true }
+  | { notModified: false; applications: Application[]; revision: string | null; path: string };
+
+// GET the tracker. With a known revision the server answers 304 when this tab
+// already holds it, so an unchanged tracker is never downloaded again.
+async function readTracker(knownRevision: string | null): Promise<TrackerRead> {
+  const res = await fetch(
+    "/api/applications",
+    knownRevision ? { headers: { "If-None-Match": `"${knownRevision}"` } } : undefined
+  );
+  if (res.status === 304) return { notModified: true };
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
+  return {
+    notModified: false,
+    applications: Array.isArray(data.applications)
+      ? data.applications.map(canonicalizeApplicationAiUsage)
+      : [],
+    revision: typeof data.revision === "string" ? data.revision : null,
+    path: typeof data.path === "string" ? data.path : ""
+  };
+}
+
 export function useApplications() {
   const [applications, setApplications] = useState<Application[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -292,6 +316,11 @@ export function useApplications() {
   // an earlier optimistic edit whose own request also failed. This ref always
   // represents the durable state we can safely return to.
   const confirmedApplications = useRef<Application[]>([]);
+  // The server revision `confirmedApplications` reflects, or null when unknown.
+  // Both refs change together — in the mount read before any write, inside the
+  // write queue, or in a drained refresh — so a queued write always sends the
+  // revision of the state it will be applied to.
+  const confirmedRevision = useRef<string | null>(null);
   const conflictMessage = useRef("");
   // A non-conflict failure of a write that was already superseded by a newer
   // pending write cannot setError directly (the newer request owns the error
@@ -309,22 +338,20 @@ export function useApplications() {
       readVersion.current = readId;
       const loadVersion = persistVersion.current;
       try {
-        const res = await fetch("/api/applications");
-        const data = await res.json();
+        const read = await readTracker(null);
         if (cancelled) return;
-        if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
         // A mutation started while the initial GET was in flight. Its queued
         // write/rollback is now authoritative; never replace it with this older
         // read snapshot.
         if (readId !== readVersion.current || loadVersion !== persistVersion.current) return;
-        const loaded = Array.isArray(data.applications)
-          ? data.applications.map(canonicalizeApplicationAiUsage)
-          : [];
+        if (read.notModified) return;
+        const loaded = read.applications;
         confirmedApplications.current = loaded;
+        confirmedRevision.current = read.revision;
         applicationsRef.current = loaded;
         setApplications(loaded);
         setHasLoadedApplications(true);
-        setStoragePath(typeof data.path === "string" ? data.path : "");
+        setStoragePath(read.path);
         conflictMessage.current = "";
         setError("");
       } catch (err) {
@@ -354,25 +381,47 @@ export function useApplications() {
     }
     const requestId = persistVersion.current + 1;
     persistVersion.current = requestId;
-    const write = persistQueue.current.catch(() => undefined).then(async () => {
+    const write = persistQueue.current.catch(() => undefined).then(async (): Promise<Application[]> => {
       const res = await fetch("/api/applications", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           applications: applicationMutationRecords(next, mutations),
-          mutations
+          mutations,
+          baseRevision: confirmedRevision.current
         })
       });
       const data = await res.json();
       if (!res.ok) {
         const message = typeof data.error === "string" ? data.error : "Save failed.";
         if (res.status === 409 && Array.isArray(data.applications)) {
-          throw new ApplicationConflictError(message, data.applications);
+          const conflict = new ApplicationConflictError(message, data.applications);
+          confirmedApplications.current = conflict.applications;
+          confirmedRevision.current = typeof data.revision === "string" ? data.revision : null;
+          throw conflict;
         }
         throw new Error(message);
       }
       if (!Array.isArray(data.applications)) throw new Error("Save returned an invalid applications list.");
-      return data;
+      const incoming = data.applications.map(canonicalizeApplicationAiUsage);
+      let confirmed: Application[];
+      try {
+        confirmed = applyApplicationWriteResponse(confirmedApplications.current, {
+          applications: incoming,
+          order: Array.isArray(data.order) ? data.order : undefined
+        });
+        confirmedRevision.current = typeof data.revision === "string" ? data.revision : null;
+      } catch {
+        // The write succeeded but its sparse response could not be placed.
+        // Adopt the whole tracker instead of guessing (no write can race this:
+        // it runs inside the write queue).
+        const read = await readTracker(null);
+        if (read.notModified) throw new Error("Save returned an invalid applications list.");
+        confirmed = read.applications;
+        confirmedRevision.current = read.revision;
+      }
+      confirmedApplications.current = confirmed;
+      return confirmed;
     });
     persistQueue.current = write.then(
       () => undefined,
@@ -380,12 +429,7 @@ export function useApplications() {
     );
 
     try {
-      const data = await write;
-      const confirmed = reconcileApplicationWriteResponse(
-        confirmedApplications.current,
-        data.applications.map(canonicalizeApplicationAiUsage)
-      );
-      confirmedApplications.current = confirmed;
+      const confirmed = await write;
       setHasLoadedApplications(true);
       // Trust changed/new server rows while retaining unchanged references.
       if (requestId === persistVersion.current) {
@@ -398,7 +442,6 @@ export function useApplications() {
     } catch (err) {
       lastPersistError.current = err instanceof Error ? err.message : "Save failed.";
       if (err instanceof ApplicationConflictError) {
-        confirmedApplications.current = err.applications;
         setHasLoadedApplications(true);
         conflictMessage.current = err.message;
         setError(err.message);
@@ -894,18 +937,18 @@ export function useApplications() {
             await queue.catch(() => undefined);
           } while (queue !== persistQueue.current);
           const refreshVersion = persistVersion.current;
-          const res = await fetch("/api/applications");
-          const data = await res.json();
-          if (!res.ok) throw new Error(data.error ?? "Failed to load applications.");
+          const read = await readTracker(confirmedRevision.current);
           if (refreshVersion !== persistVersion.current) continue;
-          const loaded = Array.isArray(data.applications)
-            ? data.applications.map(canonicalizeApplicationAiUsage)
-            : [];
-          confirmedApplications.current = loaded;
+          // 304: the drained confirmed snapshot is exactly the server's tracker.
+          const loaded = read.notModified ? confirmedApplications.current : read.applications;
+          if (!read.notModified) {
+            confirmedApplications.current = loaded;
+            confirmedRevision.current = read.revision;
+            setStoragePath(read.path);
+          }
           applicationsRef.current = loaded;
           setApplications(loaded);
           setHasLoadedApplications(true);
-          setStoragePath(typeof data.path === "string" ? data.path : "");
           conflictMessage.current = "";
           setError("");
           return true;

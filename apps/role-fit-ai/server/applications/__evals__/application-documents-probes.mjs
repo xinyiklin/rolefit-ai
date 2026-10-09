@@ -23,11 +23,18 @@ import {
 import { persistApplicationDocument } from "../documentService.ts";
 import { handleSaveApplications } from "../trackerRoutes.ts";
 import { MAX_ATTACHMENTS_PER_APPLICATION, safeAttachmentFileName } from "../documents.ts";
-import { readApplications, writeApplications } from "../storage.ts";
+import { invalidateApplicationsSnapshot, readApplications as readCachedApplications, writeApplications } from "../storage.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
   serializeCoverLetterFile
 } from "@typeset/engine/lib/coverLetter.ts";
+
+// Read back from disk, not the server's validated cache, so every check below
+// proves a strict round trip through applications.json.
+const readApplications = (dir) => {
+  invalidateApplicationsSnapshot();
+  return readCachedApplications(dir);
+};
 
 const isolatedRoot = await mkdtemp(join(tmpdir(), "rolefit-app-documents-"));
 const workspaceDir = join(isolatedRoot, "workspace");

@@ -3,6 +3,71 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+## 2026-10-09
+
+- [USER+CODE+TOOL] **Tracker limit 500 → 2,000; candidate-only duplicate scan;
+  revision-aware saves; backup limits sized for 2,000** (task
+  `2026-10-08-tracker-scale`; the user's real tracker had reached 500, a cap
+  with no recorded rationale since the initial commit).
+  - **The limit.** `MAX_APPLICATIONS = 2_000` (`server/applications/schema.ts`)
+    is the only limit. The user chose it over "unlimited": the single-file
+    store and the single-envelope backup have practical ceilings, and
+    streaming backup is the next one.
+  - **Duplicate scan.** `groupDuplicateApplications` compares only candidate
+    pairs: a shared ATS key, requisition ID, normalized URL, or company.
+    Id-less, company-less records are also paired with id-less records of the
+    same role or of no role. Pairs are evaluated in the all-pairs order, so
+    results are identical.
+    - Description features are built lazily, and `matchSignatures` checks
+      metadata first.
+    - `DuplicateScanMemo` (client) reuses signatures and pair verdicts by
+      record object. "No match" verdicts are kept only below 250k candidate
+      pairs.
+  - **Server.** `storage.ts` caches the validated, deep-frozen tracker while
+    the bigint stat identity (dev/ino/size/mtimeNs/ctimeNs) holds.
+    - Writes re-sanitize only new or edited records.
+    - A write is cached only if the renamed file is provably its own
+      (dev/ino/size/mtime against the temp file); otherwise the cache is
+      dropped and the response carries no revision.
+    - Restore invalidates the cache, and backup strictly validates the exact
+      `applications.json` bytes it packages.
+    - An in-memory revision drives GET `304` and PUT sparse responses (`order`
+      plus upserted rows, only for a matching `baseRevision`).
+  - **Client.** `useApplications` keeps `confirmedRevision` beside the confirmed
+    snapshot and updates both inside the write queue. A full response (stale
+    base) is adopted as-is, like a GET. An unusable sparse response falls back
+    to one full read, and refresh is conditional.
+  - **Backup limits:** 5,000 files, 48 MB per file (also the companion count
+    read), 256 MB decoded, 384 MB JSON. The format is unchanged.
+  - [TOOL] **Receipts** (Node 24.18; synthetic data plus the real tracker's
+    counts, timings, and digests only):
+    - **Real 500 records:** identical to the HEAD matcher; scan 290 → 19 ms,
+      0.19% of pairs.
+    - **Realistic 2,000:** 1,818 → 75 ms cold, 2.5 ms rescan, 0.10% of pairs;
+      per-job check 423 → 16 ms.
+    - **Stress:** one 300-record company 174 ms; 5,000 records 256 ms.
+    - **Worst case:** every record with no company, role, or ID makes all pairs
+      candidates. That costs 8.0 s, the same as HEAD, with the memo at 1 MB.
+    - **Save at 2,000 (27 MB):** median 36 ms server time and 43 KB response
+      instead of about 180 ms plus 27 MB; a `304` takes 0.2 ms. The first save
+      after a restart, restore, or outside edit re-validates once (131–199 ms).
+    - **Backup round trip at 2,000** (165 MB decoded, 212 MB JSON): peak RSS
+      about 1.1 GB with ASCII text, 1.5–1.6 GB with non-Latin-1 text.
+      - The user's delegated decision kept the limits rather than lose backup
+        past about 790 applications.
+      - Packaged Electron IPC at that size is UNVERIFIED.
+  - [TOOL] **Review.** Two independent reviews (adversarial, and a verifier
+    focused on cache integrity) found no blocker or high issues.
+    - **Fixed with regression probes:** stale rows after a full response, the
+      post-rename race (which lost an outside writer's record), a revision
+      paired with another state, cache-backed backup validation, round-trip
+      evals that read the cache, and degenerate-tracker memo memory.
+    - Mutation checks fail as expected in `duplicate-scan-scale-eval`,
+      `tracker-revision-probes`, `applications-revision-sync`, and the five
+      round-trip evals.
+  - **Release notes:** an older build refuses a tracker over 500 records
+    (fails closed, no data loss) and backups over its old limits.
+
 ## 2026-10-08
 
 - [TOOL] **RoleFit 0.10.0 preview released.** #196 squash-merged as
@@ -3802,11 +3867,10 @@ bounded; app-only operational detail belongs in the affected app documentation.
   mutations; delete-only requests send an empty applications array. The server
   still accepts legacy full snapshots, treats unmutated client rows as
   non-authoritative, prepends genuinely new records in incoming order, and
-  retains existing server order for edits and merges. Successful writes still
-  return the authoritative full tracker for cross-tab synchronization, but the
-  client reuses prior objects whose id and `updatedAt` are unchanged. Explicit
-  Refresh and `409` conflict snapshots remain fully fresh, and the shared
-  applications lock remains unchanged.
+  retains existing server order for edits and merges. Explicit Refresh and
+  `409` conflict snapshots remain fully fresh, and the shared applications lock
+  remains unchanged. (The full-tracker write response described here was
+  superseded 2026-10-09 by revision-aware sparse responses.)
 
 - [USER+CODE] Cover letters now default to double line spacing with 8 pt after
   each paragraph, 0.5 inch top/bottom margins, and 0.75 inch side margins.
@@ -3835,13 +3899,9 @@ bounded; app-only operational detail belongs in the affected app documentation.
   may safely over-invalidate. The per-object `WeakMap` avoids rehashing only
   while references survive. Successful own-write responses now preserve
   unchanged id/revision objects; explicit GET and conflict snapshots stay fresh.
-  **DEFERRED / NOT ACTIVE BACKLOG:** bucket candidate indexing and incremental
-  edge maintenance. The tracker is capped at 500 records, and neither
-  architecture is justified by measured user impact. Reconsider only if
-  mixed/content-heavy browser traces show recurring visible scan stalls after
-  sparse mutation payloads and note-write coalescing are addressed. If the
-  remaining issue is responsiveness rather than total CPU, evaluate a worker or
-  cooperative chunking before behavior-pruning buckets.
+  **SUPERSEDED 2026-10-09** (see that day's tracker-scale entry): the deferral
+  of bucket candidate indexing and incremental edge maintenance, which rested
+  on the 500-record cap. Both shipped as exact, non-pruning forms.
 
 - [USER+CODE] Apply still creates the application and snapshots each included
   document. The resume and the cover letter are no longer frozen at that

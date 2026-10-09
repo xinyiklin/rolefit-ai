@@ -4,15 +4,18 @@
 // documented as dependency-free and side-effect-free, so the mutable caches
 // below cannot live there. Nothing under server/ imports this file.
 //
-// It solves three separate costs the Applications tab used to pay on every
+// It solves four separate costs the Applications tab used to pay on every
 // visit, because the tab unmounts and its useMemo cache dies with it:
 //
-//   1. The O(n²) scan itself — held in a one-entry module cache that survives
+//   1. The scan itself — held in a one-entry module cache that survives
 //      unmount, so returning to the tab with unchanged identity data is free.
 //   2. Re-hashing every record's job description to build the cache key — a
 //      per-record WeakMap memo avoids that work while record references survive.
 //   3. Over-invalidation — the key covers only fields the matcher actually
 //      reads. Status and date changes no longer discard the scan.
+//   4. Rescans after an edit — a DuplicateScanMemo keeps each record's
+//      signature and each candidate pair's verdict, so a rescan compares only
+//      pairs that involve a new or edited record object.
 //
 // Results are stored as member IDS, never as Application objects. A cached
 // group that held the records as they were at scan time would go stale against
@@ -22,6 +25,7 @@
 
 import {
   CONFIDENCE_RANK,
+  DuplicateScanMemo,
   duplicateCandidateKey,
   groupDuplicateApplications,
   type DuplicateCandidate,
@@ -46,7 +50,14 @@ export type DuplicateScanResult = {
 // Instrumentation for the offline eval and the development benchmark probe:
 // the "did this actually avoid a rescan?" assertions have no other observable
 // signal. Never read by product code.
-export const duplicateScanStats = { scans: 0, hashedRecords: 0 };
+export const duplicateScanStats = {
+  scans: 0,
+  hashedRecords: 0,
+  /** Candidate pairs the last scan considered, out of n(n−1)/2. */
+  candidatePairs: 0,
+  /** Of those, pairs compared afresh rather than reused from the memo. */
+  computedPairs: 0
+};
 
 // Per-record identity hash. Optimistic edits and successful own-write responses
 // retain unchanged row references, so one edit normally hashes one new object.
@@ -74,20 +85,24 @@ export function duplicateScanIdentity(applications: readonly DuplicateCandidate[
 }
 
 let cached: DuplicateScanResult | null = null;
+let memo = new DuplicateScanMemo();
 
 /** The stored scan when it matches `key`, else null. Never recomputes. */
 export function cachedDuplicateScan(key: string): DuplicateScanResult | null {
   return cached && cached.key === key ? cached : null;
 }
 
-/** Run the scan and store it as the one cached entry. Synchronous and O(n²). */
+/** Run the scan and store it as the one cached entry. Synchronous. */
 export function computeDuplicateScan(
   applications: readonly DuplicateCandidate[],
   key: string
 ): DuplicateScanResult {
   duplicateScanStats.scans += 1;
   const groups: DuplicateScanGroup[] = [];
-  for (const group of groupDuplicateApplications(applications)) {
+  const scanned = groupDuplicateApplications(applications, memo);
+  duplicateScanStats.candidatePairs = memo.lastScan.candidatePairs;
+  duplicateScanStats.computedPairs = memo.lastScan.computedPairs;
+  for (const group of scanned) {
     // Grouped records always carry an id (see DuplicateCandidate), but an id is
     // optional on the type and the whole cache is keyed by it — so drop rather
     // than cast an absent one into the member list, where it would silently
@@ -211,7 +226,8 @@ export function duplicateIdsOf<T extends DuplicateCandidate>(
   return ids;
 }
 
-/** Test seam only — drops the cached scan so an eval can assert a cold run. */
+/** Test seam only — drops the cached scan and memo so an eval can assert a cold run. */
 export function resetDuplicateScanCache(): void {
   cached = null;
+  memo = new DuplicateScanMemo();
 }

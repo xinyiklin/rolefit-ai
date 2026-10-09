@@ -13,10 +13,14 @@ export const WORKSPACE_RESTORE_MARKER_FORMAT = "rolefit-workspace-restore" as co
 export const WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_RESTORE_MARKER_FILE_NAME = "workspace-restore.json";
 
-export const MAX_WORKSPACE_BACKUP_FILES = 1_100;
-export const MAX_WORKSPACE_BACKUP_FILE_BYTES = 10_000_000;
-export const MAX_WORKSPACE_BACKUP_BYTES = 64_000_000;
-export const MAX_WORKSPACE_BACKUP_JSON_BYTES = 96_000_000;
+// Sized to carry a tracker at its 2,000-application limit (server/applications/
+// schema.ts) with its saved PDFs; the JSON cap leaves room for base64 overhead.
+export const MAX_WORKSPACE_BACKUP_FILES = 5_000;
+export const MAX_WORKSPACE_BACKUP_FILE_BYTES = 48_000_000;
+export const MAX_WORKSPACE_BACKUP_BYTES = 256_000_000;
+export const MAX_WORKSPACE_BACKUP_JSON_BYTES = 384_000_000;
+export const WORKSPACE_BACKUP_TOO_LARGE_MESSAGE =
+  `The workspace backup is larger than the supported ${MAX_WORKSPACE_BACKUP_BYTES / 1_000_000} MB limit.`;
 
 export type WorkspaceBackupFile = {
   path: string;
@@ -207,7 +211,7 @@ export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnv
     }
     totalBytes += byteLength;
     if (totalBytes > MAX_WORKSPACE_BACKUP_BYTES) {
-      throw new Error("The workspace backup is larger than the supported 64 MB limit.");
+      throw new Error(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE);
     }
     if (typeof candidate.sha256 !== "string" || !SHA256_RE.test(candidate.sha256)) {
       throw new Error("The backup contains an invalid file checksum.");

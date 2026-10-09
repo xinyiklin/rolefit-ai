@@ -430,7 +430,7 @@ async function backupWorkspaceToFile(): Promise<RoleFitWorkspaceBackupResult> {
     }
     const { body } = transfer;
     if (Buffer.byteLength(body, "utf8") > ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES) {
-      return workspaceError("The workspace backup is larger than the supported 96 MB limit.");
+      return workspaceError(`The workspace backup is larger than the supported ${ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES / 1_000_000} MB limit.`);
     }
     // Minimal shape probe only; the server already validated the envelope and
     // the file is written verbatim. Never log or echo envelope contents.
@@ -513,7 +513,7 @@ async function restoreWorkspaceFromFile(): Promise<RoleFitWorkspaceRestoreResult
       }
       // Refuse oversized files before reading them into memory.
       if (details.size > ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES) {
-        return workspaceError("That file is larger than the supported 96 MB backup limit.");
+        return workspaceError(`That file is larger than the supported ${ROLEFIT_WORKSPACE_BACKUP_MAX_JSON_BYTES / 1_000_000} MB backup limit.`);
       }
     } catch {
       return workspaceError("The selected backup file could not be read.");

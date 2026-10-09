@@ -344,6 +344,14 @@ small sizes. For the full 50/100/300/500 sweep when changing the matcher or the
 scan cache, run it standalone with
 `ROLEFIT_DUPLICATE_BENCH=full node apps/role-fit-ai/src/lib/__evals__/duplicate-scan-eval.mjs`.
 
+The scan compares only candidate pairs (`candidatePairs` in `jobIdentity.ts`).
+`duplicate-scan-scale-eval.mjs` rebuilds the all-pairs result from the linear
+per-job matcher on seeded synthetic trackers and requires identical groups,
+including pairs that share only one candidate key; a missing key fails it. It
+also proves a memo rescan equals a cold scan and that a realistic 2,000-record
+tracker compares under 5% of all pairs. Extend `candidatePairs` and this eval
+together whenever a matcher tier changes.
+
 Full server-lifecycle and companion-process integration tests are explicit.
 `server/__evals__/server-lifecycle-probes.test.mjs` intentionally uses the
 `.test.mjs` suffix, which the offline child-process runner excludes. Run it with
@@ -739,7 +747,13 @@ Good server verification covers:
   snapshot, only sparse tracker mutations are accepted, server-authoritative
   unmutated rows retain deterministic ordering, successful own writes retain
   unchanged record references, and corrupt application JSON or malformed strict
-  `.resume` data fails closed without destructive reseeding
+  `.resume` data fails closed without destructive reseeding; the 2,000-record
+  limit, the validated-snapshot cache (outside, same-size, and invalid edits,
+  explicit invalidation, and an outside replace racing a write), `304`
+  refreshes, and sparse PUT responses are covered by
+  `tracker-revision-probes.mjs` and `applications-revision-sync.mjs`. Evals
+  that read the tracker back after a write invalidate the snapshot first, so
+  they still prove a strict round trip through `applications.json`
 - portable workspace backup includes only app-managed resumes/history, tracker
   data, saved application `.resume` / `.cover` sources and PDF-only
   replacements, and canonical allowlisted workspace preferences; validates
