@@ -5,6 +5,37 @@ bounded; app-only operational detail belongs in the affected app documentation.
 
 ## 2026-10-08
 
+- [USER+CODE] **RoleFit 0.10.0 preview prepared** (minor: the Handshake
+  import is a new capability since `rolefit-preview-v0.9.1-beta.1`, with no
+  stored-data or format change). The user asked to "start the 0.10.0 release"
+  after #195 merged. Branch `chore/rolefit-0.10.0-release` starts from
+  `e25e55c`. It re-applies the earlier, unpushed
+  `chore/rolefit-0.10.0-preview` bump and notes, which that branch's two
+  release reviews had already shaped.
+  - Extension 1.2.1 -> 1.3.0 (the capture changed, so the notes ask for one
+    reload); desktop bridge API 13 is unchanged; the landing screenshot
+    manifest stays empty. Current-version references move to 0.10.0;
+    historical ones stay.
+  - The intended tag is `rolefit-preview-v0.10.0-beta.1`, with notes in
+    `apps/role-fit-ai/docs/releases/0.10.0-beta.1.md`. The notes now also
+    list #195's two fixes under Fixed.
+  - Shipped since 0.9.1: #194 (squash `bc5b4ba`, Handshake import, title
+    parsing, supported sites) and #195 (squash `e25e55c`, Skip close
+    warning, changed-only update PDFs). Each had green CI and an exact-head
+    review marked ready.
+  - [USER] Firefox: the ⌘⇧U shortcut works after a Firefox restart. A
+    Handshake capture in Firefox specifically is UNCONFIRMED; Chrome was
+    verified live.
+  - [TOOL] On this branch (macOS arm64, Node 24.18.0): `test:desktop:release`
+    14/14 and the full `npm run check --workspace apps/role-fit-ai` 167/167.
+    The preview preflight is re-run on the merged `origin/main` commit before
+    the tag.
+- [TOOL] **RoleFit 0.9.1 preview released.** The annotated tag
+  `rolefit-preview-v0.9.1-beta.1` is on `4e389af` (#193). Release workflow run
+  37857689297 succeeded and published the prerelease "RoleFit AI 0.9.1 —
+  unsigned preview beta.1" at 2026-10-08T23:15:56Z, with the arm64/x64 `.dmg`
+  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
+  Typeset, and Document workflow runs on `4e389af` succeeded.
 - [USER+CODE] **A saved Skip no longer warns on close; Update offers only
   changed PDFs** (branch `fix/rolefit-saved-application-prompts`; the user
   reported both).
