@@ -16,8 +16,6 @@ const textExtensions = new Set([
 // file-level exemption. Adding even one stale mention requires a reviewed edit
 // here, while deleting a rejection probe or historical receipt removes its row.
 const expectedCounts = new Map([
-  // The 2026-10-09 compaction kept only the rename record itself.
-  ["CONTINUITY.md", 1],
   ["apps/role-fit-ai/__evals__/extension-popup-contract.mjs", 1],
   ["apps/role-fit-ai/docs/engineering/ai-server.md", 1],
   ["apps/role-fit-ai/docs/engineering/testing.md", 1],
@@ -38,12 +36,13 @@ const expectedCounts = new Map([
 // `--exclude-standard` filters untracked files only: a force-added personal file
 // would still be read, and the exact counts fail on it rather than leak it
 // quietly. `--others` keeps a new source file in scope before it is staged.
+// Root CONTINUITY.md is out of scope: it is a dated history that gets compacted.
 function scannedTextFiles() {
   let listed;
   try {
     listed = execFileSync(
       "git",
-      ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "CONTINUITY.md", "apps/role-fit-ai"],
+      ["ls-files", "-z", "--cached", "--others", "--exclude-standard", "--", "apps/role-fit-ai"],
       { cwd: repoRoot, encoding: "utf8", maxBuffer: 32 * 1024 * 1024 }
     );
   } catch (cause) {
