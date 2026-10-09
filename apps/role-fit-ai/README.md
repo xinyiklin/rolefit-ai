@@ -176,7 +176,7 @@ font, size and wrapping changes still reflow the page normally.
   lists each). Each recognized source must yield the exact linked job; a
   missing posting or sign-in page fails with a prompt to paste or use the
   extension rather than importing unrelated text. The generic fallback accepts
-  any readable page (see the table's known limits). The configured Job analysis
+  any readable page (see the known limits under the table). The configured Job analysis
   provider extracts the posting into structured fields and concise summaries.
   The server validates response shape and bounds; extraction has no additional
   fact checks or evidence-review warnings.

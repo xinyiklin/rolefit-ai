@@ -34,7 +34,8 @@ export function findMatchingApplication(url: unknown, applications: unknown, pag
 // Conservative: returns only what it can read; never guesses an employer.
 // Any site supplies both inputs and the analyze route runs this synchronously
 // (title <= 500, text <= 50,000 characters), so titles are split rather than
-// matched and no body pattern can cross a line; backtracking stays bounded.
+// matched and no `^`-anchored body pattern skips across lines; backtracking
+// stays bounded.
 export function extractJobMeta(text: unknown, pageTitle: unknown): { title?: string; company?: string } {
   const meta: { title?: string; company?: string } = {};
   const title = typeof pageTitle === "string" ? pageTitle.trim() : "";
