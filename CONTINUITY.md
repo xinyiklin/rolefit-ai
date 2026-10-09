@@ -596,7 +596,18 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
 - [USER+CODE+TOOL] Dependency maintenance:
   - Dependabot now checks npm monthly (#199). The esbuild 0.28.2 allowlist
     entry (#143) and Vite 8.3.3 (#116, which clears the nanoid, postcss, and
-    source-map-js advisories) are merged; #151 and #152 stay open as trivial.
+    source-map-js advisories) are merged.
+  - [USER+TOOL] Dependabot triage: #151 (`@types/node` 24.19.1) and #152
+    (React 19.3.0, lucide-react 1.52.0; independent review passed on the exact
+    merged head) are merged. #152 slightly redraws the SpellCheck,
+    CheckCircle2, CalendarDays, and CalendarClock icons; browser QA was
+    skipped. #132 (Electron 44, conflicting after #202) and #145 (Node 24.18.1
+    base image, which the Dockerfile's exact version assert rejects) are
+    closed. #167 (Forge 8, which needs `@electron/asar` 4) and #144 (react-pdf
+    11, which needs `pdfjs-dist` 6.3.289) stay open, deferred by the user.
+  - [CODE+TOOL] #152's lockfile recorded the workspace `lucide-react` specs as
+    `^1.52.0` against exact manifest pins. `npm ci` accepted the mismatch, but
+    npm 11.16.0 rewrites it on install; the lockfile now records `1.52.0`.
   - [TOOL] Dependabot alerts, and with them security updates, are **disabled**
     for the repository (the alerts API returns 403 "disabled"). That
     contradicts #199's text that security updates still arrive immediately.
