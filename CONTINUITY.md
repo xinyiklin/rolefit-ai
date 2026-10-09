@@ -3,5399 +3,936 @@
 Cross-workspace decisions and handoff state. Keep entries factual, dated, and
 bounded; app-only operational detail belongs in the affected app documentation.
 
+> Compacted 2026-10-09; full prior text is in git history (CONTINUITY.md at commit 8ed2e374).
+
+## Durable state (compacted through 2026-10-02)
+
+Bullets keep the date and tag of their source entries; the dated entries below
+win on conflict.
+
+### Monorepo, packages, toolchain, and CI
+
+- 2026-07-24 [CODE] `@typeset/engine` owns measurement, line breaking,
+  pagination, fonts, DOM/PDF painting, and the strict portable-file primitives;
+  RoleFit owns job/provider orchestration, source-letter intake, tailoring, and
+  review UX; `FormattingToolbar.documentStyleTools` and `documentStructureTools`
+  are the host seams.
+- 2026-08-01 [USER+CODE+TOOL] Typeset and the private `@typeset/engine` /
+  `@typeset/editor` packages share a 0.2.0 milestone (metadata only; link ranges
+  stay `*`), published by the Typeset static-container deploy from `main`; that
+  milestone's PR checks, `Typeset CI and Deploy` run, and live-site receipt are
+  UNCONFIRMED.
+- 2026-07-29 [USER+CODE+TOOL] Toolchain: Node 24.18+ below 25 (`.node-version`:
+  24.18.0), npm 11.16.0, root-owned TypeScript 7.0.2/Vite/React tooling, a
+  pinned install-script allowlist, and the dependency-contract gate; Electron
+  43.2.0. Actions are SHA-pinned; Dependabot has no auto-merge; Vite,
+  TypeScript, Electron, PDF/font, and Python bumps stay manual.
+- 2026-07-29..07-31 [USER+CODE+TOOL] PDF dependencies stay `pdf-lib` 1.17.1,
+  `@pdf-lib/fontkit` 1.1.1, and React-PDF 10.4.1; RoleFit declares `pdfjs-dist`
+  5.4.296 (contract-pinned to React-PDF's). `devEngines` enforcement on a
+  mismatched toolchain is UNCONFIRMED. `.gitattributes` sets `* text=auto
+  eol=lf`; `fonts:check` runs via `packages/engine/scripts/run-python.mjs`.
+- 2026-07-31..09-29 [USER+CODE+TOOL] `Document workflow CI` is the sole per-push
+  owner of the package suites and app correctness and must stay green on `main`;
+  deploy workflows build only their own app (a skipped workflow never reports,
+  so a deploy verify job must not be a required check). [USER+CODE] Core and
+  extended browser-contract groups own disjoint cases (Product Partner waived).
+- 2026-09-08 [USER+CODE+TOOL] Root ignore rules follow Machine Bootstrap (root
+  `.npmrc` stays shared). `.agent-work/` stays local, including completed task
+  artifacts; durable summaries are self-contained and task IDs are plain labels.
+
+### Document formats and the shared engine/editor
+
+- 2026-07-29 [USER] **Pre-release schema policy, in force until the user lifts
+  it.** While the products are in dev/preview/beta each format has exactly one
+  live schema, still `schemaVersion: 1`; runtime parsers stay single-shape (no
+  compatibility branches, derived defaults, or version negotiation). When a
+  stored shape changes, the assistant converts existing documents with a
+  throwaway script kept out of the commit. The user will say when to lift it;
+  the assistant may ask.
+- 2026-07-29 [USER+CODE] `.resume` and `.cover` each have one strict schema v1
+  with the same optional structural header; retired shapes are accepted only by
+  explicit workspace rewrite tools. [USER] One strict shape per portable format,
+  no runtime migration tooling, truthful artifact status, tab-safe recovery, and
+  separate behavior/refactor commits; the application lock, revision check,
+  client mutation queue, and file-byte rollback are non-negotiable; PR #97's
+  three merge blockers (tracker revision regression, async replacement
+  overwrite, stale auto-link destination) were fixed.
+- 2026-09-27 [USER+CODE] `.resume` style requires `bulletIndentPt` (0–36 pt,
+  default 14.73, absolute points); older files and stale autosaves are rejected
+  (user accepted); `.cover` carries an inert 0 and shares `.resume`'s header
+  limits (`DOCUMENT_HEADER_LIMITS`). 2026-09-16 [USER+CODE]: title/subtitle rows
+  are Add/Remove-only, stored as paired strings or paired nulls; older builds
+  reject null rows.
+- 2026-07-29 [USER+CODE] **Spacing is absolute**: each junction is the next
+  row's line advance plus the user's gap; the header keeps line spacing 1;
+  `titleSubGapPt` may reach -6; the three header gaps stay style-owned for both
+  kinds. UNCONFIRMED: on the cover letter, `headerSectionGapPt` and the first
+  paragraph's `space-before` add rather than override (`coverLetterBlocks.ts`).
+- 2026-10-02 [USER+CODE] Spacing presets: fixed Compact/Balanced/Spacious plus
+  up to eight named saved presets in a shared-editor local preference
+  (`typeset-resume.docStyle.spacingPresets.v1`), synced across tabs, never in
+  files or history; the old `typeset-resume.docStyle.custom.v1` preset migrates
+  in as "Custom".
+- 2026-07-26 [USER+CODE] Page margins are Narrow (0.5 in), Normal (1 in), or
+  Custom per side; files store only physical values. [USER] Resume line height
+  is a global setting inside Spacing; preset numeric controls stay expanded;
+  cover-letter inline line height adds room below the targeted lines only.
+  [USER+CODE] The line-height menu offers Single, 1.15, 1.5, Double, paragraph
+  before/after, and Custom; a caret or partial selection applies to the painted
+  lines.
+- 2026-07-24..07-26 [USER] The editor follows word-processor behavior wherever
+  models disagree: line placement depends on a line's fonts and sizes, never
+  typed glyphs; prose Tab/Shift+Tab indent/outdent by a measured half-inch stop;
+  Resume Tab/Shift+Tab walks logical header and section fields, skipping
+  headings (the cover letter cycles only its header fields); copy/paste keeps
+  supported inline formatting; mixed family/size selections blank those
+  controls; typed sizes clamp to 1–200 pt; committing a family/size returns
+  focus to the document; Ctrl/Cmd +/-/0 zooms. The caret follows the next-typing
+  family, face, and size and stays visible while toolbar controls hold focus;
+  oversized unbreakable tokens wrap at measured grapheme boundaries; cross-field
+  Select All works in Firefox; selection endpoints that name no field still
+  resolve to one, and a press off the text starts a drag that survives leaving
+  the sheet.
+- 2026-07-25 [USER] A document page always has a caret: an open or first arrival
+  starts at the document start, returning to the Resume or Cover letter tab
+  restores caret and scroll offset, and an open never steals focus from an
+  outside text field. The caret leans by the face's `post.italicAngle`.
+- 2026-07-28..07-29 [USER] Enter continues the active formatting, and a format
+  set on an empty paragraph persists. Authored spacing shows at document
+  boundaries; a selected line's highlight spans its full engine-line height and
+  is continuous through before/after spacing without crossing pages. Google Docs
+  clipboard interop keeps logical paragraphs, before/after spacing as paragraph
+  style, line height both ways, and outbound links; [USER+TOOL] the user's live
+  line-height round trip passed.
+- 2026-07-24..07-25 [USER] Every editor host has the self-owned right-click
+  menu; linking and pasting work on multi-paragraph selections; the link overlay
+  follows caret and selection, not hover; alignment is one labelled-menu
+  trigger; RoleFit's formatting-row menus are icon-only (Typeset keeps labels
+  until 1210px); menu rows carry a description only when the title is not
+  enough.
+- 2026-07-24..07-25 [USER] Tinos, Carlito, and Arimo ship as metric-compatible
+  equivalents under their own names, the metric twin shown beside them; menu
+  order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern.
+  New cover letters start in Carlito; resumes default to Latin Modern.
+  `entryEndIndentPt` is the entry's right edge for every row; Jake is the style
+  reference, not a spec; fresh starters use the Jake-derived defaults (10.8 pt
+  start, 5.4 pt end) and the bundled starter is the canonical starter.
+  Small-caps "wobble" is overshoot plus pixel quantization; the benefit of
+  `text-rendering: geometricPrecision` is UNCONFIRMED. [CODE]
+  `lib/fontFamilies.ts` is the single family-id list.
+- 2026-07-27..07-29 [USER+CODE] History: a field-plus-intent text run closes on
+  a 700 ms pause, field or caret move, selection, formatting, structural edit,
+  undo/redo, a word boundary, or a 20-character cap; content and style share one
+  coordinator per document. Header structure lives in the toolbar, keyboard, and
+  right-click (no hover menu); auto-link deferral holds the paint stable during
+  a pointer selection; contact undo restores a removed slot.
+- 2026-08-03 [USER+CODE] RoleFit's Resume tab always mounts a real editor
+  document; existence enables editing and strict save, while `resumeHasContent`
+  gates PDF export, Polish, and Apply. The overlay caret owns editing except
+  during IME composition (real-browser IME handoff and hint placement
+  unverified).
+- 2026-09-17..09-27 [USER+CODE] Measured wrapping covers paired entry fields,
+  section titles, names, and contacts; header baselines use font-face metrics;
+  the selectable DOM and PDF text follow logical field order; the PDF carries
+  kern adjustments (TJ); year ranges and numeric dates no longer auto-link as
+  phones. [CODE] Residual: non-year number ranges still auto-link; OS IME,
+  screen readers, native Find UI, and other browsers are unverified.
+- 2026-07-24 [CODE+USER] Underline and link rules come from `underlineSpans` and
+  a face-derived `underlineRule(style)`; painted lines end with the separator
+  their break stood for (`data-tsds`), so word selection never runs across a
+  line break.
+- 2026-07-29..09-28 [USER+CODE] PDF export embeds every face as `CIDFontType2` +
+  `FontFile2`; downloads keep the anchor and blob URL alive so the `.pdf` name
+  survives; the emitter disables pdf-lib's timer-based yields. Firefox
+  background prioritization (consistent with Mozilla bug 1960734) still delays
+  hidden tabs; the READMEs give the foreground workaround; the user's exact
+  10–20 s case is unverified.
+
+### RoleFit product behavior and trust decisions
+
+- 2026-09-18 [USER] Content and evidence checks warn across RoleFit while usable
+  output and actions stay available; acceptance is not verification; truthful
+  prompts and technical/stale-document protections stay blocking. Policy:
+  `PRODUCT.md#content-and-evidence-warning-policy` (RoleFit only).
+- 2026-09-27 [USER+CODE] Still blocking: confirmed BLOCKED eligibility stops
+  automatic Polish; BLOCKED without explicitly conflicting excerpts becomes
+  CHECK; Apply needs 40 authored words and no template slots in the cover
+  letter; Resume Polish withholds edits containing placeholders; metadata-only
+  Job analysis falls back to the local brief.
+- 2026-09-30 [USER+CODE] Job analysis is plain structured JD extraction: the
+  user trusts the selected model and wants no fact checking; the parser keeps
+  type, enum, markup, and size guards without source matching, condition
+  replacement, or evidence warnings.
+- 2026-08-08..09-28 [USER+CODE+TOOL] Fit Assessment (formerly Initial Fit) is
+  advisory: a categorical verdict (Strong, Reasonable, Stretch, Limited) with
+  bounded exact excerpts, validated mechanically; semantic word-matching vetoes
+  are gone (2026-09-18) while citation integrity and explicit-conflict checks
+  remain; insufficient information is a neutral outcome; prompt
+  `fit-assessment-direct-rubric-v7` (2026-09-28). Fit has its own stage
+  settings, sharing Prepare's request only when they match Job analysis;
+  **Reassess fit** always runs fresh; a stale run shows as **Previous
+  assessment**; only the first Prepare-launched run may trigger automatic
+  Polish; Apply keeps the latest assessment as one timestamped snapshot.
+- 2026-09-30 [USER+CODE] Fit gap notes are not claim-checked (user-accepted: an
+  invented claim there shows unflagged); `Match N:`, `Gap N:`, and
+  `Eligibility:` warnings render beside their finding.
+- 2026-08-07..08-08 [USER+CODE] Fit runs automatically by default; Resume and
+  Cover automatic Polish are independent switches, off by default, with
+  minimum-fit thresholds (fresh defaults Reasonable and Strong); only
+  exact-evidence BLOCKED stops an eligible run. Polish turns on only the
+  polished document's Include toggle.
+- 2026-07-30..08-11 [USER+CODE+TOOL] Prepare is the default and sole job-intake
+  surface (JobMenu retired): Source, then the editable brief with one Role
+  context, then the Application rail with Resume (included by default) and Cover
+  Letter (excluded by default) and Apply, which needs readiness only for
+  included materials. `usePreparedResume` alone picks the preparation's resume,
+  auto-selecting a unique winner only into a clean, unowned editor; the bundled
+  starter never satisfies readiness, Fit, or automatic proposals; Prepare waits
+  until the startup resume is committed. [USER] Prepare is flat, dense, and
+  tool-like ("more functional/compact/less ai"); brief list sections edit as
+  per-item rows under one tablist, and per-item toggles and drag reordering were
+  declined.
+- 2026-08-08 [USER+CODE+TOOL] The shared input firewall derives its data-only
+  instruction and escaping pattern from one fence list.
+- 2026-08-07..08-09 [USER+CODE] The fast path is Prepare → Fit → Polish → Apply:
+  Prepare publishes the local brief first and provider failure leaves manual
+  Polish usable; numeric scores, recruiter reviews, and Tailor/Review/Both
+  settings were removed; each workflow owns a named progress card and every
+  active request exposes Stop.
+- 2026-08-07..09-30 [USER+CODE] Resume Polish is one proposal request over
+  opaque `target-N` ids (only bullets (rewrite/remove), actual Skills lists,
+  linked new-bullet slots, and in-entry bullet order are mutable; Skills
+  category labels, identity, contact, education, standard-entry
+  role/employer/subtitle/dates, and omitted sections are locked; oversized
+  target sets are ranked by materiality and job relevance) with distinct
+  Proposal, No changes, and Withheld outcomes (the 2026-10-07 opt-in review is
+  the one exception). It also proposes bullet removals and per-entry reorders,
+  grouped Rewrite / Add / Remove / Reorder; entry-level removal/reorder and
+  Profile swap are out of scope; the "Proposed improvements" summary is not
+  claim-checked. UNCONFIRMED: browser QA of the grouped rail and live-provider
+  use of those rules.
+- 2026-08-09 [USER+CODE+TOOL] Accepting is one interaction for both documents
+  through the footer `ProposalDecisionBar` (`Accept all` / `Discard all`,
+  `Accept proposal` / `Discard proposal`) and one `ProposalDiff`; every resume
+  decision is reversible; a resume-only change leaves a pending cover proposal
+  acceptable with a warning. Browser QA of the bar and letter diff is
+  UNCONFIRMED.
+- 2026-08-04 [USER+CODE] Workbench: Polish is one rail action (header when open,
+  beside the reopen tab when closed); vocabulary **Polish** / `Polishing…` /
+  `Polish again` and Accept/Discard; footers carry only Stop, Retry,
+  Accept/Discard, and Restore previous; the Resume More menu was removed at the
+  user's request; the rail closes to zero behind an icon-only edge tab ([USER]
+  chose it over a labelled tab), with a count only for a validated post-draft
+  Cover Letter `blocked` response. Opening the rail does not shift the page
+  (`.studio-body` uses `overflow: clip`), and the idle Cover Letter rail does
+  not restate its workflow message. [USER] The rail resizes from 18rem (default)
+  to 28rem with one shared width (`rolefit:document-rail:width`).
+- 2026-07-28..08-05 [USER+CODE] Cover Letter Polish is one operation: the server
+  resolves date, names, greeting, and sign-off and sends the whole evidence
+  corpus with the user's template; the model chooses the evidence; a failure
+  gets one silent repair, then 422; a valid letter is staged as a fingerprinted
+  whole-document proposal. Questions are the exception path (missing name, role,
+  or company; an unanswered private slot). Employer facts never count as
+  candidate evidence. [USER+CODE] The cover quality corpus stays synthetic and
+  never reads `workspace/cover-letters/`. [ASSUMPTION] Future employer research
+  must never block Polish or send resume or Profile text to a fetcher.
+- 2026-07-24..07-25 [USER] The cover letter has its own always-present editor
+  page and starts from the user's own letter, tailored to the job and truthful
+  evidence; it is plain correspondence (no resume sections, rules, columns,
+  bullets, or resume spacing settings) with the same toolbar family, named
+  variants and history like base resumes, and the same PDF rename prompt. New
+  letters use double line spacing with 0.5 in top/bottom and 0.75 in side
+  margins (2026-07-27, which also recorded 8 pt after each paragraph);
+  2026-07-28 [USER]: the default rhythm is explicit 8 pt space-before on every
+  paragraph.
+- 2026-07-25..08-13 [USER+CODE] Resume and cover letter share `DocumentOpenMenu`
+  and `DocumentSaveMenu` (no Starter button); Resume Open accepts only strict
+  `.resume` and Cover Open only strict `.cover`. Cover-letter startup mirrors
+  the resume's, and automatic title changes no longer cancel it or Prepare's
+  selection; base cover letters are flush-left block letters; app-produced
+  titles follow `Name_Company_Resume` / `Name_Company_Cover_Letter`.
+- 2026-07-27..07-31 [USER+CODE] Apply snapshots each included document; each
+  then keeps its own saved state and an "Update application" row that commits
+  source bytes plus its tracker fields atomically against the current revision;
+  nothing saves on an effect. Applications store only editable sources
+  (`resume.resume` / `cover.cover`) and render PDF on demand; extra PDF
+  attachments (8 MB each, 10 per application) download only. Apply's prompt
+  names each included PDF separately and Apply is single-flight. Both editors
+  keep per-tab recovery drafts via `lib/autosaveDraftStorage.ts`.
+- 2026-08-11..08-12 [USER+CODE] A fresh preparation creates a tracker row only
+  on Apply or Skip & save job (and, since 2026-10-07, as a Draft on a first
+  Answers Save); opening a saved record updates that exact id; Application
+  Detail and the Applications inspector share one presentation. Recovery is
+  interruption-only: a fresh tab never adopts a closed tab's draft, same-tab
+  entries expire after 24 hours, and an excluded dirty document releases once
+  its recovery write succeeds; concurrent Application Detail edits fail closed.
+- 2026-08-10 [USER+CODE+TOOL] Preparation stabilization: draft and committed
+  preparation are distinct; Stop or input changes cannot publish late success;
+  candidate facts are tri-state declarations; authored blank resumes are
+  applicant-owned; workspace saves use an invocation-order queue and a monotonic
+  baseline revision. Browser interaction QA is UNCONFIRMED.
+- 2026-09-04 [USER+CODE+TOOL] Stages group as Active (Applied, Interviewing,
+  Offer) and Inactive (Skipped, Rejected, Withdrawn) with movement either way; a
+  formerly applied record keeps its date, documents, and attachments when
+  Skipped. Applications and Analytics show layout-shaped skeletons (browser QA
+  unverified). 2026-08-08..08-15 [USER+CODE+TOOL]: search covers only company,
+  role/title, and a readable posting ID; the table keeps native scrollbars, a
+  sticky head, and an aligned Fit column; the inspector and Prepare rail contain
+  long values without widening the page; Prepare and Applications keep a stable
+  desktop height above 1080px. 2026-09-03 [USER+CODE+TOOL]: **Bold keywords in
+  bullets** (Settings > Guidance, default on).
+- 2026-09-28 [USER+CODE] Settings > About you became **Profile**: declared facts
+  plus one **Background** (`profileBackground`). Every stage sending candidate
+  context gets the whole Background up to 12,000 characters and declines above
+  it (user-approved, no clipping); servers reject merged context above 13,000;
+  storage allows 60,000. Per-source Experience evidence rows were removed into a
+  `## Experience by type` block. 2026-08-09: GPA (0–4.0, only with declared
+  education) and earliest-start availability are optional facts. 2026-07-25
+  [USER]: facts emit nothing until declared, so an undeclared citizenship,
+  clearance, or degree never becomes groundable wording.
+- 2026-08-06..09-29 [USER+CODE] Naming: Distill became **Job analysis**; stages
+  `job-analysis`, `fit-assessment`, `resume-polish`, `cover-polish`,
+  `application-answers`, `application-review`; keys `<camelCase stage
+  id>Provider|SelectedModel|CliReasoningEffort`; routes `/api/job-analysis`,
+  `/api/resume-polish`, `/api/cover-polish`; `candidateContext` is facts plus
+  Background; auto-run keys `fitAssessmentAuto`,
+  `resumePolishAuto`/`coverPolishAuto` plus `…AutoThreshold`. Old names convert
+  once in `migrateStoredSettings`. [ASSUMPTION] Reload open tabs after
+  upgrading; back up before a rollback.
+- 2026-09-29 [USER+CODE] Profile-aware Resume Polish: a Background heading
+  naming exactly one standard entry links its text to that entry
+  (`linkProfileBlocks`); Polish may rewrite that entry's bullets from it and
+  fill two `new-bullet` slots per linked entry; grounding failures stay warnings
+  (CR001 Option A). UNCONFIRMED: the user's decisions on CR002 v2
+  (enclosing-heading rule) and the stricter ownership check, and live-provider
+  behavior of linked-entry rewrites and new-bullet slots. [USER]
+  Profile-driven swapping and entry-level removal/reorder stay deferred.
+- 2026-10-01 [USER+CODE] Job-link import selects the exact posting from Ashby
+  boards, JobPosting JSON-LD, Oracle, iCIMS, Dayforce, Workable, and UKG data;
+  missing LinkedIn, Greenhouse, Ashby, and Jobvite jobs fail with
+  paste/extension guidance. Known limit: a non-Greenhouse URL with `gh_jid` plus
+  `for`/`board` fails instead of falling back. [USER+CODE] A Profile line's own
+  source type wins over its heading in Fit's source-type check.
+- 2026-09-08 [USER+CODE] Paragraph-cited cover evidence, bounded Resume targets
+  with advisory suggestions, and an optional session-only final review of
+  included materials; legacy Fit/date representations stay readable.
+- 2026-07-25..08-01 [USER] One Settings dialog, opened from the studio rail's
+  foot, holds every preference and shows no runtime diagnostics (those belong to
+  RoleFit Companion); Reset sits at the foot of the section rail; rows are
+  frameless, never card-in-card. [CODE+USER] Custom instructions are per stage
+  over a shared default (Job analysis and Fit take none); an emptied override is
+  deleted. [CODE] `src/config/aiStages.ts` is the single stage declaration;
+  `normalizeSettings` may repair and remove but never add. [USER+CODE+TOOL] The
+  masthead owns only identity and Apply; Sessions sits in the studio-rail
+  utilities.
+
+### AI providers, defaults, and benchmark outcomes
+
+- 2026-09-30 [USER+CODE+TOOL] GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
+  (`claude-sonnet-5-5`) are the Codex and Claude defaults for new or unset
+  stages and the server fallback; saved selections are not moved; Sonnet 5.5 on
+  the API sends `thinking: {type: "between_tools"}`; retired Codex ids repair to
+  GPT-6.1 Sol. The 2026-10-07 per-stage startup defaults override this for their
+  stages. Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and
+  Codex CLI 0.159.2. Receipt: `apps/role-fit-ai/docs/engineering/ai-server.md`.
+  UNCONFIRMED: live provider calls.
+- 2026-09-27 [USER+CODE] GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
+  joined the CLI/API catalogs (the user waived the Product Partner flow); Codex
+  5.4, 5.4 Mini, and Spark were removed; GPT-5.5 remains until its announced
+  2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
+  their stage/provider; one app-owned CLI effort contract serves settings,
+  validation, and Claude argv.
+- 2026-08-08 [USER+CODE+TOOL] Five integrations (Claude CLI, Codex CLI,
+  Antigravity CLI, OpenAI API, Claude API) and no speculative provider;
+  Antigravity's full calibration matrix is unconfirmed. 2026-08-09: a private
+  71-application Fit calibration found GPT-5.5 medium the strongest balanced
+  configuration and rejected a broader prescriptive rubric.
+- 2026-07-24 [TOOL] Application-writing guidance sources and the resulting
+  prompt policy are in `apps/role-fit-ai/docs/engineering/ai-server.md`.
+
+### Tracker, storage, and workspace
+
+- 2026-07-26 [USER+CODE] The data root is `workspace/`:
+  `resumes/<variant>.resume` and `cover-letters/<variant>.cover`, each with its
+  own `.trash/`; tracker, applications, and preferences stay at the root.
+- 2026-08-09..08-10 [USER+CODE+TOOL] Preferences live in owner-only
+  `workspace-preferences.json` (localStorage is a fail-open cache); backup,
+  preference, and restore-marker contracts are schema v1 only; 0.6.0 backups do
+  not restore into 0.7.0+. 2026-07-26 [CODE]: backups exclude standalone saved
+  `.cover` variants and history.
+- 2026-09-29..09-30 [USER+CODE] Preference writes require `baseRevision`
+  (SHA-256 of the stored bytes); a mismatch returns `409 { stale, current }` and
+  the tab rebases once. Contract:
+  `apps/role-fit-ai/docs/engineering/workspace-backup.md`, which also documents
+  a known race (2026-10-01): the pending-edits record does not name its tab, so
+  a new tab can write a live sibling's older value.
+- 2026-07-27 [USER+CODE] Tracker PUTs send only `upsert` records; the server
+  keeps existing order and prepends new records; explicit Refresh and `409`
+  snapshots are fully fresh (write responses became revision-aware and sparse on
+  2026-10-09). [USER+CODE+TOOL] The cold duplicate scan runs after the first
+  Applications paint and is cached across tab visits; the 27-record corpus pins
+  all 351 pairs (candidate pairs replaced the all-pairs loop on 2026-10-09).
+  2026-08-11 [CODE]: duplicates link by posting group or record a reviewed
+  separation.
+- 2026-08-09 [USER+CODE+TOOL] Tracker reads fail closed on unknown fields,
+  retired shapes, duplicate ids, and malformed data; only a redundant derived
+  Fit summary leaf is normalized for comparison; the tracker key `initialFit`
+  stays a storage-boundary name. [USER+CODE] Legacy tracker-schema compatibility
+  was left to a one-user preview migration.
+
+### Extension
+
+Pre-October popup, pairing, port-storage, and shortcut detail is app-operational
+and lives in the app ledger.
+
+- 2026-07-27 [USER+CODE+TOOL] The companion writes its validated port into the
+  materialized extension runtime config, which since 2026-08-01 is only the
+  first-install seed.
+
+### Desktop companion, distribution, and release/deploy state
+
+Current: RoleFit 0.10.0 preview (`rolefit-preview-v0.10.0-beta.1` on `4e33fb8`),
+extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
+
+- 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
+  (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
+  1.2.1. `docs/releases/0.8.0-beta.1.md` discloses that `.resume` files without
+  `bulletIndentPt` are rejected (add `"bulletIndentPt": 14.73` to `style`).
+  [USER+CODE] The Typeset remote deploy runs `docker builder prune -af
+  --keep-storage 1gb` before building (the user's "your call"); run 36865789743
+  reclaimed 4.42 GB and typeset.xinyiklin.com answered 200.
+- 2026-08-10 [USER+CODE+TOOL] **1.0 is deliberately not claimed**; its criteria
+  are a genuinely signed release and a compatibility policy promising migrations
+  for `.resume`, `.cover`, and `.rolefit-backup`; 0.x minors carry behavioral
+  breaks. 0.7.0 shipped with extension 1.2.0 (tag
+  `rolefit-preview-v0.7.0-beta.1`); [TOOL] 2026-10-09 `gh release view` shows
+  it published 2026-08-10T22:19:45Z.
+- 2026-08-10 [USER+CODE+TOOL] Landing screenshots are 2x captures from a
+  synthetic pack served through `ROLEFIT_WORKSPACE_DIR` on a spare port.
+  `landing/screenshot-manifest.json` plus `assertScreenshotVersionStamps` check
+  any version printed in a screenshot in both release workflows and the Pages
+  `verify` job; capture is not automated in CI and used Edge over CDP because
+  this machine's Chrome policy sets `DeveloperToolsDisabled=1`. Companion
+  recaptures from 0.8.0 on used isolated user data, an empty workspace, and
+  port 5181 (see 2026-10-08).
+- 2026-08-01 [USER+CODE+TOOL] 0.6.0 (extension 1.1.0, API 12) published via run
+  `30717428328`. API 12 added a bounded main-owned extension-setup copy
+  operation with no generic renderer clipboard/path capability. 2026-07-26
+  [USER]: the release after 0.3.0 was to be a larger step than 0.4.0; [CODE] it
+  became 0.5.0.
+- 2026-07-27 [USER+CODE+TOOL] Only the live private utility handle proves this
+  companion started the server; Stop and Restart revalidate RoleFit identity and
+  send one graceful `SIGTERM`; unknown listeners are never signalled and
+  external ones never force-killed.
+- 2026-09-30 [USER+CODE] Companion UX: inline Access card (pending requests
+  first, **Approve & restart**, two-step Remove), per-browser install guides,
+  and copy fields. Contract: `apps/role-fit-ai/desktop/AGENTS.md`. UNCONFIRMED:
+  a live extension install against the real companion and
+  screen-reader/forced-colors rendering.
+
+### Process and workflow decisions
+
+- 2026-07-24 [USER] Before requested pushes, review and update affected README
+  and docs and commit compact, privacy-safe continuity with the behavior slice;
+  a version change is complete only after a triggered, successful
+  release/publish workflow.
+- 2026-09-08 [USER+CODE] Authorized review, browser QA, and merge of the
+  accumulated RoleFit evidence-grounded drafting work (an authorization for that
+  work, not a standing rule).
+
+### Deferred backlog
+
+- 2026-09-27 [CODE] Engine/editor: codec-accepted unrendered fields (a schema
+  decision), context-menu keyboard navigation, space-kern DOM drift
+  (unconfirmed), refactor/simplification items.
+- 2026-07-25 [TOOL] Confirmed but not fixed then (status after the September
+  editor passes UNCONFIRMED): PDF link annotations per run; a justified line
+  past the 1.75x join bound splits a linked phrase; engine and editor auto-link
+  different strings and scopes; `End`/`Shift+End` cannot reach authored trailing
+  spaces; RoleFit's right-click menu resolves `position: fixed` against the
+  scroller. The replay-queue stall was fixed 2026-09-27.
+- 2026-07-24 [CODE] Plain-text paste with blank lines inserts hard breaks in one
+  paragraph (rich HTML multi-block paste exists since 2026-07-28). 2026-07-25
+  [TOOL]: font candidates Gelasio and Caladea; UNCONFIRMED whether either ships
+  usable italic/caps lookups.
+
+### Open questions and UNCONFIRMED items
+
+- 2026-07-25..10-06 [TOOL] Browser QA never run (flag-first) for shipping
+  surfaces: Prepare states and 1080/980/860/720px breakpoints and the Firefox
+  footer band (2026-07-30); prepared two-pane scrolling (2026-08-07); Apply's
+  download dialog (2026-07-31); Sessions rail placement (2026-08-01); Fit
+  staleness and inspector layout (2026-08-08..08-09); populated Open-menu
+  labels (2026-07-25); the add-evidence focus path (2026-09-28, still
+  unexercised 2026-10-06; the redesigned Settings pages themselves were
+  browser-checked 2026-10-06); the Show evidence 16rem scroll bound
+  (2026-10-06).
+- 2026-08-08..09-18 [TOOL] Live-provider behavior of the extension-arrival race
+  and automatic flows (2026-08-08) is UNCONFIRMED; live providers, vendor ATS
+  behavior, and hiring outcomes are unverified and no efficacy is claimed
+  (2026-09-18); the original 2026-09-18 Fit failure remains unconfirmed.
+- 2026-09-27..10-07 [CODE+TOOL] Smaller open items carried from dated entries:
+  positive kern pairs of at least 0.1em can yield a stray pdf.js space, and
+  cover-only Shift+Tab and spacing-dialog focus are proven only by evals
+  (2026-09-27); VoiceOver may flatten the `<h2>` inside `<summary>`
+  (2026-09-30); a lowercase non-curated or article-led tool after a denied list still warns
+  (2026-10-05);
+  other-variant notes appear under Other notes, typing a heading into the
+  preamble loses focus, the server links on a clipped scope, and an oversized
+  first brief item renders its placeholder (2026-10-06); a declined typed-link
+  or paste source stays "stopped" (2026-10-07).
+
 ## 2026-10-09
 
 - [USER+CODE+TOOL] **Tracker limit 500 → 2,000; candidate-only duplicate scan;
   revision-aware saves; backup limits sized for 2,000** (task
   `2026-10-08-tracker-scale`; the user's real tracker had reached 500, a cap
   with no recorded rationale since the initial commit).
-  - **The limit.** `MAX_APPLICATIONS = 2_000` (`server/applications/schema.ts`)
-    is the only limit. The user chose it over "unlimited": the single-file
-    store and the single-envelope backup have practical ceilings, and
-    streaming backup is the next one.
+  - **Limit.** `MAX_APPLICATIONS = 2_000` (`server/applications/schema.ts`) is
+    the only limit. The user chose it over "unlimited": the single-file store
+    and single-envelope backup have practical ceilings, and streaming backup is
+    the next one.
   - **Duplicate scan.** `groupDuplicateApplications` compares only candidate
-    pairs: a shared ATS key, requisition ID, normalized URL, or company.
-    Id-less, company-less records are also paired with id-less records of the
-    same role or of no role. Pairs are evaluated in the all-pairs order, so
-    results are identical.
-    - Description features are built lazily, and `matchSignatures` checks
-      metadata first.
-    - `DuplicateScanMemo` (client) reuses signatures and pair verdicts by
-      record object. "No match" verdicts are kept only below 250k candidate
-      pairs.
-  - **Server.** `storage.ts` caches the validated, deep-frozen tracker while
-    the bigint stat identity (dev/ino/size/mtimeNs/ctimeNs) holds.
-    - Writes re-sanitize only new or edited records.
-    - A write is cached only if the renamed file is provably its own
-      (dev/ino/size/mtime against the temp file); otherwise the cache is
-      dropped and the response carries no revision.
-    - Restore invalidates the cache, and backup strictly validates the exact
-      `applications.json` bytes it packages.
-    - An in-memory revision drives GET `304` and PUT sparse responses (`order`
-      plus upserted rows, only for a matching `baseRevision`).
+    pairs (a shared ATS key, requisition ID, normalized URL, or company;
+    id-less, company-less records also pair with id-less records of the same
+    role or no role), evaluated in all-pairs order, so results are identical.
+    Description features are built lazily and `matchSignatures` checks metadata
+    first. `DuplicateScanMemo` (client) reuses signatures and pair verdicts by
+    record object; "no match" verdicts are kept only below 250k candidate pairs.
+  - **Server.** `storage.ts` caches the validated, deep-frozen tracker while the
+    bigint stat identity (dev/ino/size/mtimeNs/ctimeNs) holds; writes
+    re-sanitize only new or edited records; a write is cached only if the
+    renamed file is provably its own (dev/ino/size/mtime against the temp file),
+    otherwise the cache drops and the response carries no revision; restore
+    invalidates the cache; backup strictly validates the exact
+    `applications.json` bytes it packages. An in-memory revision drives GET
+    `304` and sparse PUT responses (`order` plus upserted rows, only for a
+    matching `baseRevision`).
   - **Client.** `useApplications` keeps `confirmedRevision` beside the confirmed
-    snapshot and updates both inside the write queue. A full response (stale
-    base) is adopted as-is, like a GET. An unusable sparse response falls back
-    to one full read, and refresh is conditional.
+    snapshot and updates both inside the write queue; a full response (stale
+    base) is adopted as-is, an unusable sparse response falls back to one full
+    read, and refresh is conditional.
   - **Backup limits:** 5,000 files, 48 MB per file (also the companion count
-    read), 256 MB decoded, 384 MB JSON. The format is unchanged.
-  - [TOOL] **Receipts** (Node 24.18; synthetic data plus the real tracker's
-    counts, timings, and digests only):
-    - **Real 500 records:** identical to the HEAD matcher; scan 290 → 19 ms,
-      0.19% of pairs.
-    - **Realistic 2,000:** 1,818 → 75 ms cold, 2.5 ms rescan, 0.10% of pairs;
-      per-job check 423 → 16 ms.
-    - **Stress:** one 300-record company 174 ms; 5,000 records 256 ms.
-    - **Worst case:** every record with no company, role, or ID makes all pairs
-      candidates. That costs 8.0 s, the same as HEAD, with the memo at 1 MB.
-    - **Save at 2,000 (27 MB):** median 36 ms server time and 43 KB response
-      instead of about 180 ms plus 27 MB; a `304` takes 0.2 ms. The first save
-      after a restart, restore, or outside edit re-validates once (131–199 ms).
-    - **Backup round trip at 2,000** (165 MB decoded, 212 MB JSON): peak RSS
-      about 1.0–1.1 GB with ASCII text. With non-Latin-1 text, backup peaks at
-      1.2–1.9 GB and restore at about 1.3 GB.
-      - The JavaScript heap needs under 1 GB (restore fails only below a
-        1,024 MB heap cap); the rest is Buffer memory.
-      - Kept as a plan-owner decision, rather than lose backup past about 790
-        applications.
-      - Packaged Electron IPC at that size is UNVERIFIED; streaming backup is
-        the follow-up.
-  - [TOOL] **Review.** Two independent reviews (adversarial, and a verifier
-    focused on cache integrity) found no blocker or high issues.
-    - **Fixed with regression probes:** stale rows after a full response, the
-      post-rename race (which lost an outside writer's record), a revision
-      paired with another state, cache-backed backup validation, round-trip
-      evals that read the cache, and degenerate-tracker memo memory.
-    - Mutation checks fail as expected in `duplicate-scan-scale-eval`,
-      `tracker-revision-probes`, `applications-revision-sync`, and the five
-      round-trip evals.
-  - **Release notes:** an older build refuses a tracker over 500 records
-    (fails closed, no data loss) and backups over its old limits.
+    read), 256 MB decoded, 384 MB JSON; the format is unchanged.
+  - [TOOL] Receipts (Node 24.18; synthetic data plus the real tracker's counts,
+    timings, and digests only): real 500 records identical to the HEAD matcher,
+    scan 290 → 19 ms (0.19% of pairs); realistic 2,000: 1,818 → 75 ms cold, 2.5
+    ms rescan, 0.10% of pairs, per-job check 423 → 16 ms; stress: one 300-record
+    company 174 ms, 5,000 records 256 ms; worst case (no company, role, or ID on
+    any record) 8.0 s, the same as HEAD, with the memo at 1 MB. Save at 2,000
+    (27 MB): median 36 ms and 43 KB instead of about 180 ms plus 27 MB; a `304`
+    takes 0.2 ms; the first save after a restart, restore, or outside edit
+    re-validates once (131–199 ms).
+  - [TOOL] Backup round trip at 2,000 (165 MB decoded, 212 MB JSON): peak RSS
+    about 1.0–1.1 GB with ASCII text; with non-Latin-1 text, backup peaks at
+    1.2–1.9 GB and restore at about 1.3 GB. The JavaScript heap needs under 1 GB
+    (restore fails only below a 1,024 MB heap cap); the rest is Buffer memory.
+    The approved plan's 1.5 GB RSS Change Request trigger fired (peaks were
+    1.2–1.9 GB); the limits were kept under the user's delegated ownership,
+    rather than lose backup past about 790 applications. Packaged Electron IPC
+    at that size is UNVERIFIED; streaming backup is the follow-up.
+  - [TOOL] Two independent reviews (adversarial; cache-integrity verifier): no
+    blocker or high. Fixed with regression probes: stale rows after a full
+    response, the post-rename race (which lost an outside writer's record), a
+    revision paired with another state, cache-backed backup validation,
+    round-trip evals reading the cache, and degenerate-tracker memo memory.
+    Mutation checks fail as expected in `duplicate-scan-scale-eval`,
+    `tracker-revision-probes`, `applications-revision-sync`, and the five
+    round-trip evals.
+  - **Release notes:** an older build refuses a tracker over 500 records (fails
+    closed, no data loss) and backups over its old limits.
 
 ## 2026-10-08
 
-- [TOOL] **RoleFit 0.10.0 preview released.** #196 squash-merged as
-  `4e33fb8`, with a tree identical to its reviewed head `2242afd`.
-  - Preflight on that tree (macOS arm64, Node 24.18.0) passed before tagging:
-    - full `npm run check --workspace apps/role-fit-ai` 167/167;
-    - `test:rolefit:desktop` (Electron development smoke);
-    - `make:rolefit:desktop` (135 staged files);
-    - `test:rolefit:desktop:packaged` (darwin-arm64);
-    - `test:desktop:release` 14/14.
-  - The annotated tag `rolefit-preview-v0.10.0-beta.1` is on `4e33fb8`. Tag
-    creation is restricted by a ruleset, which the push bypassed.
-  - Release workflow run 37873927902 succeeded: source validation, the
-    Windows x64 and macOS arm64/x64 builds, and the verified publish. It
-    published the prerelease "RoleFit AI 0.10.0 — unsigned preview beta.1" at
-    2026-10-09T02:25:20Z, with the arm64/x64 `.dmg` and `.zip`, the Windows
-    x64 `.exe`, and `SHA256SUMS.txt`.
-  - The product site, Typeset, and Document workflow runs on `4e33fb8`
-    succeeded.
-- [USER+CODE] **RoleFit 0.10.0 preview prepared** (minor: the Handshake
-  import is a new capability since `rolefit-preview-v0.9.1-beta.1`, with no
-  stored-data or format change). The user asked to "start the 0.10.0 release"
-  after #195 merged. Branch `chore/rolefit-0.10.0-release` starts from
-  `e25e55c`. It re-applies the earlier, unpushed
-  `chore/rolefit-0.10.0-preview` bump and notes, which that branch's two
-  release reviews had already shaped.
-  - Extension 1.2.1 -> 1.3.0 (the capture changed, so the notes ask for one
-    reload); desktop bridge API 13 is unchanged; the landing screenshot
-    manifest stays empty. Current-version references move to 0.10.0;
-    historical ones stay.
-  - The intended tag is `rolefit-preview-v0.10.0-beta.1`, with notes in
-    `apps/role-fit-ai/docs/releases/0.10.0-beta.1.md`. The notes now also
-    list #195's two fixes under Fixed.
-  - Shipped since 0.9.1: #194 (squash `bc5b4ba`, Handshake import, title
-    parsing, supported sites) and #195 (squash `e25e55c`, Skip close
-    warning, changed-only update PDFs). Each had green CI and an exact-head
-    review marked ready.
-  - [USER+TOOL] Firefox Handshake capture (the pre-tag check #194 promised; the
-    user said not to wait for them, and the shortcut itself is the separate
-    Firefox entry below). Headless Firefox 157.0.1 in a clean profile ran the
-    1.3.0 extension's ⌘⇧U import on a synthetic Handshake posting
-    (`school.joinhandshake.com` resolved locally, stand-in RoleFit server).
-    Firefox awaited the async capture: it expanded the description, dropped
-    Similar Jobs, alumni, and navigation, sent the canonical `/jobs/<id>`
-    URL, and opened the import tab with no failure notice. The live
-    Handshake site in Firefox stays UNCONFIRMED; Chrome was verified live.
-  - [TOOL] On this branch (macOS arm64, Node 24.18.0): `test:desktop:release`
-    14/14 and the full `npm run check --workspace apps/role-fit-ai` 167/167.
-    The preview preflight is re-run on the merged `origin/main` commit before
-    the tag.
+- [TOOL] **RoleFit 0.10.0 preview released.** #196 squash-merged as `4e33fb8` (=
+  reviewed head `2242afd`); macOS arm64 preflight passed (check 167/167, desktop
+  and packaged smokes, release tests 14/14). Annotated tag
+  `rolefit-preview-v0.10.0-beta.1` on `4e33fb8` (ruleset-restricted; the push
+  bypassed it); run 37873927902 published "RoleFit AI 0.10.0 — unsigned preview
+  beta.1" at 2026-10-09T02:25:20Z with arm64/x64 `.dmg`/`.zip`, the Windows x64
+  `.exe`, and `SHA256SUMS.txt`; site, Typeset, and Document workflow runs
+  succeeded.
+- [USER+CODE] **0.10.0 prepared** (minor: the Handshake import is new; no
+  stored-data or format change; the user asked to "start the 0.10.0 release"
+  after #195 merged). Extension 1.2.1 → 1.3.0 (capture changed; the notes ask
+  for one reload); bridge API 13 unchanged; the screenshot manifest stays empty;
+  notes in `apps/role-fit-ai/docs/releases/0.10.0-beta.1.md`. Ships #194
+  (`bc5b4ba`) and #195 (`e25e55c`). [USER+TOOL] Headless Firefox 157.0.1 in a
+  clean profile ran the 1.3.0 ⌘⇧U import on a synthetic Handshake posting
+  correctly (the user said not to wait for them); the live Handshake site in
+  Firefox stays UNCONFIRMED; Chrome was verified live.
 - [USER+CODE] **A saved Skip no longer warns on close; Update offers only
-  changed PDFs** (branch `fix/rolefit-saved-application-prompts`; the user
-  reported both).
-  - Close-tab warning: Prepare's automatic cover-letter retitle makes the
-    letter recovery-dirty with no edit, and Skip writes no persistence
-    receipt, so `applicationDocumentNeedsUnloadGuard` warned despite the
-    saved recovery draft. A dirty document beside a Skipped (`not_applying`)
-    record now follows the Apply-excluded rule: it warns only until its
-    recovery write succeeds. Apply with default materials already released.
-    The retitle still counts as dirty, so a prepared, unsaved session warns.
-  - Update application's download prompt offered every included PDF. It now
-    offers only a document whose application sync state is not `saved`
-    (source fingerprint differs from the stored copy), saves directly when
-    none changed, and names the target ("Update & download cover-letter
-    PDF"; Apply reads "Apply & download resume PDF").
-  - [TOOL] Reproduced, then verified live on a 5183 dev server with a
-    synthetic workspace and temporary state logging (removed): the guard
-    after Save as skipped went from on to off; an unchanged update saved with
-    no prompt; cover-only and resume-only changes each offered just that
-    row. Full `npm run check --workspace apps/role-fit-ai` passed (167/167).
-  - [TOOL] One independent review: no blockers. Fixed its lows (one owner for
-    the Skipped rule via the `job-only` sync state, App wiring assertions that
-    fail under mutation, a Skipped-over-failed-receipt case, PRODUCT wording).
-    Its medium is a product trade-off left as built: real edits beside a
-    Skipped record also release once recovery is written, the same rule
-    Apply-excluded documents follow, and that recovery is same-tab only.
-- [USER+TOOL] The extension's Firefox ⌘⇧U import did nothing; the cause was a
-  stale Firefox session (running since its 157.0.1 update). Restarting Firefox
-  fixed it, and a clean Firefox 157 profile ran the shortcut end to end; no
-  code change.
-- [USER+CODE] **Extension imports signed-in Handshake postings** (branch
-  `feature/rolefit-handshake-import`; the user asked to check and add
-  support). Before, the extension captured the whole page: about 300
-  characters of a description Handshake shortens in JavaScript behind
-  **More**, plus site navigation, other jobs' "Similar Jobs" listings, and
-  "Alumni in similar roles" names. The server cannot fetch these pages (sign-in
-  required). `extractPageData` (now exported) adds a Handshake
-  adapter for `*.joinhandshake.com/jobs/<id>` and `/job-search/<id>`. It clicks
-  up to four section toggles, skipping any inside a link or form; it re-finds
-  each toggle (Handshake re-renders it on every click) and reopens one it
-  closed. It keeps the pane's sections up to Similar Jobs, drops any section
-  linking to `/profiles/`, and sends the canonical `/jobs/<id>` URL taken from
-  the pane's title link. Its title is `<Role> | <Employer> | Handshake`, with
-  whitespace collapsed. `extractJobMeta` now parses that title by splitting on
-  `|`, ahead of the LinkedIn pattern. Before, it read no employer and cut the
-  role at " - ". An unrecognized layout falls back to the generic capture.
-  Only a Handshake posting page's capture returns a promise (Chrome and
-  Firefox both document awaiting it); every other capture, including
-  Handshake pages that are not a posting, stays synchronous, as before. No
-  permission or new route; the analyze route only caps its parser input.
-  - [TOOL] The real function ran in the user's signed-in Chrome on the three
-    reported postings and the search view. It captured 3,683 / 4,816 / 2,096
-    characters with no Similar Jobs, alumni, nav, or other result cards. The
-    first posting gave identical lengths from collapsed, already-open, and
-    search-view starts. The first live run exposed the re-rendered toggle (an
-    open description was closed and left closed), and the stub now models it.
-    Firefox was not exercised live (no automation available). The unpacked
-    extension needs a reload to pick this up.
-    `__evals__/extension-handshake-capture.mjs` has 11 probes on synthetic
-    data, and each fails under its targeted mutation. Full
-    `npm run check --workspace apps/role-fit-ai` passed.
-  - [TOOL] One independent review found two blockers, both fixed:
-    - The first eval fixture copied live session values (school subdomain,
-      the user's Handshake user id, real posting and employer ids, and
-      description text), and the repo is public. It was replaced with
-      synthetic values before anything was staged.
-    - A first regex title parse backtracked: a whitespace-heavy 500-character
-      `document.title` from any site took up to about 9 s in the
-      synchronous analyze handler.
-
-    The review's low findings (toggle guard, cap test, whitespace collapse,
-    doc overclaims) are also fixed. A second reviewer is not required (no
-    shared package, schema, prompt, or version change).
-  - Residual: an already-open description closes and reopens on capture (the
-    toggle exposes no `aria-expanded`); capture clicks before the pairing check
-    (no text leaves the browser); Similar Jobs is the only stop marker; a
-    hidden kept section would contribute its text; `atsPostingKey` has no
-    Handshake key, so one posting seen under two school subdomains matches only
-    through the description tier.
-  - [USER+CODE] `extractJobMeta` no longer stalls the analyze route (the user
-    asked for this in the same branch). The Indeed title regex took 10-34 s
-    on a crafted 500-character title, and the body `Role:`/`Company:`/intro
-    patterns 6-16 s on 50,000 blank lines (`^\s*` crossed lines). A crafted
-    title or page on any site could stall the whole local server when the
-    popup opened. LinkedIn and Indeed titles are now split and indexed, the
-    whitespace before an anchored body label no longer crosses lines, and
-    the analyze route caps
-    resolved text at 50,000 characters before parsing (a recognized source's
-    resolved text was uncapped, and the unchanged `at` cue then took ~3 s on
-    2.5M characters). A differential run over 225 title/body pairs changed only
-    two junk titles and the Handshake format. Probes:
-    `server/extension/__evals__/job-meta-probes.mjs`.
-  - [USER+TOOL] Supported job sites are documented in the app README (the
-    user asked). A live October 2026 check sent one public posting per site
-    through the real link import. Full description: Greenhouse (board and
-    company wrapper), Lever, Ashby, Workday, SmartRecruiters, Workable,
-    iCIMS, Oracle Recruiting, LinkedIn, Amazon, Google, Apple, Built In, Dice,
-    YC, Wellfound, Teamtailor, SAP SuccessFactors and Radancy sites. Refused
-    the server: Indeed 401, Glassdoor 403, ZipRecruiter 403, Meta 400.
-  - Open (found by that check, not fixed; each needs the user's go-ahead):
-    - Microsoft Careers link import keeps only a 1,792-character summary of a
-      5,692-character posting (no Responsibilities or Qualifications). The
-      extension captures it fully, and its public `position_details` JSON
-      has the full text.
-    - Generic link import accepts a page reached by redirect: Rippling's
-      own board 308-redirects every posting to its general careers page,
-      which imports as the job.
-    - The extension reads only the top frame. On an iCIMS job page the top
-      frame holds 15 characters and the description sits in a same-origin
-      frame, so only the server fetch of `*.icims.com` saves it, and company
-      sites that embed an ATS in a frame capture nothing useful.
-    - Unverified (no live posting found): Jobvite, Taleo, Paylocity, ADP,
-      BambooHR, Breezy, JazzHR, Recruitee, Personio, and Rippling boards of
-      other companies.
-
-- [TOOL] **RoleFit 0.9.1 preview released.** The annotated tag
-  `rolefit-preview-v0.9.1-beta.1` is on `4e389af` (#193). Release workflow run
-  37857689297 succeeded and published the prerelease "RoleFit AI 0.9.1 —
-  unsigned preview beta.1" at 2026-10-08T23:15:56Z, with the arm64/x64 `.dmg`
-  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
-  Typeset, and Document workflow runs on `4e389af` succeeded.
-- [USER+CODE] **RoleFit 0.9.1 preview prepared** (patch: the three
-  user-facing fixes and one test fix of #192 since
-  `rolefit-preview-v0.9.0-beta.1`, no new capability and no
-  stored-data or format change; the user approved the release brief and plan,
-  task `2026-10-08-rolefit-0.9.1-preview`). The intended tag is
-  `rolefit-preview-v0.9.1-beta.1`; extension 1.2.1 and desktop bridge API 13
-  are unchanged, and the landing screenshot manifest stays empty. Release notes
-  are `apps/role-fit-ai/docs/releases/0.9.1-beta.1.md`.
-  - [TOOL] Preflight on Windows x64 with Node 24.18.0: release tests
-    (`test:desktop:release`) 14/14; full `npm run check --workspace
-    apps/role-fit-ai` (165/165 offline evals); `make:rolefit:desktop` produced
-    a fresh Squirrel installer and `0.9.1-full.nupkg`; the packaged smoke
-    passed against that fresh output (win32-x64, unpacked). The Electron
-    development-mode smoke failed once in the main checkout without its output
-    kept, then passed twice there (the second with a full log and exit 0). The
-    0.9.0 preflight also saw it fail in the main checkout and pass in a clean
-    worktree; root cause still not isolated. Keep the smoke's log next time.
-  - [USER+TOOL] After that preflight, the landing companion screenshot was
-    retaken on macOS arm64 (user request) to replace the 0.9.0 Windows
-    capture with macOS system fonts: smoke screenshot hook, development mode,
-    isolated user data, empty workspace, port 5181 with the user's companion
-    quit, 2x, 1800x1176, converted from Display P3 to sRGB so the brand green
-    matches the CSS. The empty workspace and port 5181 depart from
-    `landing/AGENTS.md`'s synthetic-pack/spare-port rule, as at 0.8.0; the
-    Overview shows no workspace content. The `<img>` now declares 1800x1176.
-    It shows no version, so the manifest stays empty. After the swap,
-    `build:landing` (with its boundary guard) and `test:desktop:release`
-    (14/14) passed on macOS. No landing browser QA ran for this image-only
-    swap. One independent review: no blocking findings.
-  - [CODE] Open, found in the release review (pre-existing, not fixed in
-    0.9.1): `resumeIsStarterSample` requires `applicationOfRecordId === null`
-    (`App.tsx`), so once the preparation owns a record (after a first Answers
-    Save, Apply, or Skip & save job, or with a saved application open), Open >
-    Bundled starter makes `resumeReady` true. Answers, Resume and Cover Letter
-    Polish, Apply readiness, and the automatic-proposal inputs can then treat
-    the sample as the applicant's resume (`usePreparedResume` has the same
-    application-owned exception in `lib/preparedResume.ts`), contrary to
-    PRODUCT's rule that the Starter never satisfies resume readiness. The 0.9.1
-    notes disclose it as a known issue.
-- [USER+CODE] **Four open items fixed in #192** (squash `fc60489` of the
-  exact reviewed head `1f77176`, CI green: 15 checks, product-site deploy
-  skipped; branch
-  `fix/rolefit-four-open-gaps`, task `2026-10-08-four-open-fixes`; the user
-  approved brief v1 and plan v1). Client and test code only: no schema,
-  prompt, provider, or shared-package change, and no version bump.
-  - Answers' `generate()` gates on App's `resumeReady`, so send and both Retry
-    buttons stop at "Add your resume first." while the unowned bundled Starter
-    is loaded. A Retry used to send the sample as the applicant's resume.
-  - A fresh preparation's first Answers Save reuses the duplicate choice the
-    guard remembers for that exact posting's top match
-    (`rememberedRelationship`: no prompt, no publish), as Polish, Apply and
-    Skip do, and falls back to the committed relationship only when none is
-    remembered. A remembered Keep separate wins (user-accepted, matches
-    Polish/Apply), and a Save retried after a failed link skips its own Draft.
-    Apply's update mode is unchanged.
-  - Prepare, the Resume tab and its rail share `editablePolishSectionCount`
-    (locked Education/contact headings never count). Prepare's Resume note
-    shows App's `resumePolishBlocker` (provider recovery step, then "Set at
-    least one editable resume section to Polish.") before any earlier Polish
-    status.
-  - The companion version test slices `loadRuntimeInfo` to its own end and
-    asserts the version write; the old test passed with the function moved
-    and its write removed.
-  - Still open: no duplicate resolution runs for an answer-created Draft with
-    no remembered or committed choice, and Answers' first Save does not
-    persist a Keep separate (`markPostingRecordsUnrelated`) as Apply's create
-    path does. The first Save's lookup reads the in-memory tracker without a
-    refresh (another tab's change can make it link a deleted record, which
-    fails with the existing Retry Save error). Prepare still counts a Polish
-    section that has no usable targets (non-goal).
-  - [TOOL] Full `npm run check --workspace apps/role-fit-ai` (client, server
-    and desktop `tsc`, builds, desktop probes, 165/165 offline evals), the
-    release-contract test (12/12), and `git diff --check` passed. Each fix's
-    new assertions fail under targeted mutations; the old companion-version
-    test passed with `loadRuntimeInfo` moved and its write removed. Browser QA
-    was not run (no layout change). One independent review: ready to merge, no
-    high or medium findings; its eval gap (the first Save's lookup source) and
-    a testing.md wording were fixed, and a second reviewer was judged not
-    warranted.
+  changed PDFs** (the user reported both). A dirty document beside a Skipped
+  (`not_applying`) record follows the Apply-excluded rule and warns only until
+  its recovery write succeeds (Prepare's automatic retitle still counts as
+  dirty). Update application offers only documents whose sync state is not
+  `saved`, saves directly when none changed, and names the target ("Update &
+  download cover-letter PDF"). [TOOL] Reproduced and verified live on a 5183
+  synthetic workspace; check 167/167; one review, no blockers. Accepted
+  trade-off: real edits beside a Skipped record also release once recovery is
+  written (same-tab only).
+- [USER+TOOL] Firefox's ⌘⇧U import did nothing because of a stale session
+  (running since its 157.0.1 update); a restart fixed it. No code change.
+- [USER+CODE] **The extension imports signed-in Handshake postings** (the server
+  cannot fetch them). `extractPageData` (now exported) adds an adapter for
+  `*.joinhandshake.com/jobs/<id>` and `/job-search/<id>` that opens up to four
+  section toggles, keeps sections up to Similar Jobs, drops any section linking
+  to `/profiles/`, and sends the canonical `/jobs/<id>` URL; `extractJobMeta`
+  splits `<Role> | <Employer> | Handshake` titles on `|`; unknown layouts fall
+  back to generic capture; only a Handshake posting's capture is async. No
+  permission or new route. [TOOL] Verified in the user's signed-in Chrome on the
+  three reported postings; 11 synthetic probes in
+  `__evals__/extension-handshake-capture.mjs`. A review's two blockers were
+  fixed before staging: a fixture had copied live session values (now synthetic;
+  the repo is public) and a regex title parse backtracked for up to about 9 s.
+  - Residual: an already-open description closes and reopens on capture (no
+    `aria-expanded`); capture clicks before the pairing check (no text leaves
+    the browser); Similar Jobs is the only stop marker; a hidden kept section
+    would contribute its text; `atsPostingKey` has no Handshake key, so one
+    posting under two school subdomains matches only through the description
+    tier.
+- [USER+CODE] `extractJobMeta` no longer stalls the analyze route (crafted
+  inputs had taken 6–34 s): LinkedIn and Indeed titles are split and indexed,
+  and the route caps resolved text at 50,000 characters; probes in
+  `server/extension/__evals__/job-meta-probes.mjs`.
+- [USER+TOOL] Supported job sites are documented in the app README. An October
+  2026 live check imported one public posting per site in full: Greenhouse
+  (board and company wrapper), Lever, Ashby, Workday, SmartRecruiters, Workable,
+  iCIMS, Oracle Recruiting, LinkedIn, Amazon, Google, Apple, Built In, Dice, YC,
+  Wellfound, Teamtailor, SAP SuccessFactors, and Radancy sites. Refused: Indeed
+  401, Glassdoor 403, ZipRecruiter 403, Meta 400.
+  - Open (each needs the user's go-ahead): Microsoft Careers link import keeps
+    only a 1,792-character summary of a 5,692-character posting (the extension
+    captures it fully; its public `position_details` JSON has the full text);
+    generic link import accepts a page reached by redirect (Rippling's board
+    308-redirects every posting to its careers page); the extension reads only
+    the top frame, so iCIMS relies on the server fetch of `*.icims.com` and ATS
+    frames embedded in company sites capture nothing useful. Unverified (no live
+    posting found): Jobvite, Taleo, Paylocity, ADP, BambooHR, Breezy, JazzHR,
+    Recruitee, Personio, and other companies' Rippling boards.
+- [TOOL] **RoleFit 0.9.1 preview released.** Annotated tag
+  `rolefit-preview-v0.9.1-beta.1` on `4e389af` (#193); run 37857689297 published
+  at 2026-10-08T23:15:56Z with the same asset set; product site, Typeset, and
+  Document workflow runs succeeded.
+- [USER+CODE] **0.9.1 prepared** (patch: #192's fixes; the user approved the
+  release brief and plan); notes
+  `apps/role-fit-ai/docs/releases/0.9.1-beta.1.md`. [TOOL] The Electron
+  development-mode smoke failed once in the main checkout (as at 0.9.0) and then
+  passed; root cause not isolated; keep its log next time. [USER+TOOL] At the
+  user's request the landing companion screenshot was retaken on macOS arm64
+  (empty workspace, port 5181, 2x, 1800x1176), departing from
+  `landing/AGENTS.md`'s synthetic-pack/spare-port rule as at 0.8.0.
+  - [CODE] Open (pre-existing; a known issue in the 0.9.1 notes):
+    `resumeIsStarterSample` requires `applicationOfRecordId === null`
+    (`App.tsx`), so once the preparation owns a record, Open > Bundled starter
+    makes `resumeReady` true and Answers, Polish, Apply readiness, and
+    automatic-proposal inputs can treat the sample as the applicant's resume
+    (`usePreparedResume` has the same exception in `lib/preparedResume.ts`),
+    contrary to PRODUCT.
+- [USER+CODE] **Four open items fixed in #192** (`fc60489`; the user approved
+  brief v1 and plan v1). Answers' `generate()` gates on App's `resumeReady`
+  ("Add your resume first." while the unowned starter is loaded); a fresh
+  preparation's first Answers Save reuses the duplicate choice the guard
+  remembers for that posting (`rememberedRelationship`), else the committed one;
+  Prepare, the Resume tab, and its rail share `editablePolishSectionCount`, and
+  Prepare shows `resumePolishBlocker` first; the companion version test asserts
+  the version write. [TOOL] Check 165/165, mutation checks, one review.
+  - Still open: no duplicate resolution runs for an answer-created Draft with no
+    remembered or committed choice; Answers' first Save does not persist a Keep
+    separate (`markPostingRecordsUnrelated`) as Apply's create path does; its
+    lookup reads the in-memory tracker without a refresh; Prepare still counts a
+    Polish section with no usable targets (non-goal).
 - [TOOL] **RoleFit 0.9.0 preview released.** Annotated tag
-  `rolefit-preview-v0.9.0-beta.1` on `ea8cc6a` (#190, squash of reviewed head
-  `33f1f3e`). Release workflow run 37827489011 succeeded (validate, macOS arm64
-  and x64, Windows x64, publish) and published the prerelease "RoleFit AI 0.9.0
-  — unsigned preview beta.1" at 2026-10-08T18:58:16Z with the arm64/x64 `.dmg`
-  and `.zip`, the Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site,
-  Typeset, and Document workflow runs on `ea8cc6a` succeeded. Preflight before
-  the tag: release-contract tests 14/14, the RoleFit check gate, and the Windows
-  packaged smoke (win32-x64, unpacked) passed; the Electron development-mode
-  smoke failed only in the main checkout and passed for `main` and the release
-  head in a clean worktree (local state, root cause not isolated). Two
-  independent reviewers plus exact-head reviews of their fix commits. Its
-  follow-up (the companion-version test could pass on an empty slice after a
-  reorder) is closed by the four open fixes entry above.
-- [USER+CODE] RoleFit 0.9.0 preview prepared (minor: Answers, multiple Skip
-  reasons, and a one-way tracker format since 0.8.0-beta.1). Versioning now
-  follows `docs/git-workflow.md`: patch for fix-only releases, minor for new
-  capability or stored-data changes, and agents suggest releases but bump only
-  on the user's go-ahead.
-- [USER+CODE] The desktop companion shows its version only in Settings, not in
-  the sidebar (the sidebar keeps "Running on <port>"), so the landing
-  screenshot of the shell no longer needs a retake on every version bump.
-  `landing/screenshot-manifest.json` may be empty and is empty now; a release
-  test pins the version out of the sidebar. The companion screenshot was
-  recaptured on Windows (1784x1202, isolated user data, empty workspace, port
-  5181, 2x), so its type renders in Windows fallback fonts rather than the
-  macOS ones used at 0.8.0 (superseded 2026-10-08 by the 0.9.1-prep macOS
-  recapture, 1800x1176).
-- [USER+CODE] RoleFit Skip records any number of reasons from a grouped list of
-  12 (Eligibility, Logistics, Fit, Status, Personal) plus an optional note. The
-  tracker field is now `notApplyingReasons` (canonical-order list, omitted when
-  empty); `src/lib/notApplying.ts` is the single list the server sanitizer
-  imports. The retired `constraints` reason stays valid on saved records but is
-  not offered. Task `2026-10-08-skip-reasons` (local artifacts; brief v3 and plan
-  v2 approved by the user's delegation after an independent planning review).
-- [CODE] The Skip dialog suggests reasons from local evidence only, with no
-  provider request. A prior skip of the same posting supplies the only
-  pre-checks; otherwise a link to a submitted application (`already_applied`)
-  and a current Fit **Blocked** eligibility whose cited posting text names
-  clearance/citizenship or work authorization pre-check. Eligibility Check,
-  on-site/travel wording from `jobConstraints.ts` (unused since #133, now
-  live), and a Limited verdict are only marked.
-- [CODE] Compatibility: tracker reads stay strict. A pre-list scalar
-  `notApplyingReason` reads as a one-item list (comparison-only, no rewrite);
-  both shapes on one record are invalid on read and write. Once the new build
-  saves the tracker, an older build refuses it (and a newer backup) without
-  changing anything until updated, and a code revert must fix forward.
-- [USER+CODE] Fixed (task `2026-10-08-reskip-history`, user chose the
-  recommended option): re-skipping a posting matched to an application later
-  moved to Skipped, and Save job updates on that record, stripped its
-  `appliedAt`, sent-document metadata, attachments, and document AI receipts,
-  and the server accepted it. Both paths now keep that history; job-only
-  decisions still store none. Records damaged before the fix are not repaired,
-  and their files stay orphaned on disk. No server guard against removing
-  `appliedAt` was added (offered as optional, not chosen).
-- [USER+CODE] Docs now match the submitted-metrics code (user chose the code's
-  rule): a job-only Skipped decision never counts as submitted or as a calendar
-  submission, an application later marked Skipped keeps its original submission,
-  and no Skipped record counts toward follow-up hygiene. App `AGENTS.md`,
-  `PRODUCT.md`, `README.md`, and `docs/engineering/testing.md` previously said
-  no Skipped record ever counts.
-- [TOOL] Four Document workflow runs since 2026-10-06 failed one Chromium job
-  with "Timed out starting Chromium" (core on `3d7f4cd` and `b35628c`, extended
-  on `d37990f` and `e4d339b`): no stderr within 15s, while the other Chromium
-  job started on the same SHA. A rerun of `e4d339b` passed. No earlier failure
-  in the last 100 runs was a startup timeout.
-- [CODE] The browser-contract launcher now waits 30s for DevTools and retries
-  startup once with a fresh profile, logging the first failure; a browser that
-  cannot start still fails after the second attempt. Contract assertions are
-  unchanged.
+  `rolefit-preview-v0.9.0-beta.1` on `ea8cc6a` (#190); run 37827489011 published
+  at 2026-10-08T18:58:16Z.
+- [USER+CODE] 0.9.0 prepared (minor: Answers, multiple Skip reasons, a one-way
+  tracker format). Versioning follows `docs/git-workflow.md`: patch for fix-only
+  releases, minor for new capability or stored-data changes; agents suggest
+  releases but bump only on the user's go-ahead.
+- [USER+CODE] The companion shows its version only in Settings (the sidebar
+  keeps "Running on <port>"), so `landing/screenshot-manifest.json` may be and
+  is empty, and a release test pins the version out of the sidebar.
+- [USER+CODE] **Skip records any number of reasons** from a grouped list of 12
+  plus an optional note, stored as `notApplyingReasons`;
+  `src/lib/notApplying.ts` is the single list; the retired `constraints` reason
+  stays valid but is not offered (task `2026-10-08-skip-reasons`; approved under
+  the user's delegation). [CODE] Suggestions use local evidence only (no
+  provider request). A pre-list scalar `notApplyingReason` reads as a one-item
+  list; once the new build saves, an older build refuses the tracker and newer
+  backups without changing anything; a revert must fix forward.
+- [USER+CODE] Re-skipping a posting matched to an application later moved to
+  Skipped, and Save job updates on that record, keep its `appliedAt`,
+  sent-document metadata, attachments, and AI receipts (the user chose the
+  recommended option); damaged records are not repaired; a server guard against
+  removing `appliedAt` was offered and not chosen.
+- [USER+CODE] Submitted metrics follow the code's rule (user choice): a job-only
+  Skipped decision never counts as submitted or as a calendar submission, an
+  application later marked Skipped keeps its original submission, and no Skipped
+  record counts toward follow-up hygiene; the app docs now say so.
+- [CODE] After four "Timed out starting Chromium" CI failures, the
+  browser-contract launcher waits 30 s for DevTools and retries once with a
+  fresh profile; assertions are unchanged.
 
 ## 2026-10-07
 
-- [CODE] A fresh preparation's posting relationship is now scoped to the
-  Prepare run that resolved it (branch `fix/rolefit-answers-relationship-scope`,
-  on top of the Draft job-source fix, #186). A Prepare
-  run's duplicate gates return their Link / Keep separate choice with the gate
-  result instead of publishing it; `useJobIntake` commits it with the run (the
-  later gate's choice wins, a gate with no match keeps the earlier one), and
-  App's commit setter makes it the session's `pendingRelationship` (on a
-  same-posting re-prepare, only when the run resolved one). Only the Polish
-  and Apply/Skip gates, which judge the current prepared job, publish through
-  `onRelationshipResolved`; at the user's request (2026-10-07) they also
-  publish a choice the guard remembers for that exact posting, so a Link chosen in a
-  stopped re-prepare of the same posting reaches the session once Polish, Skip or
-  Apply reuses it (previously Apply linked it silently while the first Answers
-  Save did not). Fixed: B's first Answers Save joined A's
-  posting group when B was prepared after A's unsaved Link and found no
-  duplicate; and a Link or Keep separate choice made in an extension or Retry
-  Prepare of B reached A's first Save, whether that Save came while B ran
-  (Answers Save stays enabled during Prepare) or after B stopped, and Keep
-  separate dropped A's own Link. Apply and Skip keep
-  resolving their own relationship, unchanged. The commit setter now judges
-  "same posting" against the live prepared job (`importedJobRef`): a queued
-  extension run commits through the setter from its delivery render, so a run
-  for A that waited behind B's Link could count as continuing A and keep B's
-  Link (pre-existing staleness, found in review).
-  - [TOOL] `application-answer-draft-source.mjs` now also runs App's
-    preparation session, committed-intake setter, and duplicate guard (the real
-    hook) with the production store: carry-over, three in-flight variants, the
-    queued-run case, B's remembered Link never reused for A by Polish, and five
-    keep-working controls (A's own Link, a same-posting re-prepare with a new
-    Link, a Polish-time Link, that Link surviving a same-posting re-prepare that
-    finds no match, and Polish reusing a stopped re-prepare's Link).
-    `job-intake-entry-points.mjs` pins each path's committed relationship;
-    `duplicate-relationship-resolution.mjs` pins which gates publish, fresh or
-    remembered. The pre-fix sources failed the eval, and each of twelve
-    targeted mutations fails at least one of the three. After merging #186 the
-    eval also pins that a capture from an older conversation (Start a new
-    preparation, then a run that never commits) cannot be saved, which #186's
-    exact-head review found unpinned; dropping that conversation check fails it.
-    Full `npm run check --workspace apps/role-fit-ai` passed on the merged tree.
-    Browser QA was not run.
-  - [TOOL] One independent review: no high findings. Medium (fixed): this
-    entry's first insertion swallowed the next entry's opening line. Lows fixed:
-    the queued-run staleness above, an untested same-posting guard, docs that
-    overstated the rule, and (at the user's request) the stopped same-posting
-    Link that Polish and Apply remembered but never published. Two
-    confirmation passes found no high or medium issues.
-  - [TOOL] Exact-head review of PR #187's first head (`f537cdd2`): no high or
-    medium findings, all CI green, fit to merge. Its four lows were fixed in
-    the follow-up commit: PRODUCT and testing.md now say a committed Prepare
-    (which includes a duplicate stop after analysis) or a Polish/Apply/Skip
-    check, the intake eval covers imported-posting Retry, the
-    `DuplicateGateResult` comment is exact, and this receipt.
-  - Closed 2026-10-08 (four open fixes): after such a stopped re-prepare, a
-    first Answers Save that came before any Polish, Apply or Skip created an
-    unlinked Draft, and a later Apply in update mode never linked it. The first
-    Save now reuses the remembered choice itself.
-- [CODE] Answers' Retry, including the progress dock's, now stops at the tab's
-  prepared-job gate. `useApplicationAnswers` takes App's `jobPrepared` as
-  `jobReady`, and `generate()`, the only path to the provider for send and
-  both Retry buttons, blocks with "Add the job on Prepare first." in the tab's
-  gate order (Profile limit, resume, job, provider; the provider check used to
-  come first). It used to check only for a non-empty job description, so a
-  draft that failed for prepared job A, Retried from the dock after job B was
-  pasted (not prepared) into Prepare's source, was drafted from B's text in
-  A's conversation. A link-only edit kept A's text but hit the same bypass. This
-  closes the "dock's Answers Retry skips the tab's prepared-job gate" Open item
-  first recorded with the Draft job-source fix below.
-  - [TOOL] `application-answers-retry-gate.mjs` drives the real hook and Answers
-    tab: Retry still drafts while prepared; after a paste or link edit, the dock
-    Retry, send and the tab's disabled controls all name the same gate and no
-    request carries unprepared text. It fails on main (Retry sent B's text), and
-    a provider-first blocker order fails it. Four hook fixtures gained
-    `jobReady: true`. Full `npm run check --workspace apps/role-fit-ai`
-    (client and server `tsc`, builds, 162/162 offline evals) and
-    `git diff --check` passed. Browser QA was not run (no layout change).
-  - [TOOL] One independent review: no high findings, no regressions. It
-    confirmed opened applications, extension/link/paste commits and brief edits
-    keep `jobPrepared` true, so they are not blocked. It also found that
-    App passing a wrong or missing `jobReady` fails the eval, and that merges
-    with dff66ef1 are clean. Fixed from it: a comment and the hooks guide had
-    claimed full parity with the tab's gate, and an eval regex was too strict.
-  - [CODE] Closed 2026-10-08 (four open fixes): the hook's resume check was
-    non-empty text, so a dock Retry after Open > Bundled starter drafted from
-    sample content; it now uses App's `resumeReady`.
-- [USER+CODE] RoleFit UI polish pass (`fix/rolefit-fit-findings-ui-polish`),
-  client-only; no prompt, schema, provider, or shared-package change:
-  - Fixed: the Applications inspector and detail modal showed Fit gaps only,
-    so a "Match N:" warning had nothing to attach to and rendered inside the
-    104px verdict column. One shared `components/FitFindings.tsx` now renders
-    matches, gaps, and eligibility, each with its own warning, on Prepare, the
-    inspector, and the modal. `splitFitWarnings` takes the Fit result.
-  - "Review before use" is a warm-veil hairline note instead of a dark 2px
-    side stripe, app-wide.
-  - Polish: Prepare verdict is dot plus word, its run attribution is quiet;
-    a job analysis that fell back to the local brief shows a warning mark, not
-    a success check; inspector empty values recede; Analytics stage bars use
-    stage hues and draw nothing for zero; blocked workflow-rail rows put their
-    recovery under the label; dialog titles outrank their body.
-  - [TOOL] RoleFit build, client `tsc`, and 157/157 offline evals passed;
-    before/after browser QA at 1440 and 1024px on a synthetic workspace (port
-    5183). AI-result states (Polish proposals, live Fit runs) were not
-    exercised because no provider ran. One independent review: no high or
-    medium findings; its low findings (CSS selector leaks, guide exception for
-    the warning note, eval depth) were fixed, and the new evals fail on
-    mutated wiring.
-  - [USER] Saved views (inspector, detail modal) may show Fit gap notes,
-    which are not claim-checked; this extends the tradeoff accepted when gap
-    notes were Prepare-only.
-  - [USER+CODE] Follow-up done (`fix/rolefit-prepare-polish-blocker`): the
-    Resume card on Prepare still reads "Ready", but its Polish note no longer
-    says "Finish the resume and AI setup before polishing." The note is the
-    Resume Polish provider's recovery step while that provider is not ready,
-    otherwise the current Polish status, otherwise "Set at least one editable
-    resume section to Polish." (the pipeline's own wording).
-    - [TOOL] Client `tsc`, RoleFit build, and 161/161 offline evals passed;
-      browser QA of the no-provider state on synthetic data; one independent
-      review (no high or medium findings).
-    - Closed 2026-10-08 (four open fixes): a leftover Polish status could
-      outrank the no-section blocker with a ready provider, and Prepare's gate
-      counted a locked section's leftover Polish mode while the Resume tab's
-      did not.
-- [CODE] Unsaved Answers work no longer disappears silently when the
-  preparation is replaced. The conversation key changes on every committed
-  Prepare (link, paste, extension, Retry) and on opening a saved application, so
-  both ask first when the current thread holds composer text, an unsaved
-  revision, a drafting request in flight, or a failed or stopped latest turn
-  that carries typed refinement or detail text (`hasUnsavedAnswers` /
-  `hasUnsavedAnswersNow()` in `useApplicationAnswers`; copy "Replace Answers?").
-  Prepare asks once at run start through `confirmPreparedSourceReplacement`, and
-  that approval covers a follow-on duplicate Open for the run; opening reuses the
-  dirty-document dialog, pauses if Answers become unsaved after approval, and
-  opens the saved cover letter before the thread's key changes. While a
-  Prepare run is active `editBlocker` makes the composer, answer edits, Refine,
-  and Retry read-only ("Paused while the job is prepared."); Save and Stop stay,
-  so nothing new can appear after the ask. Declining an extension or Retry
-  payload settles the card as failed so Retry shows, under the headline
-  "Preparation paused". Save, storage, and schemas are unchanged; there is no
-  draft recovery.
-  - [TOOL] Evidence: `application-answers-replacement-guard.mjs` runs the real
-    hook against App's guard code, `answers-prepare-lock.mjs` renders the real
-    Answers tab, and the intake eval covers a declined replacement (including the
-    visible Retry) on every path; each was mutation-checked. Full
-    `npm run check --workspace apps/role-fit-ai` and both tsc gates passed.
-    Browser QA was not run.
-  - [CODE] A Prepare run that goes stale only because the owner changed (a
-    first Answers Save during the locked run) now settles its card as failed
-    "Preparation paused" with Retry, clears the preview, Fit run, and resume
-    recommendation, and lifts the lock; it previously left the card running and
-    Answers locked until reload. The card's Retry now ignores the click event it
-    is handed: the paste Retry (`handleAnalyzePaste`) took it as the source text
-    and threw `raw.trim is not a function` (pre-existing). With no source, it
-    now prepares what the Prepare posting button shows (the captured posting
-    when present, else the typed description).
-  - [TOOL] Evidence: `job-intake-entry-points.mjs` bumps the owner at each of
-    five re-check sites (replacement dialog, duplicate review before and after
-    analysis, resume resolution, provider response) on URL, paste, and
-    extension; before the fix every row left the card running, and each site was
-    mutation-checked. Every Retry in that eval is called with a click-shaped
-    argument, which reproduces the paste TypeError when the wrapper is removed.
-  - [CODE] Known gaps: a bare failed question (nothing typed beyond it) is not
-    counted; a decline of a typed link or paste source stays "stopped" because
-    the source fields still hold it.
-- [CODE] Stage 2 of the external-review follow-up, sanitizer slice:
-  - The Resume Polish no-op filter no longer drops a deletion-only rewrite that
-    removes a narrowing claim word ("solely", "all", "critical", "senior",
-    "three") or a number; such an edit is a correction to review. Words are
-    matched on the raw word. Deleting a negation or hedge widens the claim and
-    stays a dropped no-op, as do filler trims.
-  - Resume Polish proposals that open with a capitalised, whole-word, plain or
-    -s present ownership verb ("Build…", "Owns…") claim its past form's level,
-    so "Assisted…" → "Build…" warns like "Built…".
-    - A present-tense current bullet or evidence line supports only the same
-      verb ("Build…" → "Built…"); "Direct messaging…" or a role title never
-      supports "Led…".
-    - This is a `presentLead` option forwarded through `candidateClaimIssue`,
-      kept out of the shared `ownershipStrength`.
-    - "lead time/generation/scoring" no longer count as leadership anywhere.
-  - [TOOL] Two independent reviews. A first version put the present-tense
-    reading in `ownershipStrength`. That made "L2", "Direct3D", "Design
-    reviews", role titles and words after a semicolon count as ownership: it
-    hid real inflation and added warnings to Fit, cover letters and Skills.
-    The no-op version also surfaced hedge, negation and partial-quantity
-    deletions ("40% of", "most") unwarned. A re-review found the support side
-    was overruled by the shared check, and that nouns could still stand in for
-    other verbs. All findings were fixed with probes, including end-to-end
-    sanitizer probes.
-  - [TOOL] Replay of 1,326 stored proposal edits against their Astra labels:
-    - Real applications unchanged: 31 flagged, precision 29%, recall 50%.
-    - Six new synthetic old-prompt flags, all labelled supported. They are
-      present-tense forms of the existing "Added/Wrote → Implemented/Developed"
-      ownership rule.
-    - Stored receipts hold only surviving edits, so the no-op rule is not
-      measurable from them.
-    - New probes fail on main.
-  - Still open from that review: claims that recombine separate facts, saving
-    Answers' declared facts (storage change, needs approval), and the Answers
-    unsaved-work guard (separate fix).
-- [CODE] Answers' first Save in a fresh preparation creates its Draft from the
-  posting as last prepared in that conversation: link, prepared brief, captured
-  posting, tracking, job warnings, AI usage, Fit, and posting relationship. App
-  captures these on each render where the job is prepared. It used to read the
-  live source fields. Pasting job B after preparing A, without preparing B,
-  saved A's answer under B's text and tracking. A stopped Prepare of B that had
-  chosen Link also joined A's Draft to B's posting group. With nothing
-  prepared in the conversation, Save now refuses instead of saving draft text.
-  - Apply and Skip were already safe from source edits: both need a prepared job
-    at click and recheck a commit identity before writing. Unchanged.
-  - [TOOL] `application-answer-draft-source.mjs` runs App's real Answers save
-    code with the production store. It fails on main, and three mutations
-    (live relationship, capture without a prepared job, no missing-capture
-    guard) each fail it.
-  - Open, unchanged:
-    - Cancel at the pre-analysis duplicate check leaves B's raw posting
-      reading as prepared while the committed preparation is A, so Apply,
-      Skip, and a new Answers conversation can save that raw posting.
-      UNCONFIRMED whether that is intended. (That raw posting no longer
-      inherits A's relationship; see the run-scoped entry above.)
-  - The two relationship items once listed here (an extension or Retry run's
-    choice reaching A's first Save, mid-run or after a stop, and A's Link
-    carrying into a later fresh Prepare of B) are closed by the run-scoped
-    entry above.
-  - [TOOL] Receipt recorded by the #186 session: full RoleFit check on the
-    merged tree 163/163, `git diff --check` clean, two independent reviews
-    (pre-merge and exact head) with no blocking findings. CI on `c8385cbc` was
-    green (checked with `gh pr checks 186`).
-- [USER+CODE] Resume Polish fresh/reset default is now Codex CLI / GPT-6.1 Sol /
-  medium (`src/lib/stageSettings.ts`), superseding Claude CLI / Opus 5.5 / high.
-  Saved choices stay; the user's own saved selection was switched too (app
-  continuity).
-  - [TOOL] Evidence: live baseline on the 39 synthetic cases with the corrected
-    opportunity gates and Astra fact-checks.
-    - Sol medium: 39/39 passed, 88 edits, 0 unsupported, 1 immaterial.
-    - Opus High: 35/39, 103 edits, 3 unsupported, 3 immaterial, 1 tense flip.
-      All three unsupported edits combined separate facts into a new
-      relationship.
-    - Both met all five gated opportunity cases.
-    - Real applications pull both ways. On 32 fresh applications
-      (2026-10-05), Opus had 2/99 edits unsupported and Sol 0/123. On the
-      2026-10-04 22-application holdout (older prompt), Opus High beat Sol
-      Medium 11–5 on quality where Astra and Opus agreed (Astra alone 11–11).
-    - The switch is a user-directed, safety-first choice. The only fact-check
-      judge is Astra, the same vendor as Sol. One run per synthetic case.
-    - [USER] Deferred: a paired real-application rerun on the current prompt
-      (about 20 applications, blinded Astra + Opus, sides swapped). The user is
-      low on Codex usage.
-    - Receipts are in ignored `workspace/resume-proposal-eval/`.
-  - [CODE] The Resume Polish route now resolves the selected provider before
-    generation, so a Codex failure is no longer labeled "Claude Code".
-    Follow-ups not done: a fresh user with only Claude Code gets a generic
-    "check AI settings" blocker for Polish instead of "add Codex"; and
-    switching Resume Polish to Claude CLI now seeds Sonnet 5.5 low rather than
-    Opus 5.5 high.
-- [USER+CODE] The Settings > Automation Fit toggle now governs only automatic
-  runs (after Prepare and after a selected-resume change) and the automatic
-  Polish that depends on them. Previously turning it off disabled Fit entirely,
-  contradicting its "You can reassess anytime" copy. **Assess fit** / **Reassess
-  fit** always run once a posting is prepared; a requested run never carries an
-  automation token. The client-only `FitAssessmentState.enabled` field and the
-  toggle-change abort effect are gone. Changing the toggle mid-Prepare still
-  cancels that Prepare as "Inputs changed", and that path now also aborts the
-  awaited separately-dispatched Fit request, so the intake lock releases. A
-  manual or resume-change run finishes; App's existing auto-Polish gate
-  declines any pending token. A restored application with no saved assessment
-  and the duplicate-review stop now read "Not assessed yet" / "Prepare again"
-  instead of a failure. Workflow compressed: the user chose this option in
-  chat; no separate Brief/Plan artifacts were written.
-  - [TOOL] One independent review: one medium finding (an orphaned Prepare-owned
-    Fit request held the intake lock after an input change) and four low ones
-    (two rail messages, stale testing docs, this entry), all fixed. Full RoleFit
-    check passed after the fixes. No browser QA (rail copy and one button;
-    flag-first policy).
-- [USER+CODE] Prepare's variant pick has a user-chosen eligible pool (task
-  `variant-source-pool-20261007`; the user approved Product Brief v1 and
-  Delivery Plan v1, which supersedes that task's "awaiting approval" note
-  below). Settings > Automation **Prepare picks from** lists saved resumes and
-  cover letters independently; unchecked variants are never read, ranked, or
-  adopted automatically but still open by hand, and a manual choice wins. It
-  is stored as `excludedResumeVariants` / `excludedCoverLetterVariants`
-  file-name exclusion records in workspace preferences: absent means every
-  variant is eligible, newly saved or renamed names are eligible, names of
-  deleted variants are inert, and edits rebase per variant across tabs. The
-  strict preferences/backup parse rejects malformed records; the preferences
-  schema version is unchanged. Both resolvers filter before candidate reads,
-  and the eligible set joins their snapshots: a pool change during the read
-  retries under the new pool, one before the loader commits cancels adoption,
-  and a pool change never re-resolves a settled preparation. The app guide's
-  "no persisted variant metadata" rule now allows only this pool. Rollback:
-  an older build treats preferences with these keys as invalid and refuses
-  settings saves. Settings Reset no longer avoids that (superseded 2026-10-08:
-  since #179, Reset's auto-save re-writes `resumePolishReview`, which 0.8.0 also
-  rejects); restore a backup made by the older build instead. Re-checking variants is not
-  enough, because a deleted or renamed excluded variant can no longer be
-  re-checked. Backups taken while a pool was customized need a newer build to
-  restore.
-  - [TOOL] Self-verification in the feature worktree: full RoleFit check
-    (client and server `tsc`, Vite build, landing build, desktop probes,
-    154/154 offline evals including the new `variant-pool-eval.mjs` and the
-    extended resolver, backup-contract, preferences-conflict, server
-    preferences/backup, and Settings markup probes) and `git diff --check`
-    passed. Mutation checks confirmed the resolver evals fail when excluded
-    variants are read, counted, left out of the snapshot, or not cancelled at
-    commit.
-  - [TOOL] Two independent reviews (resolver; persistence), no high
-    findings. Two medium, fixed: a cover-letter pick cancelled at commit by a
-    pool change still returned its recommendation, so Prepare could offer a
-    letter the user had just excluded (now cleared when the option or pool
-    snapshot changed; edit or ownership cancels keep it); and the rollback note
-    above, which had said to re-check every variant. Three low, fixed: the
-    resume eval pins that the hook passes the pool check to the loader, the
-    cover eval pins that the hook's input key holds no pool and adds a
-    twice-changed pool case, and excluded names may be up to 255 characters
-    (was 200, shorter than names the workspace can list). The full RoleFit
-    check (154/154) and `git diff --check` passed after the fixes.
-  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
-    synthetic workspace (three resumes, one with a long name, and two cover
-    letters).
-    - "Prepare picks from" lists every variant checked by default.
-    - Unchecking one resume persisted only that exclusion.
-    - The lists sit side by side at 1040 px and stack at 375 px, with no
-      overflow.
-    - The only console errors were Vite's live-reload socket.
-    - QA ran before the review fixes, which changed no UI.
-- [USER] Briefs approved 2026-10-07 (both implemented: the source pool above,
-  the Polish review step below) (tasks
-  `variant-source-pool-20261007`, `polish-edit-review-20261007`): (1) a
-  user-originated **eligible source pool** for Prepare's resume/cover variant
-  pick — conflicts with the app guide's "no persisted variant metadata" rule,
-  so it needs a guide update; (2) an optional internal Resume Polish review step
-  that drops immaterial or wrong edits, using the Polish stage's model. It would
-  replace the "one provider request, never Tailor followed by Review" contract
-  and change the warning policy for that path. The recommendation was opt-in,
-  show the dropped edits, fail open, and benchmark it after the eval fixes.
-- [USER+CODE] Opt-in **Resume Polish review** implemented (task
-  `polish-edit-review-20261007`; Product Brief v1 and Delivery Plan v1 approved
-  by the user; supersedes the review half of the entry above and, for this
-  opt-in path only, the 2026-08-07 "one proposal request" decision). Settings >
-  Guidance > **Review edits before showing them** (`resumePolishReview`, default
-  off) makes `/api/resume-polish` (body `reviewEdits: true`, sent only when on)
-  run one keep/drop dispatch (`server/ai/resumeProposalReview.ts`) after
-  sanitizing, on the Resume Polish provider, model, effort, and abort signal,
-  only when an edit survives. The reviewer sees review-local ids and each edit's
-  before/after with its whole entry and linked Profile evidence, never server
-  ids, generator reasons, or warnings; its `proposed_edits` fence is registered
-  in `prompts.ts`. A strict
-  parser rejects any reply that is not exactly one KEEP/DROP per sent id; any
-  failure except Stop fails open to the full proposal with a note. Held-back
-  edits list collapsed with reason, note, warnings, and Restore; Restore is
-  decision state under the unchanged proposal key. Holding back everything reads
-  as no worthwhile changes. Usage is recorded as `resume-polish-review` (tracker
-  row) and cleared for unreviewed runs. With the setting off, the request and
-  result are byte-identical to before. PRODUCT's warning policy carries the
-  user-directed exception. An older build rejects a preferences file or backup
-  containing the new key (the existing no-downgrade policy).
-  - [USER] AC6 amended: offline probes prove the contract, fencing, parser, and
-    plumbing; model judgment is checked by the live review probes. The
-    default-on bar in `docs/engineering/testing.md` is approved, with its
-    key-evidence item restated by the user as zero held-back edits to
-    `mustKeepBullets` bullets that Astra labels supported and material
-    (`keyEvidenceValuableHeldBack`). Live calls are not yet authorized.
-  - [CODE] Benchmark: `EVAL_POLISH_REVIEW=paired` reviews each generated
-    proposal and grades both arms with shared Astra labels, plus two tracked
-    review probes (`fixtures/resume-proposal-review-probes.json`). Provider
-    failures wait and retry, unreadable reviews are counted, and neither
-    rewrites the unreviewed arm. UNCONFIRMED: no live run exists; the setting
-    stays off by default.
-  - [TOOL] Two independent reviews (server/benchmark; client/docs) found no
-    path that mutates or retargets an edit. Fixed from them: the review usage
-    receipt now reaches the application on Apply and a later unreviewed run
-    clears an older one; an all-held-back result stays in the proposal root (no
-    remount or focus loss on Restore) and keeps the withheld line, with a warn
-    note tone; distinct Restore names; held-back edits are classified by the
-    grader's own opportunity rule, with a `keyEvidence` marker; bounded,
-    control-character-free notes; whole entry and Profile evidence for the
-    reviewer; the review prompt follows the materiality rubric (filler cuts
-    kept). After merging main, server `tsc`, `npm run check --workspace
-    apps/role-fit-ai` (157/157 offline evals), and `git diff --check` passed.
-  - [TOOL] Browser QA, approved: the feature build on port 5183 against a
-    synthetic workspace, at 1440 px.
-    - The page's network calls were stubbed in the browser, so no AI provider
-      was called: provider status, Job analysis unavailable, and two synthetic
-      Polish results.
-    - The Guidance toggle sent `reviewEdits: true`.
-    - A run with one kept and two held-back edits showed a collapsed "2 held
-      back by review" list, with location, reason and the bounded note.
-      Restore names were distinct.
-    - Accept the kept edit, Restore one, Accept it, Undo it: Undo restored
-      exactly that bullet, the earlier acceptance survived, and the restored
-      edit went back to the queue.
-    - All held back with one withheld edit: "No worthwhile changes after
-      review" plus the withheld line, with the warning tone.
-    - Restoring the first and then the last held-back edit kept the same open
-      disclosure node, and focus stayed on its summary.
-    - Console errors were only Vite live-reload polling, which is unreachable
-      from the QA pane.
-- [TOOL] An external review of `c8cc1d4` was verified by offline probe; these
-  claims held: the no-op rewrite filter hides claim-changing deletions;
-  `shouldAdd`/`shouldReorder` opportunity gates pass any edit in the entry;
-  present-tense `Build`/`Own` escape the ownership check; the outcome check
-  accepts recombined claims; the cover judge drops section/entry attribution
-  and its source is unhashed; a worded cap in one unit demotes bare limits in
-  other units in Answers; saved Answers revisions keep only a facts
-  fingerprint.
-- [CODE] Stage 1 of that review's follow-up (eval fixes and one parser bug):
-  - Resume Polish benchmark: a gated `shouldAdd` now counts only a new or
-    rewritten bullet that carries one of the case's `addTerms`; a gated
-    reorder counts only when it puts `leadBullet` first; only valid-target
-    changes count; and an opportunity met only by rewrites also needs a
-    `material` Astra label. Removals and labeled reorders count on their own.
-  - Cover judge: its evidence lines carry section and entry. A missing or
-    unreadable `unsupportedSentences` list is unknown, not zero, and the panel
-    row is unknown when any answer lacks one. `coverLetterJudge.ts` is in the
-    manifest hashes.
-  - Answers: a worded maximum still demotes bare counts of its own unit, but
-    an instructed count in another unit stays hard ("Answer in 3 sentences.
-    Maximum 500 characters."). Permitted, negated, approximate, or advisory
-    phrasings stay advice, as does a count sitting between two of a field's
-    questions. The 57 fixture questions parse exactly as before.
-  - No stored repo-eval receipts existed (`workspace/resume-proposal-eval/` is
-    empty), so re-scoring needs a live run. Still open: the no-op filter,
-    present-tense ownership, outcome recombination, and Answers declared facts.
-  - [TOOL] Two independent reviews. Answers parser: four rounds; fixed one
-    regression of the first fix (content wording after a comma softened real
-    no-cap limits) and the gaps it found. Evals: one medium finding (trivial
-    rewrites still met the other gated cases, fixed via the material label) and
-    lows fixed. Known accepted gaps: rare phrasings such as "Feel free to keep
-    it to 3 sentences" beside a cap; the judge's own fence names are not in the
-    shared registry, and its score clamping still hides off-scale replies
-    (benchmark-only; flagged, not changed).
-- [USER+CODE] Answers now keep the facts the user adds (task
-  `answers-declared-facts-20261007`; the user approved Product Brief v1 and
-  delegated the rest, and the Product Partner approved Delivery Plan v1 under
-  that delegation, a compressed gate). This closes the "Answers declared facts"
-  item left open above. A saved revision may carry
-  `userFacts: { provenance: "user-declared", facts }`: the Add a detail text in
-  effect for that question, 1-20 facts within the request's explicit-fact
-  limits (4,000 characters each, 12,000 joined), now shared constants and
-  `answerFactsWithinLimits` in `shared/applicationAnswersContract.ts`. The client
-  attaches `message.facts` at Save; a generated revision never carries the
-  field and the hook rejects a response that does. Reopen restores exactly that
-  revision's facts (no union across revisions) into the next request's
-  `explicitFacts` and shows them in a collapsed "Your facts (N)" list on the
-  reopened question only. Applications-modal edits carry the previous
-  revision's facts forward; Answers' Edit question still starts without facts.
-  Answer text, the model's follow-up question, refinement instructions and the
-  refinement chips never become facts. A follow-up defaults the composer to Add
-  a detail, even beside draft text, so the typed reply is saved as a fact; a
-  chip or Refine this answer (user-approved 2026-10-07) opens Refine. One
-  strict parser serves browser, tracker route/load and backup restore; older
-  revisions and legacy pairs stay valid; no migration and no prompt change (v4).
-  - [CODE] Forward-only (accepted by the Product Partner under the delegation
-    as the existing no-downgrade policy): a build without this change cannot
-    load, back up or restore a tracker holding `userFacts` (probed on
-    `2930dd59`). Rollback: keep a copy of `workspace/applications.json`, then
-    strip the field in that directory with
-    `node -e 'const fs=require("fs");const p="applications.json";const d=JSON.parse(fs.readFileSync(p,"utf8"));for(const a of d.applications)for(const r of a.applicationAnswers??[])delete r.userFacts;fs.writeFileSync(p+".tmp",JSON.stringify(d,null,2),{mode:0o600});fs.renameSync(p+".tmp",p)'`
-    (probed: the pre-change build loads the result, owner-only). The `jq`
-    equivalent `(.applications[].applicationAnswers[]?) |= del(.userFacts)`
-    refuses files with lone-surrogate escapes (loudly, nothing lost). Either
-    discards the saved facts; the copy keeps them. After upgrading, a browser
-    tab opened before the upgrade refuses to save into an application whose
-    answers hold facts, with a misleading "exceed the storage limit" message,
-    until it is reloaded.
-  - [TOOL] Self-verification in the feature worktree
-    (`fix/rolefit-answers-user-facts`): new `application-answer-facts.mjs` and
-    `answer-facts-markup.mjs`; persistence, backup, save-ordering and
-    conversation probes extended; ten source mutations each caught; client and
-    server `tsc`; full RoleFit check (builds, landing, desktop probes, 159/159
-    offline evals); `git diff --check`. A three-way merge with
-    `fix/rolefit-answers-unsaved-guard` (`37799709`) is clean for every shared
-    file, this ledger included, and the facts evals pass on the merged hook.
-  - [TOOL] Two independent reviews. Persistence: no high or medium findings.
-    Client: one medium, fixed. A refinement chip on a repaired draft that kept
-    its text and also asked a follow-up became a saved, restored "fact",
-    because the composer defaulted to Add a detail whenever a follow-up existed.
-    `refine()` with an instruction is now always a refinement. A first fix also
-    moved the no-instruction default to Refine for such drafts; the client
-    re-review found that sent the user's typed reply as a refinement (not
-    evidence, not saved, and the sentence it supports flagged unsupported), so
-    that default is back to Add a detail. Facts-eval cases cover chips and typed
-    replies on such drafts before and after Reopen; both fixes are
-    mutation-checked against the earlier hooks, and a confirmation review of the
-    second found no high or medium issues. Lows fixed: the text and fact limits
-    are marked as stored format (tightening needs a migration), PRODUCT says
-    facts stay with their question id, and the rollback recipe above. Full
-    RoleFit check passed again after the fixes (159/159 offline evals). Browser
-    QA was not run (optional; not authorized).
-- [USER+CODE] Materials became **Answers** (tasks `answers-redesign-20261006`,
+- [USER+CODE] **Materials became Answers** (tasks `answers-redesign-20261006`,
   `answers-tuning-20261007`, `answers-expanded-20261007`; the user waived the
-  Product Brief/Delivery Plan gates in those sessions and supplied the draft).
-  Answers is a per-preparation conversation over `/api/application-answers`
-  `mode: "conversation"` (`server/ai/applicationAnswerConversation.ts`, prompt
+  brief/plan gates and supplied the draft). Answers is a per-preparation
+  conversation over `/api/application-answers` `mode: "conversation"`
+  (`server/ai/applicationAnswerConversation.ts`, prompt
   `application-answer-conversation-v4`: the benchmarked v3 writing guidance plus
-  the input firewall naming the Answers sections): the exact employer question and its
-  revision stay attached to every answer; evidence is the selected resume,
-  whole Profile, edited brief, captured posting and explicit user facts, never
-  a previous answer or the cover letter; one generation plus at most one
-  format repair; only explicit hard word/character/sentence limits gate Copy
-  and Save, every other warning stays advisory; oversized inputs are rejected,
-  not clipped. `shared/applicationAnswersContract.ts` (limits, exact counts,
-  constraint parsing) and `shared/applicationAnswerStorage.ts` (strict
-  saved-revision parser; legacy question/answer pairs keep unknown provenance)
-  serve browser, server and backup validation. Explicit Save appends an
-  immutable revision through the normal mutation queue; the first Save creates
-  a `draft` tracker record (new status: no `appliedAt`, no documents, outside
-  submission metrics and calendar events, transitions only to applied or
-  not_applying) and Apply/Skip promote that same id. Reconcile rejects any
-  rewrite of a saved revision id; the Applications modal's manual edit appends
-  a new revision instead. The `materials` tab id is retained so saved tab
-  preferences stay valid.
-- [USER+CODE] Per-stage startup defaults moved to `src/lib/stageSettings.ts`:
-  Prepare/Fit Claude CLI Sonnet 5.5 low, Resume Polish Opus 5.5 high (later
-  superseded the same day by Codex CLI GPT-6.1 Sol medium, above), Cover
-  Codex CLI GPT-6.1 Sol medium, Answers Claude CLI Opus 5.5 high, Final review
-  Sonnet 5.5 low (retained user choice, no benchmark winner). Saved choices
-  stay; a model-only saved setting keeps the implied Claude CLI provider, and
-  choosing a stage's recommended provider seeds its recommended model/effort.
-  Answers' setting comes from the 57-case, nine-setting synthetic comparison
-  graded blind by Astra High and Opus High under one agreed rubric (Opus high
-  a modest quality-first lead; Sol medium the OpenAI alternative; model
-  judgments, no human calibration). Results, judge disagreement and the cost
-  ledger (per-task averages, run subtotals, unknown historical usage, one
-  Resume/Cover cost sample; tasks `benchmark-ledger-20261007`,
-  `polish-cost-sample-20261007`) are in `docs/engineering/testing.md` and the
-  new `docs/engineering/benchmarks.md`. `eval:live:application-answers` is
-  opt-in, synthetic-only and denylisted from `npm test`; receipts stay under
-  ignored `workspace/application-answer-eval/`.
-  - [TOOL] Review-and-publish session: full RoleFit check (client and server
-    `tsc`, Vite build, landing build, desktop probes, 153/153 offline evals
-    including the eight new or rewritten Answers probes), `git diff --check`,
-    and a link/anchor check over the changed docs all passed. Fixed in review:
-    the README Answers section had been appended after License (moved into AI
-    setup); the tracker row menu offered stage transitions the record cannot
-    make (Draft for submitted records, and anything beyond Apply/Skip for a
-    Draft) and now disables them.
-    Two independent reviews (server/shared; client/docs) in this session:
-    fixed two high findings — the twelve Answers prompt sections were not in
-    the shared fence registry, so a posting or question could close a section
-    and forge a candidate-evidence block (now registered in `prompts.ts` and
-    named by the Answers firewall line; prompt version v4, writing guidance
-    unchanged, not re-benchmarked), and an un-negated ceiling stated through
-    its penalty ("responses that exceed 250 words will not be read") parsed as
-    a 251-word minimum, which the repair step then enforced (now a maximum
-    when a penalty clause follows; "don't need more than", compound and
-    thousands-separated numbers, and "Word limit: 300" phrasings also parse;
-    "Limit 2.000 characters" no longer yields a 0-character ceiling). Medium
-    findings fixed: stored revisions are now shape-checked on load so a later
-    count rule can never make the whole tracker unloadable (reconcile verifies
-    only new revisions' receipts); bracketed or doubled-brace placeholders keep
-    an answer a draft on the server and in manual edits; a repair that asks a
-    question keeps the draft text; the answer-created Draft is acknowledged to
-    the duplicate guard so Polish no longer reports the preparation's own
-    record as an existing application; the unload guard follows the current
-    thread only; the Applications modal numbers same-question revisions
-    correctly and trims manual rows again; saved versions number per
-    question. The server re-review then caught a regression in the first
-    parser fix (negated ceilings such as "no longer than 300 words" had
-    become minimums): the negation pattern now covers those comparisons and
-    a negated-prefix fallback guards the ceiling rule. Also fixed on that
-    pass: a repair that asks a question leaves the retained text a draft
-    (normal Save would have sent an invalid ready revision); reopened answers
-    recompute limits under current rules so later edits save; fence tags with
-    spaces around the slash are neutralized; hyphenated and thousand-scale
-    number words parse; impossible ranges are dropped; numeric, editorial and
-    code-style brackets are not placeholders; whitespace-only edits in the
-    Applications modal create no revision; edits typed during a failed save
-    no longer name the unsaved revision. A third pass made the ceiling rule
-    conservative: an un-negated "more than / over / exceed N" is a hard floor
-    only after a positive instruction and otherwise no limit at all (a negation
-    up to four words before, or a penalty clause, makes it a hard ceiling), so an
-    unrecognised negation can never drive a repair past an employer's limit;
-    a lone hyphenated number word no longer claims its span as an inverted
-    range. Seven further server-review passes then closed the phrasing paths
-    that could still yield a hard minimum from a ceiling sentence or a hard
-    maximum below the stated limit (penalty windows bound to their own count,
-    negated outcomes, conditional and permissive clauses, suggested or typical
-    lengths and unworded ranges beside a stated maximum, sufficiency wording,
-    "limit/capped at/within"); the probe table now covers about 170 phrasings.
-    The limit parser remains heuristic: a rare phrasing can still misread, and
-    the safe default is that an ambiguous ceiling word yields no limit.
-    Left as residual: no duplicate
-    resolution runs when the first tracker record for a posting is an
+  the input firewall). Each answer keeps the exact employer question and
+  revision; evidence is the selected resume, whole Profile, edited brief,
+  captured posting, and explicit user facts, never a previous answer or the
+  cover letter; one generation plus at most one format repair; only explicit
+  hard word/character/sentence limits gate Copy and Save; oversized inputs are
+  rejected. `shared/applicationAnswersContract.ts` and
+  `shared/applicationAnswerStorage.ts` serve browser, server, and backup
+  validation. Save appends an immutable revision (reconcile rejects rewriting a
+  saved revision id; manual edits append one); the first Save creates a `draft`
+  tracker record (no `appliedAt` or documents, outside submission metrics and
+  the calendar, moving only to applied or not_applying) that Apply/Skip promote.
+  - [TOOL] Check 153/153; two reviews (Answers sections joined the fence
+    registry in `prompts.ts`); the limit parser stays heuristic and an ambiguous
+    ceiling yields no limit.
+  - Residual: no duplicate resolution runs when a posting's first record is an
     answer-created Draft, and acknowledging that Draft replaces an earlier
-    Link/Keep-separate decision for the same posting (the tracker's later
-    duplicate scan still surfaces both); re-preparing the same posting hides
-    its unsaved thread without a prompt; conversations of earlier
-    preparations stay in memory for the session; "Node.js" and "U.S." count
-    as two words.
-    Earlier sessions' receipts (app-local ledger, ignored): synthetic-route
-    browser QA of the thread, picker and saved versions at 1440 and 390 px,
-    Reset and provider round trips, companion refresh with one synthetic HTTP
-    generation on prompt v3. UNCONFIRMED this session: no live-provider
-    generation through the installed companion and no browser QA of the
-    stage-menu change.
+    Link/Keep-separate decision; earlier conversations stay in memory for the
+    session; "Node.js" and "U.S." count as two words. UNCONFIRMED: live
+    generation through the installed companion and browser QA of the stage-menu
+    change.
+- [USER+CODE] **Per-stage startup defaults** (`src/lib/stageSettings.ts`):
+  Prepare/Fit Claude CLI Sonnet 5.5 low; Resume Polish and Cover Codex CLI
+  GPT-6.1 Sol medium; Answers Claude CLI Opus 5.5 high; Final review Sonnet 5.5
+  low (retained user choice). Saved choices stay. Answers' setting comes from a
+  blinded synthetic comparison (Opus high a modest lead; Sol medium the OpenAI
+  alternative; no human calibration; receipts in the app ledger); results and
+  costs are in `docs/engineering/testing.md` and
+  `docs/engineering/benchmarks.md`.
+- [USER+CODE] **Resume Polish fresh/reset default is Codex CLI / GPT-6.1 Sol /
+  medium**, superseding Claude CLI / Opus 5.5 / high; saved choices stay and the
+  user's own selection was switched (app ledger). [TOOL] On 39 synthetic cases
+  Sol medium passed 39/39 with 0 unsupported edits and Opus high 35/39 with 3
+  (all combining separate facts); real applications pull both ways (the
+  2026-10-04 holdout favored Opus 11–5). A user-directed, safety-first choice;
+  the only fact-check judge is Astra, Sol's vendor.
+  - [USER] Deferred: a paired real-application rerun on the current prompt
+    (about 20 applications, blinded Astra + Opus, sides swapped); the user is
+    low on Codex usage.
+  - [CODE] Not done: a Claude-only user gets a generic "check AI settings"
+    Polish blocker instead of "add Codex"; switching Resume Polish to Claude CLI
+    seeds Sonnet 5.5 low rather than Opus 5.5 high.
+- [USER+CODE] The Settings > Automation Fit toggle governs only automatic runs
+  and the automatic Polish that depends on them; **Assess fit** / **Reassess
+  fit** always run once a posting is prepared and never carry an automation
+  token; a mid-Prepare toggle change cancels that Prepare and its Fit request.
+  The user chose this option in chat.
+- [USER+CODE] **Prepare picks from a user-chosen eligible pool** (task
+  `variant-source-pool-20261007`; brief and plan user-approved). Settings >
+  Automation **Prepare picks from** lists saved resumes and cover letters;
+  unchecked variants are never read, ranked, or adopted automatically but still
+  open by hand. Stored as `excludedResumeVariants` /
+  `excludedCoverLetterVariants` file-name exclusions in workspace preferences
+  (absent means all eligible); resolvers filter before reading and never
+  re-resolve a settled preparation. The app guide's "no persisted variant
+  metadata" rule allows only this pool. Rollback: an older build refuses
+  settings saves with these keys, and since #179 Settings Reset re-writes
+  `resumePolishReview` (which 0.8.0 also rejects), so restore a backup made by
+  the older build; backups taken with a customized pool need a newer build.
+  [TOOL] Check 154/154; two reviews; approved browser QA with synthetic data.
+- [USER+CODE] **Opt-in Resume Polish review** (task
+  `polish-edit-review-20261007`; [USER] the brief — opt-in, show the dropped
+  edits, fail open, benchmark after the eval fixes — and plan were approved; for
+  this path only it supersedes the 2026-08-07 "one proposal request" decision).
+  Settings > Guidance > **Review edits before showing them**
+  (`resumePolishReview`, default off) makes `/api/resume-polish` (`reviewEdits:
+  true`) run one keep/drop dispatch (`server/ai/resumeProposalReview.ts`) after
+  sanitizing, on the Resume Polish provider, model, effort, and abort signal.
+  The reviewer sees review-local ids with each edit's entry and linked Profile
+  evidence, never server ids, reasons, or warnings (`proposed_edits` fence in
+  `prompts.ts`); a strict parser needs one KEEP/DROP per id, and any failure
+  except Stop fails open with a note. Held-back edits list collapsed with
+  Restore; with the setting off, request and result are byte-identical; an older
+  build rejects preferences or backups containing the key.
+  - [USER] AC6 amended: offline probes prove contract, fencing, parser, and
+    plumbing; model judgment belongs to the live probes. The default-on bar in
+    `docs/engineering/testing.md` is approved, its key-evidence item restated by
+    the user as zero held-back edits to `mustKeepBullets` bullets Astra labels
+    supported and material (`keyEvidenceValuableHeldBack`). Live calls are not
+    yet authorized.
+  - [CODE] `EVAL_POLISH_REVIEW=paired` grades both arms with shared Astra
+    labels. UNCONFIRMED: no live run exists; the setting stays off. [TOOL] Check
+    157/157; approved browser QA with stubbed calls.
+- [USER+CODE] **Answers keep the facts the user adds** (task
+  `answers-declared-facts-20261007`; the user approved the brief and delegated
+  the rest). A saved revision may carry `userFacts: { provenance:
+  "user-declared", facts }` (1–20 facts, 4,000 characters each, 12,000 joined;
+  `answerFactsWithinLimits` in `shared/applicationAnswersContract.ts`);
+  generated revisions never carry it. Reopen restores exactly that revision's
+  facts into `explicitFacts` and lists them as "Your facts (N)"; answer text,
+  follow-up questions, refinement instructions, and chips never become facts. A
+  follow-up defaults the composer to Add a detail; a chip or Refine this answer
+  (user-approved) opens Refine. No migration and no prompt change.
+  - [CODE] Forward-only: a build without this change cannot load, back up, or
+    restore a tracker holding `userFacts`. Rollback: keep a copy of
+    `workspace/applications.json`, then strip the field in that directory with
+    `node -e 'const fs=require("fs");const p="applications.json";const d=JSON.parse(fs.readFileSync(p,"utf8"));for(const a of d.applications)for(const r of a.applicationAnswers??[])delete r.userFacts;fs.writeFileSync(p+".tmp",JSON.stringify(d,null,2),{mode:0o600});fs.renameSync(p+".tmp",p)'`
+    (probed; the copy keeps the facts). A tab opened before the upgrade refuses
+    to save into an application whose answers hold facts, with a misleading
+    "exceed the storage limit" message, until reloaded. [TOOL] Ten mutations
+    caught; check 159/159; two reviews.
+- [CODE] A first Answers Save builds its Draft from the posting as last prepared
+  in that conversation; with nothing prepared, Save refuses. Open: Cancel at the
+  pre-analysis duplicate check leaves B's raw posting reading as prepared while
+  the committed preparation is A, so Apply, Skip, and a new Answers conversation
+  can save that raw posting; UNCONFIRMED whether intended.
+- [CODE] A fresh preparation's posting relationship is scoped to the Prepare run
+  that resolved it; only the Polish and Apply/Skip gates publish through
+  `onRelationshipResolved`, and at the user's request they also publish a
+  remembered choice for that exact posting.
+- [CODE] Answers' Retry, including the dock's, stops at the tab's prepared-job
+  gate (`jobReady` from App's `jobPrepared`; "Add the job on Prepare first.").
+- [CODE] Every committed Prepare and opening a saved application ask first ("Replace
+  Answers?") when the thread holds unsaved work; during a Prepare run Answers is
+  read-only except Save and Stop; a decline settles the card as "Preparation
+  paused" with Retry. Known gap: a bare failed question is not counted.
+- [USER+CODE] UI polish (client-only): one shared `components/FitFindings.tsx`
+  renders matches, gaps, and eligibility with their warnings on Prepare, the
+  inspector, and the modal; "Review before use" is a hairline note. [USER] Saved
+  views may show Fit gap notes, which are not claim-checked. [USER+CODE]
+  Prepare's Resume Polish note shows the provider's recovery step, otherwise
+  "Set at least one editable resume section to Polish.".
+- [CODE] Follow-ups to an external review of `c8cc1d4`: gated benchmark
+  opportunities count only edits that reach their named outcome; the no-op
+  filter keeps deletions of a narrowing claim word or number; a present-tense
+  ownership verb ("Build…") claims its past form's level via `presentLead`.
+  Still open: claims that recombine separate facts.
 
 ## 2026-10-06
 
-- [USER+CODE] RoleFit landing redesigned as "the galley proof" (done in a
-  separate landing session alongside CareFlow's; recorded here at commit).
-  The hero sets the real editor capture as a cropped sheet beside a labelled
-  proof slip of one synthetic proposed edit; the workflow is four ruled
-  editorial spreads, not cards; a Forest Ink band carries the local runtime
-  boundary; downloads are ledger rows. Type is bundled from `@typeset/engine`
-  (Source Serif 4, Source Sans 3) under the page's `font-src 'self'`; the card
-  hover-lift is gone and a one-shot proof-mark draw joins the scroll reveal,
-  both collapsing under reduced motion. `DESIGN.md` and `landing/AGENTS.md`
-  updated. No release-catalog or CSP change.
-  - [TOOL] `npm run build:rolefit:landing` (tsc, release-catalog probes, Vite
-    build, public build-boundary check) passed; `git diff --check` clean.
-    [USER] asked that the review of the day's other work stay separate from
-    this redesign, so no independent review of the landing diff ran in this
-    session. UNCONFIRMED here: browser QA of the landing at desktop and phone
-    widths (the landing session's own checks are not recorded in this repo).
-
-- [USER] Base documents refreshed (task `base-docs-refresh-20261006`, user
-  data only, no code change): the general base resume's RoleFit AI entry now
-  states evidence-grounded tailoring with user approval and the benchmark
-  method (real job applications, blinded two-family judging, per-edit fact
-  checks, 140+ offline evals); the monorepo bullet is kept; Experience dates
-  use en dashes.
-  The Profile Background's RoleFit section carries the Sept–Oct evidence
-  grounding, Prepare, benchmark, and eval facts at 11.3k of the 12k limit;
-  every entry heading still links. The base cover letter is unchanged (three
-  independent drafts — Opus 5.5 high, GPT-6.1 Sol medium, this session — all
-  recommended keeping the 2026-10-06 benchmarked letter). Portfolio mirror
-  synced (its diff also publishes the uncommitted 2026-10-04 resume sync). [TOOL] Layout probe: one page, 44 lines, 25.1 pt room; PDF rendered
-  and inspected; linkage and limit checked with the shared contract. Both
-  external Profile drafts exceeded the 12,000-character limit and were not
-  used whole. Backups under `workspace/.trash/` and
-  `workspace/resumes/.trash/` (`2026-10-07T02-45-29Z__*`).
-
-- [USER+CODE] Settings redesign with chosen links (task
-  `settings-redesign-20261006`; the user approved Product Brief v2 and
-  Delivery Plan v2 with "approve, include QA as needed"; builds on the
-  uncommitted Profile-by-entry work below). No schema, route, prompt, or
-  provider-default change; the Background limit message now says
-  "Settings > Background".
-  - [CODE] Five pages in two rail groups — You: Profile (facts), Background;
-    AI: Guidance (custom instructions, every per-stage override, Bold
-    keywords), Automation, Models (one compact row per stage, column heads
-    once). `SettingsDialog` is the shell; pages live in `sections/settings/`.
-    One card size (1040x760) for every page. App keeps open state apart from
-    the page: the gear reopens the last page in the tab (Background first).
-  - [CODE] Background is an entry list beside the selected note's editor.
-    [USER] asked to choose links by hand; links stay stored in the heading
-    text (entry ids are session ids; the Background serves every variant), so
-    **Linked to** rewrites only the heading's name (title, else unique
-    subtitle; an unreachable entry is offered disabled) and keeps type/dates
-    and body; Not linked renames to "<name> notes". A linked note edits only
-    Type and dates; an unlinked heading never stores a name that would link.
-    The entry's resume bullets sit folded beside its notes. Add-evidence
-    opens the new note with its notes focused (`profileNoteFocus`).
-  - [CODE] Fixed in passing: the previous editor stored the trimmed body on
-    each keystroke, so a trailing newline or space vanished mid-typing; body
-    and detail now keep local drafts.
-  - [TOOL] Offline suite 147/147 (three evals rewritten/extended), client and
-    server `tsc`, RoleFit build. Browser QA in the in-app pane against the
-    live workspace at 1024, 700, and 375 px: all five pages, add → name
-    preview → link → remove (Background verified byte-identical to a backup
-    afterwards), reopen on last page, stacked layout scrolls the editor into
-    view, no console errors. Fixed during QA: long note names widened the list
-    column. UNCONFIRMED in a browser: the add-evidence focus path (needs a
-    live Polish result).
-  - [TOOL] One independent review: two high, three medium, four low, all
-    fixed. High: removing a note handed its editor (drafts, open confirm) to
-    the next note, since editors were keyed by line position; typing a block
-    heading into a body duplicated text each keystroke. Now each editor
-    rewrites exactly its own line span and settles on blur, and a revision
-    remounts editors after any structural or outside change. Medium: Add
-    notes nested under a level-1 heading (now `#` when `##` would nest);
-    stale drafts after another tab's edit (revision bump); renaming or
-    unlinking a nested note could merge its text into the parent entry (now
-    judged by re-parsing in place and refused with a message). Low: the
-    notes partition now matches the linker after a cut-out nested heading
-    (`profileHeadingLinkage` marks the resuming heading as a block; only the
-    notes view reads that flag); body edits keep the heading line verbatim;
-    refused writes no longer update drafts or selection; an App comment.
-  - [TOOL] After fixes: offline suite 147/147, client and server `tsc`,
-    RoleFit build; browser re-check removed the first of two notes (survivor
-    kept its own text, confirm closed) and typed a heading into a note (stored
-    once, became its own note); Background byte-identical to the baseline
-    afterwards. [USER-side, not this task] Final application review changed
-    from Codex GPT-5.5 medium to Claude Sonnet 5.5 low at 21:04 during the
-    session; left as found.
-  - [TOOL] Re-review closed all nine findings and raised two medium and one
-    low, fixed: an unfocused editor handed another note by a line shift now
-    adopts that note's stored text and keeps its span as a length from its
-    start (was an absolute end); a new note appended after a cut-out nested
-    note is `#` when `##` would inherit the entry above (it had become that
-    entry's evidence); settling waits for focus to leave the whole editor so
-    a click on its own controls is not lost. Probe added for the append case.
-    UNCONFIRMED in a browser: the line-shift handover (needs three notes on
-    one entry with irregular spacing; reasoned and reviewed, not exercised).
-  - [TOOL] Pre-commit review (a separate session, at the user's request "review
-    the work performed, separate from the landing page redesign"): one
-    medium, one low, fixed. Medium: an edit to one note could silently change
-    how other notes link — renaming an unlinked `# Experience` note that has
-    text to `Career` unlinked every entry note beneath it; relinking it to an
-    entry cut the others out; removing a parent re-homed its cut-out and
-    resumed notes. `keepsOtherLinks` now refuses rename, relink, unlink, and
-    remove when any heading outside the note would link differently ("This
-    would change how other notes link. Restructure it in Text view."). Low:
-    a spent add-evidence focus request re-selected its note when the
-    Background page remounted after a page switch (now cleared on page
-    change). A fresh reviewer of the fix found no defects (fuzzed ~1.3M
-    remove/relink/unlink/rename actions against an independent line-ownership
-    oracle: no missed change, no false refusal) and one low, fixed: a refusal
-    message outlived later edits. After fixes: offline suite 147/147, client
-    and server `tsc`, RoleFit build. Browser QA not run for these fixes
-    (logic and message paths only).
-  - Residual: notes written for another resume variant show under Other
-    notes on a resume without that entry; a nested note cannot be relinked
-    or unlinked from the editor (it says to restructure in Text view); typed
-    text is unguarded — a `#` heading typed into a note or the preamble
-    regroups the notes after it, as in Text view, with no warning; typing a
-    heading into the preamble remounts its editor (focus is lost and the
-    typed heading becomes its own note at once).
-
-- [USER+CODE] Profile linkage preview and evidence beside proposed edits (task
-  `profile-linkage-preview-20261006`; the user approved the deferred brief with
-  "sure, lets go with both" under the recommended defaults — Settings only,
-  resume rows only — so the plan gate was compressed into that acceptance).
-  No schema, request, route, prompt, or provider-default change.
-  - [CODE] `profileHeadingLinkage` in the shared Profile contract reports, per
-    Background heading, Linked (with the entry title), Grouping, General
-    context with one reason (names no entry / names more than one entry /
-    parent heading is not a grouping heading / inside another entry's
-    heading), or Omitted (entry in a section set to Off), walking the same
-    parent chain `linkProfileBlocks` uses. Settings > Profile renders it as one
-    flat list under the Background against `resumePolishScopeFromModes` (the
-    pipeline now builds its scope through the same helper); the starter sample
-    or an empty document shows one line instead of a list.
-  - [CODE] Every Resume Polish row on a standard entry carries
-    `profileEvidence` (the linked block text at proposal time) and folds a
-    collapsed Show evidence disclosure with the entry's current bullets and
-    that text; skills/summary rows state their scope. Accept/Edit/Discard and
-    the decision keys are untouched.
-  - [TOOL] One independent review (no high findings). Fixed: a nested heading
-    that names no entry under a linked heading reported General context or
-    Grouping while the linker keeps its text inside the ancestor's block (now
-    Linked to that entry, and the probe asserts Linked rows are exactly the
-    headings inside the linker's blocks); the live entry text is labelled
-    "Resume now" so accepted AI text is not read as evidence; a spoken
-    separator between heading and status; docs say "standard entry" rather
-    than "experience or project". Accepted residual (pre-existing, shared
-    with `profileSource`): the server links on a trimmed/clipped scope, so a
-    title or heading past the clip limit could link differently there.
-  - [TOOL] After fixes: offline suite 145/145 (one new eval); client and
-    server `tsc`; RoleFit build. Browser QA skipped: a list in the Settings
-    panel and a disclosure in the rail, both on existing text treatments.
-    UNCONFIRMED in a browser: the list's indentation and the 16rem evidence
-    scroll bound.
-  - [USER] The flat heading list shipped first was rejected on sight ("very
-    inconvenient, may as well not produce"); the user asked for a redesign of
-    the whole Profile section around the feature and chose, through one
-    structured round, entries-first organisation inside a wider Settings
-    panel over text blocks, free text plus outline, or a studio page.
-  - [CODE] Settings > Profile now renders the Background by the open
-    resume's entries (`sections/settings/ProfileNotes.tsx` over
-    `lib/profileNotes.ts`): facts in a 352px column, notes beside them; one
-    hairline row per standard entry grouped by resume section with the first
-    line of its notes, its word count, and Add notes when empty; General notes
-    for blocks no entry owns (preamble included) with a chip only for a
-    surprising reason; a row expands to edit heading and notes in place
-    (heading stores on blur so a half-typed name cannot move the block; the
-    row follows a block whose heading moved it); inline two-step Remove; a
-    Text view keeps the raw field. Storage stays one Background string:
-    `profileHeadingLinkage` now reports `line`, `block` (starts its own
-    stretch, as the linker partitions), and `entryId`; editing rewrites one
-    block's lines and normalises only its trailing blank line. Every standard
-    section is in scope for notes, whatever Polish would send. The card is
-    1180x820 for this section. The heading list and its styles are gone.
-  - [TOOL] Browser check in the in-app pane at 1440x900 against the live
-    workspace: both columns, the full entry list, an expanded editor, no
-    console errors. Design detector: advisory font-size steps only, all
-    already used by settings.css. Offline suite 147/147 (two new evals);
-    client and server `tsc`; RoleFit build.
-  - Deferred: the linkage note on the Resume page and Show evidence on Cover
-    Letter Polish paragraphs (the brief's two open decisions, declined for the
-    first slice).
-
-- [USER+CODE] Prepare correctness, Prepare benchmark, and Polish quality gates
-  (task `prepare-benchmark-20261006`; the user shared an external review of
-  head 7b860837 and said "go with all the recommendations as needed", so the
-  brief and plan were written and both approval gates compressed into that
-  acceptance). No prompt text, schema, route shape, or provider-default change.
-  - [CODE] Three Prepare defects fixed. The tailoring brief's 9,000-character
-    cap now budgets whole items across required, responsibilities, and
-    preferred (required first, round-robin, a list stops at its first
-    non-fitting item) instead of slicing the assembled string, so twelve
-    maximal duties can no longer drop the required qualifications or tech
-    stack; in-budget briefs are byte-identical. Fit's 24,000/28,000-character
-    normalized limits are measured before any dispatch on both the standalone
-    route (input-limit message, zero attempts, same 200/unavailable contract)
-    and combined Prepare (Fit section omitted, Job analysis still runs, Profile
-    message still named first); before, the clipped prompt was dispatched and
-    the result rejected for the original length. A response carrying only
-    domain or seniority labels keeps the local brief and the independent Fit.
-  - [CODE] Benchmark foundation. `providerUsage.ts` lets the dispatch stats
-    collector carry the provider's own token counts (OpenAI/Anthropic/Claude
-    Code counts, Codex one total, Antigravity `null`; retries sum; numbers
-    only). The Fit consistency runner is now the Prepare benchmark: immutable
-    receipt directory with manifest and corpus/source hashes, matrix entries
-    may carry a differing `fit` request so the app's split path is measured
-    as its two calls, per-dispatch elapsed time and usage, the job half scored
-    against each fixture's `expectedJob` (coverage, preferred placement,
-    or-alternatives kept in one item, eligibility text, honest empty lists,
-    identity and salary facts, `absentTerms` that fail the run), the
-    automatic-Polish decision per threshold across repeats and between paths,
-    report-only replay with drift warnings, runs 1-5. Corpus 17 -> 22 with
-    five extraction fixtures (Python-or-Java with salary, degree-or-equivalent,
-    professional scope, long noisy posting with late requirements, embedded
-    instruction). The contract runs the runner offline against a fake
-    dispatcher.
-  - [CODE] Polish gates. `coverLetterJudge.ts` (benchmark-only) scores a whole
-    letter on support, relevance, argument, voice, improvement over the base,
-    and overall, listing unsupported sentences; `EVAL_JUDGE=panel` uses the
-    recorded GPT-6 Astra + Opus 5.5 panel, a Sol model is refused as a judge,
-    the judge never sees the generator's identity, and structural checks alone
-    still decide pass/fail. The five resume opportunity cases (flagged
-    `gateOpportunity`) now fail with `missedOpportunity` when a proposal
-    touches none of their named targets (tightened 2026-10-07: labeled
-    additions and reorders must reach their outcome, and rewrites must be
-    judged material), and the three brochure cases
-    keep accepting any honest edit (this supersedes the 2026-10-06 note above
-    that the counters never gate).
-  - [TOOL] Offline suite 143/143 (141 + two new evals); server and client
-    TypeScript gates and the RoleFit build pass. No UI change, no browser QA.
-  - [TOOL] Live Prepare screen, 2026-10-06, 22 synthetic fixtures x 1 run,
-    five configurations (receipts in ignored `workspace/fit-assessment-eval/`;
-    the Codex directory was written by the pre-review runner and replayed with
-    `EVAL_REPORT_ONLY` under the corrected scoring, so its usage is Codex's
-    total only and was not recorded as `null`-safe per dispatch; the Sonnet
-    directory was written by the corrected runner). Prepare-path medians
-    (p90) per posting, extraction score (mean of per-fixture fractions),
-    fabricated terms, automation flips between the Prepare and standalone
-    paths:
-    - current stage settings, split: Codex GPT-6 Luna medium + GPT-5.5
-      medium, 2 calls: 13.7 s (21.4 s), 0.989, 0 fabricated. Luna left the
-      company blank on the "Synthetic Data" posting both times (the only
-      extraction miss across the screen).
-    - low effort, split: Luna low + GPT-5.5 low, 2 calls: 12.2 s (17.4 s),
-      0.989, 0 fabricated; the one Fit wobble of the screen (the
-      project-accepted entry-level posting went REASONABLE in the split path
-      and STRONG standalone, which flips the Strong-only automation
-      decision).
-    - combined on Fit's model: GPT-5.5 medium, 1 call: 13.6 s (17.8 s),
-      1.0, 0 fabricated, no flips. (GPT-5.5 retires 2026-10-14.)
-    - combined Claude Sonnet 5.5 low, 1 call: 4.4 s (8.3 s), 1.0, 0
-      fabricated, no flips; 148.7k input tokens over 22 postings of which
-      136.8k were cache writes of the system prompt, 13.1k output, $0.68 of
-      plan usage reported by Claude Code.
-    - combined Claude Sonnet 5.5 medium, 1 call: 7.4 s (9.3 s), 1.0, 0
-      fabricated, no flips; 21.6k output tokens, $0.77 reported.
-    Every configuration kept every verdict inside its allowed category except
-    the long noisy posting, which every Codex configuration judged REASONABLE
-    against a STRONG label because the resume shows neither the written-
-    communication nor the design-system duty; the fixture is now unstable
-    ["STRONG","REASONABLE"] [ASSUMPTION: the models' reading is the fairer
-    one]. No invalid responses, provider errors, or theme-overlap failures.
-    Reading: on this synthetic screen a combined Sonnet 5.5 low Prepare is
-    about three times faster than the current split Codex pair at equal
-    extraction and Fit outcomes; the split path's second call costs ~40% of
-    its time. One run per fixture is a screen, not a verdict: a 20-posting
-    holdout with repeats and the matched downstream Polish comparison are the
-    next step before changing the stage defaults.
-  - [USER] 2026-10-06: the user adopted the screen's recommendation. Job
-    analysis and Fit Assessment are now both Claude CLI / Sonnet 5.5 / low, so
-    Prepare takes the one-call combined path (previously Codex GPT-6 Luna
-    medium + GPT-5.5 medium, split). The prior preferences file is backed up
-    under `workspace/.trash/` (`...before-prepare-sonnet.json`).
-  - [TOOL] Holdout, 2026-10-06: twenty disjoint synthetic postings
-    (`set:holdout-20261006`: early-career full stack and backend, consulting,
-    healthcare HL7/FHIR, clearance, hourly and GBP pay, staff-level stretch,
-    noisy and instruction-laden postings, a title-only page, offered
-    sponsorship, an internship), three runs each, corrected runner, Sonnet
-    first then the old pair (receipts under `workspace/fit-assessment-eval/`).
-    - Sonnet 5.5 low combined, 60 Prepare runs: median 4.9 s (p90 6.6 s) per
-      posting, extraction 0.997, 0 fabricated terms, no invalid responses;
-      one automation flip group (the Spark-or-Flink posting went STRONG twice
-      and REASONABLE once on the standalone prompt, crossing the Strong-only
-      threshold), 2 of 60 prepare/standalone pairs differed on that same
-      threshold; 455k tokens, $1.94 of plan usage reported by Claude Code.
-    - Old pair, Codex GPT-6 Luna medium + GPT-5.5 medium split, 60 runs:
-      median 17.5 s (p90 22.7 s), extraction 0.993 (Luna missed the "0-2
-      years" requirement once and named the client instead of the staffing
-      agency), 0 fabricated; one flip group (the instruction-laden QA posting
-      went REASONABLE twice, STRONG once); GPT-5.5 read the UK posting
-      REASONABLE on all three runs where Sonnet read STRONG on all three
-      [ASSUMPTION: STRONG is the better reading; the resume covers every
-      stated requirement].
-    - Both models flagged the W-2-only contract condition as a CHECK
-      eligibility on some runs, and both read a flat "$45 per hour" as
-      min = max; the two expectations were widened (W-2 may be CHECK; a
-      flat rate is min-only). No other fixture changed.
-  - [TOOL] Matched downstream comparison, 2026-10-06 (private harness
-    `workspace/prepare-benchmark/harness/`, ten real applications sampled by
-    stored Fit verdict 3/3/2/2, raw postings re-analyzed; same resume,
-    Profile, base letter, Resume Polish Opus 5.5 high, Cover Polish Sol
-    medium; only the brief differed; blinded Astra + Opus 5.5 pairwise with
-    A/B swapped by hash, judged against the raw posting):
-    - Briefs: Sonnet low 5.8 s vs Luna medium 10.1 s per posting; list sizes
-      within half an item of each other; Luna fell back to the local brief
-      on two content-poor pages where Sonnet fell back on one. On one of
-      them Luna returned only a seniority and three domain labels, which the
-      old usability rule would have accepted in place of the local brief.
-    - Resume Polish: 41 vs 40 proposed changes over ten postings, 1 vs 4
-      warned; both judges split 5-5 and agreed on every case; mean score
-      8.01 (Sonnet brief) vs 7.79; unsupported edits 0 vs 1.
-    - Cover Polish: judges disagreed (Astra 6-4 Sonnet brief, Opus 7-3 Luna
-      brief; agree on 5 of 10, 2-3); mean 8.30 vs 8.20; unsupported
-      sentences 1 vs 3.
-    - Reading: the brief's source does not measurably change what Polish
-      writes, so Prepare is not the quality bottleneck; choose it on speed
-      and cost. Sonnet 5.5 low stands as the Prepare setting. Further Prepare
-      tuning should wait for a measured defect; Resume and Cover Polish
-      remain where the earlier benchmarks put them.
-  - [TOOL] Two independent reviews (product path; benchmark and gates), no
-    high findings. Closed: the usage reader dropped Anthropic cache-creation
-    tokens and mixed input conventions (now one convention: every prompt
-    token, with cache read and write split out, total derived when absent);
-    Codex's token footer took the first match in the echoed prompt (now the
-    last); the judge's Sol refusal ran before the request resolved so an
-    omitted model fell to the Codex default (now after); a failing judge
-    aborted the cover run and lost the letter (now recorded as absent for that
-    letter); automation decisions ignored BLOCKED eligibility (now all-false,
-    as the app behaves); a required tool demoted to preferred still scored
-    full coverage through the tech stack (now a miss); an injected location
-    or title was invisible to `absentTerms` (now checked); number words and
-    degrees penalised faithful paraphrase (any-of groups); acronyms matched
-    common words (all-capital terms are case-sensitive); the split path paid a
-    duplicate standalone call (dropped; only combined pairs); report-only
-    needed the matrix again (now manifest-driven); the resume gate rejected a
-    rewrite of a named filler bullet or of a bullet in the entry that should
-    gain the fact (both now satisfy it); plus matrix uniqueness, receipt-save
-    outside the provider try, usage summed over every dispatched reply,
-    whole-word theme matching, a CI/CD resume for the embedded-instruction
-    fixture, and contract hygiene (failing-dispatch and fabricating-fake runs
-    with a console sentinel). Accepted residual: a list whose single first
-    item exceeds the remaining brief budget renders its placeholder (needs an
-    ~8k-character local item; unreachable on the AI path where items cap at
-    1,000). Offline suite after fixes 144/144.
-  - Deferred: Profile linkage preview and source-beside-edit (brief
-    `profile-linkage-preview-20261006`, awaiting approval); application-level
-    result caching and AI variant selection (measure repeat preparations
-    first); the 20-posting holdout and matched downstream Polish comparison
-    for the chosen Prepare challenger.
-
-- [USER+CODE] Polish review follow-ups (task `polish-review-followups-20261006`;
-  the user shared an external review of head d37990fc and said "go with your
-  recommendations", so the brief and plan were written and both approval gates
-  compressed into that acceptance). No schema, route, provider-default, or
-  `.resume`/`.cover` change; the cover prompt text is unchanged.
-  - [CODE] Cover Letter Polish findings now have two lifetimes on the wire:
-    `concerns` (evidence, attribution, and private-slot findings about the
-    wording, plus echoed `sourceWarnings`) and `warnings` (this draft's
-    structure, quality, phrasing, length, and model notes). The review rail
-    shows both; the client carries only `concerns` past acceptance, so a
-    corrected length or phrasing note never recurs. The model's `warnings`
-    field, requested by the prompt since the one-call rewrite but discarded by
-    the validator, is now read as at most three sanitized, deduplicated
-    `Model note:` entries; malformed metadata is ignored and a note never
-    re-enters a prompt. [TOOL] Offline measure over the 2026-10-05 benchmark
-    letters (raw provider output, no new calls): Sol wrote model warnings on
-    10 of 40 letters (~0.3 each, mostly eligibility and requirement gaps the
-    deterministic guard cannot see); Opus and Sonnet wrote 3-4 per letter,
-    mostly "the letter does not claim X" and dropped-source-claim notes, which
-    is why the cap is three and the notes are draft-scoped.
-  - [CODE] Resume Polish examines every change in the 40-item window (kind order
-    still settles rewrite/remove/reorder conflicts) and then keeps the first 12
-    usable changes in the model's own order; the prompt now states the limit
-    and asks for the most valuable changes first. Before, a Profile addition
-    listed first was cut by twelve rewrites. The omission warning fires only
-    when usable edits were actually cut, not on any response over 12 items.
-  - [CODE] Resume quality corpus: 34 -> 39 fixtures with five opportunity cases
-    that require a proposal (buried strength, duplicated achievement, missing
-    Profile fact, feature tour, irrelevant bullet beside the only proof), so an
-    always-NO_CHANGES generator fails 8 of 39. Cover live runner rewritten on the
-    resume runner's pattern: unique owner-only receipt directory, manifest with
-    configuration and corpus/source hashes, fixture snapshot, per-run receipts,
-    `summary.json`, forwarded `EVAL_REASONING_EFFORT`, `--help`. No live run
-    was made; the private `workspace/cover-benchmark/harness/run.mjs` still
-    mirrors the old flat `warnings` list and should add `concerns` before its
-    next rerun.
-  - [TOOL] Two independent reviews (cover lifecycle; resume cap and evals), no
-    high findings, one medium each, both closed with probes: the concern split
-    was by issue category, which kept citation bookkeeping and leftover-token
-    notes echoing after acceptance (now by code via `isCoverLetterConcern`; the
-    cited private slot carries a `concern` flag); and a change the cap cut could
-    still have won a conflict against one listed earlier (now a fixpoint: the
-    prefix up to the twelfth kept change is re-examined without the tail).
-    Lows closed: model notes stripped from the repair prompt's rejected output
-    and listed last; rail de-duplicates the two lists; the cover runner records
-    a stage, not an error class, and stops on a generation failure; contract
-    and doc wording no longer claim the opportunity counters gate a pass. An
-    exact-head review of the PR commit (no high or medium) left four lows,
-    fixed in a follow-up commit: the runner no longer stops a run on one
-    fixture's blocked letter, and three wording drifts. Not
-    changed on advice: the component keeps `concerns` required rather than
-    defaulting it (the hook normalizes older servers). Offline suite 141/141.
-  - Deferred, recorded for the next brief: Profile linkage preview and
-    source-beside-edit in the review rail (draft Product Brief written as task
-    `profile-linkage-preview-20261006`, awaiting approval, local artifact
-    only); a whole-document judge for the cover
-    corpus (the structural grader still scores a nine-times-repeated sentence
-    100); an opportunity gate for the five new resume cases is a benchmark
-    policy decision for the user.
+- [USER+CODE] **RoleFit landing redesigned as "the galley proof"** (editor sheet
+  beside a proof slip of one synthetic edit, ruled editorial spreads, ledger-row
+  downloads; fonts bundled from `@typeset/engine` under `font-src 'self'`); the
+  card hover-lift is gone and a proof-mark draw joins the scroll reveal.
+  `DESIGN.md` and `landing/AGENTS.md` updated. [USER] The review of the day's
+  other work stays separate, so no independent review of the landing diff ran.
+  UNCONFIRMED: landing browser QA at desktop and phone widths.
+- [USER] Base documents refreshed (task `base-docs-refresh-20261006`; user data
+  only): the base resume and the Profile Background were updated (Background at
+  11.3k of 12k, every heading still linking); the base cover letter is
+  unchanged; the portfolio mirror was synced. [TOOL] One page, 44 lines. Backups
+  under `workspace/.trash/` and `workspace/resumes/.trash/`
+  (`2026-10-07T02-45-29Z__*`).
+- [USER+CODE] **Settings redesign with chosen links** (task
+  `settings-redesign-20261006`; brief v2 and plan v2 approved, "approve, include
+  QA as needed"). Five pages in two rail groups — You: Profile, Background; AI:
+  Guidance, Automation, Models — under `SettingsDialog` with pages in
+  `sections/settings/`; the gear reopens the last page. Background is an entry
+  list beside the selected note's editor; [USER] links are chosen by hand, so
+  **Linked to** rewrites only the heading's name and Not linked renames to
+  "<name> notes"; an edit that would change how other notes link is refused.
+  [TOOL] 147/147; in-app browser QA at 1024, 700, and 375 px; three review
+  passes. UNCONFIRMED in a browser: the add-evidence focus path and the
+  line-shift handover. Residual: nested notes cannot be relinked from the
+  editor; a typed `#` heading regroups following notes without warning.
+- [USER+CODE] **Profile linkage and evidence beside edits** (task
+  `profile-linkage-preview-20261006`; "sure, lets go with both").
+  `profileHeadingLinkage` reports per heading Linked, Grouping, General context
+  (with a reason), or Omitted; every Resume Polish row on a standard entry
+  carries `profileEvidence` behind a collapsed Show evidence. [USER] The first
+  flat heading list was rejected ("very inconvenient, may as well not produce");
+  the user chose an entries-first Profile, so the Background renders by the open
+  resume's entries (`sections/settings/ProfileNotes.tsx` over
+  `lib/profileNotes.ts`) with a Text view; storage stays one string. Deferred: a
+  linkage note on the Resume page and Show evidence on Cover Letter Polish.
+- [USER+CODE] **Prepare correctness, the Prepare benchmark, and Polish gates**
+  (task `prepare-benchmark-20261006`; "go with all the recommendations as
+  needed"). [CODE] The brief's 9,000-character cap budgets whole items (required
+  first); Fit's input limits are measured before dispatch. The Fit consistency
+  runner became the Prepare benchmark; `coverLetterJudge.ts` (benchmark-only)
+  scores whole letters and `EVAL_JUDGE=panel` refuses a Sol judge.
+  - [TOOL] On a live screen and a 20-posting x 3 holdout, combined Sonnet 5.5
+    low (median 4.9 s, extraction 0.997) was about three times faster than the
+    split Codex pair (17.5 s, 0.993) at equal Fit outcomes; a matched test on
+    ten real applications showed the brief's source does not measurably change
+    Polish, so Prepare is chosen on speed and cost (receipts in ignored
+    `workspace/fit-assessment-eval/`).
+  - [USER] 2026-10-06: the user adopted the recommendation; Job analysis and Fit
+    are Claude CLI / Sonnet 5.5 / low, so Prepare takes the combined path.
+  - Deferred: application-level result caching and AI variant selection (measure
+    repeat preparations first).
+- [USER+CODE] **Polish review follow-ups** (task
+  `polish-review-followups-20261006`; "go with your recommendations"). Cover
+  findings split into `concerns` (evidence, attribution, private slots, echoed
+  `sourceWarnings`), which survive acceptance, and `warnings` (draft structure,
+  quality, length, up to three `Model note:` entries), which do not
+  (`isCoverLetterConcern`). Resume Polish examines the whole 40-item window and
+  keeps the first 12 usable changes in the model's order. The resume corpus is
+  39 fixtures with five opportunity cases. Open: the private
+  `workspace/cover-benchmark/harness/run.mjs` should add `concerns` before its
+  next rerun.
 
 ## 2026-10-05
 
-- [USER+CODE] Cover Letter Polish: prompt, evidence guard, and base variants
+- [USER+CODE] **Cover Letter Polish benchmark, evidence guard, and base letter**
   (task `cover-polish-benchmark-20261005`; the user asked to improve all three
-  the way Resume Polish was proven, so the brief and plan were written and the
-  two approval gates compressed into after-the-fact acceptance). No schema,
-  request, route, or UI change.
-  - Prompt: unchanged in the end. A restraint-and-length variant (v3: numbers
-    keep noun and qualifier, team wording stays, no computed totals, no merged
-    entries, scope notes never restated, no volunteered gaps, no posting
-    mirroring, generate-kind slot ids only, 3-4 paragraphs under 340 words)
-    won on the Claude models but lost on GPT-6.1 Sol, which the user then
-    chose as the cover model; the variant text is kept in the ignored harness.
-  - [TOOL] Benchmark mirrored the Resume Polish one: 40 tuning + 20 holdout
-    real applications sampled by Fit verdict, live resume and Profile through
-    the app's evidence builder, matched base variant, GPT-6 Astra/high
-    per-sentence fact check, blinded pairwise by Astra and Opus 5.5 (A/B
-    swapped by hash). Results stay in ignored
-    `apps/role-fit-ai/workspace/cover-benchmark/`.
-    - Variant v3 vs the shipped prompt on the tuning set, both judges agree:
-      Sonnet 5.5 medium (the user's cover setting) 23-4 for v3 (Astra +0.72
-      of 10, CI ±0.34; Opus judge +0.16, CI ±0.29); Opus 5.5 high 15-7 for v3
-      (Astra +0.40, CI ±0.33; Opus judge 19-21, a tie). Astra fact checks:
-      unsupported sentences Sonnet 16.2% -> 12.6%, Opus 15.3% -> 13.4%.
-      Disjoint 20-application holdout, both judges agree: Sonnet 11-6 for
-      v3 (Astra +0.63, CI ±0.52), Opus 8-1 (Astra +0.46, CI ±0.53).
-      GPT-6.1 Sol medium is the exception: it prefers the
-      shipped prompt 27-7 where judges agree (it already wrote 310-word
-      letters with 3% unsupported sentences, and v3 makes it terse at 287
-      words), and the same held with the rewritten base letter (28-9).
-    - Cross-model, same shipped prompt, both judges agree: Sol 6.1 medium beat
-      Sonnet 5.5 medium 25-2 (Astra +1.90 of 10, CI ±0.34) and Opus 5.5 high
-      16-0 (Astra +1.73, CI ±0.31; the Opus judge alone preferred Opus 22-18),
-      and Opus beat Sonnet 17-8; Sol with the shipped prompt beat Opus-v3
-      21-0 and Sonnet-v3 36-0. Sol's letters also carried the fewest
-      unsupported sentences (3.4% vs 12.6% Sonnet, 13.4% Opus). [USER]
-      2026-10-06: the cover stage is now Codex / GPT-6.1 Sol / medium
-      (preferences backed up to `workspace/.trash/`), so the prompt stays as
-      shipped rather than taking the Claude-only win.
-      The harness (cases, runner, judge, replay) is copied under
-      `workspace/cover-benchmark/harness/` for reruns.
-    - Rejected: v2 (restraint rules plus a 220-340 word target) lost on
-      elaboration with every judge (Opus 11-7 for the old prompt where judges
-      agree, Sol 18-10, Sonnet a 14-12 tie) even though repairs fell from
-      114 of 120 runs to 0 and Opus unsupported sentences fell 28%; v4 (the
-      same rules with the original 200-400 word line) lost on Opus 14-6 and
-      Sol 12-4 and tied on Sonnet 16-15, so the structural paragraph rule is
-      what carries the Sonnet and Opus wins.
-    - Every model cited the deterministic role or company slot, which the
-      validator treated as a technical defect: 114 of 120 baseline runs paid a
-      second provider call for the repair pass. Cited deterministic slot ids are
-      now dropped, not repaired (a cited unanswered private slot warns on its
-      paragraph); v2 through v4 ran with zero repairs.
-  - [CODE] Evidence guard (rules in `server/ai/AGENTS.md`): whole-entry
-    citation scope with Profile sections linked by heading, named entries
-    checked against their own evidence, a cleaner claim surface (per-clause
-    polarity, role and team names, 401(k), "one"), count qualifiers, head
-    nouns and modifiers, compound adjectives, causal "led to", clause-wide
-    modals, whole-word concepts, PostgreSQL -> relational database, and a
-    warning for values only the base letter supports.
-    - [TOOL] Replay of the 120 baseline letters against Astra labels, after
-      two review rounds: warned candidate sentences 233 -> 35 of 1,518;
-      precision 12.4% -> 27.8%; recall 16.9% -> 5.8%. Most lost true warnings were coincidental hits on denials
-      ("I have not used Kafka") or judgment labels ("what the candidate did
-      most"); 87 of 172 unsupported labels were claims only the user's own base
-      letter made. A count-purpose check ("covered by 90+ tests") was tried
-      and dropped: 1 true of 7 warnings on letters. The resume warning replay
-      stayed at 53.5% precision / 54.8% recall; the offline suite passed
-      141/141.
-  - [USER+CODE] Base variants, now one. The five variants carried an outcome
-    figure the Profile explicitly disclaims, "helped lead" where the
-    resume says "Led", and stale counts. Matched specialized variants vs
-    `default` on 15 postings (Opus 5.5 high, both judges): 8-7 and 7-7, agree
-    6-6, so specialization adds nothing measurable. [USER] One variant, as
-    the resume has one: `default.cover` only, rewritten in a plain
-    first-person voice (one short clinic story, one small engineering
-    decision, no stack lists, no "I would bring X, Y, and Z"). On Sol with
-    the shipped prompt it beat the previous template 35-0 where both judges
-    agreed (writing 5.8 -> 7.8 and 7.3 -> 9.0 of 10; judges cited voice and
-    less resume-like prose), with evidence warnings 133 -> 11 across 40
-    letters. All old files are in `cover-letters/.trash/`; the new one parses
-    strictly, round-trips, lays out on one page, and raises no grounding
-    warning against the corpus.
-  - [USER+CODE] Base letter, second round (2026-10-06). The 40 Sol letters from
-    the rewrite had become formulaic at the slots: 37/40 opened "<gerund
-    phrase> is the kind of problem I like working on", every sampled closer
-    was "<Company>'s emphasis on X connects with Y", and Sol turned the
-    reflective clinic sentence into "taught me" in 29/40. The opening slot is
-    now its own sentence that asks for one checkable posting detail, the two
-    closing slots collapsed into one that names a concrete team
-    responsibility, the clinic sentence states the action the resume
-    documents (translate the problem into a requirement, fix, explain), and
-    the intro's plural "applications" became singular. A first draft of this
-    round with a self-assessment sentence about how the candidate handles
-    complaints won 29-2 but doubled Astra's unsupported candidate facts (4.0%
-    -> 9.1%); the grounded draft won 24-3 against it and 34-0 against the
-    installed letter where both judges agreed (Opus 38-2, Astra 36-4), with
-    unsupported facts at 3.2% and the formula phrases at zero. Installed as
-    `default.cover`; the prior letter is in `cover-letters/.trash/`. The
-    prompt was not changed: the slot fills, not the prompt, drove the
-    repetition, and Sol still prefers the shipped prompt on this letter
-    family.
-  - [TOOL] Sixth review (exact head da8c5674, 2026-10-06): no high findings;
-    two regressions from the fifth round: the denied verb's object list ran
-    past the clause ("I have not used Kafka, though I ran 12 Spark clusters"
-    lost its count), and widening the shared polarity verbs made passive
-    bullets ("200 resources not managed by Terraform") read as denials, which
-    would have put false warnings on Resume Polish, Application Answers, and
-    Fit. Closed: the list takes only name-like items joined by commas, and,
-    or, nor and stops at the next clause; the polarity helper is back to
-    main's verb list, so "I have never touched Airflow" warns as it does on
-    main (recorded residual); the role frame yields only to a capitalised
-    other employer or "I held", so "the <role> role with your team" stays
-    the application. Seventh review (exact head f15f6d39): no high or medium
-    findings. Recorded residuals, not fixed: a capitalised word that opens a
-    new clause right after a denied list ("Having never used Rust, Flink
-    became my main tool", "I have not used Rust and Flink is my strength")
-    is absorbed into the list, so that tool is not warned (main warns; the
-    suggested fix backs off later items before a lowercase non-clause word,
-    and a broader one would make "I have not used Kafka much" warn); a
-    company name under three characters counts as another employer in the
-    role frame (main warns too); "I had hoped for" reads as a past job (main
-    warns too); a lowercase non-curated or article-led tool after a denied
-    list warns ("not used dbt or terraform", "Kafka or the Airflow
-    scheduler"), as on main.
-  - [TOOL] Fifth review (exact head 6c3d5104, 2026-10-06): no high findings;
-    two regressions from the fourth round (glued durations also took word
-    numbers, so "tend" read as ten days in every shared guard; the stricter
-    denial head left "no experience with Kafka", "never having used", and
-    denied lists warning again) and two residuals (a verbless denial could
-    still swallow "my 12 Airflow DAGs"; any possessive or "that" framed the
-    role title, and "the <role> role at Harbor" was stripped). All closed
-    with probes: digits only glue a duration; a denied verb takes its whole
-    object list and an experience denial its noun; a verbless denial never
-    gives up a number, a name, or a tool; the role frame takes only
-    the/this/your/<Company>'s and never "at" another employer. Replay on
-    the 120 baseline letters is back at 27.8% / 5.8% (the fourth round's
-    extra true warning came from the over-wide denial head); Resume Polish
-    replay unchanged at 53.5% / 54.8%; check 141/141.
-  - [TOOL] Fourth review (exact head 18e6ec7a, 2026-10-06): no high findings;
-    four of the third review's holes were only partly closed (a clause-initial
-    denial still hid the facts after it; the role title was stripped before
-    "role" without an article; "platform", "products", "users", "customers"
-    made a tool-named company a name; a slot-only Profile heading still
-    dropped out), two fixture strings still matched the Profile and the
-    tracker, and the stricter denial handling had made honest contraction
-    denials and "drew me to this role" warn again. All closed with probes: a
-    governing denial now drops only its own verb phrase; the title needs
-    the/this/your/<Company>'s before "role"; the employer-noun list lost the
-    product words; a slot-only heading is kept as "(untitled)"; glued
-    durations ("30d", "5yrs") match their spelled-out forms; the idiom may
-    land on "this role" or "in". Replay on the 120 baseline letters: precision
-    27.8% -> 29.7%, recall 5.8% -> 6.4% (one more true warning); Resume
-    Polish replay unchanged at 53.5% / 54.8%; check 141/141.
-  - [TOOL] Third review (exact head of PR #169, 2026-10-06): no high findings;
-    eight medium recall holes and two low ones, all closed with probes: a
-    percent borrowed another metric's evidence; the attention idiom hid a
-    candidate clause after it; a trailing denial dropped its whole clause;
-    the role title was stripped outside an application frame and the
-    company outside an employer frame ("Databricks engineering experience",
-    "within Databricks", "Datadog's agent"); a cited unanswered private slot
-    vanished silently (now a paragraph warning); Profile owners were keyed by
-    heading text, so a same-text nested heading borrowed the linked one, and
-    a bracketed heading dropped out of the corpus so its lines fell into the
-    previous section; a capitalised Skills row could be "named"; "30d" was a
-    name; "who" did not end a counted phrase. The review also found the
-    precision-probe fixtures paraphrased the real resume, Profile, and base
-    letter despite a "synthetic" header; they are now invented (a lending
-    app, a sandbox CLI, a marina job). Replays unchanged: cover 27.8% / 5.8%,
-    resume 53.5% / 54.8%; check 141/141.
-  - [TOOL] Two independent reviews: the first found 4 high / 4 medium holes in
-    the guard relaxations (glued units, plural concepts, aspiration clauses,
-    role and company stripping, team names, Profile grouping, modal lookback),
-    the second 3 high / 7 medium more (denial-led clauses, company after
-    "with", same-title entries pooling, stack segments linking, glued-metric
-    skips, counts crossing lines, relative-clause modals, past titles, word
-    numbers, a doc overclaim). All were fixed with a negative probe each in
-    `cover-letter-warning-precision-probes.mjs`. No browser QA (server-side text and ignored workspace
-    files; the cover workspace listing re-reads the directory per request).
+  the way Resume Polish was proven).
+  - The prompt is unchanged: a restraint variant won on Sonnet 5.5 and Opus 5.5
+    but lost on GPT-6.1 Sol medium, which prefers the shipped prompt; with it
+    Sol beat Sonnet 25–2 and Opus 16–0 where judges agreed, with the fewest
+    unsupported sentences (3.4% vs 12.6% and 13.4%). [USER] 2026-10-06: the
+    cover stage is Codex / GPT-6.1 Sol / medium. Harness under
+    `workspace/cover-benchmark/harness/`.
+  - [CODE] Cited deterministic slot ids are dropped, not repaired (114 of 120
+    baseline runs had paid a repair call). The evidence guard (rules in
+    `server/ai/AGENTS.md`) scopes citations to whole entries with Profile
+    sections linked by heading. [TOOL] Replay of 120 letters: precision 12.4% →
+    27.8%, recall 16.9% → 5.8%; probes in
+    `cover-letter-warning-precision-probes.mjs`. Residuals: a capitalised word
+    opening a clause after a denied list is absorbed; a company name under three
+    characters reads as another employer; "I had hoped for" reads as a past job.
+  - [USER+CODE] **One base cover letter**: specialized variants added nothing
+    measurable, so [USER] there is one variant, as the resume has one
+    (`default.cover`, plain first-person voice). [USER+CODE] Second round
+    (2026-10-06): the opening slot asks for one checkable posting detail and one
+    closing slot names a concrete team responsibility; it beat the installed
+    letter 34–0 where judges agreed (unsupported facts 3.2%). Old letters are in
+    `cover-letters/.trash/`.
 
 ## 2026-10-04
 
-- [USER+CODE] Resume Polish prompt update (benchmark variant v5; unrelated to
-  the Fit v5 rubric). The user asked for the review, benchmark, and
-  implementation. Rewrites keep each bullet's existing tense; a
-  materiality rule omits churn (tense-only changes, synonym swaps, rephrasing
-  already-strong bullets); separate facts and broader posting terms never become
-  a new claim; an entry gets removals or one reorder; each add slot belongs to
-  its own entry. The old current-role present-tense rule (shared
-  `accomplishmentStyleRules`, also used by Application Answers) is gone. No
-  schema, sanitizer, request, or UI change. The user declined a page-impact
-  line or any warning in the review rail.
-  - [TOOL] Live benchmark, prompt held out from tuning where noted: synthetic
-    fixtures plus 40 real applications and a disjoint 22-application holdout,
-    six models, low through xhigh effort, judges GPT-6 Astra, Opus 5.5 and
-    GPT-6.1 Sol. v5 beat the previous prompt with every judge (real data, Opus
-    medium +0.8 and Sol medium +1.9 of 10; held-out fixtures +1.2 to +1.6) and
-    cut tense-only rewrites from about a quarter of rewrites to near zero.
-    Judges showed family self-preference, so cross-model comparisons rest on
-    where they agree. Results stay in ignored
-    `apps/role-fit-ai/workspace/tailor-benchmark/`.
-  - [USER] Resume Polish setting is now Claude Code / Opus 5.5 / high (on the
-    holdout it beat the previous Sonnet 5.5 medium setup 17 to 1 where both
-    judges agreed). App provider defaults are unchanged.
-  - [TOOL] Superseded below: with the user's one-page instruction and the
-    round-2 prompt, Accept-all still overflowed in 4 of 48 runs; page length
-    stays human review. The grounding-warning item is also superseded below.
-  - [TOOL] Two independent reviews found no high/medium issues. Both flagged
-    that "keep every number" contradicted the vanity-count trim rule, so the
-    shipped clause reads "keep any number you retain with the noun it counts".
-    Besides the slot count now read from `NEW_BULLETS_PER_ENTRY`, that is the
-    only wording difference from the benchmarked variant. Remaining accepted
-    lows: "keep accurate verbs" sits beside the AI-tell verb list, and a
-    present-tense bullet in a past role is fixed only alongside a material edit.
-  - [TOOL] Server TypeScript gate and the full RoleFit check passed (138/138
-    offline). New prompt assertions in the resume proposal, structure, Profile,
-    and complete-scope probes fail on the previous wording. A live smoke of the
-    shipped prompt (Opus 5.5 high, GPT-6.1 Sol medium, 12 synthetic fixtures)
-    had no trap hits, merged claims, tense flips, or withheld edits, and an
-    independent fact check found no unsupported edits. No browser QA
-    (prompt-only).
-- [USER+CODE] Resume Polish follow-ups (user-chosen items 1–4).
-  - Warning precision: the shared evidence checks (also used by cover letters,
-    application answers/review, and Fit) now treat sentence-initial verbs as
-    grammar, let a verbless own-work line support authorship of that thing,
-    flag "Assisted … in migrating" rewritten as "Migrated", entail categories
-    from specific evidence (PostgreSQL→database, ARIA labels→accessibility),
-    and validate Skills labels/parentheticals more exactly. With the user's
-    agreement, Python frameworks (Django, pytest…) count as Python evidence.
-    Rationale and rules live in `server/ai/AGENTS.md`.
-  - [TOOL] Replaying stored benchmark proposals against independent per-edit
-    fact checks (real data, v5 prompt): flagged edits 19.1%→3.2%, precision
-    5.6%→27.5%, recall 41.8%→34.5% (the drop is coincidental flags). Three
-    review rounds found recall holes in early relaxations; reduction-verb
-    equivalence and count-modifier tolerance showed no real benefit and were
-    reverted to base behavior.
-  - Supporting-role prompt sentence (round 2 widened it to team wording).
-    The opt-in `eval:live:resume-proposal` benchmark now holds 34 invented
-    fixtures with traps and GPT-6 Astra fact checks.
-  - [TOOL] 34-fixture baseline: Sol 6.1 medium passed 34/34 with no
-    unsupported edits; Opus 5.5 high passed 63/68 (present-tense flip,
-    capstone team promoted to "Built", an inferred "8+ years"; the checker
-    warned on each) with 3 of 131 edits unsupported. Supporting-role wording
-    held on both models.
-  - [TOOL] Prompt slimming rejected: removing duplicated resume/Profile text
-    (−20% to −40% characters) lost or tied on blinded Astra and Opus pairwise
-    judging over 24 fresh real applications and saved little time (Opus high
-    ~35s per run either way). Only `<earlier_output_concerns>` and
-    `<terminology_priorities>` were added to the shared injection-firewall
-    tag list.
-- [USER+CODE] Resume Polish round 2. The prompt now tells the model
-  to follow user_guidance preferences within its rules, keeps "part of a team"
-  wording, and forbids computed totals such as years from dates. Skills "Name
-  API/SDK/CLI" items count only when the evidence attaches that interface to
-  the name; hyphenated practices carry no ownership level.
-  - [TOOL] 48 untouched real applications, Opus 5.5 high, blinded Astra +
-    Opus judging: the user's new custom instruction (with a static one-page
-    space rule) beat the old one 44–0 where judges agreed and kept one page
-    after Accept-all in 35/48 runs vs 0/48; the shipped prompt raised that to
-    44/48 at equal judged quality. Sol 6.1 medium improved +0.16 on a 10-point
-    weighted score (95% CI +0.03 to +0.29). The 34-fixture eval: Opus 67/68 trap checks (was 63/68),
-    Sol 34/34.
-  - [TOOL] Warning replay with corrected labels (an earlier fact-check
-    misread the linked Typeset Profile block): flagged edits 2.7%, precision
-    32.2%, recall 45.2%. Most remaining misses are merged facts or added
-    "how", which deterministic checks cannot catch reliably.
-  - [USER] The user's base resume and Profile were tightened from benchmark
-    evidence (private workspace data; edits backed up locally).
-- [USER+CODE] Resume Polish round 3. [USER] One page is a soft
-  target: page length must never block an edit or decide materiality.
-  - [CODE] Evidence warnings name up to three concerns (term, number,
-    ownership, outcome) instead of one generic sentence; written-out
-    "object-oriented" evidence grounds "OOP"; tense-only or sub-15% no-new-word
-    rewrites and Skills reorders that move no posting skill forward settle as
-    `UNCHANGED`. The benchmark judge's "material" definition no longer
-    considers length. Rules live in `server/ai/AGENTS.md`.
-  - [TOOL] Replay of 1,146 stored round-2 edits: warned edits 63 -> 42 (21 were
-    OOP), older labelled set unchanged at 32.8% precision / 45.2% recall; the
-    no-op filter removed 3 edits, none judged material. 43 of 45 Astra
-    "unsupported" labels in round 2 were the true CI-runs-all-tests claim, so
-    real unsupported edits were near zero and the planned Profile-excerpt
-    citation was dropped as unmeasurable. Two independent reviews; findings
-    fixed. `npm run check --workspace apps/role-fit-ai`: 140/140. No browser
-    QA (server-side text only).
-  - [TOOL] Guidance wording, 48 real applications, Opus 5.5 high, same shipped
-    prompt, judges told page count is not a criterion: a soft one-page
-    paragraph beat the "must be paid for" paragraph 40-4 where Astra and Opus
-    agreed (+0.36 and +0.53 of 10). Removed bullets 33 -> 11, trim-only
-    rewrites 26 -> 6, added bullets 34 -> 50, immaterial edits 5.0% -> 2.8%;
-    Accept-all stayed on one page in 6/48 instead of 44/48, 41 of the 42
-    overflows by a single line. [USER] approved applying the better
-    outcome, so the saved Resume Polish instruction now carries the soft
-    paragraph (private workspace data; previous file backed up locally).
-- [CODE] Resume Polish round 4 (2026-10-05): warning precision
-  and recall, no prompt change.
-  - [CODE] Solo-project authorship (every linked Profile heading must declare
-    it), a count-purpose merge warning, shared-interface Skills items, REST =
-    RESTful, plural multi-word terms, AWS/Azure/GCP -> cloud, CI -> continuous
-    integration, and "one <participle> <noun>" counting the noun. Rules,
-    thresholds, and accepted gaps live in `server/ai/AGENTS.md`.
-  - [TOOL] Replay of stored real proposals against independent labels:
-    precision 32.8% -> 51.1%, recall 45.2% -> 54.8% (2,145 edits); round-2
-    edits warned 42 -> 23 of 1,143. On 32 untouched real applications (live
-    resume, Profile, and guidance; Opus 5.5 high and Sol 6.1 medium; 636
-    textual edits across six arms) 9 edits warn and Astra found 2 unsupported,
-    1 of them warned.
-  - [TOOL] Prompt candidates rejected on those 32 applications with blinded
-    Astra + Opus pairwise judging. "Keep concrete facts" plus "a count keeps
-    its line's scope": Opus 12-12 where judges agreed, Sol 10-14. Count-scope
-    alone: Opus 10-15, Sol 5-20 (-0.21 and -0.30 of 10, both CIs below zero).
-    The shipped prompt is unchanged.
-  - [TOOL] Two independent reviews found two must-fix holes (a team heading
-    beside a solo heading; "one failed build" losing its count) and several
-    should-fix items; all fixed with probes that fail when each guard is
-    removed. No browser QA (server-side text only).
-  - [USER] Approved grounding "AI-assisted <activity>" Skills items from a
-    line naming an AI coding tool and that activity. [TOOL] After it: labelled
-    precision 53.5%, recall 54.8%; 4 of 636 fresh edits warn (1 correct). A
-    third independent review added a denial veto, a coding-context
-    requirement for ambiguous tool names, and two probes.
-  - [TOOL] Rejected: extending the count check to "for <scope>" phrases caught
-    the one fresh-sample miss but added about seven false alarms across the
-    replays (1 correct of 8 new warnings); reverted.
-  - [USER] An unrecorded local CLI usage-receipt feature found uncommitted in
-    the same tree was removed at the user's request before this commit.
-  - [TOOL] `npm run check --workspace apps/role-fit-ai`: 140/140.
-
-## 2026-10-02
-
-- [USER+CODE] Spacing presets: the single saved "Custom" preset became up to
-  eight named saved presets, listed in the same section under the fixed
-  Compact/Balanced/Spacious segmented row (the user delegated the design with
-  no Product Partner, then asked to merge built-in and saved presets; one row
-  per built-in wasted space). Built-ins stay
-  fixed engine values so Reset and the layout snapshots keep their meaning.
-  Saved rows reapply, update with current spacing, rename inline, or delete
-  after inline confirmation. A rename commits on Enter, blur, or the popover
-  closing; an empty name keeps the old one. Save is disabled when the current
-  spacing already matches any preset. The list is a shared-editor local
-  preference (`typeset-resume.docStyle.spacingPresets.v1`), re-read before each
-  write and synced across tabs by the `storage` event; it never enters
-  `.resume` files or history. The old `typeset-resume.docStyle.custom.v1`
-  preset migrates in as "Custom". The cover-letter adapter stubs the new
-  controls.
-
-## 2026-10-01
-
-- [USER+CODE] Job-link import audit and repair (task `jd-import-audit-20261001`;
-  Product Brief v1 and Delivery Plan v1 user-approved). A 201-link audit (latest
-  200 submitted applications plus one supplied link) found 72 consistent JDs,
-  20 successes that imported unrelated board/login/careers text, and 104 errors.
-  RoleFit's importer now selects the exact posting from embedded Ashby boards,
-  bound JobPosting JSON-LD, Oracle requisition details, iCIMS job frames,
-  Dayforce page data, Workable, and UKG data. An oversized Ashby board may fall
-  back to its exact job page; that fallback catches only the new
-  `ResponseTooLargeError`. Missing LinkedIn, Greenhouse, Ashby, and Jobvite jobs
-  now fail with paste/extension guidance instead of importing unrelated text.
-  Generic pages that already show their JD are kept. Extension enrichment
-  shares source resolution but keeps captured text on failure.
-  - [TOOL] Repeat audit on the same frozen corpus: all 21 confirmed recoveries
-    and both partial improvements imported. Of the 19 other false successes, 17
-    now fail (one or two per run through LinkedIn HTTP 429 rather than a source
-    rule). One deferred
-    careers wrapper still passes, and one Greenhouse job became available again.
-    Separate source drift: one Greenhouse job was removed, one careers page now
-    serves a shell that still passes the generic gate, and LinkedIn rate limits
-    changed. The tracker
-    corpus hash was unchanged and no AI call ran. The RoleFit gate passed
-    (138/138 offline). Browser QA was skipped (server-only change).
-  - [TOOL] Independent review: all acceptance criteria passed. Fixed findings:
-    tracked probes reused real job identifiers (now invented), JSON-LD could
-    bind through slug fragments or a conflicting same-host URL, and provider
-    rate limits were reported as missing jobs. Known limit: a non-Greenhouse
-    URL with `gh_jid` plus `for`/`board` fails instead of falling back.
-
-- [USER+CODE] Pre-merge review of `feature/rolefit-candidate-profile` (the
-  user asked to review, fix, push, and merge). Two fresh independent reviews
-  (server/AI + shared; client/desktop/editor) found no high findings. Fixed:
-  - Fit's source-type check: a type named in the cited Profile line now wins
-    over its heading, so a personal line under a professional heading still
-    conflicts with a professional requirement (regression from 2026-09-28).
-    Accepted tradeoff: a type word used as an adjective ("academic medical
-    center") also overrides the heading and can warn, as on resume lines.
-  - Unsent Profile new-bullet slots no longer inflate the omitted-fields count.
-  - Group Accept/Discard skip the row open for editing, and a decided row
-    closes its editor. The footer Accept all/Discard all still settle that row
-    (pre-existing; Undo reopens the editor with the draft).
-  - The Settings Background status region stays mounted for screen readers.
-  - Dead code from the job-analysis simplification (`eligibilityLexicon.ts`,
-    `LIST_STOPWORDS`) and stale docs removed; release notes and README cover
-    bullet remove/reorder and extraction without warnings.
-  - Known limitation, documented in `workspace-backup.md`: the origin-wide
-    pending-edits record does not name its tab, so a narrow race can let a new
-    tab write a live sibling's older value. Not fixed in this pass.
-  - [TOOL] New probes fail against the old logic. Root `npm run check` and
-    `types:check` passed on the merged tree; after the fixes the RoleFit gate
-    passed (137/137 offline) and a fresh exact-head review found no high/medium
-    issues. Browser QA skipped (flag-first); no live-provider calls.
-  - [TOOL] Squash-merged as #161 (`d7f12a0`) with all 17 PR checks green on
-    the reviewed head. `rolefit-preview-v0.8.0-beta.1` (annotated, on
-    `d7f12a0`) ran the preview release workflow (run 36862392970: validate,
-    macOS arm64/x64, Windows x64, publish all succeeded). The prerelease
-    published 2026-10-01T12:41Z with five installers and `SHA256SUMS.txt`.
-    Document CI and the product-site deploy passed on `d7f12a0`.
-  - **Open:** the Typeset deploy for `d7f12a0` failed with "no space left on
-    device" while building the image on the EC2 host; verify and container
-    jobs passed and the site still serves the previous build. The remote
-    script prunes dangling images but not Docker build cache.
-  - [USER+CODE] Fix (user-approved; cache cap was the user's "your call"):
-    before unpacking and building, the remote deploy script runs
-    `docker builder prune -af --keep-storage 1gb`, which keeps the most
-    recently used 1 GB of build cache and drops the rest. Deploys still run
-    only for Typeset-relevant paths. `--keep-storage` is used because it
-    parses on both older Docker and current buildx (hidden alias there).
-    Merging the workflow change starts a new deploy on `main`.
-  - [TOOL] Merged as #163 (`74f5b67`). Its deploy run 36865789743 succeeded:
-    the prune reclaimed 4.42 GB of build cache (confirming the cause), the
-    image built, and typeset.xinyiklin.com answered 200 afterward.
-
-## 2026-09-30
-
-- [USER+CODE] Resume Polish keeps its "Proposed improvements" summary but no
-  longer claim-checks that editorial feedback or emits the generic unsupported
-  summary warning. Existing proposal displays omit that old message without a
-  new provider call. Proposed resume text, cited advice, and response-limit
-  warnings retain their checks and displays.
-  - [TOOL] Full RoleFit gate passed (137/137 offline, application/landing builds,
-    desktop checks). Two independent reviews and synthetic rendered-proposal
-    checks passed, including checks on actual resume Summary content. Companion
-    reloaded; `/api/health` is healthy on port 5181 with the same workspace.
-    Browser QA skipped for this passive-message removal; no live-provider calls.
-
-- [USER+CODE] Job analysis is simple structured JD extraction. The user trusts
-  the selected model for this task and requested no fact checking. The prompt
-  permits concise summaries/paraphrases while preserving stated conditions;
-  the parser retains type, enum, markup, and size guards without source matching,
-  condition replacement, or evidence warnings. Prepare and saved-job views no
-  longer display extraction warnings. Historical warning metadata remains
-  readable without rewriting saved files and is not included in drafting context.
-  Fit Assessment and candidate/document evidence checks are unchanged.
-  - [TOOL] Full RoleFit gate passed (137/137 offline, application/landing builds,
-    desktop checks); final prompt wording rechecked with server TypeScript and
-    137/137 offline tests. Two independent reviews found no substantive issues;
-    their prompt/schema wording consistency note is fixed. Browser QA skipped:
-    only passive warning blocks were removed. No live-provider calls ran.
-
-- [USER+CODE] [TASK tailor-grouped-proposals-20260930] Resume Polish proposes
-  bullet removals and per-entry bullet reorders, and the review groups rows as
-  Rewrite / Add / Remove / Reorder. The user delegated the scope ("your call")
-  and approved Brief v1 and Plan v1 by chat instruction without line-by-line
-  review.
-  - Shared `order-N` flat targets list an entry's bullet `target-N` ids. A
-    removal is `action: "remove"` on a standard bullet target. The server
-    withholds:
-    - removal of an entry's last bullet;
-    - remove plus rewrite of one bullet;
-    - reorder plus removal in one entry;
-    - non-permutation orders.
-  - Undo restores a removed bullet's id and text after its nearest surviving
-    original predecessor, and restores a reordered entry's order. Bulk apply
-    runs index-based reorders before id-based changes.
-  - Group headers carry scoped Accept / Discard when several groups show.
-    `DESIGN.md` and `src/sections/AGENTS.md` were amended: the footer is no
-    longer the only bulk commit location.
-  - Entry-level removal/reorder and Profile swap remain out of scope.
-  - [TOOL] `npm run check --workspace apps/role-fit-ai` exit 0 (offline
-    137/137, uncommitted on `feature/rolefit-candidate-profile`).
-    **UNCONFIRMED:** browser QA of the grouped rail, and live-provider use of
-    the new prompt rules.
-
-- [USER+CODE+TOOL] **RoleFit is prepared as 0.8.0 with browser extension 1.2.1
-  and desktop bridge API 13** (unchanged since 0.7.0). It covers everything
-  after the `rolefit-preview-v0.7.0-beta.1` tag (#135–#159) plus this branch.
-  The minor bump follows the 0.x policy of 2026-08-10. Extension 1.2.1 exists
-  because `popup.js` changed after 1.2.0 shipped.
-  - Disclosed break in `docs/releases/0.8.0-beta.1.md`: `.resume` files
-    without `bulletIndentPt` are rejected. This covers workspace and
-    application resumes, backup creation, and restoring a 0.7.0 backup. The
-    documented workaround is adding `"bulletIndentPt": 14.73` to `style`.
-  - The companion screenshot was retaken at 0.8.0 via the smoke screenshot hook
-    (isolated user data, empty workspace, `--force-device-scale-factor=2`, macOS,
-    1800x1176) on the default port 5181, with the user's companion quit. The empty workspace departs from
-    `landing/AGENTS.md`'s synthetic-pack rule; the Overview shows no workspace
-    content. No landing browser QA ran for this image-only swap.
-  - Notes also disclose the `.resume`/`.cover`-only Open change (#140), the
-    12,000-character Background limit, required CLI versions, and that 0.8.0
-    resumes and backups do not open in 0.7.0.
-  - [TOOL] RoleFit check 134/134 offline, 13/13 release-contract tests, landing
-    build and boundary guard pass. Two independent reviews: no high findings;
-    their release-note fixes are applied.
-  - [TOOL] Superseded 2026-10-01: `rolefit-preview-v0.8.0-beta.1` published
-    successfully (see the 2026-10-01 entry).
-
-- [USER+CODE] [TASK companion-ux-20260930] Desktop companion UX pass, with
-  the Browser extension section first. Renderer-only (`desktop/companion.*`);
-  IPC, preload, main, and the five copy targets are unchanged.
-  - An inline Access card replaced the header pill and popover. Pending
-    requests come first, labelled Firefox or "Chrome or Edge", with
-    **Approve & restart**. Paired origins get a two-step Remove (**Confirm
-    removal**; Escape or blur cancels).
-  - Install is a per-browser (Chrome/Edge/Firefox) numbered guide that ends in
-    the approve step. It collapses once paired.
-  - The sidebar has a pending badge, a Providers attention dot, a labeled
-    **Open RoleFit**, and a service line from live connection status. The
-    Overview heading and card tones follow state. Workspace shows a visible
-    reason when Restore is blocked by open tabs.
-  - Polls no longer rebuild unchanged pairing rows, so focus is kept.
-  - Contract: `apps/role-fit-ai/desktop/AGENTS.md`.
-  - [TOOL] `check:desktop` and the Electron companion smoke pass (Node
-    24.18). One `ipc-probes` ownership-gate regex was rewritten for the new
-    row builder (mutation-checked), and a render-key assertion was added.
-  - [TOOL] Mock-bridge offscreen Electron screenshots and scripted
-    keyboard/confirm/focus/error checks replaced browser QA. Real Electron
-    mouse input confirmed that a click focuses and arms Remove, blur cancels,
-    and a double-click cannot confirm.
-  - [TOOL] One independent review found no high issues. Fixed: the
-    double-click confirm bypass, focus loss and poll-wiped errors after a failed
-    approve/remove, an always-rendered status live region, the Restore note
-    requiring transfer readiness, a disabled `.text-button`, forced-colors
-    attention dot, and AA contrast on the new hint lines.
-  - [USER+CODE] Follow-up (plan amendment v2): copy controls became copy
-    fields (value plus a clipboard segment that shows a check on success),
-    browser addresses got their own field under each step, and accessible
-    names read "Copy <value>". Desktop checks, smoke, and harness re-passed.
-  - Known limitation: the `<h2>` inside `<summary>` may be flattened by
-    VoiceOver heading navigation.
-  - UNCONFIRMED: a live install of the extension against the real companion,
-    and screen-reader or forced-colors rendering.
-
-- [USER+CODE] Fit gap notes are no longer claim-checked. Their ordinary
-  absence wording ("does not mention Kubernetes", the posting's "5+ years")
-  raised "Gap N: explanatory claims are not supported" warnings.
-  - User-accepted tradeoff: an invented candidate claim in a gap note now shows
-    unflagged. Gap notes are display-only in Prepare. Summary and
-    eligibility-note claim checks, excerpt location checks, and
-    transferable/contradictory citation checks remain.
-  - Warnings labelled `Match N:`, `Gap N:`, or `Eligibility:` now render beside
-    that finding in Prepare, the application modal, and the tracker inspector
-    (`splitFitWarnings`). Findings a surface doesn't show keep their warnings in
-    the top note.
-  - Prompt, rubric v7, and schemas are unchanged. Saved results keep their old
-    warnings until reassessed. Contract: `apps/role-fit-ai/server/ai/README.md`.
-  - [TOOL] RoleFit gate exit 0, 134/134 offline. Restoring the old check fails
-    the new eval. Two independent reviews led to fixes for list-selector
-    leakage, duplicate gap keys, and a Final review wrap regression. Browser QA
-    was skipped (flag-first). Approval gates were compressed through chat
-    replies.
-
-- [USER+CODE+TOOL] Provider catalog: GPT-6.1 Sol (`gpt-6.1-sol`) added to Codex
-  and OpenAI API, and Claude Sonnet 5.5 (`claude-sonnet-5-5`) to Claude CLI and
-  API. Both became the Codex and Claude defaults for new or unset stages and the
-  server fallback; saved selections are not moved.
-  - GPT-6.1 Sol effort follows the provider-reported Codex catalog (client
-    0.159.0: low–ultra); the Codex models page still calls Ultra "coming later".
-  - Sonnet 5.5 on the API sends `thinking: {type: "between_tools"}` because it
-    rejects `disabled`.
-  - Retired Codex ids now repair to GPT-6.1 Sol.
-  - Receipt and sources: `apps/role-fit-ai/docs/engineering/ai-server.md`.
-  - Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and Codex CLI
-    0.159.2, whose catalog lists GPT-6.1 Sol. Older Codex clients fail it with
-    the generic Codex error (no update hint).
-  - UNCONFIRMED: live provider calls.
-
-- [USER+CODE] [TASK prefs-clobber-20260929] Workspace preferences no longer
-  lose newer records to stale clients. On 2026-09-29 the desktop client twice
-  replaced an externally updated `workspace-preferences.json` with its cached
-  copy: page exit always saved and left a pending marker, and the next boot
-  pushed that copy before reading the file.
-  - `POST /api/workspace/preferences` now requires `baseRevision`, the SHA-256
-    of the stored file bytes that GET and a successful POST report. A different
-    stored revision returns `409 { stale, current }`, so edits that leave
-    `updatedAt` untouched are also detected.
-  - Each tab writes its own settings snapshot, never the shared browser cache.
-    It pushes only saves that change a setting, and records unpushed edits with
-    their values in an origin-wide pending record.
-  - On a stale reply the tab rebases: user-changed settings keep local values,
-    the rest take the newer record's. It retries once. An unseen restore drops
-    pre-restore edits. Legacy `"1"` markers without a valid edit record are
-    discarded.
-  - Contract: `apps/role-fit-ai/docs/engineering/workspace-backup.md`. Evals:
-    `workspace-preferences-precondition-probes.mjs`,
-    `workspace-preferences-conflict-eval.mjs`.
-  - [CODE] Review follow-up (2026-09-30): adoption keeps settings-hook edits
-    still inside its 400 ms debounce; per-stage instructions rebase per stage,
-    including removals; each tab tracks the restore its baseline includes, and
-    the shared pending record carries its restore stamp, so a restore another
-    tab acknowledged still drops pre-restore edits; a saved edit that resolves
-    against a sibling setting (model, effort, date) is released. Companion
-    Remove ignores auto-repeated Enter.
-  - [TOOL] RoleFit gate 134/134, `check:desktop` pass; new conflict probes
-    fail against the old logic (mutation-checked). One independent review plus
-    re-review: two defects fixed, then no findings. Browser/Electron QA and a
-    real key-hold test were not run.
-
-- [USER+CODE] Approved a minimal browser-reliability/CI refinement after waiving
-  Product Partner. Browser contracts retain all content, layout, persistence,
-  and history assertions. Core and extended groups own disjoint cases; the
-  default command runs their union. The existing Chromium check aggregates both
-  results, so extended failures remain blocking without duplicate test runs.
-- [CODE+TOOL] Independent review caught and resolved a section-style leak:
-  fixtures now await persisted restoration before closing, and groups clear the
-  synthetic origin before starting. Focused browser probes verify both boundaries.
-- [TOOL] A synthetic pre-fix trace reproduced menu open → delayed outside scroll
-  → menu close in 10/10 attempts per resume host. The helper now settles scroll
-  and geometry before one native right-click, checks the enabled command, and
-  waits for the model mutation. Ten repaired structure/history repetitions per
-  host passed; missing-target, absent-command, and disabled-command controls fail.
-- [CODE] CDP owns named response deadlines and disconnect cleanup. A 10-minute
-  suite watchdog replaces no correctness assertion; the two completed-workload
-  speed assertions became timing reports. CI retains Chrome identity, phase
-  timings, and bounded synthetic failure JSON/screenshots for seven days.
-- [CODE] Document CI owns app correctness and the seven automatically discovered
-  document-workflow probes. Pages retains its landing artifact/release checks;
-  Typeset retains its container build/HTTP probe and existing result check.
-  Duplicate full app checks, server probes, and the extra server typecheck were
-  removed. Native platform coverage, release gates, and the small landing-catalog
-  overlap remain. Extended skips only Markdown/backend AI-only changes; mixed,
-  shared, configuration, manual, and uncertain comparisons run it.
-- [TOOL] Local checks passed: full macOS Chromium coverage, 11 harness/routing
-  tests, RoleFit's complete gate (122 offline probes), 13 release-contract tests,
-  dependency/script contracts, workflow YAML/dependency validation, and a Linux
-  ARM64 Typeset container build/HTTP probe. Deliberate browser failure produced
-  the expected error, target/menu/selection/scroll state, and PNG. AST comparison
-  retained every old functional assertion; only the two timing assertions were
-  removed. At local verification, hosted Linux Chromium/Actions, artifact upload,
-  and deployment remained unverified. No version/dependency or product UI change.
-
-## 2026-09-29
-
-- [USER+CODE] [TASK profile-tailor-naming-20260929] Naming pass: one name per
-  RoleFit concept.
-  - AI stages are `job-analysis`, `fit-assessment`, `resume-polish`,
-    `cover-polish`, `application-answers`, `application-review`; settings keys
-    are `<camelCase stage id>Provider|SelectedModel|CliReasoningEffort`.
-  - Routes are `/api/resume-polish` and `/api/cover-polish`.
-  - The stored Background is `profileBackground`; the facts plus Background
-    sent to every stage is `candidateContext`.
-  - The auto-run keys are `fitAssessmentAuto` and `resumePolishAuto`/
-    `coverPolishAuto` plus `…AutoThreshold`.
-  - Cover evidence from the Profile is labelled Profile.
-  - Only the cover stage label changed ("Cover letter Polish").
-- [CODE] Old settings names convert once in `migrateStoredSettings` (browser
-  cache, workspace file, backups); a stored new name wins; unknown keys still
-  fail closed. Tracker `aiUsage.cover` reads as `cover-polish` in
-  `copyAiUsage`; stored records are not rewritten.
-- [ASSUMPTION] Residual risks:
-  - A browser tab still running the previous build can read new-name settings
-    as unknown and, after a Settings edit there, push a reduced file. Reload
-    open tabs after upgrading.
-  - Rolling back this change after new-name files are saved drops those
-    settings in the older build. Back up the workspace first.
-- [USER+CODE] Profile-aware Resume Polish:
-  - A Background heading that names exactly one standard resume entry by title
-    or subtitle links its text to that entry (`linkProfileBlocks`, shared with
-    Fit's heading scan). Resumes put the employer on either line; the
-    plain-text parser writes "Role | Company" role-first.
-    - Every enclosing heading must name the same entry or be a grouping heading
-      (resume section names or a fixed list); any other enclosing heading blocks
-      links beneath it (CR002 v2, pending user confirmation).
-    - Text under a nested heading that names another entry is cut out.
-    - A grouping word never names an entry; blank section names are ignored.
-    - Profile rows list every whole heading linked to the entry
-      ("From Profile: …").
-    - A name an omitted entry shares stays unlinked
-      (`locked.omittedEntryNames`, never sent to a provider).
-  - Polish may rewrite that entry's bullets from the linked text and fill two
-    `new-bullet` slots per linked in-scope entry; the client assigns the
-    bullet id so Undo removes exactly it.
-    - A new bullet must echo its slot's `entryId`.
-    - A bullet change repeating another bullet change to the same entry in
-      one response is a no-op; edits to existing bullets win over new ones.
-    - Inline marks (even bold) never unlock an Education or contact heading.
-    - Every change echoes its server target; a mismatch fails the proposal.
-    - Client and server reduce structural marks identically before numbering,
-      which also closes an older mismatch for alignment-marked
-      Education headings.
-  - Grounding and ownership for experience/project entries use only the entry
-    plus its linked text; failures stay warnings (CR001 Option A).
-  - Advice may quote the Profile. `add-from-profile` must quote a heading
-    block that names no resume entry, and it is hidden when that item is
-    already on the resume.
-  - Settings > Profile's hint says to name headings as on the resume.
-  - `@typeset/editor` `addBullet` accepts an optional prebuilt bullet
-    (duplicate id is a no-op).
-- [USER] Deferred: Profile-driven swapping of resume content. Superseded in
-  part on 2026-09-30: Polish now removes and reorders bullets (see that date);
-  entry-level removal/reorder and Profile swap stay deferred.
-- [TOOL] Verification, uncommitted on `feature/rolefit-candidate-profile`:
-  - Editor and Typeset checks passed.
-  - The RoleFit build, landing, desktop, and server type-checks passed.
-  - Offline evals: 134/134, together with the concurrent
-    workspace-preferences fix in the same worktree.
-  - Two independent reviewers ran five rounds. All confirmed defects are
-    fixed with tests. The verifier killed 19/20 mutations; the survivor is
-    now covered. Client/server target-id fuzz: 4,000 random scopes, 0
-    mismatches.
-  - **UNCONFIRMED:**
-    - browser QA of the review rail (the preview launcher cannot read the
-      project folder: EPERM);
-    - live-provider behaviour of the Tailor prompt;
-    - the user's decisions on CR002 v2 and the stricter ownership check.
-
-## 2026-09-28
-
-- [USER+CODE] [TASK candidate-profile-20260928] RoleFit Settings > About you
-  became **Profile**: the basic declared facts plus one **Background** text
-  field (the former Guidance > Honest context; stored as `profileBackground`
-  since the 2026-09-29 naming pass).
-  The per-source Experience evidence rows were removed. Stored rows migrate
-  once, before strict preference/backup validation, into an appended
-  `## Experience by type` block with every declared value. Custom instructions
-  stay in Guidance, apart from the facts the AI stages treat as evidence.
-- [CODE] `shared/candidateProfileContract.ts` is the one length contract,
-  measured as the longer of the raw and NFKC-normalized length. Every stage that
-  sends candidate context gets the whole Background up to 12,000 characters and
-  declines above it, and servers reject rather than slice merged context above
-  13,000, before any provider call. Those stages are Fit, resume and cover-letter Polish,
-  application answers, and final review. Before this change, Fit refused anything
-  over 4,000 characters, and Polish and answers silently cut it at 8,000/6,000.
-  Cover-letter evidence caps rose to 600 items and 12,000 characters per item,
-  with a 100,000-character prompt corpus. It now declines visibly rather than
-  clipping; this was user-approved. Background lines are grouped into at most
-  200 evidence items, never across a heading while there are at most 200
-  headings. Stored Background may be up to 60,000 characters, and
-  larger edits are refused.
-- [CODE] Fit's deterministic professional-source conflict check now reads a
-  cited Profile line together with the nearest enclosing Markdown heading that
-  names a type (its own line included, fenced code excluded, every occurrence
-  checked), so `## X (personal project, …)` headings keep that protection. The Fit prompt
-  overlap rule now says "entries or types", and the prompt version is
-  `fit-assessment-direct-rubric-v7`.
-- [TOOL] Verification:
-  - Final `npm run check --workspace apps/role-fit-ai` passed with 126/126
-    offline evals; the server type-check passed too.
-  - Two independent reviews followed. Reviewer 1's heading-chain, evidence
-    grouping, NFKC length, pre-dispatch Fit, and sanitizer-cost findings were
-    fixed and re-checked.
-  - The verifier passed 11/12 criteria and killed 24 of 28 mutations; the
-    survivors were later covered by tracked assertions.
-  - A live synthetic Fit probe (`claude-cli`, one run per case) treated a
-    personal-project heading as not meeting a paid-experience requirement, and
-    matched Profile evidence for a source-neutral requirement.
-  - **UNCONFIRMED:** browser QA of Settings > Profile and the add-evidence focus.
-    The in-app preview could not read the project folder (EPERM).
-- [USER+CODE] Investigated Firefox Apply/download delays when the tab is hidden.
-  The shared PDF emitter now disables pdf-lib's timer-based serialization yields,
-  which can be throttled in background tabs. RoleFit saves the tracker and strict
-  document sources before PDF export; their persistence sequence is unchanged.
-  The fix also covers Typeset and saved-document PDF rendering. Fully suspended
-  or discarded tabs remain outside application control; large documents
-  may spend longer in one uninterrupted serialization task.
-- [TOOL] The new timer-rejecting regression failed with the old setting and passes
-  12 resume/cover cases across six font families. Engine check, RoleFit build,
-  Typeset check, PDF round trip, Apply lifecycle/export probes, and script-path
-  validation passed. All 15 rendered pages from 14 synthetic before/after PDFs
-  are pixel-identical at 96 DPI. Two independent reviews found no actionable
-  issues and independently confirmed the negative control.
-- [USER+TOOL] The user still reported a 10–20 second Firefox background delay
-  after the timer change. An isolated stock Firefox 156.0.1 macOS test with a
-  synthetic 451-record, approximately 5 MB tracker reproduced a smaller but
-  substantial delay: both PDF downloads completed in 0.66 seconds foreground
-  and 5.07 seconds hidden. Saving alone took 0.38 versus 2.23 seconds; the
-  remaining delay preceded PDF handoff to Firefox. Setting only
-  `threads.lower_mainthread_priority_in_background.enabled` to `false` in the
-  isolated test profile reduced hidden-tab completion to 0.79 seconds (saving
-  0.37 seconds). This supports Firefox background main-thread prioritization
-  as a contributor, consistent with Mozilla bug 1960734; the user's exact
-  10–20 second case and original browser profile remain unverified. Playwright
-  Firefox forced pages visible and was rejected as background evidence.
-- [TOOL] A RoleFit PDF-worker prototype improved an isolated warmed render but
-  did not reliably improve the full save/download flow; all prototype app-code
-  changes were removed. Only the earlier shared timer fix remains. No real
-  applications or user Firefox preferences were modified. Synthetic test
-  browsers and servers were stopped.
-- [CODE] Package and RoleFit READMEs document the remaining background-scheduling
-  limitation and the foreground workaround. The Firefox-wide preference remains
-  unchanged; this change removes PDF serialization timers without promising a
-  complete fix for the reported browser delay.
-- [TOOL] Publication verification passed engine, editor, and Typeset checks,
-  dependency/script contracts, and the RoleFit gate (122 offline evaluations).
-  The sandbox initially blocked a desktop test's loopback listener; the complete
-  RoleFit gate passed with loopback access. A fresh PDF round trip and all 15
-  rendered pages again matched the pre-change baseline at 96 DPI.
-
-## 2026-09-27
-
-- [CODE+TOOL] Provider catalog publication review: RoleFit adds GPT-6 and
-  Claude Fable 5.1/Opus 5.5 choices, defaults Codex to GPT-6 Sol, and repairs
-  known retired Codex selections within their original stage/provider. One
-  app-owned CLI effort contract serves settings, request validation, and Claude
-  argv; strict preference/backup parsing still rejects unrelated invalid data.
-  Fresh RoleFit builds, desktop contracts, all 122 offline evaluations, and
-  document-workflow regressions passed. Two fresh independent reviews found no
-  actionable issues. Live-provider execution and rendered settings QA remain
-  unverified. No version bump or native release is included.
-
-- [CODE+TOOL] PR #157 Chromium CI failed because the wrapped-header test still
-  expected `.cover` headers above 1,000 characters to be rejected after the
-  approved limit alignment. The test now requires successful reopen and exact
-  header preservation for all existing 80/512/4096-character cases in all hosts.
-  Cover codec/layout evals and 16 focused header round trips passed, including
-  the 10,000-character boundary and rejection above it. The full local Chromium
-  suite passed after granting loopback access, including the corrected cover
-  cases. Independent review found no actionable issues; syntax and diff checks
-  passed. The correction changes only test expectations.
-
-- [USER+CODE] [TASK engine-editor-bugfix-20260927] Approved fixing the shared
-  engine/editor review's user-facing bugs.
-  - The PDF now carries kern adjustments (TJ), so exported widths match the
-    editor. It keeps drawText's control-character cleanup.
-  - Year ranges and numeric dates no longer auto-link as phones; every format
-    that linked before still does.
-  - Page fit uses a fixed reference-string row footprint (`Agjpqy`), never
-    typed glyphs.
-  - The title/subtitle ink floor is max(old floor, real underline depth).
-  - Title line-height marks apply whether or not the title wraps.
-  - `.cover` header limits now equal `.resume`'s (`DOCUMENT_HEADER_LIMITS`),
-    which relaxes a `.cover` bound.
-  - Editor fixes:
-    - portaled toolbar menus no longer close their popover;
-    - empty or unchanged numeric drafts revert;
-    - dialog close keeps editor focus;
-    - the link card owns Escape only on the page or card;
-    - no-op edits add no undo step;
-    - pasted HTML whitespace collapses;
-    - Shift+Tab mid-paragraph outdents;
-    - replay continues past no-op and undo intents;
-    - cross-field Enter and clear formatting keep order and parity.
-- [TOOL] Every regression eval fails on HEAD and passes now.
-  - Engine/editor checks, the Typeset build/check, the RoleFit check and
-    `npm test` passed.
-  - The workspace layout diff found 0 changes (221 `.resume` files; the
-    verifier also checked 50 `.cover` files).
-  - The base resume PDF extracts the identical word sequence, with 7 links.
-  - Typeset browser checks passed: popover menus, empty size revert, undo.
-  - A verifier and an adversarial reviewer found no failures. The reviewer's
-    phone regression was fixed, and its three low findings were addressed.
-- [CODE] Residual limitations:
-  - Positive kern pairs ≥0.1em (rare Source Serif/bracket pairs) can make
-    pdf.js extract a stray space.
-  - Non-year number ranges (`1000-5000`) still auto-link, as they did before.
-  - The live cover-letter-only behaviors (Shift+Tab, spacing dialog focus) are
-    eval-proven only.
-- [CODE] Deferred:
-  - codec-accepted unrendered fields (a schema decision);
-  - context-menu keyboard navigation;
-  - space-kern DOM drift (unconfirmed);
-  - all refactor/simplification items.
-
-- [USER+CODE] [TASK bullet-indent-20260927] Approved a document-wide
-  `.resume` style field, `bulletIndentPt`. It is the bullet dot's offset from
-  the entry start (0–36pt), shown in Paragraph → Entry layout in both apps.
-  Bullet text keeps its historical gap after the dot. The default is 14.73,
-  which reproduces the previous LaTeX-derived layout exactly at the default
-  10pt body size. Unlike the old constant, the dot position is absolute
-  points: it no longer scales with `baseFontSizePt`, although the dot-to-text
-  gap still does. No UI changes the base size.
-- [USER+CODE] Under the pre-release schema policy the field is required, with no
-  absent-field default. Older `.resume` files and stale browser autosaves are
-  rejected (a stale Typeset autosave is replaced by a fresh document); the user
-  accepted this.
-- [CODE] `.cover` is unchanged; letters carry an inert 0.
-- [TOOL] A throwaway script converted 214 of the 229 ignored RoleFit workspace
-  `.resume` files, using exact per-size values. The before/after layout diff was
-  0pt with identical pages. The 15 skipped files were July trash copies that
-  already failed on the retired `letterSpacingPt`.
-- [TOOL] Engine and editor checks, the Typeset build/check, the RoleFit check,
-  and `npm test` passed. A Typeset browser check confirmed the slider, a flush
-  dot at 0, undo, and an autosave reload round trip; PDF rendering was
-  inspected.
-
-- [USER+CODE] Pre-merge code review of the advisory-content-checks branch; the
-  user approved fixing all ten findings. These fixes restore guards the branch had loosened:
-  - job conditions that change meaning keep the posting's source clause;
-  - metadata-only Job analysis falls back to the local engine;
-  - confirmed BLOCKED eligibility stops automatic Polish;
-  - BLOCKED without located, explicitly conflicting excerpts is downgraded to CHECK;
-  - Apply needs 40 authored words and no template slots in the cover letter;
-  - Resume Polish withholds edits that contain placeholders.
-
-  They also fix job-type and salary normalization, and add a call-time check
-  for a replaced document plus memoized terminology checks. The warning policy
-  docs now carve out these exceptions.
-- [CODE] Independent review found the branch's loose `<…>` markup test would
-  make main-era saved Fit excerpts (for example `<50ms … >99.9%`, `List<T>`)
-  unloadable and discard Final Review on `<insert …>` placeholders. Only
-  tag-shaped text is now treated as markup. Quotes may contain it only when
-  found verbatim in their source.
-- [TOOL] RoleFit gate (build, landing, desktop, server tsc) and 121/121 offline
-  probes passed after the fixes. Two independent reviewers covered the fixes
-  and the AI sanitizer/grounding surface; live providers and browser QA were
-  not run.
-
-## 2026-09-18
-
-- [USER+CODE] Follow-up review corrected a terminology warning false positive:
-  an unrelated warning no longer hides a supported term retained in the same
-  field. Original/current terminology pairs preserve genuine aliases while
-  newly added, negated or aspirational terms remain uncertain. The correction
-  leaves warning visibility, decision controls and technical protections intact.
-- [TOOL] Corrected build and all 121 offline probes passed; an independent
-  reviewer reproduced the retained-term case through the production hook and
-  cleared adversarial/Undo/identity checks. Actual production App acceptance
-  used disposable storage and synthetic provider replies: Resume/Cover Save,
-  real Apply tracker/document writes, and both downloaded PDFs passed strict
-  source/text/render checks. Desktop/390px checks had no browser errors. This
-  supersedes the earlier full-shell acceptance gap below; OS file dialogs,
-  live providers, ATS imports and hiring outcomes remain untested.
-- [USER+CODE] [TASK ats-terminology-20260918] Approved system-wide advisory
-  content checks and supported-term preservation, then requested review and a
-  branch push. This supersedes the earlier evidence-rejection behavior below:
-  RoleFit preserves usable questioned output with warnings and user actions,
-  while truthful prompts and technical/stale-document protections remain.
-  Root guidance now distinguishes this RoleFit policy from Typeset. Shared
-  packages, portable schemas, provider defaults and product versions are unchanged.
-- [CODE] Required-first terminology uses strict aliases and actual accepted
-  decisions (details in RoleFit's AI docs). Saved Fit/job receipts retain
-  optional warnings; older builds may reject those newer receipts. Draft warning
-  metadata stays session-local. Visitor and engineering docs describe the limits.
-
-- [TOOL] Final pre-push RoleFit gate passed app/server/landing/desktop checks
-  and 121/121 offline probes after terminology corrections. Document workflows
-  and synthetic desktop/390px QA passed during implementation; two independent
-  implementation reviewers and a fresh publication reviewer cleared their scopes.
-  Live providers, vendor ATS and hiring outcomes remain unverified; no efficacy
-  claim. Local artifacts and personal data remain excluded from publication.
-
-- [USER+CODE] [TASK fit-assessment-rejection-20260918] Approved the advisory Fit
-  guard simplification and publication after review. The RoleFit-owned change
-  removes semantic word-matching vetoes while preserving citation integrity
-  and focused explicit-conflict checks. Shared packages, document-generation
-  safeguards, schemas, provider settings, and product versions are unchanged.
-- [TOOL] Five focused Fit/evidence suites and the full RoleFit gate passed:
-  app/server/landing builds, desktop contracts, and all 117 offline probe files.
-  Two fresh independent reviewers found no
-  actionable issues. The local companion was gracefully refreshed and reported
-  healthy with unchanged workspace identity. Browser QA was not needed for the
-  server/static-copy change; no live provider evaluation ran, and the exact
-  original assessment failure remains unconfirmed.
-
-## 2026-09-17
-
-- [USER] [TASK editor-stress-20260916] Approved editor stress work, including
-  paired title/subtitle wrapping and the logical text layer. Subsequent reports
-  exposed omitted name/contact, section-title overflow and glyph-dependent name
-  placement. The user authorized final correctness/maintainability review,
-  necessary simplification, push and merge once green.
-- [CODE] Shared measured wrapping covers paired entry fields, section titles,
-  names and contacts. Short paired fields retain their widths; long counterparts
-  share available space. Source text, marks, links and logical field identity
-  survive wraps; oversized groups split at continuation boundaries. Section
-  rules follow the last continuation. Header baselines use font-face metrics,
-  including blank plain fields. This intentionally replaces typed-ink placement:
-  all 75 starter snapshot rows move down 11.275pt, with text/X/pages unchanged.
-- [CODE] The selectable DOM follows logical field order while painting engine
-  geometry, preserving native selection/search and accessibility-tree order.
-  PDF text operators follow field order within each page. Editor fixes cover
-  directional selection, wrapped navigation, grapheme/word deletion, queued
-  input/no-op replay and document replacement, tight title/subtitle clearance,
-  and page-aware structure controls. Compact Typeset retains Open/Save actions;
-  shared popovers stay within the viewport. Schemas, dependencies, versions,
-  provider behavior and persistence ownership are unchanged.
-- [TOOL] Prior implementation gates passed across both apps/packages and
-  isolated Chromium fixtures. Regression families include all 12 editable
-  field paths, six fonts, blank/long/token input, native typing/selection/history,
-  strict files, rendered print/PDF, 384 header stability cases and independent
-  review of each correction. Earlier completion claims omitted field types;
-  the explicit inventory and subsequent regressions replace those claims.
-- [CODE+TOOL] Final publication review removed redundant horizontal caret
-  interception, an unused selection-painting fallback and browser-test import
-  cycles. Native horizontal navigation now follows the browser's platform
-  conventions. Fresh full workspace and Chromium gates passed after cleanup,
-  covering both resume hosts and Cover; two independent reviewers cleared
-  their scopes. Independent output comparison passed 28 browser/dedicated PDF
-  fixture pairs (35 pages per backend). Linux browser CI remains a publication
-  gate; local native checks ran on macOS Chromium.
-- [TOOL] Initial Linux CI exposed a section-fixture startup race: its data API
-  existed before fonts finished loading and the editor painted. The test now
-  waits for its rendered heading, matching the other browser fixture waits.
-  Native word navigation is compared with a plain control in the same browser
-  instead of assuming that every non-macOS browser skips trailing whitespace.
-- [CODE] Limits remain explicit: physically impossible glyph geometry is not
-  silently shrunk; oversized keep-groups can leave unused preceding-page space.
-  Actual OS IME, screen readers, native Find UI and other browsers remain
-  unverified; synthetic composition, AX traversal and browser text search are
-  distinct checks. Cover file size limits are unchanged. Test artifacts and
-  personal documents stay local and ignored.
-
-## 2026-09-16
-
-- [USER+CODE] [TASK entry-rows-20260915] Approved Add/Remove-only title/subtitle
-  row controls in both resume hosts. Menu removal clears both fields; Enter
-  from the end of Title right adds/focuses Subtitle left, and Backspace from
-  its start removes the row only when both subtitle fields are empty. Undo
-  restores removal; fully empty entries recover from their section context menu.
-- [CODE] Standard entries retain four required `.resume` v1 field keys with
-  paired strings for present rows and paired nulls for absent rows. Mixed pairs
-  and null rows in nonstandard sections are rejected. Existing string-valued
-  files retain their layout; older builds reject new null-row files. No personal
-  files were rewritten and no versions changed. The user subsequently authorized
-  review and, if ready, publication through the repository's push/merge workflow.
-- [TOOL] Verification passed: combined workspace check; final editor and both
-  app checks after interaction fixes; Chromium contracts for both resume hooks,
-  compact menu recovery, queued Enter, composition, and Undo/Redo; strict file
-  round trips/rejection; unchanged-file geometry; rendered mixed-size row
-  combinations in editor, print, and dedicated PDF including a page boundary.
-  Two independent reviews completed with no unresolved findings. Review-found
-  queued Enter stalling and reproduced menu overflow were fixed and retested.
-  Browser QA used synthetic Chromium fixtures; additional browsers and personal
-  documents were not tested.
-
-## 2026-09-08
-
-- [USER+CODE] Authorized review, browser QA, and merge of the accumulated RoleFit
-  evidence-grounded drafting work. RoleFit retains app ownership: paragraph-cited
-  cover-letter evidence, bounded Resume targets and advisory suggestions, compact
-  Fit v5 with a neutral insufficient-information outcome, and optional session-only
-  final review of included materials. Legacy Fit/date representations remain
-  readable without rewriting tracker data. Shared packages and portable formats
-  are unchanged; provider judgment remains advisory and Apply stays independent.
-- [CODE] Merge review corrected stale sentence-binding prompting, numeric version
-  and multiplier handling, contradictory-evidence disclosures, first-person
-  wrong-target findings, and the final-review progress dismissal control.
-  Synthetic provider calibration remains limited: the prior combined evaluation
-  had one adjacent-verdict mismatch (17/18 expected); no accuracy improvement or
-  universal factual correctness is claimed. New live-provider calls were not run.
-
-- [TOOL] Final RoleFit app/server/landing/desktop gate passed with 117/117 offline
-  probe files after review corrections. Two fresh independent reviewers cleared
-  their scopes. Isolated browser QA mounted the production review hook and rail:
-  completion, Stop, late/stale results, failure/previous receipt, source disclosure,
-  keyboard access, progress dismissal, Apply independence, and desktop/390px layout
-  passed. Browser inputs/responses were synthetic; the personal App workspace and
-  live-provider generation were not exercised. Task artifacts remain local.
-
-- [USER+CODE+TOOL] Aligned root ignore rules with Machine Bootstrap's GitHub main
-  `3c95056f3d7902932f33c2bdabcd0d0e87cf58f2`: machine facts, local skill/npm
-  state, caches, coverage, setup backups, and editor files stay local. Root
-  `.npmrc` remains the shared install policy and agent guidance stays tracked.
-  App privacy rules are unchanged. Forty ignore probes and independent review
-  passed for that alignment; the subsequent task-artifact decision below supersedes
-  its exception for `.agent-work/`.
-- [USER+CODE+TOOL] `.agent-work/` now stays local, including completed task artifacts.
-  Removed the 12 previously tracked task files from the index; all 25 local task
-  files were verified byte-for-byte unchanged. Root guidance and Git workflow now require self-contained durable
-  summaries instead of links to ignored artifacts; task IDs remain valid labels.
-  Ignore/link checks and independent preservation review passed.
-
-## 2026-09-05
-
-- [USER+CODE+TOOL] [TASK loading-skeleton-20260904] Refined the Applications
-  skeleton within its approved scope: a separate header uses the real table's
-  column grid, and the full-height inspector frame now reserves identity,
-  facts, Fit, documents, and actions. The full RoleFit gate passed again with
-  107 offline evaluations. Browser layout and interaction remain unverified.
-
-## 2026-09-04
-
-- [USER+CODE+TOOL] [TASK loading-skeleton-20260904] Applications and Analytics
-  now show layout-shaped skeletons for initial page-code and saved-data loading,
-  with a quiet opacity pulse and static reduced-motion fallback. Applications
-  follows the selected table/calendar view; populated refreshes keep content
-  visible. Initial Analytics load failures expose recovery instead of zero
-  totals. The full RoleFit gate passed with loopback access, including builds,
-  desktop probes, and 107 offline evaluations; the sandboxed attempt was blocked
-  at a loopback listener. Browser QA was not opted into and remains unverified.
-
-- [USER+CODE+TOOL] [TASK tracker-stage-menu-groups-20260904] The Applications row context menu now groups stages into
-  Active (Applied, Interviewing, Offer) and Inactive (Skipped, Rejected,
-  Withdrawn), and permits movement in either direction on the same record. A
-  formerly applied record retains its application date, saved documents, and
-  attachments when later marked Skipped; a Skipped record without an application
-  date remains job-only until reactivated. The full RoleFit gate passed all
-  builds, desktop probes, and 106 offline evaluations; the UI detector was
-  clear. An isolated browser pass verified visible grouping, disabled-current
-  behavior, enabled-only Arrow navigation, and Applied → Skipped → Applied
-  persistence while retaining the original application date.
-
-## 2026-09-03
-
-- [USER+CODE+TOOL] Resume Polish now has a default-on **Bold keywords in
-  bullets** preference under Settings > Guidance. The persisted boolean travels
-  with the proposal request and its freshness fingerprint; when disabled, the
-  prompt forbids bullet bold and the server strips `<b>` from rewritten bullets
-  while preserving italic, underline, and Skills-list formatting. The sanitizer
-  rejects non-boolean request values and mark-only replacements, treats a fully
-  examined all-UNCHANGED response as No changes only when the provider status is
-  valid and not Withheld, excludes echoes from the verification-failure count,
-  and records changes beyond the 40-item examination window as malformed safety
-  drops. Focused settings and direct sanitizer regressions plus application,
-  landing, and desktop builds pass under Node 24.18.0. The managed shell blocks
-  listener-backed checks with `listen EPERM`; exact-head GitHub CI remains the
-  publication gate. Browser visual QA and live-provider evaluation were not run.
-
-## 2026-08-15
-
-- [USER+CODE+TOOL] The Applications table now uses the same scrollbar mechanics
-  as its inspector rail. Removing the table-only WebKit width/thumb styling lets
-  Chromium-based browsers retain scrolling while following platform overlay and
-  auto-hide preferences; Firefox keeps platform visibility behavior. Both
-  scrollports still inherit the studio surface's shared scrollbar color. The
-  live physical-gutter measurement keeps the detached header aligned when
-  needed.
-
-## 2026-08-14
-
-- [USER+CODE+TOOL] Application search now uses only company, role/title, and
-  posting ID, with exact and prefix company matches ranked first; descriptions
-  and notes are excluded in both Table and Calendar. A privacy-safe aggregate
-  probe reduced `docu` from 115 broad content matches to 3 identity matches. The
-  desktop tracker controls now share one height and top edge, and pagination
-  remains visible for empty results to stabilize the table and inspector rail.
-  The table no longer forces Firefox's thin, custom-colored scrollbar, which
-  made the scrollbar permanently visible and consumed an end gutter. Firefox
-  now follows native overlay/auto-hide behavior; measured-width header alignment
-  remains as a fallback when a platform preference supplies a physical
-  scrollbar.
-  The RoleFit gate passes all 106 offline evaluations and dependency contracts;
-  browser QA was not run.
-- [USER+CODE+TOOL] Application Detail and the tracker now display and search a
-  readable posting ID derived from immutable posting text before safe ATS links;
-  opaque UUIDs and unsafe URL schemes are ignored. The RoleFit gate passes all
-  106 offline evaluations; browser QA was not run.
-
-## 2026-08-12
-
-- [USER+CODE+TOOL] The final ultra review hardened application ownership,
-  authoritative duplicate-refresh ordering, modal cross-tab and document
-  recovery, and status/focus lifecycles without new schemas or dependencies.
-  Same-tab writes are drained before tracker reads, stale preparation work
-  cannot relink a replacement, concurrent Application Detail edits fail closed,
-  and document operations join the unload boundary. A behavioral refresh-race
-  probe and the full app/package gates pass; the RoleFit suite now contains 106
-  offline evaluations. Browser QA was not started under the flag-first policy.
-- [USER+CODE+TOOL] Recovery is now an interruption-only safety net: a fresh tab
-  never adopts a closed tab's draft, an extension import hides the receiving
-  tab's prior prompt without deleting recovery data, same-tab entries expire
-  after 24 hours, definitive no-entry responses remove stale extension claim
-  tokens, and visible copy says **Recovery draft available**. Apply and explicit
-  document saves share saved, excluded, and failed outcomes: every commit attempt
-  invalidates stale evidence, included strict-source writes stay unload-protected,
-  and an excluded dirty document releases after its exact recovery write succeeds.
-  Sequential document uploads are both revalidated before either editor is marked
-  clean, and retired debounce timers cannot recreate cleared recovery data. Saved
-  applications do not warn during recoverable PDF export. The full RoleFit gate
-  passes both builds, desktop contracts, and all 103 offline evaluations after the
-  sandbox-only loopback rerun. No browser session was started under the flag-first
-  interaction-QA policy.
-
-## 2026-08-11
-
-- [USER+CODE+TOOL] Resume and Cover Letter now consistently open saved variants.
-  Automatic output-title changes no longer cancel Cover Letter startup or
-  Prepare selection; body/style edits and explicit user opens still win. A
-  dedicated Prepare resolver waits for workspace startup, then adopts the sole
-  or uniquely ranked letter. Focused race probes and the full RoleFit gate pass.
-- [USER+CODE] Application preparation now has two explicit identities: fresh work creates a tracker row only on Apply or Skip & save job, while opening a saved record updates that exact id. Generated application answers remain session-local. Forward-only stages prevent submitted history from becoming Skipped or moving backward.
-- [CODE] Skipped records are dated job-only decisions and reject saved application documents. A narrow migration converts legacy Saved rows, removes retired priority metadata, and preserves strict fail-closed tracker validation. Duplicate handling links independent attempts by posting group or records a reviewed separation; destructive merge remains a separate confirmed cleanup.
-- [USER+CODE] Application Detail and the Applications inspector share the saved-record presentation: categorical Fit verdict and rationale, read-only posting snapshot, always-present job activity, and explicit document availability. The tracker toolbar keeps lifecycle filters and its native Table/Calendar selector aligned above the inspector rail.
-- [CODE] Three full-diff reviews removed dead backward-stage paths, inferred write-target and test-only helpers, brittle comment/layout assertions, dead CSS, repeated Fit resume labels, stale re-Apply terminology, and redundant Apply cleanup. They also fixed deleted-record recovery, duplicate-group preservation during merge, stale cross-application document-save feedback, Apply/Skip busy-state recovery, delayed-confirmation and document-preview races, activity-menu refocus, stacked-viewer modal semantics, transient-popover cleanup, section heading hierarchy, and skipped-job action copy.
-- [TOOL] The RoleFit production and landing builds, desktop contract suite, all 100 offline evaluations, and `git diff --check` pass after the third branch review. The UI detector reports only advisory design-token matches. Existing screenshots covered the changed desktop layouts, so no additional browser session was started under the repository's flag-first visual-QA policy.
-
-## 2026-08-10
-
-- [USER+CODE+TOOL] **RoleFit is prepared as 0.7.0 with browser extension 1.2.0
-  and desktop bridge API 13.** The minor slot is the right one under 0.x: this
-  release replaces numeric fit scoring with the categorical Fit Assessment,
-  unifies both documents on one Polish workflow, renames Distill to Job
-  analysis, and moves preferences into the workspace — behavioral breaks with no
-  migrations, which is what 0.x minors are for. **1.0 is deliberately not
-  claimed**, and its criteria are now explicit: a genuinely signed release
-  (every tag so far is an unsigned preview) and an inverted compatibility policy
-  that promises migrations for `.resume`, `.cover`, and `.rolefit-backup`.
-  0.x has unlimited runway because SemVer orders minors numerically — 0.10.0
-  follows 0.9.0 — so the counter never forces a 1.0.
-  The bump is prepared on merged `main` at `a774529`, not the squash-merged
-  feature branch. A user-affecting break is disclosed in the release notes: the
-  portable backup schema moved 2 -> 1 and rejects any other version, so a
-  `.rolefit-backup` written by installed 0.6.0 cannot restore into 0.7.0.
-  `workspace-backup.md` still claimed "Schema version 2 is the sole accepted and
-  written backup shape" while its own earlier paragraph and the code said 1;
-  that contradiction is corrected. Extension 1.2.0 reflects the popup redesign,
-  direct-import shortcut, and inline port Settings that landed after 1.1.0
-  shipped, so two different builds no longer both claim 1.1.0. API 13 was
-  already current while 0.6.0 shipped 12, so released and current converge here.
-  The companion screenshot was recaptured at 0.7.0 and its manifest updated —
-  the version-stamp guard fired exactly as designed. All 13 release-contract
-  tests pass. **The tag and release workflow have NOT run: no branch, commit,
-  push, tag, or publication has happened, so this versioned change is
-  incomplete until that completion is confirmed.**
-- [USER+CODE+TOOL] **The public landing page and every product screenshot now
-  describe the current workflow.** The page leads with Prepare — the first
-  surface and the only one that shows the Fit Assessment — then the two document
-  cards, then the tracker; the resume card no longer promises "Apply all" or a
-  separate recruiter audit. Eleven assets were recaptured at 1440x900 (social
-  preview 1200x630, companion 884x581, which is the Windows content size of its
-  900x620 window and now the declared intrinsic size): the shots predated the
-  Sessions rail move, the Prepare-first navigation, the tracker inspector, and
-  the 0.6.0 version stamp. They were taken from the synthetic Alex Morgan test
-  pack copied outside the repository, extended with six fictitious tracker rows
-  and Fit snapshots that round-trip the application sanitizer exactly, and
-  served through `ROLEFIT_WORKSPACE_DIR` on a spare port so no personal
-  workspace was involved. **Every asset is a 2x capture** (app 2880x1800, social
-  preview 2400x1260, companion 1784x1202 via Electron
-  `--force-device-scale-factor=2`), and each `<img>` declares that true
-  intrinsic size. The first pass shipped 1x to match the retired files and read
-  blurry: measured in the built page, the cards render those shots at 549-749
-  CSS px, so at device pixel ratio 2 the hero had 0.68x and the two large shots
-  0.96x of the pixels they needed. The 2x files measure 1.37x to 2.62x, and the
-  aspect ratios are unchanged so no layout moved. The companion shot is its
-  genuine just-installed
-  state — no providers connected, no extension paired — because seeding a
-  configured vault trips the companion's own provider/server boundary assertion
-  and inventing readiness in a hero image is not acceptable. Capture used a
-  dependency-free CDP driver over
-  **Edge**, because this machine's Chrome policy sets `DeveloperToolsDisabled=1`
-  and Chrome therefore refuses every DevTools page session. The landing build,
-  its release-catalog probes, and the output-boundary guard pass; real-browser
-  QA at 1440x900 and 390x844 shows no horizontal overflow
-  (`scrollWidth == clientWidth` at both) and all three `[data-reveal]` blocks
-  settling from opacity 0 to 1 on scroll.
-- [USER+CODE+TOOL] **A version printed inside a screenshot is now a checked
-  contract, not a silent one.** The companion shot prints `ROLEFIT 0.6.0` in its
-  footer while the page renders the live release version from the GitHub
-  catalog, so a bump without a retake contradicts the same page and no text
-  search can catch it. `landing/screenshot-manifest.json` records the version
-  each version-stamped image was captured at, and `assertScreenshotVersionStamps`
-  fails when it no longer equals the RoleFit package version. It runs in both
-  release workflows and in the Pages `verify` job that gates the site upload, so
-  the bump fails at exactly the moment someone should retake the image.
-  Capture was deliberately NOT automated in CI: it needs a real Electron run,
-  and runner font rendering would drift the site's screenshots between releases.
-  All 13 release-contract tests pass, including fixture-level rejection of a
-  stale version, a missing file, an unknown key, a traversing path, an empty
-  map, and a future schema, plus a red/green run against the real repository.
-- [USER+CODE+TOOL] **Preparation stabilization and its follow-on boundary review
-  resolve Findings 1-8 without a schema-version bump or runtime migration
-  aliases.** Fit Assessment
-  keeps its latest completion across later attempts, the first assessment is an
-  awaited one-use Prepare automation decision, draft and committed preparation
-  are distinct, and Stop/input changes cannot publish late success. Candidate
-  facts are independent tri-state declarations, authored blank resumes become
-  applicant-owned, Apply records actual document delta, every intake captures
-  one provider context, and ungrounded Resume Polish gaps are removed. The
-  ignored preview workspace was backed up and manually rewritten (318 records,
-  77 Fit snapshots); strict direct reads and live endpoints passed. The pinned
-  follow-up rejects cross-preparation Fit persistence, declines stale automation,
-  waits for automatic cover-variant resolution before consuming its token,
-  keys preparation identity to the captured posting, and round-trips resume
-  origin through autosave recovery. A follow-up GPT-5.6 Sol Pro branch review
-  found that the cover-variant wait did not include the initial workspace read;
-  the cover-letter editor now exposes that one-shot pending state, including the
-  empty-to-loaded and single-saved-variant paths, before automatic Polish may
-  consume its token. A second Sol Pro review found four remaining cross-path
-  gaps. Cover startup now keeps title-sensitive data behind stable refs so its
-  effect cannot replay after ordinary naming, and saved/history opens share one
-  pending replacement boundary that starts before confirmation. Apply carries
-  an explicit set/preserve/clear Fit decision so it cannot reattach another
-  preparation's saved snapshot. Resume Polish now returns a synchronous claim,
-  publishes provider/duplicate preflight, guards unload, and settles the one-use
-  token only when that claim starts or permanently declines. Exact-head review
-  then found that an older asynchronous Polish preflight could mistake a newer
-  claim's boolean lock for its own; the existing input generation now scopes
-  preflight ownership. A later exact-head review found three remaining cover-
-  letter persistence gaps. Saved opens and history restores now share one
-  replacement generation and may adopt only while the exact post-confirmation
-  document + title remains live. Workspace saves capture payload, title, source
-  revision, active variant, intended target, and operation id; delayed
-  completions can refresh workspace metadata but cannot clear a newer recovery
-  draft, mark newer edits clean, or rebind another opened letter. One exported
-  title-inclusive recovery-dirty value now owns unload protection, recovery
-  restore/dismissal, replacement guards, and save-status rendering. Deferred
-  reversed-response and edit-during-request probes pass. Final merge review
-  found two remaining cross-route races: a superseded save could publish its
-  workspace snapshot before ownership evaluation, and a delayed workspace P1
-  acknowledgment could roll the persistence baseline back after an application
-  save committed P2. Workspace saves now run through an invocation-order queue,
-  all workspace mutations share a visible pending boundary, ownership is
-  evaluated before snapshot publication, and a shared monotonic baseline
-  revision rejects older acknowledgments. Deferred reverse-response and P1/P2
-  application-save probes cover options, history, candidate revision, active
-  identity, status, baseline,
-  and recovery state. A corrected final review found two more lifecycle gaps.
-  Apply now keeps unload protection through its post-tracker strict source
-  uploads even when both editors began clean. Resume workspace metadata refreshes
-  now wait behind the one-shot startup commit before claiming a load generation,
-  so Prepare cannot be stranded on an unresolved bootstrap promise. Deferred
-  two-document persistence and startup-versus-metadata probes cover both paths.
-  The Chromium workspace fixture now awaits the asynchronously claimed fetch,
-  preventing a harness-only deadlock while retaining reordered-response coverage.
-  Under pinned Node 24, dependency/package-script contracts,
-  every workspace check, the production and landing builds, desktop/security
-  contracts, and all 91 offline evaluations pass. No layout changed; browser
-  interaction QA remains UNCONFIRMED under the flag-first policy.
-
-## 2026-08-09
-
-- [CODE+TOOL] **The full uncommitted Fit/workspace/document-workflow diff was
-  reviewed and its blocking edge cases were repaired.** Resume selection now
-  reassesses Fit against the hook-owned captured posting instead of the editable
-  brief. A post-analysis duplicate stop can retain an already-completed combined
-  assessment, but it cannot authorize automatic Polish or launch a separately
-  configured Fit request. Tracker compatibility normalizes only a present,
-  nonblank legacy summary string; missing, blank, and non-string summaries still
-  fail closed. Empty or corrupt citizenship/education enums are removed, and an
-  unknown citizenship gate emits no authorization or sponsorship claims. Stale
-  resume proposals disable accept/edit actions while preserving discard, new
-  resume and cover-letter proposals reset local review state, and a manual edit
-  after a recorded decision can no longer expose an Undo that overwrites that
-  newer text. Interrupted debounced settings writes now leave a durable browser
-  marker and replay the cached snapshot before canonical workspace adoption on
-  reload. The live-eval command in root development docs uses the current Fit
-  Assessment name. Focused red/green regressions, production and landing builds,
-  desktop security/contracts, all 88 offline evaluations, and `git diff --check`
-  pass under pinned Node 24. The final layout-scoped Impeccable detector reports
-  no findings. Browser interaction QA remains UNCONFIRMED under the repository's
-  flag-first policy.
-- [USER+CODE+TOOL] **The tracker's Fit column aligns, and its header pins.**
-  `.application-fit` still carried `min-width: 42px; justify-content: center`
-  from the numeric score badge it replaced. With word labels that floor is wider
-  than exactly one verdict — "Stretch" measured 42px against the floor while
-  "Strong fit" measured 45.6px and "Reasonable fit" 70.3px — so centering
-  offset that one label a few pixels off the column's left edge and nothing
-  else. Both declarations are gone; measured after, all three verdicts paint
-  from x=852. The table head is now `position: sticky; top: 0; z-index: 2`: at
-  the desktop breakpoint `.applications-table` is itself the vertical scrollport
-  (measured 1107px of rows in a 464px port), so the head is a direct child of
-  the scroller and pins while rows pass under it — verified holding at y=187
-  across scrollTop 0/200/400/end. Below that breakpoint the table is not a
-  vertical scrollport and the rule is inert. The final full-diff review resolved
-  the inspector-width defect: the register is now an inline-size container, and
-  at its calculated 852px full-column minimum it hides Next action — still
-  available in application details — before the fixed Fit verdict can clip. The
-  focused layout contract locks that component-aware behavior. All 88 offline
-  evaluations, the RoleFit TypeScript/server gates, production and landing
-  builds, desktop contracts/security, the layout-scoped Impeccable detector, and
-  `git diff --check` pass; exact browser rendering of this last container-query
-  change remains UNCONFIRMED under the flag-first policy.
-- [USER+CODE+TOOL] **Settings is dense again, and seven of its inputs were
-  invisible.** Every text field in AI stages, About you, and Experience evidence
-  carried `className="input"` — a class no stylesheet defines, so they fell
-  through to the bare `input` reset (`border: 0; background: transparent`) and
-  rendered as naked text under a label while the selects beside them had proper
-  boxes. They now use the canonical `.text-input`. Density: each automation
-  document is one row (switch, then its Minimum fit threshold) instead of a
-  RESUME / COVER LETTER subhead over a switch over a full-width select — the
-  subhead repeated the word the switch already said, and `.check-row`'s own
-  bottom hairline had to be suppressed once the label became a flex item. About
-  you rows are label-beside-control over one 152px label column, with
-  content-width controls. Measured in the running app at 1280x720: the
-  automation group went 450px → 193px, two AI stages now sit above the fold,
-  and the whole About panel fits without scrolling. Verified live on the
-  already-running 5181 dev server (reused, not started): no console errors, and
-  a probe confirmed the restyled Experience evidence inputs stay inside their
-  three-column grid (214px each in a 658px track, `border-box`). All 87 offline
-  evaluations, the RoleFit TypeScript gate, the production build, and
-  `git diff --check` pass.
-- [USER+CODE+TOOL] **Job analysis no longer exposes a nonfunctional custom-instruction
-  control.** Only the three drafting stages — Resume Polish, Cover letter, and
-  Application questions — offer instruction overrides. Job analysis retains its
-  fixed complete-extraction contract, Fit Assessment retains its fixed rubric,
-  and settings normalization removes dormant overrides for either analysis stage.
-  The focused stage-settings regression, production and landing builds, desktop
-  contracts/security, all 87 offline evaluations, `git diff --check`, and the
-  Impeccable detector pass. Browser interaction QA remains unrun under the
-  flag-first policy because this only removes one conditional disclosure.
-- [USER+CODE+TOOL] **Apply now retains the latest completed Fit Assessment even after
-  later input changes.** Ready, stale, and restored snapshots share one explicit
-  application-persistence selector. The assessment is saved independently of
-  resume artifact inclusion, while re-Apply preserves an existing snapshot when
-  the current session has no newer completed run. Tracker storage remains one
-  timestamped latest snapshot rather than a versioned Fit history. The focused
-  lifecycle and application-persistence regressions, production and landing
-  builds, desktop contracts/security, and all 87 offline evaluations pass.
-- [USER+CODE+TOOL] **Accepting a proposal is now one interaction across both
-  documents.** The unit stays genuinely different — the resume decides
-  individual edits, the letter decides one replacement — but nothing else about
-  the act does. Previously the resume committed from an `Apply all` button
-  inside a section header, over a `<details>` that was collapsed by default; it
-  had no bulk decline, no way to take a decision back, and restated its counts
-  in two places. The letter committed from the rail's sticky footer and showed
-  only the finished text, leaving the reader to compare two panes by eye.
-  Both now commit through one shared `ProposalDecisionBar` in that footer: what
-  is left to decide, then a primary accept beside a secondary discard, in that
-  order (`Accept all` / `Discard all`, `Accept proposal` / `Discard proposal`).
-  Only a multi-decision proposal renders its `progressbar`, and the rail
-  description no longer repeats those counts. One `ProposalDiff` renderer marks
-  changed words for both over the existing `buildResumeDiff`: `removed` and
-  `added` for the resume's Now/Proposed pair, `merged` behind the letter's new
-  Changes / Full letter switch, which opens on Changes. Text carrying inline
-  marks falls back to its plain rendered side, because a word-level diff can
-  split a tag pair at a segment seam. The resume's edits are now open on
-  arrival, each row names the section and entry it edits, a settled row shows
-  one shared chip (Accepted / Discarded / Changed in editor) and de-emphasizes
-  so the queue reads as what is left, and **every recorded decision is
-  reversible in place** — `revert` restores an accepted edit's exact original
-  text before returning the row to the queue, and `discardAll` records
-  decisions without mutating the document. The letter's per-paragraph
-  provenance was also wrong in two ways the new view exposed: it printed the
-  engine's inline-mark syntax verbatim (`<b>CareFlow</b> · …`) and used the
-  entry's entire serialization as its label, so one paragraph's source ran to
-  forty words. `buildCoverLetterEvidence` now strips inline marks from section
-  and entry context — display syntax that belonged in neither the rail nor the
-  prompt — and leads every entry label with the entry's own name, including the
-  bulletless field branch that previously led with "Title detail". The exported
-  `evidenceEntryName` reads only that head for the rail, so the model keeps the
-  full attribution context (dates, link, employer, stack) that lives nowhere
-  else in the corpus. No provider, request, grounding, or persistence contract
-  changed; evidence ids are per-request and unpersisted. All 87 offline
-  evaluations, the RoleFit
-  TypeScript gate, the production build, and `git diff --check` pass, with
-  red/green proof on the new shared-decision probes; one unrelated
-  `fit-assessment-lifecycle` run flaked under the parallel runner and passed
-  standalone and on both reruns. **Browser QA is UNCONFIRMED** and is the
-  outstanding check: the new footer bar, the diff marking inside the letter's
-  `pre-line` block, and the open-by-default edit list all change rail height and
-  scroll behavior.
-- [USER+CODE+TOOL] **Only the first Fit Assessment launched by Prepare may
-  trigger automatic Polish.** Ready assessment state now carries an in-memory
-  automation-eligibility receipt. The combined and separately configured first
-  Prepare assessment opt in; Reassess fit, retries, resume-change assessments,
-  restored history, and stale results remain advisory-only and cannot start a
-  later Resume or Cover Letter automatic Polish. The focused lifecycle
-  regression, production and landing builds, desktop contracts/security, and all
-  87 offline evaluations pass with pinned Node 24. Real-browser QA was not needed
-  because this changes orchestration policy without changing rendered UI.
-- [USER+CODE+TOOL] **Fit Assessment now explains staleness without erasing the
-  prior assessment.** Exact provenance differences derive a stable changed-input
-  list for job posting, resume content, About you, and assessment setup. An
-  out-of-date run remains visible only as a timestamped **Previous assessment**
-  with its verdict, matches, gaps, attribution, and a compact **Changed since
-  assessment** receipt before **Reassess fit**; its stale state still excludes it
-  from automation. Tracker persistence remains the latest compact snapshot, not
-  a versioned assessment ledger. The production and landing builds, desktop
-  contracts/security, all 87 offline evaluations, focused lifecycle/layout
-  probes, both TypeScript projects, and `git diff --check` pass. The Impeccable
-  detector reports only the stylesheet's existing off-ramp font-size advisories;
-  browser interaction QA remains UNCONFIRMED under the flag-first policy.
-- [USER+CODE+TOOL] **A resume edit no longer dead-ends a pending Cover Letter
-  proposal.** The cover workflow now fingerprints its own target, personal
-  evidence, and instructions separately from resume evidence. Changing the
-  source letter, job, Guidance, or polishing instructions still blocks acceptance
-  and requires Polish again. A resume-only change instead keeps Accept proposal
-  enabled, warns that the draft was checked against the earlier resume, and
-  leaves the exact evidence receipt visible for review. The production and
-  landing builds, desktop contracts/security, all 87 offline evaluations, the
-  focused red/green freshness probe, `git diff --check`, and the Impeccable
-  detector pass. Browser interaction QA remains UNCONFIRMED under the flag-first
-  policy.
-- [USER+CODE+TOOL] **Fit Assessment completed a private multi-model corpus
-  calibration and now uses rubric v3.** The full editable-source corpus contains
-  71 applications; the remaining tracker rows have no `.resume` source and were
-  excluded by user direction. Seven exposed Codex models (GPT-5.6 Sol, Terra,
-  Luna, GPT-5.5, GPT-5.4, GPT-5.4 Mini, and GPT-5.3 Codex Spark) each ran three
-  low-effort and three medium-effort passes: 2,982 calls, 2,676 strictly grounded
-  results, 306 fail-closed shape/anchor rejections, and zero provider errors.
-  GPT-5.5 medium was the strongest balanced calibration configuration (209/213
-  grounded, 71.0% three-run majority agreement with the independent labels); a
-  separate Sol xhigh review reached 70.0% exact agreement, with every miss only
-  one adjacent category away. A broader prescriptive rubric was rejected after
-  it reduced corpus accuracy. The retained v3 delta classifies role-critical
-  versus administrative text, selects decision-relevant findings, self-checks
-  exact excerpts, and narrowly distinguishes supporting-core Stretch from truly
-  sparse Limited evidence. The specialized-support and content-poor synthetic
-  controls held their intended Stretch/Limited categories in 6/6 runs each, and
-  the two real Limited-boundary cases stayed Limited in 42/42 model/effort/run
-  votes each. All 71 tracker Fit snapshots were atomically refreshed from
-  grounded xhigh receipts with complete private pre-write backups: 69 retain
-  truthful rubric-v2 provenance and the two v3-affected boundary cases carry v3;
-  the distribution is 8 Strong, 45 Reasonable, 16 Stretch, and 2 Limited. The
-  canonical write also archived and removed two retired `finalCheck` fields that
-  had blocked safe tracker reads; 241 other application rows were unchanged.
-  Post-write canonical result/provenance checks cover all 71 snapshots. The exact
-  RoleFit gate passes production/landing builds, desktop contracts/security, and
-  all 83 offline evaluations. Browser visual QA was not needed because this slice
-  changes prompt/data behavior without layout or interaction risk.
-- [USER+CODE+TOOL] **Fit Assessment now owns its own AI stage configuration.**
-  Settings exposes Fit Assessment as the fifth independently persisted
-  provider/model/reasoning stage, including normal one-shot Copy from behavior;
-  its fixed screening rubric deliberately has no custom-instruction override.
-  Prepare keeps the single-dispatch optimization only when Job analysis and Fit
-  Assessment resolve to the exact same provider/model/reasoning triple. When any
-  field differs, Job analysis sends no resume or candidate context, commits the
-  prepared brief, and Fit Assessment settles through a separate assessment-only
-  request with its own provider readiness and provenance. Reassessment and stale
-  identity now read the Fit stage rather than Job analysis. The full RoleFit gate
-  passes with production/landing builds, desktop contracts/security, and all 83
-  offline evaluations; the Impeccable detector reports no finding in the changed
-  Settings components. Browser visual QA remains UNCONFIRMED under the flag-first
-  policy.
-- [USER+CODE+TOOL] **About you now records optional GPA and earliest-start
-  availability.** GPA is one bounded 0–4.0 value, appears only with declared
-  education, and emits no candidate fact when empty or invalid. Availability is
-  independently optional and supports immediately, one to four weeks' notice,
-  or a specific ISO date; impossible calendar dates fail closed. Both facts use
-  the existing canonical workspace-preferences, backup/restore, reset, and
-  candidate-context path rather than a parallel store. The complete RoleFit
-  gate passes: production and landing builds, desktop contracts/security
-  probes, grounding/sanitizer coverage, and all 85 offline evaluations. The
-  Impeccable detector found only pre-existing typography advisories elsewhere in
-  the Settings stylesheet. Browser visual QA remains UNCONFIRMED under the
-  flag-first policy.
-- [USER+CODE+TOOL] **The reusable screening is now Fit Assessment, not Initial
-  Fit.** Its first run normally shares Prepare's Job analysis request, while a
-  completed or out-of-date result exposes **Reassess fit** and always dispatches
-  a fresh assessment without repeating Job analysis. Reassessment uses the
-  retained captured posting, current selected resume and candidate context, and
-  the Fit Assessment stage's selected provider/model/reasoning plus rubric v1.
-  Results show last-assessed attribution and the latest successful run
-  supersedes the displayed result. Active runtime types, prompt/schema fields,
-  CSS, docs, and offline/live eval names use Fit Assessment. The two existing
-  persisted v1 JSON keys, preference `runInitialFit` and tracker `initialFit`,
-  remain storage-boundary names so existing local data stays readable; they are
-  not user-facing concepts or runtime compatibility aliases. The full RoleFit
-  gate passes: production/landing/desktop builds and contracts plus all 85
-  offline evaluations.
-- [USER+CODE+TOOL] **About you now supplies source-aware experience evidence
-  from canonical workspace preferences.** Optional professional, internship,
-  freelance, research, academic, personal, open-source, volunteer, and
-  military/public-service categories each accept bounded duration,
-  role/project count, recency, and factual scope. Candidate context preserves
-  those sources and warns Fit Assessment not to sum overlaps; the shared rubric
-  also prevents strict professional/industry requirements from being satisfied
-  by other sources unless the posting accepts them. Preferences now belong to
-  owner-only `workspace-preferences.json` across browsers, ports, and incognito
-  sessions for the same OS-user workspace; localStorage is a fail-open cache,
-  startup/focus adopts the workspace record, and failed writes are visible in
-  Settings. The workspace backup, preference, and restore-marker contracts now
-  each expose only schema version 1; retired preference filenames/routes/fields,
-  old settings keys/model display names, and non-v1 backup formats are rejected
-  or defaulted without translation. The full RoleFit gate
-  passes: production/landing/desktop builds and contracts plus all 85 offline
-  evaluations. Browser visual QA, live-provider calibration, and a human-labeled
-  accuracy benchmark were not run.
-- [USER+CODE+TOOL] **Extension posting checks no longer fail on stale derived
-  Initial Fit summary copy.** The live popup's `RoleFit could not check this
-  posting (500)` was reproduced as a healthy extension handshake followed by a
-  fail-closed tracker read. All 312 application records were structurally valid;
-  13 differed only because their stored provider-era Initial Fit summary did not
-  equal the current fixed summary derived from the verdict. The tracker reader
-  now normalizes only that redundant summary leaf for its canonical comparison;
-  unknown fields, retired shapes, duplicate ids, lossy sanitizer changes, and
-  malformed data still fail closed. A red/green storage probe, server TypeScript,
-  the document-workflow suite, all 84 offline evaluations, the real tracker GET,
-  and a synthetic analyze request using the paired extension origin pass. The
-  restarted companion serves both tracker and extension-analyze routes with 200.
-- [USER+CODE+TOOL] **Initial Fit late stabilization is complete locally.** One
-  normalized captured posting now owns combined Prepare, fit-only Retry,
-  provenance, and staleness, while the displayed brief stays independently
-  editable. Both request paths use the same exported v4 direct-rubric block;
-  assessment/result state stays separate from client-only Resume and Cover
-  Letter automation policy. One browser request helper, one fit-settlement
-  helper, and one URL/paste/extension/Retry post-acquisition coordinator now
-  prevent entry-path drift without changing route copy or manual recovery.
-  The opt-in 12-fixture live calibration produced 60/60 valid grounded final-v4
-  Codex/Claude responses, exact eligibility, no non-adjacent jumps, and 1.0
-  average material-theme overlap; three Claude samples moved one adjacent
-  category, while each intended clear category held in five of six runs.
-  Antigravity returned four clean Strong receipts before its fifth call stalled,
-  so its full matrix remains unconfirmed. All 84 offline evaluations, 477 client
-  workflow guards, both TypeScript projects, and `git diff --check` pass. Product
-  behavior now lives in `PRODUCT.md`; provider/request mechanics live in
-  `server/ai/README.md`. Browser QA remains pending.
-
-## 2026-08-08
-
-- [USER+CODE+TOOL] **Initial Fit is simplified without changing the document
-  workflows.** The provider now applies the four-category rubric directly and
-  returns bounded exact posting/resume/context excerpts; the server performs
-  mechanical validation and maps accepted verdicts to fixed public summaries.
-  The hidden requirement selection, coverage recalculation, years/degree logic,
-  broad eligibility regex, and synthesized verdict path are removed. Resume and
-  Cover Letter keep their existing Polish workflows and one-shot safeguards but
-  now have independent automatic-Polish switches and categorical minimum-fit
-  thresholds; legacy enabled switches migrate to Reasonable, while fresh Resume
-  and Cover Letter defaults are Reasonable and Strong respectively. Only an
-  exact-evidence `BLOCKED` eligibility result stops an otherwise eligible run.
-  Fit identity covers normalized job/resume/context, provider/model/reasoning,
-  and prompt version, so unchanged ready results are reused and changed inputs
-  become out of date. The complete RoleFit gate passes: production and landing
-  builds, desktop contracts/security, and all 80 offline evaluations. Live-
-  provider and browser visual QA were not run. The work remains uncommitted on
-  the current branch; no pull request was opened.
-- [USER+CODE+TOOL] **The second re-review findings are repaired on the prepared-resume branch.**
-  Initial Fit Retry and visible-fit provenance now read the authoritative
-  `currentResumeSelection` snapshot, reject starter/blank-origin/stub documents,
-  hide a ready verdict when that selection disappears, and derive Retry from the
-  retained prepared-job receipt across setting toggles. Provenance records the
-  complete normalized screening payload and separately anchors the complete
-  displayed prepared brief, preventing both immediate combined-response staleness
-  and false freshness after edits outside selected requirements. Quick Fit parses
-  ranges/numeric thresholds before bounded alternatives, rejects zero-token
-  adjacency, and requires a valid provider-row quorum while preserving explicit
-  `NOT_SHOWN`. Resume Polish and Final Check gate every upward ownership step
-  against target-specific evidence, including spearheaded/oversaw/orchestrated.
-  The synthetic live Resume Proposal harness now runs aligned and improvable
-  fixtures and independently checks targets, labels, tools, numbers, outcomes,
-  and ownership; execution remains UNCONFIRMED because the environment requires
-  separate approval for a cost-bearing provider call. Browser race QA was
-  attempted but remains UNCONFIRMED because the in-app browser could not attach
-  a localhost tab after its documented recovery attempt. The same races have
-  executable offline lifecycle coverage. The aggregate `npm run check` exceeded
-  the tool's 10-minute bound in font generation; every constituent gate then
-  passed separately: root dependency/script contracts, engine type/evals/font
-  generation (including 1,266,912 shaping checks), editor, Typeset, RoleFit
-  production and landing builds, desktop contracts, and all 80 RoleFit offline
-  evaluations. No pull request was opened and nothing was merged.
-- [USER+CODE+TOOL] **The re-review repair is complete.** Initial Fit now sends a
-  broad prepared-brief pool and selects
-  an authoritative five with responsibility/qualification quotas, at most one
-  provider extra, substantive license coverage, and a three-core floor for
-  Strong or Reasonable. OR/equivalent requirements, weak domain tokens, and
-  contextual degree abbreviations receive deterministic caps. Exact fit
-  provenance covers the raw posting, normalized requirements, resume, and
-  candidate context; edits derive a visible out-of-date state that blocks
-  automation and Apply persistence until a fresh retry screens the current
-  editor and prepared brief. Manual variant screening consumes the guarded
-  loader receipt. Resume Polish locks Skills category labels and rejects
-  unsupported leadership inflation. Final Check uses stronger detail anchors,
-  shares the ownership detector, and retains material nontechnical missing
-  requirements. Proposal decisions include the full editor target path. A
-  synthetic-only live Resume Proposal harness is available but was not run.
-  The complete repository gate passes, including production/landing builds,
-  desktop contracts/security, all 79 RoleFit offline evaluations, package
-  integrations, and deterministic layout/PDF/font checks. Browser QA was not
-  run because the visible stale state reuses the existing rail hierarchy. No
-  pull request was opened and nothing was merged.
-- [USER+CODE+TOOL] **The first branch-review accuracy findings were repaired and
-  later published as commit `ded6e35`.** Initial Fit now requires every one of up to five
-  material RoleFit-selected requirements, including important items outside the
-  clipped posting prefix, permits only one provider-added row, and caps exact but
-  semantically unrelated evidence before deriving the public verdict. Prepared
-  resume selection includes the live candidate revision in its atomic snapshot,
-  so overwriting a saved resume under the same filename invalidates and retries
-  an in-flight read. Resume Polish exposes only bullets and Skills labels/lists
-  as mutable targets; standard role, employer, subtitle, and date fields remain
-  read-only evidence. Final Check now binds each issue detail to its own exact
-  private source excerpt before its grounding test. Active Resume Polish scope,
-  proposal-target, payload, and test names use current terminology, and the stale
-  work-authorization scoring comment is corrected. The complete RoleFit gate
-  passes: production and landing builds, desktop security/contracts, and all 79
-  offline evaluations. Live-provider and browser QA were not run; the changes do
-  not alter provider count or rendered layout. That slice was committed and
-  pushed as `ded6e35`; no pull request was opened and nothing was merged.
-- [USER+CODE+TOOL] **The remaining accuracy and preview-cleanup slices are now in
-  place.** Final Check requires a private exact source excerpt for every issue,
-  validates it against the current document or posting, preserves valid
-  siblings, and removes the excerpt from the public result. Resume Polish ranks
-  oversized editable-target sets by materiality and job relevance into complete
-  JSON, validates responses only against the selected set, and reports a quiet
-  omitted-target count without adding a provider call. The temporary
-  `/api/distill` alias, renamed stage/instruction setting readers, obsolete
-  eligibility tri-states, historical AI-usage key rewriting, legacy presence
-  phase, and cover/answers cross-stage inheritance are removed under the preview
-  no-compatibility policy. Older continuity entries describing those readers or
-  migrations are retained as historical chronology and are superseded by this
-  current-state entry. The complete RoleFit gate passes: production and landing
-  builds, both browser/server TypeScript projects, every desktop contract and
-  security probe, and all 79 offline evaluations. Live-provider and visual
-  browser QA were not run; the only visible change is one quiet derived count
-  line using the existing proposal typography.
-- [USER+CODE+TOOL] **Prepared-resume and proposal closing lifecycles now keep
-  one content-consistent generation.** The prepared-resume resolver snapshots
-  ordered filenames, option count, and loaded filename around its candidate
-  read, retries one changed snapshot, and otherwise retains the current editor.
-  Guarded adoption returns the exact validated document committed by the
-  workspace loader; failed/blocked adoption clears its recommendation, and
-  cancellation clears the visible resolving flag. Resume proposal decisions are
-  keyed by outcome plus target/original/replacement/reason content, derive empty
-  on a new key without a render-time state update, and preserve live-document
-  undo/manual-match semantics. The automatic current-document check tracks
-  provider preflight separately and consumes a proposal key only once fetch
-  starts, so incomplete inputs, unavailable providers, or a held lock can retry.
-  Focused red/green probes pass (53 prepared-resume checks and 459 client
-  workflow guards), as do both TypeScript projects, the production build, every
-  desktop contract/security probe, and all 79 offline evaluations. Browser and
-  live-provider QA were not run; no layout contract or provider-call count
-  changed.
-- [USER+CODE+TOOL] **The fast one-call workflow now has a compact deterministic
-  accuracy layer.** Resume Polish preserves its single provider dispatch while
-  exposing Skills category labels and actual skill lists as distinct target
-  kinds; controlled label changes and grounded list edits survive, while swaps
-  and job-only skill insertions fail independently. Combined Job analysis +
-  Initial Fit and fit-only retry now ask the provider for at most six material
-  requirement rows with exact posting/candidate anchors. The server validates
-  those anchors, treats missing/invalid evidence as `NOT_SHOWN`, recognizes
-  explicit years and eligibility contradictions, prevents supporting preferences
-  or eligibility conditions from depressing fit, and derives the public
-  category, summary, matches, gaps, and optional eligibility warning. The hidden
-  basis is neither returned nor persisted. `BLOCKED` requires both an explicit
-  posting restriction and explicit adverse candidate context; `CHECK` remains
-  eligible for automatic polishing. Initial Fit no longer derives tracker
-  priority: explicit user choice wins, Interviewing/Offer may derive High, and
-  other records default Medium while fit remains sortable. Focused red/green
-  probes, both client/server TypeScript gates, Job analysis and provider
-  contracts, the production build, all desktop contract/security probes, and
-  all 78 offline evaluations pass. Live-provider evaluation and browser QA were
-  not run; the code changed no visible layout or interaction contract.
-- [USER+CODE+TOOL] **Prepare's wrapped Initial Fit detail now remains inside
-  the Application rail panel.** The desktop two-pane scroller stretched the
-  rail's single grid item to the scrollport height, so a longer fit summary
-  continued below the card border. The panel now opts out of grid-item stretch
-  while retaining its full-scrollport minimum height; shorter content still
-  fills the rail and longer content establishes the card's real height. A
-  focused red/green layout contract and the complete RoleFit gate pass with 77
-  offline evaluations. Live browser QA remains UNCONFIRMED under the flag-first
-  policy.
-- [USER+CODE+TOOL] **The Applications inspector now contains long AI usage
-  identifiers and full-width controls instead of widening the workspace.** Its
-  implicit auto grid column used the longest provider/model value as a
-  max-content floor, which pulled the fit strip, ledger rows, and form fields
-  past the card and created a page-level horizontal scrollbar. The inspector
-  now owns one `minmax(0, 1fr)` track; the existing value-wrapping and control
-  bounds can therefore operate against the card width. A red/green layout
-  contract locks that source rule. The complete RoleFit production, landing,
-  desktop, and 76-evaluation gate passes with loopback access; live browser QA
-  remains UNCONFIRMED under the flag-first policy.
-- [USER+CODE+TOOL] **AI stage and provider catalogs now match their current
-  contracts.** RoleFit still supports exactly five independently configurable
-  stages and the existing five integrations; no speculative provider was added.
-  The stale configurable `tailor` id and historical tracker provenance migrate
-  to `resume-polish` while the original unprefixed provider fields remain stable.
-  Settings calls the `final-check` request **Check current document**, identifies
-  its resume and cover-letter scope, and describes Job analysis, Cover letter,
-  and Application questions by the user-visible work each request performs.
-  OpenAI API retains the three current GPT-5.6 models; Claude API and Claude Code
-  add Opus 5, with Sonnet 5 / Opus 5 bounded API requests explicitly disabling
-  their new default thinking behavior and Fable 5 using low effort because its
-  required adaptive thinking shares the output cap. The installed Codex 0.145.0 list adds
-  `gpt-5.3-codex-spark`. Antigravity 1.1.11 adds Gemini 3.6 Flash and now uses
-  the stable slugs introduced in 1.1.5; every older display-name setting maps to
-  its matching slug before dispatch. Installed-list inspection, both TypeScript
-  projects, production and landing builds, every desktop probe, and all 75
-  offline evaluations pass. Live provider requests remain UNCONFIRMED.
-- [USER+CODE] **Polish now includes the document being polished.** The Resume
-  and Cover Letter Polish actions on both Prepare and their document workbenches
-  turn on only that document's Include toggle before dispatch. An enabled
-  automatic proposal also includes its own document when it starts; it no
-  longer requires Include to be on beforehand. The sibling material and the two
-  automation settings remain independent, and Apply continues to persist only
-  the selected package.
-- [USER+CODE+TOOL] **Workspace hydration now becomes observable to Prepare only
-  after React commits the loaded resume.** The startup promise previously
-  settled inside `loadWorkspace`'s `finally`, in the same async turn that queued
-  the resume state updates. An extension-triggered Prepare could resume first,
-  read the still-blank state ref, and report "Initial Fit needs your own resume"
-  while the saved resume appeared immediately afterward. The promise now
-  settles from an effect following the authoritative startup commit; focused
-  resolution checks (45/45), client workflow guards (441/441), the RoleFit
-  production/landing/desktop gates, and all 75 offline evaluations pass. A fresh
-  browser session loaded the saved resume from the live port, but the exact
-  extension-arrival race and a live-provider Initial Fit remain UNCONFIRMED in
-  browser QA.
-- [USER+CODE+TOOL] **Final Check is no longer a separate tool; it is the closing
-  phase of Polish for both documents.** The Resume rail showed a standalone
-  "Final Check — Optional review of the actual current resume. Run Final Check"
-  block while the cover letter validated and repaired its proposal invisibly, so
-  the product exposed an implementation difference as two workflows. Both now
-  show one sequence, owned by `shared/documentWorkflowContract.ts`: Ready to
-  Polish, Polishing and validating, Proposal ready, Reviewing proposal, Checking
-  current document, then Ready / Review / Needs evidence.
-  The internal difference is deliberate and stays. A resume proposal is
-  individual edits, so the resulting resume does not exist until each is
-  accepted, edited, or discarded; checking inside the Polish request would check
-  a hypothetical accept-everything resume. The check therefore runs ONCE when
-  the last decision settles — not per accepted edit — which required lifting
-  decision state out of `ResumeProposalReview` into `useResumeProposalDecisions`
-  so the workflow can observe it settle. A cover-letter proposal is one complete
-  replacement the server already validated and repaired, so accepting it records
-  that receipt as Ready with no second provider request; `/api/final-check` is
-  now document-kind aware for the letters that have no receipt (manually
-  authored, imported, or edited after acceptance).
-  Staleness split into two meanings that were previously one: editing the
-  document is "Changed since check" and invites a re-check, while a changed job,
-  evidence, or guidance is "Out of date" and invites a re-polish. Both expose
-  one inline Check again. The check remains advisory — it never rewrites a
-  document, blocks Apply, or invalidates a proposal — and a new `runFinalCheck`
-  setting (default on) keeps the extra request per polish user-owned without
-  making it a user-operated section. Role Fit stays separate and no fit score or
-  post-tailor fit audit returned.
-  The shared input firewall now derives both its data-only instruction and
-  escaping pattern from one current fence list. That list covers the check-time,
-  Initial Fit, Resume Polish, cover-letter, and application-answer inputs,
-  including `<editable_targets>`, `<resume_context>`, and the separate
-  `<selected_resume_label>` fence; those carried untrusted text without a
-  matching instruction or safe attribute boundary before. The final audit also
-  removed the retired cover-result adapter, keeps a superseded whole-letter
-  proposal visible to the shared workflow resolver, and uses Document check in
-  user-facing tracker and provider-error copy while preserving the `final-check`
-  storage/API id. All 77 offline evaluations (including the shared-state and two
-  layout contracts), 453 client workflow guards, RoleFit production and landing
-  builds, both TypeScript gates, and every desktop probe pass. **Browser QA is
-  UNCONFIRMED** and is the outstanding check: the Resume rail lost a section and
-  both rails changed status vocabulary. No live provider evaluation ran, so the
-  automatic post-decision check has not been observed against a real provider.
-
-## 2026-08-07
-
-- [USER+CODE+TOOL] **Which resume a preparation speaks for now has exactly one
-  owner.** Prepare ran two independent selectors: a pre-fit picker that never
-  adopted its choice, and a post-Prepare effect that re-ranked every variant and
-  could load a different one. When they disagreed, Initial Fit described resume
-  A while the editor held resume B, and the auto-proposal gate — comparing
-  friendly labels — then suppressed the proposals that fit had just approved.
-  The pre-fit picker also sampled `isWorkspaceBootstrapping` mid-flight, so an
-  extension import arriving before the startup workspace load returned read an
-  empty editor and reported "Initial Fit needs a loaded resume" with an empty
-  label that also hid the rail's Retry. `usePreparedResume`, over the pure rules
-  in `lib/preparedResume.ts`, now resolves once per preparation after the local
-  job analysis and before the combined provider request: it awaits hydration,
-  treats a single saved variant as the answer rather than a ranking problem,
-  ranks several against the LOCAL brief while the provider still receives the
-  raw posting, adopts through the existing guarded loader, and returns the exact
-  text the request carries. It runs whether or not Initial Fit is enabled.
-  An explicit resume origin (saved/uploaded/application/starter/blank) stops the
-  bundled starter — sample content long enough to pass every length test — from
-  satisfying readiness, Initial Fit, or an automatic proposal; Prepare now says
-  "Starter template" instead of "No document". Fit provenance became a content
-  fingerprint of the resume and posting actually screened rather than a label.
-  A valid Initial Fit now survives a local job-analysis fallback, and a narrow
-  grounding layer rejects only three things: a named technology absent from both
-  sources, a gap unanchored in the posting, and an eligibility note claiming an
-  authorization class neither the posting nor the candidate's context mentions
-  (note dropped, status kept). The retired evidence ledger and forensic
-  validator were deliberately NOT restored. Candidate reads for both document
-  kinds moved to bounded batch routes: one workspace lock, only the requested
-  files, nothing else in the response, and a corrupt variant skipped rather than
-  failing the batch. Prepare's prepared two-column row is now bounded to the
-  studio height with each column scrolling internally (CSS grid only — no
-  measurement, no observers); below 1080px the single-column behavior is
-  unchanged. 74 offline evaluations (4 new, including executed resolution
-  sequences that replace removed source-regex guards), 427 client workflow
-  guards, red/green proof on the new fit-grounding probes, both TypeScript
-  gates, and the RoleFit production build pass. **Browser QA of the new prepared
-  two-pane scrolling is UNCONFIRMED** and is the outstanding check; no live
-  provider evaluation ran, so combined-response reliability and concurrent
-  Resume/Cover latency remain unmeasured.
-- [USER+CODE+TOOL] The application workflow now has one fast path with bounded,
-  independent document work. `/api/polish` accepts only the one-pass
-  `resume-proposal` contract; Final Check and Cover Letter remain dedicated
-  routes. After a positive Initial Fit, enabled Resume and Cover proposals start
-  independently without awaiting each other. Apply persists only compact
-  Initial Fit and non-stale Final Check snapshots; numeric scores, full recruiter
-  reviews, missing-skill compatibility fields, Tailor/Review/Both settings, and
-  their permanent readers/evaluations were removed. Final Check settings and AI
-  usage now use the canonical `final-check` name with bounded migration from the
-  old local key. Resume and Cover feedback share a presentation-only component
-  while generation and acceptance stay workflow-owned. The unchanged full
-  RoleFit gate passes outside the managed loopback sandbox: production and
-  landing builds, desktop contract probes, and all 70 offline evaluations are
-  green. Browser and live provider QA remain UNCONFIRMED under the flag-first
-  policy.
-
-## 2026-08-06
-
-- [TOOL] `job-analysis-rename-contract.mjs` now takes its file list from
-  `git ls-files --cached --others --exclude-standard` instead of a directory
-  walk. Git reports POSIX separators, so its ledger keys matched only on Linux
-  CI and the check could never pass on Windows; git's ignore rules also keep an
-  ignored personal workspace out of the scan and out of test output. The
-  ledger's 20 entries and exact counts are unchanged, and the full RoleFit gate
-  passes on Windows for the first time with all 69 offline evaluations green.
-
-## 2026-08-01
-
-- [USER+CODE+TOOL] The standalone Typeset app and the private
-  `@typeset/engine` and `@typeset/editor` workspace packages establish a 0.2.0
-  document-platform milestone together. This is metadata-only: workspace link
-  ranges remain `*`; RoleFit remains 0.6.0; runtime code and UI are untouched;
-  and no exported package contract, portable-file schema, or browser-storage
-  schema changed.
-  npm 11.16.0 regenerated exactly the three owning workspace-version entries
-  in the root lockfile, and a clean install passed with a task-scoped cache
-  after the running RoleFit companion released its native-module handle. The
-  matching publication mechanism is the existing Typeset static-container
-  deployment from `main`, not a Git tag, GitHub Release, or npm publication;
-  PR checks, merge, the `Typeset CI and Deploy` main run, and the live-site
-  receipt remain UNCONFIRMED.
-- [USER+CODE+TOOL] The frozen RoleFit milestone is prepared as source version
-  0.6.0 with browser extension 1.1.0 and the existing desktop bridge API 12;
-  within that RoleFit release, Typeset, shared-package, manifest-format,
-  backup, document, settings, and runtime-config schema versions remained
-  unchanged. Preview identity stays in the
-  `rolefit-preview-v0.6.0-beta.1` tag rather than the package version, and the
-  curated note records the exact extension/API mapping. The
-  release-tuple regression check has a red/green proof and all 12 desktop
-  release-contract tests pass. The full RoleFit build/landing/desktop gate and
-  all 64 offline evaluations pass outside the managed esbuild filesystem
-  boundary; source Electron smoke, the 129-file allowlisted package layout, and
-  unpacked Windows x64 packaged smoke also pass. A local Squirrel installer
-  make is UNCONFIRMED because this execution account cannot create Electron's
-  `AppData\Local\SquirrelTemp`; the authoritative native workflow superseded
-  that host limitation after user QA and merge commit `e4c67ea`: run
-  `30717428328` published the six-asset unsigned GitHub prerelease successfully.
-- [USER+CODE+TOOL] Desktop API 12 adds one bounded extension-setup copy
-  operation for `directory`, `chrome`, `edge`, and `firefox`. The companion
-  renderer sends only that fixed target; Electron main maps it to the private
-  materialized extension path or exact browser setup address and owns
-  `clipboard.writeText`, with no generic renderer clipboard/path capability.
-  The setup card uses quiet native buttons with control-local hover/focus,
-  pending, success, and error feedback; success holds for 1.1s and fades before
-  restoring its prompt, the panel never rerenders or shifts, and an always-
-  present visually hidden live region reports results across tab changes. The
-  user approved visual QA on port 5181. The full RoleFit gate (64 offline
-  evaluations), 129-file package-layout probe, source Electron smoke, unsigned
-  Windows x64 Forge package, and packaged smoke pass; packaged smoke now
-  normalizes ASAR separators across Windows and POSIX. The product/extension
-  release version remains unchanged for the separate release PR.
-- [USER+CODE+TOOL] Live browser-tab Sessions awareness moved from the masthead
-  into the bottom studio-rail utilities group immediately above Settings. It
-  remains read-only and outside `OUTPUT_TABS` and the APG tablist; the expanded
-  rail shows a stable total, the collapsed rail preserves a compact count and
-  working cue, and the menu uses a viewport-clamped rightward popover that
-  escapes the clipped studio shell. The masthead now owns only RoleFit identity
-  and Apply. Product, design, engineering, testing, and scoped ownership docs
-  now describe the same boundary. The RoleFit production build, 371 workflow
-  guards, and all 64 offline evaluations pass; the seven esbuild evaluations
-  that cannot traverse the managed Windows filesystem sandbox were rerun
-  successfully outside it. Desktop visual QA on port 5181 remains UNCONFIRMED
-  pending the user's pre-merge review.
-- [USER+CODE+TOOL] A focused review of Apply's multi-document download change
-  closed three async-contract gaps and two dialog/name edge cases. The naming
-  dialog now remains mounted and busy until every selected PDF attempt settles,
-  preventing cover-letter edits from changing the style after its application
-  artifact was saved. A pure sequential export helper catches `false` and
-  rejected results per document, so a failed resume export cannot suppress the
-  cover-letter attempt. Manual resume selection owns a separate reactive busy
-  lifetime in addition to its synchronous ref guard, keeping Apply and Tailor
-  blocked when it overlaps an automatic recommendation load. Download-only
-  checkboxes now say so explicitly, retain a 24px label target, and expose a
-  polite in-dialog progress receipt. Dotted kind suffixes round-trip without
-  stacking (`Jane.Doe.Resume` -> `Jane.Doe.Cover.Letter`). The executable PDF
-  sequencing evaluator, 18 naming probes, 345 workflow guards, RoleFit build,
-  and all 64 offline evaluations pass. Browser QA of the changed dialog remains
-  UNCONFIRMED under the flag-first policy.
-
-## 2026-07-31
-
-- [USER+CODE] **Apply's download prompt now covers every included, exportable
-  material instead of the resume alone.** A cover-letter-only Apply prompts, and
-  an Apply with both gives each document its own row: checkbox plus its own
-  editable name field, replacing the single shared "File name" input. The two
-  documents stay two PDFs because ATS uploads are per-document and a merged file
-  breaks resume parsing. The letter's field is seeded with
-  `swapDocumentTitleKind` (`Name_Company_Resume` -> `Name_Company_Cover_Letter`),
-  reusing the existing document-title convention rather than stacking a second
-  suffix onto a base that already carries a kind, and remains independently
-  editable. Downloads run sequentially,
-  and both PDF export helpers now resolve a success flag so Apply's own status
-  names a failed export instead of losing it to an editor status the user has
-  navigated away from; that message appends to the artifact-save result rather
-  than replacing it. Apply is synchronously single-flight from duplicate
-  resolution through a direct commit and through the selected post-commit PDF
-  exports; the pre-commit naming prompt remains interactive. Explicit manual
-  resume or cover-letter selection now preempts in-flight recommendation work,
-  and included cover-letter ranking keeps Apply and Cover Tailor blocked until
-  selection settles. The prompt gates the resume on the structured model, not
-  the looser export-rail flag, so a text-only polish result no longer offers a
-  PDF that cannot be typeset. The 15-case `apply-download-names-eval` plus
-  the focused `apply-download-lifecycle.mjs` evaluator pin the naming, ordering,
-  and outer busy lifecycle. The workflow guards now pass 344 checks. The
-  RoleFit
-  check, `deps:check`, the server TypeScript gate, and all 63 offline
-  evaluations pass. Browser QA of the dialog is UNCONFIRMED.
-- [USER+CODE+TOOL] CI ran the engine suite three times per push — once in
-  `Document workflow CI` and again inside each deploy workflow's verify job.
-  Only `generate_font_assets.py` reaches the network, and it refetches every
-  pinned upstream source on a cold runner with a 60s socket timeout and no
-  retry, so each duplicate run was an independent chance to fail. Observed on
-  `22b1fd1`: the engine job succeeded while `RoleFit verify` timed out against
-  the same sources minutes apart, and a re-run of the identical commit passed
-  with no code change. `Document workflow CI` is now the sole per-push owner of
-  the package suites; the deploy workflows build and ship only their own app
-  and no longer install Python at all. An app build still compiles both shared
-  packages from source, so type and integration breakage still fails a deploy —
-  but a deploy passing alone no longer proves the package suites passed, so
-  `Document workflow CI` is the gate that must stay green on `main`.
-- [CODE] Every job that runs `generate_font_assets.py` now caches
-  `/tmp/typeset-fonts`, keyed on that script plus `requirements-fonts.txt`,
-  which name the immutable pinned commits. Both release workflows carry the
-  same cache so a signed or preview release cannot fail on a slow mirror.
-  Retry was deliberately not added: caching removes the download on warm
-  runners rather than papering over a failure, and it is worth seeing whether
-  cold-runner misses still flake before adding backoff.
-- [CODE] Both deploy workflows exclude `**/*.md` and `packages/*/scripts/**`
-  from their triggers. `22b1fd1` changed only a Python wrapper, a package
-  script field, and docs, yet republished the RoleFit site and swapped the
-  Typeset container; neither path can change a built bundle. The existing
-  warning still applies: a skipped workflow never reports, so a deploy verify
-  job must not become a required status check.
-
-- [USER+CODE+TOOL] `npm run check` could not pass on Windows for
-  `packages/engine`, for two independent reasons now fixed. The repository had
-  no `.gitattributes`, so a Windows checkout under `core.autocrlf=true`
-  rewrote the generated font assets to CRLF while the generators emit LF;
-  `generate_font_assets.py --check` compares byte for byte and therefore
-  reported correct committed assets as stale. Confirmed by measurement rather
-  than inference: `fonts/Arimo-OFL.txt` held 93 CR in the working tree and 0 in
-  its committed blob, and stripping CR made the working file hash-identical to
-  the blob. Every committed text blob in the repository was already LF, so
-  `* text=auto eol=lf` changes no blob; only Windows working trees renormalize
-  on re-checkout. Second, `fonts:check` invoked `python3`, which Windows
-  installs do not provide — they ship `python.exe`, `pythonw.exe`, and a `py`
-  launcher, and a bare `python` may resolve to the Microsoft Store alias stub.
-  It now runs through `packages/engine/scripts/run-python.mjs`, which prefers
-  the `.font-tools` virtualenv over any ambient interpreter and requires a real
-  "Python 3" banner. `__pycache__/` is now ignored.
-- [TOOL] Verified on Windows 11 with Python 3.12.10 and the pinned
-  fontTools 4.60.2 / brotli 1.2.0 virtualenv: `npm run fonts:check` passes both
-  generators ("Verified 40 generated files against pinned sources", "Verified
-  33 fonts, 11.80 MB total"), and the full `packages/engine` check passes for
-  the first time on this platform. CI behavior is unchanged — it already
-  checked out LF and had `python3` on PATH.
-
-- [USER+CODE+TOOL] A dependency-ownership follow-up closes three phantom
-  dependencies that the default hoisted install was satisfying without any
-  manifest declaring them. RoleFit now declares `pdfjs-dist` 5.4.296 directly,
-  superseding the 2026-07-29 record of it as a React-PDF transitive: RoleFit
-  resolves the PDF.js worker by subpath in `PreviewOverlay`, and its PDF
-  round-trip eval imports the legacy build. A contract pins that version to
-  whatever React-PDF requires, because an API/worker split fails at runtime in
-  the preview rather than at build time. RoleFit also declares
-  `@electron/asar` 3.4.1, imported by the packaged smoke test, and the root
-  declares `react`/`react-dom` 19.2.8 for the root-owned browser-contract
-  fixture. The lockfile gained four manifest lines and no packages: every
-  version was already resolved at exactly these numbers.
-- [CODE] `check-dependency-contracts.mjs` now walks `scripts/`, `apps/*`, and
-  `packages/*` recursively across `.js/.mjs/.cjs/.ts/.tsx/.cts/.mts`, resolving
-  each import against its nearest owning `package.json` and allowing only that
-  manifest's dependencies, root-owned tooling, workspace packages, or Node
-  builtins. It previously scanned only immediate `.js/.mjs/.cjs` files under
-  `scripts/`, so it could not see any of the three. Textual scanning matches
-  escaped imports inside regex literals, so candidates must also parse as legal
-  npm package names. Dependency CI adds `deps:tree` and
-  `deps:audit:production`; the root gains a `devEngines` block that fails a
-  mismatched runtime or package manager before install.
-- [TOOL] Verified on this branch: `deps:check` passes and a negative test
-  (declarations removed) reproduces all three findings with file and owner
-  attribution; `deps:tree` exits clean; the production audit is zero while the
-  development tree keeps its 30 known no-fix Forge packaging advisories; engine
-  typecheck and evals including 1,266,912 PDF shaping comparisons, the editor
-  check, and both app checks pass with 57 RoleFit tests green. Engine
-  `fonts:check` was NOT run locally — this Windows host has no Python 3, so CI
-  is the first environment to exercise it. `devEngines` is accepted by npm
-  11.16.0 but its enforcement on a mismatched toolchain is UNCONFIRMED.
-
-## 2026-07-30
-
-- [USER+CODE+TOOL] **Prepare now exposes one concise Role context instead of
-  separate Role summary and Company / product context textareas.** Existing
-  prepared or restored jobs still combine and deduplicate the legacy split
-  values so no captured context disappears. Once the user edits the unified
-  field, its tracker-backed `roleDescription` becomes authoritative and the
-  hidden legacy `companyContext` value is cleared atomically, preventing stale
-  prose from reaching Tailor beside the edit. Extraction gaps now use the same
-  Role context label. The focused prepared-job eval, all 314 client workflow
-  guards, the RoleFit production build, and all 61 offline evaluations pass;
-  the suite's loopback probes required a non-sandboxed rerun after the sandbox
-  correctly rejected `server.listen` with `EPERM`. Browser QA was not run under
-  the flag-first policy; the unified textarea's rendered width at responsive
-  breakpoints remains unconfirmed.
-- [USER+CODE+TOOL] **Prepare's Resume and Cover Letter groups now use one
-  concise recommendation contract.** The screenshot showed the root failure:
-  equal raw keyword counts were broken alphabetically, so a tied source was
-  still called recommended; Resume then asked for confirmation while Cover
-  Letter required a separate Use action. `recommendVariant` now weights the
-  prepared job's title, required qualifications, declared technology,
-  responsibilities, seniority, domain, preferred qualifications, and context.
-  A tie, negligible edge, or incomplete candidate read returns no
-  recommendation. A meaningful unique winner is auto-selected for either
-  document through its existing guarded loader only while the editor is clean
-  and not application-owned. The normal UI now uses the selector as the receipt:
-  both groups say `Selecting best match…` while ranking and expose the same
-  Tailor/Open actions, with no counts, tie explanation, Use button, confirmation
-  step, or duplicate success receipt. A compact `Recommended: <label> · Select`
-  fallback appears only when safe replacement was blocked. This supersedes the
-  earlier same-day cover-letter recommend-only/high-confidence resume contract.
-  The weighted/tie/incomplete evals, all 312 client workflow guards, the RoleFit
-  production/landing/desktop builds and probes, and all 61 offline evaluations
-  pass. Browser QA was not run under the flag-first policy; rendered density in
-  the supplied rail layout remains unconfirmed.
-- [USER+CODE+TOOL] **Resume and cover-letter output identity now stays paired,
-  and Prepare reports fit without guessing.** Selecting a saved cover-letter
-  variant changes its content source but preserves the current application
-  title, matching resume selection and keeping exports on the
-  `Name_Company_Resume` / `Name_Company_Cover_Letter` contract. Both editor
-  toolbars now use only the same `Role at Company` sublabel instead of adding
-  AI-source text to Resume. After preparation, the flat Application rail shows
-  the matching current AI Review verdict and score, falls back to a matching
-  saved verdict explicitly labeled Historical Review, or says `Not reviewed`
-  with a route to Review; it never derives a local fit judgment. All 305 client
-  workflow guards, naming and fit-verdict focused checks, the RoleFit
-  production/landing/desktop builds and probes, and all 61 offline evaluations
-  pass. Browser QA was not run under the flag-first policy; the new compact Fit
-  row's rendered wrapping at rail breakpoints remains unconfirmed.
-- [USER+CODE] **Prepare now changes shape with the job lifecycle instead of
-  reserving a sparse readiness column.** Before preparation, a centered Source
-  panel is the whole task: URL and pasted text are APG-tabbed methods, only the
-  selected method renders, the URL action says what it does ("Prepare from
-  URL"), and the paste editor is capped at a compact working height. Empty Job
-  brief, Materials, and readiness scaffolds are absent. After preparation,
-  Source keeps its existing collapsed captured-posting paths, the editable brief
-  leads the main column, and one sticky Application rail combines the stacked
-  Resume/Cover Letter choices, readiness, saved-application summary, and Apply.
-  Material DOM order now matches the visible identity/Include/variant/actions
-  sequence; the existing preparation, recommendation, inclusion, and Apply
-  contracts are unchanged. The Impeccable layout detector is clean, all 296
-  client workflow guards and 61 offline evaluations pass, and the RoleFit
-  production build passes. Browser QA was not run under the flag-first policy;
-  rendered empty/prepared states and the 1080/860/720px transitions remain
-  unconfirmed.
-- [USER+CODE+TOOL] **The Include toggle's hidden checkbox had no containing
-  block.** `.prepare-include-toggle input` is `position: absolute` while its
-  label was `static`, so the input resolved against the INITIAL containing block
-  and did not move with the studio-body scroller. Measured in the running app at
-  1512x620, scrolled to the end: the label sat at y530 while its own checkbox was
-  stranded at y342, 188px away; adding `position: relative` to the label pins it
-  inside at every scroll offset (A/B run in one probe, both directions). This is
-  the failure mode already recorded on 2026-07-25 for popovers — an absolutely
-  positioned descendant extends its scroll container's scrollable area — and it
-  explains a blank band under the last material row after clicking Include,
-  which focuses that stranded input. `.prepare-main` is now positioned as a
-  backstop for the sr-only recommendation live region in the same column.
-  Chromium (the QA pane) clamps the visible symptom: sidebar, studio body, pane,
-  and shell all measured flush to the window bottom before and after, so **the
-  user's reported footer band is Firefox-observed and its disappearance is
-  UNCONFIRMED** — the stranding it comes from is fixed and guarded.
-- [USER+CODE+TOOL] **Prepare now recommends a cover letter too, and stops
-  calling a saved template "No draft."** `resumeVariantRecommendation.ts` became
-  `variantRecommendation.ts` (`recommendVariant`, `VariantCandidate`,
-  `VariantRecommendation`) with a per-caller usable-length floor: 80 characters
-  for a resume, 40 for a letter. `readCoverLetterVariantCandidates` reads each
-  saved `.cover` through the same validated select route the editor opens with —
-  verified in the running app to be a pure read that leaves the open letter
-  alone — parses it, and skips any variant that fails rather than ranking it
-  empty. A second App effect ranks them on the same debounced prepared job and
-  invalidates on a new `coverLetterCandidatesRevision`, which one
-  `adoptCoverWorkspaceSnapshot` owner now advances for every authoritative
-  cover-letter snapshot. **It never adopts its own winner**: a letter is short
-  enough that keyword coverage cannot honestly reach the confidence that
-  justifies replacing an open document, so both materials render one
-  `PreparedVariantRecommendation` note carrying a one-click "Use <label>".
-  Separately, `coverLetterReady` was right but its label lied: base letters are
-  templates, so a legitimately loaded variant with unresolved `[slots]` read as
-  "No draft". The state now says `Template · N placeholders to fill`, with
-  "Draft too short" and "No draft" as the other real reasons.
-  287 client workflow guards (9 new), 61 offline evals including cover-letter
-  ranking cases, client typecheck, and the production build pass. Live browser
-  checks: all five saved letters fetch and parse through the select route, and
-  the state line reads `Template · 6 placeholders to fill`. The recommendation
-  itself needs a prepared job, so its rendered form is **UNCONFIRMED** — no live
-  provider-backed job analysis was run.
-- [USER+CODE] **Prepare's page shape is now flat, dense, and tool-like**
-  (user: "more functional/compact/less ai"). Behavior, props, readiness, and the
-  Apply contract are unchanged; the chrome is not. Source, Job brief, and
-  Materials are hairline-headed panels — title, quiet meta, trailing actions —
-  and a prepared source collapses into its own head (captured size and origin)
-  with no body. The two material cards became two rows of one Materials panel;
-  their icon tiles, the `· Using <variant>` clause, and the `activeBaseResumeLabel`
-  / `activeCoverLetterLabel` props are gone because the variant selector already
-  names the variant. Every secondary line — blocked-action guidance, live
-  status, safety notes, the variant recommendation — is one `.prepare-note`
-  text treatment instead of four tinted panels, and each material shows at most
-  one: the blocker while its action is unavailable, its status otherwise
-  (the cover row previously showed both at once). The extraction/candidate gap
-  boxes are flat columns, ending a card-in-card the No Nested Container Rule
-  already forbade. The rail is one panel: preparation is a readiness check, so
-  its progress card appears only while work runs or a status is outstanding, and
-  each check is one line rather than a label over a sentence. Removed as
-  decoration: every Sparkles/ShieldCheck/FileText/Mail/ClipboardCheck mark, the
-  brief's two-sentence "correct missing details here" preamble, and the
-  duplicated role/company brief header. Verbose labels shortened (Tailor,
-  View/Replace, Fetch, Open/Review). All 278 client workflow guards, 61 offline
-  evals, the RoleFit client typecheck, and the production build pass; the
-  guard that pinned "no accent stripe" moved to `.prepare-note` and gained a
-  no-nested-card check for the gap columns. **Browser QA was not run** under the
-  flag-first policy — layout risk is real and unverified: the 3-column brief
-  grid, the 4-column material row, the collapsed-source bar, and the 1080/980/
-  860/720px breakpoints.
-- [USER+CODE+TOOL] Prepare is the first/default and sole job-intake surface. Its
-  editable brief includes tracked job facts, company context,
-  responsibilities, required/preferred qualifications, technical keywords,
-  seniority/domain signals, benefits, and extraction/candidate-review gaps.
-  Resume and Cover Letter share the same card pattern with Include toggles and
-  variant selectors; Resume starts included, Cover Letter starts excluded, and
-  Apply requires readiness only for included materials while allowing neither.
-  Re-Apply preserves any previously saved artifact for an excluded material.
-  Current candidate gaps come only from the matching Review result; a restored
-  Apply snapshot is labeled historical until Review runs again. Applications
-  routes new work back to Prepare and its detail modal edits existing records.
-  Resume recommendation ranks actual variant contents and auto-selects only a
-  clear high-confidence winner while the editor is clean; ambiguous or dirty
-  state pauses without persisted variant metadata or a schema change. Saved
-  variant mutations invalidate the ranking, and an in-flight automatic choice
-  cannot replace a restored application's resume. The full RoleFit gate passes:
-  production and landing builds, desktop contracts, and all 61 offline
-  evaluations. Browser QA was not run.
-
-## 2026-07-29
-
-- [USER+CODE+TOOL] The final dependency-modernization tranche SHA-pins every
-  third-party GitHub Action, fixes workflow runners to named current images,
-  and executes TypeScript 7's native compiler plus all seven configs on Linux
-  x64/ARM64, macOS ARM64/x64, and Windows x64. Typeset's Node 24.18.0 and
-  unprivileged Nginx bases are multi-architecture digest-pinned; pull requests
-  build the image and require an HTTP response before deployment. Native
-  Dependabot now groups npm, Actions, Docker, and Python updates without an
-  auto-merge path, leaving Vite, TypeScript, Electron, PDF/font, Python, and
-  generated-asset changes under their documented manual gates.
-- [USER+CODE+TOOL] The PDF dependency audit retains `pdf-lib` 1.17.1,
-  `@pdf-lib/fontkit` 1.1.1, React-PDF 10.4.1, and its `pdfjs-dist` 5.4.296
-  transitive. RoleFit's unused direct `fontkit` 2.0.4 dev dependency and its
-  nine exclusive transitive lockfile records are removed: source search found
-  no import, the desktop bundle metafile retains no runtime import, and the
-  staged package remains 128 allowlisted files. The strengthened round-trip
-  fixture emits all six families and six faces with accents, ligatures,
-  kerning, links, and underlines plus a searchable two-page cover letter.
-  PDF.js exact-position/extraction checks, 1,266,912 shaping comparisons,
-  reproducible web/PDF font checks, both app builds, Poppler renders of every
-  retained artifact, and a real React-PDF Source Serif preview pass with no
-  browser errors or warnings. Python pins and generated font assets are
-  unchanged; the production npm audit remains zero.
-- [USER+CODE+TOOL] TypeScript 7.0.2 is the sole workspace compiler after an
-  explicit 6.0.3 bridge. The root probe and all six child configs pass without
-  diagnostics; browser configs retain their previous options, the Node-native
-  server gate alone uses ESNext/NodeNext with relative-import rewriting,
-  erasable syntax, verbatim modules, and no emit, and the desktop emit remains
-  separate. The editor component probe now loads its TSX through Vite rather
-  than TypeScript's removed JavaScript compiler API. On this macOS ARM64 host,
-  real wall-clock typechecks changed from 5.04s to 0.86s for RoleFit, 2.67s to
-  0.81s for Typeset, 1.98s to 0.46s for engine, and 2.74s to 0.66s for editor.
-  Node-native `.ts` evals and desktop `.cts` emit/probes pass. Other native
-  compiler platforms remain assigned to the PR CI tranche.
-- [USER+CODE+TOOL] Electron 43.2.0 now shares one desktop runtime contract for
-  its 43.2 major/minor, embedded Node 24.18, the `node24.18` esbuild target,
-  and Node 24-only Forge host. Build staging, Forge, release contracts, IPC
-  fixtures, package layout, and packaged smoke consume that owner; the exact
-  Electron installer is included in the reviewed lifecycle-script allowlist.
-  Source desktop probes, release tests, the real Electron owned/reused server
-  smoke, native macOS arm64 packaging, ASAR/PDF-worker presence, security
-  fuses, ad-hoc signature, and packaged startup pass. Native macOS x64 and
-  Windows x64 remain workflow-only verification on this ARM64 host.
-- [USER+CODE+TOOL] RoleFit now shares the root Vite 8.1.5 and React plugin
-  6.0.4 with Typeset, with the Vite 7 browser baseline retained explicitly for
-  the renderer and public landing page. Dependency checks, both app gates,
-  RoleFit/landing builds, lifecycle probes, Chromium lazy-panel/React-refresh
-  checks, and the built landing CSP smoke pass. Real saved-resume QA also found
-  and fixed a pre-existing CSP omission: `connect-src` now permits only the
-  in-memory `blob:` fetch PDF.js needs. The public starter resume, fonts,
-  PDF.js worker, and object URL all returned 200 with no browser errors.
-- [USER+CODE+TOOL] React and React DOM now resolve once at 19.2.8, and all
-  three Lucide consumers resolve once at 1.27.0. Shared-editor checks, the
-  Typeset app gate, RoleFit's production build, and the dependency contract
-  pass. No product UI code changed; visual QA remains deferred under the
-  flag-first policy until the Vite/browser tranche.
-- [USER+CODE+TOOL] Dependency-modernization tranche 1 pins the workspace to
-  Node 24.18+ below 25 (`.node-version`: 24.18.0) and npm 11.16.0, aligns CI
-  and Node types with that runtime, and makes shared TypeScript/Vite/React
-  tooling root-owned. A strict, version-pinned install-script allowlist and the
-  dependency-contract gate now protect clean installs. RoleFit's Vite 7/plugin
-  5 pair remains the sole explicit migration exception until its dedicated
-  Vite 8 tranche; Electron Forge's private TypeScript 5.4 compiler is not a
-  workspace compiler. Two clean `npm ci` runs preserved the lockfile hash;
-  production audit, full repository check, Chromium editor contracts, and
-  effective RoleFit tsconfig comparison passed under the pinned toolchain.
-  The production audit is zero; the separate full audit still reports 29 high
-  and 1 critical no-fix advisories, all in dev-only Electron Forge
-  packaging/rebuild transitives, for the Electron tranche to reassess.
-- [USER+CODE] Browser downloads now keep their hidden anchor and blob URL alive
-  through Chromium's asynchronous handoff. Immediate cleanup could deliver the
-  PDF bytes while losing the anchor's requested `.pdf` filename, leaving a
-  UUID-named file; the shared download path now cleans up after a bounded delay
-  and a focused lifecycle probe pins the filename and cleanup order.
-- [USER+CODE+TOOL] PDF export no longer rewrites Latin Modern's name-keyed
-  OpenType/CFF program as a CID-keyed `CIDFontType0` resource, a hybrid that
-  Firefox 153 / PDF.js 6 painted as missing or remapped glyphs even though
-  older PDF.js and Poppler could extract it. The reproducible PDF-font
-  generator now converts Latin Modern to metric-preserving TrueType siblings;
-  pdf-lib emits every face as `CIDFontType2` + `FontFile2` with the identity
-  CID-to-GID map. The engine gate, 1,266,912 font-parity checks, RoleFit and
-  Typeset builds, the PDF round-trip, and real-resume Poppler plus PDF.js 5/6
-  path-raster probes pass. The broader upstream-source font check remains red
-  only because the pre-existing Arimo/Carlito license outputs are stale; the
-  focused PDF-font regeneration check passes.
-- [USER] 2026-07-29: **Pre-release schema policy, in force until the user lifts
-  it.** While the products are in dev/preview/beta there is exactly one live
-  schema: whatever the current build writes, still called `schemaVersion: 1`.
-  Runtime parsers stay single-shape and reject anything else — no compatibility
-  branches, no derived defaults for absent fields, no version negotiation. When
-  a change alters a stored shape, the assistant converts the existing documents
-  with a throwaway developer script and keeps that script out of the commit.
-  The user will say when to lift this and move to real versioning and
-  migrations; the assistant may ask whether a lift is warranted.
-- [USER+CODE] 2026-07-29: **Spacing is absolute.** Every structural junction is
-  the following row's own line advance plus the gap the user set, so 0 adds
-  nothing; the retired TeX junction constants and tabular struts are gone from
-  the engine. The header keeps its own line spacing of 1 and does not inherit
-  the document's, so a gap of 0 is the same distance in a resume and in a
-  double-spaced letter, and the header's gaps are the only thing that moves its
-  rows. `titleSubGapPt` may go negative (floor -6): an entry head is a pair
-  inside one block, traditionally tighter than single spacing, and the ink floor
-  still prevents collision. `.cover` persists the three header gaps it actually
-  uses; the other eight belong to sections and entries a letter does not have.
-  Defaults, presets, and `starter.resume` were rebased so a new document looks
-  unchanged, and 21 live workspace documents (9 resume styles, 12 cover styles,
-  including snapshots inside application records) were converted with backups
-  under `workspace/.spacing-migration-backup/` and
-  `workspace/.header-lineheight-backup/`. Documents in `.trash/` and older
-  rewrite backups were left alone and will fail to open until converted.
-- [CODE] 2026-07-29: `vertical-parity.mjs` and `vertical-truth.json` are
-  retired. They measured the engine against a frozen Tectonic compile, and the
-  engine owns its layout now. `vertical-layout-snapshot.mjs` replaces them: 75
-  recorded lines across the three spacing presets, compared exactly rather than
-  within a TeX tolerance, updated only via `--update`. `pdf-roundtrip.mjs` now
-  lays out the engine's own starter document instead of the TeX fixture.
-- [USER+CODE] 2026-07-29: The three header gaps (`nameContactGapPt`,
-  `contactGapPt`, `headerSectionGapPt`) stay style-owned for both document
-  kinds; paragraph spacing does not replace them. Only style can express a gap
-  inside the header block or between wrapped contact rows, which are layout
-  products with no document node. The cover letter, which has no
-  document-spacing popover, now exposes them in its Header menu via
-  `DocumentStructureControls`'s `headerSpacing` prop; the resume keeps them in
-  `SpacingStylePopover`. `DOC_STYLE_BOUNDS` point gaps now round outward to the
-  0.1 step so every slider stop is a clean tenth, and the two trim gaps floor at
-  -6 pt: both sit on a calibrated baseline skip (13.6 pt name -> contact, 19.18
-  pt header -> body, one leading in a cover letter), so their old calibrated
-  floors could not close the gap they name. Widening a bound cannot invalidate
-  an existing document. UNCONFIRMED: on the cover letter, `headerSectionGapPt`
-  and the first paragraph's `space-before` still add rather than override
-  (`coverLetterBlocks.ts`), so the header gap is a floor the paragraph control
-  cannot reach below.
-- [USER+CODE] 2026-07-29: Typing/deletion undo grouping is word-sized, not
-  burst-sized (user: live grouping undid every character typed at once, unlike
-  Google Docs). A shared-editor text run still ends on an idle pause, field
-  change, or structural edit, and now also at a word boundary in the gesture's
-  own direction and at a 20-character cap. `TextEditOptions.historyText` is how
-  the editor reports the characters an edit moved; an edit that omits it counts
-  as one character against the cap. Editor checks and both app builds pass.
-- [USER+CODE] 2026-07-29: **SUPERSEDES the resume-v2 and cover-file
-  compatibility entries below.** `.resume` and `.cover` each have one strict
-  schema version 1. Both persist the same optional structural header contract:
-  absent, hidden, visible blank, named, and ordered contact fields remain
-  distinct. Retired resume name/contact, resume schema-v2, oldest
-  `rolefit.resume`, interim cover-header, and cover schema-v2 shapes are
-  accepted only by explicit workspace rewrite tools, never by runtime parsers.
-- [CODE] 2026-07-29: The shared editor owns header create/show/hide/remove,
-  name/contact editing, right-click actions, keyboard structure edits, rich
-  clipboard transfer, and explicit multi-block header/document paste mapping;
-  header hover action menus are intentionally absent. Cover letters enable
-  header structure while disabling resume sections.
-- [TOOL] 2026-07-29: The ignored local workspace was migrated with backups:
-  24 resume files and 12 cover files reparse through the sole strict-v1 codecs.
-  Seven resume and one cover application source fingerprint were reconciled
-  with tracker backups. A post-write audit caught the tracker sanitizer dropping
-  structural headers on its second pass; the boundary was corrected and all 249
-  affected resume header snapshots were restored exactly from the immediate
-  backup. Repeat dry runs report zero source or metadata changes, and all eight
-  tracked source fingerprints match their files.
-- [USER+CODE+TOOL] 2026-07-29: Header commands now retain stable identity so a
-  normal typing render cannot trigger the caret-restoration effect against the
-  pre-edit DOM. A synthetic browser reproduction changed from caret `10 -> 0`
-  before the fix to `10 -> 11` after it. The header hover add/delete menu and
-  its CSS were removed; header structure remains in the toolbar, keyboard, and
-  right-click paths. Editor checks and both consumer builds pass.
-- [CODE+TOOL] 2026-07-29: The final review made private structural paste
-  lossless across single- and multi-field selections, preserved style-only and
-  header-only autosaves, disabled every control in an already-open structure
-  popover, and added a strict storage-boundary rewrite for retired standalone
-  Typeset browser autosaves. The full repository check passes: all four
-  workspace gates, 59 RoleFit tests, 143 client workflow guards, both autosave
-  migration suites, and 1,266,912 PDF parity checks. Final workspace dry runs
-  remain zero-change for all 24 resumes and 12 cover letters.
-- [USER+CODE+TOOL] 2026-07-29: Automatic-link deferral no longer swaps an
-  editable `<a>`/`<span>` while a primary pointer selection is in flight. That
-  swap disconnected the range anchor and collapsed a backward drag beginning
-  at a linked contact's trailing edge. The current paint now stays stable until
-  mouseup, then the settled single- or multi-field range is restored. Shared
-  editor checks and both app builds pass; live RoleFit verified trailing-edge,
-  already-deferred, cross-contact, and repeated Shift-selection cases with no
-  console errors.
-- [USER+CODE+TOOL] 2026-07-29: Contact undo/redo now detects a restored slot
-  before comparing field text. A missing trailing contact and a restored empty
-  contact both read as `""`, which previously left history without a caret
-  target and let the browser collapse before the restored divider. The caret
-  now restores at offset zero inside the first added contact. The focused
-  regression ran red then green; the editor gate and both app builds pass, and
-  live RoleFit verified both undo-restoration and redo-restoration at
-  `contact|5`/0 with zero console errors.
-- [USER+CODE+TOOL] 2026-07-29: Text history now uses a rolling 700 ms
-  field-plus-intent group: typing, backward deletion, and forward deletion are
-  independent transactions; selections, formatting, structural edits, field or
-  caret moves, pauses, and undo/redo close the group, while background
-  persistence does not. React Strict Mode exposed that the shared history clock
-  allocated two sequences for one reducer dispatch, so sequence allocation is
-  now idempotent for the same state/action pair across both content and style
-  reducers. Red/green reducer probes cover held deletion, autosave, direction,
-  caret, pause, contacts, and double invocation. Live RoleFit verified grouped
-  typing/deletion undo and redo plus the caret-move boundary, restored the
-  original contact after each probe, and reported zero console errors.
-
-## 2026-07-28
-
-- [USER+CODE] 2026-07-28: **SUPERSEDES every cover-letter preparation/proposal
-  entry below.** The cover letter is one Tailor click. `/api/cover-letter` is a
-  single operation with no `mode`, plan, selected-evidence, or override field:
-  the server resolves date, candidate, role, company, greeting, and sign-off,
-  sends the whole evidence corpus with the typed source template, and the model
-  chooses which experiences and honest-context notes the posting warrants. A
-  valid letter is applied straight to the editor; the editor keeps the exact
-  pre-tailor `.cover` behind one Restore that expires on the next edit, open, or
-  Tailor. Removed as user-facing ceremony: the evidence plan, use/skip
-  decisions, clarification round-trips, the 1–3 evidence-item contract, the
-  "Continue to draft" and "Use this draft" steps, the Polish/Guide mode picker,
-  and the guided `why_role` / `lead_experience` / tone fields. Removed as
-  gates: the 80-authored-word requirement (now only a prompt voice signal), the
-  verbatim four-word source-phrase requirement, and the 180–420-word and
-  one-page acceptance checks (now warnings on a delivered letter).
-  The reason the branch was reworked rather than reverted: the template parser,
-  deterministic correspondence, stale-request cancellation, placeholder
-  rejection, and grounding checks were the right parts; the choreography around
-  them was not.
-- [USER+CODE] 2026-07-28: Questions are the exception path, not the workflow. A
-  missing candidate name, role title, or company blocks with one inline field
-  each; an unanswered private template slot (a referral, a prior personal
-  relationship) blocks with one focused question. Everything else generates: a
-  recipient comes from an authored `Dear <name>,` greeting or falls back to the
-  company hiring team, and an unrecognized natural-language slot stays
-  generative rather than becoming a blocker.
-- [CODE] 2026-07-28: Server validation collects _repairable violations_ instead
-  of throwing, then runs exactly one silent repair request carrying the
-  violations and the rejected output. A second failure returns 422 and keeps the
-  candidate's current letter. The normal path is one provider request.
-- [ASSUMPTION] 2026-07-28: `/api/cover-letter` accepts an optional
-  `employerContext` array of `{fact, source}` and passes it to the prompt for
-  employer facts only. Nothing populates it yet — app-owned public company
-  research is a deliberate follow-up, must never delay or block Tailor, and must
-  never send resume or honest-context text to the fetcher.
-- [USER+CODE] 2026-07-28: The cover-letter quality corpus stays synthetic and
-  never reads `workspace/cover-letters/`. Ignoring a personal `.cover` protects
-  its path, not copied text; pasting it into the tracked fixture would publish
-  it, while loading it in the live harness would send it to the selected
-  provider and duplicate it in local eval output. The tracked synthetic job
-  families remain the portable quality floor without either exposure.
-- [TOOL] 2026-07-28: All 57 RoleFit offline evals, both TypeScript gates, and the
-  RoleFit production build passed after the rework. Browser QA was not run under
-  the repository's flag-first policy; the rail and toolbar changed shape, so
-  rendered QA of the Cover letter page is the outstanding check.
-- [TOOL] 2026-07-28 (historical, pre-rework): the two-stage flow passed 58
-  offline evals and live Claude CLI QA on a Saronic Full Stack Engineer
-  application, reaching a validated pending proposal. Recorded because the
-  grounding behavior it proved still holds; the workflow it describes does not.
-- [TOOL] RoleFit production build, all 57 offline evals, and desktop/390px
-  browser interaction QA passed with a clean console. The synthetic live-provider
-  harness was added but not run.
-- [CODE+TOOL] 2026-07-28: The final review kept employer research out of
-  candidate grounding (a public company technology can never substantiate the
-  candidate's use of it), made punctuation-heavy employer names safe for
-  employer-only sentence classification, and added the four new cover-letter
-  prompt wrappers to the shared fence-injection firewall. Adversarial probes
-  failed before each fix and passed after it. The full RoleFit gate then passed:
-  production and landing builds, desktop contracts, and all 57 offline evals.
-  No live provider eval ran.
-
-## 2026-07-27
-
-- [USER+CODE] Ordinary tracker PUTs now send only records named by `upsert`
-  mutations; delete-only requests send an empty applications array. The server
-  still accepts legacy full snapshots, treats unmutated client rows as
-  non-authoritative, prepends genuinely new records in incoming order, and
-  retains existing server order for edits and merges. Explicit Refresh and
-  `409` conflict snapshots remain fully fresh, and the shared applications lock
-  remains unchanged. (The full-tracker write response described here was
-  superseded 2026-10-09 by revision-aware sparse responses.)
-
-- [USER+CODE] Cover letters now default to double line spacing with 8 pt after
-  each paragraph, 0.5 inch top/bottom margins, and 0.75 inch side margins.
-  Exact snapshots of both prior shipped defaults migrate to the new default;
-  the locally applied 1.15/8 pt and double/0 pt defaults also migrate, while
-  customized stored styles remain untouched. The starter and ignored base
-  variants add another 8 pt space before `[Date]`.
-
-- [USER+CODE+TOOL] Duplicate scanning remains a full O(n²) pair loop, but PR #92
-  schedules its cold run after the first Applications table paint and caches one
-  id/edge result across tab visits; rehydration always uses live records and
-  re-splits disconnected survivors. PR #93 made description intersections lazy
-  behind cheap metadata/size gates without changing any verdict, threshold,
-  tier, evidence string, or grouping. The 27-record characterization corpus
-  still pins all 351 pairs.
-  The reported 71.3 ms at 500 records is an ATS-heavy Node benchmark, not a
-  worst-case browser bound. The scan still runs synchronously on the browser
-  main thread after scheduling. The pre-#93 browser fixture measured a 155.6 ms
-  cold scan, 7.2 ms key construction, an effectively free revisit, and about
-  30 ms to read/serialize/parse its 2.75 MB list payload; a post-#93 browser
-  trace and mixed/content-heavy fixtures remain unmeasured.
-  Cache identity now uses the matcher's exact raw-text fallback and effective
-  role selection, observes only the first 15,000 description characters,
-  canonicalizes dismissed-id membership, and uses a length-prefixed two-hash
-  composite. It remains a conservative cache version: raw URL/metadata changes
-  may safely over-invalidate. The per-object `WeakMap` avoids rehashing only
-  while references survive. Successful own-write responses now preserve
-  unchanged id/revision objects; explicit GET and conflict snapshots stay fresh.
-  **SUPERSEDED 2026-10-09** (see that day's tracker-scale entry): the deferral
-  of bucket candidate indexing and incremental edge maintenance, which rested
-  on the 500-record cap. Both shipped as exact, non-pruning forms.
-
-- [USER+CODE] Apply still creates the application and snapshots each included
-  document. The resume and the cover letter are no longer frozen at that
-  moment; each carries its own saved/unsaved state and an explicit "Update
-  application" row
-  in its own Save menu, so a letter tailored after applying is saved to the
-  same record instead of being copied by hand. The strict source bytes and only
-  that document's tracker fields commit atomically against the current
-  application revision, so concurrent edits fail with a refreshable conflict
-  instead of rewriting the other document, status, notes, job details, or fit.
-  Tracker revisions advance monotonically even for same-millisecond edits, and
-  file mutations wait for this tab's pending tracker writes before choosing
-  their base revision.
-  Nothing saves on an effect: regenerating or editing never rewrites what the
-  application holds. Saved-state comparison includes the complete serialized
-  source, so style-only edits remain unsaved; missing source remains retryable,
-  and Apply preserves each recovery draft until that document's source is
-  durable. The session
-  remembers the applied/restored record (dropped once the desk points at
-  another posting) so repeated updates cannot create a second row. An empty
-  editor cannot erase a stored document.
-
-- [USER+CODE] A tracked application now keeps both documents in the same form.
-  Apply and each explicit document update store only the editable source
-  (`resume.resume` / `cover.cover`); PDF preview/download is rendered from that
-  source on demand. An explicit PDF upload replaces the corresponding source
-  and remains stored as `resume.pdf` / `cover.pdf`. Both forms use one route
-  vocabulary, `/api/applications/:id/documents/:kind[.format]`, replacing the
-  resume-only pair; existing saved PDFs keep working. The Documents tab is one
-  component rendering both kinds with identical Preview/PDF/source, Upload,
-  and confirmed Remove actions, and users can attach extra PDFs —
-  extension allowlist + magic-byte check, 8 MB each, 10 per application, stored
-  under `applications/<id>/attachments/` and served only as downloads with a
-  narrow content type, `nosniff`, and a no-load CSP. Attachment bytes and
-  metadata commit atomically against the current application revision, not at
-  modal Save.
-  Review fixes folded in: attachment names are case-folded and derived
-  idempotently (a non-idempotent name orphaned bytes the record could no longer
-  reach), the tracker metadata count is authoritative for the attachment cap
-  even when managed bytes are missing, and an upload 404s for an untracked id.
-  Each document slot stores exactly one representation and clears the
-  superseded source/PDF, deleting an application moves its files to
-  `applications/.trash/`, and both file routes send the same download headers.
-  File downloads also require matching tracker metadata, so orphan bytes are
-  not reachable through the loopback API. Exact source fingerprints take
-  precedence over lossy tracker text for saved-state comparison, and duplicate
-  detection recognizes every absorbed source URL instead of only the primary
-  posting URL.
-  Workspace backup schema v2 carries each
-  tracked application's active managed document paths and PDF attachments,
-  validates strict sources during backup and staged restore, requires tracker
-  metadata and bundled bytes to match exactly, and excludes orphan application
-  directories. Schema v1 remains restore-compatible.
-
-- [USER+CODE] The two editors now behave alike. The cover letter's "Restore
-  source" button and the pre-tailoring source state behind it are gone; instead
-  the letter keeps its own per-tab recovery draft (serialized `.cover`, so a
-  restore brings back style as well as text) with the resume's Recovery
-  draft saved / Saving / failed vocabulary and its own restore bar, replacing
-  the bare "Unsaved cover letter" warning. Tab scoping, live-sibling
-  protection, tab isolation, and expiry moved to one owner
-  (`lib/autosaveDraftStorage.ts`) that both drafts share under separate storage
-  keys; workspace adoption clears current/dead entries and preserves notified
-  live siblings. The letter's draft is cleared only where the letter itself
-  becomes durable (workspace save, `.cover` download, or a successful application-document save). Apply
-  settles the resume and cover-letter recovery state independently, so a failed
-  source save cannot clear the other document's protection. Document titles now
-  share one rule,
-  `Name_Company_Resume` / `Name_Company_Cover_Letter`, applied only to titles the
-  app itself produced. Residual risk: an AI reseed clears editor history, so a
-  letter that was tailored without ever being edited or saved is recoverable
-  only from workspace variants/history — the same footing as the resume.
-
-- [CODE+TOOL] Content and print-style Undo/Redo now share one coordinator per
-  document rather than module-global state. A divergent edit invalidates Redo
-  across both reducers, loading a document invalidates the prior document's
-  history, and editing a second document cannot split the first one's typing
-  group. Focused reducer probes, both app builds, and a live Typeset
-  style-Undo/content-edit check passed.
-- [USER+CODE+TOOL] Desktop health now reports closed standalone/companion launch
-  provenance without treating public health as ownership; only the live private
-  utility handle proves that this companion started the server. Compatible
-  listeners get state-specific Connect/Stop or Use/Restart choices. Stop and
-  Restart still revalidate the exact RoleFit identity between two listener-PID
-  resolutions and send only one graceful `SIGTERM`; unknown listeners are never
-  signalled and external listeners are never force-killed. After resolving the
-  active server, the companion writes its validated port into the materialized
-  extension runtime config; a port-changing restart explicitly asks for one
-  browser extension reload. Reused services expose read-only extension access,
-  live status revalidates the full health identity, and the previous owning
-  companion exits cleanly after an approved graceful service handoff. Desktop,
-  lifecycle, and Electron ownership/reuse smoke checks pass.
-
-## 2026-07-26
-
-- [USER+CODE] Cover letters now mirror resume startup selection: the browser
-  stores only the active saved `.cover` filename, reopens it through the
-  validated workspace select route, clears stale/detached identity, and falls
-  back to the server's first option (Default when present). A startup response
-  cannot replace a blank, starter, upload, external letter, or other document
-  the user opened while it was in flight.
-- [USER+CODE] Base cover-letter variants remain flush-left block letters rather
-  than receiving first-line indents. Current university career-center guidance
-  favors concise one-page, resume-matched professional formatting; paragraph
-  separation supplies the visual boundary while indentation stays optional.
-- [USER+CODE] In prose paragraphs, Tab indents and Shift+Tab outdents rather
-  than navigating focus; neither moves focus out of the page
-  (Escape does). This supersedes the earlier "Shift+Tab is the cover-letter
-  focus escape" decision. One tab stop is measured, not fixed: a half inch
-  converted through the engine's space advance for the caret's own font and
-  size, so it matches a word processor in every family instead of the ~0.11-0.19
-  inch four spaces gave. A caret indents at the caret; a selection indents the
-  lines it covers and survives, including across paragraphs. A plain
-  Backspace/Delete against authored indentation removes exactly one whole stop
-  and never a remainder, so a space typed before the Tab survives it, live and
-  on the held-key replay path; shorter space runs and word/line deletes are
-  unchanged. Structured resume Tab navigation is unchanged and still leaves the
-  key to the browser at a document boundary or for a selection crossing fields.
-- [USER+CODE] A selected line's band covers its LINE BOX: its ink plus the line
-  spacing that line owns, which the engine now publishes per line
-  (`VLine.leading` → `PlacedLine.leading` → `--tsd-line-leading`). Measuring the
-  band from the DOM gap to the next line instead left the last line of every
-  paragraph short and painted the paragraph gap as a tall empty slab at the
-  previous block's width (most visible under the contact row); the gap between
-  two blocks belongs to neither and stays unpainted. Bands tile rather than
-  stack: the offset is signed, so where tight line spacing overlaps two ink
-  boxes the band gives height back instead of painting the translucent veil
-  twice as a dark stripe over the text.
-  Supersedes the earlier "selection paint includes each selected line's owned
-  leading/paragraph gap": the line below claimed the same gap, so every
-  paragraph gap was painted twice and a short closing line left a floating band
-  above the next paragraph, which read as that paragraph owning the previous
-  one's spacing.
-- [USER+CODE] An endpoint that names no field now resolves to one on BOTH paths,
-  because the painter's line separator and line container carry no field key and
-  that is exactly where a browser parks a line-end caret or ends a whole-line
-  drag. `readSelection` (collapsed carets) resolves through `fieldCaretOf` to
-  the end of the last content span at or before the point; `readFieldRanges`
-  (ranges) resolves both the covering field and the display offset inside it
-  against that field's own painted spans. Before this, a caret at a paragraph's
-  end mapped to no field and every command fell back to the last remembered
-  range — choosing a line spacing there applied it to the whole paragraph and
-  left the whole paragraph highlighted — while a range defaulted to the whole
-  field, and a wrapped field tested by its FIRST span resolved to nothing at all,
-  greying out the line-spacing menu on ordinary selections. Paragraph space
-  before/after remains a paragraph property by design.
-- [USER+CODE] Restored ranges convert both endpoints through
-  `valueIndexForDisplayIndex`. `valueStart` covers real characters only, so a
-  caret at a field's END indexed nothing and the restore paths defaulted its
-  start to 0 and its end to the value length — bringing a caret at the end of a
-  paragraph back as the whole paragraph SELECTED, even once the edit itself was
-  correctly scoped to one line.
-- [USER+CODE] The browser's native selection paint is suppressed for the whole
-  editable document rather than only field spans, so engine-owned runs that
-  belong to no field — the contact divider — stop painting a second darker veil
-  of their own.
-- [USER+CODE] Pointer selection begun off the text now works: any press that
-  places the caret by hand (margins, before the first glyph, after the last, the
-  gap between two fields on a row, a bullet marker) also starts the synthetic
-  drag, which previously did not exist there because the prevented default had
-  already removed the browser's own. Drag anchors snap to a field's outer edges
-  instead of every inline-style span boundary, and move/release are tracked on
-  the document with unrestricted line resolution so a drag survives leaving the
-  sheet, the window, or the page. Focused evals cover the indentation
-  arithmetic, the edge anchors, and the drag-versus-click line reach.
-- [USER+CODE] The local data root is now `workspace/` in source development and
-  packaged runs. Editable bases live in `resumes/<variant>.resume` and
-  `cover-letters/<variant>.cover`; each folder owns its `.trash/` history. The
-  server migrates recognized root-level prefixed files without overwriting a
-  destination, while tracker, applications, preferences, and unrelated files
-  remain at the workspace root.
-- [USER+CODE] Cover-letter schema v2 adds an optional name/contact header and
-  contact separator. Resume and cover-letter pages use the same header layout
-  and editor control; v1 paragraph-only `.cover` files remain readable and are
-  upgraded on save. AI tailoring replaces paragraphs without clearing the
-  candidate-authored header.
-- [USER+CODE] Resume and cover-letter Open menus now share “Current variant,”
-  “Bundled starter,” “Variants,” empty-state, and history wording. Variant
-  filenames no longer repeat their document kind because their containing
-  folder and `.resume`/`.cover` extension already establish it.
-- [USER+CODE] Shared page margins use the simple Narrow, Normal, and Custom UI:
-  Narrow applies 0.5 inches all around, Normal applies 1 inch, and Custom
-  remains per-side from 0.25 through 3 inches. Editable files persist only the
-  resulting physical values, never the UI preset identity.
-- [USER+CODE] Line height is visual-line scoped rather than document-global:
-  a caret or partial selection expands to the painted line(s), while selecting
-  the complete paragraph applies the value throughout it. The compact shared
-  menu offers Single, 1.15, 1.5, Double, paragraph space before/after, and a
-  focused Custom spacing modal. Paragraph before/after values remain
-  paragraph properties.
-- [USER+CODE] Up/Down caret movement uses the shared line-aware placement path,
-  so placeholder-backed, whitespace-only, and consecutive blank lines remain
-  reachable without browser hit testing escaping to an adjacent text line.
-- [CODE] Current `.resume` saves use schema version 2 so physical page margins
-  no longer carry a UI preset field. Version 1 files remain readable and
-  migrate on the next save.
-- [USER] The next desktop release should reflect a larger product step than the
-  previously suggested 0.4.0, refresh the public landing page, and remove stale
-  README and engineering-document references before publication.
-- [CODE] RoleFit's source version is 0.5.0. The jump from 0.3.0 reflects the
-  complete candidate-owned cover-letter document workflow, named resume and
-  cover-letter variants and history, expanded shared-editor behavior,
-  independent configuration for five AI stages, and the rebuilt application
-  tracker. It remains below 1.0 while installers are unsigned and auto-update
-  is out of scope.
-- [CODE] The public landing page now presents RoleFit as an
-  application-materials workbench, gives the cover-letter editor its own
-  product surface, and uses fresh fictitious-data captures of the current
-  companion, resume, cover-letter, tracker, menu, calendar, and application
-  detail interfaces.
-- [CODE] The versioned examples in the app README, desktop guide, development
-  guide, and distribution plan now use 0.5.0. Historical 0.3.0 release notes
-  and the documented 0.3.0 recovery lesson remain unchanged.
-- [CODE] Portable backup schema version 1 still excludes standalone saved
-  `cover-letter*.cover` variants and their history. The app README, backup
-  contract, and 0.5.0 preview note now state that boundary and direct users to
-  save `.cover` copies separately.
-- [TOOL] Publication target is the curated unsigned preview
-  `rolefit-preview-v0.5.0-beta.11`; the release is complete only after its
-  native macOS and Windows jobs, installed lifecycle checks, checksum gate,
-  GitHub prerelease publication, Pages deployment, and live download
-  resolution all succeed.
-
-## 2026-07-25
-
-- [TOOL] CORRECTS the standing note that `vertical-parity.mjs` was "already red
-  before this work". It is red on THIS BRANCH ONLY: `origin/main` is green on
-  the same eval (last three runs successful), and PR #87's CI reproduces the
-  failure as its single RoleFit failure. The eval predates main (`e6ce369`), so
-  the divergence was introduced by this branch's engine work and has been
-  carried forward, not inherited. Treat it as an open regression against main,
-  not as a known-bad baseline.
-- [USER] `entryEndIndentPt` is the ENTRY's right edge and applies to every row of
-  the entry — head rows, bullets, summary paragraphs, skills rows. Deliberately
-  NOT Jake, who insets only the head row's `tabular*{0.97\textwidth}` and leaves
-  bullets on a plain `itemize` with no right margin. Jake is the style reference,
-  not a specification to match exactly.
-- [CODE] That application is unchanged from `main` and was never the problem. The
-  real difference is the DEFAULT: `main` ships `entryEndIndentPt: 0`, and this
-  branch raised it to 5.4 with the Jake-derived starter defaults. A non-zero
-  inset narrows every body column by 5.4bp, which wraps one long bullet a word
-  earlier than the frozen Tectonic fixture — compiled when the value was
-  effectively 0. An earlier cut of this fix moved the inset off the body columns
-  to chase the fixture; that was reverted as soon as the preference above was
-  stated. Superseded: the note that the body columns were over-applying it.
-- [TOOL] `vertical-parity.mjs` therefore sets `entryEndIndentPt: 0` inside its
-  own `legacyStyle()`, beside the other legacy-era mappings. The fixture holds
-  per-line `{p, y, x0}` and the probe is named for the VERTICAL model; zeroing a
-  horizontal width policy the fixture predates keeps it measuring junctions
-  rather than line breaking. A vertical regression still fails it. Green again:
-  20 lines within ±1.5bp, RoleFit suite 47/48 with only the Windows-only
-  `EPERM: symlink` probe red.
-- [TOOL] PR #87 (`codex/wip-editor-document-actions` -> `main`) carries the whole
-  branch. Its first CI run reproduced the parity failure as RoleFit's single
-  red — Typeset green, and the Windows-only backup probe green on Linux, both as
-  predicted.
-
-- [USER+CODE] A TOO-LONG MENU no longer runs past the window and shifts the
-  document. Reported as "not necessarily a bug"; it was one. Every popover's
-  height cap was a viewport fraction assuming the panel starts just below the
-  toolbar, so a trigger further down put the panel's end past the window — and
-  an absolutely positioned descendant EXTENDS its scroll container's scrollable
-  area, so the studio body silently became scrollable under it. Measured at a
-  520px-tall window: Styles ran 34px past the bottom and `.studio-body`
-  scrollHeight went 463 -> 498. `Popover` now measures the room under its
-  trigger on open (and on resize) and publishes `--popover-space`; panels bound
-  themselves by it, with a 160px floor. After: the panel ends 9px inside the
-  window and scrollHeight is 463 again. At 900px nothing changes — the measured
-  space (743) loses to the designed 650px cap.
-- [CODE] A panel with its own scrolling body subtracts `--popover-frame` (2px,
-  the surface's border) from that value. Without it the panel is exactly two
-  pixels too tall for the border-box holding it, and the surface grows a SECOND
-  scrollbar beside the body's own — measured before the fix.
-- [CODE] REPORTED BUG, fixed: a popover opened from the collapsed toolbar's More
-  panel painted OVER the panel. Below 900px the style popovers pin to a fixed
-  slot under the toolbar (`top: 102px`) — which is exactly where the open More
-  panel sits. Inside an open panel they now use anchored placement, with the
-  trigger set `position: static` so the surface resolves against the PANEL: the
-  panel wraps to two rows at ~430px, and anchoring to the button would have left
-  a first-row popover covering the second row. Forced right-aligned, which
-  cannot overflow — the panel is pinned 12px from the edge and these surfaces
-  are at most `100vw - 24px` wide. Measured at 900px (panel 159–209, popover 213) and 430px with a wrapped panel (panel 159–247, popover 251).
-- [USER] SMALL-CAPS HEADING WOBBLE is font overshoot plus pixel quantization at
-  the rendered size, not a layout defect. Measured in LM Roman Caps 10: flat
-  small caps have a cap height of 515.6/1000 em, round ones 531.3 — a 3%
-  overshoot every serious typeface has. At a 16pt heading that is 8.25 device px
-  of ink, which the rasterizer resolves to 8 or 9 whole pixels per glyph. The
-  PDF is unaffected. The document now sets `text-rendering: geometricPrecision`
-  (paint hint only; measured NO change to painted advances — the heading is
-  84.125px either way), so whether it improves the appearance is UNCONFIRMED and
-  needs the user's eyes; the QA pane cannot screenshot. The remaining lever is
-  snapping each painted baseline to a whole device pixel on screen, which trades
-  the documented DOM/PDF baseline agreement and has not been done.
-- [USER] Returning to a document tab also restores the SCROLL OFFSET, not just
-  the caret. `useRestoredScroll` holds it host-side beside the caret; opening a
-  document resets both.
-- [CODE] Two non-obvious constraints in that hook, both hit while building it:
-  the offset cannot be applied on the first commit (the engine paints after
-  layout, so the scroller has no scrollable height yet and the assignment
-  silently clamps to 0 — it retries per render until the content is tall
-  enough), and it cannot be read from a PASSIVE cleanup (a detached element
-  reports `scrollTop` 0). A layout cleanup reading the element captured at mount
-  is correct. A scroll listener was tried first and abandoned: it adds a handler
-  on a hot path, and scroll events DO NOT FIRE AT ALL in the QA browser pane,
-  which made the whole feature unverifiable there.
-- [USER] Masthead menu panels (Sessions, Job) anchor to their OWN trigger's right
-  edge instead of their group's left edge. The group anchoring existed to align
-  the paired Resume/Job and AI provider/Options menus under one another; both
-  pairs are gone, and with the surviving controls at the right of the bar a
-  380px left-anchored panel ran past the window and was left pressed against the
-  edge by the viewport clamp. Measured at 1280px: the Job panel's right edge now
-  meets its trigger's, 132px clear of the window.
-- [CODE] The clamp had to change with it. A `position: absolute` box offset by
-  `right` has an AUTO `left`, which absorbs a `margin-left` and moves nothing —
-  the old nudge was silently dead under right anchoring (measured: margin
-  applied, rect unchanged). It uses `margin-right` now, and handles left
-  overflow, which is the direction a right-anchored panel overflows. Verified at
-  420px: the Job panel lands at left 8 instead of -19.7.
-- [USER] A document page ALWAYS has a caret. Opening a document puts it at the
-  first line and takes focus, and so does arriving at the page for the first
-  time; RETURNING to the Resume or Cover letter tab resumes the caret you left
-  there.
-- [CODE] The first-visit rule was the missing half, reported from the running
-  app: the Cover letter tab painted with NO focus and no caret, because its
-  blank letter is `useState` initial data rather than a load, so no open path
-  ever ran for it. A mount with no stored caret now starts at the document
-  start, and a stored caret whose field is gone falls back there instead of
-  leaving the page caretless. Re-homing on every tab switch was rejected: it discards your place, and
-  the resume's "start" is the NAME field, where one stray keystroke edits the
-  most conspicuous line in the document. A tailored AI result does not take
-  focus — it lands while you are reading the review.
-- [CODE] The studio tabs UNMOUNT the editor, so a returning caret cannot live in
-  the editor. `TypesetEditor` gained `initialCaret`/`onCaretExit` (a
-  `TypesetCaret` = field key + VALUE index, which survives the repaint) and the
-  host holds one per document. `focusDocumentStart()` is the open-time entry
-  point; it records the request and forces a paint instead of placing
-  immediately, because a host calls it one tick BEFORE the new data is painted —
-  placing then would place the caret in the outgoing document. Neither may
-  return early from the restore effect, which also reopens the commit gate.
-- [CODE] An open never steals focus from a text field outside the editor. The
-  workspace load resolves whenever the server answers, which can land while the
-  user is typing the job description; buttons and the page background are fair
-  game, an input/textarea/select is not, and the caret is still placed so the
-  next Tab lands there. Verified live both ways.
-- [CODE] No open site has to remember any of this: App wraps `seed`/`seedData`
-  before they reach `useWorkspaceResume`, and `useCoverLetterEditor` routes its
-  user-initiated loads through one `openDocument`. The tailored-result path
-  still calls `seedData` directly, which is the whole distinction.
-- [TOOL] Live QA in a FRESH tab (an HMR session that hot-swaps hooks reports
-  hook-order and dep-size errors and an App crash that the error boundary
-  recovers — artifacts, not defects; a reloaded tab has a clean console): boot
-  load focused the resume at `name`/0; a caret at `contact|1`/4 survived a
-  round trip through another tab; the guided starter opened focused at `[Date]`;
-  Blank opened with the title input focused left focus there and still placed
-  the caret; typing and undo still commit. One test artifact worth knowing:
-  the caret is recorded on `selectionchange`, which is ASYNC, so placing a
-  selection and unmounting in the same tick loses it.
-- [USER] The caret LEANS with italic text. It is sheared by the active face's
-  own `post.italicAngle` (Carlito -7°, Source Sans 3 -11°, Source Serif 4 and
-  Arimo -12°, Latin Modern -14.036°, Tinos -16.333°) about the baseline it
-  already reports, so its position at the insertion point is unchanged and only
-  its slope moves. Arming italic with a collapsed caret leans it before the
-  first character is typed, and a caret placed inside existing italic text leans
-  from the text it sits in.
-- [CODE] That angle is the ONE font fact `fontRegistry.ts` writes by hand:
-  `metrics.gen.ts` does not carry it, regenerating it needs the pinned Python
-  toolchain, and the browser cannot report it. `font-assets.mjs` therefore reads
-  `post.italicAngle` out of each shipped sfnt sibling and fails on any drift; a
-  `FaceAsset` union makes the italic flag and the angle inseparable. Negative-
-  tested by declaring a wrong angle.
-- [CODE] `sameCaretGeometry` compared position only, so the first cut painted no
-  slant at all: a family's upright and italic faces share vertical metrics, so
-  arming italic produced an identical box and the memoized upright geometry was
-  kept. It compares slope and baseline offset now.
-- [USER] Font menu order is recognition first — Tinos (Times New Roman), Carlito
-  (Calibri), Arimo (Arial), then Source Serif 4, Source Sans 3, Latin Modern.
-  The families a posting or a career office names by name lead; the house faces
-  follow. Order is presentation only; the persisted ids did not move.
-- [USER] A NEW cover letter now starts in Carlito, not Source Serif 4 — a cover
-  letter is business correspondence and Calibri is what business correspondence
-  is written in, with metrics that survive a reader opening it in Word. The
-  resume default stays Latin Modern. Existing letters are unaffected: the style
-  is persisted per browser (`rolefit:coverLetterStyle.v1`) and only an absent
-  key falls back to the default.
-- [TOOL] `cover-letter-file-v1.mjs` asserted a soft wrap as the fixed pair
-  `[" ", ""]`, which is a property of the DEFAULT FAMILY'S ADVANCES — the
-  fixture wrapped in Source Serif and fits one line in Carlito. It now asserts
-  the separator SHAPE over however many lines the family produces.
-- [TOOL] Adding font families is BLOCKED on this machine: no Python is
-  installed, and `scripts/generate_font_assets.py` needs Python 3.9+ with
-  fonttools 4.60.2 / brotli 1.2.0 plus network access to the digest-pinned
-  sources. The natural next candidates are Gelasio (Georgia metrics) and Caladea
-  (Cambria metrics), both open and metric-compatible with faces resumes are
-  asked for. UNCONFIRMED whether either ships usable italic/caps lookups.
-- [TOOL] Verified: engine, editor, and Typeset checks green; RoleFit offline
-  suite 46/47 with the two already-recorded reds (`vertical-parity.mjs` fixture
-  divergence, `workspace-backup-probes.mjs` Windows `EPERM: symlink`). Live QA
-  on the running dev server read the caret's computed transform: upright when
-  italic is off, `skewX(-7deg)` on a Carlito cover letter, `skewX(-14.036deg)`
-  on a Latin Modern resume both armed and inside existing italic text; menu
-  order and the Carlito cover-letter default confirmed; console clean. No
-  screenshot: the QA pane was not displayed, so it composites no frames.
-- [CODE] AUDIT of the cover-letter workspace slice found three real defects, all
-  now fixed and locked by evals:
-  1. `variant` is a LABEL the server slugs; `fileName` is a name it only
-     validates. The client sent the ACTIVE FILE NAME as `variant`, so "Update
-     Growth" re-slugged it and wrote
-     `cover-letter-cover-letter-growth-cover.cover` — a mangled duplicate instead
-     of an update. Silent: it returned 200 and listed the new file.
-  2. The Open menu's saved list called the workspace loaders directly, discarding
-     unsaved edits with NO confirm, while Blank/Starter/file-picker all asked and
-     the resume's equivalents both call `confirmReplaceEditor`. Now routed through
-     `openSaved`/`restoreSaved`.
-  3. `activeCoverFileName` survived Blank, Starter, and an uploaded `.cover`, so
-     Save still offered "Update <that letter>" and would have overwritten an
-     unrelated saved letter with the new document. All three reset it now.
-- [CODE] Audit cleanups: `formatHistoryDate` was copied into App and the cover
-  toolbar (now `src/lib/historyDate.ts`); `ExportMenu` returned an empty wrapper
-  when idle, consuming a flex gap in the action bar, and now returns null.
-- [CODE] A11y REGRESSION from the shared Open menu, now fixed: every saved-row
-  action rendered as a bare "Open"/"Restore", so a screen-reader button list read
-  as identical controls. The `ResumeMenu` it replaced carried
-  `title="Load <file>"` / `"Restore <name> from <date>"`, so context was LOST in
-  the rewrite. Each row action now has an aria-label naming its document, and
-  `SettingsStage`'s "Check providers" (one per blocked stage) names its stage.
-  UNVERIFIED LIVE: the populated saved list still has no data in this workspace,
-  so only the static expression is confirmed.
-- [USER] Menu rows carry a description only when the title is not enough, so
-  `description` is optional on both menu action types. Downloads whose title names
-  the format (.resume, .cover, PDF) have none; ".txt — content only, no
-  formatting" keeps one because it must be told apart from .cover.
-- [CODE] The bulk at the bottom of the resume Save menu was `workspaceStatus`
-  holding a permanent instructional sentence ("Local workspace ready. Save a base
-  resume to use it automatically on startup.") — 48px of in-product manual, which
-  `ui-principles.md` already forbids, restating what that menu's own "Save as
-  default base" row says at the point of action. `useWorkspaceResume` no longer
-  sets it; real save feedback and errors still flow through the same status.
-  Resume Save measured 388px -> 297px.
-- [USER] The cover letter's PDF export now opens the SAME rename prompt as the
-  resume — a PDF is the file you send, so its name is worth confirming for both.
-  `downloadPdf` takes an optional base name and `ExportMenu` (dialog only since
-  its trigger moved into Save) is mounted in the cover toolbar too.
-- [USER] Cover letters now have NAMED VARIANTS and version history, the same as
-  base resumes. This needed new storage, not just UI: `server/coverLetterWorkspace.ts`
-  stores `cover-letter*.cover` beside `base-resume*.resume`, with
-  `/api/workspace/cover-letter`, `/cover-letter/select`, and `/cover-letter/restore`,
-  and its snapshot fields ride along on `GET /api/workspace` so one fetch seeds
-  both editors. Supersedes the 2026-07-25 note that cover letters are never
-  written to the workspace.
-- [CODE] That module is a SIBLING of `workspace.ts`, not a generalization of it:
-  it imports the storage primitives (lock, atomic write, trash stamping, listing)
-  and reimplements only the parts that differ — one extension instead of four, no
-  plain-text import path, no bundled-starter fallback. Parameterizing the
-  battle-tested base-resume path for a simpler document would have complicated it
-  for both.
-- [CODE] `workspace.ts` imports `coverLetterWorkspace.ts` and vice versa. The
-  cover module therefore reads NO top-level binding from `workspace.ts` during
-  evaluation — an earlier cut held `jobWorkspaceDir` in a module-level const,
-  which is a TDZ ReferenceError at import time depending on load order. Both
-  import orders are now proven to resolve at runtime, not just to typecheck.
-- [CODE] Save is one shared `DocumentSaveMenu` for both documents: update the
-  active workspace copy, save a named variant, then the downloads. PDF moved in as
-  a download row, so both bars are Open/Save/Polish. `ExportMenu` kept the rename
-  dialog and status but lost its trigger — it is controlled by `promptOpen` now,
-  because the dialog cannot live inside a popover that closes when it opens.
-- [TOOL] The new routes are proven by an HTTP round-trip probe
-  (`server/__evals__/cover-letter-workspace-probes.mjs`): save → archive on
-  overwrite → select → restore, plus traversal keys, a resume payload rejected by
-  the cover validator, and an oversized body. They could NOT be verified in the
-  running app: port 5181 is the Electron companion's server process, started
-  before these changes, so it serves the old routes. A client reload picks up the
-  UI but not the server — restart the companion to exercise variants end to end.
-- [USER] The Starter button is GONE from both action bars; starting a document and
-  reopening a saved one are the same decision, so both live in Open. Resume and
-  cover letter now share ONE `DocumentOpenMenu`, grown from the cover letter's
-  menu shape: a heading, the start actions (bundled starter / blank / choose a
-  file), then the documents already saved in the workspace. `ResumeMenu.tsx` is
-  deleted along with 169 lines of its bespoke CSS. Both bars are now
-  Open/Save/PDF/Polish.
-- [CODE] `DocumentOpenMenu` takes declarative `actions` and `saved.groups`; an
-  action resolving `false` keeps the menu OPEN, which preserves the cover
-  letter's behavior of not dismissing your choice when you cancel the
-  "Replace cover letter?" confirm.
-- [CODE] SUPERSEDED the same day by the cover-letter workspace store above. The
-  saved list was briefly empty for cover letters because they were download-only;
-  `saveCoverFile` now remains as the "take a file away" download beside the
-  workspace save.
-- [CODE] `activeBaseResumeLabel` is derived once in App; the Open menu's
-  description and the Save menu's "update this base" row both name it, and it was
-  being recomputed inline at each call site.
-- [USER] All preferences live in ONE Settings dialog, opened from the foot of the
-  studio tab rail. Its three sections are AI stages, About you, and Guidance,
-  with Reset and Done in the dialog footer. The masthead's "AI provider and
-  model" and "Options" menus are DELETED (`AiMenu.tsx`, `PolishMenu.tsx`),
-  leaving Sessions, Job target, and Apply. A
-  modal with a section nav was chosen over a taller anchored popover because five
-  provider blocks plus demographics plus four free-text fields do not fit the
-  NavMenu pattern.
-- [CODE] `src/config/aiStages.ts` is the single declaration of a configurable AI
-  stage. `StageId`, the persisted key triples, the settings seeder, the Copy
-  settings control, and the Settings dialog all derive from it. This was several
-  hand-maintained lists, and the failure mode is silent: the cover-letter and Q&A
-  flows were BOTH hardcoded to `stages.tailor` while looking configurable. Both now
-  have their own provider/model/effort.
-- [CODE] Cover/answers INHERIT Tailor's config when they have none of their own, so
-  an install predating the split keeps the provider it was already using. That
-  inheritance lives in the new pure `src/lib/stageSettings.ts` seeder, NOT in
-  `normalizeSettings`. Putting it there first was a real regression caught by
-  `workspace-backup-contract-eval`: that contract accepts a restored settings bag
-  only if it round-trips through `normalizeSettings` unchanged, so an additive
-  migration rejects every backup written before the key existed. `normalizeSettings`
-  may repair and remove; it must never add. The seeder is a pure module purely so
-  `stage-settings-eval.mjs` can cover the inheritance without React.
-- [CODE] `buildCandidateFactsContext` gates education POSITIVELY (on a known level
-  producing a line) rather than on `!== "unspecified"`. Stricter than the
-  citizenship gate, and it cannot crash on an absent level the way the first cut
-  did — an undefined level entered the block and dereferenced `facts.major`.
-- [CODE+USER] Custom instructions are per stage over a shared default: a stage
-  with non-blank override text sends it, otherwise it sends the shared box. The
-  polish pipeline's `commonBody` no longer carries `customInstructions` — Tailor
-  and Review are separate requests, so a shared string sent Review the Tailor
-  guidance. An emptied override is DELETED from storage rather than saved as "",
-  so blank and absent cannot diverge.
-- [USER] Settings > About you adds education level and field of study to the
-  candidate facts. `buildCandidateFactsContext` no longer returns early when
-  citizenship is unspecified: citizenship gates the work-authorization lines,
-  education level gates the field of study, and the two are independent opt-ins.
-  Every field still emits nothing until declared, which matters because that
-  string becomes the keyword-grounding allowlist — an unset default must never let
-  an undeclared citizenship, clearance, or DEGREE become groundable resume wording.
-- [USER] The resume Polish action ASKS which stages to run (Tailor and review /
-  Tailor only / Review only) and remembers the pick; Settings holds the same value
-  as an editable default. `polishStages` stays the one owner, so the chooser SETS
-  it and the run starts on the NEXT render. That two-step is required, not
-  stylistic: `polishStages` is in the pipeline's input fingerprint and the
-  fingerprint effect aborts any in-flight run when it changes, so starting the run
-  in the same tick as the setState aborts the run it just started.
-- [CODE] The Polish trigger now gates on inputs only (`polishInputsReady`) and each
-  stage row gates on its own provider, because one trigger cannot be gated by a
-  choice the user has not made yet. `buildPolishContext` requires an editable
-  Tailor scope for every selection including Review-only, so the input gate is
-  unchanged.
-- [USER] Cover letter matches the resume: its action bar says Polish (not Tailor),
-  the "Plain correspondence document" context label is gone, and the page header
-  is flat and the same fill as the resume header. Two separate causes —
-  `.studio-card--flush` kept a 10px radius that only ever CLIPPED content, which
-  the Cover letter page's `overflow: hidden` turned into rounded top corners the
-  Resume page never showed; and `.cover-letter-tab__toolbar` overrode the primary
-  row to `--card-elev`, a shade lighter than the shared `--card`.
-- [USER] Settings shows NO runtime diagnostics. The local-server address,
-  workspace path, and provider counts belong to RoleFit Companion — they describe
-  the machine the companion runs, not a browser preference. The per-stage
-  readiness list went with them: it restated each stage row, which already shows a
-  blocked provider beside the control that fixes it. `workspacePath` is off the
-  `useWorkspaceResume` surface again.
-- [USER] That left "Advanced" holding only a reset button, and a nav entry leading
-  to a near-empty panel is worse than no entry. Reset is now pinned at the FOOT OF
-  THE SECTION RAIL — an action rather than a section, reachable from whichever
-  section is open, and the same shape as Settings sitting at the foot of the
-  studio rail that opens the dialog. The nav is exactly the three real preference
-  groups. No copy was lost: the confirm dialog already carried the full "what this
-  clears" explanation. A full-width dialog footer was tried first and read as a
-  detached bar under the content; it also cost the panel 51px of height. The
-  autosave note ("Changes save as you make them") moved to the dialog header,
-  where it answers the missing-Save-button question without a bar of its own.
-- [USER] Copy pass over the settings surfaces. Fixed: "Legally authorized to work
-  in U.S." (missing article), "Nothing here reaches the model until you set it"
-  (no singular antecedent), "A stage with its own instructions in AI stages"
-  (location phrase mid-sentence), "Polish runs" (reads as a verb) -> "Default
-  Polish stages", and a Reset section whose intro and hint restated each other.
-  The per-stage toggle is now "Add instructions" / "Edit instructions" instead of
-  two different phrasings both ending in "for this stage".
-- [USER] The first cut of Settings > AI stages was bulky and sloppy. Measured:
-  each stage was a bordered card INSIDE another bordered card at 317px tall, five
-  of them in a 625px panel (2.85x scroll), each with an always-open instruction
-  textarea for an optional override. Card-in-card is explicitly rejected by the
-  Drafting Desk and I introduced it. Rebuilt as frameless hairline-separated rows
-  with the override disclosed: 139px per stage, 1.39x scroll, zero bordered
-  descendants. `ProviderSection.tsx` and `MenuSection.tsx` are replaced by
-  `SettingsStage.tsx`, and their popover-era CSS (147 lines sized for a 380px
-  menu, not an 860px dialog) is deleted.
-- [CODE] A collapsed-but-set instruction override renders a two-line clamped
-  preview. Guidance that is actually being sent to a provider must never be
-  invisible; the disclose label also switches from "Add instructions" to
-  "Edit instructions".
-- [USER] Stage copy is shorter and free of internal jargon — "Owns the fit score,
-  gaps, and verdict" became "Audits your draft like a recruiter and scores the
-  fit", and the awkward stage-instruction interpolation is gone. The
-  cover stage is titled "Cover letter", not "Cover letter tailor".
-- [CODE] Settings' reset clears stored preferences and reseeds in-memory state
-  from defaults behind a danger confirm. The debounced auto-save then rewrites the
-  defaults, so the storage key returns immediately — that is fine because
-  `hasStoredSettings()` is only consulted at boot by `browserPrefsSync`. Documents
-  and tracked applications are untouched.
-- [TOOL] `requestAnimationFrame` NEVER FIRES in the QA browser pane when the pane
-  is not displayed (proven: a scheduled callback had not run across two tool
-  calls). `useModalFocus` and `Popover` both place initial focus in a rAF, so
-  initial-focus and focus-restore behavior is UNVERIFIABLE there and reads as
-  "focus stayed on body". Modal stacking and hit-testing still verify normally —
-  the reset confirm was measured painting above the Settings dialog and
-  hit-testable. Do not report a rAF-driven focus contract as verified from that
-  pane.
-- [TOOL] `client-workflow-guards.mjs` counts its own assertions now (93) instead
-  of printing a hand-maintained total that had already drifted.
-- [TOOL] RoleFit offline suite is 45/47. The two reds are unrelated and both
-  pre-existing: `vertical-parity.mjs` (recorded fixture divergence) and
-  `workspace-backup-probes.mjs`, which fails on this machine with
-  `EPERM: symlink` — Windows needs elevation or Developer Mode for `fs.symlink`,
-  and the probe dies in a temp directory before touching product code.
-- [USER] Selected-paragraph alignment is ONE trigger with a labelled menu, not
-  four buttons. `AlignmentControl` shows the active alignment on the trigger, so
-  the collapsed control still reports state. It reclaims ~97px of a 48px row and
-  therefore survives three stages further down the responsive ladder. Opening it
-  moves focus off the document exactly as the link editor does; that is safe
-  because `commandTarget()` falls back to the last recorded selection.
-- [USER] RoleFit's formatting-row menus are ICON-ONLY at every width. The host
-  seam inverted: `data-toolbar-labels` now takes `"icon"` (RoleFit sets it on both
-  editor toolbars) and the old `"text"` label-first bands — including the
-  1190.01–1210px interlock and the 900px structure-label exception — are deleted.
-  Typeset never sets the attribute and keeps its labels-until-1210px default, so
-  its documented desktop appearance is unchanged. Header/Section keep their icons
-  now; the seam previously hid them.
-- [CODE] The formatting row was CLIPPED, not scrolled, between 1041 and 1080px of
-  container width: measured 33px of overflow at 1041 with `studio-body`'s
-  `overflow-x: hidden` swallowing it, so Page silently lost its right edge. The
-  band existed because the default label collapse fired at 1210 while the More
-  overlay only engaged at 1040, and RoleFit's label-first seam kept Header and
-  Section wide in between.
-- [CODE] The disclosure ladder is now four measured stages on container width —
-  style menus at 920, selection typography at 740, alignment at 520, then clear
-  formatting + spell check at 460 (which also tightens group spacing). Each
-  threshold is the intrinsic width of the set still inline above it, so no width
-  leaves a control half-painted. Clear formatting and spell check gain duplicate
-  mounts in the overlay rather than being dropped; `LinkControl` deliberately does
-  NOT get one, because its `open` state is host-controlled and two mounts would
-  both open. Measured with a per-descendant right-edge sweep: RoleFit resume and
-  cover letter fit 1140→355px and Typeset fits 1440→355px (formatting row) and
-  →365px (primary row), against a documented 400px floor.
-- [CODE] `.toolbar-button--icon:has(.toolbar-button__trailing)` un-squares a
-  label-less button that still carries a disclosure chevron; the 32px icon box
-  crushed the alignment trigger's two glyphs. `.font-family-control` is 112px
-  (was 128px); its menu is still content-sized, so no name truncates further.
-- [CODE] The clear-formatting tooltip printed `⌘\\`. A JSX attribute string does
-  not process escapes, so the shortcut is now an expression constant.
-- [TOOL] Verified `@typeset/editor` checks (typecheck + 3 evals), both app
-  production builds, and live browser QA on RoleFit resume/cover letter and
-  Typeset: all four ladder stages move the right controls into the overlay, the
-  overlay stays inside the toolbar and wraps at the narrow edge, an icon-only
-  Spacing trigger still opens its popover, and applying Center from the alignment
-  menu moved the paragraph and undid in one step with the trigger label following.
-  RoleFit's offline suite is 44/46: `vertical-parity.mjs` remains the already
-  recorded fixture divergence, and `workspace-backup-probes.mjs` fails on this
-  machine with `EPERM: symlink` (Windows needs elevation or Developer Mode for
-  `fs.symlink`) — an environment limitation, not a code regression.
-- [USER] The hyperlink overlay is driven by the CARET and SELECTION, not by hover:
-  it shows when the caret is inside a hyperlink or hyperlinked text is selected.
-  The "Detected" badge is gone. Hover was wrong for an editor — it fires while
-  reading rather than acting, no keyboard user can reach it, and it competes with
-  selection dragging for the pointer.
-- [CODE] ROOT CAUSE of the reported caret bug: `autoLinkSuppress` stored a
-  SNAPSHOT of the field value, and `renderData` composed fresh data with it, so the
-  repaint after every keystroke inside a URL painted pre-edit text — one character
-  short. `displayIndexToCaret` then clamped the restore to the end of that shorter
-  text, so the caret landed one back. That moved it off the word's trailing edge,
-  which cleared the deferral and linked the URL mid-typing, and the next space then
-  landed INSIDE the URL: typing `example.com` left the caret before the `m`, and the
-  following space produced `example.co m` linked as `example.co`. State now holds a
-  display RANGE and `suppressedAutoLinkValue` derives the paint from the current
-  value every render, so the paint can never lag the data. Reproduced in the
-  browser and proven offline before and after; the offline eval sweeps every prefix
-  of `"example.com "` and asserts the paint's display equals the current value.
-  The bug needed a repaint between keystrokes, so it appeared at human typing speed
-  and NOT under machine-speed synthetic typing.
-- [CODE] Link state is not inherited like character formatting. `applyEdit`
-  inherited `linkHref` and `linkSuppressed` from the character to the left, so
-  typing after a link swallowed the rest of the sentence into it and `<nolink>`
-  leaked into everything typed after a de-linked URL, permanently killing
-  auto-linking there. Both are now inherited only when the insertion point is
-  strictly inside one run.
-- [CODE] `expandToLinkRun` expanded from the selection's own bounds, so a selection
-  touching two links returned a range labelled with the first href but reaching into
-  the second — Remove and Apply then rewrote the neighbouring link's text. It now
-  expands only across one href's contiguous run; a crossing selection resolves to
-  the first link. Removing BOTH links from one crossing selection would need a
-  multi-run command and is not implemented.
-- [CODE] `trailingLinkWordAt` deferred explicit links too, so a real hyperlink
-  visibly lost its anchor whenever the caret rested at its end. Only automatic links
-  are deferred.
-- [CODE] `automaticLinkHref` linked bare filenames: `resume.pdf` became
-  `https://resume.pdf`, which a resume triggers constantly. The existing code-suffix
-  denylist is now a general file-suffix denylist. It stays a denylist of extensions
-  rather than an allowlist of TLDs because a real public-suffix list is too large to
-  bundle, and denying an extension only costs a link the user can still add
-  explicitly while allowing one silently ships a broken destination. Suffixes that
-  are also TLDs people type bare (io, co, dev, app) are deliberately excluded.
-- [CODE] The cover letter never received `onRequestLinkEditor`, so the menu's
-  "Edit link"/"Add link" and the card's Edit were silent no-ops — a regression from
-  giving it the context menu while its link-popover state stayed private to its
-  toolbar. The state is lifted to `CoverLetterTab`.
-- [CODE] Editor overlays are wrapper-relative siblings inside `.typeset-editor`,
-  not viewport-fixed portals. The card was `position: fixed` on a one-shot rect and
-  detached from its link on scroll (measured: link moved 150px, card moved 0). Scroll
-  events are paint-gated and could not be observed at all in the QA pane, so a
-  scroll listener was unverifiable; wrapper-relative geometry needs none.
-- [TOOL] A hook returning a fresh object each render, consumed by an effect that
-  writes state, is an infinite render loop ("Maximum update depth exceeded"). Found
-  in the first cut of the selection-driven card. Destructure the hook's stable
-  callbacks and make every repeatable state write identity-stable.
-- [TOOL] An adversarial multi-agent audit of the link/caret pipeline independently
-  confirmed the root cause from three directions and surfaced further defects that
-  are CONFIRMED BUT NOT YET FIXED: PDF link annotations are emitted per run so
-  interior spaces of a multi-word link are unclickable while the DOM paints one
-  continuous anchor; a justified line that stretches past the 1.75x space-join bound
-  splits a linked phrase into one anchor and one underline per word; the engine
-  auto-links the raw field VALUE while the editor auto-links the ligature-transformed
-  DISPLAY string; the engine auto-links name/heading/entry-head/contact fields per
-  WHOLE FIELD while the editor works per word; `End`/`Shift+End` cannot reach a
-  field's authored trailing spaces; the replay queue stalls when a drained intent
-  commits nothing; and RoleFit's right-click menu resolves `position: fixed` against
-  the editor scroller rather than the viewport.
-- [USER] Resume and Cover letter now use matched document action bars above the
-  formatting toolbar. Resume owns Starter, Open, Save, PDF, and Polish there;
-  Cover letter owns Starter, Open, Save, PDF, optional Restore source, and Tailor.
-  The masthead no longer owns Resume or Polish, and Cover letter no longer shows
-  Copy.
-- [CODE] `DocumentActionMenu` is the shared RoleFit disclosure shell. Resume Open
-  carries base variants, Recent history, and file upload without the old
-  Save/Reload/Remove cluster. Resume Save separates updating the active base,
-  saving a named `base-resume-<variant>.resume`, and downloading `.resume`.
-  Cover Save separates `.cover` from a plain-text copy. The workspace snapshot
-  now exposes the bundled starter independently of the active saved base so the
-  Starter action never needs to overwrite or disguise that base.
-- [CODE] RoleFit injects `DocumentStructureControls` through the shared
-  `FormattingToolbar.documentStructureTools` seam, placing Header and Section
-  immediately before Spacing. At narrow widths that same order moves into More;
-  standalone Typeset keeps its existing DocumentToolbar placement.
-- [TOOL] Verified `@typeset/editor` checks, RoleFit production build, focused
-  workspace persistence/lifecycle probes, and all desktop contract probes. Live
-  browser QA at 1440, 1280, 1000, and 820px confirmed the action order, Open/Save
-  surfaces, both starters, responsive disclosure, absent Cover Copy, and a clean
-  console. The RoleFit offline suite remains 45/46 because the already-recorded
-  `vertical-parity.mjs` fixture divergence is still red and unrelated.
-
-## 2026-07-24
-
-- [USER] Before requested pushes, review and update affected README and
-  documentation; commit compact, privacy-safe continuity with the behavior
-  slice. Version changes also update canonical/user-facing versions and require
-  a triggered, successfully completed matching release/publish workflow before
-  the versioned change is complete.
-- [TOOL] Local `main` was fast-forwarded to `origin/main` at `58fcf3f`
-  (`Harden AI workflows and refresh application tracker`) before the current
-  cover-letter work began.
-- [USER] Cover letters are moving out of Materials into a dedicated editor page.
-  The workflow starts from the user's own written letter and tailors it against
-  the job description and truthful candidate evidence; it does not generate a
-  new letter from nothing.
-- [USER] Cover-letter presentation is a plain correspondence document: one text
-  column and paragraphs, without resume sections, rules, columns, or bullets.
-- [USER] The cover-letter page uses the same document and formatting toolbar
-  family as the resume editor, but it must not expose resume-specific structure,
-  heading, entry-indent, or resume-spacing settings.
-- [CODE] The portable editable cover-letter format is `.cover`, with magic
-  `typeset-cover-letter` and schema version 1. `.resume` remains resume-only,
-  while `.rolefit-backup` remains the product-level workspace backup format.
-- [CODE] `@typeset/engine` owns the shared measurement, line breaking,
-  pagination, font, DOM/PDF painting, and strict portable-file primitives.
-  Cover-letter paragraph composition is a separate engine adapter. RoleFit owns
-  job/provider orchestration, source-letter intake, tailoring, and review UX.
-- [CODE] `FormattingToolbar.documentStyleTools` is the narrow host seam for a
-  non-resume document grammar. RoleFit replaces the default resume style menus
-  with a focused line-height popover plus the shared page-margin popover; the
-  shared history, zoom, selection formatting, alignment, link, and spell-check
-  controls remain unchanged for both document types.
-- [USER] Direct editing uses word-processor behavior across both document
-  layouts: prose Tab/Shift+Tab indent and outdent by one tab stop (superseding
-  the earlier focus-escape Shift+Tab), copy/paste retains supported inline
-  formatting, mixed font-family selections leave the family control blank, and
-  Ctrl/Cmd +/-/0 controls document zoom.
-- [USER] Mixed font-family and font-size selections leave both toolbar controls
-  blank. Custom typed inline sizes clamp to 1–200 pt without changing the
-  curated preset dropdown. Selection highlighting spans the full engine-line
-  height determined by its largest inline run.
-- [USER] The cover-letter page always presents an editor. With no uploaded,
-  restored, or authored base, it starts as a clean blank paragraph; opening a
-  source remains optional.
-- [CODE] Empty engine paragraphs paint a DOM-only zero-width caret target that
-  selection mapping and clipboard handling exclude from document content, so a
-  blank cover letter remains immediately editable.
-- [USER] Fresh starter resumes, New, and Reset use the canonical Jake-derived
-  defaults, including the 10.8 pt start indent and 5.4 pt end indent implied by
-  Jake's 0.15 in list plus 0.97-text-width entry rows.
-- [USER] The bundled RoleFit starter is the serialized canonical starter, so
-  its title, subtitle, and skill-label marks already match Reset text
-  formatting instead of changing appearance the first time Reset is used.
-- [USER] A collapsed editor caret follows the active next-typing family, face,
-  and size and remains visible while toolbar settings own focus. The engine
-  wraps otherwise-unbreakable oversized tokens at measured grapheme boundaries
-  instead of allowing them to overflow the page; inline font, size, and mark
-  boundaries within the token do not create early line breaks. A grapheme that
-  cannot fit the current remainder moves intact to the next line, preventing
-  single-character formatting runs from oscillating as the user types.
-- [USER] Committing a font-family or font-size selection returns keyboard focus
-  from the toolbar control to the saved document caret or text range.
-- [CODE] Mixed families and sizes remain independent runs on one line. All runs
-  share one engine baseline; the DOM painter measures the browser's real CSS
-  baseline per bundled face, and pagination expands calibrated line junctions
-  for oversized inline ink so adjacent lines cannot collide.
-- [ASSUMPTION] A separate AI review pass is not required for the first
-  cover-letter editor slice. The product keeps the pre-tailoring source
-  recoverable and presents deterministic human-review checks; this decision may
-  be revisited with quality evidence.
-- [USER] The editor follows word-processor behavior (Word, Google Docs, Pages)
-  wherever the two models disagree. Vertical placement therefore depends on the
-  fonts and sizes on a line, never on which glyphs were typed: `VLine` carries
-  its role-size ink footprint plus `riseOverflow`/`dropOverflow` derived from the
-  new `faceExtent`, and pagination adds only that overflow to a calibrated
-  junction. Previously the page-top inset and the junction expansion read typed
-  ink, so typing a taller letter at a larger inline size moved the line. All-
-  nominal rows keep their calibrated distances exactly; `inkExtent` stays only
-  for the TeX-calibrated entry title/subtitle strut.
-- [CODE] A cleared section heading no longer opens extra space. Its injected
-  space measured as zero nominal ink against a full-height row, which added the
-  whole heading footprint to both adjacent junctions.
-- [CODE+USER] Underline and link rules now come from `underlineSpans` plus a
-  face-derived `underlineRule(style)`, superseding the 2026-07-11 per-content
-  TeX `\underline` depth. That depth made the rule step between two links in one
-  paragraph, and because the DOM painter measures merged style spans while the
-  PDF emitter walks single runs, an underlined phrase drew one continuous rule on
-  screen and one broken rule per word in the exported PDF.
-- [CODE] Enter in a prose paragraph always starts a new paragraph, including from
-  an empty one; bullet and skills rows keep the non-empty-only rule. Cover-letter
-  authors could not open a blank line between blocks.
-- [CODE] Cover-letter New restores the blank document's saved fingerprint, so a
-  fresh blank letter is not reported as unsaved.
-- [CODE] Bold/italic/underline with a collapsed caret arm the next-typing format.
-  Only the toolbar buttons did; the keyboard shortcut and the browser's
-  `formatBold`/`formatItalic`/`formatUnderline` intents reached a commit that
-  returned early on a collapsed selection. All three now share one path.
-- [CODE] Selection rectangles are bounded by each line's painted text. The line
-  block spans the whole sheet and a browser stretches mid-selection fragment
-  rects to their containing block, so Select All highlighted the page margins
-  (measured: 0→815 px across an 816 px sheet). A selected empty paragraph keeps a
-  short stub instead of vanishing from the highlight.
-- [CODE] Selections that cross field boundaries are editable. `readSelection`
-  returns null unless both endpoints map to one field, so Select All silently
-  disabled delete, typing, formatting, and the whole toolbar. The new
-  `multiFieldSelection.ts` resolves the covered fields and their display ranges,
-  and a `batch` reducer action plus `applyFieldEdits` lands the whole change as
-  one undo step. Cross-field deletion removes emptied prose paragraphs and
-  bullet rows, joins the boundary remainders inside one list, keeps at least one
-  row per covered list, and never removes a name, contact, heading, entry-head,
-  or skills slot — those belong to the structure controls. Link commands stay
-  single-field.
-- [CODE] Cross-field resolution reads only document order plus the range's two
-  endpoints; it no longer asks `Selection.containsNode` per span. A DOM selection
-  is one contiguous range, so the fields it touches are a contiguous slice, and
-  the endpoint-only form behaves the same whichever way an engine shapes a
-  select-all range (Blink puts the boundaries in the first/last text nodes, Gecko
-  can put them on the editing host with child offsets). An endpoint that resolves
-  to no field means "from the start"/"to the end". Multiple ranges (Gecko-only)
-  span first-start to last-end. A single covered field is allowed, so a
-  one-paragraph Select All whose endpoints do not resolve still edits.
-- [CODE+USER] Painted lines end with the separator their break stood for (a space
-  inside one field, a newline between fields), marked `data-tsds` and rendered
-  contentEditable=false inside the font-size-0 line box, so it is invisible and
-  zero-width. Without it the browser's word iterator ran the last word of a line
-  into the first word of the next: a double-click on the last word of a paragraph
-  selected across the break ("gammaDelta"). `lineSeparators` lives in `layout.ts`
-  (React-free, testable); caret placement, line-edge movement, and the selection
-  rectangle exclude the span.
-- [CODE] A range boundary that names no field is resolved by DOCUMENT POSITION,
-  not by assuming the document's first or last field. A triple-click ends on a
-  line container, so the old assumption made a one-paragraph selection report —
-  and copy — the whole document.
-- [CODE] Cross-field copy writes plain text from the model, one covered slice per
-  field joined by newlines. The DOM-derived path lost paragraph breaks and could
-  leak the caret placeholder; the model path also keeps an authored hard break's
-  real newline, which the layout separator deliberately does not distinguish.
-- [USER] Linking and pasting must work on a multi-paragraph selection. A
-  cross-field selection now links every covered range in place, with the link
-  popover's text field read-only (`linkTextEditable: false`) because one string
-  cannot rewrite multi-paragraph text; remove-link clears them all. Paste replaces
-  the selection inside the same batched edit (one undo step), and cut — previously
-  a silent no-op across fields — writes the model's text and deletes.
-- [CODE] KNOWN GAP: pasting text that contains blank lines inserts hard breaks in
-  one paragraph rather than creating paragraphs, so a pasted multi-paragraph
-  letter arrives as a single paragraph. `parseCoverLetterText` splits paragraphs
-  only on the Open/load path. Fixing it needs a reducer action that replaces one
-  paragraph with several, plus a decision for the resume host (pasting into a
-  bullet list). Not attempted in this slice.
-- [TOOL] The in-app browser driver cannot produce `insertParagraph`, Backspace's
-  `deleteContentBackward`, or native Select All (CDP key events carry no editing
-  command), so those paths were exercised by dispatching the app's own
-  `beforeinput` intent and setting the range directly. Typing, real toolbar
-  clicks, marks, and geometry read back normally.
-- [USER] Cross-field Select All was confirmed fixed in Firefox by the
-  endpoint-only resolution. Gecko puts a select-all range's boundaries on the
-  editing host, which no endpoint-based key lookup can name, so `readSelection`
-  now falls back to the covered-field resolution and treats a ONE-field selection
-  as single-field. Without that, Firefox lost every command needing one run of
-  text — the reported symptom was a dead link control on a fully selected
-  single-paragraph letter, working in Blink and not in Gecko.
-- [CODE] Wrapped continuation lines are editable again. A line break consumes the
-  interword glue (or the authored newline) into the break, so that display
-  character has no DOM character in either line; both caret mappings in
-  `domSelection.ts` desynchronized there. `caretToDisplayIndex` returned null for
-  any caret on a continuation line — no typing, no editing, and queued keystrokes
-  such as a second space were dropped — and `displayIndexToCaret` resolved a
-  restored caret to the end of the line above, so the next character landed in
-  the previous word (typing past the margin produced "rightg" instead of "marg").
-  A caret AT a break belongs to the end of the broken line; past it, to the start
-  of the next. Emergency mid-token breaks and same-line style boundaries consume
-  nothing, and the crossing is resolved for blank-line spans too — an authored
-  hard break paints a blank line that consumed its own display character, so
-  skipping it desynchronized every caret after it.
-- [TOOL] `apps/role-fit-ai/src/typeset/__evals__/vertical-parity.mjs` is RED and
-  was already red before this work: bullet, summary, and skills columns subtract
-  `entryEndIndentPt` (5.4 default), which Jake's source applied only to entry
-  head rows, so one truth line reflows by a word. Setting `entryEndIndentPt: 0`
-  makes all 20 lines match within ±1.5bp. UNCONFIRMED whether the body columns or
-  the fixture should change; the decision reflows every existing resume.
-- [USER] The document font list gains the three families resumes are most often
-  asked for, as their redistributable metric-compatible equivalents: Tinos
-  (Times New Roman), Arimo (Arial), and Carlito (Calibri). The originals are not
-  redistributable; these keep the originals' per-character advance widths, so a
-  document holds its line and page count when opened in a word processor that
-  only has the original. The menu shows each font's real name with its metric twin
-  beside it — never the trademark as the font's own name — and previews each row
-  in its own face. Verified against the published originals: Tinos and Arimo match
-  Times New Roman and Arial with ZERO deviation on the sampled repertoire.
-- [CODE] `lib/fontFamilies.ts` is the single list of family ids. The persisted
-  style enum, `FONT_FAMILY_OPTIONS`, both `<font=…>` tag automata (engine
-  measurement and the editor's display map), `clearInlineOverride`,
-  `effectiveFieldFont`, and the engine face registry all derive from it. They were
-  eight independent hardcoded copies; the tag automata are regex strings, so a
-  missed copy TYPECHECKS and then fails at runtime with the tag painted as
-  literal text. `typeset-editing.mjs` now sweeps every family through a
-  value→display→value round trip, which is the only mechanical guard on that.
-- [CODE] The three new families are drawn on a 2048-unit em, so `metrics.gen.ts`'s
-  integer 1000ths cannot represent every advance exactly. The residue is per glyph
-  and bounded — `pdf-font-parity` measured 0.1166bp worst case over a 61-character
-  run at 10bp, and each painted segment carries an explicit engine width so it
-  never accumulates past one segment. The eval now allows 0.005bp/glyph for a
-  finer design grid and holds every 1000-unit family to bit-exact parity
-  (measured 0.0000bp), so a real shaping divergence still fails. Rescaling their
-  outlines to 1000/em was rejected: it would trade an invisible engine-vs-render
-  difference for a visible break in the metric compatibility that is the reason
-  to ship them.
-- [CODE] None of the three ships a usable `smcp` lookup (Carlito's `c2sc` has one
-  substitution), so their caps faces carry SYNTHESISED small capitals: uniformly
-  scaled capitals baked into the shipped font's cmap. Uniform scaling is not an
-  approximation of a different design — Latin Modern's own caps face, a genuine
-  TeX design, measures 0.7513 height and 0.7522 advance against its capitals. The
-  ratio floors at 0.80 (the median real small-cap height of the three bundled
-  families) and rises with a face's x-height, because Arial-metric Arimo's
-  x-height would otherwise reach past its own small caps. Synthesis lives in the
-  ASSET, not in a layout branch, so the browser, the PDF embedder, and the
-  committed metrics agree by construction.
-- [CODE] `boldDisplay` aliases `bold` for the three static families. Latin Modern
-  and the Source families ship a real display optical size (LM Roman 12,
-  `opsz: 24`); a single-design static has none, so both roles share one asset,
-  one metrics record, and one `@font-face`.
-- [CODE] A new editor eval (`styles/__evals__/font-assets.mjs`) cross-checks the
-  registry against the stylesheet and the disk: every face declared exactly once,
-  loading its own asset at the right weight/style, with both a webfont and a PDF
-  sibling present. That failure mode is silent and severe — an unmatched
-  `cssFamily` makes the browser substitute a system font, so text paints at
-  advances the engine never measured and every caret position is wrong while it
-  still looks like text. Both directions were negative-tested.
-- [USER] Every editor host gets the right-click menu. It was gated on
-  `structureEditing`, so the cover letter had no menu at all — only the browser's
-  native one. That flag now gates only the structural group; clipboard, emphasis,
-  clear-formatting, link, and history commands are always present.
-- [CODE] The toolbar and the right-click menu now drive one command surface and
-  read enabled state from one `InlineFormatState`. The menu had its own
-  single-field-only implementations, so it silently kept the pre-cross-field
-  behaviour: on a multi-paragraph selection its Cut, Copy, Bold, and link items
-  were all disabled. Verified in-browser: a cross-paragraph Cut from the menu
-  merged the two paragraphs correctly and undid in one step.
-- [USER] Hovering a link shows a card with the destination plus open, copy, edit,
-  and remove. Acting on it selects that link's run first and then runs the
-  ordinary command, so there is no second link path. Remove works on an
-  auto-detected bare URL too — it marks the run `<nolink>`, keeping the text and
-  dropping the link.
-- [CODE] The font menu is sized to its content. At the toolbar's width the fixed
-  128px menu collapsed the name column to nothing, so a row read only
-  "Times New Roman" with no font name, and "Source Serif 4" truncated.
-- [TOOL] CareerOneStop, MIT CAPD, and Harvard FAS guidance was reviewed for
-  concise, specific, active, evidence-based application writing that preserves
-  the candidate's own voice. The durable links and resulting prompt policy are
-  recorded in `apps/role-fit-ai/docs/engineering/ai-server.md`.
-- [USER] 2026-07-26: Resume line height is a global setting inside Spacing.
-  Spacing presets and Page margin presets keep their numeric controls expanded
-  so the active physical values remain inspectable. Cover-letter inline line
-  height adds room below targeted visual lines only.
-- [CODE] 2026-07-26: Resume print-style changes and content edits share one
-  chronological Undo/Redo order through monotonic history transactions. Zoom,
-  spell-check, and the page-preset label remain outside document history.
-- [USER] 2026-07-26: Resume Tab/Shift+Tab traverses logical header and section
-  fields instead of authoring spaces. A destination is selected as one field
-  across wrapping and inline runs; structural headings are skipped. The cover
-  letter applies that cycle only to optional name/contact header fields; body
-  Tab indents and Shift+Tab outdents along the measured half-inch ladder.
-- [CODE] 2026-07-26: Selection paint includes each selected line's owned
-  leading/paragraph gap without crossing page boundaries. Cover-letter
-  line-height transforms remain visual-line scoped and affect only the outgoing
-  junction; focused evals cover inherited paragraph height and hard breaks.
-- [USER+CODE+TOOL] 2026-07-26: Cover/summary paragraph leading indentation now
-  survives the shared schema, editor repaint, and PDF path. Forgiving selection
-  edges anchor from adjacent line whitespace but never snap the moving endpoint;
-  measured caret fallback preserves partial forward/reverse selection at first,
-  wrapped, and final glyphs. Browser typing/Tab/Undo QA passed.
-- [USER] 2026-07-28: Selection paint must be continuous through before/after
-  paragraph spacing. Copying from either shared editor into Google Docs must
-  preserve logical paragraphs: destination-width reflow is expected, but
-  Typeset's visual wrap points must not become separate pasted blocks. Nonzero
-  paragraph spacing should paste as a blank paragraph rather than CSS spacing.
-- [CODE] 2026-07-28: Supersedes the 2026-07-26 selection-gap detail above.
-  Consecutive selected engine lines now tile through their complete calibrated
-  junction; exposed paragraph edges use engine-published authored before/after
-  spacing without crossing page bounds. External HTML clipboard data is
-  serialized from logical model ranges with one block per field, supported
-  inline formatting, and one blank block at a nonzero spacing boundary; the
-  absolutely positioned visual-line DOM no longer defines pasted paragraphs.
-- [TOOL] 2026-07-28: The isolated worktree dev process was started on canonical
-  port 5181 after a clean lockfile dependency install; the server returned HTTP 200. Both owner checks and both consumer production builds passed; the
-  interface detector reported no findings.
-- [USER] 2026-07-28: Cover-letter default paragraph rhythm is explicit 8pt
-  space-before on every paragraph, never the generic resume bullet gap. The
-  erroneously introduced document-level cover-letter gap field is removed from
-  the current beta schema without a schema-version bump or compatibility path.
-- [CODE] 2026-07-28: New, imported, starter, and tailored cover-letter text is
-  normalized through the shared explicit space-before default. Enter preserves
-  paragraph properties on either empty split half. Cover-letter layout ignores
-  the generic resume bullet gap, and current `.cover` style parsing rejects the
-  removed beta prototype field.
-- [USER] 2026-07-28: The beta `.cover` contract has no legacy compatibility
-  obligation. Its current strict shape is renumbered as schema version 1, and
-  all other cover-letter versions must be rejected.
-- [CODE] 2026-07-28: The `.cover` codec now has one schema branch: version 1
-  includes the optional header, ordered paragraphs, and current print style.
-  The former paragraph-only compatibility branch and its migration probe were
-  removed; resume schema compatibility is unchanged.
-- [TOOL] 2026-07-28: A privacy-safe shape audit found all five ignored local
-  cover-letter variants use schema v2 and the retired `paragraphGapPt` wire
-  field; no document text was read or printed.
-- [USER+TOOL] 2026-07-28: The v1-only contract above is intentional. The five
-  ignored local variants were privately backed up, converted to schema v1, and
-  one saved application `.cover` received the same migration. All six active
-  files were verified through the strict parser without printing document
-  text. Their retired document gap was moved into explicit paragraph marks
-  before the wire field was removed; converted files and backups remain
-  ignored. The saved application's tracker fingerprint and revision were
-  refreshed through the running app's sparse mutation route, with the prior
-  tracker snapshot in the ignored migration backup.
-- [USER] 2026-07-28: Authored paragraph spacing remains visible at document
-  boundaries: the first paragraph/line shows before-space and the final
-  paragraph/line shows after-space.
-- [CODE] 2026-07-28: Page-start placement now reserves the first line's
-  authored before-space. Selection paint claims before-space without requiring
-  a predecessor and after-space without requiring a successor, capped at the
-  page edge so boundary highlighting cannot cross sheets.
-- [USER] 2026-07-28: Google Docs clipboard interop must preserve paragraph
-  before/after spacing in both directions and hyperlinks from the shared editor
-  to Docs, not only links pasted from Docs into the editor.
-- [CODE] 2026-07-28: External clipboard blanks now carry a non-breaking space
-  so Docs retains leading/trailing spacing boundaries. Outbound HTML promotes
-  both explicit and auto-detected URLs/emails to anchors, while inbound rich
-  block margins are converted from CSS points/pixels into explicit paragraph
-  before/after marks.
-- [USER] 2026-07-28: Enter/new-paragraph editing continues the active text and
-  paragraph formatting rather than resetting it.
-- [CODE] 2026-07-28: An empty half created by Enter now stores adjacent
-  emphasis, family, size, alignment, line-height, spacing, and indentation in
-  textless inline wrappers, which later typing reads back. Hyperlink and
-  link-suppression state intentionally stop at the paragraph boundary.
-- [USER] 2026-07-28: A format selected while the new paragraph is still empty
-  persists if the caret moves elsewhere and later returns.
-- [CODE] 2026-07-28: Collapsed-caret emphasis, font-family, and font-size
-  commands on an empty paragraph now commit a complete effective typing format
-  into its textless carrier. Selection synchronization restores that stored
-  format, including alignment, instead of relying on the caret-local ref.
-- [USER] 2026-07-28: Supersedes the clipboard blank-line expectation above.
-  Google Docs interop must preserve before/after spacing as paragraph style,
-  not add an empty paragraph or flatten pasted paragraphs into hard lines.
-- [CODE] 2026-07-28: Clipboard HTML now exports paragraph spacing as explicit
-  top/bottom margins. Inbound block HTML is separated from authored `<br>`
-  breaks and an atomic reducer action inserts multiple blocks as distinct
-  summary paragraphs or bullets; explicit source spacing wins over empty-target
-  defaults. A cross-field paste performs deletion, structural insertion, and
-  boundary joining in that same reducer transaction, so one Undo restores it.
-- [USER] 2026-07-29: Google Docs clipboard interop must preserve line height in
-  both directions, alongside the existing paragraph-spacing contract.
-- [CODE] 2026-07-29: Model-derived clipboard HTML now publishes effective
-  unitless line height on paragraph blocks and inline runs. Inbound rich HTML
-  converts allowlisted unitless, percentage, and font-relative point/pixel line
-  heights into explicit inline marks; unsupported CSS remains discarded.
-- [USER+TOOL] 2026-07-29: The restarted desktop app passed the user's live
-  Google Docs line-height copy/paste round trip.
-- [USER] 2026-07-29: The document-workflow hardening review requires one
-  current strict v1 shape per portable format, no runtime migration tooling,
-  truthful artifact status, tab-safe recovery, and separate behavior/refactor
-  commits. The application lock, revision check, client mutation queue, and
-  file-byte rollback transaction remain non-negotiable.
-- [CODE] 2026-07-29: `.cover` serialization now rejects unrepresentable editor
-  state; header-menu edits preserve inline marks; disabled structure controls,
-  one-block rich paste, and Typeset save baselines are corrected. Application
-  records retain only strict source/PDF artifacts as reloadable documents, and
-  sanitization is deterministic.
-- [CODE] 2026-07-29: Cover title/style recovery and live-sibling draft
-  protection now share the app-owned recovery timer. Retired autosave,
-  full-tracker, and workspace-backup compatibility paths are rejected rather
-  than migrated. Shared JSON codecs, clipboard/structure seams, cover services,
-  and application routes were extracted without moving editor caret ownership
-  or changing the application document transaction.
-- [TOOL] 2026-07-29: The required clean install, root check/test, standalone
-  font provenance gate, both app builds, landing build, server TypeScript and
-  lifecycle checks, document-workflow integrations, and headless Chromium
-  contracts passed. Live RoleFit QA found no console errors and verified header
-  popover focus plus artifact-backed document labels/actions. Layout snapshot
-  files are byte-identical to branch base `8016693`. The CI workflow is
-  committed but has no remote run because this branch was intentionally not
-  pushed.
-- [USER] 2026-07-29: Draft PR review found three merge blockers: tracker
-  revisions could regress, async document replacement could overwrite newer
-  local state, and editing an automatically linked contact could retain its old
-  destination. Merge also requires injected document-transaction rollback
-  evidence and green remote checks.
-- [CODE] 2026-07-29: Tracker reads and writes now require canonical ISO
-  revisions, reject retired/lossy fields and dual artifact representations, and
-  require existing upserts to advance monotonically after a matched base.
-  Resume replacement reads live content/style state at commit time; cover
-  replacement includes title changes; restore adoption is idempotent,
-  latest-response-only, and does not auto-apply a sibling document.
-- [CODE+TOOL] 2026-07-29: Derived email/URL/phone links now follow edited
-  visible text while custom label destinations remain stable, with Undo
-  restoring both. Production document rollback is fault-injected after real
-  source/PDF/deletion mutation. CI provisions pinned Python font tooling and
-  waits for Chromium termination before retry-safe profile cleanup.
-- [TOOL] 2026-07-29: The final local diff passed `npm run check`, the document
-  workflow and server-lifecycle probes, and the real-Chromium editor/recovery
-  contracts; no layout snapshot changed. At this local-verification checkpoint,
-  draft PR #97 remained unready and unmerged at remote SHA `49ac6cd`;
-  publication and required remote checks were still pending.
-- [TOOL+CODE] 2026-07-29: The first corrective remote run passed all six
-  Document workflow jobs, including engine fonts and Chromium. The separate
-  Typeset verify job passed the parity corpus but one dynamically selected CTAN
-  mirror failed Python TLS verification; the parallel engine job passed on the
-  same Ubuntu image. Font-tool setup now pins `certifi` and exports its CA bundle
-  in every engine-checking workflow so mirror trust does not depend on runner
-  image timing.
-- [TOOL+CODE] 2026-07-29: Superseding the CA-only diagnosis above, the next
-  remote engine job reproduced the redirected CTAN mirror's incomplete trust
-  chain even with pinned `certifi`. Latin Modern provenance now uses the named
-  official Illinois CTAN mirror instead of the proximity redirector while
-  retaining exact source digests; the CA pin remains deterministic runner
-  setup, not a fallback for an invalid upstream chain.
-- [USER+CODE] 2026-07-30: Prepare's brief was redesigned. Multi-item sections
-  (responsibilities, required/preferred qualifications, tech keywords,
-  seniority/domain signals, benefits) moved from eight stacked textareas into
-  one small tablist over per-item editable rows with add/remove; prose fields
-  stay inline. Resume and Cover Letter cards collapsed to a single row each.
-  Presentation only: `PreparedJobBrief` stays `string[]` per field and
-  `onJobBriefChange` keeps its newline-joined string contract. Per-item include
-  toggles and drag reordering were offered and declined for this pass.
-- [TOOL] 2026-07-30: Verified against the companion's built bundle at
-  localhost:5181 with a synthetic posting: edit, remove, and add each persist
-  through a tab round-trip, counts track, the new row takes focus, and the APG
-  arrow/Home/End/wrap model holds. `npm run check --workspace apps/role-fit-ai`
-  passed. Note for future browser QA: the QA pane runs unfocused
-  (`document.hasFocus()` false), so `element.blur()` emits no `focusout` and
-  React `onBlur` never fires — dispatch `focusout` explicitly or commit-on-blur
-  reads as a phantom data-loss bug.
-- [USER+CODE] 2026-08-03: RoleFit's Resume tab always mounts a real editor
-  document. `createBlankResumeData()` (`src/lib/blankResume.ts`) seeds an
-  explicit `{visible, name: "", contact: []}` header over no sections, so the
-  empty-state and bootstrapping panels are gone and `editedResume` is non-null
-  through the App/ResumeTab/workspace chain. Open gained a Blank action ordered
-  Starter, Blank, File. Document existence enables editing and strict `.resume`
-  save; `resumeHasContent` separately gates PDF export, Polish, and Apply. The
-  replacement guard fingerprints the structural document plus normalized style
-  without applying save-time codec limits during React render. Workspace Save
-  stays disabled through bootstrap and the state owner rejects bootstrap races;
-  starting Blank also clears prior workspace-save feedback. A detached save
-  defaults to `default.resume` rather than `default.txt`.
-- [USER+CODE] 2026-08-03: The overlay caret owns model-driven editing.
-  `.tsd-doc--editable` sets `caret-color: transparent` when the model owns the
-  value, because a document with no fields at all (a removed header and no
-  sections) otherwise parks a native caret in the page's top-left corner outside
-  the margin as though it could accept typing. IME composition is the deliberate
-  exception: `.is-composing` restores the browser caret while its DOM value is
-  uncommitted and hides the stale overlay until `compositionend`. A range
-  selection paints no edge caret; the selection band is its own feedback.
-  The blank name's "Type your name" hint became document typography rather than
-  UI chrome — `font: inherit` from the run, baseline-aligned by `top: 0` — so it
-  agrees with the caret, which is drawn at the field's display size. The DOM
-  renderer publishes `--tsd-empty-hint-shift` (how far along the column a
-  zero-width run's anchor sits) so a centred header's hint centres on the
-  insertion point instead of spilling right from the midpoint.
-- [TOOL] 2026-08-03: Small-caps heading letters that look like they sit at
-  different heights on screen were measured, not adjusted. The caps faces are
-  uniform (Latin Modern's small caps span 0.508-0.531 em, with the round letters
-  and A carrying ordinary overshoot, and T 1.2% under the flat-topped letters),
-  `pdf/emit.ts` embeds those same `.ttf` files at the same baselines, and the
-  PDF at 400% reads level. The residual at 100% is anti-aliasing at a ~6px
-  small-cap height, where A's apex and T's crossbar hold too little ink for a
-  solid top row; `text-rendering: geometricPrecision` already removes the
-  hinting half of it. No code change beyond recording the rationale.
-- [TOOL] 2026-08-03: After review remediation, `npm run check` passes for
-  `packages/engine`, `packages/editor`, `apps/typeset`, and `apps/role-fit-ai`;
-  the RoleFit gate needed host access for its expected loopback server probe.
-  Browser QA of the caret and hint change was NOT run under the flag-first
-  policy. Unverified in a real browser: hint baseline/size across zoom levels,
-  hint centring for centred versus left-aligned headers, and the native-to-overlay
-  caret handoff during a physical IME composition session.
-- [USER+CODE+TOOL] 2026-08-03: Resume review and Cover Letter tailoring now use
-  one collapsible `DocumentWorkbench`; separate preferences persist, hidden
-  children stay mounted, and the rail stacks below 1080px. Type/build/app tests
-  and the automated Chromium disclosure/layout contract passed.
-- [USER+CODE+TOOL] 2026-08-03: Supersedes the 44px collapsed handle above. The
-  user rejected that collapse; the rail now closes its whole track to zero and
-  is reopened from an icon-only edge tab (full-width bar when stacked); [USER]
-  chose the icon over a labelled tab with a count, so no badge API exists.
-  Collapsed rails are `inert` rather than `hidden` and focus follows the control
-  that replaced the one clicked. RoleFit check (67 evals) and the Chromium workbench contract —
-  extended for focus handoff, single control per state, full track return, and
-  the stacked bar — passed. Browser QA not run: unverified in a real browser are
-  the collapse animation's feel and the edge tab against a scrolled document.
-- [CODE+TOOL] 2026-08-03: Workbench review remediation makes the stacked layout
-  its vertical scroll owner so editor content and the reopen bar remain
-  reachable in the host's clipped tab pane. Fit zoom now observes the exact
-  editor pane through an explicit ref and recalculates after rail-width
-  transitions, while the structural rail wrapper is neutral so its named child
-  review rail remains the sole complementary landmark. The editor package
-  check, Typeset build, RoleFit check (67 evals), focused contract probe,
-  Chromium workbench regressions, UI detector, and diff check passed. Real-app
-  visual QA was not run under the flag-first policy.
-- [CODE+TOOL] 2026-08-03: Follow-up review fixed narrow document-tab scroll
-  restoration without changing the workbench layout. `useRestoredScroll` now
-  receives the desktop editor and stacked layout refs and resolves the active
-  owner from computed overflow during restore and layout cleanup. The Chromium
-  regression failed first with a saved offset of 0 instead of 180, then passed
-  through narrow unmount/remount; the full RoleFit check passed 67 evals and the
-  UI detector returned no findings.
-- [USER+CODE+TOOL] 2026-08-04: Resume and Cover Letter now share one always-present
-  workflow-rail hierarchy while retaining separate orchestration. Resume's
-  primary **Polish resume** action runs Tailor then Recruiter audit, with
-  one-stage actions secondary and proposal decisions marking the audit stale.
-  Cover Letter stages a fingerprinted whole-document proposal; only **Use
-  proposal** applies atomically and creates Restore, **Keep current** performs no
-  mutation, changed semantic inputs disable acceptance, and deterministic `422`
-  blockers omit rejected provider output. Production build, document-workflow
-  round trips, focused contracts, and all 67 offline evals passed; real-browser
-  visual QA was not run under the flag-first policy.
-- [USER+CODE+TOOL] 2026-08-04: Opening a document workflow rail no longer moves
-  the workspace. `.studio-body` on the document tabs is `overflow: clip` rather
-  than `hidden` — `hidden` left it a scroll container holding ~69px of
-  horizontal overflow from closed toolbar popovers, and the rail toggle's focus
-  (whose target is outside the box until the track settles) scrolled toolbar,
-  title, and editor sideways together; the toggle now focuses with
-  `preventScroll`. The rail's track is also paid out of the desk margin before
-  the page moves: the pane biases its start padding by the rail width, using the
-  rendered page width (`DOC_PAGE_WIDTH_PX × zoom`) threaded through as
-  `pageWidthPx`, and both halves animate on one `--document-rail-motion` token
-  because the page holds still only while padding gains what the track loses.
-  Rail width moved from `clamp(320px, 27vw, 380px)` to `18rem`. Measured page
-  shift on open: 0px at 1920, 63px at 1600, 109px at 1365; transition scrubbed
-  frame-by-frame with pane width + padding invariant at 1756 throughout. All 67
-  offline evals passed. Browser QA ran in the paint-gated pane, so end states and
-  scrubbed timelines are verified but real animation frames are not.
-- [USER+CODE] 2026-08-04: Supersedes only the earlier "no badge API exists"
-  decision for collapsed document rails. The user approved integrating the
-  typed cover-letter evidence failure work with the latest workbench branch.
-  `DocumentWorkbench` now accepts a generic optional attention count, but RoleFit
-  supplies it only for a validated post-draft Cover Letter `blocked` response;
-  readiness gaps and generic provider failures remain unbadged. The closed icon
-  and accessible label carry the bounded count while the detailed flat issue
-  list stays in the existing mounted workflow rail.
-- [CODE] 2026-08-04: Cover-letter validation issues now have fixed typed
-  code/category/recovery relationships, separate internal repair instructions
-  from bounded display-safe fields, and expose at most eight public records after
-  the single repair fails. The loopback client validates that wire shape before
-  rendering it, semantic input changes clear stale failure state, and proposal
-  acceptance remains the only editor replacement boundary. Unfinished Guidance
-  prompts are filtered by both corpus boundaries, and numeric grounding treats
-  equivalent digit and word durations alike without letting an unrelated number
-  support a duration.
-- [TOOL] 2026-08-04: The RoleFit production/server build, full app check
-  (including desktop contracts), all 67 offline evals, and the headless Chromium
-  editor/workbench suite passed. The browser contract now asserts the branch's
-  documented `18rem` rail width instead of its stale pre-branch 320-380px range
-  and verifies the collapsed issue count, accessible label, persistence,
-  desktop disclosure, and stacked in-flow placement. The UI detector found no
-  new unresolved issue; its remaining layout-transition warning is the documented
-  synchronized padding/track motion that prevents the workspace-shift regression.
-  Live provider evaluation and real-app visual QA were not run.
-- [USER+CODE+TOOL] 2026-08-04: The primary document action now has one visible owner:
-  the workflow rail. Resume and Cover Letter both call it **Polish**; the
-  editor header retains file/edit controls (plus Resume's secondary More menu),
-  and a state-matched Polish button floats beside the edge tab when the rail is
-  collapsed. Full RoleFit checks, the workbench contract, and live browser QA
-  passed for both expanded and collapsed document rails.
-- [USER+CODE] 2026-08-04: Supersedes the floating collapsed Polish button above.
-  The collapsed rail is now one edge dock — action plus reopen tab on a single
-  card, a full-width bar when stacked — and both document workspaces share one
-  vocabulary: **Polish** / `Polishing…` / `Polish again` everywhere a run
-  starts, including the Prepare material cards that previously said `Tailor`;
-  `Tailor` and `Audit` remain stage names only. Cover Letter's proposal now uses
-  the resume's `Accept` / `Discard` verbs, its status strings stopped naming a
-  `Tailoring panel` the UI never shows, the resume dropped its always-ready
-  `Workflow` readiness row, and both rails phrase shared gates identically.
-  RoleFit check (67 evals) and the Chromium workbench contract — extended for
-  the dock's single surface, ordering, edge flushness, and stacked bar — passed.
-  Real-app visual QA was not run.
-- [USER+CODE] 2026-08-04: Three follow-ups on the collapsed dock and document
-  chrome. (1) The docked action lost its own button box — the dock is the single
-  surface, so a filled/disabled button inside it no longer reads as a card in a
-  card; the shell styles whatever action a host docks there. (2) The Resume
-  header's More menu (specialist Tailor-only / Audit-current stage runs) is
-  removed at [USER] request; that choice still exists as the remembered Settings
-  stage default, and `POLISH_STAGE_ACTIONS`, `polishStageReady`,
-  `polishStageBlocker`, `reviewProviderMessage`, and the `.polish-stage-menu`
-  rules went with it. (3) The Cover Letter rail no longer restates its workflow
-  message under the action while idle — the phase, description, and checks
-  already carry it, and the editor's own save/PDF receipts still show; the
-  duplicate readiness hint and its `providerMessage` prop are gone. Prepare's
-  compact "Inputs changed · polish again." note is unaffected. RoleFit check
-  (67 evals) and the Chromium workbench contract passed; real-app visual QA not
-  run.
-- [USER+CODE] 2026-08-04: Supersedes the collapsed-dock entry above. Polish is
-  now one rail action placed by the shell (`rail.action`, not `collapsedAction`):
-  it sits at the end of the rail header while the rail is open and on the
-  document's edge beside the reopen tab while it is closed, rendered in exactly
-  one of the two at a time. No card wraps the collapsed pair, the disclosure
-  control is a single 30px shape in both states matched to the compact button
-  beside it, and the header's end padding matches the collapsed inset. The rails'
-  footers no longer duplicate Polish — they carry only Stop, Retry tailor/audit,
-  Accept/Discard proposal, and Restore previous. An intermediate icon-only
-  collapsed action was tried and reverted at [USER] request. RoleFit check
-  (67 evals) and the Chromium workbench contract passed; real-app visual QA not
-  run.
-- [USER+CODE] 2026-08-04: The shared document rail is resizable. [USER] set the
-  range brief; the chosen contract is 18rem (today's default) as both floor and
-  default, 28rem ceiling, one shared width for Resume and Cover Letter under
-  `rolefit:document-rail:width` — disclosure stays per-document, width does not,
-  because a per-document width would shift the page on every tab switch. Bounds
-  are rem-derived and re-clamped on read against the live root font size; the
-  dragged value is px. The affordance is a `role="separator"` on the rail's
-  divider with pointer drag plus ArrowLeft/Right (Shift for a coarse step), Home,
-  End, and double-click to reset; it is hidden once the rail stacks below 1080px.
-  Drags write the CSS variable directly and commit once on release, and set
-  `data-resizing` to suspend the disclosure transition. RoleFit check (67 evals)
-  and the Chromium contract — extended for drag distance, ceiling clamp,
-  persistence, the suspended clock, and keyboard parity — passed. Real-app visual
-  QA not run.
-- [USER+CODE+TOOL] 2026-08-05: Review remediation closed the document-workflow
-  and grounding gaps before publication. Cover-letter validation now excludes
-  only demonstrably employer-only predicates from the candidate evidence gates;
-  the original comparison bypass, two unfamiliar employer-led paraphrases, and
-  pure employer facts have end-to-end probes. Resume and Prepare dispatch the
-  same Settings-owned Tailor / Recruiter audit / Both workflow, readiness checks
-  only the selected providers and Tailor scope, and progress/state labels show
-  only stages that actually ran. Visitor, product, engineering, and scoped-agent
-  docs now use the shipped Polish and Accept/Discard vocabulary. The README,
-  landing page, resume/cover-letter screenshots, and social preview describe and
-  show the current workflow with direct functional copy. The complete repository
-  `npm run check` passed with loopback access — including app and landing builds,
-  desktop contracts, shared packages, and 67/67 RoleFit offline evaluations —
-  and the rendered Chromium workbench contract passed. Isolated fictitious-data
-  browser QA covered the current Resume and Cover Letter workspaces plus the
-  landing page at 1440px and 390px. No live provider evaluation ran.
-- [USER+CODE+TOOL] 2026-08-06: PR 1 renames the configurable Distill stage to
-  **Job analysis** across settings, runtime identifiers, progress copy, current
-  docs, and the canonical `/api/job-analysis` route. Settings and portable
-  backups migrate the legacy provider/model/effort/instruction keys before
-  strict normalization; historical tracker provenance is read under the new
-  label and subsequent writes use only `job-analysis`. `/api/distill` remains a
-  one-preview compatibility alias, extension cleanup still recognizes
-  `distillAi`, and historical release notes remain unchanged. No initial-fit
-  audit behavior is included in this PR.
-- [USER+CODE] 2026-08-07: The fast path is now Prepare → Initial Fit → Polish →
-  Apply. Prepare publishes its deterministic local brief before provider work;
-  Job analysis improves it when available, while provider failure leaves manual
-  Polish usable. Optional Initial Fit shares the normal Prepare dispatch,
-  sanitizes independently, and reruns alone when the selected resume changes.
-  Its contract is only a four-level verdict, one summary, up to three matches
-  and gaps, and a relevant eligibility warning — no score, confidence, ledger,
-  evidence quotes, recommendation, persistence, or analytics.
-- [USER+CODE] 2026-08-07: Initial Fit defaults on. Independent Resume and Cover
-  Letter proposal toggles default off; only Strong or Reasonable without an
-  eligibility blocker may start either proposal, and manual Polish remains
-  available for every fit outcome. PR #124 and PR #125 were reverted before
-  this slice so the new contract does not preserve their audit complexity.
-- [TOOL] 2026-08-07: The full RoleFit check passed: browser and server builds,
-  landing build, desktop contracts, and 71/71 offline evaluations. The compact
-  Initial Fit probes, 403 client workflow guards, settings normalization, and
-  analytics regression all passed. The UI detector reported only advisory
-  font-size matches already permitted by the documented body/label ramps.
-  Live-provider and real-browser visual QA were not run.
-- [USER+CODE] 2026-08-07 (superseded 2026-10-07 for the opt-in Resume Polish
-  review only; see that entry): Normal Resume Polish is one proposal request from
-  Resume or Prepare; the Tailor / Review / Both selector and reviewer readiness
-  gate are absent from that path. The server flattens editable fields to opaque
-  `target-N` ids, keeps identity, contact, education, dates, and omitted sections
-  locked, and validates each mutation independently while treating optional
-  feedback tolerantly. Proposal, No changes, and Withheld are distinct outcomes;
-  all-withheld output is a retryable non-success and never mutates the resume.
-  The compact rail shows only What improved, collapsed Edits ready with Apply
-  all plus Accept/Edit/Discard, Still missing, and a quiet withheld line.
-- [TOOL] 2026-08-07: The full RoleFit check passed with loopback access:
-  application and landing builds, desktop contracts, and 72/72 offline
-  evaluations including the new one-pass proposal probes and 405 client workflow
-  guards. The UI detector reported only advisory matches already covered by the
-  documented body/label ramps or pre-existing styles. Live-provider evaluation
-  and real-browser visual QA were not run.
-- [USER+CODE] 2026-08-07: Final Check replaces Recruiter audit in the normal
-  Resume UI as a deliberate optional request after proposal decisions. It sends
-  the actual current resume, candidate evidence, and prepared job through its
-  own one-call route and independent compact contract; the server grounds up to
-  five unsupported, missing, or clarity issues and derives Ready / Review /
-  Needs evidence from valid survivors. A failed, stopped, or stale Final Check
-  never changes the Polish proposal, editor, or Apply readiness. The legacy
-  headless Review modes remain compatibility-only for the final cleanup slice.
-- [TOOL] 2026-08-07: The exact PR 3 RoleFit gate passed: application and landing
-  builds, desktop contracts, server types, and 73/73 offline evaluations,
-  including the independent Final Check route/grounding probes, 419 client
-  workflow guards, and document-workbench contract. The UI detector reported
-  only advisory font-size/radius/color matches already present in the shared
-  review stylesheet or consistent with its existing compact type ramp.
-  Live-provider evaluation and real-browser visual QA were not run.
-- [USER+CODE+TOOL] 2026-08-09: Prepare and Applications now use the same stable
-  desktop studio height in populated and empty states above 1080px; stacked
-  layouts retain normal page scrolling. Prepared brief/rail columns scroll
-  independently. Applications reserves a fixed pagination row below an internal
-  table scrollport, while the selected-application rail owns its own scroll;
-  long Fit Assessment gaps wrap inside that rail. The focused Applications 8/8,
-  Prepare 4/4, and 481/481 client workflow layout contracts, `git diff --check`,
-  the layout detector, production and landing builds, desktop contracts, and
-  85/85 offline evaluations passed with pinned Node 24 and loopback access.
-  The expanded browser-app navigation rail was then reduced by 25px
-  without changing its 52px compact breakpoint; the updated 483/483 workflow
-  guards, production build, layout detector, and `git diff --check` passed.
-  Real-browser visual QA was not run.
-- [USER+CODE+TOOL] 2026-08-09: Opening a tracked application now hydrates Fit
-  Assessment's hook-owned prepared-job receipt instead of leaving the rail in
-  its pre-Prepare state. A saved compact assessment is shown as historical and
-  can be reassessed, but cannot trigger automatic Polish; a saved preparation
-  without an assessment offers a new run against the restored resume. The
-  focused lifecycle and restore-wiring probes pass. Full build and browser QA
-  remain blocked by unrelated in-progress Final Check removals in the worktree.
-- [USER+CODE] 2026-08-09: Job analysis and Resume Polish no longer share a
-  numbered multi-step progress sheet. Job analysis, Resume Polish, Cover letter,
-  and Application answers each own an independently named progress card with no
-  redundant step count, and every active provider request in that dock exposes
-  Stop through its workflow owner's abort boundary.
-- [TOOL] 2026-08-09: The focused workflow-copy and progress-wiring probes passed
-  34/34, and the full RoleFit check passed with loopback access: production and
-  landing builds, desktop contracts, and all 88 offline evaluations.
-  `git diff --check` passed. The Impeccable detector reported only pre-existing
-  advisory token matches in `shell.css`; browser QA was not run under the
-  repository's flag-first policy.
-- [USER+CODE] 2026-08-09: The application-preparation hardening pass deliberately
-  leaves legacy tracker-schema compatibility to a one-user preview migration.
-  Prepare cancellation now invalidates prepared-resume selection before adoption,
-  all post-resolution failure/Stop paths settle Fit, and an explicit uploaded
-  resume is authoritative. URL and paste intake keep their deterministic local
-  fallback without a provider. Compact Fit results retain exact match and
-  eligibility anchors, reject non-Limited verdicts without a match, and record
-  resolved execution attribution while request provenance remains configured-input
-  identity.
-- [TOOL] 2026-08-09: The final RoleFit gate passed with loopback access: production
-  and landing builds, desktop contracts, and 88/88 offline evaluations. Focused
-  prepared-resume 60/60, intake lifecycle, Fit grounding, request-attribution,
-  tracker sanitization, and Prepare layout probes also passed; `git diff --check`
-  and both client/server TypeScript checks passed. The Impeccable detector found
-  only advisory type-ramp matches already present in `prepare.css`. Live-provider
-  and real-browser visual QA were not run.
-- [USER+CODE] 2026-08-13: Resume Open now accepts only strict `.resume` files and
-  Cover Letter Open only strict `.cover` files. The picker filters, client
-  preflight, resume workspace save/open/history routes, menu copy, and current
-  product/engineering guidance agree. The two hosts share the action-menu
-  disclosure and common row styles while keeping file lifecycle app-owned.
-  Resume hosts keep the header name field required; Cover Letter explicitly
-  opts into its optional name. Legacy text resume artifacts remain untouched on
-  disk and in portable backups but are no longer opened or offered as restorable
-  editor history.
-- [TOOL] 2026-08-13: The focused client and server document-open probes passed,
-  and the full repository gate passed: RoleFit browser/server and landing builds,
-  desktop contracts, 106/106 offline evaluations, Typeset, editor, engine, PDF
-  parity, and generated-font checks. The Impeccable detector reported only
-  advisory palette/type-ramp literals already present outside this change.
-  Real-browser QA was not run; the remaining risk is menu and notice interaction/layout.
+- [USER+CODE] **Resume Polish prompt v5** (the user asked for the review,
+  benchmark, and implementation): rewrites keep each bullet's tense; a
+  materiality rule omits churn; separate facts and broader posting terms never
+  become a new claim; an entry gets removals or one reorder; the current-role
+  present-tense rule (shared `accomplishmentStyleRules`) is gone. The user
+  declined a page-impact line or any warning in the review rail. [TOOL] v5 beat
+  the previous prompt with every judge; judges show family self-preference, so
+  cross-model comparisons rest on agreement (results in ignored
+  `apps/role-fit-ai/workspace/tailor-benchmark/`).
+- [USER+CODE] **Resume Polish follow-ups** (user-chosen items 1–4): the shared
+  evidence checks (also used by cover letters, Answers, and Fit) were tuned for
+  warning precision (rules in `server/ai/AGENTS.md`), and with the user's
+  agreement Python frameworks count as Python evidence. A supporting-role
+  sentence keeps "part of a team" wording. Prompt slimming was rejected; only
+  `<earlier_output_concerns>` and `<terminology_priorities>` joined the shared
+  firewall tags.
+- [USER+CODE] Round 2: the prompt follows user_guidance within its rules and
+  forbids computed totals such as years from dates; Skills "Name API/SDK/CLI"
+  items need evidence attaching that interface. [USER] The base resume and
+  Profile were tightened from benchmark evidence (private data, backed up
+  locally).
+- [USER+CODE] Round 3: [USER] one page is a soft target and never blocks an edit
+  or decides materiality. [CODE] Warnings name up to three concerns;
+  "object-oriented" grounds "OOP"; tense-only or trivial rewrites settle as
+  `UNCHANGED`. [USER] The saved Resume Polish instruction carries a soft
+  one-page paragraph (it beat the "must be paid for" paragraph 40–4; private
+  data, backed up).
+- [CODE] Round 4 (2026-10-05): solo-project authorship, a count-purpose merge
+  warning, REST = RESTful, cloud and CI entailments; rules in
+  `server/ai/AGENTS.md`. [USER] Approved grounding "AI-assisted <activity>"
+  Skills items from a line naming an AI coding tool and that activity. [TOOL]
+  Labelled precision 53.5%, recall 54.8%. [USER] An unrecorded local CLI
+  usage-receipt feature found uncommitted in the tree was removed at the user's
+  request. Check 140/140.
