@@ -90,7 +90,7 @@ export function randomClaimToken() {
 // ── Page capture (the function body below is injected into the active tab) ──
 
 // Injected by source, so every helper it uses is declared inside it. Only a
-// Handshake page returns a promise; every other page's capture stays synchronous.
+// Handshake posting page returns a promise; every other capture is synchronous.
 export function extractPageData() {
   const capped = (page) => ({ ...page, text: page.text.slice(0, 50000) });
   if (!handshakePostingId()) return capped(extractVisiblePage());

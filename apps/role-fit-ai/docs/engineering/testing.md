@@ -1175,7 +1175,9 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   a single-line role and employer, no toggle clicked inside a link or form and
   at most four clicked, a wait of only the 1.5 s deadline when the toggle never
   responds, the 50,000-character cap, generic fallback without a posting pane,
-  no clicks on other sites, and no server fetch of the signed-in page;
+  no clicks on other sites, a synchronous capture on other sites and on
+  Handshake pages that are not a posting (only a posting page returns a
+  promise), and no server fetch of the signed-in page;
 - popup title/company parsing (`server/extension/__evals__/job-meta-probes.mjs`):
   LinkedIn, Indeed, and `<Role> | <Employer> | Handshake` titles (Handshake
   ahead of LinkedIn), body header lines filling only what the title left open,
