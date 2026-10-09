@@ -16,7 +16,8 @@ const textExtensions = new Set([
 // file-level exemption. Adding even one stale mention requires a reviewed edit
 // here, while deleting a rejection probe or historical receipt removes its row.
 const expectedCounts = new Map([
-  ["CONTINUITY.md", 5],
+  // The 2026-10-09 compaction kept only the rename record itself.
+  ["CONTINUITY.md", 1],
   ["apps/role-fit-ai/__evals__/extension-popup-contract.mjs", 1],
   ["apps/role-fit-ai/docs/engineering/ai-server.md", 1],
   ["apps/role-fit-ai/docs/engineering/testing.md", 1],
