@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 
-import { runApplyPdfExports } from "../applyPdfExports.ts";
+import { applyDownloadOffered, runApplyPdfExports } from "../applyPdfExports.ts";
 
 function deferred() {
   let resolve;
@@ -101,6 +101,19 @@ for (const secondFailure of [
   first.resolve(true);
   assert.deepEqual(await exportsDone, [], "the controlled sequential export completes after release");
   assert.equal(coverStarted, true, "the second export starts after the first settles");
+}
+
+{
+  const offered = (overrides) =>
+    applyDownloadOffered({ included: true, exportable: true, savedToApplication: false, ...overrides });
+  assert.equal(offered({}), true, "a new or changed included document is offered");
+  assert.equal(
+    offered({ savedToApplication: true }),
+    false,
+    "an update does not re-offer a document that matches the application's copy"
+  );
+  assert.equal(offered({ included: false }), false, "an excluded document is never offered");
+  assert.equal(offered({ exportable: false }), false, "a document that cannot be typeset is never offered");
 }
 
 console.log("apply-pdf-exports-eval: passed");

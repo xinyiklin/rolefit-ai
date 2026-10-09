@@ -65,6 +65,16 @@ export function ApplyDownloadDialog({
   const downloadResume = canDownloadResume && (!bothOffered || pickResume);
   const downloadCoverLetter = canDownloadCoverLetter && (!bothOffered || pickCoverLetter);
   const selectedCount = Number(downloadResume) + Number(downloadCoverLetter);
+  // The primary names exactly what it downloads; "Update" keeps it beside the
+  // secondary action at this card's width.
+  const primaryVerb = action.kind === "update-application" ? "Update" : action.label;
+  const downloadTarget = selectedCount > 1
+    ? " both PDFs"
+    : downloadResume
+      ? " resume PDF"
+      : downloadCoverLetter
+        ? " cover-letter PDF"
+        : "";
   const ext = EXPORT_META["pdf-engine"].ext;
   const busyMessage =
     submittedAction === "download"
@@ -216,9 +226,7 @@ export function ApplyDownloadDialog({
             <Download size={13} aria-hidden="true" />
             {busy && submittedAction === "download"
               ? `${action.busyLabel.replace(/…$/, "")} & exporting…`
-              : selectedCount > 1
-                ? `${action.label} & download both`
-                : `${action.label} & download`}
+              : `${primaryVerb} & download${downloadTarget}`}
           </button>
         </footer>
       </form>

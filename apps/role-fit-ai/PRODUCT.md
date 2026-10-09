@@ -276,8 +276,10 @@ previously saved artifact is never deleted or replaced implicitly. The resume
 and cover letter keep independent
 saved/unsaved states and an explicit "Update application" action in their own
 Save menus that rewrites only that document. Regenerating or editing a document
-never rewrites a stored one. An application keeps one space-efficient
-representation of each document:
+never rewrites a stored one. Update application offers to download only the PDFs
+whose document differs from the copy already saved on that application; an
+unchanged document stays exportable from its own menu. An application keeps one
+space-efficient representation of each document:
 editable `.resume`/`.cover` source for documents saved from RoleFit, or the PDF
 when the user explicitly uploads one. Its Documents tab groups the immutable
 job posting, resume, and cover letter as primary artifacts, previews or downloads
@@ -292,7 +294,10 @@ keeps it active. Post-save PDF export is recoverable from the document menu and
 does not keep an already-saved application unload-guarded. A dirty document the
 user excluded from Apply also releases after the application commits and its
 exact recovery write succeeds; a later edit warns only until its replacement
-recovery write succeeds.
+recovery write succeeds. A Skipped record accepts no document saves (an
+application later marked Skipped keeps only its earlier ones), so once a job is
+saved as skipped, or a Skipped record is open, each dirty document follows the
+same recovery rule.
 Duplicate matching is advisory and relational. Before AI work, an exact prior
 application or Skipped decision can be opened or continued as a new preparation;
 high/possible matches ask whether to link or keep the records separate. A Keep
