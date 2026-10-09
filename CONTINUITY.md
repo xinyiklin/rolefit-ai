@@ -52,10 +52,14 @@ bounded; app-only operational detail belongs in the affected app documentation.
       instead of about 180 ms plus 27 MB; a `304` takes 0.2 ms. The first save
       after a restart, restore, or outside edit re-validates once (131–199 ms).
     - **Backup round trip at 2,000** (165 MB decoded, 212 MB JSON): peak RSS
-      about 1.1 GB with ASCII text, 1.5–1.6 GB with non-Latin-1 text.
-      - The user's delegated decision kept the limits rather than lose backup
-        past about 790 applications.
-      - Packaged Electron IPC at that size is UNVERIFIED.
+      about 1.0–1.1 GB with ASCII text. With non-Latin-1 text, backup peaks at
+      1.2–1.9 GB and restore at about 1.3 GB.
+      - The JavaScript heap needs under 1 GB (restore fails only below a
+        1,024 MB heap cap); the rest is Buffer memory.
+      - Kept as a plan-owner decision, rather than lose backup past about 790
+        applications.
+      - Packaged Electron IPC at that size is UNVERIFIED; streaming backup is
+        the follow-up.
   - [TOOL] **Review.** Two independent reviews (adversarial, and a verifier
     focused on cache integrity) found no blocker or high issues.
     - **Fixed with regression probes:** stale rows after a full response, the
