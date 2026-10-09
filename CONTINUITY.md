@@ -23,8 +23,8 @@ bounded; app-only operational detail belongs in the affected app documentation.
   role at " - ". An unrecognized layout falls back to the generic capture.
   Only a Handshake posting page's capture returns a promise (Chrome and
   Firefox both document awaiting it); every other capture, including
-  Handshake pages that are not a posting, stays synchronous, as before. No permission or new route; the analyze route only caps its parser
-  input.
+  Handshake pages that are not a posting, stays synchronous, as before. No
+  permission or new route; the analyze route only caps its parser input.
   - [TOOL] The real function ran in the user's signed-in Chrome on the three
     reported postings and the search view. It captured 3,683 / 4,816 / 2,096
     characters with no Similar Jobs, alumni, nav, or other result cards. The
