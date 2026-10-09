@@ -550,7 +550,7 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
   43.4.1), and GHSA-qmv3-fv6v-rmhq (fixed in 43.5.0).
   `deps:audit:production` cannot see them because `electron` is a
   devDependency. 43.7.9 bundles Node 24.21.0 and Chromium 150.0.7871.250.
-  - [USER] Only the desktop runtime moves. `runtime-versions.mjs` expects
+  - [USER+CODE] Only the desktop runtime moves. `runtime-versions.mjs` expects
     43.7.x with Node 24.21.x and esbuild target `node24.21`. `.node-version`,
     CI, Docker, and npm stay on 24.18.0 / 11.16.0, so the README and
     `docs/development.md` no longer say the toolchain matches Electron. Moving
@@ -558,8 +558,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
   - [CODE] Electron 43.x ships no npm install script; its binary downloads on
     the first `require("electron")`. The `allowScripts` entry is policy that the
     checker keeps in step.
-  - [TOOL] The lockfile changes only the `electron` entry, and its integrity
-    matches the registry. The 43.2.0 → 43.7.9 `install.js` diff only makes the
+  - [TOOL] The lockfile changes only the `electron` entry and the RoleFit
+    workspace's declared pin, and the integrity matches the registry. The 43.2.0 → 43.7.9 `install.js` diff only makes the
     extractor `require` lazy. `npm audit` shows no Electron entry (40 → 39).
     `deps:check`, `deps:tree`, `deps:audit:production`, and
     `test:desktop:release` (14/14) pass.
@@ -601,7 +601,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
   - [TOOL] Dependabot alerts, and with them security updates, are **disabled**
     for the repository (the alerts API returns 403 "disabled"). That
     contradicts #199's text that security updates still arrive immediately.
-    Enabling them is the user's setting; UNCONFIRMED.
+    Enabling them is the user's setting; whether they will be enabled is
+    UNCONFIRMED.
   - [USER] #201 removed root `CONTINUITY.md` from the RoleFit retired-name
     contract. The ledger is a compacted history, outside RoleFit evals.
 

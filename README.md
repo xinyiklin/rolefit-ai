@@ -35,7 +35,7 @@ npm run check        # every workspace's type/build/eval gate
 
 Requires Node 24.18 or newer in the Node 24 line. `.node-version` pins
 Node 24.18.0, matching CI and Docker, and the workspace pins npm 11.16.0. The
-packaged desktop companion runs on Electron's bundled Node instead.
+desktop companion runs on Electron's bundled Node instead.
 
 Focused commands:
 
