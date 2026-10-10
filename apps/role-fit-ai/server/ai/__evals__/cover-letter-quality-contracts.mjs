@@ -9,6 +9,8 @@ import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { assembleCoverLetterText } from "../coverLetterContracts.ts";
 import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, panelUnsupportedSentenceCount, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
 import { judgeLetter, judgeMatrix } from "./cover-letter-quality-eval.mjs";
+import { gradeFitGaps, polishFitFindings } from "./support/fit-findings.mjs";
+import { parsePolishFitFindings } from "../../../shared/polishFitFindings.ts";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 
 const fixtures = JSON.parse(
@@ -262,5 +264,20 @@ assert.equal(
   assert.equal(mixed[1].judgment, undefined);
   delete process.env.OPENAI_API_KEY;
 }
+
+// Frozen Fit findings are valid Polish blocks; their gap labels and provenance
+// stay benchmark-only, and a gap claimed against a no-evidence label fails.
+const withFindings = fixtures.filter((fixture) => fixture.fitFindings);
+assert.equal(withFindings.length, 6, "six cover fixtures carry frozen Fit findings; the rest were assessed as insufficient");
+for (const fixture of withFindings) {
+  const sent = polishFitFindings(fixture);
+  const parsed = parsePolishFitFindings(sent);
+  assert.ok(parsed && parsed !== "invalid", `${fixture.id}: frozen Fit findings are a valid Polish block`);
+  assert.ok(!JSON.stringify(sent).includes("expect") && !JSON.stringify(sent).includes("provenance"));
+}
+const screenReader = fixtures.find((fixture) => fixture.id === "base-variant-frontend");
+assert.equal(gradeFitGaps(screenReader, { fitGaps: [{ gap: "gap-1", status: "ADDRESSED", paragraphs: [2] }] }).addressedNoEvidenceGap, 1);
+assert.equal(gradeFitGaps(screenReader, { fitGaps: [{ gap: "gap-1", status: "NO_EVIDENCE", paragraphs: [] }] }).addressedNoEvidenceGap, 0);
+assert.equal(gradeFitGaps(screenReader, {}).notReported, 1);
 
 console.log("cover-letter quality contracts passed (judge module included)");

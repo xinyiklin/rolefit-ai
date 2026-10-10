@@ -9,6 +9,11 @@ import {
   type FitAssessmentSnapshot,
   type FitAssessmentState
 } from "../../shared/fitAssessmentContract.ts";
+import {
+  isPolishFitExcerpt,
+  POLISH_FIT_FINDINGS_ITEM_LIMIT,
+  type PolishFitFindings
+} from "../../shared/polishFitFindings.ts";
 import type { FitAssessmentRequest } from "./aiJobAnalysis";
 import type { AiRequestFields } from "./aiRequest.ts";
 import { workflowInputFingerprint } from "./aiWorkflow";
@@ -65,6 +70,25 @@ export function fitAssessmentCurrentResult(
     && result?.status === "ASSESSED"
     ? result
     : null;
+}
+
+// What Resume and Cover Polish are told about Fit: posting excerpts from an
+// assessment of this same posting. A changed resume or Background still sends
+// them, labelled earlier; a saved assessment cannot confirm its inputs, so it is
+// labelled the same way. Excerpts Polish would refuse are left out, never sent.
+export function fitFindingsForPolish(state: FitAssessmentState): PolishFitFindings | null {
+  const completed = state.latestCompleted;
+  const result = completed?.snapshot.result;
+  if (!completed || completed.previousPreparation || completed.changes.includes("job") || result?.status !== "ASSESSED") return null;
+  const matches = result.matches.filter((match) => isPolishFitExcerpt(match.jobExcerpt)).slice(0, POLISH_FIT_FINDINGS_ITEM_LIMIT)
+    .map(({ jobExcerpt, relationship }) => ({ jobExcerpt, ...(relationship ? { relationship } : {}) }));
+  const gaps = result.gaps.filter(isPolishFitExcerpt).slice(0, POLISH_FIT_FINDINGS_ITEM_LIMIT)
+    .map((jobExcerpt, index) => ({ id: `gap-${index + 1}`, jobExcerpt }));
+  if (!matches.length && !gaps.length) return null;
+  const earlierVersion = completed.origin === "saved"
+    || completed.changes.includes("resume")
+    || completed.changes.includes("candidate-context");
+  return { earlierVersion, matches, gaps };
 }
 
 export function fitAssessmentPersistenceDecision(

@@ -6,6 +6,7 @@
 // next request after acceptance; `warnings` describe only this draft.
 
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
+import { coverFitGapStatements, parsePolishFitFindings, type PolishFitFindings } from "../../shared/polishFitFindings.ts";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import {
   FetchTimeoutError,
@@ -66,6 +67,7 @@ type TailorCoverLetterArgs = {
   resolvedContext: ResolvedCoverLetterContext;
   employerContext: CoverLetterEmployerFact[];
   customInstructions: string;
+  fitFindings?: PolishFitFindings | null;
   signal?: AbortSignal;
 };
 
@@ -81,6 +83,7 @@ export async function tailorCoverLetter(
     resolvedContext,
     employerContext,
     customInstructions,
+    fitFindings = null,
     signal
   }: TailorCoverLetterArgs,
   stats?: AttemptStats
@@ -96,7 +99,8 @@ export async function tailorCoverLetter(
     evidenceItems,
     resolvedContext,
     employerContext,
-    customInstructions
+    customInstructions,
+    fitFindings
   };
 
   const attempt = async (repair?: { violations: string[]; rejectedOutput: unknown }) => {
@@ -159,8 +163,14 @@ export async function tailorCoverLetter(
     evidenceUsed: evidenceUsedByParagraphs(output.bodyParagraphs, evidenceItems),
     warnings: sanitizeContentWarnings([...coverLetterIssueWarnings(draftOnly), ...output.warnings, ...coverLetterLengthWarnings(coverLetterText), ...output.modelNotes]) ?? [],
     concerns: sanitizeContentWarnings([...coverLetterIssueWarnings(durable), ...run.concerns]) ?? [],
+    ...(fitFindings?.gaps.length ? { fitGaps: coverFitGapStatements(parsedFitGaps(run.parsed), fitFindings, output.bodyParagraphs.length) } : {}),
     ...(repaired ? { repaired: true } : {})
   };
+}
+
+// Display-only statements; they never become a warning or concern.
+function parsedFitGaps(parsed: unknown): unknown {
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? (parsed as Record<string, unknown>).fitGaps : undefined;
 }
 
 function parseDetailValues(body: Record<string, unknown>) {
@@ -258,6 +268,12 @@ export async function handleCoverPolish(
       return;
     }
 
+    const fitFindings = parsePolishFitFindings(body.fitFindings);
+    if (fitFindings === "invalid") {
+      sendJson(res, 400, { error: "Cover Polish received unreadable Fit findings. Reload the page and try again." });
+      return;
+    }
+
     const evidenceItems = parseCoverLetterEvidenceItems(body.evidenceItems);
     if (!evidenceItems.some((item) => item.source === "resume")) {
       sendJson(res, 400, { error: "Add your resume before polishing a cover letter." });
@@ -284,6 +300,7 @@ export async function handleCoverPolish(
         resolvedContext: preflight.resolved,
         employerContext: parseEmployerContext(body.employerContext),
         customInstructions,
+        fitFindings,
         signal: request.signal
       },
       coverStats

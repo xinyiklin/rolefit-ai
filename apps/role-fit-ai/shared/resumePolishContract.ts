@@ -2,6 +2,7 @@ import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts"
 
 import { linkProfileBlocks } from "./candidateProfileContract.ts";
 import { hasMarkupTag, sanitizeContentWarnings } from "./contentWarnings.ts";
+import { FIT_GAP_IDS, sanitizeFitGapStatements, type FitGapStatus } from "./polishFitFindings.ts";
 import { isEducationHeading } from "../src/resume/sections.ts";
 export const RESUME_POLISH_STATUSES = ["PROPOSAL", "NO_CHANGES", "WITHHELD"] as const;
 export const RESUME_POLISH_WITHHELD_REASONS = [
@@ -98,6 +99,8 @@ export type ResumePolishWireResult = {
     reasons: ResumePolishWithheldReason[];
   };
   review?: ResumePolishReview;
+  // Present only when Fit findings with gaps were sent; display-only.
+  fitGaps?: Array<{ gap: string; status: FitGapStatus; targetIds: string[] }>;
 };
 
 export type ResumePolishEditorTarget = {
@@ -371,6 +374,12 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
 
   const review = source.review === undefined ? undefined : parseWireReview(source.review, status as ResumePolishStatus, changes);
   if (review === null) return null;
+  // Optional display-only statements; a held-back change stays citable because
+  // Restore can bring it back.
+  const citable = new Set([...changes, ...(review?.heldBack ?? []).map((item) => item.change)].map((change) => change.targetId));
+  const fitGaps = sanitizeFitGapStatements(source.fitGaps, FIT_GAP_IDS, "targetIds",
+    (value): value is string => typeof value === "string" && citable.has(value))
+    .map(({ gap, status: gapStatus, refs }) => ({ gap, status: gapStatus, targetIds: refs }));
 
   return {
     advice: sanitizeResumePolishAdvice(source.advice),
@@ -380,6 +389,7 @@ export function sanitizeResumePolishWireResult(raw: unknown): ResumePolishWireRe
     summary: list(source.summary, 260),
     omittedTargetCount,
     withheld: { count, reasons },
-    ...(review ? { review } : {})
+    ...(review ? { review } : {}),
+    ...(fitGaps.length ? { fitGaps } : {})
   };
 }

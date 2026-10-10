@@ -1,7 +1,8 @@
 // Opt-in synthetic benchmark. Importing it and running npm test never calls a provider.
 // Usage: npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs]
 // EVAL_POLISH_REVIEW=paired also reviews each generated proposal (the opt-in Polish
-// review) and grades the kept edits beside the full proposal.
+// review) and grades the kept edits beside the full proposal. Each fixture's
+// frozen Fit findings are sent by default; EVAL_FIT_FINDINGS=off omits them.
 import { createHash } from "node:crypto";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -16,6 +17,7 @@ import {
   factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, gradeReviewProbe, opportunityMetOnlyByChurn,
   pairedReview, reviewProbeProposal, reviewSummary, validateFactCheck
 } from "./support/resume-proposal-quality.mjs";
+import { fitGapFailures, gradeFitGaps, polishFitFindings } from "./support/fit-findings.mjs";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 const FIXTURE_URL = new URL("./fixtures/resume-proposal-quality.json", import.meta.url);
@@ -34,8 +36,11 @@ export function evalOptions(argv, env) {
   if (!selected.length || (names[0] !== "all" && new Set(names).size !== selected.length) || (names.includes("all") && names.length > 1)) throw new Error("EVAL_FIXTURES must be all or known comma-separated fixture names");
   const review = env.EVAL_POLISH_REVIEW || "off";
   if (!["off", "paired"].includes(review)) throw new Error("EVAL_POLISH_REVIEW must be off or paired");
+  // "off" reproduces a request from before Fit findings reached Polish.
+  const fitFindings = env.EVAL_FIT_FINDINGS || "on";
+  if (!["on", "off"].includes(fitFindings)) throw new Error("EVAL_FIT_FINDINGS must be on or off");
   return {
-    runs, selected, review,
+    runs, selected, review, fitFindings: fitFindings === "on",
     config: {
       provider: env.EVAL_PROVIDER || "claude-cli",
       model: env.EVAL_MODEL ?? ((env.EVAL_PROVIDER || "claude-cli") === "claude-cli" ? "opus" : ""),
@@ -80,7 +85,8 @@ export async function evaluateCase(fixture, config, {
   generate = generateResumeProposal,
   judge = callConfiguredProvider,
   review = null,
-  retry = {}
+  retry = {},
+  fitFindings = true
 } = {}) {
   const started = Date.now();
   const receipt = { fixture: fixture.name, config: publicConfig(config), judge: JUDGE, humanReviewed: false };
@@ -90,7 +96,8 @@ export async function evaluateCase(fixture, config, {
     receipt.result = await generate({
       body: config, resumeScope: scope, scopeText: resumeText, jobText: fixture.jobText,
       candidateContext: fixture.candidateContext, customInstructions: fixture.customInstructions,
-      boldBulletKeywords: fixture.boldBulletKeywords ?? true
+      boldBulletKeywords: fixture.boldBulletKeywords ?? true,
+      fitFindings: fitFindings ? polishFitFindings(fixture) : null
     });
     stage = "trap-check";
     receipt.grade = gradeProposal(fixture, receipt.result);
@@ -108,7 +115,8 @@ export async function evaluateCase(fixture, config, {
         receipt.grade.passed = false;
       }
     }
-    receipt.passed = receipt.grade.passed && receipt.factCheck.unsupported === 0;
+    if (fitFindings) receipt.fitGaps = gradeFitGaps(fixture, receipt.result, edits, receipt.factCheck);
+    receipt.passed = receipt.grade.passed && receipt.factCheck.unsupported === 0 && fitGapFailures(receipt.fitGaps) === 0;
   } catch {
     // Provider errors can contain response excerpts. Keep only the failing stage.
     receipt.error = stage;
@@ -143,6 +151,7 @@ export function summaryRow(receipt, run) {
     unsupported: receipt.error?.startsWith("fact-check") ? null : receipt.factCheck?.unsupported ?? null,
     immaterial: receipt.error?.startsWith("fact-check") ? null : receipt.factCheck?.immaterial ?? null,
     providerAttempts: receipt.result?.attempts ?? null, judgeAttempts: receipt.judgeAttempts ?? 0,
+    ...(receipt.fitGaps ? { fitGaps: Object.fromEntries(Object.entries(receipt.fitGaps).filter(([key]) => key !== "rows")) } : {}),
     ...(receipt.review ? {
       review: receipt.review.status === "reviewed"
         ? { status: "reviewed", passed: receipt.review.passed, heldBack: receipt.review.heldBack.map(({ reason, kind, class: label }) => ({ reason, kind, class: label })),
@@ -164,7 +173,7 @@ export async function evaluateReviewProbe(probe, config, { review = reviewWithPr
 
 export async function main(argv = process.argv.slice(2), env = process.env) {
   if (argv.length === 1 && argv[0] === "--help") {
-    console.log("Usage: npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator; EVAL_FIXTURES selects all or comma-separated names.\nEVAL_POLISH_REVIEW=paired also runs the opt-in Polish review on each generated proposal (same provider settings) plus the review probes, and grades both arms; off is the default.\nEvery run includes GPT-6 Astra/high per-edit fact-checks via Codex CLI. Both providers must be configured.\nFixtures: " + fixtures.map((fixture) => fixture.name).join(", ") + "\nReview probes: " + reviewProbes.map((probe) => probe.name).join(", "));
+    console.log("Usage: npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- [runs:1-5]\nEVAL_PROVIDER, EVAL_MODEL, EVAL_REASONING_EFFORT select the generator; EVAL_FIXTURES selects all or comma-separated names.\nEVAL_POLISH_REVIEW=paired also runs the opt-in Polish review on each generated proposal (same provider settings) plus the review probes, and grades both arms; off is the default.\nEVAL_FIT_FINDINGS=off omits each fixture's frozen Fit findings (on by default) to reproduce the earlier request.\nEvery run includes GPT-6 Astra/high per-edit fact-checks via Codex CLI. Both providers must be configured.\nFixtures: " + fixtures.map((fixture) => fixture.name).join(", ") + "\nReview probes: " + reviewProbes.map((probe) => probe.name).join(", "));
     return 0;
   }
   let options;
@@ -184,11 +193,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const sourceHashes = Object.fromEntries([
     "../resumeProposal.ts", "../resumeProposalReview.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../resumeScope.ts", "../json.ts", "../clients.ts",
     "../claimEvidence.ts", "../../../shared/resumePolishContract.ts", "../../../shared/candidateProfileContract.ts",
-    "../../../shared/evidencePolarity.ts", "../../../shared/contentWarnings.ts", "../../../src/lib/coverLetterTemplate.ts",
+    "../../../shared/evidencePolarity.ts", "../../../shared/contentWarnings.ts", "../../../shared/polishFitFindings.ts", "../../../src/lib/coverLetterTemplate.ts",
     "../../../src/resume/terminology.ts", "./support/resume-proposal-quality.mjs", "./resume-proposal-quality-eval.mjs"
   ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));
   save("manifest.json", {
-    createdAt: new Date().toISOString(), config: options.config, judge: JUDGE, runs: options.runs, reviewArm: options.review,
+    createdAt: new Date().toISOString(), config: options.config, judge: JUDGE, runs: options.runs, reviewArm: options.review, fitFindingsArm: options.fitFindings ? "on" : "off",
     fixtures: options.selected.map((fixture) => fixture.name), corpusHash: hash(readFileSync(FIXTURE_URL)), sourceHashes,
     ...(options.review === "paired" ? { reviewProbesHash: hash(readFileSync(REVIEW_PROBE_URL)) } : {}),
     labelProvenance: "Agent-authored synthetic traps; Astra labels are model judgments, not human factual certification.",
@@ -204,7 +213,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const probeReceipts = [];
   outer: for (let run = 1; run <= options.runs; run += 1) {
     for (const fixture of options.selected) {
-      const receipt = await evaluateCase(fixture, options.config, paired ? { review: reviewWithProduction } : {});
+      const receipt = await evaluateCase(fixture, options.config, { fitFindings: options.fitFindings, ...(paired ? { review: reviewWithProduction } : {}) });
       receipts.push(receipt);
       save(`${fixture.name}-run-${run}.json`, receipt);
       const row = summaryRow(receipt, run);
@@ -223,7 +232,10 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
   const expected = options.selected.length * options.runs;
   const passed = rows.filter((row) => row.passed).length;
   const review = paired ? reviewSummary(receipts, probeReceipts) : undefined;
-  save("summary.json", { expected, completed: rows.length, passed, unrun: expected - rows.length, rows, ...(review ? { review } : {}) });
+  const fitGaps = options.fitFindings ? Object.fromEntries(["addressed", "noEvidence", "notReported", "addressedNoEvidenceGap", "addressedByUnsupported"]
+    .map((key) => [key, rows.reduce((total, row) => total + (row.fitGaps?.[key] ?? 0), 0)])) : undefined;
+  save("summary.json", { expected, completed: rows.length, passed, unrun: expected - rows.length, rows, ...(review ? { review } : {}), ...(fitGaps ? { fitGaps } : {}) });
+  if (fitGaps) console.log(`Fit gaps: ${JSON.stringify(fitGaps)}`);
   if (review) console.log(`Review arm: ${JSON.stringify(review)}`);
   console.log(`Result: ${passed}/${expected} passed; ${expected - rows.length} unrun. Materiality and length metrics are diagnostic; a required case must touch a named opportunity. Receipts: ${out}`);
   return passed === expected ? 0 : 1;

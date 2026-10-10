@@ -1,6 +1,7 @@
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { coverFitGapStatements, type PolishFitFindings } from "../../shared/polishFitFindings.ts";
 import { buildStageRequestFields, type StageConfig } from "../lib/aiRequest";
 import { ApiError, classifyFailure } from "../lib/failures";
 import {
@@ -48,25 +49,30 @@ type UseCoverLetterArgs = {
   // The editor owns that fact because it owns the pre-tailor snapshot behind it.
   tailorApplied: boolean;
   jobTarget?: { role?: string; company?: string };
+  // Read when a run starts: the Fit state is owned by intake, which composes later.
+  getFitFindings?: () => PolishFitFindings | null;
   onApplyTailored: (text: string) => void;
   onUsage?: (usage: StageAiUsage) => void;
 };
 
 export type CoverLetterProposal = {
   result: CoverLetterTailorResult;
+  // The findings this letter was written with, when they carried gaps.
+  fitFindings?: PolishFitFindings;
   stale: boolean;
   resumeChanged: boolean;
 };
 
 type PendingCoverLetterProposal = CoverLetterProposalIdentity & {
   result: CoverLetterTailorResult;
+  fitFindings?: PolishFitFindings;
 };
 
 export type CoverLetterFailure =
   | CoverLetterBlockedFailure
   | { kind: "error"; headline: string; detail: string };
 
-function tailorResponse(value: unknown): CoverLetterTailorResult | null {
+function tailorResponse(value: unknown, fitFindings: PolishFitFindings | null): CoverLetterTailorResult | null {
   if (!value || typeof value !== "object") return null;
   const candidate = value as Partial<CoverLetterTailorResult>;
   if (
@@ -78,10 +84,13 @@ function tailorResponse(value: unknown): CoverLetterTailorResult | null {
   ) {
     return null;
   }
+  const { fitGaps: rawFitGaps, ...rest } = candidate;
+  const fitGaps = fitFindings?.gaps.length ? coverFitGapStatements(rawFitGaps, fitFindings, candidate.bodyParagraphs.length) : [];
   return {
-    ...candidate,
+    ...rest,
     warnings: sanitizeContentWarnings(candidate.warnings) ?? [],
     concerns: sanitizeContentWarnings(candidate.concerns ?? []) ?? [],
+    ...(fitGaps.length ? { fitGaps } : {}),
   } as CoverLetterTailorResult;
 }
 
@@ -104,6 +113,7 @@ export function useCoverLetter({
   sourceRevision,
   candidateName,
   jobTarget,
+  getFitFindings,
   onApplyTailored,
   onUsage,
 }: UseCoverLetterArgs) {
@@ -201,6 +211,7 @@ export function useCoverLetter({
       });
       return {
         result: pendingProposal.result,
+        ...(pendingProposal.fitFindings ? { fitFindings: pendingProposal.fitFindings } : {}),
         ...freshness,
       };
     },
@@ -361,6 +372,7 @@ export function useCoverLetter({
     }
 
     const { controller, isCurrent } = beginRequest();
+    const fitFindings = getFitFindings?.() ?? null;
     setPendingProposal(null);
     setFailure(null);
     setCoverStatus("Polishing this letter…");
@@ -383,6 +395,7 @@ export function useCoverLetter({
           resolvedContext: preflight.resolved,
           evidenceItems,
           slotAnswers,
+          ...(fitFindings ? { fitFindings } : {}),
         }),
         signal: controller.signal,
       });
@@ -414,12 +427,13 @@ export function useCoverLetter({
           response.status,
         );
       }
-      const result = tailorResponse(raw);
+      const result = tailorResponse(raw, fitFindings);
       if (!result) {
         throw new ApiError("The polished cover letter could not be read.", 502);
       }
       setPendingProposal({
         result,
+        ...(fitFindings?.gaps.length ? { fitFindings } : {}),
         contentFingerprint: proposalContentFingerprint,
         resumeFingerprint: proposalResumeFingerprint,
       });

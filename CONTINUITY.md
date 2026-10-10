@@ -394,9 +394,8 @@ and lives in the app ledger.
 
 ### Desktop companion, distribution, and release/deploy state
 
-Current: RoleFit 0.11.1 preview (`rolefit-preview-v0.11.1-beta.1` on `aa202ba`),
-extension 1.3.0, desktop bridge API 13 (see 2026-10-10). 0.12.0 is prepared,
-not yet released.
+Current: RoleFit 0.12.0 preview (`rolefit-preview-v0.12.0-beta.1` on `9ee863c`),
+extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
 
 - 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
@@ -602,7 +601,41 @@ not yet released.
       health probe.
     - `make:rolefit:desktop` and `test:rolefit:desktop:packaged` (win32-x64,
       unpacked) passed in the clean worktree.
-  - Release receipt: PENDING.
+  - [TOOL] Release receipt: the annotated tag `rolefit-preview-v0.12.0-beta.1`
+    is on `9ee863c` (#213). Run 38082606961 succeeded and published the
+    prerelease at 2026-10-10T20:17:47Z, with arm64/x64 `.dmg`/`.zip`, the
+    Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site, Typeset, and
+    Document workflow runs on `9ee863c` succeeded.
+- [USER+TOOL] **Stage 2A: the opt-in Resume Polish review stays off by
+  default** (user-accepted). A paired run over the 39 synthetic cases failed
+  the 2026-10-07 default-on bar on both Sol medium and Opus high; numbers are in
+  `apps/role-fit-ai/docs/engineering/benchmarks.md`. Stage 2B (the paired
+  real-application rerun) needs the user's other machine and will run on the
+  Stage 4 prompt. [TOOL] Codex CLI 0.162.1 was installed on this machine
+  (npm global); the Codex desktop app's bundled binaries are not on PATH.
+- [USER+CODE] **Fit findings in Resume and Cover Polish, and terminology
+  coverage** (task `fit-findings-polish-20261010`; brief v2 and plan v1
+  approved). Polish receives one fenced `fit_findings` block of posting excerpts
+  (at most 3 matches and 3 gaps) from a completed Fit of the same posting,
+  labelled earlier after a resume, Background, or saved-origin change; both
+  rails fold per-gap Addressed / No evidence / Not reported statements, and the
+  Resume rail folds recognized posting terms by resume use. Contract and trust
+  rules: `PRODUCT.md`, `DESIGN.md`, `server/ai/AGENTS.md`.
+  - [TOOL] Without findings both Polish prompts are byte-identical to `9ee863c`
+    (52 prompts; an independent reviewer re-checked 104). Offline: check exit
+    0, `npm test` 182/182. Two independent reviews: no blockers; their
+    should-fix items were applied. Browser pass with synthetic data and stubbed
+    Fit/Polish responses in a scratch workspace: both rails, accept/discard/undo
+    transitions, tablet width, no failed requests.
+  - [TOOL] Benchmark fixtures carry frozen Fit findings (Sonnet 5.5 low): 39/39
+    resume cases (82 gaps, 73 labelled no-evidence) and 6/13 cover cases (the
+    other 7 postings are Insufficient job information).
+  - UNCONFIRMED: the live before-and-after (AC5, AC6, AC9) on Sol medium and
+    Opus high. Codex hit its usage limit after four Sol resume cases; the user
+    will run `EVAL_FIT_FINDINGS` on/off on another machine. Merge waits for it.
+  - [TOOL] This machine's synthetic workspace `.resume` files predated the
+    2026-09-27 `bulletIndentPt` requirement; a throwaway script added the
+    default (14.73 pt) to six files, kept outside the repository.
 
 ## 2026-10-09
 

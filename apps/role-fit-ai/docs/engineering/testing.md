@@ -487,6 +487,20 @@ Good server verification covers:
 - the bold-in-bullets preference is enforced in both layers: the route rejects a
   present non-boolean with 400 and treats an absent flag as bold-on, and the
   sanitizer strips `<b>` from every bullet replacement when the preference is off
+- Fit findings in Polish (`server/ai/__evals__/polish-fit-findings-probes.mjs`,
+  `src/lib/__evals__/polish-fit-findings-eval.mjs`,
+  `src/sections/resume/__evals__/resume-proposal-fit-gaps.mjs`, and the gap
+  transitions in `src/hooks/__evals__/resume-proposal-restore-hook.mjs`): the strict block
+  rejects extra keys, candidate excerpts or notes, more than three items, ids out
+  of sequence, oversized, markup, control or bidi text, and both routes answer
+  400 before any provider call; fence-shaped text in an excerpt is neutralized
+  and the `fit_findings` fence is named in the firewall line only when sent;
+  without findings both prompts and requests are unchanged; gap statements keep
+  one per sent gap and drop an ADDRESSED that cites a withheld change or a
+  missing paragraph (one cover check shared by server and client); findings add no provider request; the client sends findings
+  only for the same posting (labelled earlier after a resume, Background, or
+  saved-origin change), follows accept/discard/hold-back/restore in the Resume
+  rail, and groups recognized posting terms without a score
 - the opt-in Polish review (`server/ai/__evals__/resume-proposal-review-probes.mjs`):
   with `reviewEdits` absent or false the route makes one dispatch and returns a
   byte-identical result with no `review` field; on, it makes one more dispatch on
@@ -779,6 +793,15 @@ Good server verification covers:
   `EVAL_PROVIDER=claude-cli EVAL_MODEL=claude-opus-5-5 EVAL_REASONING_EFFORT=high npm run eval:live:resume-proposal --workspace apps/role-fit-ai -- 3`.
   Compare the same fixtures/repetitions on another model by changing those
   environment variables; each invocation retains its own receipts.
+
+  Each resume fixture, and the six cover fixtures Fit could assess, carries
+  frozen `fitFindings` (Fit default model, posting excerpts only, provenance
+  recorded) with a hand label per gap: `no-evidence` when closing it needs a
+  posting-only term, a computed duration, promoted ownership, or a fact absent
+  from the resume and Background, otherwise `either`. Both live evals send them
+  by default; `EVAL_FIT_FINDINGS=off` reproduces the request from before
+  findings reached Polish. Receipts add per-gap statuses; ADDRESSED on a
+  `no-evidence` gap, or citing an edit Astra labels unsupported, fails the case.
 
   `EVAL_POLISH_REVIEW=paired` (default `off`, which leaves receipts unchanged)
   evaluates the opt-in Polish review against the same proposals: each generated

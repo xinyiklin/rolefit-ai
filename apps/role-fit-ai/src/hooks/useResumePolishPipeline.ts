@@ -21,6 +21,7 @@ import {
   workflowRequestIsCurrent,
   type PolishProgressState
 } from "../lib/aiWorkflow";
+import type { PolishFitFindings } from "../../shared/polishFitFindings.ts";
 import type { OutputTab } from "../sections/shared";
 import type { ProviderReadiness } from "./useAvailableProviders";
 import type { ResumeProposalSuggestion } from "../resume/types";
@@ -41,6 +42,8 @@ type PolishContext = {
   inputFingerprint: string;
   documentGeneration: number;
   sourceConcerns: ResumeSourceConcern[];
+  // Fixed when the run starts; a reassessment mid-run does not change what was sent.
+  fitFindings: PolishFitFindings | null;
 };
 
 export type PolishRunOptions = {
@@ -56,6 +59,7 @@ type UseResumePolishPipelineArgs = {
   currentResumeText: string;
   jobDescription: string;
   candidateContext: string;
+  fitFindings: PolishFitFindings | null;
   // Set while the Profile Background is over its limit; the stage declines.
   profileLimitMessage: string | null;
   customInstructionsFor: (stage: StageId) => string;
@@ -88,6 +92,7 @@ export function useResumePolishPipeline({
   currentResumeText,
   jobDescription,
   candidateContext,
+  fitFindings,
   profileLimitMessage,
   customInstructionsFor,
   boldBulletKeywords,
@@ -198,7 +203,7 @@ export function useResumePolishPipeline({
     }
     const documentGeneration = getDocumentGeneration();
     const sourceConcerns = currentResumeConcerns(previousResult, flattenResumeTargets(buildResumePolishScope(editedResume, editedResume.sections.map((section) => section.id), [])), documentGeneration);
-    return { resumeScope, candidateContext, scopedResumeText, inputFingerprint: inputFingerprintRef.current, documentGeneration, sourceConcerns };
+    return { resumeScope, candidateContext, scopedResumeText, inputFingerprint: inputFingerprintRef.current, documentGeneration, sourceConcerns, fitFindings };
   }
 
   async function runProposal(
@@ -219,6 +224,7 @@ export function useResumePolishPipeline({
           resumeScope: context.resumeScope,
           jobText: jobDescription,
           candidateContext: context.candidateContext,
+          ...(context.fitFindings ? { fitFindings: context.fitFindings } : {}),
           sourceWarnings: context.sourceConcerns.length
             ? ["Some current resume wording came from earlier generated edits with unresolved evidence concerns. Candidate-supplied text is not independently verified; check every claim against the original supplied sources."] : undefined,
           customInstructions: customInstructionsFor("resume-polish"),
@@ -268,7 +274,11 @@ export function useResumePolishPipeline({
         omittedTargetCount: data.omittedTargetCount,
         suggestedChanges: suggestions,
         withheld: data.withheld,
-        ...(data.review ? { review: data.review.outcome, heldBack } : {})
+        ...(data.review ? { review: data.review.outcome, heldBack } : {}),
+        ...(context.fitFindings?.gaps.length ? {
+          fitFindings: context.fitFindings,
+          fitGaps: (data.fitGaps ?? []).filter((statement) => context.fitFindings?.gaps.some((gap) => gap.id === statement.gap))
+        } : {})
       });
       if (revealResumeOnSuccess) setActiveOutputTab("resume");
       const { note, tone } = resumePolishSettledNote({

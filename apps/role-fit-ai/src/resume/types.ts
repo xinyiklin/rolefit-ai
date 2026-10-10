@@ -1,6 +1,7 @@
 import type { ResumeSourceConcern } from "./proposalWarnings.ts";
 import type { TerminologySnapshot } from "./terminology.ts";
-import type { ResumePolishAdvice, ResumePolishReview, ResumePolishReviewReason } from "../../shared/resumePolishContract.ts";
+import type { PolishFitFindings } from "../../shared/polishFitFindings.ts";
+import type { ResumePolishAdvice, ResumePolishReview, ResumePolishReviewReason, ResumePolishWireResult } from "../../shared/resumePolishContract.ts";
 export type ResumeProposalField = "bullet" | "skill";
 
 export type ResumeProposalTarget = {
@@ -52,6 +53,10 @@ export type PolishedResume = {
   suggestedChanges?: ResumeProposalSuggestion[];
   polishOutcome?: "PROPOSAL" | "NO_CHANGES" | "WITHHELD";
   omittedTargetCount?: number;
+  // The Fit findings this run was sent, when they carried gaps, and the model's
+  // display-only statement about each gap.
+  fitFindings?: PolishFitFindings;
+  fitGaps?: NonNullable<ResumePolishWireResult["fitGaps"]>;
   advice?: ResumePolishAdvice[];
   adviceStale?: boolean;
   withheld?: {

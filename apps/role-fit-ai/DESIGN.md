@@ -673,7 +673,13 @@ returns an edit to the queue; the cover letter's Restore reverts an accepted
 letter). A restored row carries a neutral Restored chip, and a result whose
 every edit was held back reads "No worthwhile changes after review." above the
 same disclosure. Proposal, No changes, and Withheld remain visibly distinct.
-Cover letter keeps
+When the run was sent Fit gaps, both rails fold one quiet "What this proposal did
+about Fit gaps" disclosure (shared `FitGapStatements`): each gap's posting
+excerpt with Addressed and where, No evidence, or Not reported, an earlier-version
+note when it applies, and a line that these are the model's statements, not a
+check; no count or score. The Resume rail also folds "Posting terms and your
+resume" beside the terminology-check limits, grouping recognized terms without
+a score. Cover letter keeps
 the editor unchanged while showing a whole-document proposal with explicit
 Accept proposal and Discard proposal actions; Restore appears only after acceptance.
 A resume-only change keeps that existing proposal in the proposal state with

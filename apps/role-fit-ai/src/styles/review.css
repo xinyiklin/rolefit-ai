@@ -373,6 +373,72 @@
   color: var(--warm);
 }
 
+/* What a proposal said about each Fit gap, and the posting's recognized terms:
+   folded, quiet, read-only. */
+.proposal-fit-gaps > summary,
+.resume-proposal__terms > summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 0.82rem;
+}
+
+.proposal-fit-gaps ul {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s2) 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.proposal-fit-gaps li {
+  display: grid;
+  gap: var(--s1);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--hairline-soft);
+}
+
+.proposal-fit-gaps blockquote {
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  overflow-wrap: anywhere;
+}
+
+.proposal-fit-gaps__status,
+.proposal-fit-gaps__note {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.76rem;
+}
+
+.proposal-fit-gaps__status strong {
+  color: var(--ink-strong);
+  font-weight: 650;
+}
+
+.proposal-fit-gaps__note {
+  margin-top: var(--s2);
+}
+
+.resume-proposal__terms dl {
+  display: grid;
+  gap: var(--s2);
+  margin: var(--s2) 0 0;
+}
+
+.resume-proposal__terms dt {
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.resume-proposal__terms dd {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
 /* Edits the opt-in Polish review held back: folded, quiet, restorable. */
 .resume-proposal__held-back > summary {
   cursor: pointer;
