@@ -547,13 +547,30 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
     reviews: one NOT READY only for a misquoted recovery message in docs
     (fixed), one READY with Low findings. Residual: sparse saved Resume Polish
     settings without a model or effort now seed Opus/high fields; dotted
-    tokens count lower than `w+`-style form counters; a stale tab and an
+    tokens count lower than `\w+`-style form counters; a stale tab and an
     updated server disagree on new-revision counts for dotted tokens until
     reload. [TOOL] Browser QA on an isolated synthetic workspace (port 5183):
     a blocked row's 65-character recovery message wraps to two lines under its
     label without overflow in both rails at 1440 px and at 375 px; after Skip &
     save job the owned preparation still shows "Starter template" and Answers
     says "Add your resume first."; no console errors.
+- [USER+CODE] **0.11.1 prepared** (patch: the Stage 1 fixes; the user asked
+  for the bump, PR, and merge). Notes
+  `apps/role-fit-ai/docs/releases/0.11.1-beta.1.md`; extension 1.3.0 and
+  desktop bridge API 13 unchanged; GPT-5.5 stays until its removal.
+  - [TOOL] `test:rolefit:desktop` failed twice on this branch and once on
+    `main` (`1592a24`) in the owned development phase: the companion's
+    1 s `/api/extension/pairing-requests` fetch timed out and the
+    connection status read "unreachable". The third run passed. A standalone
+    development server answered that route in about 100 ms, and Vite's
+    dependency cache was not rebuilt between two starts; root cause
+    UNCONFIRMED. Logs kept outside the repository.
+  - [TOOL] At 0.11.1 on Windows x64: `npm run check --workspace
+    apps/role-fit-ai` exit 0 (offline 178/178), `make:rolefit:desktop` and
+    `test:rolefit:desktop:packaged` (unpacked win32-x64) passed, and
+    `test:desktop:release` passed 14/14. macOS packaging runs only in the
+    release workflow.
+  - Release receipt: PENDING (rides in the next PR).
 
 ## 2026-10-09
 
