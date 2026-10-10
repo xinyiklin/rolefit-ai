@@ -29,7 +29,8 @@ export const AI_STAGE_COPY: Record<AiStageKey, Record<"idle" | "running" | "done
   "job-analysis": { idle: "Job analysis", running: "Analyzing job", done: "Job analyzed", failed: "Job analysis failed", stopped: "Job analysis stopped" },
   "resume-polish": { idle: "Resume Polish", running: "Polishing resume", done: "Resume Polish complete", failed: "Resume Polish failed", stopped: "Resume Polish stopped" },
   "cover-polish": { idle: "Cover letter Polish", running: "Polishing cover letter", done: "Cover letter proposal ready", failed: "Cover letter Polish failed", stopped: "Cover letter Polish stopped" },
-  "application-answers": { idle: "Application answers", running: "Drafting answers", done: "Answers ready", failed: "Answers failed", stopped: "Answers stopped" }
+  "application-answers": { idle: "Application answers", running: "Drafting answers", done: "Answers ready", failed: "Answers failed", stopped: "Answers stopped" },
+  "resume-import": { idle: "Resume import", running: "Interpreting structure", done: "Structure interpreted", failed: "Interpretation failed", stopped: "Interpretation stopped" }
 };
 
 export const AI_WORKFLOW_TITLE: Record<AiStageKey, string> = {
@@ -37,7 +38,8 @@ export const AI_WORKFLOW_TITLE: Record<AiStageKey, string> = {
   "job-analysis": "Job analysis",
   "resume-polish": "Resume Polish",
   "cover-polish": "Cover letter Polish",
-  "application-answers": "Application answers"
+  "application-answers": "Application answers",
+  "resume-import": "Resume import"
 };
 
 // Stable-enough identity for one client workflow request. Inputs are plain

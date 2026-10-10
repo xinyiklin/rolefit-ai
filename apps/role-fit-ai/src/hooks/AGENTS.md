@@ -208,7 +208,22 @@ browser-side effects; components render them and App composes them.
   state covers the complete file operation so modal close and browser unload
   cannot interrupt a document commit silently.
 - `useResumeEditor` is a RoleFit adapter over the shared editor hook; keep
-  reusable history/reducer behavior in `@typeset/editor`.
+  reusable history/reducer behavior in `@typeset/editor`. Its `seedData(data,
+  { unsaved: true })` seeds a document that exists only in memory (an import),
+  which counts as dirty until it is saved, marked clean, or replaced; every
+  seed bumps `seedRevision`.
+- `useResumeImport` owns one PDF import: local reading (lazily loaded pdf.js and
+  `resume/pdfImport/`), the guarded commit through `useWorkspaceResume`, the
+  review session, the explicit AI interpretation (abort, stale-result and
+  edited-document guards, client re-validation), and Discard. The session lives
+  only while the editor still holds the seed the import made, so saving,
+  opening anything else, restoring a draft, or Discard end it without per-path
+  wiring; a refusal shown inside a review ends with it. It never writes a
+  workspace file or preference (the replaced variant's identity is detached in
+  memory only), and resume text reaches a provider only from `interpret`.
+  `__evals__/resume-import-lifecycle.mjs` drives the hook and pins App's Polish
+  gates (the dock hides Retry during a review) and the workspace commit/restore
+  seams.
 - `useCoverLetterEditor` composes RoleFit's separate letter lifecycle while
   delegating file transport to `coverLetterWorkspaceRepository`, export and
   application-artifact construction to `coverLetterExport`, title/baseline

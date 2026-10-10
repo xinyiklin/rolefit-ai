@@ -20,6 +20,7 @@ import {
   Download,
   FileDown,
   FilePlus2,
+  FileText,
   FolderOpen,
   LayoutTemplate,
   Save,
@@ -40,7 +41,7 @@ import {
   type TypesetCaret,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS } from "@typeset/engine/lib/documentStyle.ts";
+import { DOC_PAGE_WIDTH_PX, DOC_STYLE_BOUNDS, toDocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -53,7 +54,8 @@ import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import { useApplications, type Application, type SaveApplicationAnswerTarget } from "./hooks/useApplications";
-import { useResumeEditor } from "./hooks/useResumeEditor";
+import { useResumeEditor, type SeedOptions } from "./hooks/useResumeEditor";
+import { useResumeImport } from "./hooks/useResumeImport";
 import { useResumeExport } from "./hooks/useResumeExport";
 import { useCoverLetter } from "./hooks/useCoverLetter";
 import { useCoverLetterEditor } from "./hooks/useCoverLetterEditor";
@@ -122,7 +124,7 @@ import {
 } from "./lib/preparedJobBrief";
 import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
-import type { ResumeOrigin } from "./hooks/useWorkspaceResume";
+import type { ResumeDocumentSnapshot, ResumeOrigin } from "./hooks/useWorkspaceResume";
 import {
   automaticPolishActionDecision,
   fitAssessmentMeetsThreshold
@@ -181,7 +183,7 @@ import { AnswerModelPicker } from "./sections/tabs/answers/AnswerModelPicker";
 import type { ApplicationAnswerRevision } from "../shared/applicationAnswersContract.ts";
 import type { TrackerView } from "./sections/tabs/TrackerTab";
 import type { OutputTab, OutputTabDescriptor } from "./sections/shared";
-import { providerLabel } from "./config/aiOptions";
+import { describeProviderModel, providerLabel } from "./config/aiOptions";
 import { formatHistoryDate } from "./lib/historyDate";
 import { applicationActivityDate, type ApplicationActivityFilter } from "./lib/applicationDisplay";
 
@@ -644,8 +646,10 @@ function App() {
   // Ref for the Profile Background textarea inside Settings — focused after the
   // dialog is opened by handleAddProfileEvidence so the user can type immediately.
   const profileBackgroundTextareaRef = useRef<HTMLTextAreaElement>(null);
-  // Hidden file input the resume Open menu's "Choose a file" row clicks.
+  // Hidden file inputs the resume Open menu's "Choose a file" and "Import PDF"
+  // rows click.
   const resumeFileInputRef = useRef<HTMLInputElement>(null);
+  const resumePdfInputRef = useRef<HTMLInputElement>(null);
   // The PDF rename prompt is opened from the Save menu's PDF row; ExportMenu
   // still owns the dialog itself.
   const [pdfPromptOpen, setPdfPromptOpen] = useState(false);
@@ -675,6 +679,8 @@ function App() {
     serializedResume,
     seed: seedResumeEditorDocument,
     seedData: seedResumeDataDocument,
+    seedRevision: resumeSeedRevision,
+    getSeedRevision: getResumeSeedRevision,
     markClean: markResumeClean,
     actions: resumeEditorActions
   } = useResumeEditor(resumeHistoryClock);
@@ -696,8 +702,8 @@ function App() {
   // no open site has to remember to do this: `seedData`/`seed` are the editor
   // hook's only load paths.
   const seedResumeData = useCallback(
-    (data: ResumeData) => {
-      seedResumeDataDocument(data);
+    (data: ResumeData, options?: SeedOptions) => {
+      seedResumeDataDocument(data, options);
       resumeCaretRef.current = null;
       resumeScrollTopRef.current = 0;
       typesetEditorRef.current?.focusDocumentStart();
@@ -1270,10 +1276,6 @@ function App() {
       jobDescription.trim().length > 40
     );
   }, [editedResume, jobDescription, jobPrepared, resumeReady, editablePolishSections]);
-  const canPolish = polishInputsReady && selectedPolishProvidersReady;
-  // Prepare names a current blocker before any earlier Polish status.
-  const resumePolishBlocker = resumePolishProviderMessage
-    || (editablePolishSections ? "" : "Set at least one editable resume section to Polish.");
 
   const debouncedPreparedJobDescription = useDebouncedValue(jobDescription);
 
@@ -1336,7 +1338,10 @@ function App() {
     readBaseResumeCandidates,
     readBaseResumeCandidatesRevision,
     detachBaseResumeIdentity,
-    handleFileUpload
+    handleFileUpload,
+    commitImportedResume,
+    replaceImportedContent,
+    restoreResumeSnapshot
   } = useWorkspaceResume({
     confirm,
     replacementGuard: resumeReplacementGuard,
@@ -1356,6 +1361,46 @@ function App() {
     editedResume,
     docStyle
   });
+
+  // What Discard import restores, read live at the import's commit boundary.
+  const liveResumeSnapshotRef = useRef<() => ResumeDocumentSnapshot>(null!);
+  liveResumeSnapshotRef.current = () => ({
+    data: editedResume,
+    style: toDocumentStyle(docStyle.style),
+    unsaved: resumeDocumentDirty,
+    fileName,
+    baseResumeName,
+    documentTitle,
+    origin: resumeOrigin,
+    resumeText
+  });
+  const readResumeSnapshot = useCallback(() => liveResumeSnapshotRef.current(), []);
+  const readResumeVersion = useCallback(() => resumeReplacementStateRef.current.version, []);
+  const resumeImportStage = stages["resume-import"];
+  const resumeImportRequestFields = useCallback(() => buildStageRequestFields(resumeImportStage), [resumeImportStage]);
+  const resumeImport = useResumeImport({
+    seedRevision: resumeSeedRevision,
+    getSeedRevision: getResumeSeedRevision,
+    commit: commitImportedResume,
+    replaceContent: replaceImportedContent,
+    restore: restoreResumeSnapshot,
+    readSnapshot: readResumeSnapshot,
+    currentVersion: readResumeVersion,
+    confirm,
+    interpretRequestFields: resumeImportRequestFields
+  });
+  // Import reconstructs; Polish improves. A resume under import review cannot
+  // be polished until the review is saved or discarded.
+  const resumeImportBlocker = resumeImport.reviewOpen ? "Finish the import review first: save or discard it." : "";
+  const canPolish = polishInputsReady && selectedPolishProvidersReady && !resumeImport.reviewOpen;
+  // Prepare names a current blocker before any earlier Polish status.
+  const resumePolishBlocker = resumeImportBlocker
+    || resumePolishProviderMessage
+    || (editablePolishSections ? "" : "Set at least one editable resume section to Polish.");
+  // Retry reaches the pipeline directly, past handleResumePolish's gates.
+  const retryResumePolish = () => {
+    if (!resumeImport.reviewOpen) void retryStage();
+  };
 
   // Every live value the resolver's decision depends on, read at dispatch time
   // rather than captured: preparation begins from an event, and a stale closure
@@ -1881,6 +1926,7 @@ function App() {
       || isSavingBaseResume
       || isManuallySelectingResumeVariant
       || isResolvingPreparedResume
+      || resumeImport.reviewOpen
     ) return false;
     const claimed = handlePolish(options);
     if (!claimed) return false;
@@ -2766,7 +2812,7 @@ function App() {
             <TaskProgress
               stageKey="resume-polish"
               state={polishProgress.polish}
-              onRetry={() => void retryStage()}
+              onRetry={resumeImport.reviewOpen ? undefined : retryResumePolish}
               onStop={stopPolish}
               onDismiss={() => setPolishProgressVisible(false)}
               onDismissButton={() => dismissTaskProgressFromButton(() => setPolishProgressVisible(false))}
@@ -3134,20 +3180,56 @@ function App() {
               polishStatus={polishStatus}
               proposalDecisions={resumeProposalDecisions}
               onPolish={() => void handleResumePolish()}
-              onRetryPolish={() => void retryStage()}
+              onRetryPolish={retryResumePolish}
               onStopPolish={stopPolish}
               jobTarget={materialsJobTarget}
+              importReview={resumeImport.status.kind !== "idle" || resumeImport.review ? {
+                status: resumeImport.status,
+                review: resumeImport.review,
+                existingVariantNames: baseResumeOptions.map((option) => option.fileName),
+                variantFileName: resumeVariantFileName,
+                saving: isSavingBaseResume,
+                onSave: (variantFileName) => void saveCurrentAsBaseResume(variantFileName),
+                onDiscard: () => void resumeImport.discard(),
+                onDismissRefusal: resumeImport.dismissRefusal,
+                onViewOriginal: () => {
+                  const original = resumeImport.original;
+                  if (original) setDocumentPreview({ url: URL.createObjectURL(original.blob), name: original.fileName });
+                },
+                interpretation: {
+                  label: describeProviderModel(resumeImportStage.provider, resumeImportStage.selectedModel),
+                  ready: providerReady(resumeImportStage.provider),
+                  blocker: providerRecoveryMessage(resumeImportStage.provider),
+                  state: resumeImport.interpretation,
+                  onInterpret: () => void resumeImport.interpret(),
+                  onStop: resumeImport.stopInterpretation,
+                  onDismiss: resumeImport.dismissInterpretation,
+                  onShowLocal: () => void resumeImport.showLocalReading()
+                }
+              } : null}
               documentActions={
                 <>
-                  {/* The resume file picker is a hidden input the menu's "Choose a
-                      file" row clicks, matching the cover letter — the menu is the
-                      same component for both. */}
+                  {/* The resume file pickers are hidden inputs the menu's "Choose a
+                      file" and "Import PDF" rows click, matching the cover letter —
+                      the menu is the same component for both. */}
                   <input
                     ref={resumeFileInputRef}
                     className="sr-only"
                     type="file"
                     accept=".resume"
                     onChange={handleFileUpload}
+                  />
+                  <input
+                    ref={resumePdfInputRef}
+                    className="sr-only"
+                    type="file"
+                    accept=".pdf,application/pdf"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0];
+                      // Reset first so choosing the same file again still fires.
+                      event.target.value = "";
+                      if (file) void resumeImport.importFile(file);
+                    }}
                   />
                   <DocumentOpenMenu
                     tooltip="Open a resume"
@@ -3180,6 +3262,14 @@ function App() {
                         title: "Choose a file",
                         description: ".resume only",
                         onSelect: () => resumeFileInputRef.current?.click()
+                      },
+                      {
+                        key: "import-pdf",
+                        icon: <FileText size={15} aria-hidden="true" />,
+                        title: "Import PDF",
+                        description: "Text-based PDF, read on this computer; review before saving.",
+                        disabled: isSavingBaseResume || resumeImport.status.kind === "reading",
+                        onSelect: () => resumePdfInputRef.current?.click()
                       }
                     ]}
                     saved={{

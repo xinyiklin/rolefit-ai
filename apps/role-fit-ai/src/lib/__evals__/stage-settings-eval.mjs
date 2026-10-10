@@ -42,6 +42,11 @@ assert.deepEqual(
       label: "Final application review",
       title: "Final application review",
       blurb: "Reviews the current included materials when you request it; never changes or submits them."
+    },
+    "resume-import": {
+      label: "Resume import",
+      title: "Resume import",
+      blurb: "Interprets the structure of an imported PDF when you ask; never rewrites its text."
     }
   },
   "AI stage copy describes current user-visible requests"
@@ -74,7 +79,8 @@ assert.deepEqual(fresh, {
   "resume-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
   "cover-polish": { provider: "codex-cli", selectedModel: "gpt-6.1-sol", cliReasoningEffort: "medium" },
   "application-answers": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
-  "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
+  "application-review": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
 }, "fresh stages use their task-specific recommendations");
 for (const stage of AI_STAGES) {
   const keys = stageSettingsKeys(stage);

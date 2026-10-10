@@ -242,6 +242,11 @@ and `docs/engineering/ui-principles.md`.
   each claim. When that rail is collapsed, its edge tab may show only the
   bounded issue count; readiness blockers and generic provider failures do not
   earn a badge.
+- While a PDF import is read or reviewed, the Resume rail renders
+  `resume/ResumeImportReview` instead of the Polish workflow and the Polish
+  action is hidden. It reuses the workflow rail's anatomy and classes but not
+  Polish's states or vocabulary; the original PDF is a lazy React-PDF chunk
+  (`ResumeImportOriginal`), and AI interpretation reuses `AiWorkflowProgress`.
 - `DocumentWorkbench` owns the two document tabs' shared rail placement,
   disclosure, and responsive scroll boundary. Its wrapper stays semantically
   neutral because `DocumentWorkflowRail` owns the one named complementary

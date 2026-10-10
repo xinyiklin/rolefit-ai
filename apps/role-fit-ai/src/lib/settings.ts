@@ -44,6 +44,9 @@ export type PersistedSettings = {
   applicationReviewProvider?: AiProviderValue;
   applicationReviewSelectedModel?: string;
   applicationReviewCliReasoningEffort?: string;
+  resumeImportProvider?: AiProviderValue;
+  resumeImportSelectedModel?: string;
+  resumeImportCliReasoningEffort?: string;
   profileBackground?: string;
   // Guidance applied to every instruction-enabled drafting stage that has no
   // override of its own. Fixed analysis stages never receive it.

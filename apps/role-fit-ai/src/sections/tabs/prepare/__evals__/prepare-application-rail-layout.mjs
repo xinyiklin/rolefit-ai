@@ -75,8 +75,8 @@ assert.match(
 );
 assert.match(
   appSource,
-  /resumePolishBlocker = resumePolishProviderMessage\s*\|\| \(editablePolishSections \? "" : "Set at least one editable resume section to Polish\."\)/,
-  "the provider's recovery step comes first, then the no-editable-section blocker"
+  /resumePolishBlocker = resumeImportBlocker\s*\|\| resumePolishProviderMessage\s*\|\| \(editablePolishSections \? "" : "Set at least one editable resume section to Polish\."\)/,
+  "an open import review comes first, then the provider's recovery step, then the no-editable-section blocker"
 );
 assert.ok(
   appSource.includes("resumePolishBlocker={resumePolishBlocker}"),

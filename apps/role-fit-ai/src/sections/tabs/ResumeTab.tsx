@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type ReactNode, type RefObject } from "react";
+import { useCallback, useEffect, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
 
 import type { PolishedResume } from "../../resumeEngine";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
@@ -27,6 +27,7 @@ import {
   DocumentWorkbenchEditorPane
 } from "../document/DocumentWorkbench";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
+import { ResumeImportReview } from "../resume/ResumeImportReview";
 import { ResumeWorkflowRail } from "../resume/ResumeWorkflowRail";
 import { ViewportGate } from "../ViewportGate";
 
@@ -77,6 +78,8 @@ type ResumeTabProps = {
   onPolish: () => void;
   onRetryPolish: () => void;
   onStopPolish: () => void;
+  // A PDF import being read or reviewed takes the rail over from Polish.
+  importReview: Omit<ComponentProps<typeof ResumeImportReview>, "resume" | "onHighlight"> | null;
 };
 
 // The resume surface is edit-and-polish: the owned typeset page is the editor
@@ -124,6 +127,7 @@ export function ResumeTab({
   onPolish,
   onRetryPolish,
   onStopPolish,
+  importReview
 }: ResumeTabProps) {
   const { editorScrollerRef, layoutScrollerRef } = useRestoredScroll(
     initialScrollTop,
@@ -156,7 +160,10 @@ export function ResumeTab({
   }, [docStyle]);
 
   const [highlightTarget, setHighlightTarget] = useState<ResumeProposalTarget | null>(null);
-  const highlightedFieldKey = fieldKeyForReviewTarget(editedResume, highlightTarget);
+  const [importHighlightKey, setImportHighlightKey] = useState<string | null>(null);
+  const highlightedFieldKey = importReview
+    ? importHighlightKey
+    : fieldKeyForReviewTarget(editedResume, highlightTarget);
   const renderOverlay = useCallback(
     (context: TypesetEditorOverlayContext) => (
       <RoleFitEditorOverlay
@@ -235,8 +242,15 @@ export function ResumeTab({
           id: "resume-review",
           label: "Workflow",
           preferenceKey: "resume-review",
-          action: polishAction,
-          content: (
+          action: importReview ? undefined : polishAction,
+          content: importReview ? (
+            <ResumeImportReview
+              key={importReview.review?.previewUrl ?? importReview.status.kind}
+              {...importReview}
+              resume={editedResume}
+              onHighlight={setImportHighlightKey}
+            />
+          ) : (
             <ResumeWorkflowRail
               result={result}
               resume={editedResume}

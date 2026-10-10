@@ -16,7 +16,8 @@ export type AiStageId =
   | "resume-polish"
   | "cover-polish"
   | "application-answers"
-  | "application-review";
+  | "application-review"
+  | "resume-import";
 
 export type AiStageDescriptor = {
   readonly id: AiStageId;
@@ -31,7 +32,8 @@ export type AiStageDescriptor = {
     | "resumePolish"
     | "coverPolish"
     | "applicationAnswers"
-    | "applicationReview";
+    | "applicationReview"
+    | "resumeImport";
   readonly supportsInstructions: boolean;
 };
 
@@ -86,6 +88,16 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     title: "Final application review",
     blurb: "Reviews the current included materials when you request it; never changes or submits them.",
     settingsPrefix: "applicationReview",
+    supportsInstructions: false
+  },
+  {
+    id: "resume-import",
+    label: "Resume import",
+    title: "Resume import",
+    blurb: "Interprets the structure of an imported PDF when you ask; never rewrites its text.",
+    settingsPrefix: "resumeImport",
+    // Structure is read against a fixed references-only contract; free-form
+    // guidance could only push it toward rewriting.
     supportsInstructions: false
   }
 ];

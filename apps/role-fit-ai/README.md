@@ -83,9 +83,16 @@ font, size and wrapping changes still reflow the page normally.
 
 ## Highlights
 
-- **Resume input** — open a strict `.resume` document, or start with a blank
-  document and type or paste resume content directly into the editor. The file
-  picker does not import text, word-processing, or PDF files.
+- **Resume input** — open a strict `.resume` document, start with a blank
+  document and type or paste resume content directly into the editor, or
+  **Import PDF**: a text-based PDF resume is read on this computer into an
+  editable draft, with the original beside it and every uncertain or unplaced
+  piece of text listed for review before you save it as a variant. No text is
+  lost, added, or reworded; anything the importer cannot place is listed rather
+  than dropped. An optional **Interpret with ‹provider›** step (one explicit click per
+  request, using Settings > Models > Resume import) can rebuild the structure,
+  but only by arranging the PDF's own text. Scanned PDFs, DOCX, and other
+  formats are not imported.
 - **Cover-letter workflow** — open a strict `.cover` document, or start with a
   blank/starter letter and type or paste your own prose. Press **Polish** once. RoleFit
   resolves the date, your name, the role, the company, the greeting, and the
@@ -285,7 +292,8 @@ font, size and wrapping changes still reflow the page normally.
   Every save archives the version it replaces, so nothing is overwritten
   destructively. Both editors use the same Open and Save menus: Open lists the
   starter, a blank, a format-specific file picker, and everything already saved;
-  the Resume picker accepts only `.resume` and Cover Letter accepts only `.cover`.
+  the Resume picker accepts only `.resume` (Resume's Open menu adds Import PDF)
+  and Cover Letter accepts only `.cover`.
   Save updates the active copy, adds a variant, or takes a
   `.resume`/`.cover`/`.txt`/PDF away.
   Resume always keeps a real editable page mounted: when no saved source exists,
@@ -349,7 +357,7 @@ font, size and wrapping changes still reflow the page normally.
   is excluded from submitted counts, application-sent history, and submission
   calendar events, while an application later marked Skipped keeps its original
   submission there; no Skipped record counts toward follow-up hygiene.
-- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, and application-answer features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
+- **Local-first personal workflow** — the browser app, server, paired extension bridge, and workspace files run on your own device. Source development uses the gitignored `workspace/`; an installed companion uses `app.getPath("userData")/workspace/`. Origin-scoped browser storage may contain recovery resume/job drafts and a fail-open cache of allowlisted preferences, but canonical stage, candidate, and selected-resume preferences live in the owner-only workspace; neither location stores API keys. The Electron companion encrypts supported API keys with the operating system through `safeStorage` and stores only encrypted bytes locally beneath its own `userData`; keys never enter browser storage, browser requests, status payloads, or logs. A companion-owned server receives decrypted keys only in memory through a private parent/child channel. AI-backed job preparation, resume tailoring, cover-letter, application-answer, and on-request Resume import interpretation features still send the relevant job/resume text directly from the local server to the provider you choose; resume/job payloads do not cross Electron IPC.
 
 ## Stack
 
@@ -457,6 +465,8 @@ per-row collapse control:
   free-text questions.
 - **Final application review** — checks the included documents and job context
   without changing them.
+- **Resume import** — interprets the structure of an imported PDF when you ask;
+  it references the PDF's own text and never rewrites it.
 
 Fresh settings and **Reset all settings** use these recommendations:
 
@@ -467,6 +477,7 @@ Fresh settings and **Reset all settings** use these recommendations:
 | Cover letter | Codex CLI | GPT-6.1 Sol | Medium |
 | Application questions | Claude Code CLI | Opus 5.5 | High |
 | Final application review | Claude Code CLI | Sonnet 5.5 | Low |
+| Resume import | Claude Code CLI | Sonnet 5.5 | Low |
 
 Saved choices remain selected. Choosing a stage's recommended provider seeds
 its recommended model and effort; other providers use their catalog defaults.
