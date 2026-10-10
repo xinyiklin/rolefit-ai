@@ -1,12 +1,13 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer as createHttpServer } from "node:http";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import electronPath from "electron";
+import { resolveConfig } from "vite";
 import {
   ROLEFIT_DESKTOP_COMPATIBILITY_VERSION,
   ROLEFIT_HEALTH_API_VERSION
@@ -66,6 +67,32 @@ async function waitForHealth(
     await delay(100);
   }
   throw new Error(`Timed out waiting for the ${mode} RoleFit smoke server.`);
+}
+
+// Vite commits optimized dependencies only after a page crawl. A cold optimize
+// inside a development companion phase starves its 750 ms health probes.
+async function warmViteDependencies(origin, timeoutMs = 60_000) {
+  const { cacheDir } = await resolveConfig({ root: appRoot, logLevel: "silent" }, "serve");
+  const metadataPath = join(cacheDir, "deps", "_metadata.json");
+  const page = await fetch(`${origin}/`);
+  assert.equal(page.ok, true, `Vite page request failed with ${page.status}.`);
+  const moduleScripts = [...(await page.text()).matchAll(/<script type="module" src="([^"]+)"/g)];
+  assert.notEqual(moduleScripts.length, 0, "The Vite page lists no module scripts to crawl.");
+  for (const [, src] of moduleScripts) {
+    const script = await fetch(new URL(src, origin));
+    assert.equal(script.ok, true, `Vite module ${src} failed with ${script.status}.`);
+    await script.arrayBuffer();
+  }
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      await access(metadataPath);
+      return;
+    } catch {
+      await delay(100);
+    }
+  }
+  throw new Error(`Vite did not commit its optimized dependencies to ${metadataPath}.`);
 }
 
 function spawnCaptured(command, args, env) {
@@ -371,6 +398,7 @@ try {
     ROLEFIT_WORKSPACE_DIR: workspaceDir
   });
   await waitForHealth(origin, "development", "standalone");
+  await warmViteDependencies(origin);
   const reusedDevelopment = await runProcess(
     electronPath,
     [appRoot],

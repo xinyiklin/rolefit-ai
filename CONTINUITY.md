@@ -485,6 +485,23 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
+## 2026-10-10
+
+- [USER+CODE+TOOL] **Desktop smoke passes from a cold Vite cache** (task
+  `2026-10-10-desktop-smoke-vite-warm`).
+  - [CODE] Vite 8 drops `node_modules/.vite/deps` when the lockfile changes and
+    commits a new optimize only after a page crawl. The smoke never requested a
+    page, so every run optimized cold and the owned-development companion
+    missed its 750 ms health probes.
+  - [CODE] Test-only fix: `smoke.test.mjs` `warmViteDependencies` fetches `/`
+    and its module scripts from the standalone development server, then waits
+    up to 60 s for `<cacheDir>/deps/_metadata.json` (path from Vite's
+    `resolveConfig`). In Vite's public `createServer`, the stale cache is
+    removed before RoleFit answers health, so an outdated file cannot satisfy
+    the wait. No product, probe, or assertion change.
+  - [TOOL] Windows x64: a cold run of the old smoke on `main` failed; with the
+    fix, 3 of 3 cold runs and a warm run passed (about 32 s each).
+
 ## 2026-10-09
 
 - [USER+CODE+TOOL] **Resume PDF import** (task `2026-10-09-resume-pdf-import`;
@@ -745,12 +762,10 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     passed (win32-x64). The packaged companion reports
     `electron=43.7.9 node=24.21.0`. No macOS host; the release workflow's
     native jobs cover macOS.
-  - [TOOL] `test:rolefit:desktop` is flaky on Windows under machine load, on
-    both Electron versions. Its development-mode phases intermittently fail
-    the companion's 750 ms / 1 s loopback probes ("connection status
-    contract", or a pairing-settings `TimeoutError`). Measured: 0.10.0, #198,
-    and #143 passed on a quiet machine; later, 4 of 4 interleaved runs passed
-    on each of 43.2.0 and 43.7.9 on this branch. CI does not run this smoke.
+  - [TOOL] `test:rolefit:desktop` intermittently failed its development-mode
+    phases on both Electron versions ("connection status contract", or a
+    pairing-settings `TimeoutError`). Superseded 2026-10-10: the cause was a
+    cold Vite dependency optimize, not machine load. CI does not run this smoke.
   - [TOOL] A Windows `safeStorage` probe (isolated user data, synthetic value)
     encrypted with 43.2.0 and decrypted with 43.7.9: MATCH,
     `shouldReEncrypt=false`. macOS upgrade decryption is UNVERIFIED.
@@ -853,8 +868,7 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     requests a page, so Vite never commits a new one: every run optimizes cold,
     and the dev server misses the companion's 750 ms health probes (instrumented:
     `TimeoutError` after ready). The packaged runtime has no Vite. The
-    2026-10-09 "flaky under load" note is probably this; making the smoke
-    deterministic is a follow-up.
+    2026-10-09 "flaky under load" note was this; fixed 2026-10-10.
   - [TOOL] #198 browser QA ([USER] required before tagging). The dev server ran
     from the release worktree on port 5183 with `ROLEFIT_WORKSPACE_DIR` set to
     a scratch workspace of 620 synthetic applications (46 planted duplicates)
