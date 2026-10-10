@@ -464,7 +464,7 @@ test("a mostly dated sidebar beside any kind of bullet is still a column", async
 });
 
 test("a mostly dated sidebar under its own headings is still a column beside plain lines", async () => {
-  for (const [label, side, headings] of [["larger", DATED_SIDEBAR, "larger"], ["bold", DATED_SIDEBAR, "bold"], ["plain capitals", DATED_SIDEBAR, "plain"]]) {
+  for (const [label, side, headings] of [["larger", DATED_SIDEBAR, "larger"], ["bold", DATED_SIDEBAR, "bold"]]) {
     const result = await importResumePdf(await sidebarPdf(side, { headings }), pdfjs);
     assert.deepEqual(regions(result), ["left", "right"], label);
     const found = result.data.sections.map((section) => section.heading.toUpperCase());

@@ -408,7 +408,7 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   in the left half stays combined with a Check; and same-baseline right
   sidebars that must read as a column: skill lists with one dated row, and a
   mostly dated sidebar beside glyph, inline, or dingbat bullets, or under
-  larger, bold, or plain capital section-title headings.
+  larger or bold headings.
 - `pdf-import-interpretation.mjs` feeds crafted provider replies to the client
   rebuild: reworded or corrected substrings, free text, unknown pieces,
   duplicated, overlapping, reordered, or partly omitted text, recombined or

@@ -45,9 +45,10 @@ file/layout contracts remain in `@typeset/engine`.
   at least 40% dated (`rowDates.ts` `hasDate`, which also finds the date in
   "2019 – 2023 · Boston" or "06/2019 – Present (4 yrs)"). The dated reading
   never applies to a band beside a bullet (dingbat glyphs included) or holding
-  a heading, which is a sidebar. A heading is styled apart, or is a section
-  title in capitals ("EDUCATION") among mixed-case words; a value such as
-  "Honors", or an all-caps resume's values, is not.
+  a heading-styled line, which is a sidebar. A dated sidebar whose headings
+  look like its entries, beside a column without bullets, still reads as one
+  column: words and case did not separate its headings from row values such
+  as "Honors" without regressing tab-stop layouts.
 - A title or subtitle row's last segment is its right-hand value when it
   reaches the margin, or when it sits in the right half of the column and
   starts within 1.5pt of another section row's (a tab stop; contact lines and

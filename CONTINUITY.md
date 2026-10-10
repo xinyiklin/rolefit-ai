@@ -630,20 +630,22 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     review found no Blocker or High and one Medium that the user accepted for
     the follow-up: a mostly dated sidebar with plain headings beside a main
     column without bullet glyphs read as one column.
-  - [CODE] Follow-up branch `fix/rolefit-pdf-import-followups`:
+  - [USER+CODE+TOOL] Follow-up PR #206 (`fix/rolefit-pdf-import-followups`):
     - Cover letter Polish waits for an import review on every route (button,
       Prepare card, automatic Polish, the dock's Retry, the rail's Retry); the
-      Cover Letter rail names the review as its resume blocker.
-    - A band holding a section title in capitals among mixed-case words
-      ("EDUCATION") is a sidebar, which closes the accepted Medium. Its first
-      review (head `9469ddd3`, no Blocker or High) found that any-case titles
-      turned tab-stop values like "Honors" into a sidebar, worse than `main`;
-      fixed. Still read as one column, as on `main`: a dated sidebar whose
-      only headings are plain Title Case, beside a column without bullets.
+      Cover Letter rail names the review as its resume blocker. Passed two
+      independent reviews.
     - A title or subtitle row's last segment in the right half that starts
       within 1.5pt of another section row's (not a contact line or bullet)
       goes to the right-hand slot; a one-off gap or one shared in the left half
       stays combined with a Check.
+    - [USER] The accepted #205 Medium stays a documented limitation: a dated
+      sidebar whose headings look like its entries, beside a column without
+      bullets, reads as one column (no text lost). Three section-title cues
+      were tried; each review (heads `9469ddd3`, `e27f0102`) found tab-stop or
+      sidebar layouts made worse than `main`, so column detection stays as on
+      `main`. Residual Low: in that misread layout, tab-stop placement pairs
+      sidebar lines into rows without the "combined" Check `main` gave.
   - [TOOL] Corpus: 7 engine + 6 foreign fixtures (one truly two pages with a
     running header) and 8 refusal kinds; synthetic and written alongside the
     parser, so real-world accuracy is UNCONFIRMED.

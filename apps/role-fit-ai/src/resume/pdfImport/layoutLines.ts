@@ -3,7 +3,7 @@
 // tab-stop-sized gaps (right-aligned dates, contact runs).
 
 import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
-import { BULLET_GLYPHS, isSectionHeader, isSectionTitle } from "../sections.ts";
+import { BULLET_GLYPHS, isSectionHeader } from "../sections.ts";
 import type { PdfLayout, PdfSpan } from "./pdfLayout.ts";
 import { hasDate } from "./rowDates.ts";
 
@@ -195,14 +195,8 @@ function findGutter(spans: readonly PdfSpan[], pageWidth: number): Gutter | null
     const bolds = extents.map((extent) => extent.spans.every((span) => span.bold));
     const typicalSize = [...sizes].sort((a, b) => a - b)[Math.floor(sizes.length / 2)];
     const boldMinority = bolds.filter(Boolean).length < bolds.length / 2;
-    // A plain heading is a section title in capitals among mixed-case words: a
-    // value such as "Honors", or an all-caps resume's values, never is.
-    const words = values.filter((value) => /\p{L}/u.test(value) && !/\d/u.test(value) && !isSectionTitle(value));
-    const mixedCase = words.filter((value) => value !== value.toUpperCase()).length * 2 >= words.length;
     const headed = values.some((value, index) => /\p{L}/u.test(value) && !/[\d,]/u.test(value) &&
-      (sizes[index] >= typicalSize * 1.08 ||
-        (value === value.toUpperCase() && mixedCase && isSectionTitle(value)) ||
-        (bolds[index] && boldMinority && isSectionHeader(value))));
+      (sizes[index] >= typicalSize * 1.08 || (bolds[index] && boldMinority && isSectionHeader(value))));
     const dated = !besideBullet && !headed && values.filter(hasDate).length >= values.length * 0.4;
     const rowValues = sharedRows >= rightLines.size * 0.6 && (dated || widths[Math.floor(widths.length / 2)] < pageWidth * 0.2);
     if (rowValues && (flushRight || longestRun <= 2 || dated)) continue;
