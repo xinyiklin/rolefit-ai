@@ -89,7 +89,12 @@ const el = (tag, options, children) => new FakeElement(tag, options, children);
 function installPage(url, title, body) {
   const parsed = new URL(url);
   globalThis.location = { hostname: parsed.hostname, pathname: parsed.pathname, origin: parsed.origin, href: parsed.href };
-  globalThis.document = { title, body, querySelector: (selector) => body.querySelector(selector) };
+  globalThis.document = {
+    title,
+    body,
+    querySelector: (selector) => body.querySelector(selector),
+    querySelectorAll: (selector) => body.querySelectorAll(selector)
+  };
 }
 
 // Like the live page, a toggle applies after the click returns and renders a

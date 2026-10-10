@@ -101,7 +101,14 @@ export function extractPageData() {
     return location.pathname.match(/^\/(?:jobs|job-search)\/(\d+)\/?$/)?.[1] ?? "";
   }
 
+  // Frame addresses let the server read a posting framed from a job board.
+  // Only a same-origin frame's text is readable here; another origin's
+  // contentDocument is null.
   function extractVisiblePage() {
+    const frames = [...document.querySelectorAll("iframe")];
+    const frameUrls = [...new Set(frames.map((frame) => frame.src)
+      .filter((src) => /^https?:\/\//i.test(src) && src.length <= 2000))].slice(0, 8);
+    const page = (text) => ({ text, url: location.href, title: document.title, frameUrls });
     const selectors = [
       "#jobDescriptionText",
       ".jobs-description",
@@ -112,10 +119,13 @@ export function extractPageData() {
     for (const selector of selectors) {
       const node = document.querySelector(selector);
       if (node && node.innerText && node.innerText.trim().length > 100) {
-        return { text: node.innerText.trim(), url: location.href, title: document.title };
+        return page(node.innerText.trim());
       }
     }
-    return { text: document.body.innerText || "", url: location.href, title: document.title };
+    const frameText = frames
+      .map((frame) => frame.contentDocument?.body?.innerText?.trim() ?? "")
+      .filter((text) => text.length > 100);
+    return page([document.body.innerText || "", ...frameText].join("\n\n"));
   }
 
   // Signed-in Handshake shortens the description behind a toggle and follows
@@ -285,7 +295,12 @@ export async function analyzePosting(apiBase, pageData) {
     response = await fetch(`${apiBase}/api/extension/analyze`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: pageData.text, url: pageData.url, pageTitle: pageData.title }),
+      body: JSON.stringify({
+        text: pageData.text,
+        url: pageData.url,
+        pageTitle: pageData.title,
+        frameUrls: pageData.frameUrls
+      }),
       signal: timeoutSignal(ANALYZE_TIMEOUT_MS)
     });
   } catch (error) {
@@ -311,8 +326,8 @@ export async function analyzePosting(apiBase, pageData) {
 
 /**
  * Queue the posting for one fresh app tab. The body carries only the captured
- * text, its URL, and the claim token that routes it to that tab; the app owns
- * AI-backed job analysis and stops on Prepare.
+ * text, its URL, the page's frame addresses, and the claim token that routes
+ * it to that tab; the app owns AI-backed job analysis and stops on Prepare.
  */
 export async function importPosting(apiBase, pageData, claimToken) {
   let response;
@@ -320,7 +335,7 @@ export async function importPosting(apiBase, pageData, claimToken) {
     response = await fetch(`${apiBase}/api/extension/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ text: pageData.text, url: pageData.url, claimToken }),
+      body: JSON.stringify({ text: pageData.text, url: pageData.url, frameUrls: pageData.frameUrls, claimToken }),
       signal: timeoutSignal(IMPORT_TIMEOUT_MS)
     });
   } catch (error) {

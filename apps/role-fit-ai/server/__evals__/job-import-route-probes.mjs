@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { Readable } from "node:stream";
 
-import { handleImportJob, resolveImportedJobText } from "../jobImport.ts";
+import { cleanFrameUrls, handleImportJob, resolveImportedJobText } from "../jobImport.ts";
 
 const PUBLIC_IP = "93.184.216.34";
 const PRIVATE_IP = "10.0.0.5";
@@ -506,6 +506,111 @@ await probe("Workable path components are validated before building an API URL",
   assert(!calls.some((href) => href.includes("/api/v2/")));
 });
 
+// --- Microsoft Careers (Eightfold) --------------------------------------------
+const MS_ID = "1970393550000001";
+const MS_URL = `https://apply.careers.microsoft.com/careers/job/${MS_ID}`;
+const MS_API = `https://apply.careers.microsoft.com/api/pcsx/position_details?position_id=${MS_ID}`;
+const msPosition = (extra = {}) => ({
+  status: 200,
+  data: {
+    id: Number(MS_ID),
+    name: "Software Engineer II",
+    locations: ["United States, Washington, Redmond", "United States, Washington, Redmond"],
+    jobDescription: `<b>Overview</b>${jdHtml("Software Engineer II")}`,
+    ...extra
+  }
+});
+const msPage = page({
+  head: ldScript(posting({ url: MS_URL, description: "<p>Short summary of the role only.</p>".repeat(8) })),
+  body: marketing
+});
+
+await probe("a Microsoft Careers link imports the full position, not the page summary", async () => {
+  for (const url of [MS_URL, `${MS_URL}/?src=JB-10000`, `https://apply.careers.microsoft.com/careers?pid=${MS_ID}&domain=microsoft.com`]) {
+    const { deps, calls } = transport({ [MS_API]: { status: 200, body: JSON.stringify(msPosition()) }, [MS_URL]: { status: 200, body: msPage } });
+    const result = await importUrl(url, deps);
+    ok(result, /Role: Software Engineer II\nLocation: United States, Washington, Redmond\n/);
+    assert.match(result.text, /Responsibilities[\s\S]*Qualifications/);
+    assert.doesNotMatch(result.text, /Short summary/);
+    assert.deepEqual(calls, [MS_API], "only the position details are fetched");
+  }
+});
+
+await probe("missing, mismatched, and unreadable Microsoft positions fail; other errors report status", async () => {
+  for (const route of [
+    { status: 404, body: JSON.stringify({ status: 404, error: { message: "Position not found" }, data: {} }) },
+    { status: 200, body: JSON.stringify(msPosition({ id: 1970393550000002 })) },
+    { status: 200, body: JSON.stringify(msPosition({ jobDescription: "<p>Apply now.</p>" })) },
+    { status: 200, body: "not json" }
+  ]) {
+    const { deps } = transport({ [MS_API]: route, [MS_URL]: { status: 200, body: msPage } });
+    fails(await importUrl(MS_URL, deps), /Could not find this job's description/);
+  }
+  const { deps } = transport({ [MS_API]: { status: 503, body: "" } });
+  fails(await importUrl(MS_URL, deps), /HTTP 503/);
+});
+
+await probe("other Microsoft paths stay on the generic page path", async () => {
+  const url = "https://apply.careers.microsoft.com/careers/job/12x34";
+  const { deps, calls } = transport({ [url]: { status: 200, body: page({ body: `<h1>Engineer</h1>${jdHtml("Engineer")}` }) } });
+  ok(await importUrl(url, deps), /Responsibilities/);
+  assert(!calls.some((href) => href.includes("/api/pcsx/")));
+});
+
+// --- Rippling ----------------------------------------------------------------
+const RIP_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+const RIP_API = `https://api.rippling.com/platform/api/ats/v1/board/acme-co/jobs/${RIP_ID}`;
+const RIP_CAREERS = "http://www.acme.example/careers/open-roles";
+const ripplingJob = (extra = {}) => ({
+  uuid: RIP_ID,
+  name: "Backend Engineer",
+  workLocations: ["Seattle, WA", "San Francisco, CA"],
+  description: { company: "<p>Acme builds payroll tools.</p>", role: jdHtml("Backend Engineer") },
+  ...extra
+});
+
+await probe("a Rippling posting imports from its board API in every link form", async () => {
+  for (const url of [
+    `https://ats.rippling.com/acme-co/jobs/${RIP_ID}`,
+    `https://ats.rippling.com/en-GB/acme-co/jobs/${RIP_ID}`,
+    `https://ats.rippling.com/acme-co/jobs/${RIP_ID.toUpperCase()}/`,
+    `https://ats.rippling.com/acme-co/jobs/${RIP_ID}?jobSite=LinkedIn`
+  ]) {
+    const { deps, calls } = transport({ [RIP_API]: { status: 200, body: JSON.stringify(ripplingJob()) } });
+    const result = await importUrl(url, deps);
+    ok(result, /Role: Backend Engineer\nLocation: Seattle, WA; San Francisco, CA\n/);
+    assert.match(result.text, /Responsibilities[\s\S]*About\nAcme builds payroll tools/);
+    assert.deepEqual(calls, [RIP_API], `${url} reads only the board API`);
+  }
+});
+
+await probe("a closed Rippling posting fails instead of importing the careers page", async () => {
+  const url = `https://ats.rippling.com/acme-co/jobs/${RIP_ID}`;
+  const { deps, calls } = transport({
+    [RIP_API]: { status: 404, body: "" },
+    [url]: { status: 308, headers: { location: RIP_CAREERS } },
+    [RIP_CAREERS]: { status: 200, body: page({ body: `<h1>Careers at Acme</h1>${marketing}` }) }
+  });
+  fails(await importUrl(url, deps), /Could not find this job's description/);
+  assert.deepEqual(calls, [RIP_API]);
+  for (const job of [ripplingJob({ uuid: "ffffffff-4e5f-4a6b-8c7d-9e0f1a2b3c4d" }), ripplingJob({ description: { role: "" } })]) {
+    const mismatch = transport({ [RIP_API]: { status: 200, body: JSON.stringify(job) } });
+    fails(await importUrl(url, mismatch.deps), /Could not find/);
+  }
+});
+
+await probe("Rippling path components are validated before building an API URL", async () => {
+  for (const url of [
+    `https://ats.rippling.com/acme%2F..%2Fadmin/jobs/${RIP_ID}`,
+    "https://ats.rippling.com/acme-co/jobs/not-a-uuid",
+    "https://ats.rippling.com/acme-co/jobs"
+  ]) {
+    const { deps, calls } = transport({});
+    fails(await importUrl(url, deps), /HTTP 404/);
+    assert(!calls.some((href) => href.includes("api.rippling.com")), url);
+  }
+});
+
 // --- UKG / UltiPro -----------------------------------------------------------
 const OPP_ID = "0c1d2e3f-4a5b-4c6d-8e7f-9a0b1c2d3e4f";
 const UKG_URL = `https://recruiting2.ultipro.com/ACME1038/JobBoard/5a1e2b3c-4d5e-4f60-8a71-b2c3d4e5f601/OpportunityDetail?opportunityId=${OPP_ID}&source=feed`;
@@ -660,6 +765,75 @@ await probe("extension enrichment resolves recognized sources and keeps captured
 
   const blocked = transport({ [ICIMS_URL]: { status: 200, body: icimsFrame(ICIMS_FRAME) }, [ICIMS_FRAME]: { status: 302, headers: { location: "http://10.0.0.1/" } } });
   assert.equal(await resolveImportedJobText(captured, ICIMS_URL, blocked.deps), captured);
+});
+
+// --- Embedded job-board frames -------------------------------------------------
+const COMPANY_PAGE = "https://www.brand.example/careers/backend-engineer";
+const FRAME_GH = GH_EMBED("brandco", "5550006006");
+const FRAME_RIP = `https://ats.rippling.com/acme-co/jobs/${RIP_ID}`;
+const companyRoute = { [COMPANY_PAGE]: { status: 200, body: page({ body: marketing }) } };
+const captured = "Captured company page text around an embedded application frame.";
+
+await probe("one recognized job-board frame resolves an unrecognized page's posting", async () => {
+  const gh = transport({ ...companyRoute, [FRAME_GH]: { status: 200, body: ghJob } });
+  // The same posting framed under two spellings is one candidate, not ambiguity.
+  const frames = ["https://www.youtube-nocookie.com/embed/abc", FRAME_GH, "https://boards.greenhouse.io/embed/job_app?token=5550006006&for=brandco"];
+  assert.match(await resolveImportedJobText(captured, COMPANY_PAGE, gh.deps, frames), /Role: Software Engineer I/);
+  assert(!gh.calls.some((href) => href.includes("youtube")), "an unrecognized frame is never fetched");
+
+  const rip = transport({ ...companyRoute, [RIP_API]: { status: 200, body: JSON.stringify(ripplingJob()) } });
+  assert.match(await resolveImportedJobText(captured, COMPANY_PAGE, rip.deps, [FRAME_RIP]), /Role: Backend Engineer/);
+
+  const leverFrame = "https://jobs.lever.co/brandco/0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
+  const lever = transport({ ...companyRoute, [leverFrame]: { status: 200, body: page({ body: `<h2>Data Engineer</h2>${jdHtml("Data Engineer")}` }) } });
+  assert.match(await resolveImportedJobText(captured, COMPANY_PAGE, lever.deps, [leverFrame]), /Data Engineer[\s\S]*Responsibilities/);
+});
+
+await probe("ambiguous, unrecognized, unsafe, or failing frames keep the captured text", async () => {
+  const cases = [
+    [[FRAME_GH, FRAME_RIP], { [FRAME_GH]: { status: 200, body: ghJob }, [RIP_API]: { status: 200, body: JSON.stringify(ripplingJob()) } }],
+    [["https://widgets.example/chat", "https://www.brand.example/apply?gh_jid=5550006006"], {}],
+    [["http://127.0.0.1/jobs/1", "javascript:alert(1)", "not a url", 42, "https://jobs.example:8443/jobs/1"], {}],
+    [[FRAME_RIP], { [RIP_API]: { status: 404, body: "" } }],
+    [[GH_EMBED("brandco", "5550007007")], { [GH_EMBED("brandco", "5550007007")]: { status: 503, body: "" } }]
+  ];
+  for (const [frames, routes] of cases) {
+    const { deps, calls } = transport({ ...companyRoute, ...routes });
+    assert.equal(await resolveImportedJobText(captured, COMPANY_PAGE, deps, frames), captured, JSON.stringify(frames));
+    if (!Object.keys(routes).length) {
+      assert.deepEqual(calls.filter((href) => href !== COMPANY_PAGE), [], "nothing beyond the page is fetched");
+    }
+  }
+});
+
+await probe("extension enrichment resolves Microsoft and Rippling and keeps the capture when they fail", async () => {
+  const ms = transport({ [MS_API]: { status: 200, body: JSON.stringify(msPosition()) } });
+  assert.match(await resolveImportedJobText(captured, MS_URL, ms.deps), /Role: Software Engineer II/);
+  const rip = transport({ [RIP_API]: { status: 200, body: JSON.stringify(ripplingJob()) } });
+  assert.match(await resolveImportedJobText(captured, FRAME_RIP, rip.deps), /Role: Backend Engineer/);
+  for (const [url, api, status] of [[MS_URL, MS_API, 503], [MS_URL, MS_API, 404], [FRAME_RIP, RIP_API, 503], [FRAME_RIP, RIP_API, 404]]) {
+    const { deps } = transport({ [api]: { status, body: "" } });
+    assert.equal(await resolveImportedJobText(captured, url, deps), captured, `${url} ${status}`);
+  }
+});
+
+await probe("a recognized page URL ignores its frames", async () => {
+  const url = "https://job-boards.greenhouse.io/acmeco/jobs/5550001001";
+  const { deps, calls } = transport({ [GH_EMBED("acmeco", "5550001001")]: { status: 200, body: ghJob } });
+  assert.match(await resolveImportedJobText(captured, url, deps, [FRAME_RIP]), /Role: Software Engineer I/);
+  assert(!calls.some((href) => href.includes("rippling")));
+
+  const workday = "https://acme.wd5.myworkdayjobs.com/External/job/Remote/Engineer_R100";
+  const miss = transport({ [RIP_API]: { status: 200, body: JSON.stringify(ripplingJob()) } });
+  assert.equal(await resolveImportedJobText(captured, workday, miss.deps, [FRAME_RIP]), captured, "a Workday CXS miss keeps the capture");
+  assert(!miss.calls.some((href) => href.includes("rippling")));
+});
+
+await probe("frame URL input is bounded to eight strings of at most 2,000 characters", async () => {
+  assert.deepEqual(cleanFrameUrls(undefined), []);
+  assert.deepEqual(cleanFrameUrls("https://a.example/"), []);
+  assert.deepEqual(cleanFrameUrls(["https://a.example/", 7, null, `https://b.example/${"x".repeat(2_000)}`]), ["https://a.example/"]);
+  assert.equal(cleanFrameUrls(Array.from({ length: 20 }, (_, i) => `https://f${i}.example/`)).length, 8);
 });
 
 if (failures) {

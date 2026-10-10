@@ -498,6 +498,27 @@ export function workablePostingText(value: unknown, shortcode: string): string {
   return postingText([["Role", value.title], ["Location", location]], body);
 }
 
+function stringList(value: unknown): string {
+  return Array.isArray(value) ? [...new Set(value.filter((item) => typeof item === "string" && item))].join("; ") : "";
+}
+
+export function eightfoldPositionText(value: unknown, positionId: string): string {
+  const data = isRecord(value) ? value.data : undefined;
+  if (!isRecord(data) || String(data.id ?? "") !== positionId || !readableBody(data.jobDescription)) return "";
+  return postingText(
+    [["Role", data.name], ["Location", stringList(data.locations) || data.location]],
+    htmlToText(data.jobDescription)
+  );
+}
+
+export function ripplingJobText(value: unknown, jobId: string): string {
+  if (!isRecord(value) || String(value.uuid ?? "").toLowerCase() !== jobId) return "";
+  const description = isRecord(value.description) ? value.description : {};
+  if (!readableBody(description.role)) return "";
+  const body = sections([["", description.role], ["About", description.company]]);
+  return postingText([["Role", value.name], ["Location", stringList(value.workLocations)]], body);
+}
+
 export function jobviteMissingJob(html: string): boolean {
   const source = String(html || "");
   return /class=["'][^"']*\bjv-page-error\b/i.test(source) &&

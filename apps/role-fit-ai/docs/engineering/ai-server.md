@@ -267,13 +267,19 @@ owns:
   board URLs and branded wrappers that expose a numeric `gh_jid` plus a
   validated board slug in their HTML, Oracle candidate-experience requisition
   details, the iCIMS job frame, Dayforce page data, Workable's public posting
-  API, UKG opportunity data, LinkedIn visible job body + criteria rows,
+  API, UKG opportunity data, Microsoft Careers' public Eightfold position
+  details, Rippling's public job board API (never the posting page, which
+  redirects a closed posting to a careers page), LinkedIn visible job body + criteria rows,
   otherwise generic HTML→text, replaced by a bound schema.org JobPosting when
   that text is unreadable or lacks the posting — behind SSRF
   guards that re-validate the host and resolved IP on every redirect hop
   and reject private / loopback / link-local targets. A recognized source
   whose selected job is missing fails with paste/extension guidance instead
-  of importing a board, login, or careers page. Job-analysis calls use
+  of importing a board, login, or careers page. Extension enrichment
+  (`resolveImportedJobText`) may resolve an unrecognized page through its
+  captured `frameUrls`. That happens only when exactly one frame names a posting
+  on a recognized board (or a Lever or Jobvite posting); unrecognized frames
+  are never fetched. Job-analysis calls use
   `/api/job-analysis` (below); the deterministic `src/lib/jobExtract.ts` engine
   supplies the local parsing baseline and the inspectable failure brief. RoleFit then splits the result
   into compact model-facing tailoring text and tracking-only facts (role
@@ -345,7 +351,8 @@ dispatch attempts but never an API key.
   existing `previousApp` shape (built from the best match) and adds
   `match: { level, confidence, evidence }` (evidence capped at 3 strings), or
   `previousApp`/`match` null when nothing matches. `import` (POST) accepts only
-  the posting `text`, `url`, and the bounded `claimToken`, stores the page text,
+  the posting `text`, `url`, the bounded `frameUrls`, and the bounded
+  `claimToken`, stores the page text,
   and returns immediately; a background server pass only
   RESOLVES the raw job text (e.g. fetching the full Workday, Ashby, or Greenhouse posting body) —
   it makes no AI call, because the server cannot read the receiving tab's

@@ -158,8 +158,8 @@ const importFlow = bridge.slice(importStart, importEnd);
 assert.ok(importStart >= 0 && importEnd > importStart, "import flow is bounded");
 assert.match(
   importFlow,
-  /body:\s*JSON\.stringify\(\{\s*text:\s*pageData\.text,\s*url:\s*pageData\.url,\s*claimToken\s*\}\)/,
-  "import wire body contains only text, url, and claimToken"
+  /body:\s*JSON\.stringify\(\{\s*text:\s*pageData\.text,\s*url:\s*pageData\.url,\s*frameUrls:\s*pageData\.frameUrls,\s*claimToken\s*\}\)/,
+  "import wire body contains only text, url, frameUrls, and claimToken"
 );
 assert.match(
   bridge,

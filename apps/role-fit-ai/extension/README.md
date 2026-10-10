@@ -112,7 +112,11 @@ the keyboard command is an ES module.
 
 1. On open, the popup injects a small extractor into the active tab
    (`document.body.innerText`, with site-specific selectors for LinkedIn,
-   Indeed, Lever, Greenhouse, and Workday tried first). On a signed-in
+   Indeed, Lever, Greenhouse, and Workday tried first). Without a selector
+   match, it adds the text of frames from the page's own site. It also
+   collects up to eight frame addresses, so the server can read a posting
+   framed from a recognized job board. Another site's frame content is never
+   read. On a signed-in
    Handshake posting (`/jobs/<id>` or the search view's selected job), it
    opens the shortened description, captures only that posting's sections
    (leaving out Similar Jobs and alumni profiles), and sends the posting's
@@ -135,7 +139,7 @@ the keyboard command is an ES module.
    requires substantial descriptions with aligned metadata plus strong lexical
    and ordered-phrase overlap; small amounts of shared boilerplate do not
    produce a warning.
-3. **Prepare in RoleFit** sends exactly `{text, url, claimToken}` to
+3. **Prepare in RoleFit** sends exactly `{text, url, frameUrls, claimToken}` to
    `POST /api/extension/import` and opens a fresh app tab with that short claim
    token. The server resolves the raw posting text in the background (for
    example, fetching the full description for a Greenhouse link), so it

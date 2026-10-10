@@ -3,7 +3,8 @@
 // HTTP outcomes; ./jobImportContent.ts owns HTML→text and exact-posting parsing,
 // and ./network.ts performs every public fetch behind its SSRF guards.
 // resolveImportedJobText is exported for the browser-extension routes, which
-// keep the captured page text whenever a recognized source cannot resolve.
+// keep the captured page text whenever a recognized source cannot resolve; an
+// unrecognized page may resolve through one embedded job-board frame instead.
 
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { FetchTimeoutError, readBody, sendJson } from "./http.ts";
@@ -19,6 +20,7 @@ import {
   ashbyPostingText,
   dayforceJobText,
   decodeEntities,
+  eightfoldPositionText,
   greenhouseEmbeddedJobText,
   htmlAttr,
   htmlToText,
@@ -29,6 +31,7 @@ import {
   linkedInJobText,
   oracleRequisitionText,
   pageShowsPosting,
+  ripplingJobText,
   ukgOpportunityText,
   workablePostingText
 } from "./jobImportContent.ts";
@@ -339,18 +342,54 @@ function ukgOpportunityId(u: URL): string {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id) ? id : "";
 }
 
-function workableTarget(u: URL): { apiUrl: URL; shortcode: string } | null {
+// --- Public posting APIs -----------------------------------------------------
+
+type ApiTarget = { apiUrl: URL; id: string };
+
+function workableTarget(u: URL): ApiTarget | null {
   if (u.hostname.toLowerCase() !== "apply.workable.com") return null;
   const [account = "", marker, shortcode = ""] = u.pathname.split("/").filter(Boolean);
   if (marker !== "j" || !/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(account) || !/^[a-z0-9]{6,20}$/i.test(shortcode)) return null;
-  return { apiUrl: new URL(`https://apply.workable.com/api/v2/accounts/${account}/jobs/${shortcode}`), shortcode };
+  return { apiUrl: new URL(`https://apply.workable.com/api/v2/accounts/${account}/jobs/${shortcode}`), id: shortcode };
 }
 
-async function resolveWorkable(fetchHtml: FetchHtml, target: { apiUrl: URL; shortcode: string }): Promise<SourceOutcome> {
+// Eightfold-hosted career sites whose page JobPosting data is truncated; their
+// public position details carry the full description.
+const EIGHTFOLD_HOSTS = new Set(["apply.careers.microsoft.com"]);
+
+function eightfoldTarget(u: URL): ApiTarget | null {
+  if (!EIGHTFOLD_HOSTS.has(u.hostname.toLowerCase())) return null;
+  const id = u.pathname.match(/^\/careers\/job\/(\d{1,20})\/?$/)?.[1] ??
+    (/^\/careers\/?$/.test(u.pathname) ? u.searchParams.get("pid") ?? "" : "");
+  if (!/^\d{1,20}$/.test(id)) return null;
+  const apiUrl = new URL(`https://${u.hostname.toLowerCase()}/api/pcsx/position_details`);
+  apiUrl.searchParams.set("position_id", id);
+  return { apiUrl, id };
+}
+
+// Rippling redirects a closed posting to the company's careers page, so the
+// posting page is never read; its public board API answers 404 instead.
+const RIPPLING_JOB_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function ripplingTarget(u: URL): ApiTarget | null {
+  if (u.hostname.toLowerCase() !== "ats.rippling.com") return null;
+  const parts = u.pathname.split("/").filter(Boolean);
+  if (/^[a-z]{2}(?:-[a-z]{2})?$/i.test(parts[0] ?? "") && parts[2] === "jobs") parts.shift();
+  const [board = "", marker, jobId = ""] = parts;
+  if (marker !== "jobs" || !/^[a-z0-9][a-z0-9_-]{0,80}$/i.test(board) || !RIPPLING_JOB_ID.test(jobId)) return null;
+  const id = jobId.toLowerCase();
+  return { apiUrl: new URL(`https://api.rippling.com/platform/api/ats/v1/board/${board}/jobs/${id}`), id };
+}
+
+async function resolveApiPosting(
+  fetchHtml: FetchHtml,
+  target: ApiTarget,
+  postingText: (value: unknown, id: string) => string
+): Promise<SourceOutcome> {
   const response = await fetchHtml(target.apiUrl, { Accept: "application/json" });
   if (!sourceOk(response)) return found("");
   try {
-    return found(workablePostingText(JSON.parse(await response.text()), target.shortcode));
+    return found(postingText(JSON.parse(await response.text()), target.id));
   } catch {
     return found("");
   }
@@ -375,7 +414,11 @@ async function resolveKnownSource(fetchHtml: FetchHtml, jobUrl: URL, loadPage: L
   if (greenhouseDirect) return found(await importFromGreenhouse(fetchHtml, greenhouseDirect));
 
   const workable = workableTarget(jobUrl);
-  if (workable) return resolveWorkable(fetchHtml, workable);
+  if (workable) return resolveApiPosting(fetchHtml, workable, workablePostingText);
+  const eightfold = eightfoldTarget(jobUrl);
+  if (eightfold) return resolveApiPosting(fetchHtml, eightfold, eightfoldPositionText);
+  const rippling = ripplingTarget(jobUrl);
+  if (rippling) return resolveApiPosting(fetchHtml, rippling, ripplingJobText);
 
   const oracleId = oracleJobId(jobUrl);
   const icimsId = icimsJobId(jobUrl);
@@ -421,10 +464,58 @@ function genericPageOutcome(jobUrl: URL, html: string): Outcome {
   return { text };
 }
 
+async function resolvePosting(fetchHtml: FetchHtml, jobUrl: URL): Promise<Outcome> {
+  const loadPage = pageLoader(fetchHtml, jobUrl);
+  const outcome = await resolveKnownSource(fetchHtml, jobUrl, loadPage);
+  if (outcome) return outcome;
+  const page = await loadPage();
+  return page.ok ? genericPageOutcome(jobUrl, page.html) : { httpStatus: page.status };
+}
+
+// --- Embedded job-board frames -----------------------------------------------
+
+export function cleanFrameUrls(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item.length <= 2_000).slice(0, 8);
+}
+
+// A frame counts only when its own URL names one posting on a board read
+// directly; page-evidence wrappers and unfamiliar frames are never fetched.
+function framePostingKey(u: URL): string {
+  const ashby = ashbyPostingApiTarget(u);
+  if (ashby) return `${ashby.apiUrl.href}#${ashby.jobId}`;
+  const direct = workdayCxsUrl(u) ?? greenhouseJobAppUrl(u) ??
+    (workableTarget(u) ?? eightfoldTarget(u) ?? ripplingTarget(u))?.apiUrl;
+  if (direct) return direct.href;
+  const pageId = oracleJobId(u) || icimsJobId(u) || dayforceJobId(u) || ukgOpportunityId(u);
+  if (pageId) return `${u.origin}${u.pathname}#${pageId}`;
+  const host = u.hostname.toLowerCase();
+  const generic = (/^jobs\.(?:eu\.)?lever\.co$/.test(host) && /^\/[a-z0-9._-]+\/[0-9a-f-]{36}\/?$/i.test(u.pathname)) ||
+    (host === "jobs.jobvite.com" && /^\/[a-z0-9_-]+\/job\/[a-z0-9]+\/?$/i.test(u.pathname));
+  return generic ? `${u.origin}${u.pathname}` : "";
+}
+
+// Two different postings in frames are ambiguous evidence, so neither is used.
+function soleFramePosting(frameUrls: readonly string[]): URL | null {
+  const postings = new Map<string, URL>();
+  for (const raw of frameUrls) {
+    let frame: URL;
+    try {
+      frame = new URL(raw);
+    } catch {
+      continue;
+    }
+    const key = isPublicHttpUrl(frame) ? framePostingKey(frame) : "";
+    if (key) postings.set(key, frame);
+  }
+  return postings.size === 1 ? [...postings.values()][0] : null;
+}
+
 export async function resolveImportedJobText(
   text: unknown,
   url: unknown,
-  deps: FetchPublicHtmlDeps = {}
+  deps: FetchPublicHtmlDeps = {},
+  frameUrls: readonly string[] = []
 ): Promise<string> {
   const fallbackText = String(text || "");
   let jobUrl: URL;
@@ -438,7 +529,12 @@ export async function resolveImportedJobText(
   const fetchHtml: FetchHtml = (target, headers = {}) => fetchPublicHtml(target, headers, deps);
   try {
     const outcome = await resolveKnownSource(fetchHtml, jobUrl, pageLoader(fetchHtml, jobUrl));
-    return outcome && "text" in outcome ? outcome.text : fallbackText;
+    if (outcome) return "text" in outcome ? outcome.text : fallbackText;
+    // A Workday CXS miss is recognized but has no outcome; its frames still don't count.
+    const frame = framePostingKey(jobUrl) ? null : soleFramePosting(frameUrls);
+    if (!frame) return fallbackText;
+    const framed = await resolvePosting(fetchHtml, frame);
+    return "text" in framed ? framed.text : fallbackText;
   } catch {
     return fallbackText;
   }
@@ -470,12 +566,7 @@ export async function handleImportJob(
 
   const fetchHtml: FetchHtml = (target, headers = {}) => fetchPublicHtml(target, headers, deps);
   try {
-    const loadPage = pageLoader(fetchHtml, jobUrl);
-    let outcome = await resolveKnownSource(fetchHtml, jobUrl, loadPage);
-    if (!outcome) {
-      const page = await loadPage();
-      outcome = page.ok ? genericPageOutcome(jobUrl, page.html) : { httpStatus: page.status };
-    }
+    const outcome = await resolvePosting(fetchHtml, jobUrl);
     if ("text" in outcome) {
       sendJson(res, 200, { text: outcome.text.slice(0, 16_000) });
     } else if ("missing" in outcome) {

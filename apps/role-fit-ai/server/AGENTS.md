@@ -19,7 +19,7 @@ for provider, prompt, sanitizer, and review work.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
 - `jobImport.ts` owns recognized job-source targets, fetch sequencing, caches,
   and import outcomes; `jobImportContent.ts` owns the pure HTML→text converter
-  and exact-posting parsers. Both stay near 500 lines by design: splitting
+  and exact-posting parsers. Both stay near 500–600 lines by design: splitting
   per source would scatter one shared selection contract.
 - `workspace.ts` owns resume variants/history plus the serialized atomic
   storage primitives shared with `coverLetterWorkspace.ts`. Keep strict
