@@ -70,6 +70,7 @@ type ResumeTabProps = {
   resumeReady: boolean;
   jobReady: boolean;
   resumePolishProviderReady: boolean;
+  resumePolishProviderMessage: string;
   isPolishStarting: boolean;
   isPolishing: boolean;
   polishProgress: PolishProgressState;
@@ -119,6 +120,7 @@ export function ResumeTab({
   resumeReady,
   jobReady,
   resumePolishProviderReady,
+  resumePolishProviderMessage,
   isPolishStarting,
   isPolishing,
   polishProgress,
@@ -260,6 +262,7 @@ export function ResumeTab({
               resumeReady={resumeReady}
               jobReady={jobReady}
               resumePolishProviderReady={resumePolishProviderReady}
+              resumePolishProviderMessage={resumePolishProviderMessage}
               selectedSectionCount={selectedSectionCount}
               polishSectionCount={polishSectionCount}
               isPolishing={isPolishing}

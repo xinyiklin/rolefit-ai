@@ -60,6 +60,7 @@ type CoverLetterTabProps = {
   resumeBlocker: string;
   jobReady: boolean;
   providerReady: boolean;
+  providerBlocker: string;
   jobTarget?: { role?: string; company?: string };
   preflight: CoverLetterPreflight;
   proposal: CoverLetterProposal | null;
@@ -100,6 +101,7 @@ export function CoverLetterTab({
   resumeBlocker,
   jobReady,
   providerReady,
+  providerBlocker,
   jobTarget,
   preflight,
   proposal,
@@ -202,6 +204,7 @@ export function CoverLetterTab({
             resumeBlocker={resumeBlocker}
             jobReady={jobReady}
             providerReady={providerReady}
+            providerBlocker={providerBlocker}
             slotAnswers={slotAnswers}
             onDetailChange={onDetailChange}
             onSlotAnswerChange={onSlotAnswerChange}

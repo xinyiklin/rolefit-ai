@@ -1242,7 +1242,7 @@ function App() {
   // Resume Polish uses, while `jobUrl` is optional metadata saved with the
   // application for pipeline tracking only — it is never sent to the model.
   const resumeHasContent = Boolean((currentResumeText || resumeText).trim().length > 0);
-  const resumeIsStarterSample = resumeOrigin === "starter" && applicationOfRecordId === null;
+  const resumeIsStarterSample = resumeOrigin === "starter";
   const resumeReady = Boolean(
     resumeHasContent && !resumeIsStarterSample
   );
@@ -3183,6 +3183,7 @@ function App() {
               resumeReady={resumeReady}
               jobReady={jobReady}
               resumePolishProviderReady={resumePolishProviderReady}
+              resumePolishProviderMessage={resumePolishProviderMessage}
               isPolishStarting={isPolishStarting}
               isPolishing={isPolishing}
               polishProgress={polishProgress}
@@ -3421,6 +3422,7 @@ function App() {
               resumeBlocker={resumeImportBlocker}
               jobReady={jobReady}
               providerReady={coverProviderReady}
+              providerBlocker={coverProviderMessage}
               jobTarget={materialsJobTarget}
               preflight={coverLetterPreflight}
               proposal={coverLetterProposal}

@@ -21,6 +21,7 @@ type ResumeWorkflowRailProps = {
   resumeReady: boolean;
   jobReady: boolean;
   resumePolishProviderReady: boolean;
+  resumePolishProviderMessage?: string;
   selectedSectionCount: number;
   polishSectionCount: number;
   isPolishing: boolean;
@@ -44,6 +45,7 @@ export function ResumeWorkflowRail({
   resumeReady,
   jobReady,
   resumePolishProviderReady,
+  resumePolishProviderMessage,
   selectedSectionCount,
   polishSectionCount,
   isPolishing,
@@ -91,7 +93,7 @@ export function ResumeWorkflowRail({
   const checks = [
     readiness("Resume", resumeReady, "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
-    readiness("Polish provider", resumePolishProviderReady, "Check AI settings"),
+    readiness("Polish provider", resumePolishProviderReady, resumePolishProviderMessage || "Check AI settings"),
     readiness(
       "Sections selected",
       polishSectionCount > 0,

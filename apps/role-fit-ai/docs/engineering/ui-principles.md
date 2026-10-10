@@ -224,7 +224,8 @@ Tailor/Review/Both selector: every entry point dispatches one Resume Polish
 proposal request and readiness checks that one provider. A rail's readiness rows hold gates only: what the
 workflow does with them belongs to the description, and a row that is always
 ready is not a check. The two rails share their gate phrasing (`Add your
-resume`, `Prepare the job`, `Check AI settings`) and their decision verbs
+resume`, `Prepare the job`, and the Polish provider's own recovery such as
+`Add <provider> in RoleFit Companion.`, else `Check AI settings`) and their decision verbs
 (`Accept` / `Discard` a proposal) while their content stays document-specific; a
 row never repeats a reason that the field directly below it already carries.
 

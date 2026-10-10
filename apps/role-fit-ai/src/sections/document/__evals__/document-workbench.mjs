@@ -441,6 +441,21 @@ assert.match(
   /readiness\("Resume", resumeReady, resumeBlocker \|\| "Add your resume"\)/,
   "the cover rail shares the phrase and names an import review instead when one blocks"
 );
+assert.match(
+  resumeRail,
+  /readiness\("Polish provider", resumePolishProviderReady, resumePolishProviderMessage \|\| "Check AI settings"\)/,
+  "the resume rail names the provider's recovery, such as adding a missing provider"
+);
+assert.match(
+  coverRail,
+  /readiness\("Polish provider", providerReady, providerBlocker \|\| "Check AI settings"\)/,
+  "the cover rail names the provider's recovery the same way"
+);
+assert.match(
+  readFileSync(sourceUrl("../../../App.tsx"), "utf8"),
+  /resumePolishProviderMessage=\{resumePolishProviderMessage\}[\s\S]*providerBlocker=\{coverProviderMessage\}/,
+  "App hands each rail its stage's recovery message"
+);
 assert.doesNotMatch(
   resumeRail,
   /label: "Workflow", state: "ready"/,

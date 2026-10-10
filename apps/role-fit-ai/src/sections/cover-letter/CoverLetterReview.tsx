@@ -38,6 +38,7 @@ type CoverLetterReviewProps = {
   resumeBlocker?: string;
   jobReady: boolean;
   providerReady: boolean;
+  providerBlocker?: string;
   slotAnswers: Record<string, string>;
   onDetailChange: (key: CoverLetterDetailKey, value: string) => void;
   onSlotAnswerChange: (slotId: string, value: string) => void;
@@ -108,6 +109,7 @@ export function CoverLetterReview({
   resumeBlocker,
   jobReady,
   providerReady,
+  providerBlocker,
   slotAnswers,
   onDetailChange,
   onSlotAnswerChange,
@@ -132,7 +134,7 @@ export function CoverLetterReview({
   const checks = [
     readiness("Resume", resumeReady, resumeBlocker || "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
-    readiness("Polish provider", providerReady, "Check AI settings"),
+    readiness("Polish provider", providerReady, providerBlocker || "Check AI settings"),
     readiness("Template details", preflight.canTailor, detailsBlocked)
   ];
 
