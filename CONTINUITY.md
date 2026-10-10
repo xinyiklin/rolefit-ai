@@ -394,8 +394,9 @@ and lives in the app ledger.
 
 ### Desktop companion, distribution, and release/deploy state
 
-Current: RoleFit 0.11.0 preview (`rolefit-preview-v0.11.0-beta.1` on `0a37415`),
-extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
+Current: RoleFit 0.11.1 preview (`rolefit-preview-v0.11.1-beta.1` on `aa202ba`),
+extension 1.3.0, desktop bridge API 13 (see 2026-10-10). 0.12.0 is prepared,
+not yet released.
 
 - 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
@@ -570,7 +571,20 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
     `test:rolefit:desktop:packaged` (unpacked win32-x64) passed, and
     `test:desktop:release` passed 14/14. macOS packaging runs only in the
     release workflow.
-  - Release receipt: PENDING (rides in the next PR).
+  - [TOOL] Release receipt: the annotated tag `rolefit-preview-v0.11.1-beta.1`
+    is on `aa202ba`. Run 38073499741 succeeded and published the prerelease
+    at 2026-10-10T18:00:12Z, with arm64/x64 `.dmg`/`.zip`, the Windows x64
+    `.exe`, and `SHA256SUMS.txt`. The product site, Typeset, and Document
+    workflow runs on `aa202ba` succeeded.
+- [USER+CODE] **0.12.0 prepared** (minor: #212's Microsoft Careers, Rippling,
+  and embedded-frame capabilities; the user approved the release brief and
+  plan, including the tag push). Notes
+  `apps/role-fit-ai/docs/releases/0.12.0-beta.1.md`. Extension 1.3.0 → 1.4.0,
+  for frame capture and the `frameUrls` field. Desktop bridge API 13 is
+  unchanged.
+  - [USER] The installed-extension check in Chrome and Firefox was WAIVED. The
+    release notes say frame capture is not hand-tested.
+  - Preflight and release receipt: PENDING.
 
 ## 2026-10-09
 
