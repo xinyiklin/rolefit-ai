@@ -836,8 +836,9 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       limits
     - the four Electron advisories
     - rollback: after any 0.11.0 launch, 0.10.0 and earlier refuse to save
-      settings and refuse 0.11.0 backups (#205's `resumeImport*` keys), and
-      refuse a tracker over 500 or an oversized backup; all fail closed
+      settings, leave preferences out of their own backups, and refuse 0.11.0
+      backups (#205's `resumeImport*` keys); they also refuse a tracker over
+      500 or an oversized backup. None changes the workspace.
     - known issues: packaged backup at the new maximum is unverified; PDF
       import accuracy on real layouts and live interpretation are unmeasured,
       and the two accepted layout residuals
