@@ -181,7 +181,8 @@ try {
   assert.match(hookCall, /[{,]\s*jobReady\s*[,}]/, "App passes jobReady to the hook");
   assert.match(hookCall, /[{,]\s*resumeReady\s*[,}]/, "App passes resumeReady to the hook");
   assert.match(appSource, /<AnswersTab[^>]*?\bresumeReady=\{resumeReady\}/, "the tab reads the same resumeReady");
-  assert.match(appSource, /const resumeReady = Boolean\(\s*resumeHasContent && !resumeIsStarterSample\s*\);/, "resumeReady excludes the unowned Starter");
+  assert.match(appSource, /const resumeReady = Boolean\(\s*resumeHasContent && !resumeIsStarterSample\s*\);/, "resumeReady excludes the Starter");
+  assert.match(appSource, /const resumeIsStarterSample = resumeOrigin === "starter";/, "an application of record does not make the Starter ready");
   assert.match(appSource, /<AnswersTab[^>]*?\bjobReady=\{jobReady\}/, "the tab reads the same jobReady");
   assert.match(appSource, /const jobReady = jobPrepared;/);
   assert.match(appSource, /stageKey="application-answers"[^>]*?onRetry=\{retryAnswers\}/, "the dock's Retry is the controller's");

@@ -355,6 +355,21 @@ function harness({ state, candidates = [], hydrate, adoptSucceeds = true, onAdop
     "the starter can never become a current selection"
   );
   check(
+    resumeIsApplicantOwned(baseState({ resumeOrigin: "starter", currentText: STARTER, applicationOwned: true })),
+    false,
+    "an application of record does not make the starter the applicant's"
+  );
+  const owned = harness({ state: baseState({ resumeOrigin: "starter", currentText: STARTER, applicationOwned: true }) });
+  check(
+    (await resolvePreparedResumeSelection(owned.deps)).blocker,
+    "starter-only",
+    "an application-owned starter still resolves no resume"
+  );
+  checkOk(
+    resumeIsApplicantOwned(baseState({ resumeOrigin: "blank", currentText: "", applicationOwned: true })),
+    "a restored application without a resume keeps its ownership"
+  );
+  check(
     currentResumeSelection(baseState({ resumeOrigin: "blank", currentText: resumeText("Edited blank") })),
     null,
     "a blank origin remains neutral until the editor records a substantive authored transition"

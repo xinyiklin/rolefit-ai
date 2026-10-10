@@ -192,6 +192,7 @@ check("sentence ending etc abbreviation", () => assert.equal(countAnswerText("I 
 check("mid-sentence etc abbreviation", () => assert.equal(countAnswerText("I tested APIs, queues, etc. with my team. The results helped.").sentences, 2));
 check("sentence ending acronym", () => assert.equal(countAnswerText("I worked in the U.S. I built services.").sentences, 2));
 check("apostrophes, hyphens, Unicode words", () => assert.equal(countAnswerText("I'm hands-on with café résumé.").words, 5));
+check("inner periods stay within one word", () => assert.equal(countAnswerText("I used Node.js in the U.S., e.g. v2.5 at example.com... then 1,500 users.").words, 13));
 check("UTF16 emoji and normalized line breaks", () => assert.equal(countAnswerText("A😀\r\nB").characters, 5));
 check("newline normalization", () => assert.equal(normalizeAnswerText(" A\r\nB\rC "), " A\nB\nC "));
 check("manual edits recalculate", () => { const constraints = extractAnswerConstraints("Max 2 words"); assert.equal(validateAnswerConstraints("I build", constraints).compliant, true); assert.equal(validateAnswerConstraints("I build reliable APIs", constraints).compliant, false); });

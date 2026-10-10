@@ -480,7 +480,9 @@ Fresh settings and **Reset all settings** use these recommendations:
 | Resume import | Claude Code CLI | Sonnet 5.5 | Low |
 
 Saved choices remain selected. Choosing a stage's recommended provider seeds
-its recommended model and effort; other providers use their catalog defaults.
+its recommended model and effort; other providers use their catalog defaults,
+except that Resume Polish on Claude Code CLI seeds Opus 5.5 High, the Claude
+setting benchmarked against GPT-6.1 Sol.
 An existing workspace without Final review settings initially copies Fit once.
 Final review retains the prior user-selected setting; it has no comparative
 benchmark winner. The [Answers evaluation](docs/engineering/testing.md#application-answers)

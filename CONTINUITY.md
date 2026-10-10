@@ -523,6 +523,37 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
   - [TOOL] Windows x64: with the fix, 3 of 3 cold runs and a warm run passed
     (about 32 s each). Independent review READY on the exact head; merged as
     #208 (`25e1531`).
+- [USER+CODE] **Stage 1 known-cause fixes** (the user approved the six-stage
+  plan's Stage 1 and kept GPT-5.5 until its removal; brief/plan gates
+  compressed into that approval).
+  - The bundled starter never counts as the applicant's resume, even once the
+    preparation owns a record: `resumeIsStarterSample` is `resumeOrigin ===
+    "starter"` (`App.tsx`) and `resumeIsApplicantOwned` rejects the starter
+    before the ownership exception (`lib/preparedResume.ts`); an
+    application-owned blank keeps its ownership.
+  - The Resume and Cover rails' Polish provider row shows the stage's recovery
+    message (for a missing provider "Add <provider> in RoleFit Companion.")
+    instead of a generic "Check AI settings", which stays the fallback.
+  - Switching Resume Polish to Claude CLI seeds Opus 5.5 high
+    (`STAGE_ALTERNATES` in `lib/stageSettings.ts`); other stages keep the
+    provider's catalog default.
+  - Answers word counts keep inner periods inside one word ("Node.js",
+    "U.S.", "example.com"), in `countAnswerText`
+    (`shared/applicationAnswersContract.ts`), which client and server share.
+  - [TOOL] `npm run check --workspace apps/role-fit-ai` exit 0 (builds,
+    desktop, offline 178/178); focused resolution (96/96), retry-gate,
+    workbench, stage-settings, and Answers probes (178) pass; reverting
+    `preparedResume.ts` fails the new resolution checks. Two independent
+    reviews: one NOT READY only for a misquoted recovery message in docs
+    (fixed), one READY with Low findings. Residual: sparse saved Resume Polish
+    settings without a model or effort now seed Opus/high fields; dotted
+    tokens count lower than `w+`-style form counters; a stale tab and an
+    updated server disagree on new-revision counts for dotted tokens until
+    reload. [TOOL] Browser QA on an isolated synthetic workspace (port 5183):
+    a blocked row's 65-character recovery message wraps to two lines under its
+    label without overflow in both rails at 1440 px and at 375 px; after Skip &
+    save job the owned preparation still shows "Starter template" and Answers
+    says "Add your resume first."; no console errors.
 
 ## 2026-10-09
 
@@ -983,8 +1014,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
   user's request the landing companion screenshot was retaken on macOS arm64
   (empty workspace, port 5181, 2x, 1800x1176), departing from
   `landing/AGENTS.md`'s synthetic-pack/spare-port rule as at 0.8.0.
-  - [CODE] Open (pre-existing; a known issue in the 0.9.1 notes):
-    `resumeIsStarterSample` requires `applicationOfRecordId === null`
+  - [CODE] Fixed 2026-10-10 (see that day). Was open (pre-existing; a known
+    issue in the 0.9.1 notes): `resumeIsStarterSample` requires `applicationOfRecordId === null`
     (`App.tsx`), so once the preparation owns a record, Open > Bundled starter
     makes `resumeReady` true and Answers, Polish, Apply readiness, and
     automatic-proposal inputs can treat the sample as the applicant's resume
@@ -1059,9 +1090,9 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
   - Residual: no duplicate resolution runs when a posting's first record is an
     answer-created Draft, and acknowledging that Draft replaces an earlier
     Link/Keep-separate decision; earlier conversations stay in memory for the
-    session; "Node.js" and "U.S." count as two words. UNCONFIRMED: live
-    generation through the installed companion and browser QA of the stage-menu
-    change.
+    session; "Node.js" and "U.S." counted as two words (fixed 2026-10-10).
+    UNCONFIRMED: live generation through the installed companion and browser
+    QA of the stage-menu change.
 - [USER+CODE] **Per-stage startup defaults** (`src/lib/stageSettings.ts`):
   Prepare/Fit Claude CLI Sonnet 5.5 low; Resume Polish and Cover Codex CLI
   GPT-6.1 Sol medium; Answers Claude CLI Opus 5.5 high; Final review Sonnet 5.5
@@ -1080,9 +1111,10 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
   - [USER] Deferred: a paired real-application rerun on the current prompt
     (about 20 applications, blinded Astra + Opus, sides swapped); the user is
     low on Codex usage.
-  - [CODE] Not done: a Claude-only user gets a generic "check AI settings"
-    Polish blocker instead of "add Codex"; switching Resume Polish to Claude CLI
-    seeds Sonnet 5.5 low rather than Opus 5.5 high.
+  - [CODE] Fixed 2026-10-10 (see that day). Was: a Claude-only user got a
+    generic "check AI settings" Polish blocker instead of "add Codex";
+    switching Resume Polish to Claude CLI seeded Sonnet 5.5 low rather than
+    Opus 5.5 high.
 - [USER+CODE] The Settings > Automation Fit toggle governs only automatic runs
   and the automatic Polish that depends on them; **Assess fit** / **Reassess
   fit** always run once a posting is prepared and never carry an automation

@@ -70,7 +70,8 @@ export function answerFactsWithinLimits(facts: readonly unknown[]): facts is str
 export function countAnswerText(value: string): AnswerCounts {
   const text = normalizeAnswerText(value);
   // Keep abbreviations and decimals inside their sentence. UTF-16 length mirrors
-  // HTML text-field limits; apostrophes and hyphens stay within one word.
+  // HTML text-field limits; apostrophes, hyphens, and inner periods ("Node.js",
+  // "U.S.") stay within one word.
   const sentenceText = text
     .replace(/\b(?:Mr|Mrs|Ms|Dr|Prof|Sr|Jr|St|vs|etc|e\.g|i\.e)\./gi, (match, offset: number, original: string) => {
       const endsSentence = /^etc\.$/i.test(match) && /^\s+["'“‘(]*\p{Lu}/u.test(original.slice(offset + match.length));
@@ -83,7 +84,7 @@ export function countAnswerText(value: string): AnswerCounts {
     .replace(/(?<=\d)\.(?=\d)/g, "\uE000")
     .replace(/\b([A-Z])\.(?=\s+[A-Z][a-z])/g, "$1\uE000");
   return {
-    words: text.match(/\p{N}+(?:[.,]\p{N}+)+|[\p{L}\p{N}]+(?:[’'\-‐‑][\p{L}\p{N}]+)*/gu)?.length ?? 0,
+    words: text.match(/\p{N}+(?:[.,]\p{N}+)+|[\p{L}\p{N}]+(?:[’'\-‐‑.][\p{L}\p{N}]+)*/gu)?.length ?? 0,
     characters: text.length,
     sentences: sentenceText.split(/[.!?]+(?:["'”’)]*)(?:\s+|$)|\n\s*\n/u).filter((part) => /[\p{L}\p{N}]/u.test(part)).length
   };

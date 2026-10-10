@@ -86,6 +86,16 @@ for (const stage of AI_STAGES) {
   const keys = stageSettingsKeys(stage);
   assert.deepEqual(seedStage(stage.id, { [keys.provider]: fresh[stage.id].provider }), fresh[stage.id], "explicitly choosing the recommended provider uses the stage recommendation");
 }
+assert.deepEqual(
+  seedStage("resume-polish", { resumePolishProvider: "claude-cli" }),
+  { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" },
+  "switching Resume Polish to Claude CLI seeds its benchmarked Opus 5.5 high alternative"
+);
+assert.deepEqual(
+  seedStage("cover-polish", { coverPolishProvider: "claude-cli" }),
+  { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
+  "a stage without an alternative seeds the provider's generic default"
+);
 
 const partialSettings = {
   resumePolishProvider: "openai",

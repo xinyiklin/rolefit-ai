@@ -160,10 +160,10 @@ export type PreparedResumeResolution = {
   blocker: PreparedResumeBlocker | null;
 };
 
-// A blank document speaks for nobody; the starter speaks for a sample person.
-// A restored application's resume is the applicant's own by definition.
+// A blank document speaks for nobody; the starter speaks for a sample person,
+// even after the preparation owns a record.
 export function resumeIsApplicantOwned(state: PreparedResumeState): boolean {
-  return state.applicationOwned || (state.resumeOrigin !== "starter" && state.resumeOrigin !== "blank");
+  return state.resumeOrigin !== "starter" && (state.applicationOwned || state.resumeOrigin !== "blank");
 }
 
 function documentIsReplaceable(state: PreparedResumeState): boolean {

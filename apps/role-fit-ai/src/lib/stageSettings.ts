@@ -15,6 +15,11 @@ const STAGE_DEFAULTS: Record<StageId, StageConfig> = {
   "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
 };
 
+// The benchmarked setting a stage seeds when it moves to this provider.
+const STAGE_ALTERNATES: Partial<Record<StageId, StageConfig>> = {
+  "resume-polish": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" }
+};
+
 export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig {
   if (stage === "application-review" && saved.applicationReviewProvider === undefined) return seedStage("fit-assessment", saved);
   const ownKeys = stageSettingsKeys(AI_STAGES.find((entry) => entry.id === stage)!);
@@ -22,9 +27,10 @@ export function seedStage(stage: StageId, saved: PersistedSettings): StageConfig
   const defaults = STAGE_DEFAULTS[stage];
   // Sparse saved model choices used Claude CLI before stage-specific defaults.
   const provider = (bag[ownKeys.provider] as AiProviderValue | undefined) ?? (bag[ownKeys.model] !== undefined ? "claude-cli" : defaults.provider);
-  const selectedModel = bag[ownKeys.model] ?? (provider === defaults.provider ? defaults.selectedModel : providerOptions.find((option) => option.value === provider)?.model) ?? defaults.selectedModel;
-  const defaultEffort = provider === defaults.provider && selectedModel === defaults.selectedModel
-    ? defaults.cliReasoningEffort : defaultCliReasoningEffort(provider);
+  const recommended = [defaults, STAGE_ALTERNATES[stage]].find((config) => config?.provider === provider);
+  const selectedModel = bag[ownKeys.model] ?? recommended?.selectedModel ?? providerOptions.find((option) => option.value === provider)?.model ?? defaults.selectedModel;
+  const defaultEffort = recommended && selectedModel === recommended.selectedModel
+    ? recommended.cliReasoningEffort : defaultCliReasoningEffort(provider);
   return {
     provider,
     selectedModel,
