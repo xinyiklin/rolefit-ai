@@ -501,6 +501,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
     runs on `0a37415` succeeded.
   - [USER] `test:rolefit:desktop` was waived for this tag (failed cold; passed
     warm); #208 fixed it the same day.
+  - [USER] From now on a release receipt rides in the next PR rather than its
+    own (`docs/git-workflow.md`); this one was already open as #209.
 - [USER+CODE+TOOL] **Desktop smoke passes from a cold Vite cache** (task
   `2026-10-10-desktop-smoke-vite-warm`).
   - [CODE] Vite 8 drops `node_modules/.vite/deps` when the lockfile changes and

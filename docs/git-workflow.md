@@ -80,6 +80,12 @@ release/publish workflow, wait for successful completion, and retain the
 workflow or live-environment receipt. A versioned change is incomplete until
 that release/deploy completion is confirmed.
 
+The receipt exists only after the tag runs, so it cannot ride in the release
+PR. Report it to the user at once, then record it in `CONTINUITY.md` (including
+its "Current" release line) in the next PR, not a dedicated receipt PR. Open a
+receipt-only PR only when no other change is expected soon, because a stale
+"Current" line misleads the next session.
+
 ## Versioning and release suggestions
 
 Versioned products use Semantic Versioning, `MAJOR.MINOR.PATCH`. Below 1.0,
