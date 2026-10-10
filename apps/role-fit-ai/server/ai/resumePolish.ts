@@ -7,6 +7,7 @@ import {
   sendJson
 } from "../http.ts";
 import { candidateContextLimitError } from "../../shared/candidateProfileContract.ts";
+import { parsePolishFitFindings } from "../../shared/polishFitFindings.ts";
 import { UserSafeAiError, safeConfigErrorMessage } from "./errors.ts";
 import { readAiJsonBody } from "./json.ts";
 import { providerLabel, resolveProviderRequest } from "./providers.ts";
@@ -69,6 +70,13 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       });
       return;
     }
+    const fitFindings = parsePolishFitFindings(body.fitFindings);
+    if (fitFindings === "invalid") {
+      sendJson(res, 400, {
+        error: "Resume Polish received unreadable Fit findings. Reload the page and try again."
+      });
+      return;
+    }
     if (!resumeScope.sections.length || !editableText.trim() || jobText.trim().length < 40) {
       sendJson(res, 400, {
         error: "Select at least one editable resume section and add a job description before polishing."
@@ -87,6 +95,7 @@ export async function handleResumePolish(req: IncomingMessage, res: ServerRespon
       customInstructions,
       boldBulletKeywords,
       reviewEdits,
+      fitFindings,
       signal: request.signal
     });
     sendJson(res, 200, proposal);

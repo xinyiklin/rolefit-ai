@@ -9,6 +9,7 @@ const scheduler = `
 let slots=[],cursor=0;
 export function useState(initial){const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];}
 export function useMemo(factory){cursor++;return factory();}
+export function useDeferredValue(value){return value;}
 export function useCallback(callback){cursor++;return callback;}
 export function render(callback){cursor=0;return callback();}
 `;

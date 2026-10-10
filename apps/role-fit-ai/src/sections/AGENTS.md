@@ -215,7 +215,11 @@ and `docs/engineering/ui-principles.md`.
   sources (the entry's current bullets and `profileEvidence`, the linked Profile
   text at proposal time) behind one collapsed Show evidence disclosure, and
   skills/summary rows state their scope in one line. Withheld never receives
-  success treatment.
+  success treatment. Both rails render `document/FitGapStatements` only when the
+  run was sent Fit gaps; it is presentation only, each workflow decides the
+  statuses (Resume through `resumeFitGapRows` in the decisions hook, the letter
+  from its proposal). The Resume rail's `TerminologyCoverageView` takes the
+  hook's deferred `termCoverage` and never computes on its own.
   Cover letter keeps one Polish request but stages its result as a whole-document
   proposal: **Accept proposal** applies it atomically, **Discard proposal** performs no
   mutation, stale inputs disable acceptance, and Restore appears only after acceptance.

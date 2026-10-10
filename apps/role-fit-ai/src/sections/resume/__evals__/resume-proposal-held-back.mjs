@@ -36,7 +36,7 @@ const bundled = await esbuild.build({
       const render = ({ result = {}, suggestions = [rewrite], held = heldBack, restored = [], stale = false } = {}) => renderToStaticMarkup(React.createElement(ResumeProposalReview, {
         result: { polishOutcome: "PROPOSAL", missingKeywords: [], trimmedBulletGroups: 0, proposalBaselineText: "", suggestedChanges: [rewrite], ...result },
         resume,
-        decisions: { suggestions, decisions: {}, decided: 0, isPending: () => true, accept: noop, discard: noop, revert: noop, applyAll: noop, discardAll: noop,
+        decisions: { suggestions, decisions: {}, decided: 0, fitGapRows: [], termCoverage: { onResume: [], relatedOnly: [], notOnResume: [], limitations: [] }, isPending: () => true, accept: noop, discard: noop, revert: noop, applyAll: noop, discardAll: noop,
           heldBack: held, isRestored: (id) => restored.includes(id), restore: noop, documentReplaced: false },
         proposalStale: stale,
         onHighlight: noop
@@ -137,7 +137,7 @@ const noop = () => undefined;
 const element = (suggestions, held, restored) => ResumeProposalReview({
   result: { polishOutcome: "NO_CHANGES", review: "REVIEWED", heldBack, suggestedChanges: [], missingKeywords: [], trimmedBulletGroups: 0, proposalBaselineText: "" },
   resume,
-  decisions: { suggestions, decisions: {}, decided: 0, isPending: () => true, accept: noop, discard: noop, revert: noop, applyAll: noop, discardAll: noop,
+  decisions: { suggestions, decisions: {}, decided: 0, fitGapRows: [], termCoverage: { onResume: [], relatedOnly: [], notOnResume: [], limitations: [] }, isPending: () => true, accept: noop, discard: noop, revert: noop, applyAll: noop, discardAll: noop,
     heldBack: held, isRestored: (id) => restored.includes(id), restore: noop, documentReplaced: false },
   proposalStale: false,
   onHighlight: noop

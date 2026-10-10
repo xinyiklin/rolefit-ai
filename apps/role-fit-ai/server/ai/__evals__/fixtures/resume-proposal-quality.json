@@ -169,7 +169,39 @@
         "harbor-b1"
       ]
     },
-    "provenance": "Original synthetic tuning case (2026-10-04)"
+    "provenance": "Original synthetic tuning case (2026-10-04)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Strong experience with PostgreSQL or another relational database"
+        },
+        {
+          "jobExcerpt": "Experience with metrics, dashboards, and alerting (Prometheus, Grafana, or similar)"
+        },
+        {
+          "jobExcerpt": "3+ years building production backend services"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Experience with Kubernetes and containerized deployments",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Operate services on Kubernetes and event pipelines on Kafka",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Design, build, and operate backend services in Go and Python",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "frontend-attribution",
@@ -336,7 +368,31 @@
         "orbit-b3"
       ]
     },
-    "provenance": "Original synthetic tuning case (2026-10-04)"
+    "provenance": "Original synthetic tuning case (2026-10-04)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Experience building web applications with React and TypeScript"
+        },
+        {
+          "jobExcerpt": "Understanding of web accessibility (WCAG, ARIA)"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Experience writing automated tests for front-end code",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Consume GraphQL APIs and manage client state",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "aligned-data",
@@ -456,7 +512,23 @@
       "fillerBullets": [],
       "expectFewEdits": true
     },
-    "provenance": "Original synthetic tuning case (2026-10-04)"
+    "provenance": "Original synthetic tuning case (2026-10-04)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build and maintain batch pipelines with Airflow and dbt"
+        },
+        {
+          "jobExcerpt": "Model data in Snowflake for analytics and billing"
+        },
+        {
+          "jobExcerpt": "Improve pipeline performance and data quality testing"
+        }
+      ],
+      "gaps": []
+    }
   },
   {
     "name": "injection-metrics",
@@ -608,7 +680,23 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Original synthetic tuning case (2026-10-04)"
+    "provenance": "Original synthetic tuning case (2026-10-04)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build internal tools with React, TypeScript, and Node.js"
+        },
+        {
+          "jobExcerpt": "Design secure REST APIs with role-based access control"
+        },
+        {
+          "jobExcerpt": "Optimize relational database queries and reports"
+        }
+      ],
+      "gaps": []
+    }
   },
   {
     "name": "profile-new-bullets",
@@ -739,7 +827,34 @@
       ],
       "adviceFromProfile": "Homelab"
     },
-    "provenance": "Original synthetic tuning case (2026-10-04)"
+    "provenance": "Original synthetic tuning case (2026-10-04)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Manage AWS infrastructure as code with Terraform"
+        },
+        {
+          "jobExcerpt": "Build and speed up CI/CD pipelines in GitHub Actions"
+        },
+        {
+          "jobExcerpt": "2+ years in software, DevOps, or platform roles"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Run containerized services on Kubernetes",
+          "expect": "either"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Write runbooks and improve incident response",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "brochure-project",
@@ -899,7 +1014,23 @@
       ]
     },
     "provenance": "Original synthetic tuning case (2026-10-04)",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Experience with React and Node.js"
+        },
+        {
+          "jobExcerpt": "Relational database design (PostgreSQL)"
+        },
+        {
+          "jobExcerpt": "Automated testing experience"
+        }
+      ],
+      "gaps": []
+    }
   },
   {
     "name": "staff-led",
@@ -1049,7 +1180,39 @@
         "tally-b4"
       ]
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Lead the design of event-driven services on Kafka"
+        },
+        {
+          "jobExcerpt": "Experience leading engineering teams or large technical initiatives"
+        },
+        {
+          "jobExcerpt": "8+ years of backend engineering"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Set technical direction for reliability and observability across teams",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Operate services on Kubernetes",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Mentor engineers and lead architecture reviews",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "analyst-negative-evidence",
@@ -1170,7 +1333,36 @@
         "bloom-b4"
       ]
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Experience with experimentation / A/B testing"
+        },
+        {
+          "jobExcerpt": "Build dashboards and data models"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Advanced SQL",
+          "expect": "either"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Python for analysis",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Define and track product metrics",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "near-limit-bullets",
@@ -1291,7 +1483,29 @@
       "fillerBullets": [],
       "expectFewEdits": true
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Design secure PostgreSQL data access"
+        },
+        {
+          "jobExcerpt": "Own automated testing in CI"
+        },
+        {
+          "jobExcerpt": "Integrate messaging providers"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "HIPAA familiarity",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "guidance-conflict-bold-off",
@@ -1412,7 +1626,33 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "C++ and ROS 2"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "2+ years robotics software",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Motion planning or SLAM experience",
+          "expect": "either"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Develop ROS 2 navigation and localization in C++",
+          "expect": "either"
+        }
+      ]
+    }
   },
   {
     "name": "career-switch-teacher",
@@ -1526,7 +1766,33 @@
       ],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Onboard district customers and train administrators"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Customer-facing technical experience",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Write SQL to investigate customer data problems",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Troubleshoot integrations and API issues",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "ml-attribution",
@@ -1666,7 +1932,36 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case"
+    "provenance": "Synthetic holdout for initial v5 tuning (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Experience training and evaluating NLP models"
+        },
+        {
+          "jobExcerpt": "PyTorch"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Deploy models with Triton and Kubernetes",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Own model serving latency",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Fine-tune and evaluate LLMs",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "assisted-index-transition",
@@ -1723,7 +2018,28 @@
         "assisted-index-transition-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "validate Python import jobs"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "migrate catalog search",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "maintain OpenSearch indexes",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "helped-browser-tests",
@@ -1780,7 +2096,20 @@
         "helped-browser-tests-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "build Playwright checkout tests"
+        },
+        {
+          "jobExcerpt": "improve keyboard accessibility"
+        }
+      ],
+      "gaps": []
+    }
   },
   {
     "name": "supported-queue-rollout",
@@ -1837,7 +2166,29 @@
         "supported-queue-rollout-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "roll out retry handling",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "debug failed invoice delivery",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "operate RabbitMQ queues",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "present-assistance",
@@ -1894,7 +2245,26 @@
         "present-assistance-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "maintain S3 archive transfers"
+        },
+        {
+          "jobExcerpt": "Python upload validation"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Infrastructure Engineer",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "profile-assisted-backfill",
@@ -1955,7 +2325,23 @@
         "profile-assisted-backfill-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "validate SQL customer records"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "backfill missing customer regions",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "direct-execution-control",
@@ -2010,7 +2396,20 @@
         "direct-execution-control-b1"
       ]
     },
-    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case"
+    "provenance": "Synthetic supporting-role holdout (2026-10-04); now a regression case",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "implement Go webhook signature validation"
+        },
+        {
+          "jobExcerpt": "test duplicate event delivery"
+        }
+      ],
+      "gaps": []
+    }
   },
   {
     "name": "profile-blocks-cross-entry",
@@ -2191,7 +2590,39 @@
       ],
       "adviceFromProfile": "Riverside Tenants Union"
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build and operate Spark Structured Streaming and Flink jobs that consume Kafka topics"
+        },
+        {
+          "jobExcerpt": "Replace full reloads with incremental, idempotent merges"
+        },
+        {
+          "jobExcerpt": "A cloud warehouse such as Redshift, Snowflake, or BigQuery"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Model them in Delta Lake tables",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Orchestrate batch backfills with Airflow",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "3+ years in data engineering",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "newgrad-context-capstone",
@@ -2400,7 +2831,39 @@
         "shelf-b3"
       ]
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Coursework or project experience with AWS, especially serverless services"
+        },
+        {
+          "jobExcerpt": "Programming experience in Python or JavaScript"
+        },
+        {
+          "jobExcerpt": "Comfort troubleshooting networks, operating systems, and user issues"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "write infrastructure as code in Terraform and CloudFormation",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "troubleshoot customer networking issues across VPCs and VPNs",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Experience with Terraform, Docker, or Kubernetes is a plus",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "same-tool-two-ownership-levels",
@@ -2539,7 +3002,39 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Design and maintain reusable Terraform modules for AWS (VPC, RDS, IAM, EKS)"
+        },
+        {
+          "jobExcerpt": "Write docs and coach teams on module usage"
+        },
+        {
+          "jobExcerpt": "Join the on-call rotation and run game days"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Run Terraform in CI with Atlantis and policy checks in Sentinel or OPA",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Migrate hand-managed resources into code",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Terragrunt or multi-account AWS experience is a plus",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "skills-labels-composite-product",
@@ -2703,7 +3198,36 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "C# and ASP.NET Core"
+        },
+        {
+          "jobExcerpt": "Unit testing (xUnit or NUnit)"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Azure Functions and Azure Service Bus",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "SQL Server or Cosmos DB",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Health insurance or benefits domain",
+          "expect": "either"
+        }
+      ]
+    }
   },
   {
     "name": "scale-number-inflation",
@@ -2866,7 +3390,39 @@
       "shouldReorder": [],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "You'll partition and tune Spark jobs"
+        },
+        {
+          "jobExcerpt": "experience with Airflow or Dagster"
+        },
+        {
+          "jobExcerpt": "chase down data-quality incidents before advertisers notice them"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "You'll likely have 5+ years of data engineering experience",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "own critical batch and streaming pipelines that move billions of rows into our lakehouse every day",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "familiarity with Iceberg or Delta Lake",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "injection-three-channels",
@@ -3026,7 +3582,29 @@
         "tamarack"
       ]
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Design and maintain Playwright and API test suites"
+        },
+        {
+          "jobExcerpt": "Build contract tests between services"
+        },
+        {
+          "jobExcerpt": "Keep CI pipelines fast and reliable"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Performance testing with k6 is a plus",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "homonym-release-products",
@@ -3165,7 +3743,39 @@
       ],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Own release branching, versioning, and the release calendar"
+        },
+        {
+          "jobExcerpt": "Jenkins and Git (Perforce a plus)"
+        },
+        {
+          "jobExcerpt": "Write tooling in Python and Go"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Move our C++ monorepo builds to Bazel with remote caching",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Experience measuring and reducing build times",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Cut build times and flaky failures in Jenkins and GitHub Actions",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "entailment-bold-off-guidance",
@@ -3297,7 +3907,39 @@
       ],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Accessibility experience (ARIA, keyboard navigation, screen readers)"
+        },
+        {
+          "jobExcerpt": "Docker and containerization"
+        },
+        {
+          "jobExcerpt": "CI/CD with GitHub Actions or CircleCI"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Containerize services and deploy them to Kubernetes",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "3+ years of full-stack JavaScript/TypeScript",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Improve checkout reliability and performance",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "nurse-clinical-informatics",
@@ -3501,7 +4143,39 @@
         "marrow"
       ]
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Epic super-user or go-live experience required"
+        },
+        {
+          "jobExcerpt": "3+ years of clinical nursing experience"
+        },
+        {
+          "jobExcerpt": "Test builds, write test scripts, and support go-lives and upgrades"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Epic certification (ClinDoc or Willow) required within 6 months of hire",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Analyze documentation and medication administration data with Clarity reports or SQL",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Triage clinician tickets and route build requests",
+          "expect": "either"
+        }
+      ]
+    }
   },
   {
     "name": "manufacturing-aligned-process",
@@ -3631,7 +4305,39 @@
       "fillerBullets": [],
       "expectFewEdits": true
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Reduce scrap and downtime on stamping presses"
+        },
+        {
+          "jobExcerpt": "Own PFMEAs, control plans, and PPAP documentation for new parts"
+        },
+        {
+          "jobExcerpt": "Lead kaizen and quick-changeover (SMED) events"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Bachelor's in mechanical or manufacturing engineering",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Six Sigma Green Belt",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "IATF 16949 experience",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "marketing-brochure-product-analytics",
@@ -3798,7 +4504,39 @@
       ]
     },
     "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build self-serve dashboards in Looker"
+        },
+        {
+          "jobExcerpt": "Write production-quality SQL against Snowflake"
+        },
+        {
+          "jobExcerpt": "2+ years in a product, growth, or marketing analytics role"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Design and analyze product experiments with the product and growth teams",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Define and monitor product metrics like activation, retention, and streaks",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "use Python or R for deeper analysis",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "staff-long-leadership-control",
@@ -4118,7 +4856,39 @@
         "obsidian"
       ]
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "A record of leading large migrations and multi-team initiatives"
+        },
+        {
+          "jobExcerpt": "Experience with sharding, idempotency, and consistency in distributed systems"
+        },
+        {
+          "jobExcerpt": "Lead design reviews and write RFCs for changes that span teams"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Drive a migration from PostgreSQL to a distributed SQL database (Spanner or CockroachDB)",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Partner with finance and compliance on SOX controls",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Kafka or Flink event processing",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "aligned-ios-present",
@@ -4252,7 +5022,29 @@
       "fillerBullets": [],
       "expectFewEdits": true
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build SwiftUI screens and shared components"
+        },
+        {
+          "jobExcerpt": "Maintain offline-first data sync with Core Data"
+        },
+        {
+          "jobExcerpt": "Write unit and UI tests with XCTest and XCUITest"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Kotlin Multiplatform experience is a plus",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "brochure-devops-filler",
@@ -4412,7 +5204,34 @@
       ]
     },
     "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
-    "requiresProposal": true
+    "requiresProposal": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Automate server configuration and patching"
+        },
+        {
+          "jobExcerpt": "Build and maintain CI/CD pipelines with safe rollbacks"
+        },
+        {
+          "jobExcerpt": "Experience in a regulated financial institution"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Kubernetes (EKS) experience",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Run Kubernetes clusters and service meshes",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "profile-omitted-entry-block",
@@ -4584,7 +5403,34 @@
         "trail"
       ]
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Build fast, accessible map interfaces with MapLibre GL or Mapbox GL"
+        },
+        {
+          "jobExcerpt": "Write end-to-end tests with Cypress or Playwright"
+        },
+        {
+          "jobExcerpt": "Improve rendering performance for large datasets (WebGL experience a plus)"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "5+ years of frontend experience.",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Create data visualizations with D3",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "promotion-ambiguous-profile",
@@ -4734,7 +5580,39 @@
       ],
       "fillerBullets": []
     },
-    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)"
+    "provenance": "Synthetic holdout for prompt slimming (2026-10-04b)",
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Size opportunities and forecast the impact of new card features"
+        },
+        {
+          "jobExcerpt": "Define feature adoption metrics and build dashboards in Tableau or Looker"
+        },
+        {
+          "jobExcerpt": "3+ years in FP&A, analytics, or product analytics"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Analyze experiments and customer behavior with SQL and Python",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Advanced SQL; Python (pandas) for analysis",
+          "expect": "either"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Present findings to product and finance leaders",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "buried-strength-order",
@@ -4863,7 +5741,39 @@
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
-    "gateOpportunity": true
+    "gateOpportunity": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Own Airflow pipelines that load partner feeds into Snowflake"
+        },
+        {
+          "jobExcerpt": "Add data quality checks that stop bad files before reporting"
+        },
+        {
+          "jobExcerpt": "Airflow and Snowflake experience"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "2+ years building batch pipelines in Python",
+          "expect": "either"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Model warehouse tables with dbt",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Logistics or supply-chain data",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "duplicate-achievement",
@@ -4971,7 +5881,34 @@
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
-    "gateOpportunity": true
+    "gateOpportunity": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Improve checkout conversion and performance"
+        },
+        {
+          "jobExcerpt": "Integrate payment providers and reconcile payment events"
+        },
+        {
+          "jobExcerpt": "Write reliable tests for money-handling code"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "3+ years with TypeScript, React, and Node.js",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Experience with A/B testing checkout flows",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "profile-fact-missing",
@@ -5092,7 +6029,29 @@
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
-    "gateOpportunity": true
+    "gateOpportunity": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Take part in the on-call rotation and run blameless postmortems"
+        },
+        {
+          "jobExcerpt": "Write and maintain runbooks and alerting"
+        },
+        {
+          "jobExcerpt": "Improve service reliability in Go and Postgres systems"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Kubernetes",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   },
   {
     "name": "feature-tour-contribution",
@@ -5208,7 +6167,29 @@
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
-    "gateOpportunity": true
+    "gateOpportunity": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "Design and implement backend services in Node.js and Postgres"
+        },
+        {
+          "jobExcerpt": "Write correct money-handling logic with thorough tests"
+        },
+        {
+          "jobExcerpt": "Node.js and SQL experience"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Collaborate with mobile engineers on API design",
+          "expect": "either"
+        }
+      ]
+    }
   },
   {
     "name": "only-proof-removal-trap",
@@ -5316,6 +6297,38 @@
     },
     "provenance": "Synthetic opportunity case (2026-10-06); requires a proposal",
     "requiresProposal": true,
-    "gateOpportunity": true
+    "gateOpportunity": true,
+    "fitFindings": {
+      "provenance": "Frozen 2026-10-10 from the product Fit Assessment (claude-cli, claude-sonnet-5-5, low); posting excerpts only; gap expectations hand-labelled (no-evidence: closing it needs a posting-only term, a computed duration, promoted ownership, or a fact absent from the resume and Background).",
+      "earlierVersion": false,
+      "matches": [
+        {
+          "jobExcerpt": "PowerShell scripting in Active Directory and Microsoft 365 environments"
+        },
+        {
+          "jobExcerpt": "Reduce manual help-desk work through scripting"
+        },
+        {
+          "jobExcerpt": "2+ years in IT support or systems administration"
+        }
+      ],
+      "gaps": [
+        {
+          "id": "gap-1",
+          "jobExcerpt": "Automate account provisioning and device setup with PowerShell and Intune",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-2",
+          "jobExcerpt": "Document automation for the support team",
+          "expect": "no-evidence"
+        },
+        {
+          "id": "gap-3",
+          "jobExcerpt": "Healthcare IT",
+          "expect": "no-evidence"
+        }
+      ]
+    }
   }
 ]

@@ -1,6 +1,7 @@
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
+import type { FitGapStatus } from "../../shared/polishFitFindings.ts";
 import { templateHasUnresolvedSlots, withoutTemplateSlots } from "./coverLetterTemplate.ts";
 
 export type CoverLetterEvidenceSource = "resume" | "profile" | "user_answer";
@@ -35,6 +36,8 @@ export type CoverLetterTailorResult = {
   reasoningEffort?: string;
   attempts?: number;
   repaired?: boolean;
+  // Present only when Fit findings with gaps were sent; display-only.
+  fitGaps?: Array<{ gap: string; status: FitGapStatus; paragraphs: number[] }>;
 };
 
 type BuildCoverLetterEvidenceInput = {

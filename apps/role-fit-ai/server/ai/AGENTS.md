@@ -307,6 +307,20 @@ application retain blocking technical guards.
   actual accepted edits with the current document, job, and supported baseline.
   True aliases can preserve a mention; related tools never establish support.
   Keep this advisory separate from Fit, without a score or coverage guarantee.
+- Fit findings reach Resume and Cover Polish through
+  `shared/polishFitFindings.ts`: at most three matches and three gaps, posting
+  excerpts only (Fit's candidate excerpts and notes are model output and never
+  travel), `gap-N` ids in order, parsed strictly at both routes (absent is no
+  block; anything else malformed is a 400 before provider work). The block sits
+  in the `fit_findings` fence, which `fenceUntrusted` always neutralizes but the
+  firewall line names only when the block is sent (`polishFirewallRule`), so a
+  request without findings, and every other stage's prompt, is byte-identical
+  to before. Findings never enter grounding inputs (`entryGrounding`,
+  `scopeText`, `candidateContext`, the cover corpus) and the opt-in reviewer does
+  not see them. The model's optional `fitGaps` statements are display-only:
+  `sanitizeFitGapStatements` keeps one per sent gap, drops an ADDRESSED that
+  cites no surviving change (Resume, held-back changes included) or no existing
+  paragraph (Cover), and never turns one into a warning, concern, or later input.
 - Resume Polish warning precision is benchmark-backed (2026-10-04): replaying
   stored proposals against independent per-edit fact checks showed most warnings
   fired on honest paraphrases. These shared checks also serve cover letters,

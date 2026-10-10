@@ -14,6 +14,7 @@ listed under coverage gaps.
 | --- | --- | --- | --- |
 | Prepare: Job analysis + Fit | Claude Sonnet 5.5 low, combined | 22 synthetic postings across five configurations; then 20 fresh postings × three repeats for Sonnet and the old Luna/GPT-5.5 split. Sonnet holdout: 4.9 s median versus 17.5 s, extraction 0.997 versus 0.993, zero fabricated terms in both. | Each setting had a Fit automation-flip group; synthetic labels are not human calibration. |
 | Resume Polish | GPT-6.1 Sol medium (since 2026-10-07; previously Claude Opus 5.5 high) | Factual safety favors Sol. 2026-10-07 live baseline, 39 synthetic cases, corrected opportunity gates, Astra fact-checks: Sol 39/39 passed, 88 edits, 0 unsupported, 1 immaterial; Opus High 35/39, 103 edits, 3 unsupported (each merged separately listed facts into a new relationship), 3 immaterial, 1 tense flip; both met all five gated opportunity cases. 2026-10-05, 32 fresh real applications: Opus 2/99 edits unsupported, Sol 0/123. 2026-10-04 34-case eval: Sol passed all cases; Opus passed 63/68 trap checks, then 67/68 after the round-2 prompt. Writing quality favored Opus: on the 2026-10-04 22-application holdout (older prompt), Opus High beat Sol Medium 11–5 where Astra and Opus agreed (Astra alone 11–11, Opus judge 17–5); Opus High also beat Sonnet Medium 17–1 there. | A user-directed safety-first choice. One run per synthetic case; the only fact-check judge is Astra (OpenAI family, same vendor as Sol). The quality comparison predates the current prompt and its arm labels (`opus-high-space` vs `sol-medium`) suggest unmatched guidance. A paired real-application rerun on the current prompt is pending (deferred for Codex usage). Page count is not materiality or a factuality score. |
+| Resume Polish opt-in review | Off by default (user-accepted 2026-10-10) | 2026-10-10 paired run, 39 synthetic cases, Astra labels shared by both arms, against the approved default-on bar. Sol medium: 3 of 61 edits held back, 1 harmless (33%, bar 75%), 3.3% of supported material edits held back, 0 key-evidence or opportunity losses, review probes 2/5. Opus high (37 of 39 cases ran before the Codex limit): 4 held back, 2 harmless (50%), 1 supported edit to key evidence held back (bar 0), 3.7%, probes 2/5. Both models missed all three merged-facts probes, and on Opus none of its 6 unsupported edits was held back. | One run per case; small held-back counts; Astra is the only fact-check judge. The setting remains available. |
 | Cover Polish | GPT-6.1 Sol medium, existing prompt | 40 tuning applications plus 20 holdouts, sentence fact-checking and blinded Astra/Opus pairwise judging. On the 40-case same-prompt comparison, Sol beat Sonnet 25–2 and Opus 16–0 where both judges agreed. | Model judges disagreed on some comparisons. Claude-specific prompt gains did not transfer to Sol, so the shared prompt was retained. |
 | Answers | Claude Opus 5.5 high; GPT-6.1 Sol medium as OpenAI alternative | 57 synthetic cases × nine settings, 513 completed answers; 38 fresh cases and 19 regressions. Astra High and Opus High agreed the rubric before independent judging. | Opus High's fresh mean lead over Medium was only 0.67/100. Astra slightly preferred Sol Medium to Opus High; Opus preferred Opus High. One sample per case, no human calibration. |
 | Final review | Claude Sonnet 5.5 low | Retained user preference. | No comparative benchmark supporting a winner. |
@@ -22,6 +23,14 @@ The matched Prepare downstream check used ten real applications, both brief
 sources, the same Resume/Cover generators and two blinded judges. Resume
 preferences split 5–5; Cover preferences differed between judges. It did not
 establish a downstream quality advantage for the slower Prepare setup.
+
+Fit findings in Polish (2026-10-10): the live before-and-after is pending.
+Same-day before baselines on the current prompt without findings are the
+unreviewed arms of the paired run above: Sol medium 39/39, 86 edits, 0
+unsupported, 1 immaterial; Opus high 29 of 36 graded, 103 edits, 6 unsupported,
+4 immaterial. The after-runs (both corpora, both models, `EVAL_FIT_FINDINGS`
+on) stopped at the Codex usage limit after four Sol resume cases, all passed
+with every gap reported as no evidence; they are not a result.
 
 Resume/Cover use private application corpora; only aggregate findings belong
 here. Their experiment history is retained in the dated root

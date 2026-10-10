@@ -132,8 +132,10 @@ import {
 import {
   fitAssessmentCurrentResult,
   fitAssessmentPersistenceDecision,
-  fitAssessmentMayTriggerAutoPolish
+  fitAssessmentMayTriggerAutoPolish,
+  fitFindingsForPolish
 } from "./lib/fitAssessmentLifecycle";
+import type { PolishFitFindings } from "../shared/polishFitFindings.ts";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
 import { extensionImportClaimTokenFromHref } from "./lib/extensionImportClaim";
@@ -1117,6 +1119,9 @@ function App() {
     resumeEditorActions.getDocumentGeneration()).length
       ? ["Some supplied resume wording retains earlier evidence concerns. Acceptance or later editing does not verify those claims."] : undefined;
 
+  // Intake owns Fit and composes below Cover Polish, so the cover hook reads the
+  // findings through this ref when a run starts.
+  const polishFitFindingsRef = useRef<PolishFitFindings | null>(null);
   // Cover Polish stages a whole-document proposal. The dedicated editor
   // remains the single owner for accepted text, direct edits, file lifecycle,
   // the pre-acceptance Restore snapshot, and application save.
@@ -1161,6 +1166,7 @@ function App() {
       role: jobTracking.role || jobTracking.title,
       company: jobTracking.company
     },
+    getFitFindings: () => polishFitFindingsRef.current,
     onApplyTailored: coverLetterEditor.applyTailoredText,
     onUsage: (usage) => setPipelineAiUsage((prev) => ({ ...prev, "cover-polish": usage }))
   });
@@ -1615,6 +1621,8 @@ function App() {
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,
   });
+  const polishFitFindings = fitFindingsForPolish(fitAssessmentState);
+  polishFitFindingsRef.current = polishFitFindings;
   const jobPreparationActive =
     isExtractingLink
     || extensionImportPhase !== null
@@ -1747,6 +1755,7 @@ function App() {
     currentResumeText,
     jobDescription,
     candidateContext,
+    fitFindings: polishFitFindings,
     profileLimitMessage,
     customInstructionsFor,
     boldBulletKeywords,
@@ -1766,7 +1775,8 @@ function App() {
     result,
     resume: editedResume,
     actions: resumeEditorActions,
-    terminologyInputKey
+    terminologyInputKey,
+    jobText: jobDescription
   });
   // Cross-tab presence: each browser tab is an independent RoleFit session, so
   // we publish this tab's coarse phase (derived from existing flow state — never

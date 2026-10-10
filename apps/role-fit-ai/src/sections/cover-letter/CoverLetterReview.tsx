@@ -20,6 +20,7 @@ import {
 } from "../document/DocumentWorkflowRail";
 import { ProposalDecisionBar } from "../document/ProposalDecisionBar";
 import { ProposalDiff } from "../document/ProposalDiff";
+import { FitGapStatements, type FitGapStatementRow } from "../document/FitGapStatements";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
 
 type CoverLetterReviewProps = {
@@ -93,6 +94,16 @@ function issueRecovery(issue: CoverLetterIssue): string {
     return "Edit the source letter, then Polish again.";
   }
   return "Retry Polish. If it repeats, switch the model or provider.";
+}
+
+// The letter is one decision, so its gap statements live and die with the proposal.
+function coverFitGapRows(proposal: CoverLetterProposal): FitGapStatementRow[] {
+  return (proposal.fitFindings?.gaps ?? []).map((gap) => {
+    const statement = proposal.result.fitGaps?.find((item) => item.gap === gap.id);
+    return statement
+      ? { ...gap, status: statement.status, where: statement.paragraphs.map((paragraph) => `paragraph ${paragraph}`) }
+      : { ...gap, status: "NOT_REPORTED", where: [] };
+  });
 }
 
 export function CoverLetterReview({
@@ -283,6 +294,7 @@ export function CoverLetterReview({
               )}
             </p>
           </div>
+          <FitGapStatements earlierVersion={Boolean(proposal.fitFindings?.earlierVersion)} rows={coverFitGapRows(proposal)} />
           {/* The block had only an aria-label, so a sighted reader met a column
               of "Paragraph N" rows with no statement of what they were. The
               title now matches the other feedback headings in this rail. */}

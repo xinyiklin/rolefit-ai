@@ -8,6 +8,7 @@
 // Usage:
 //   npm run eval:live:cover-letter --workspace apps/role-fit-ai -- [fixture-id|all] [runs]
 //   EVAL_PROVIDER=codex-cli EVAL_MODEL=gpt-6.1-sol EVAL_REASONING_EFFORT=medium npm run eval:live:cover-letter --workspace apps/role-fit-ai
+//   EVAL_FIT_FINDINGS=off omits each fixture's frozen Fit findings (sent by default);
 //   EVAL_JUDGE=panel adds the whole-letter judge stage with the recorded Astra + Opus panel;
 //   EVAL_JUDGE='[{"provider":"codex-cli","model":"gpt-6-astra","reasoningEffort":"high"}]' names the judges.
 import { createHash } from "node:crypto";
@@ -28,6 +29,7 @@ import { CoverLetterBlockedError } from "../coverLetterIssues.ts";
 import { COVER_LETTER_JUDGE_PANEL, buildCoverLetterJudgePrompts, coverLetterJudgeConfigError, panelUnsupportedSentenceCount, parseCoverLetterJudgment } from "../coverLetterJudge.ts";
 import { gradeCoverLetterResult } from "../coverLetterQuality.ts";
 import { resolveProviderRequest } from "../providers.ts";
+import { fitGapFailures, gradeFitGaps, polishFitFindings } from "./support/fit-findings.mjs";
 import { buildCoverLetterPreflight } from "../../../src/lib/coverLetterPreflight.ts";
 
 const APP_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
@@ -61,8 +63,11 @@ export function evalOptions(argv, env) {
   const fixtures = fixtureFilter === "all" ? allFixtures : allFixtures.filter((fixture) => fixture.id === fixtureFilter);
   if (fixtures.length === 0) throw new Error(`Unknown fixture "${fixtureFilter}".`);
   const provider = env.EVAL_PROVIDER || "claude-cli";
+  // "off" reproduces a request from before Fit findings reached Polish.
+  const fitFindings = env.EVAL_FIT_FINDINGS || "on";
+  if (!["on", "off"].includes(fitFindings)) throw new Error("EVAL_FIT_FINDINGS must be on or off");
   return {
-    runs, fixtures,
+    runs, fixtures, fitFindings: fitFindings === "on",
     judges: judgeMatrix(env),
     config: {
       provider,
@@ -104,7 +109,7 @@ const mean = (values) => {
   return numbers.length ? Number((numbers.reduce((sum, value) => sum + value, 0) / numbers.length).toFixed(2)) : null;
 };
 
-async function runFixture(fixture, run, config, stage, judges) {
+async function runFixture(fixture, run, config, stage, judges, fitFindings = true) {
   stage.current = "preflight";
   const preflight = buildCoverLetterPreflight({
     text: fixture.sourceText,
@@ -132,10 +137,12 @@ async function runFixture(fixture, run, config, stage, judges) {
       evidenceItems: fixture.evidence,
       resolvedContext: preflight.resolved,
       employerContext: [],
-      customInstructions: ""
+      customInstructions: "",
+      fitFindings: fitFindings ? polishFitFindings(fixture) : null
     },
     stats
   );
+  const fitGaps = fitFindings ? gradeFitGaps(fixture, result) : null;
   stage.current = "layout";
   const pageCount = layoutCoverLetter(
     toTypesetSchema(parseCoverLetterText(result.coverLetterText)),
@@ -156,7 +163,7 @@ async function runFixture(fixture, run, config, stage, judges) {
   }
   const judged = (dimension) => mean(judgments.filter((item) => item.judgment).map((item) => item.judgment[dimension]));
   return {
-    receipt: { fixture, result, pageCount, report, judgments, labelProvenance: "Repository-authored synthetic cases; judge scores are model judgments, not human review", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null },
+    receipt: { fixture, result, pageCount, report, judgments, ...(fitGaps ? { fitGaps } : {}), labelProvenance: "Repository-authored synthetic cases; judge scores are model judgments, not human review", factualAccuracy: null, coverageAccuracy: null, persuasiveness: null },
     row: {
       fixture: fixture.id,
       run,
@@ -178,6 +185,7 @@ async function runFixture(fixture, run, config, stage, judges) {
       concerns: result.concerns.length,
       repaired: result.repaired === true,
       providerRequests: stats.attempts ?? 1,
+      ...(fitGaps ? { fitGaps: { addressed: fitGaps.addressed, noEvidence: fitGaps.noEvidence, notReported: fitGaps.notReported, failures: fitGapFailures(fitGaps) } } : {}),
       failedChecks: Object.entries(report.checks)
         .filter(([, check]) => !check.passed)
         .map(([name]) => name),
@@ -208,10 +216,11 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     "../coverLetter.ts", "../coverLetterContracts.ts", "../coverLetterParagraphEvidence.ts", "../coverLetterGroundingIssues.ts",
     "../coverLetterIssues.ts", "../coverLetterQuality.ts", "../coverLetterJudge.ts", "../prompts.ts", "../grounding.ts", "../sanitize.ts", "../claimEvidence.ts",
     "../clients.ts", "../../../shared/contentWarnings.ts", "../../../shared/evidencePolarity.ts", "../../../src/lib/coverLetterTemplate.ts",
-    "../../../src/lib/coverLetterPreflight.ts", "../../../src/lib/coverLetterEvidence.ts", "./cover-letter-quality-eval.mjs"
+    "../../../src/lib/coverLetterPreflight.ts", "../../../src/lib/coverLetterEvidence.ts", "../../../shared/polishFitFindings.ts",
+    "./support/fit-findings.mjs", "./cover-letter-quality-eval.mjs"
   ].map((path) => [path, hash(readFileSync(new URL(path, import.meta.url)))]));
   save("manifest.json", {
-    createdAt: new Date().toISOString(), config: options.config, judges: options.judges, runs: options.runs,
+    createdAt: new Date().toISOString(), config: options.config, judges: options.judges, runs: options.runs, fitFindingsArm: options.fitFindings ? "on" : "off",
     fixtures: options.fixtures.map((fixture) => fixture.id), corpusHash: hash(readFileSync(FIXTURE_URL)), sourceHashes,
     labelProvenance: "Repository-authored synthetic cases; the structural grader measures neither factual support nor writing quality.",
     humanReviewed: false
@@ -224,7 +233,7 @@ export async function main(argv = process.argv.slice(2), env = process.env) {
     for (let run = 1; run <= options.runs; run += 1) {
       const stage = { current: "preflight" };
       try {
-        const outcome = await runFixture(fixture, run, options.config, stage, options.judges);
+        const outcome = await runFixture(fixture, run, options.config, stage, options.judges, options.fitFindings);
         if (outcome.receipt) {
           stage.current = "receipt";
           save(`${fixture.id}-run-${run}.json`, outcome.receipt);

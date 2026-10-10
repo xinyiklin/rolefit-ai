@@ -11,7 +11,9 @@ import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { ResumeProposalTarget } from "../../resume/types";
 import { ProposalDiff } from "../document/ProposalDiff";
 import { ProposalFeedbackList } from "../document/ProposalFeedbackList";
+import { FitGapStatements } from "../document/FitGapStatements";
 import { ResumeHeldBackEdits } from "./ResumeHeldBackEdits";
+import { TerminologyCoverageView } from "./TerminologyCoverageView";
 
 type ResumeProposalReviewProps = {
   result: PolishedResume;
@@ -147,6 +149,13 @@ export function ResumeProposalReview({
     <ProposalFeedbackList title="Proposed improvements" items={result.changeSummary?.slice(0, 3) ?? []} />
   </>;
   const terminologyLimits = result.terminology ? <details className="prepare-note"><summary>Terminology check limits</summary><ul>{result.terminology.limitations.map((note) => <li key={note}>{note}</li>)}</ul></details> : null;
+  const fitGaps = (
+    <FitGapStatements
+      earlierVersion={Boolean(result.fitFindings?.earlierVersion)}
+      rows={proposal.fitGapRows.map((row) => ({ ...row, where: row.suggestions.map((suggestion) => editLocation(resume, suggestion)) }))}
+    />
+  );
+  const termCoverage = <TerminologyCoverageView coverage={proposal.termCoverage} />;
   const heldBackTotal = result.heldBack?.length ?? 0;
   const reviewNote = result.review === "UNAVAILABLE"
     ? <p className="resume-proposal__omitted">Review unavailable; showing all edits.</p>
@@ -165,10 +174,10 @@ export function ResumeProposalReview({
   // A review that held back every edit keeps the proposal root below, so a Restore
   // never remounts the held-back list (dropping focus) and the withheld line stays.
   if (result.polishOutcome === "NO_CHANGES" && !suggestions.length && !heldBackTotal) {
-    return <><p className="resume-proposal__empty" role="status">No material changes were suggested.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
+    return <><p className="resume-proposal__empty" role="status">No material changes were suggested.</p>{feedback}{fitGaps}{advice}{omittedNote}{termCoverage}{terminologyLimits}</>;
   }
   if (result.polishOutcome === "WITHHELD" && !suggestions.length) {
-    return <><p className="resume-proposal__empty is-warn" role="status">No usable edits were returned. Your resume is unchanged.</p>{feedback}{advice}{omittedNote}{terminologyLimits}</>;
+    return <><p className="resume-proposal__empty is-warn" role="status">No usable edits were returned. Your resume is unchanged.</p>{feedback}{fitGaps}{advice}{omittedNote}{termCoverage}{terminologyLimits}</>;
   }
 
   return (
@@ -330,8 +339,10 @@ export function ResumeProposalReview({
           {result.withheld.count} generated edit{result.withheld.count === 1 ? " was" : "s were"} withheld because it could not be applied safely.
         </p>
       ) : null}
+      {fitGaps}
       {advice}
       {omittedNote}
+      {termCoverage}
       {terminologyLimits}
     </div>
   );
