@@ -1390,7 +1390,7 @@ function App() {
     interpretRequestFields: resumeImportRequestFields
   });
   // Import reconstructs; Polish improves. A resume under import review cannot
-  // be polished until the review is saved or discarded.
+  // be polished, or ground a cover letter, until the review is saved or discarded.
   const resumeImportBlocker = resumeImport.reviewOpen ? "Finish the import review first: save or discard it." : "";
   const canPolish = polishInputsReady && selectedPolishProvidersReady && !resumeImport.reviewOpen;
   // Prepare names a current blocker before any earlier Polish status.
@@ -1400,6 +1400,9 @@ function App() {
   // Retry reaches the pipeline directly, past handleResumePolish's gates.
   const retryResumePolish = () => {
     if (!resumeImport.reviewOpen) void retryStage();
+  };
+  const retryCoverPolish = () => {
+    if (!resumeImport.reviewOpen) void handleTailorCoverLetter();
   };
 
   // Every live value the resolver's decision depends on, read at dispatch time
@@ -1938,6 +1941,7 @@ function App() {
     if (
       isGeneratingCover
       || coverLetterSelectionPending
+      || resumeImport.reviewOpen
     ) return false;
     includeMaterialForPolish("coverLetter");
     void handleTailorCoverLetter();
@@ -2049,7 +2053,8 @@ function App() {
       jobPrepared &&
       coverProviderReady &&
       !isGeneratingCover &&
-      !coverLetterSelectionPending;
+      !coverLetterSelectionPending &&
+      !resumeImport.reviewOpen;
     const coverDecision = automaticPolishActionDecision({
       enabled: coverPolishAuto,
       thresholdMet: fitAssessmentMeetsThreshold(
@@ -2096,6 +2101,7 @@ function App() {
     jobRawText,
     fitAssessmentState,
     resumePolishAutoThreshold,
+    resumeImport.reviewOpen,
     resumeReady,
     resumeText,
     fitAssessmentAuto
@@ -2822,7 +2828,7 @@ function App() {
           <TaskProgress
             stageKey="cover-polish"
             state={coverProgress}
-            onRetry={handleTailorCoverLetter}
+            onRetry={resumeImport.reviewOpen ? undefined : retryCoverPolish}
             onStop={stopCoverPolish}
             onDismiss={dismissCoverProgress}
             onDismissButton={() => dismissTaskProgressFromButton(dismissCoverProgress)}
@@ -2954,20 +2960,23 @@ function App() {
                 jobReady &&
                 coverProviderReady &&
                 !isGeneratingCover &&
-                !coverLetterSelectionPending
+                !coverLetterSelectionPending &&
+                !resumeImport.reviewOpen
               }
               coverLetterTailorHint={
-                !resumeReady && !jobReady
-                  ? "Add your resume and prepare the job first."
-                  : !resumeReady
-                    ? "Add your resume first."
-                    : !jobReady
-                      ? "Prepare the job first."
-                      : coverLetterSelectionPending
-                        ? "Wait for the cover-letter variant selection to finish."
-                      : !coverProviderReady
-                        ? coverProviderMessage
-                        : (coverLetterPreflight.blockers[0] ?? "")
+                resumeImportBlocker || (
+                  !resumeReady && !jobReady
+                    ? "Add your resume and prepare the job first."
+                    : !resumeReady
+                      ? "Add your resume first."
+                      : !jobReady
+                        ? "Prepare the job first."
+                        : coverLetterSelectionPending
+                          ? "Wait for the cover-letter variant selection to finish."
+                        : !coverProviderReady
+                          ? coverProviderMessage
+                          : (coverLetterPreflight.blockers[0] ?? "")
+                )
               }
               isTailoringCoverLetter={isGeneratingCover}
               coverLetterStatus={coverStatus}
@@ -3408,7 +3417,8 @@ function App() {
               onDismissAutosaveDraft={handleDismissCoverDraft}
               isTailoring={isGeneratingCover}
               tailorStatus={coverStatus}
-              resumeReady={resumeReady}
+              resumeReady={resumeReady && !resumeImport.reviewOpen}
+              resumeBlocker={resumeImportBlocker}
               jobReady={jobReady}
               providerReady={coverProviderReady}
               jobTarget={materialsJobTarget}

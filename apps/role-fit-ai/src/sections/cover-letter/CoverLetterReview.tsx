@@ -35,6 +35,7 @@ type CoverLetterReviewProps = {
   canRestore: boolean;
   isTailoring: boolean;
   resumeReady: boolean;
+  resumeBlocker?: string;
   jobReady: boolean;
   providerReady: boolean;
   slotAnswers: Record<string, string>;
@@ -104,6 +105,7 @@ export function CoverLetterReview({
   canRestore,
   isTailoring,
   resumeReady,
+  resumeBlocker,
   jobReady,
   providerReady,
   slotAnswers,
@@ -128,7 +130,7 @@ export function CoverLetterReview({
   const ready = preflight.canTailor && resumeReady && jobReady && providerReady;
   const detailsBlocked = preflight.blockers[0] ?? "Prepare the job target";
   const checks = [
-    readiness("Resume", resumeReady, "Add your resume"),
+    readiness("Resume", resumeReady, resumeBlocker || "Add your resume"),
     readiness("Prepared job", jobReady, "Prepare the job"),
     readiness("Polish provider", providerReady, "Check AI settings"),
     readiness("Template details", preflight.canTailor, detailsBlocked)
@@ -206,7 +208,7 @@ export function CoverLetterReview({
       </button>
     </ProposalDecisionBar>
   ) : failure ? (
-    <button type="button" className="primary-button is-compact" onClick={onTailor}>
+    <button type="button" className="primary-button is-compact" disabled={Boolean(resumeBlocker)} onClick={onTailor}>
       Retry polish
     </button>
   ) : appliedResult && canRestore ? (

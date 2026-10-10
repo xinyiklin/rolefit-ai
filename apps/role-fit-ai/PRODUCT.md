@@ -869,8 +869,9 @@ discard it.") and never starts from an import.
   menu. **Discard import** returns the editor to exactly what it held before,
   including unsaved edits, and asks first only when the import was edited;
   importing again before saving keeps the document from before the first
-  import as Discard's destination. Resume Polish, including a failed run's
-  Retry, is unavailable until the review ends.
+  import as Discard's destination. Resume Polish and Cover letter Polish
+  (which reads the resume), including a failed run's Retry and automatic
+  Polish after Prepare, are unavailable until the review ends.
 - **Formatting.** The nearest bundled family, body size, page margins, header
   alignment, heading case (verbatim capitals or small caps), and section rules
   are inferred within the editor's limits; spacing keeps the defaults. Content

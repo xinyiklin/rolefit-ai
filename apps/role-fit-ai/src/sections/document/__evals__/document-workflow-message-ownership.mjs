@@ -190,6 +190,17 @@ const bundled = await esbuild.build({
         }));
       }
 
+      export function renderCoverImportBlocked(failure = null) {
+        return renderToStaticMarkup(React.createElement(CoverLetterReview, {
+          ...coverBase,
+          resumeReady: false,
+          resumeBlocker: "Finish the import review first: save or discard it.",
+          proposal: null,
+          failure,
+          status: ""
+        }));
+      }
+
       export function renderCoverPolishing() {
         return renderToStaticMarkup(React.createElement(CoverLetterReview, {
           ...coverBase,
@@ -256,6 +267,15 @@ for (const [outcome, message] of [
   const html = rendered.renderResumeSettled(outcome, message);
   assert.equal(occurrences(html, message), 1, `${outcome} shows its settled result once`);
   assert.doesNotMatch(html, /workflow-rail__status/, `${outcome} has no duplicate rail receipt`);
+}
+
+{
+  const html = rendered.renderCoverImportBlocked();
+  assert.equal(occurrences(html, "Finish the import review first: save or discard it."), 1, "an import review names itself as the resume blocker once");
+  assert.doesNotMatch(html, /Add your resume/, "a resume under import review is not reported as missing");
+  const failed = rendered.renderCoverImportBlocked({ kind: "error", headline: "Provider unavailable", detail: "Connect the provider." });
+  assert.match(failed, /<button[^>]*disabled=""[^>]*>Retry polish<\/button>/, "an earlier failure's Retry waits for the review too");
+  assert.match(rendered.renderCoverFailure(), /<button(?![^>]*disabled)[^>]*>Retry polish<\/button>/, "and stays available without one");
 }
 
 {

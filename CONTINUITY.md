@@ -615,8 +615,6 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       need the modal dialog to be bypassed or raced; no data harm);
     - tab-stop shapes still read as a column as at HEAD: three rows per
       entry (37% dated), places only, ISO or "Q3 2016" dates;
-    - tab-stop values short of the right margin are combined into the left
-      field with a Check (follow-up approved, below);
     - whitespace is not audited; invisible text imports like any text; the
       shared firewall leaves zero-width or fullwidth tag variants; a tag
       formed only across a hyphen-joined line refuses the whole import; the
@@ -627,6 +625,34 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     from HEAD. Approved as a follow-up PR: Cover letter Polish also waits for
     an import review (it reads the editor's resume), and tab-stop values go to
     the right-hand slot.
+  - [USER+TOOL] **Merged** as #205, squash `9296fb12` on `main` (head
+    `c7bfe0ee`, CI green, tree identical to the reviewed head). The exact-head
+    review found no Blocker or High and one Medium that the user accepted for
+    the follow-up: a mostly dated sidebar with plain headings beside a main
+    column without bullet glyphs read as one column.
+  - [USER+CODE+TOOL] Follow-up PR #206 (`fix/rolefit-pdf-import-followups`):
+    - Cover letter Polish waits for an import review on every route (button,
+      Prepare card, automatic Polish, the dock's Retry, the rail's Retry); the
+      Cover Letter rail names the review as its resume blocker. Passed two
+      independent reviews.
+    - A title or subtitle row's last segment that is a date (not a
+      parenthesized year) and starts within 1.5pt of another body row's last
+      segment (not a header line or bullet) goes to the right-hand slot; anything else short of the margin
+      stays combined with a Check as on `main`. [USER] Narrowed twice after
+      review: to dated values when places, coursework, and awards at a tab
+      stop read worse than `main` (head `aa9f8475`), then to pure dates when
+      two-column lists with years ("CKA (2021)") paired with no Check (head
+      `14f32755`). No text was lost in either. Against `main` on the
+      reviewers' 103 synthetic layouts: 82 identical; the other 21 only move
+      a date into its row's right-hand slot and drop that row's "combined"
+      Check, one of them the accepted Low.
+    - [USER] The accepted #205 Medium stays a documented limitation: a dated
+      sidebar whose headings look like its entries, beside a column without
+      bullets, reads as one column (no text lost). Three section-title cues
+      were tried; each review (heads `9469ddd3`, `e27f0102`) found tab-stop or
+      sidebar layouts made worse than `main`, so column detection stays as on
+      `main`. Residual Low: in that misread layout, tab-stop placement pairs
+      dated sidebar lines into rows without the "combined" Check `main` gave.
   - [TOOL] Corpus: 7 engine + 6 foreign fixtures (one truly two pages with a
     running header) and 8 refusal kinds; synthetic and written alongside the
     parser, so real-world accuracy is UNCONFIRMED.
