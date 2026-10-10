@@ -490,8 +490,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
 - [USER+CODE+TOOL] **Desktop smoke passes from a cold Vite cache** (task
   `2026-10-10-desktop-smoke-vite-warm`).
   - [CODE] Vite 8 drops `node_modules/.vite/deps` when the lockfile changes and
-    re-optimizes in the background after startup, committing about 50 ms after
-    it goes idle (no page request needed). [TOOL] Under load here, the
+    re-optimizes in the background after startup; it commits once requests go
+    idle and the bundle finishes (no page request needed). [TOOL] Under load here, the
     standalone development phase stopped before that commit (only
     `deps_temp_*` remained), so the owned development phase optimized cold and
     its companion missed the 750 ms health probes: the old smoke failed 4 of 4
@@ -769,8 +769,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     native jobs cover macOS.
   - [TOOL] `test:rolefit:desktop` intermittently failed its development-mode
     phases on both Electron versions ("connection status contract", or a
-    pairing-settings `TimeoutError`). See 2026-10-10: a cold Vite optimize that
-    load delays past the standalone phase. CI does not run this smoke.
+    pairing-settings `TimeoutError`). See 2026-10-10: likely a cold Vite optimize
+    that load delays past the standalone phase. CI does not run this smoke.
   - [TOOL] A Windows `safeStorage` probe (isolated user data, synthetic value)
     encrypted with 43.2.0 and decrypted with 43.7.9: MATCH,
     `shouldReEncrypt=false`. macOS upgrade decryption is UNVERIFIED.
