@@ -507,6 +507,7 @@ test("App gates every Resume and Cover letter Polish route while a review is ope
   assert.match(body(app, "handleCoverLetterPolish"), /\|\| resumeImport\.reviewOpen\s*\) return false;/);
   assert.match(app, /const retryCoverPolish = \(\) => \{\s*if \(!resumeImport\.reviewOpen\) void handleTailorCoverLetter\(\);\s*\};/);
   assert.equal((app.match(/handleTailorCoverLetter\(\)/g) ?? []).length, 2, "the cover pipeline starts only through its two guarded paths");
+  assert.doesNotMatch(app, /=\{handleTailorCoverLetter\}/, "and is never wired to a control unguarded");
   assert.match(app, /stageKey="cover-polish"\s*state=\{coverProgress\}\s*onRetry=\{resumeImport\.reviewOpen \? undefined : retryCoverPolish\}/);
   assert.match(app, /const coverPolishCanStart =[^;]*!resumeImport\.reviewOpen;/, "automatic cover Polish declines during a review");
   assert.match(app, /canTailorCoverLetter=\{[^}]*!resumeImport\.reviewOpen\s*\}/, "Prepare's cover card is disabled during a review");

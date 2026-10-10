@@ -151,13 +151,6 @@ export function buildResumeDraft(source: LayoutLines, rules: readonly PdfRule[])
     earlierEdges.push(...edges);
   }
   const body = lines.filter((line) => !dropped.has(line));
-  // A row's last segment in the right half of its column, starting where
-  // another row's does (a tab stop), is its right-hand value short of the margin.
-  const lastSegmentX = (line: LayoutLine) => line.segments[line.segments.length - 1][0].x;
-  const tabbed = body.filter((line) => line.segments.length > 1);
-  const atTabStop = (line: LayoutLine) =>
-    lastSegmentX(line) >= (line.regionLeft + line.regionRight) / 2 &&
-    tabbed.some((other) => other !== line && other.region === line.region && Math.abs(lastSegmentX(other) - lastSegmentX(line)) <= 1.5);
 
   // ── Name ──────────────────────────────────────────────────────────────────
   const firstPage = body.filter((line) => line.page === 0);
@@ -229,6 +222,15 @@ export function buildResumeDraft(source: LayoutLines, rules: readonly PdfRule[])
 
   const firstHeadingIndex = body.findIndex((line) => headingSet.has(line));
   const headerEnd = firstHeadingIndex < 0 ? Math.min(body.length, 3) : firstHeadingIndex;
+
+  // A row's last segment in the right half of its column, starting where
+  // another section row's does (a tab stop), is its right-hand value short of
+  // the margin. Contact lines and bullets never set a tab stop.
+  const lastSegmentX = (line: LayoutLine) => line.segments[line.segments.length - 1][0].x;
+  const tabbed = body.slice(headerEnd).filter((line) => line.segments.length > 1 && !line.marker);
+  const atTabStop = (line: LayoutLine) =>
+    lastSegmentX(line) >= (line.regionLeft + line.regionRight) / 2 &&
+    tabbed.some((other) => other !== line && other.region === line.region && Math.abs(lastSegmentX(other) - lastSegmentX(line)) <= 1.5);
   let nameDraft: FieldDraft | null = null;
   for (const line of body.slice(0, headerEnd)) {
     if (line === nameLine) continue;

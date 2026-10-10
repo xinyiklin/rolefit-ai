@@ -310,6 +310,21 @@ const tabStopVariants = {
     ["State University", "Boston, MA", "bold"], ["BS Computer Science", "2012 – 2016", "italic"],
     ["Tech Institute", "Austin, TX", "bold"], ["MS Data Science", "2016 – 2017", "italic"]
   ],
+  "a section word among the values": [
+    ["EXPERIENCE"],
+    ["Acme Corp", "San Francisco, CA", "bold"], ["Senior Engineer", "Jan 2019 – Present", "italic"], ["Cut build times in half for the payments team"],
+    ["EDUCATION"],
+    ["State University", "Boston, MA", "bold"], ["BS Computer Science", "2012 – 2016", "italic"],
+    ["Tech Institute", "Honors", "bold"], ["MS Data Science", "2016 – 2017", "italic"]
+  ],
+  "capitalized values": [
+    ["EXPERIENCE"],
+    ["Acme Corp", "NEW YORK", "bold"], ["Senior Engineer", "Jan 2019 – Present", "italic"], ["Cut build times in half for the payments team"],
+    ["Globex", "REMOTE", "bold"], ["Engineer", "2016 – 2019", "italic"],
+    ["EDUCATION"],
+    ["State University", "BOSTON", "bold"], ["BS Computer Science", "2012 – 2016", "italic"],
+    ["Tech Institute", "HONORS", "bold"], ["MS Data Science", "2016 – 2017", "italic"]
+  ],
   "single-word cities": [
     ["EXPERIENCE"],
     ["Acme GmbH", "London", "bold"], ["Senior Engineer", "Jan 2019 – Present", "italic"], ["Cut build times in half for the payments team"],
@@ -367,27 +382,42 @@ test("values at a left-aligned tab stop stay with their rows, in the right-hand 
   }
 });
 
+// Only section rows without bullets set a tab stop, and only within 1.5pt.
 test("a one-off gap, or a gap shared in a row's left half, stays combined with a Check", async () => {
   const result = await importResumePdf(await pdf(({ text, fonts }) => {
     text("Jane Doe", 54, 730, 18, fonts.bold);
     text("jane@example.test", 54, 712);
+    text("555-0100", 330, 712);
     text("EXPERIENCE", 54, 684, 12, fonts.bold);
     text("Acme Corp", 54, 668, 10, fonts.bold);
     text("(acquired by Globex)", 330, 668);
     text("•", 57, 655);
     text("Ran the payments platform for three regions and cut settlement from two days to four hours", 68, 655);
-    text("PROJECTS", 54, 627, 12, fonts.bold);
-    text("RoleFit AI", 54, 611, 10, fonts.bold);
-    text("TypeScript, Node", 200, 611);
-    text("•", 57, 598);
-    text("Built a local resume tailoring workbench", 68, 598);
-    text("Typeset", 54, 585, 10, fonts.bold);
-    text("React, Canvas", 200, 585);
-    text("•", 57, 572);
-    text("Built a browser resume editor", 68, 572);
+    text("•", 57, 642);
+    text("Owned the ledger", 68, 642);
+    text("across regions", 330, 642);
+    text("Globex", 54, 616, 10, fonts.bold);
+    text("2016 – 2019", 360, 616);
+    text("Engineer", 54, 603, 10, fonts.italic);
+    text("Remote", 360, 603);
+    text("PROJECTS", 54, 575, 12, fonts.bold);
+    text("RoleFit AI", 54, 559, 10, fonts.bold);
+    text("TypeScript, Node", 200, 559);
+    text("•", 57, 546);
+    text("Built a local resume tailoring workbench", 68, 546);
+    text("Typeset", 54, 533, 10, fonts.bold);
+    text("React, Canvas", 200, 533);
+    text("•", 57, 520);
+    text("Built a browser resume editor", 68, 520);
   }), pdfjs);
-  const entries = result.data.sections.flatMap((section) => section.items).map((item) => [stripInlineMarks(item.titleLeft), item.titleRight]);
-  assert.deepEqual(entries, [["Acme Corp (acquired by Globex)", ""], ["RoleFit AI TypeScript, Node", ""], ["Typeset React, Canvas", ""]]);
+  const entries = result.data.sections.flatMap((section) => section.items)
+    .map((item) => [stripInlineMarks(item.titleLeft), item.titleRight, stripInlineMarks(item.subtitleLeft), item.subtitleRight]);
+  assert.deepEqual(entries, [
+    ["Acme Corp (acquired by Globex)", "", "", ""],
+    ["Globex", "2016 – 2019", "Engineer", "Remote"],
+    ["RoleFit AI TypeScript, Node", "", "", ""],
+    ["Typeset React, Canvas", "", "", ""]
+  ]);
   assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 3);
 });
 
@@ -434,16 +464,9 @@ test("a mostly dated sidebar beside any kind of bullet is still a column", async
 });
 
 test("a mostly dated sidebar under its own headings is still a column beside plain lines", async () => {
-  const titleCase = DATED_SIDEBAR.map((value) => (/^[A-Z]{4,}$/.test(value) ? value[0] + value.slice(1).toLowerCase() : value));
-  // A heading styled exactly like body text is a column cue, but the local
-  // reading has no signal to read it as a heading.
-  for (const [label, side, headings, headingsFound] of [
-    ["larger", DATED_SIDEBAR, "larger", true], ["bold", DATED_SIDEBAR, "bold", true],
-    ["plain capitals", DATED_SIDEBAR, "plain", true], ["plain title case", titleCase, "plain", false]
-  ]) {
+  for (const [label, side, headings] of [["larger", DATED_SIDEBAR, "larger"], ["bold", DATED_SIDEBAR, "bold"], ["plain capitals", DATED_SIDEBAR, "plain"]]) {
     const result = await importResumePdf(await sidebarPdf(side, { headings }), pdfjs);
     assert.deepEqual(regions(result), ["left", "right"], label);
-    if (!headingsFound) continue;
     const found = result.data.sections.map((section) => section.heading.toUpperCase());
     for (const heading of ["EXPERIENCE", "EDUCATION", "CERTIFICATIONS"]) assert.ok(found.includes(heading), `${label}: ${JSON.stringify(found)}`);
   }

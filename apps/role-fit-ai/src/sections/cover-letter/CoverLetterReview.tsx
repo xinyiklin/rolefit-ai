@@ -208,7 +208,7 @@ export function CoverLetterReview({
       </button>
     </ProposalDecisionBar>
   ) : failure ? (
-    <button type="button" className="primary-button is-compact" onClick={onTailor}>
+    <button type="button" className="primary-button is-compact" disabled={Boolean(resumeBlocker)} onClick={onTailor}>
       Retry polish
     </button>
   ) : appliedResult && canRestore ? (

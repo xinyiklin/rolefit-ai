@@ -45,12 +45,14 @@ file/layout contracts remain in `@typeset/engine`.
   at least 40% dated (`rowDates.ts` `hasDate`, which also finds the date in
   "2019 – 2023 · Boston" or "06/2019 – Present (4 yrs)"). The dated reading
   never applies to a band beside a bullet (dingbat glyphs included) or holding
-  a heading (styled apart, or a section title such as "Education"), which is a
-  sidebar.
+  a heading, which is a sidebar. A heading is styled apart, or is a section
+  title in capitals ("EDUCATION") among mixed-case words; a value such as
+  "Honors", or an all-caps resume's values, is not.
 - A title or subtitle row's last segment is its right-hand value when it
   reaches the margin, or when it sits in the right half of the column and
-  starts where another row's last segment does (a tab stop). A one-off gap, or
-  one shared in the left half, stays in the left field with a Check.
+  starts within 1.5pt of another section row's (a tab stop; contact lines and
+  bullets never set one). A one-off gap, or one shared in the left half, stays
+  in the left field with a Check.
 - `__evals__/pdf-import-corpus.mjs` is the gate (synthetic fixtures generated
   in memory from `__evals__/support/importCorpus.mjs`; never commit a PDF);
   `pdf-import-edge-cases.mjs` holds review-found layouts.
