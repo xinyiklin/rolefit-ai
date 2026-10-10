@@ -821,6 +821,52 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     low-severity wording findings, all fixed; its loops ran the fixed probe
     200/200 while the original failed 21/200, and its mutation check failed
     25/25.
+- [USER+CODE+TOOL] **RoleFit 0.11.0 preview prepared** (task
+  `2026-10-09-electron-43-security`). It is a minor release because #198's
+  2,000-application tracker and #205's PDF import are user-visible
+  capabilities; Electron 43.7.9 (#202), #203, #206, and #151/#152/#204 ship
+  with them.
+  - The extension stays 1.3.0 and the desktop API stays 13; neither changed
+    since 0.10.0.
+  - [USER] 2026-10-10: the prep, first drafted on `3c1eb02`, was rebased onto
+    `main` at `9f85410` so the release includes #205 and #206.
+  - `docs/releases/0.11.0-beta.1.md` notes:
+    - PDF import, its review rail, the Polish gate, and the click-only Interpret
+    - the tracker limit, faster scans and partial saves, and the new backup
+      limits
+    - the four Electron advisories
+    - rollback: after any 0.11.0 launch, 0.10.0 and earlier refuse to save
+      settings, leave preferences out of their own backups, and refuse 0.11.0
+      backups (#205's `resumeImport*` keys); they also refuse a tracker over
+      500 or an oversized backup. None changes the workspace.
+    - known issues: packaged backup at the new maximum is unverified; PDF
+      import accuracy on real layouts and live interpretation are unmeasured,
+      and the two accepted layout residuals
+  - The landing screenshot manifest is empty, so no retake.
+  - [TOOL] Preflight on `9f85410` plus the prep (Windows x64, Node 24.18.0):
+    root `npm run check` (RoleFit 178/178), `test:desktop:release` 14/14, a
+    fresh `make:rolefit:desktop` (149 staged files, 0.11.0 nupkg), and
+    `test:rolefit:desktop:packaged` pass.
+  - [TOOL] `test:rolefit:desktop` failed 3/3 (also on plain `main`) in its
+    development phase and passed once Vite's dependency cache was warmed. The
+    lockfile change dropped `node_modules/.vite/deps`, and the smoke never
+    requests a page, so Vite never commits a new one: every run optimizes cold,
+    and the dev server misses the companion's 750 ms health probes (instrumented:
+    `TimeoutError` after ready). The packaged runtime has no Vite. The
+    2026-10-09 "flaky under load" note is probably this; making the smoke
+    deterministic is a follow-up.
+  - [TOOL] #198 browser QA ([USER] required before tagging). The dev server ran
+    from the release worktree on port 5183 with `ROLEFIT_WORKSPACE_DIR` set to
+    a scratch workspace of 620 synthetic applications (46 planted duplicates)
+    seeded through `writeApplications`.
+    - Applications showed "1–20 of 620" (31 pages), and duplicate review listed
+      43 groups.
+    - Changing one record's stage and saving sent a partial response (the full
+      ID order plus that one record). After a reload, all 620 remained with
+      the change kept, and a conditional GET returned 304.
+    - No failing resources after the fresh worktree's fonts were synced. The
+      only earlier console errors were those font 404s.
+    - Merge and delete were not exercised.
 
 ## 2026-10-08
 
