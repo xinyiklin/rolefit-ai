@@ -394,8 +394,8 @@ and lives in the app ledger.
 
 ### Desktop companion, distribution, and release/deploy state
 
-Current: RoleFit 0.10.0 preview (`rolefit-preview-v0.10.0-beta.1` on `4e33fb8`),
-extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
+Current: RoleFit 0.11.0 preview (`rolefit-preview-v0.11.0-beta.1` on `0a37415`),
+extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
 
 - 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
@@ -487,12 +487,26 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
 
 ## 2026-10-10
 
+- [USER+TOOL] **RoleFit 0.11.0 preview released.**
+  - #207 was squash-merged as `0a37415` (= reviewed head `9660428`) and the
+    annotated tag `rolefit-preview-v0.11.0-beta.1` was pushed on it.
+  - Run 38063426286: attempt 1 failed only at the macOS arm64 DMG step
+    (`hdiutil detach … No such file or directory`, after build and ad-hoc
+    signing; x64 and Windows passed) and published nothing. Attempt 2 reran
+    the failed jobs in the same run, so the tag never moved and `beta.2` was
+    not needed.
+  - The run published "RoleFit AI 0.11.0 — unsigned preview beta.1" at
+    2026-10-10T15:35:01Z with arm64/x64 `.dmg`/`.zip`, the Windows x64
+    `.exe`, and `SHA256SUMS.txt`. The site, Typeset, and Document workflow
+    runs on `0a37415` succeeded.
+  - [USER] `test:rolefit:desktop` was waived for this tag (failed cold; passed
+    warm); #208 fixed it the same day.
 - [USER+CODE+TOOL] **Desktop smoke passes from a cold Vite cache** (task
   `2026-10-10-desktop-smoke-vite-warm`).
   - [CODE] Vite 8 drops `node_modules/.vite/deps` when the lockfile changes and
     re-optimizes in the background after startup; it commits once requests go
-    idle and the bundle finishes (no page request needed). [TOOL] Under load here, the
-    standalone development phase stopped before that commit (only
+    idle and the bundle finishes (no page request needed). [TOOL] Under load
+    here, the standalone development phase stopped before that commit (only
     `deps_temp_*` remained), so the owned development phase optimized cold and
     its companion missed the 750 ms health probes: the old smoke failed 4 of 4
     cold runs on a busy machine; the reviewer's 3 cold runs on an idle machine
@@ -505,7 +519,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     so an outdated file cannot satisfy the wait. No product, probe, or
     assertion change.
   - [TOOL] Windows x64: with the fix, 3 of 3 cold runs and a warm run passed
-    (about 32 s each); one independent review.
+    (about 32 s each). Independent review READY on the exact head; merged as
+    #208 (`25e1531`).
 
 ## 2026-10-09
 
