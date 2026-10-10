@@ -496,13 +496,22 @@ const workspace = source("hooks/useWorkspaceResume.ts");
 const editor = source("hooks/useResumeEditor.ts");
 const body = (text, name) => text.slice(text.indexOf(`function ${name}(`), text.indexOf("\n  }\n", text.indexOf(`function ${name}(`)));
 
-test("App gates every Resume Polish route while a review is open", () => {
+test("App gates every Resume and Cover letter Polish route while a review is open", () => {
   assert.match(app, /const canPolish = polishInputsReady && selectedPolishProvidersReady && !resumeImport\.reviewOpen;/);
   assert.match(body(app, "handleResumePolish"), /\|\| resumeImport\.reviewOpen\s*\) return false;/);
   assert.match(app, /const retryResumePolish = \(\) => \{\s*if \(!resumeImport\.reviewOpen\) void retryStage\(\);\s*\};/);
   assert.equal((app.match(/retryStage\(\)/g) ?? []).length, 1, "retryStage is reached only through the guard");
   assert.match(app, /onRetry=\{resumeImport\.reviewOpen \? undefined : retryResumePolish\}/, "the dock hides Retry during a review");
   assert.match(app, /onRetryPolish=\{retryResumePolish\}/);
+  // Cover letter Polish reads the editor's resume, so it waits for the review too.
+  assert.match(body(app, "handleCoverLetterPolish"), /\|\| resumeImport\.reviewOpen\s*\) return false;/);
+  assert.match(app, /const retryCoverPolish = \(\) => \{\s*if \(!resumeImport\.reviewOpen\) void handleTailorCoverLetter\(\);\s*\};/);
+  assert.equal((app.match(/handleTailorCoverLetter\(\)/g) ?? []).length, 2, "the cover pipeline starts only through its two guarded paths");
+  assert.match(app, /stageKey="cover-polish"\s*state=\{coverProgress\}\s*onRetry=\{resumeImport\.reviewOpen \? undefined : retryCoverPolish\}/);
+  assert.match(app, /const coverPolishCanStart =[^;]*!resumeImport\.reviewOpen;/, "automatic cover Polish declines during a review");
+  assert.match(app, /canTailorCoverLetter=\{[^}]*!resumeImport\.reviewOpen\s*\}/, "Prepare's cover card is disabled during a review");
+  assert.match(app, /coverLetterTailorHint=\{\s*resumeImportBlocker \|\| \(/, "and says why first");
+  assert.match(app, /resumeReady=\{resumeReady && !resumeImport\.reviewOpen\}\s*resumeBlocker=\{resumeImportBlocker\}/, "the Cover Letter tab gets the same gate and reason");
 });
 
 test("the workspace commits an import as unsaved, in memory, and Discard restores it exactly", () => {

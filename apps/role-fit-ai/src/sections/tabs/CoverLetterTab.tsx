@@ -56,6 +56,8 @@ type CoverLetterTabProps = {
   isTailoring: boolean;
   tailorStatus: string;
   resumeReady: boolean;
+  // Why the resume cannot ground a letter right now, when it is not missing.
+  resumeBlocker: string;
   jobReady: boolean;
   providerReady: boolean;
   jobTarget?: { role?: string; company?: string };
@@ -95,6 +97,7 @@ export function CoverLetterTab({
   isTailoring,
   tailorStatus,
   resumeReady,
+  resumeBlocker,
   jobReady,
   providerReady,
   jobTarget,
@@ -196,6 +199,7 @@ export function CoverLetterTab({
             canRestore={editor.canRestorePreTailor}
             isTailoring={isTailoring}
             resumeReady={resumeReady}
+            resumeBlocker={resumeBlocker}
             jobReady={jobReady}
             providerReady={providerReady}
             slotAnswers={slotAnswers}

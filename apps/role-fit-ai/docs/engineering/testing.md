@@ -402,9 +402,11 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   across runs; superscripts; a role title at a page break; right-aligned
   dates, flush-right years, and left-tab-stop values (places, single-word
   cities, GPAs, wide date-and-place values, numeric months with durations) that
-  must not read as a column; and same-baseline right sidebars that must: skill
-  lists with one dated row, and a mostly dated sidebar beside glyph, inline,
-  or dingbat bullets, or under larger or bold headings.
+  must not read as a column and land in their row's right-hand slot, while a
+  one-off gap or one shared in the left half stays combined with a Check; and
+  same-baseline right sidebars that must read as a column: skill lists with
+  one dated row, and a mostly dated sidebar beside glyph, inline, or dingbat
+  bullets, or under larger, bold, or plain section-title headings.
 - `pdf-import-interpretation.mjs` feeds crafted provider replies to the client
   rebuild: reworded or corrected substrings, free text, unknown pieces,
   duplicated, overlapping, reordered, or partly omitted text, recombined or
@@ -425,8 +427,10 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   during a request, a reseed while each confirm dialog is open, Stop, single
   flight, the abort when a review ends, an unedited AI reading discarded
   without asking, and a pending request from one case never reaching the
-  next. It also pins App's Polish gates and the workspace
-  commit/restore seams (AC8, AC12).
+  next. It also pins App's Resume and Cover letter Polish gates and the
+  workspace commit/restore seams (AC8, AC12);
+  `src/sections/document/__evals__/document-workflow-message-ownership.mjs`
+  renders the cover rail naming an import review as its resume blocker.
   `src/sections/resume/__evals__/resume-import-review.mjs` renders the review
   rail's in-review reading and refusal states.
 - `server/ai/__evals__/resume-import-probes.mjs` pins the no-rewrite prompt, the

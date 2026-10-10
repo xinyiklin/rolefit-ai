@@ -615,8 +615,6 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       need the modal dialog to be bypassed or raced; no data harm);
     - tab-stop shapes still read as a column as at HEAD: three rows per
       entry (37% dated), places only, ISO or "Q3 2016" dates;
-    - tab-stop values short of the right margin are combined into the left
-      field with a Check (follow-up approved, below);
     - whitespace is not audited; invisible text imports like any text; the
       shared firewall leaves zero-width or fullwidth tag variants; a tag
       formed only across a hyphen-joined line refuses the whole import; the
@@ -627,6 +625,22 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     from HEAD. Approved as a follow-up PR: Cover letter Polish also waits for
     an import review (it reads the editor's resume), and tab-stop values go to
     the right-hand slot.
+  - [USER+TOOL] **Merged** as #205, squash `9296fb12` on `main` (head
+    `c7bfe0ee`, CI green, tree identical to the reviewed head). The exact-head
+    review found no Blocker or High and one Medium that the user accepted for
+    the follow-up: a mostly dated sidebar with plain headings beside a main
+    column without bullet glyphs read as one column.
+  - [CODE] Follow-up branch `fix/rolefit-pdf-import-followups`:
+    - Cover letter Polish waits for an import review on every route (button,
+      Prepare card, automatic Polish, the dock's Retry); the Cover Letter rail
+      names the review as its resume blocker.
+    - A band holding a section title by vocabulary ("Education",
+      "CERTIFICATIONS", any case) is a sidebar, which closes the accepted
+      Medium; a heading styled exactly like body text still is not read as a
+      heading by the local reading.
+    - A title or subtitle row's last segment in the right half that starts at
+      another row's tab stop goes to the right-hand slot; a one-off gap or one
+      shared in the left half stays combined with a Check.
   - [TOOL] Corpus: 7 engine + 6 foreign fixtures (one truly two pages with a
     running header) and 8 refusal kinds; synthetic and written alongside the
     parser, so real-world accuracy is UNCONFIRMED.

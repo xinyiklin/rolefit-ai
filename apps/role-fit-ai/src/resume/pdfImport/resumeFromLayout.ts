@@ -151,6 +151,13 @@ export function buildResumeDraft(source: LayoutLines, rules: readonly PdfRule[])
     earlierEdges.push(...edges);
   }
   const body = lines.filter((line) => !dropped.has(line));
+  // A row's last segment in the right half of its column, starting where
+  // another row's does (a tab stop), is its right-hand value short of the margin.
+  const lastSegmentX = (line: LayoutLine) => line.segments[line.segments.length - 1][0].x;
+  const tabbed = body.filter((line) => line.segments.length > 1);
+  const atTabStop = (line: LayoutLine) =>
+    lastSegmentX(line) >= (line.regionLeft + line.regionRight) / 2 &&
+    tabbed.some((other) => other !== line && other.region === line.region && Math.abs(lastSegmentX(other) - lastSegmentX(line)) <= 1.5);
 
   // ── Name ──────────────────────────────────────────────────────────────────
   const firstPage = body.filter((line) => line.page === 0);
@@ -294,7 +301,7 @@ export function buildResumeDraft(source: LayoutLines, rules: readonly PdfRule[])
     let segments = line.segments;
     let right: LinePiece[] | null = null;
     const last = segments[segments.length - 1];
-    if (segments.length > 1 && last[last.length - 1].right >= line.regionRight - 1.5 * line.size) {
+    if (segments.length > 1 && (last[last.length - 1].right >= line.regionRight - 1.5 * line.size || atTabStop(line))) {
       right = last;
       segments = segments.slice(0, -1);
     }

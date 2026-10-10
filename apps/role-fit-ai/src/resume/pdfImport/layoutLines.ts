@@ -3,7 +3,7 @@
 // tab-stop-sized gaps (right-aligned dates, contact runs).
 
 import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
-import { BULLET_GLYPHS, isSectionHeader } from "../sections.ts";
+import { BULLET_GLYPHS, isSectionHeader, isSectionTitle } from "../sections.ts";
 import type { PdfLayout, PdfSpan } from "./pdfLayout.ts";
 import { hasDate } from "./rowDates.ts";
 
@@ -196,7 +196,7 @@ function findGutter(spans: readonly PdfSpan[], pageWidth: number): Gutter | null
     const typicalSize = [...sizes].sort((a, b) => a - b)[Math.floor(sizes.length / 2)];
     const boldMinority = bolds.filter(Boolean).length < bolds.length / 2;
     const headed = values.some((value, index) => /\p{L}/u.test(value) && !/[\d,]/u.test(value) &&
-      (sizes[index] >= typicalSize * 1.08 || (bolds[index] && boldMinority && isSectionHeader(value))));
+      (sizes[index] >= typicalSize * 1.08 || isSectionTitle(value) || (bolds[index] && boldMinority && isSectionHeader(value))));
     const dated = !besideBullet && !headed && values.filter(hasDate).length >= values.length * 0.4;
     const rowValues = sharedRows >= rightLines.size * 0.6 && (dated || widths[Math.floor(widths.length / 2)] < pageWidth * 0.2);
     if (rowValues && (flushRight || longestRun <= 2 || dated)) continue;

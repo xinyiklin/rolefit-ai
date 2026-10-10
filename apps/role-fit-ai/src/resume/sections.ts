@@ -40,6 +40,12 @@ const ALL_CAPS_HEADER_RE = /^[A-Z0-9][A-Z0-9 &/\-]+$/;
 const SECTION_TITLE_RE =
   /^(?:(?:work|professional|relevant|employment|career|academic|technical|core|key|other|additional|selected|personal)\s+)*(?:experience|education|skills|projects?|summary|objective|profile|highlights?|certifications?|licenses?|achievements?|accomplishments?|awards?|honou?rs?|background|history|publications?|patents?|involvement|activities|interests|languages?|volunteer(?:ing)?|leadership|coursework|competenc(?:e|ies)|qualifications?)(?:\s*(?:&|and|\/)\s*[a-z]+)?$/i;
 
+// The section-title vocabulary alone, without the ALL-CAPS rule that also fits
+// "REMOTE" or "NEW YORK".
+export function isSectionTitle(line: string): boolean {
+  return SECTION_TITLE_RE.test(stripTrim(line));
+}
+
 export function isSectionHeader(line: string): boolean {
   // Tolerate a trailing colon ("Experience:") which the char classes reject.
   const trimmed = stripTrim(line);

@@ -436,7 +436,11 @@ assert.match(
   /readiness\("Resume", resumeReady, "Add your resume"\)/,
   "both rails phrase the same readiness gate identically"
 );
-assert.match(coverRail, /readiness\("Resume", resumeReady, "Add your resume"\)/);
+assert.match(
+  coverRail,
+  /readiness\("Resume", resumeReady, resumeBlocker \|\| "Add your resume"\)/,
+  "the cover rail shares the phrase and names an import review instead when one blocks"
+);
 assert.doesNotMatch(
   resumeRail,
   /label: "Workflow", state: "ready"/,
