@@ -592,10 +592,14 @@ not yet released.
       the companion's 750 ms health probe read "unreachable", and one start
       timed out.
     - An alternating rerun in that worktree passed twice each at `aa202ba`
-      (0.11.1) and `48bed14` (#212), so #212 is not implicated. `49dd34d`
-      then passed twice in a row.
+      (0.11.1) and `48bed14` (#212). `49dd34d` then passed twice in a row.
+      Passing reruns cannot clear an intermittent failure. What argues
+      against #212 is that the same class of failure (owned development
+      phase, "unreachable") already occurred at 0.11.1, before #212.
     - A stale Vite cache after the lockfile change was tested and not
-      confirmed. The root cause is UNCONFIRMED and matches the 0.11.1 flake.
+      confirmed. The root cause is UNCONFIRMED. It resembles the 0.11.1 flake,
+      which tripped the 1 s pairing-requests fetch rather than the 750 ms
+      health probe.
     - `make:rolefit:desktop` and `test:rolefit:desktop:packaged` (win32-x64,
       unpacked) passed in the clean worktree.
   - Release receipt: PENDING.
