@@ -1163,6 +1163,11 @@ npm run test:desktop:ipc --workspace apps/role-fit-ai
 npm run test:rolefit:desktop
 ```
 
+Before its development-mode companion phases, the smoke waits for its
+standalone development server's Vite optimize to commit. Otherwise a slow cold
+optimize can restart in the owned development phase and starve the companion's
+750 ms health probes.
+
 The browser remains the product host, so companion verification must prove that
 Electron renders only its compact local setup page, never the Drafting Desk,
 and does not own workspace/tracker files. Focused companion probes should cover:
