@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.11.1** (preview).
+Current desktop source version: **0.12.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -765,7 +765,8 @@ sites.
 Known limits:
 
 - The extension reads a frame's text only when the frame comes from the page's
-  own site. For a frame from another site, it sends the frame's address. The
+  own origin, and only when no description selector matched. For a frame from
+  another origin, it sends the frame's address. The
   server uses it when the page itself is not a recognized source and exactly
   one frame is a public posting on a board listed above. Lever and Jobvite
   postings count too. Any other frame is left out of the capture.
