@@ -69,20 +69,11 @@ async function waitForHealth(
   throw new Error(`Timed out waiting for the ${mode} RoleFit smoke server.`);
 }
 
-// Vite commits optimized dependencies only after a page crawl. A cold optimize
-// inside a development companion phase starves its 750 ms health probes.
-async function warmViteDependencies(origin, timeoutMs = 60_000) {
+// A cold Vite optimize runs in the background after startup. If this server
+// stops first, the owned phase repeats it while its 750 ms health probes run.
+async function waitForViteDependencies(timeoutMs = 60_000) {
   const { cacheDir } = await resolveConfig({ root: appRoot, logLevel: "silent" }, "serve");
   const metadataPath = join(cacheDir, "deps", "_metadata.json");
-  const page = await fetch(`${origin}/`);
-  assert.equal(page.ok, true, `Vite page request failed with ${page.status}.`);
-  const moduleScripts = [...(await page.text()).matchAll(/<script type="module" src="([^"]+)"/g)];
-  assert.notEqual(moduleScripts.length, 0, "The Vite page lists no module scripts to crawl.");
-  for (const [, src] of moduleScripts) {
-    const script = await fetch(new URL(src, origin));
-    assert.equal(script.ok, true, `Vite module ${src} failed with ${script.status}.`);
-    await script.arrayBuffer();
-  }
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -398,7 +389,7 @@ try {
     ROLEFIT_WORKSPACE_DIR: workspaceDir
   });
   await waitForHealth(origin, "development", "standalone");
-  await warmViteDependencies(origin);
+  await waitForViteDependencies();
   const reusedDevelopment = await runProcess(
     electronPath,
     [appRoot],

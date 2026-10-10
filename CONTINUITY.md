@@ -490,17 +490,22 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
 - [USER+CODE+TOOL] **Desktop smoke passes from a cold Vite cache** (task
   `2026-10-10-desktop-smoke-vite-warm`).
   - [CODE] Vite 8 drops `node_modules/.vite/deps` when the lockfile changes and
-    commits a new optimize only after a page crawl. The smoke never requested a
-    page, so every run optimized cold and the owned-development companion
-    missed its 750 ms health probes.
-  - [CODE] Test-only fix: `smoke.test.mjs` `warmViteDependencies` fetches `/`
-    and its module scripts from the standalone development server, then waits
-    up to 60 s for `<cacheDir>/deps/_metadata.json` (path from Vite's
-    `resolveConfig`). In Vite's public `createServer`, the stale cache is
-    removed before RoleFit answers health, so an outdated file cannot satisfy
-    the wait. No product, probe, or assertion change.
-  - [TOOL] Windows x64: a cold run of the old smoke on `main` failed; with the
-    fix, 3 of 3 cold runs and a warm run passed (about 32 s each).
+    re-optimizes in the background after startup, committing about 50 ms after
+    it goes idle (no page request needed). [TOOL] Under load here, the
+    standalone development phase stopped before that commit (only
+    `deps_temp_*` remained), so the owned development phase optimized cold and
+    its companion missed the 750 ms health probes: the old smoke failed 4 of 4
+    cold runs on a busy machine; the reviewer's 3 cold runs on an idle machine
+    passed, with the cache written within 3 s. The timing dependence is
+    measured; the exact load trigger is UNCONFIRMED.
+  - [CODE] Test-only fix: `smoke.test.mjs` `waitForViteDependencies` waits up
+    to 60 s, after the standalone development server is healthy, for
+    `<cacheDir>/deps/_metadata.json` (path from Vite's `resolveConfig`). Vite's
+    public `createServer` removes a stale cache before RoleFit answers health,
+    so an outdated file cannot satisfy the wait. No product, probe, or
+    assertion change.
+  - [TOOL] Windows x64: with the fix, 3 of 3 cold runs and a warm run passed
+    (about 32 s each); one independent review.
 
 ## 2026-10-09
 
@@ -764,8 +769,8 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     native jobs cover macOS.
   - [TOOL] `test:rolefit:desktop` intermittently failed its development-mode
     phases on both Electron versions ("connection status contract", or a
-    pairing-settings `TimeoutError`). Superseded 2026-10-10: the cause was a
-    cold Vite dependency optimize, not machine load. CI does not run this smoke.
+    pairing-settings `TimeoutError`). See 2026-10-10: a cold Vite optimize that
+    load delays past the standalone phase. CI does not run this smoke.
   - [TOOL] A Windows `safeStorage` probe (isolated user data, synthetic value)
     encrypted with 43.2.0 and decrypted with 43.7.9: MATCH,
     `shouldReEncrypt=false`. macOS upgrade decryption is UNVERIFIED.
@@ -863,12 +868,11 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     fresh `make:rolefit:desktop` (149 staged files, 0.11.0 nupkg), and
     `test:rolefit:desktop:packaged` pass.
   - [TOOL] `test:rolefit:desktop` failed 3/3 (also on plain `main`) in its
-    development phase and passed once Vite's dependency cache was warmed. The
-    lockfile change dropped `node_modules/.vite/deps`, and the smoke never
-    requests a page, so Vite never commits a new one: every run optimizes cold,
-    and the dev server misses the companion's 750 ms health probes (instrumented:
-    `TimeoutError` after ready). The packaged runtime has no Vite. The
-    2026-10-09 "flaky under load" note was this; fixed 2026-10-10.
+    development phase and passed once Vite's dependency cache was warmed: the
+    dev server missed the companion's 750 ms health probes (instrumented:
+    `TimeoutError` after ready) during a cold Vite optimize. The packaged
+    runtime has no Vite. [USER] Waived for this tag; cause and fix in the
+    2026-10-10 entry.
   - [TOOL] #198 browser QA ([USER] required before tagging). The dev server ran
     from the release worktree on port 5183 with `ROLEFIT_WORKSPACE_DIR` set to
     a scratch workspace of 620 synthetic applications (46 planted duplicates)
