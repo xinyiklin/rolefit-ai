@@ -91,6 +91,12 @@ V3 client of the local RoleFit server.
   promise from the injected function; the generic capture stays synchronous so
   every other site keeps working even where an engine mishandles an async
   result. Its probes live in `__evals__/extension-handshake-capture.mjs`.
+- Frames stay within `activeTab`. Do not use `allFrames` injection: it cannot
+  reach cross-origin frames without a host permission. The top-frame capture
+  reads same-origin frame text through `contentDocument`, and only frame `src`
+  addresses (at most eight) for other origins. The server fetches one of those
+  only when it names a posting on a recognized board. Probes live in
+  `__evals__/extension-frame-capture.mjs`.
 - Keep all server access fixed to local RoleFit routes. The localhost server
   must require the popup's exact configured Origin through
   `EXTENSION_ALLOWED_ORIGINS`; an extension URL scheme alone is never an
@@ -122,7 +128,7 @@ V3 client of the local RoleFit server.
   `location.origin`; do not add a repo-authored Chrome manifest key or a static
   bearer value as a substitute for server-side identity validation.
 - The popup has no AI/deterministic or automatic-proposal toggles. Extension
-  intake sends only `text`, `url`, and `claimToken` to import; the same-origin
+  intake sends only `text`, `url`, `frameUrls`, and `claimToken` to import; the same-origin
   inbox delivers only `text` and `url`. The app always owns provider-backed AI
   job analysis, duplicate gates, the deterministic brief used only for failed-run
   inspection, and the stop on Prepare. Claim-token routing and Firefox

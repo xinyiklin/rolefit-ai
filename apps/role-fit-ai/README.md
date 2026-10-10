@@ -178,7 +178,7 @@ font, size and wrapping changes still reflow the page normally.
   description: Workday-aware through CXS JSON, Ashby-aware through
   its public posting API (including Handshake's branded wrapper and embedded
   boards), with Greenhouse-wrapper resolution; Oracle, iCIMS, Dayforce,
-  Workable, and UKG job pages; structured JobPosting data; and a generic
+  Workable, UKG, Microsoft Careers, and Rippling postings; structured JobPosting data; and a generic
   HTML→text fallback for other boards ([Supported job sites](#supported-job-sites)
   lists each). Each recognized source must yield the exact linked job; a
   missing posting or sign-in page fails with a prompt to paste or use the
@@ -750,7 +750,8 @@ the URL, so the same posting is recognized as a duplicate under different URLs.
 | UKG / UltiPro (`recruiting*.ultipro.com` opportunity pages) | Job page data | Page text, then the job page | No |
 | SmartRecruiters | Page text or structured data | Page text | Yes |
 | Glassdoor | No: Glassdoor refuses the server's request (HTTP 403 in testing) | Page text | Yes |
-| Microsoft Careers (`apply.careers.microsoft.com`) | Summary only: about a third of the posting, without Responsibilities or Qualifications | Page text, complete | No |
+| Microsoft Careers (`apply.careers.microsoft.com/careers/job/<id>`) | Full description from Microsoft's public position details | Page text, then Microsoft's position details | No |
+| Rippling (`ats.rippling.com/<board>/jobs/<id>`) | Full description from Rippling's public job board API; a closed posting asks you to paste instead of importing the careers page | Page text, then Rippling's API | No |
 | Meta Careers, ZipRecruiter | No: the site refuses the server's request (HTTP 400 / 403 in testing) | Page text | No |
 | Any other site | Structured `JobPosting` data or readable page text; a page without readable text asks you to paste instead | Page text | No |
 
@@ -763,12 +764,13 @@ sites.
 
 Known limits:
 
-- The extension reads only the page's top frame. A description inside an
-  embedded frame is missed: iCIMS pages work only because the server fetches
-  `*.icims.com` itself, and a company site that embeds an ATS in a frame
-  captures little or nothing.
-- A posting link that redirects to a general careers page (as Rippling's own
-  board does) imports that page's text; check the brief before preparing.
+- The extension reads a frame's text only when the frame comes from the page's
+  own site. For a frame from another site, it sends the frame's address. The
+  server uses it when the page itself is not a recognized source and exactly
+  one frame is a public posting on a board listed above. Lever and Jobvite
+  postings count too. Any other frame is left out of the capture.
+- Outside Rippling, a posting link that redirects to a general careers page
+  imports that page's text; check the brief before preparing.
 
 ## Install and local data
 

@@ -1010,15 +1010,26 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-10).
   iCIMS, Oracle Recruiting, LinkedIn, Amazon, Google, Apple, Built In, Dice, YC,
   Wellfound, Teamtailor, SAP SuccessFactors, and Radancy sites. Refused: Indeed
   401, Glassdoor 403, ZipRecruiter 403, Meta 400.
-  - Open (each needs the user's go-ahead): Microsoft Careers link import keeps
-    only a 1,792-character summary of a 5,692-character posting (the extension
-    captures it fully; its public `position_details` JSON has the full text);
-    generic link import accepts a page reached by redirect (Rippling's board
-    308-redirects every posting to its careers page); the extension reads only
-    the top frame, so iCIMS relies on the server fetch of `*.icims.com` and ATS
-    frames embedded in company sites capture nothing useful. Unverified (no live
-    posting found): Jobvite, Taleo, Paylocity, ADP, BambooHR, Breezy, JazzHR,
-    Recruitee, Personio, and other companies' Rippling boards.
+  - 2026-10-10 [USER+CODE+TOOL] Stage 3 job intake (supersedes the earlier
+    open items).
+    - Microsoft Careers (Eightfold-hosted) links read the public
+      `position_details` JSON. A live posting went from 2,387 to 6,567
+      characters, and an unknown id says "could not find".
+    - Other Eightfold sites (PayPal, Qualcomm, Starbucks, Vodafone) already
+      imported in full and stay on the generic path. `EIGHTFOLD_HOSTS` is the
+      one-line opt-in.
+    - Rippling live postings had imported in full. Only a closed or unknown
+      posting 308-redirected to the careers page, and that page was imported.
+      Rippling links now read the public board API (verified on the `rippling`
+      and `joinroot` boards), and a closed posting says "could not find".
+    - The extension adds same-origin frame text and sends up to eight frame
+      `src` URLs as `frameUrls`. The server resolves an unrecognized page through
+      exactly one frame that names a recognized board posting. There is no new
+      permission and no `allFrames`. In Chromium, a cross-origin frame's
+      `contentDocument` reads as `null` without throwing.
+    - Generic redirects to other pages remain accepted.
+    - Unverified (deferred by the user): Jobvite, Taleo, Paylocity, ADP, BambooHR,
+      Breezy, JazzHR, Recruitee, Personio, Phenom, Avature.
 - [TOOL] **RoleFit 0.9.1 preview released.** Annotated tag
   `rolefit-preview-v0.9.1-beta.1` on `4e389af` (#193); run 37857689297 published
   at 2026-10-08T23:15:56Z with the same asset set; product site, Typeset, and

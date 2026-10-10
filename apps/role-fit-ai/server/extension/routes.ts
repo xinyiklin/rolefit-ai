@@ -16,7 +16,7 @@ import {
   withApplicationsLock
 } from "../applications/storage.ts";
 import { jobWorkspaceDir } from "../workspace.ts";
-import { resolveImportedJobText } from "../jobImport.ts";
+import { cleanFrameUrls, resolveImportedJobText } from "../jobImport.ts";
 import { findMatchingApplication, extractJobMeta } from "./index.ts";
 
 // Pending browser-extension import. `status` is "preparing" while the server
@@ -32,11 +32,12 @@ import { findMatchingApplication, extractJobMeta } from "./index.ts";
 // "preparing" → "done" lifecycle, so an import in one tab never pops the card
 // in another. A claim is refreshed on every poll (lastSeenAt) and released when
 // the owning tab goes quiet, so a claimed-then-closed import isn't stranded.
-// Entry: { id, text, url, status, claimedBy, claimToken, createdAt, lastSeenAt }.
+// Entry: { id, text, url, frameUrls, status, claimedBy, claimToken, createdAt, lastSeenAt }.
 type InboxEntry = {
   id: number;
   text: string;
   url: string;
+  frameUrls: string[];
   status: "preparing" | "done";
   claimedBy: string | null;
   claimToken: string | null;
@@ -99,10 +100,10 @@ function releaseStaleExtensionClaims(now: number): void {
 // provider-backed AI job-analysis request remains in the receiving app tab.
 // Always settles to "done" (even on a resolve failure) so the owning tab never
 // polls forever; the tab then analyzes whatever raw text was captured.
-async function runExtensionPrepare(importId: number, text: string, url: string): Promise<void> {
+async function runExtensionPrepare({ id: importId, text, url, frameUrls }: InboxEntry): Promise<void> {
   extensionPreparing = true;
   try {
-    const jobText = await resolveImportedJobText(text, url);
+    const jobText = await resolveImportedJobText(text, url, {}, frameUrls);
     const done = extensionInbox.find((e) => e.id === importId);
     if (done) {
       done.text = jobText.slice(0, 50_000);
@@ -116,7 +117,7 @@ async function runExtensionPrepare(importId: number, text: string, url: string):
     // Chain to the next un-prepared import (the one we just finished is now
     // "done", so it won't be re-selected).
     const next = extensionInbox.find((e) => e.status === "preparing");
-    if (next) void runExtensionPrepare(next.id, next.text, next.url);
+    if (next) void runExtensionPrepare(next);
   }
 }
 
@@ -357,7 +358,7 @@ export async function handleExtensionRoutes(
       sendJson(res, 400, { error: "A job page text and url are required." });
       return;
     }
-    const text = await resolveImportedJobText(capturedText, url);
+    const text = await resolveImportedJobText(capturedText, url, {}, cleanFrameUrls(body.frameUrls));
 
     // A recognized source's resolved text is not capped like the capture is.
     const { title, company } = extractJobMeta(text.slice(0, 50_000), pageTitle);
@@ -438,21 +439,23 @@ export async function handleExtensionRoutes(
     const now = Date.now();
     // Append (never overwrite) so a second import can't interrupt an in-flight
     // job analysis — each import is its own claimable entry.
-    extensionInbox.push({
+    const entry: InboxEntry = {
       id: importId,
       text,
       url,
+      frameUrls: cleanFrameUrls(body.frameUrls),
       status: "preparing",
       claimedBy: null,
       claimToken: claimToken || null,
       createdAt: now,
       lastSeenAt: now,
-    });
+    };
+    extensionInbox.push(entry);
     pruneExtensionInbox(now);
     sendJson(res, 200, { ok: true });
     // Kick the serialized prepare step only when idle; if one is already running it
     // will pick up this import when it settles (queue, never fan out).
-    if (!extensionPreparing) void runExtensionPrepare(importId, text, url);
+    if (!extensionPreparing) void runExtensionPrepare(entry);
     return;
   }
 
