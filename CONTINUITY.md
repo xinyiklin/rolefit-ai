@@ -510,12 +510,12 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     The model returns piece references, never text; both sides validate
     verbatim, and the client rebuilds from its own pieces. Each field must be
     one run of the PDF's text in order (a cut piece only ends or starts it; it
-    may pass over whole lines or another stretch of a line, never words inside
+    may pass over whole lines or another segment of a line, never words inside
     its own), so reordered, reused, spliced, or partly used text is rejected
     (splits may drop only whitespace, separators, and a label colon followed by
-    a space, across fields); then the audit re-runs. Fields outside every
-    longest in-order run of their column get a reading-order Check, and a field
-    passing over unused text gets a Check. An import that
+    a space, across fields); then the audit re-runs. Checks for stretches out
+    of their column's order, fields joining columns, and fields passing over
+    unused text are as of round 6 below. An import that
     cannot account for every character, or that would form formatting code
     once the importer's marks are removed, is refused. The import seeds the
     editor as unsaved (`seedData(..., { unsaved: true })`) and detaches the
@@ -525,8 +525,9 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     state and clears the import's recovery draft; a second import keeps the
     first one's Discard destination; a refusal raised during a review ends
     with it. Every Resume Polish route is gated during review, and the dock
-    hides a failed run's Retry. Filled form fields and viewer-added text boxes
-    refuse the import (`overlay-text`). `src/lib/browserPdfjs.ts`
+    hides a failed run's Retry. Filled form fields, viewer-added text boxes,
+    and annotations painting non-dingbat glyphs refuse the import
+    (`overlay-text`). `src/lib/browserPdfjs.ts`
     owns the one browser pdf.js setup (React-PDF's default worker path had
     overwritten a separately set worker when it loaded second).
   - [TOOL] Two independent reviews (mb-verifier; content fidelity, lifecycle).
@@ -559,60 +560,76 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
     reading-order Checks, row-value rule, `overlay-text`, lone-glyph adjacency,
     joined-text word count, `endSession`, hidden Retry); 18 scripted mutations
     each fail their eval.
-  - [TOOL] **Not merge-ready: open findings from re-verification round 3**
-    (reviewer 1 FAILED it again, no blocker; branch
-    `feature/rolefit-resume-pdf-import`). Address these, then run a fresh
-    review of both areas:
-    - **High: an AI field can pass over text other fields use without a
-      Check.** Reading order is checked only on each field's first piece
-      (`importStructure.ts`, `placed`/`movedFields`), so a field can append a
-      later whole line or segment. Two examples:
-      - one bullet's first line joined to another bullet's second line, a
-        fabricated metric sentence;
-      - a job's date moved into an Education field.
-
-      Both are accepted with zero Checks. Fix direction: order-check every
-      contiguous run inside a field per region, not just the first piece.
-      Also add evals that disable only `cutAfter` or only `cutBefore` (each
-      half of the junction rule is untested on its own).
-    - **Medium: row values at a left-aligned tab stop on consecutive rows read
-      as a column** (`layoutLines.ts` `findGutter`). Dates or locations at
-      x≈430–440 on 3+ consecutive rows are detached, silently or with only the
-      generic markerless Check. The round-3 rule (flush right, or at most two
-      consecutive rows) fixed same-baseline right sidebars but traded this
-      case. Geometry alone does not separate the two; consider a content cue
-      (date- or location-like values).
-    - **Medium: overlay text is still lost in two shapes**
-      (`pdfLayout.ts` `paintsOwnText`): a text widget with an appearance stream
-      but an empty value, and a Stamp annotation whose appearance paints text.
-      Fix direction: refuse any annotation with an appearance stream that
-      paints text, or compare it against the page text.
-    - **Low: alternating private-use glyphs import** (one lone PUA glyph
-      between readable runs, repeated; stub only), because of the neighbour
-      exemption in the unreadable ratio.
-    - **Low (reviewer 2, which otherwise PASSED round 3): untested guards.**
-      Two `|| !isCurrent(current)` checks in `useResumeImport` have no test:
-      one after the "Use interpretation" confirm, one after the Discard
-      confirm. Each needs a lifecycle case that reseeds while the dialog is
-      open (e.g. a save lands mid-dialog). The source-text pins in
-      `resume-import-lifecycle.mjs` are strict and can fail on harmless
-      rewrites.
-    - Still open for the user: whether Cover letter Polish should also wait
-      for an import review. The live benchmark (`eval:live:resume-import`) is
-      unrun; it needs authorization.
-    Not changed: whitespace is not audited (two runs abutting without a space
-    can merge words); invisible (white) text is imported like any text; the
-    shared firewall leaves zero-width or fullwidth tag variants; a tag formed
-    only across a hyphen-joined line refuses the whole import generically.
-    Open question for the user: whether Cover letter Polish should also wait
-    for an import review (the brief says "Polish"; only Resume Polish is
-    gated).
-  - [TOOL] Offline: corpus (7 engine + 6 foreign fixtures, one now truly two
-    pages with a running header, 8 refusal kinds) at P/R 1.000 and reading
-    order 1.000; units 21/21; edge cases 13/13; interpretation 28/28; lifecycle
-    13/13; session 8/8; review rail probes; server probes pass. The corpus is
-    synthetic and written alongside the parser: real-world accuracy is
-    UNCONFIRMED.
+  - [TOOL] Round 3 (reviewer 1 FAILED, no blocker; reviewer 2 passed with
+    test gaps) found: AI fields appending text past other fields' text with
+    no Check (order was checked on a field's first piece only); left-tab-stop
+    row values on 3+ rows detached as a column; overlay text lost from a text
+    widget with an appearance but no value and from a Stamp; alternating
+    private-use glyphs imported; two untested `isCurrent` re-checks.
+  - [CODE+TOOL] Round 4 fixed those; both round-4 reviews FAILED it (no
+    blocker): a line taken from another column or page still got no Check; a
+    new dates-and-places gutter cue misread a skill-list sidebar with one dated
+    row; honest titles wrapped beside a date got spurious Checks; Acrobat-style
+    checked boxes were refused; lifecycle abort paths were untested.
+  - [CODE+TOOL] Round 5 fixed those; round-5 content review FAILED it (one
+    High, three Medium): a date moved into the field ending on the line above
+    with no Check (round 5's same-line exemption was too loose); a dated
+    sidebar beside dingbat or no bullets read as row values (round-5
+    regression); page 2's top band shared page 1's; the two halves of the
+    skipped-segment rule were untested. The lifecycle review found Lows only.
+  - [CODE] Round 6 (current state):
+    - An AI field splits into stretches; a skip keeps one only past the rest of
+      the previous line (a date beside a wrapped title) or for a right-hand
+      value wrapping past a row's start (both pieces in the right half). Each
+      stretch is order-checked in its region; a field spanning regions gets
+      "Joins text from different columns", and each page's top band is its own
+      region (columns flow across pages).
+    - Gutter: a right band is row values when shared-baseline and narrow, or
+      at least 40% dated (`rowDates.ts` `hasDate`, which finds the date in
+      "· place" or "(4 yrs)" values) with no bullet beside it (dingbat glyphs
+      included) and no heading-styled line; then it stays rows if flush right,
+      at most two rows at a time, or dated. The round-4 place cue is gone.
+    - Overlay: an annotation whose appearance paints non-space, non-dingbat
+      glyphs refuses (`overlay-text`, copy names stamps); the font is graphics
+      state, restored by Q and reset per annotation. Outside dingbat faces
+      every private-use glyph counts toward the 10% unreadable share.
+    - `useResumeImport` is unchanged. Its eval gives each case a fresh hook
+      whose state setters cannot reach the next case, and covers reseeds
+      during each confirm, Stop, single flight, aborts when a review ends, and
+      an unedited AI reading discarded without asking.
+  - [TOOL] Round-6 self-verification (Node 24.18.0): interpretation 42/42,
+    edge cases 22/22, units 22/22, corpus gates at P/R 1.000 and order 1.000,
+    lifecycle 22/22, and `npm run check --workspace apps/role-fit-ai` 178/178.
+    Each new rule fails a case under its mutation, and both round-5
+    reviewers' repros now land as intended. Equivalent by design: a
+    controller's `finally` clearing only itself and Discard's own abort
+    (redundant with `endSession`); both rely on the modal confirm.
+  - Residual (Low or pre-existing, all content-preserving):
+    - spurious "different columns" Checks on honest replies when a summary's
+      last line falls below the gutter cut or a bullet crosses into a page
+      with another layout;
+    - checkbox marks drawn with a letter and signature appearances refuse as
+      overlay text;
+    - in the hook, two Interpret calls during the first confirm both send,
+      and a reply landing while Discard asks queues a stale confirm (both
+      need the modal dialog to be bypassed or raced; no data harm);
+    - tab-stop shapes still read as a column as at HEAD: three rows per
+      entry (37% dated), places only, ISO or "Q3 2016" dates;
+    - tab-stop values short of the right margin are combined into the left
+      field with a Check (follow-up approved, below);
+    - whitespace is not audited; invisible text imports like any text; the
+      shared firewall leaves zero-width or fullwidth tag variants; a tag
+      formed only across a hyphen-joined line refuses the whole import; the
+      local reading puts a page-1 running header into the contact list and
+      makes a wrapped title's continuation its own entry.
+  - [USER] Decisions 2026-10-09: no live benchmark (`eval:live:resume-import`
+    stays unrun); merge once no Blocker or High remains and nothing regresses
+    from HEAD. Approved as a follow-up PR: Cover letter Polish also waits for
+    an import review (it reads the editor's resume), and tab-stop values go to
+    the right-hand slot.
+  - [TOOL] Corpus: 7 engine + 6 foreign fixtures (one truly two pages with a
+    running header) and 8 refusal kinds; synthetic and written alongside the
+    parser, so real-world accuracy is UNCONFIRMED.
   - [TOOL] In-app browser QA on an isolated 5183 server with a scratch
     workspace and a synthetic PDF: guard decline/replace, review rail and
     original preview, Show highlight, Discard with and without edits, Save

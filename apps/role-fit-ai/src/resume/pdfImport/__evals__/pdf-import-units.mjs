@@ -9,7 +9,7 @@ import { auditImport } from "../importAudit.ts";
 import { familyForFont } from "../importStyle.ts";
 import { renderField, splitOnSeparators } from "../fieldText.ts";
 import { layoutLines, slicePiece } from "../layoutLines.ts";
-import { isDateLike } from "../resumeFromLayout.ts";
+import { hasDate, isDateLike } from "../rowDates.ts";
 import { readPdfLayout } from "../pdfLayout.ts";
 
 let passed = 0;
@@ -126,6 +126,14 @@ test("date-like values", () => {
   }
   for (const value of ["Boston, MA", "Built 2020 dashboards", "BFA, 2015", "Remote", "Q3 2020 launch plan"]) {
     assert.equal(isDateLike(value), false, value);
+  }
+});
+test("values that hold a date beside a place or duration", () => {
+  for (const value of ["Jan 2019 – Present · Boston, MA", "06/2019 – Present (4 yrs)", "Boston, MA, 2019", "2022"]) {
+    assert.equal(hasDate(value), true, value);
+  }
+  for (const value of ["Boston, MA (Hybrid)", "GPA 3.8/4.0", "Python, Go, SQL", "Built 2020 dashboards"]) {
+    assert.equal(hasDate(value), false, value);
   }
 });
 test("font names map to the nearest bundled family", () => {

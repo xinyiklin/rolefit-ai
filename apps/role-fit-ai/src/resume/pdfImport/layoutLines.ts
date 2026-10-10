@@ -3,8 +3,9 @@
 // tab-stop-sized gaps (right-aligned dates, contact runs).
 
 import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
-import { BULLET_GLYPHS } from "../sections.ts";
+import { BULLET_GLYPHS, isSectionHeader } from "../sections.ts";
 import type { PdfLayout, PdfSpan } from "./pdfLayout.ts";
+import { hasDate } from "./rowDates.ts";
 
 // A character range of one span. Every imported field is built from pieces, so
 // any text can be traced back to the exact span it came from.
@@ -154,13 +155,14 @@ function findGutter(spans: readonly PdfSpan[], pageWidth: number): Gutter | null
     const leftChars = left.reduce((sum, span) => sum + span.text.length, 0);
     const rightChars = right.reduce((sum, span) => sum + span.text.length, 0);
     if (leftChars < belowChars * 0.15 || rightChars < belowChars * 0.15) continue;
-    const rightLines = new Map<number, { start: number; end: number }>();
+    const rightLines = new Map<number, { start: number; end: number; spans: PdfSpan[] }>();
     for (const span of right) {
       const lineKey = Math.round(span.y);
       const extent = rightLines.get(lineKey);
       rightLines.set(lineKey, {
         start: Math.min(extent?.start ?? span.x, span.x),
-        end: Math.max(extent?.end ?? span.x + span.width, span.x + span.width)
+        end: Math.max(extent?.end ?? span.x + span.width, span.x + span.width),
+        spans: [...(extent?.spans ?? []), span]
       });
     }
     if (rightLines.size < 4) continue;
@@ -168,10 +170,15 @@ function findGutter(spans: readonly PdfSpan[], pageWidth: number): Gutter | null
     const columnStart = Math.min(...extents.map((extent) => extent.start));
     const aligned = extents.filter((extent) => extent.start - columnStart <= 20).length;
     if (aligned < rightLines.size * 0.6) continue;
-    // Row values (dates, locations) sit on the baselines of the entry lines
-    // beside them, stay short, and come a row or two at a time or flush right.
-    // A sidebar on the same baseline grid runs down row after row.
+    // Row values sit on entry rows and come a row or two at a time, flush right,
+    // or mostly dated; a dated band beside bullets or under a heading is a sidebar.
     const sharedRows = [...rightLines.keys()].filter((y) => left.some((span) => Math.abs(span.y - y) <= 1)).length;
+    const leftWithMarkers = spans.filter((span) => span.text.trim() && span.y > yCut && span.x + span.width <= x0);
+    const besideBullet = [...rightLines.keys()].some((y) => {
+      const row = leftWithMarkers.filter((span) => Math.abs(span.y - y) <= 0.3 * span.size + 0.5);
+      const first = row.reduce<PdfSpan | null>((best, span) => (!best || span.x < best.x ? span : best), null);
+      return first !== null && isMarkerText(first.text.trim().split(/\s+/u)[0], first);
+    });
     const widths = extents.map((extent) => extent.end - extent.start).sort((a, b) => a - b);
     const columnEnd = Math.max(...extents.map((extent) => extent.end));
     const flushRight = extents.filter((extent) => columnEnd - extent.end <= 2).length >= rightLines.size * 0.8;
@@ -183,8 +190,16 @@ function findGutter(spans: readonly PdfSpan[], pageWidth: number): Gutter | null
       run = [...rightLines.keys()].some((key) => Math.abs(key - y) <= 1) ? run + 1 : 0;
       longestRun = Math.max(longestRun, run);
     });
-    const rowValues = sharedRows >= rightLines.size * 0.6 && widths[Math.floor(widths.length / 2)] < pageWidth * 0.2;
-    if (rowValues && (flushRight || longestRun <= 2)) continue;
+    const values = extents.map((extent) => [...extent.spans].sort((a, b) => a.x - b.x).map((span) => span.text).join(" "));
+    const sizes = extents.map((extent) => Math.max(...extent.spans.map((span) => span.size)));
+    const bolds = extents.map((extent) => extent.spans.every((span) => span.bold));
+    const typicalSize = [...sizes].sort((a, b) => a - b)[Math.floor(sizes.length / 2)];
+    const boldMinority = bolds.filter(Boolean).length < bolds.length / 2;
+    const headed = values.some((value, index) => /\p{L}/u.test(value) && !/[\d,]/u.test(value) &&
+      (sizes[index] >= typicalSize * 1.08 || (bolds[index] && boldMinority && isSectionHeader(value))));
+    const dated = !besideBullet && !headed && values.filter(hasDate).length >= values.length * 0.4;
+    const rowValues = sharedRows >= rightLines.size * 0.6 && (dated || widths[Math.floor(widths.length / 2)] < pageWidth * 0.2);
+    if (rowValues && (flushRight || longestRun <= 2 || dated)) continue;
     return { x0, x1, yCut };
   }
   return null;

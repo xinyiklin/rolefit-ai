@@ -849,10 +849,10 @@ discard it.") and never starts from an import.
   no workspace file or preference is written until the user saves (an import
   replaced or discarded before saving leaves the remembered variant alone).
   Scanned or image-only, password-protected, damaged, unreadable-text, over-10
-  MB, and over-10-page PDFs, and PDFs with filled form fields or added text
-  boxes, are refused with a specific reason, and nothing changes; a refusal
-  while a review is open says so, leaves that review untouched, and ends with
-  it.
+  MB, and over-10-page PDFs, and PDFs with filled form fields, added text
+  boxes, or stamps that paint text, are refused with a specific reason, and
+  nothing changes; a refusal while a review is open says so, leaves that review
+  untouched, and ends with it.
 - **Nothing lost, nothing added.** Every character of the PDF's text ends up in
   the document, in the review's **Not placed** list (page numbers, repeated
   running headers, text that looks like editor formatting code, anything not
@@ -887,11 +887,13 @@ discard it.") and never starts from an import.
   order (only spaces, separators, and a label's colon may fall between the
   parts, only where they land in different fields, and never a colon inside a
   value such as "3:1"), so no word, sign, or number can be dropped, moved, or
-  spliced. Whole pieces it leaves out are listed under Not placed. A field moved
-  through the PDF's reading order gets a Check (both sides of a swap), as does a
-  field that passes over text nothing else uses. Stop is always available, **Use local
-  reading** switches back, and either switch asks first if the import was
-  edited. Refusing a reply that brings in text is a data-integrity protection,
+  spliced. Whole pieces it leaves out are listed under Not placed. A field with
+  any stretch moved through its column's reading order gets a Check (both sides
+  of a swap, or a line appended from past other fields' text), as does a field
+  that joins text from different columns (each page's full-width top band
+  counts as its own) or passes over text nothing else uses. Stop is always
+  available, **Use local reading** switches back, and either switch asks first
+  if the import was edited. Refusing a reply that brings in text is a data-integrity protection,
   not a content judgment; Check items for either reading only inform.
 - **Out of scope:** OCR, DOCX, Typeset import, cover-letter import, and
   persisting import findings (the review is session-only).

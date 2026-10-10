@@ -191,6 +191,7 @@ async function attackPdf() {
   const notX = 68 + regular.widthOfTextAtSize("Was ", 10);
   text("not", notX, 520, 10, bold);
   text("the release owner", notX + bold.widthOfTextAtSize("not ", 10), 520);
+  text("Initech", 54, 495, 10, bold);
   return doc.save();
 }
 const attackLocal = await importResumePdf(await attackPdf(), pdfjs);
@@ -265,8 +266,25 @@ const attacks = {
   "a ratio's colon dropped inside one field": [/separator inside a field/, (r) => {
     r.sections[0].entries[0].bullets[4] = [s(RATIO, "Held a 3"), s(RATIO, "1 hiring ratio and shipped 2019 - 2021 releases")];
   }],
+  // Words skipped inside the segment a field leaves, or the one it enters.
+  "words skipped at the start of the segment a field enters": [/left words out of the middle/, (r) => {
+    r.sections[0].entries[1].subtitleLeft = [A("Intern"), A("the release owner")];
+    r.sections[0].entries[1].bullets[1] = [A("Was"), A("not")];
+  }],
+  "words skipped at the end of the segment a field leaves": [/left words out of the middle/, (r) => {
+    r.sections[0].entries[1].bullets.splice(1, 1, [A("Was"), A("Initech")], [A("not"), A("the release owner")]);
+  }],
   "a ratio split at its colon into two bullets": [/split a value at a colon/, (r) => {
     r.sections[0].entries[0].bullets.splice(4, 1, [s(RATIO, "Held a 3")], [s(RATIO, "1 hiring ratio and shipped 2019 - 2021 releases")]);
+  }],
+  // Each half of the junction rule alone: only the earlier piece is cut short,
+  // or only the later one starts late.
+  "a line cut short and joined to the next": [/joined part of a line/, (r) => {
+    r.sections[0].entries[0].bullets.splice(0, 2, [s(B1, "Increased revenue by"), A(B2)], [s(B1, "15% in 2021")]);
+  }],
+  "a line joined from its middle": [/joined part of a line/, (r) => {
+    r.contact.push([s(B2, "Reduced costs by")]);
+    r.sections[0].entries[0].bullets.splice(0, 2, [A(B1), s(B2, "2% in 2022")]);
   }]
 };
 for (const [label, [reason, mutate]] of Object.entries(attacks)) {
@@ -306,6 +324,53 @@ test("a whole piece moved into the header or split into a new section is flagged
   assert.ok(outcome.ok, outcome.reason);
   assert.deepEqual(checks(outcome, /reading order/).sort(), ["2016 – 2019", "2019 – 2021"]);
 });
+test("a date moved into the field ending on the line above gets a Check", () => {
+  const intoBullet = attackBase();
+  intoBullet.sections[0].entries[0].bullets[4] = [A(RATIO), A("2016 – 2019")];
+  intoBullet.sections[0].entries[1].titleRight = [];
+  const bullet = interpretedImport(intoBullet, attackLocal);
+  assert.ok(bullet.ok, bullet.reason);
+  assert.ok(checks(bullet, /reading order/).includes(`${RATIO} 2016 – 2019`), JSON.stringify(checks(bullet, /./)));
+
+  const intoHeading = attackBase();
+  intoHeading.sections[0].heading = [A("EXPERIENCE"), A("2019 – 2021")];
+  intoHeading.sections[0].entries[0].titleRight = [];
+  const heading = interpretedImport(intoHeading, attackLocal);
+  assert.ok(heading.ok, heading.reason);
+  assert.ok(checks(heading, /reading order/).includes("EXPERIENCE 2019 – 2021"), JSON.stringify(checks(heading, /./)));
+});
+
+async function wrappedDatePdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const text = (value, x, y, size = 10, font = regular) => page.drawText(value, { x, y, size, font });
+  text("Jane Doe", 54, 730, 18, bold);
+  text("jane@example.test", 54, 712);
+  text("EXPERIENCE", 54, 684, 12, bold);
+  text("Acme Corp", 54, 668, 10, bold);
+  text("Jan 2014 –", 480, 668);
+  text("Senior Engineer", 54, 655);
+  text("Present", 480, 655);
+  text("•", 57, 641);
+  text("Built the billing service for partners", 68, 641);
+  return doc.save();
+}
+const wrappedDateLocal = await importResumePdf(await wrappedDatePdf(), pdfjs);
+const D = (value) => importRequestLines(wrappedDateLocal.lines).lines.flatMap((line) => line.pieces).find((piece) => piece.text === value)?.id;
+test("a right-hand date wrapped past the next row's start is one stretch: no Check on an honest reply", () => {
+  const outcome = interpretedImport({
+    name: [D("Jane Doe")], contact: [[D("jane@example.test")]],
+    sections: [{
+      heading: [D("EXPERIENCE")], type: "standard",
+      entries: [{ titleLeft: [D("Acme Corp")], titleRight: [D("Jan 2014 –"), D("Present")], subtitleLeft: [D("Senior Engineer")], bullets: [[D("Built the billing service for partners")]] }]
+    }]
+  }, wrappedDateLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.deepEqual(checks(outcome, /./), []);
+});
+
 test("a field that passes over a line nothing uses gets a Check", () => {
   const reply = attackBase();
   reply.sections[0].entries[0].bullets.splice(0, 3, [A(B1), A("Did not lead the hiring process")]);
@@ -315,9 +380,191 @@ test("a field that passes over a line nothing uses gets a Check", () => {
   assert.ok(outcome.result.findings.some((finding) => finding.kind === "unplaced" && finding.text === B2));
 });
 
+// Whole lines appended across text that other fields use: every stretch of a
+// field is order-checked, not only its first piece.
+async function wrappedPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const text = (value, x, y, size = 10, font = regular) => page.drawText(value, { x, y, size, font });
+  text("Jane Doe", 54, 730, 18, bold);
+  text("jane@example.test", 54, 712);
+  text("EDUCATION", 54, 684, 12, bold);
+  text("State University", 54, 668, 10, bold);
+  text("2012 – 2016", 500, 668);
+  text("BS Computer Science", 54, 655);
+  text("EXPERIENCE", 54, 627, 12, bold);
+  text("Acme Corp", 54, 611, 10, bold);
+  text("2019 – 2021", 500, 611);
+  text("Senior Engineer", 54, 598);
+  [["Cut infrastructure spend across the platform group's build and test fleet by", "5% for the internal tools team"],
+    ["Grew partner revenue through the new integrations marketplace launch by", "40% across all regions in 2021"]].forEach(([first, second], index) => {
+    text("•", 57, 584 - index * 26);
+    text(first, 68, 584 - index * 26);
+    text(second, 68, 571 - index * 26);
+  });
+  return doc.save();
+}
+const wrappedLocal = await importResumePdf(await wrappedPdf(), pdfjs);
+const wrappedLines = importRequestLines(wrappedLocal.lines).lines;
+const W = (value) => wrappedLines.flatMap((line) => line.pieces).find((piece) => piece.text.startsWith(value))?.id;
+const wrappedBase = () => ({
+  name: [W("Jane Doe")],
+  contact: [[W("jane@")]],
+  sections: [
+    { heading: [W("EDUCATION")], type: "standard", entries: [{ titleLeft: [W("State University")], titleRight: [W("2012")], subtitleLeft: [W("BS Computer")] }] },
+    {
+      heading: [W("EXPERIENCE")], type: "standard",
+      entries: [{ titleLeft: [W("Acme Corp")], titleRight: [W("2019")], subtitleLeft: [W("Senior Engineer")], bullets: [[W("Cut"), W("5%")], [W("Grew"), W("40%")]] }]
+    }
+  ]
+});
+test("the wrapped fixture's faithful reply is accepted without Checks", () => {
+  const outcome = interpretedImport(wrappedBase(), wrappedLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.deepEqual(checks(outcome, /./), []);
+});
+test("one bullet's first line joined to another's second line gets a Check", () => {
+  const reply = wrappedBase();
+  reply.sections[1].entries[0].bullets = [[W("Cut"), W("40%")], [W("5%"), W("Grew")]];
+  const outcome = interpretedImport(reply, wrappedLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  const flagged = checks(outcome, /reading order/);
+  assert.ok(flagged.some((text) => text.startsWith("Cut infrastructure") && text.endsWith("40% across all regions in 2021")), JSON.stringify(flagged));
+});
+test("whole lines interleaved one apart get Checks", () => {
+  const reply = wrappedBase();
+  reply.sections[1].entries[0].bullets = [[W("Cut"), W("Grew")], [W("5%"), W("40%")]];
+  const outcome = interpretedImport(reply, wrappedLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.equal(checks(outcome, /reading order/).length, 2, JSON.stringify(checks(outcome, /./)));
+});
+test("a title wrapped beside its date is one stretch: no Check on an honest reply", () => {
+  const reply = wrappedBase();
+  // "State University" shares its line with "2012 – 2016"; the degree line
+  // below continues the title past the date.
+  reply.sections[0].entries[0] = { titleLeft: [W("State University"), W("BS Computer")], titleRight: [W("2012")] };
+  const outcome = interpretedImport(reply, wrappedLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.deepEqual(checks(outcome, /./), []);
+});
+test("a job's date appended to an Education field gets a Check", () => {
+  const reply = wrappedBase();
+  reply.sections[0].entries[0].subtitleLeft = [W("BS Computer"), W("2019")];
+  reply.sections[1].entries[0].titleRight = [];
+  const outcome = interpretedImport(reply, wrappedLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.deepEqual(checks(outcome, /reading order/), ["BS Computer Science 2019 – 2021"]);
+});
+
+async function sidebarPdf() {
+  const doc = await PDFDocument.create();
+  const page = doc.addPage([612, 792]);
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  const text = (value, x, y, size = 10, font = regular) => page.drawText(value, { x, y, size, font });
+  text("Priya Natarajan", 54, 730, 22, bold);
+  text("EXPERIENCE", 54, 690, 11, bold);
+  text("SKILLS", 430, 690, 11, bold);
+  ["Hooli", "Product Designer, 2019 – 2023", "Redesigned onboarding for 2M monthly users", "Ran 40 usability sessions with partners",
+    "Pied Piper", "UX Designer, 2015 – 2019", "Shipped the first mobile app and its system", "Built the shared research repository"]
+    .forEach((value, index) => text(value, 54, 674 - index * 14, 10, index % 4 === 0 ? bold : regular));
+  ["Figma", "Prototyping", "User research", "HTML and CSS", "React", "Accessibility", "Design systems", "Workshops"]
+    .forEach((value, index) => text(value, 430, 674 - index * 14));
+  return doc.save();
+}
+const sidebarLocal = await importResumePdf(await sidebarPdf(), pdfjs);
+const sidebarLines = importRequestLines(sidebarLocal.lines).lines;
+const S = (value) => sidebarLines.flatMap((line) => line.pieces).find((piece) => piece.text === value)?.id;
+const SIDE = ["Figma", "Prototyping", "User research", "HTML and CSS", "React", "Accessibility", "Design systems", "Workshops"];
+const sidebarBase = () => ({
+  name: [S("Priya Natarajan")],
+  sections: [
+    { heading: [S("SKILLS")], type: "skills", entries: SIDE.map((value) => ({ subtitleLeft: [S(value)] })) },
+    {
+      heading: [S("EXPERIENCE")], type: "standard",
+      entries: [["Hooli", "Product Designer, 2019 – 2023", "Redesigned onboarding for 2M monthly users", "Ran 40 usability sessions with partners"],
+        ["Pied Piper", "UX Designer, 2015 – 2019", "Shipped the first mobile app and its system", "Built the shared research repository"]]
+        .map(([company, role, ...bullets]) => ({ titleLeft: [S(company)], subtitleLeft: [S(role)], bullets: bullets.map((value) => [S(value)]) }))
+    }
+  ]
+});
+// Two pages, each a full-width top band over two columns on one baseline grid.
+async function twoPageSidebarPdf() {
+  const doc = await PDFDocument.create();
+  const regular = await doc.embedFont(StandardFonts.Helvetica);
+  const bold = await doc.embedFont(StandardFonts.HelveticaBold);
+  for (const [index, top] of ["priya@example.test · 555-0100 · Boston, MA · linkedin.com/in/priya-natarajan · priya-designs.example.test",
+    "Priya Natarajan · Senior Product Designer · Resume, page 2 of 2 · priya@example.test · 555-0100"].entries()) {
+    const page = doc.addPage([612, 792]);
+    const text = (value, x, y, size = 10, font = regular) => page.drawText(value, { x, y, size, font });
+    if (index === 0) text("Priya Natarajan", 54, 740, 22, bold);
+    text(top, 54, 712);
+    text(index ? "MORE EXPERIENCE" : "EXPERIENCE", 54, 690, 11, bold);
+    text(index ? "INTERESTS" : "SKILLS", 430, 690, 11, bold);
+    ["Hooli", "Product Designer, 2019 – 2023", "Redesigned onboarding for 2M monthly users", "Ran 40 usability sessions with partners",
+      "Pied Piper", "UX Designer, 2015 – 2019", "Shipped the first mobile app and its system", "Built the shared research repository"]
+      .forEach((value, row) => text(index ? `${value} (${index + 1})` : value, 54, 674 - row * 14, 10, row % 4 === 0 ? bold : regular));
+    ["Figma", "Prototyping", "User research", "HTML and CSS", "React", "Accessibility", "Design systems", "Workshops"]
+      .forEach((value, row) => text(index ? `${value} ${index + 1}` : value, 430, 674 - row * 14));
+  }
+  return doc.save();
+}
+test("text from another page's top band gets a Check", async () => {
+  const local = await importResumePdf(await twoPageSidebarPdf(), pdfjs);
+  const requestLines = importRequestLines(local.lines).lines;
+  const piece = (prefix) => requestLines.flatMap((line) => line.pieces).find((candidate) => candidate.text.startsWith(prefix))?.id;
+  assert.deepEqual(requestLines.filter((line) => line.region === "top").map((line) => line.page), [1, 1, 2]);
+  const reply = {
+    name: [piece("Priya Natarajan")],
+    contact: [[piece("priya@example.test ·"), piece("Priya Natarajan ·")]],
+    sections: []
+  };
+  const outcome = interpretedImport(reply, local);
+  assert.ok(outcome.ok, outcome.reason);
+  assert.equal(checks(outcome, /different columns/).length, 1, JSON.stringify(checks(outcome, /./)));
+});
+
+// Each reply in both section orders, so no case passes only because the
+// sidebar happens to be placed first.
+const bothOrders = (mutate) => [false, true].map((sidebarFirst) => {
+  const reply = sidebarBase();
+  mutate(reply);
+  if (!sidebarFirst) reply.sections.reverse();
+  const outcome = interpretedImport(reply, sidebarLocal);
+  assert.ok(outcome.ok, outcome.reason);
+  return outcome;
+});
+const experience = (reply) => reply.sections.find((section) => section.type === "standard");
+test("a faithful two-column reply is accepted without Checks in either section order", () => {
+  assert.deepEqual([...new Set(sidebarLines.map((line) => line.region))].sort(), ["left", "right"]);
+  for (const outcome of bothOrders(() => {})) assert.deepEqual(checks(outcome, /./), []);
+});
+test("a line taken from another column gets a Check in either section order", () => {
+  const cases = {
+    // The left column's last line runs straight into the sidebar's heading.
+    "the sidebar's first line": [(reply) => {
+      reply.sections[0].heading = [];
+      experience(reply).entries[1].bullets[1].push(S("SKILLS"));
+    }, "Built the shared research repository SKILLS"],
+    "the sidebar's last line": [(reply) => {
+      reply.sections[0].entries.pop();
+      experience(reply).entries[1].bullets[1].push(S("Workshops"));
+    }, "Built the shared research repository Workshops"],
+    "a middle line, passing over lines other fields use": [(reply) => {
+      reply.sections[0].entries.splice(4, 1);
+      experience(reply).entries[0].bullets[0].push(S("React"));
+    }, "Redesigned onboarding for 2M monthly users React"]
+  };
+  for (const [label, [mutate, text]] of Object.entries(cases)) {
+    for (const outcome of bothOrders(mutate)) assert.deepEqual(checks(outcome, /different columns/), [text], label);
+  }
+});
+
 for (const [name, fn] of cases) {
   try {
-    fn();
+    await fn();
     passed += 1;
   } catch (error) {
     console.error(`FAIL ${name}\n  ${error.message}`);

@@ -18,14 +18,15 @@ globalThis.__resumeImportEvalPdfjs = await import("pdfjs-dist/legacy/build/pdf.m
 
 const scheduler = `
 let slots=[],cursor=0,effects=[];
-export function useState(initial){const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];}
+export function useState(initial){const index=cursor++,store=slots;if(!(index in store))store[index]=typeof initial==='function'?initial():initial;return [store[index],value=>{store[index]=typeof value==='function'?value(store[index]):value;}];}
 export function useRef(initial){const index=cursor++;if(!(index in slots))slots[index]={current:initial};return slots[index];}
 export function useCallback(callback){return callback;}
 export function useEffect(effect,deps){const index=cursor++;const old=slots[index];if(!old||!deps||deps.some((value,i)=>!Object.is(value,old.deps[i]))){effects.push(()=>{old?.cleanup?.();slots[index]={deps,cleanup:effect()};});}}
 export function render(callback){cursor=0;const result=callback();const pending=effects;effects=[];pending.forEach(effect=>effect());return result;}
+export function reset(){slots=[];cursor=0;effects=[];}
 `;
 const bundle = await build({
-  stdin: { loader: "ts", resolveDir: appRoot, contents: `export { useResumeImport } from "./src/hooks/useResumeImport.ts"; export { render } from "react";` },
+  stdin: { loader: "ts", resolveDir: appRoot, contents: `export { useResumeImport } from "./src/hooks/useResumeImport.ts"; export { render, reset } from "react";` },
   bundle: true, write: false, format: "esm", platform: "node", logLevel: "silent",
   plugins: [{ name: "controlled", setup(api) {
     api.onResolve({ filter: /^react$/ }, () => ({ path: "react", namespace: "controlled" }));
@@ -36,7 +37,7 @@ const bundle = await build({
     }));
   } }]
 });
-const { useResumeImport, render } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
+const { useResumeImport, render, reset } = await import(`data:text/javascript;base64,${Buffer.from(bundle.outputFiles[0].text).toString("base64")}`);
 
 async function resumePdf(name) {
   const doc = await PDFDocument.create();
@@ -56,8 +57,10 @@ async function resumePdf(name) {
 
 // A harness standing in for App: the editor's seed revision, the workspace's
 // commit/restore/replace, and dialogs, each recording what the hook asked for.
-// Versions are computed the way App computes the editor's.
+// Versions are computed the way App computes the editor's. Each harness mounts
+// a fresh hook, so a request one case leaves pending cannot reach the next.
 function harness() {
+  reset();
   const state = { seedRevision: 0, version: "v-before", style: {}, calls: [], confirmAnswer: true, confirms: [], commitAnswer: true, reads: 0 };
   const versionOf = (data) => resumeDocumentVersion(data, { ...DOC_STYLE_DEFAULTS, ...state.style });
   const snapshot = (label) => ({ label, data: { header: null, sections: [] }, style: {}, unsaved: false, fileName: "", baseResumeName: "fullstack.resume", documentTitle: label, origin: "saved", resumeText: "" });
@@ -87,6 +90,7 @@ function harness() {
     currentVersion: () => state.version,
     confirm: async (options) => {
       state.confirms.push(options.title);
+      state.whileConfirming?.();
       return state.confirmAnswer;
     },
     interpretRequestFields: () => ({ provider: "claude-cli", model: "claude-sonnet-5-5", reasoningEffort: "low" })
@@ -304,6 +308,187 @@ test("a declined second import does not stop a running interpretation", async ()
   await running;
 });
 
+// A save, open, or draft restore can land while a confirm dialog is open; the
+// answer then belongs to a review that has ended.
+const reseedWhileConfirming = (state) => {
+  state.whileConfirming = () => {
+    state.seedRevision += 1;
+    state.whileConfirming = null;
+  };
+};
+const editorChanges = (state) => state.calls.filter((call) => call.kind === "replace" || call.kind === "restore").length;
+
+test("a reseed during the Interpret confirm sends nothing", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  let sent = false;
+  globalThis.fetch = async () => {
+    sent = true;
+    return new Response("{}", { status: 500 });
+  };
+  state.version = "v-edited";
+  reseedWhileConfirming(state);
+  await view().interpret();
+  assert.deepEqual(state.confirms, ["Replace your corrections?"]);
+  assert.equal(sent, false);
+  assert.equal(view().interpretation.status, "idle");
+});
+
+test("a reseed during the Use interpretation confirm drops the reply", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  const held = heldReply();
+  const running = view().interpret();
+  await settle();
+  state.version = "v-edited";
+  reseedWhileConfirming(state);
+  held.faithful();
+  await running;
+  assert.deepEqual(state.confirms, ["Replace your corrections?"]);
+  assert.equal(editorChanges(state), 0, "the reply never replaces the newly seeded document");
+  view();
+  const api = view();
+  assert.equal(api.reviewOpen, false);
+  assert.equal(api.interpretation.status, "idle");
+});
+
+test("a reseed during the Use local reading confirm keeps the editor as it is", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  const held = heldReply();
+  const running = view().interpret();
+  await settle();
+  held.faithful();
+  await running;
+  assert.equal(view().review.source, "ai");
+  const before = editorChanges(state);
+  state.version = "v-edited";
+  reseedWhileConfirming(state);
+  await view().showLocalReading();
+  assert.deepEqual(state.confirms, ["Use the local reading?"]);
+  assert.equal(editorChanges(state), before);
+});
+
+test("a reseed during the Discard confirm keeps the newly seeded document", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  state.version = "v-edited";
+  reseedWhileConfirming(state);
+  await view().discard();
+  assert.deepEqual(state.confirms, ["Discard import?"]);
+  assert.equal(editorChanges(state), 0, "Discard never restores over a document seeded after it asked");
+});
+
+// A transport that rejects on abort, as fetch does.
+function abortableReply() {
+  const held = { sent: 0 };
+  globalThis.fetch = (_url, init) => new Promise((resolve, reject) => {
+    held.sent += 1;
+    held.signal = init.signal;
+    held.respond = resolve;
+    init.signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })));
+  });
+  return held;
+}
+
+test("Stop keeps the local reading, reports it, and Interpret can run again", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  let held = abortableReply();
+  const running = view().interpret();
+  await settle();
+  view().stopInterpretation();
+  await running;
+  const api = view();
+  assert.equal(held.signal.aborted, true);
+  assert.equal(api.interpretation.status, "stopped");
+  assert.equal(api.review.source, "local");
+  assert.equal(editorChanges(state), 0);
+  held = abortableReply();
+  const again = view().interpret();
+  await settle();
+  assert.equal(held.sent, 1, "Interpret sends again after Stop");
+  held.respond(new Response(JSON.stringify({ error: "unavailable" }), { status: 500 }));
+  await again;
+});
+
+test("a second Interpret while one runs sends nothing", async () => {
+  const { view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  const held = abortableReply();
+  const running = view().interpret();
+  await settle();
+  await view().interpret();
+  assert.equal(held.sent, 1);
+  view().stopInterpretation();
+  await running;
+});
+
+test("ending a review aborts its request: a save, Discard, or another import", async () => {
+  const ends = {
+    "a save": async (state, view) => {
+      state.seedRevision += 1;
+      view();
+    },
+    Discard: async (_state, view) => view().discard(),
+    "another import": async (_state, view) => view().importFile(await resumePdf("Sam Roe"))
+  };
+  for (const [label, end] of Object.entries(ends)) {
+    const { state, view } = harness();
+    await view().importFile(await resumePdf("Jane Doe"));
+    view();
+    const held = abortableReply();
+    const running = view().interpret();
+    await settle();
+    await end(state, view);
+    await running;
+    view();
+    const api = view();
+    assert.equal(held.signal.aborted, true, label);
+    assert.equal(api.interpretation.status, "idle", `${label}: no stopped notice for a review that ended`);
+    assert.equal(state.calls.filter((call) => call.kind === "replace").length, 0, label);
+  }
+});
+
+test("an AI reading left unedited is discarded without asking", async () => {
+  const { state, view } = harness();
+  await view().importFile(await resumePdf("Jane Doe"));
+  view();
+  const held = heldReply();
+  const running = view().interpret();
+  await settle();
+  held.faithful();
+  await running;
+  assert.equal(view().review.source, "ai");
+  await view().discard();
+  assert.deepEqual(state.confirms, []);
+  assert.equal(state.calls.at(-1).kind, "restore");
+});
+
+test("a request left pending by one harness cannot reach the next", async () => {
+  const first = harness();
+  await first.view().importFile(await resumePdf("Jane Doe"));
+  first.view();
+  const held = heldReply();
+  const running = first.view().interpret();
+  await settle();
+  const second = harness();
+  await second.view().importFile(await resumePdf("Sam Roe"));
+  second.view();
+  held.faithful();
+  await running;
+  const api = second.view();
+  assert.equal(api.review.fileName, "Sam_Roe.pdf");
+  assert.equal(api.review.source, "local");
+  assert.equal(api.interpretation.status, "idle");
+});
+
 // ── Seams the hook relies on ────────────────────────────────────────────────
 const source = (path) => readFileSync(new URL(`../../${path}`, import.meta.url), "utf8");
 const app = source("App.tsx");
@@ -339,10 +524,16 @@ test("the editor adapter counts an unsaved seed as dirty until a seed or markCle
   assert.match(editor, /const markClean = useCallback\(\(\) => \{\s*setUnsavedSeed\(false\);/);
 });
 
+// A case whose request never settles fails instead of stalling the run.
+const within = (promise, ms) => {
+  let timer;
+  const timeout = new Promise((_, reject) => (timer = setTimeout(() => reject(new Error("timed out: a request never settled")), ms)));
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+};
 let failed = 0;
 for (const [name, fn] of cases) {
   try {
-    await fn();
+    await within(fn(), 5_000);
   } catch (error) {
     failed += 1;
     console.error(`FAIL ${name}\n  ${error.message}`);

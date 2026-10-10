@@ -14,7 +14,7 @@ import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/f
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
-import { isDateLike } from "../../resumeFromLayout.ts";
+import { isDateLike } from "../../rowDates.ts";
 
 export const engineFonts = new Map();
 for (const [family, config] of Object.entries(DOCUMENT_FONT_FAMILIES)) {

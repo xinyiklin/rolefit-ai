@@ -120,6 +120,14 @@ function paintsOwnText(annotation: unknown): boolean {
   return (Array.isArray(note.fieldValue) ? note.fieldValue : [note.fieldValue]).some(filled);
 }
 
+// The same holds for any annotation whose appearance paints glyphs, such as a
+// stamp or a field showing a value it does not hold; a dingbat check is a mark.
+// pdf.js reduces TJ, ' and " to showText.
+function paintsGlyphs(args: unknown[] | null): boolean {
+  const glyphs = args?.[0];
+  return Array.isArray(glyphs) && glyphs.some((glyph) => glyph !== null && typeof glyph === "object" && (glyph as { isSpace?: unknown }).isSpace !== true);
+}
+
 function errorKind(error: unknown): PdfImportErrorKind {
   const name = (error as { name?: unknown } | null)?.name;
   return name === "PasswordException" ? "encrypted" : "malformed";
@@ -128,7 +136,6 @@ function errorKind(error: unknown): PdfImportErrorKind {
 // Characters that mean the text layer is garbage rather than words: the
 // replacement character, private-use glyph codes, and C0 controls.
 const UNREADABLE_RE = /[\uFFFD\uE000-\uF8FF\u0000-\u0008\u000B\u000C\u000E-\u001F]/gu;
-const LONE_PRIVATE_USE_RE = /^\s*[\uE000-\uF8FF]\s*$/u;
 
 export async function readPdfLayout(bytes: Uint8Array, pdfjs: PdfJsLike): Promise<PdfLayout> {
   if (bytes.byteLength > MAX_IMPORT_PDF_BYTES) throw pdfImportError("too-large");
@@ -167,19 +174,27 @@ export async function readPdfLayout(bytes: Uint8Array, pdfjs: PdfJsLike): Promis
       const toPage = asMatrix(viewport.transform) ?? [1, 0, 0, -1, 0, viewport.height];
       let hasImages = false;
 
-      let ctm: Matrix = [1, 0, 0, 1, 0, 0];
-      const stack: Matrix[] = [];
+      // The font is graphics state: q/Q save and restore it with the matrix.
+      let state = { ctm: [1, 0, 0, 1, 0, 0] as Matrix, dingbatFont: false };
+      const stack: (typeof state)[] = [];
+      let annotationDepth = 0;
       operators.fnArray.forEach((fn, index) => {
         const op = opName[fn];
         const args = operators.argsArray[index] as unknown[] | null;
-        if (op === "save") stack.push(ctm);
-        else if (op === "restore") ctm = stack.pop() ?? ctm;
-        else if (op === "transform") ctm = multiply(ctm, asMatrix(args) ?? [1, 0, 0, 1, 0, 0]);
+        if (op === "beginAnnotation") {
+          annotationDepth += 1;
+          state = { ...state, dingbatFont: false };
+        } else if (op === "endAnnotation") annotationDepth -= 1;
+        else if (op === "setFont") state = { ...state, dingbatFont: DINGBAT_FONT_RE.test(fontFacts(page, String(args?.[0])).name) };
+        else if (annotationDepth > 0 && op === "showText" && !state.dingbatFont && paintsGlyphs(args)) throw pdfImportError("overlay-text");
+        else if (op === "save") stack.push(state);
+        else if (op === "restore") state = stack.pop() ?? state;
+        else if (op === "transform") state = { ...state, ctm: multiply(state.ctm, asMatrix(args) ?? [1, 0, 0, 1, 0, 0]) };
         else if (op === "paintImageXObject" || op === "paintInlineImageXObject" || op === "paintImageMaskXObject") hasImages = true;
         else if (op === "constructPath") {
           const box = args?.[2] as ArrayLike<number> | undefined;
           if (!box || box.length !== 4) return;
-          const corners = [apply(ctm, box[0], box[1]), apply(ctm, box[2], box[3])].map(([x, y]) => apply(toPage, x, y));
+          const corners = [apply(state.ctm, box[0], box[1]), apply(state.ctm, box[2], box[3])].map(([x, y]) => apply(toPage, x, y));
           const x0 = Math.min(corners[0][0], corners[1][0]);
           const x1 = Math.max(corners[0][0], corners[1][0]);
           const y0 = Math.min(corners[0][1], corners[1][1]);
@@ -214,18 +229,12 @@ export async function readPdfLayout(bytes: Uint8Array, pdfjs: PdfJsLike): Promis
       page.cleanup?.();
     }
 
-    // Some exporters paint one glyph per run, so single characters count. A
-    // lone private-use glyph between readable runs is an icon or bullet; a
-    // string of them is unmapped text painted a glyph at a time.
+    // Single glyphs count (some exporters paint one per run), private-use icons
+    // included: exempting them would let unmapped glyphs hide between words.
     const text = layout.spans.filter((span) => !span.dingbat);
     const characters = text.reduce((total, span) => total + span.text.replace(/\s/g, "").length, 0);
     if (characters < 20) throw pdfImportError("no-text");
-    const lone = text.map((span) => LONE_PRIVATE_USE_RE.test(span.text));
-    const unreadable = text.reduce(
-      (total, span, index) =>
-        total + (lone[index] && !lone[index - 1] && !lone[index + 1] ? 0 : span.text.match(UNREADABLE_RE)?.length ?? 0),
-      0
-    );
+    const unreadable = text.reduce((total, span) => total + (span.text.match(UNREADABLE_RE)?.length ?? 0), 0);
     if (unreadable / characters > 0.1) throw pdfImportError("unreadable");
     return layout;
   } finally {

@@ -1,8 +1,8 @@
 // Deterministic edge cases found in independent review, each as a synthetic
-// PDF: content glyphs in Symbol fonts, filled form fields and text boxes, one
-// run per glyph (readable and unmapped), formatting code split across runs,
-// superscripts, a role title at a page break, right-aligned dates that must not
-// read as a second column, and a sidebar that must.
+// PDF: content glyphs in Symbol fonts; form fields, text boxes, stamps, and
+// other annotations; one run per glyph and private-use glyphs; formatting code
+// split across runs; superscripts; a role title at a page break; and row values
+// that must not read as a second column beside sidebars that must.
 //
 //   node apps/role-fit-ai/src/resume/pdfImport/__evals__/pdf-import-edge-cases.mjs
 import assert from "node:assert/strict";
@@ -81,6 +81,50 @@ test("a text box added in a viewer is refused instead of silently missing", asyn
   await assert.rejects(importResumePdf(bytes, pdfjs), (error) => error instanceof PdfImportError && error.kind === "overlay-text");
 });
 
+// An annotation with its own appearance stream, added to the first page; a
+// checkbox's appearance is keyed by its state.
+const withAnnotation = (dict, content) => ({ doc, pages, ...context }) => {
+  header({ ...context, pages });
+  const ctx = doc.context;
+  const font = (BaseFont) => ctx.register(ctx.obj({ Type: "Font", Subtype: "Type1", BaseFont }));
+  const resources = { Font: { Helv: font("Helvetica"), ZaDb: font("ZapfDingbats"), Wing: font("Wingdings") } };
+  const appearance = ctx.register(ctx.stream(content, { Type: "XObject", Subtype: "Form", BBox: [0, 0, 300, 16], Resources: resources }));
+  const annotation = ctx.register(ctx.obj({ Type: "Annot", Rect: [68, 615, 368, 631], F: 4, ...dict, AP: { N: dict.AS ? { [dict.AS.asString().slice(1)]: appearance } : appearance } }));
+  pages[0].node.set(PDFName.of("Annots"), ctx.obj([annotation]));
+  if (dict.Subtype === "Widget") doc.catalog.set(PDFName.of("AcroForm"), ctx.obj({ Fields: [annotation] }));
+};
+const PAINTED_TEXT = "BT /Helv 10 Tf 2 4 Td (Promoted to Staff Engineer in 2021) Tj ET";
+
+test("a form field whose appearance shows text it does not hold is refused", async () => {
+  const bytes = await pdf(withAnnotation({ Subtype: "Widget", FT: "Tx", T: PDFString.of("extra") }, PAINTED_TEXT));
+  await assert.rejects(importResumePdf(bytes, pdfjs), (error) => error instanceof PdfImportError && error.kind === "overlay-text");
+});
+
+test("a stamp that paints text is refused, whatever the text operator or a nested dingbat font", async () => {
+  for (const content of [
+    PAINTED_TEXT,
+    "BT /Helv 10 Tf 2 4 Td [(Promoted to) -250 (Staff Engineer)] TJ ET",
+    "BT /Helv 10 Tf 12 TL 2 4 Td (Promoted to Staff Engineer) ' ET",
+    // A dingbat font set inside q...Q is restored away before the text.
+    "BT /Helv 10 Tf ET q BT /ZaDb 10 Tf 1 2 Td (4) Tj ET Q BT 20 4 Td (Promoted to Staff Engineer) Tj ET"
+  ]) {
+    const bytes = await pdf(withAnnotation({ Subtype: "Stamp" }, content));
+    await assert.rejects(importResumePdf(bytes, pdfjs), (error) => error instanceof PdfImportError && error.kind === "overlay-text", content);
+  }
+});
+
+test("an annotation that only draws, paints only spaces, or shows a dingbat check does not block the import", async () => {
+  for (const [dict, content] of [
+    [{ Subtype: "Square" }, "0 0 1 RG 1 w 0.5 0.5 299 15 re S"],
+    [{ Subtype: "Widget", FT: "Tx", T: PDFString.of("blank") }, "BT /Helv 10 Tf 2 4 Td (   ) Tj ET"],
+    [{ Subtype: "Widget", FT: "Btn", T: PDFString.of("checked"), V: PDFName.of("Yes"), AS: PDFName.of("Yes") }, "BT /ZaDb 10 Tf 1 2 Td (4) Tj ET"],
+    [{ Subtype: "Widget", FT: "Btn", T: PDFString.of("ticked"), V: PDFName.of("Yes"), AS: PDFName.of("Yes") }, "BT /Wing 10 Tf 1 2 Td (\\374) Tj ET"]
+  ]) {
+    const result = await importResumePdf(await pdf(withAnnotation(dict, content)), pdfjs);
+    assert.ok(result.audit.ok, dict.Subtype);
+  }
+});
+
 test("an empty form field does not block the import", async () => {
   const result = await importResumePdf(await pdf(({ doc, pages, ...context }) => {
     header({ ...context, pages });
@@ -111,29 +155,48 @@ test("one run per glyph is read as text, not refused as a scan", async () => {
   assert.equal(result.audit.sourceWords, 12, "the summary counts words, not glyph runs");
 });
 
-test("unmapped glyphs painted one per run are refused as unreadable", async () => {
-  // pdf-lib cannot embed a font without a Unicode map, so pdf.js is stubbed.
-  const glyphs = Array.from({ length: 60 }, (_, index) => ({
-    str: String.fromCharCode(0xe020 + (index % 26)),
-    transform: [10, 0, 0, 10, 72 + (index % 20) * 6, 700 - Math.floor(index / 20) * 14],
-    width: 5.5,
-    fontName: "f1"
-  }));
+// pdf-lib cannot embed a font without a Unicode map, so pdf.js is stubbed to
+// return these text items on one page.
+function stubPdfjs(items) {
   const page = {
     getViewport: () => ({ width: 612, height: 792, transform: [1, 0, 0, -1, 0, 792] }),
     getOperatorList: async () => ({ fnArray: [], argsArray: [] }),
     getAnnotations: async () => [],
-    getTextContent: async () => ({ items: glyphs }),
+    getTextContent: async () => ({ items }),
     commonObjs: { has: () => true, get: () => ({ name: "ABCDEF+CustomFont" }) }
   };
-  const stub = {
+  return {
     OPS: pdfjs.OPS,
     getDocument: () => ({ destroy: async () => {}, promise: Promise.resolve({ numPages: 1, getPage: async () => page }) })
   };
-  await assert.rejects(
-    importResumePdf(new TextEncoder().encode("%PDF-1.7"), stub),
-    (error) => error instanceof PdfImportError && error.kind === "unreadable"
-  );
+}
+const item = (str, x, y, size = 10) => ({ str, transform: [size, 0, 0, size, x, y], width: str.length * size * 0.5, fontName: "f1" });
+const STUB_BYTES = new TextEncoder().encode("%PDF-1.7");
+const isUnreadable = (error) => error instanceof PdfImportError && error.kind === "unreadable";
+
+test("unmapped glyphs painted one per run are refused as unreadable", async () => {
+  const glyphs = Array.from({ length: 60 }, (_, index) => item(String.fromCharCode(0xe020 + (index % 26)), 72 + (index % 20) * 6, 700 - Math.floor(index / 20) * 14));
+  await assert.rejects(importResumePdf(STUB_BYTES, stubPdfjs(glyphs)), isUnreadable);
+});
+
+test("unmapped glyphs alternating with readable runs are refused as unreadable", async () => {
+  const items = Array.from({ length: 40 }, (_, index) => [
+    item("Bilt", 72 + (index % 10) * 40, 700 - Math.floor(index / 10) * 14),
+    item(String.fromCharCode(0xe020 + (index % 26)), 92 + (index % 10) * 40, 700 - Math.floor(index / 10) * 14)
+  ]).flat();
+  await assert.rejects(importResumePdf(STUB_BYTES, stubPdfjs(items)), isUnreadable);
+});
+
+test("private-use bullets and contact icons import as text", async () => {
+  const bullets = Array.from({ length: 10 }, (_, index) => [
+    item("\uF0B7", 57, 660 - index * 14),
+    item(`Shipped ${index + 2} payment services for the partner billing team`, 68, 660 - index * 14)
+  ]).flat();
+  const result = await importResumePdf(STUB_BYTES, stubPdfjs([
+    item("Jane Doe", 54, 730, 18), item("\uF0E0", 54, 712), item("jane@example.test", 66, 712), item("EXPERIENCE", 54, 684, 12), ...bullets
+  ]));
+  assert.ok(result.audit.ok);
+  assert.equal(result.data.sections[0].items.flatMap((entry) => entry.bullets).length, 10, "private-use glyphs at line starts are bullet markers");
 });
 
 test("formatting code split across runs is listed, not imported or refused", async () => {
@@ -234,6 +297,121 @@ test("flush-right years on consecutive rows stay with their rows", async () => {
   assert.deepEqual([...new Set(result.lines.lines.map((line) => line.region))], ["main"]);
   const education = result.data.sections.find((section) => section.heading === "EDUCATION");
   assert.deepEqual(education.items.map((item) => item.titleRight), ["2005", "2006", "2007", "2008"]);
+});
+
+// Rows as [left text, value at the tab stop, style]: an all-caps row without a
+// style is a heading, any other unstyled row a bullet.
+const tabStopVariants = {
+  "places and dates": [
+    ["EXPERIENCE"],
+    ["Acme Corp", "San Francisco, CA", "bold"], ["Senior Engineer", "Jan 2019 – Present", "italic"], ["Cut build times in half for the payments team"],
+    ["Globex", "Remote", "bold"], ["Engineer", "2016 – 2019", "italic"], ["Shipped the partner billing service"],
+    ["EDUCATION"],
+    ["State University", "Boston, MA", "bold"], ["BS Computer Science", "2012 – 2016", "italic"],
+    ["Tech Institute", "Austin, TX", "bold"], ["MS Data Science", "2016 – 2017", "italic"]
+  ],
+  "single-word cities": [
+    ["EXPERIENCE"],
+    ["Acme GmbH", "London", "bold"], ["Senior Engineer", "Jan 2019 – Present", "italic"], ["Cut build times in half for the payments team"],
+    ["EDUCATION"],
+    ["State University", "Paris", "bold"], ["BS Computer Science", "2012 – 2016", "italic"],
+    ["Tech Institute", "Munich", "bold"], ["MS Data Science", "2016 – 2017", "italic"]
+  ],
+  "dates beside GPAs": [
+    ["EDUCATION"],
+    ["State University", "2012 – 2016", "bold"], ["BS Computer Science", "GPA 3.8/4.0", "italic"],
+    ["Tech Institute", "2016 – 2017", "bold"], ["MS Data Science", "GPA 3.9/4.0", "italic"],
+    ["EXPERIENCE"], ["Acme Corp", "2019 – 2023", "bold"], ["Engineer", "Boston, MA", "italic"], ["Cut build times in half for the payments team"]
+  ],
+  "wide combined values": [
+    ["EXPERIENCE"],
+    ["Acme Corp", "Jan 2019 – Present · Boston, MA", "bold"], ["Senior Engineer", null, "italic"], ["Cut build times in half for the payments team"],
+    ["Globex", "2016 – 2019 · Remote", "bold"], ["Engineer", null, "italic"],
+    ["Initech", "2014 – 2016 · Austin, TX", "bold"], ["Analyst", null, "italic"],
+    ["Hooli", "2012 – 2014 · Palo Alto, CA", "bold"], ["Intern", null, "italic"]
+  ],
+  "numeric months with durations": [
+    ["EXPERIENCE"],
+    ["Acme Corp", "06/2019 – Present (4 yrs)", "bold"], ["Senior Engineer", "Boston, MA (Hybrid)", "italic"], ["Cut build times in half for the payments team"],
+    ["Globex", "03/2016 – 05/2019 (3 yrs)", "bold"], ["Engineer", "New York, NY (Remote)", "italic"],
+    ["Initech", "01/2014 – 02/2016 (2 yrs)", "bold"], ["Analyst", "Austin, TX", "italic"]
+  ]
+};
+test("values at a left-aligned tab stop on consecutive rows stay with their rows", async () => {
+  for (const [label, rows] of Object.entries(tabStopVariants)) {
+    const result = await importResumePdf(await pdf(({ text, fonts }) => {
+      text("Jane Doe", 54, 730, 18, fonts.bold);
+      text("jane@example.test", 54, 712);
+      rows.forEach(([left, value, style], index) => {
+        const y = 684 - index * 15;
+        if (style) {
+          text(left, 54, y, 10, fonts[style]);
+          if (value) text(value, 430, y);
+        } else if (left === left.toUpperCase()) {
+          text(left, 54, y, 12, fonts.bold);
+        } else {
+          text("•", 57, y);
+          text(left, 68, y);
+        }
+      });
+    }), pdfjs);
+    assert.deepEqual([...new Set(result.lines.lines.map((line) => line.region))], ["main"], label);
+    const entryText = (item) => stripInlineMarks([item.titleLeft, item.titleRight, item.subtitleLeft, item.subtitleRight].join(" "));
+    const entries = result.data.sections.flatMap((section) => section.items.map(entryText));
+    for (const [left, value] of rows.filter(([, value]) => value)) {
+      assert.ok(entries.some((text) => text.includes(left) && text.includes(value)), `${label}: ${left} / ${value}: ${JSON.stringify(entries)}`);
+    }
+  }
+});
+
+// A same-baseline sidebar beside the main column's rows, read as its own column.
+// Bullets are a separate glyph, painted with their line ("• text"), or a
+// ZapfDingbats glyph. Headings are larger and bold, bold only, or plain.
+const sidebarPdf = (side, { bullets = null, headings = "larger" } = {}) => pdf(async ({ doc, text, fonts }) => {
+  const dingbats = await doc.embedFont(StandardFonts.ZapfDingbats);
+  const sideText = (value, y) => {
+    const heading = headings !== "plain" && /^[A-Z]{4,}$/.test(value);
+    text(value, 430, y, heading && headings === "larger" ? 11 : 10, heading ? fonts.bold : fonts.regular);
+  };
+  text("Priya Natarajan", 54, 730, 22, fonts.bold);
+  text("EXPERIENCE", 54, 690, 11, fonts.bold);
+  sideText(side[0], 690);
+  ["Hooli", "Product Designer, 2019 – 2023", "Redesigned onboarding for 2M monthly users", "Ran 40 usability sessions with partners",
+    "Pied Piper", "UX Designer, 2015 – 2019", "Shipped the first mobile app and its system", "Built the shared research repository"]
+    .forEach((value, index) => {
+      const y = 674 - index * 14;
+      const font = index % 4 === 0 ? fonts.bold : fonts.regular;
+      if (!bullets || index % 4 < 2) return text(value, 54, y, 10, font);
+      if (bullets === "inline") return text(`• ${value}`, 57, y, 10, font);
+      text(bullets === "dingbat" ? "●" : "•", 57, y, bullets === "dingbat" ? 6 : 10, bullets === "dingbat" ? dingbats : fonts.regular);
+      text(value, 68, y, 10, font);
+    });
+  side.slice(1).forEach((value, index) => sideText(value, 674 - index * 14));
+});
+const regions = (result) => [...new Set(result.lines.lines.map((line) => line.region))].sort();
+const DATED_SIDEBAR = ["EDUCATION", "BS Computer Science", "State University", "2012 – 2016",
+  "CERTIFICATIONS", "AWS SAA · 2022", "CKA · 2021", "PMP · 2019", "CSM · 2018"];
+
+test("a sidebar of skill lists with one dated education row is still a column", async () => {
+  const result = await importResumePdf(await sidebarPdf(["SKILLS", "Python, Go, SQL", "React, TypeScript", "AWS, GCP, Docker", "Postgres, Redis",
+    "Kafka, Airflow", "Figma, Jira", "EDUCATION", "Boston University, MA", "2012 – 2016"]), pdfjs);
+  assert.deepEqual(regions(result), ["left", "right"]);
+  assert.deepEqual(result.data.sections.map((section) => section.heading), ["EXPERIENCE", "SKILLS", "EDUCATION"]);
+});
+
+test("a mostly dated sidebar beside any kind of bullet is still a column", async () => {
+  for (const bullets of ["glyph", "inline", "dingbat"]) {
+    const result = await importResumePdf(await sidebarPdf(DATED_SIDEBAR, { bullets, headings: "plain" }), pdfjs);
+    assert.deepEqual(regions(result), ["left", "right"], bullets);
+  }
+});
+
+test("a mostly dated sidebar under its own headings is still a column beside plain lines", async () => {
+  for (const headings of ["larger", "bold"]) {
+    const result = await importResumePdf(await sidebarPdf(DATED_SIDEBAR, { headings }), pdfjs);
+    assert.deepEqual(regions(result), ["left", "right"], headings);
+    assert.deepEqual(result.data.sections.map((section) => section.heading), ["EXPERIENCE", "EDUCATION", "CERTIFICATIONS"], headings);
+  }
 });
 
 test("a right-hand sidebar on the main column's baselines is read as its own column", async () => {

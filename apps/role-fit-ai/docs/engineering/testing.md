@@ -390,25 +390,43 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   `__evals__/support/importCorpus.mjs`.
 - `pdf-import-units.mjs` covers the audit's mutation-style rejections (invented,
   duplicated, dropped, or smuggled-as-structure text), field rendering, separator
-  splitting, dates, the font-family table, columns, and bullet markers.
+  splitting, dates (alone or beside a place or duration), the font-family
+  table, columns, and bullet markers.
 - `pdf-import-edge-cases.mjs` holds layouts found in review: Symbol-font
-  content glyphs, filled and empty form fields and viewer-added text boxes, one
-  run per glyph (readable text, word count, and unmapped glyphs), formatting
-  code split across runs, superscripts, a role title at a page break,
-  right-aligned dates and flush-right years that must not read as a column,
-  and a same-baseline right sidebar that must.
+  content glyphs; filled, empty, and appearance-only form fields, viewer-added
+  text boxes, stamps painting text (Tj, TJ, `'`, or after a dingbat font
+  restored away by Q), and annotations that only draw, paint spaces, or show a
+  ZapfDingbats or Wingdings check; one run per glyph (readable text, word
+  count, and unmapped glyphs); unmapped glyphs alternating with readable runs,
+  and private-use bullets and icons that still import; formatting code split
+  across runs; superscripts; a role title at a page break; right-aligned
+  dates, flush-right years, and left-tab-stop values (places, single-word
+  cities, GPAs, wide date-and-place values, numeric months with durations) that
+  must not read as a column; and same-baseline right sidebars that must: skill
+  lists with one dated row, and a mostly dated sidebar beside glyph, inline,
+  or dingbat bullets, or under larger or bold headings.
 - `pdf-import-interpretation.mjs` feeds crafted provider replies to the client
   rebuild: reworded or corrected substrings, free text, unknown pieces,
   duplicated, overlapping, reordered, or partly omitted text, recombined or
   spliced metrics and dates, skipped words, dropped signs and separators, a
   value split at its colon, and malformed replies are rejected, each by the
-  guard named in the case; whole omissions become Not placed, swaps and moves
-  into the header get Checks on exactly the moved fields, and a field passing
-  over unused text gets a Check.
+  guard named in the case, including each half of the junction rule and of
+  the skipped-segment rule alone; whole omissions become Not placed; swaps,
+  moves into the header, lines appended past other fields' text (including
+  whole lines one apart), and a date moved into the field on the line above
+  get reading-order Checks on exactly the moved fields; a line taken from
+  another column, or from another page's top band, gets a cross-column Check
+  in either section order; a title wrapped beside its date and a right-hand
+  date wrapped past the next row's start get none; and a field passing over
+  unused text gets a Check.
 - `src/hooks/__evals__/resume-import-lifecycle.mjs` drives `useResumeImport`
-  with controlled React state: Discard, import over import, refusals during and
-  outside a review, stale replies, and edits made during a request. It also
-  pins App's Polish gates and the workspace commit/restore seams (AC8, AC12).
+  with controlled React state, a fresh hook per case: Discard, import over
+  import, refusals during and outside a review, stale replies, edits made
+  during a request, a reseed while each confirm dialog is open, Stop, single
+  flight, the abort when a review ends, an unedited AI reading discarded
+  without asking, and a pending request from one case never reaching the
+  next. It also pins App's Polish gates and the workspace
+  commit/restore seams (AC8, AC12).
   `src/sections/resume/__evals__/resume-import-review.mjs` renders the review
   rail's in-review reading and refusal states.
 - `server/ai/__evals__/resume-import-probes.mjs` pins the no-rewrite prompt, the

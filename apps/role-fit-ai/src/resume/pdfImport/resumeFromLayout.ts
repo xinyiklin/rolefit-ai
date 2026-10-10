@@ -20,6 +20,7 @@ import { inferSectionType, isSectionHeader } from "../sections.ts";
 import { markedField, plainField, renderField, splitOnSeparators, type FieldDraft } from "./fieldText.ts";
 import { joinPieces, slicePiece, type LayoutLine, type LayoutLines, type LinePiece } from "./layoutLines.ts";
 import type { PdfRule } from "./pdfLayout.ts";
+import { isDateLike } from "./rowDates.ts";
 
 export type ImportCheck = { kind: "check"; id: string; fieldKey: string | null; reason: string; source: string };
 export type ImportUnplaced = { kind: "unplaced"; id: string; text: string; reason: string; page: number };
@@ -62,19 +63,6 @@ const PAGE_NUMBER_RE = /^(?:page\s*)?\d{1,3}(?:\s*(?:of|\/)\s*\d{1,3})?$/i;
 const CONTACT_HEADING_RE =
   /^(?:contact(?:\s+(?:info(?:rmation)?|details|me))?|personal\s+(?:details|information|info)|details|links|get\s+in\s+touch)$/i;
 const SKILLS_LIKE_RE = /\b(?:technologies|tools|toolbox|tech(?:nical)?\s+stack|competenc|proficienc|expertise)/i;
-const DATE_WORD_RE =
-  /^(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sept?(?:ember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?|present|current|now|today|expected|summer|fall|autumn|spring|winter|to|since)\.?$/i;
-
-export function isDateLike(text: string): boolean {
-  const trimmed = text.trim();
-  if (!trimmed || trimmed.length > 40) return false;
-  if (!/\b(?:19|20)\d{2}\b|\bpresent\b|\bcurrent\b/i.test(trimmed)) return false;
-  return trimmed
-    .split(/[\s,–—\-/()]+/)
-    .filter(Boolean)
-    .every((word) => /^\d{1,4}\.?$/.test(word) || /^'\d{2}$/.test(word) || DATE_WORD_RE.test(word));
-}
-
 function words(text: string): number {
   return text.split(/\s+/).filter(Boolean).length;
 }

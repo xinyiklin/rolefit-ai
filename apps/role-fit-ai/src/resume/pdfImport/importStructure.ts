@@ -26,7 +26,7 @@ import {
 import { auditImport } from "./importAudit.ts";
 import type { PdfImportResult } from "./importResumePdf.ts";
 import { renderField, type FieldDraft } from "./fieldText.ts";
-import { slicePiece, type LayoutLines, type LinePiece, type LineRegion } from "./layoutLines.ts";
+import { slicePiece, type LayoutLine, type LayoutLines, type LinePiece } from "./layoutLines.ts";
 import type { ConsumedPiece, ImportFinding } from "./resumeFromLayout.ts";
 
 type ImportRequestPieces = Map<string, { piece: LinePiece; line: number; segment: number }>;
@@ -63,12 +63,13 @@ export function importRequestLines(source: LayoutLines): { lines: ResumeImportLi
 const SPLIT_GAP_RE = /^[\s|•·◦▪∙:]*$/u;
 const READING_ORDER_REASON = "Placed out of the PDF's reading order; check that it belongs here.";
 const PASSED_OVER_REASON = "Text between this field's parts in the PDF was left out; check that nothing is missing.";
+const CROSS_COLUMN_REASON = "Joins text from different columns of the PDF; check that it belongs together.";
 const pieceOrder = (id: string) => Number(id.slice(1));
 const refPiece = (ref: PieceRef) => (typeof ref === "string" ? ref : ref.piece);
 
-// The fields outside every longest in-order run, so a swap flags both of its
-// sides while the fields around a move stay quiet.
-function movedFields(orders: readonly number[]): Set<number> {
+// The stretches outside every longest in-order sequence, so a swap flags both
+// of its sides while the stretches around a move stay quiet.
+function movedStretches(orders: readonly number[]): Set<number> {
   const ending = orders.map(() => 1);
   const starting = orders.map(() => 1);
   for (let i = 0; i < orders.length; i += 1) {
@@ -78,13 +79,18 @@ function movedFields(orders: readonly number[]): Set<number> {
     for (let j = i + 1; j < orders.length; j += 1) if (orders[j] >= orders[i]) starting[i] = Math.max(starting[i], starting[j] + 1);
   }
   const longest = Math.max(0, ...ending);
-  const onRun = orders.map((_, i) => ending[i] + starting[i] - 1 === longest);
+  const onLongest = orders.map((_, i) => ending[i] + starting[i] - 1 === longest);
   const atRank = new Map<number, number>();
   orders.forEach((_, i) => {
-    if (onRun[i]) atRank.set(ending[i], (atRank.get(ending[i]) ?? 0) + 1);
+    if (onLongest[i]) atRank.set(ending[i], (atRank.get(ending[i]) ?? 0) + 1);
   });
-  return new Set(orders.flatMap((_, i) => (onRun[i] && atRank.get(ending[i]) === 1 ? [] : [i])));
+  return new Set(orders.flatMap((_, i) => (onLongest[i] && atRank.get(ending[i]) === 1 ? [] : [i])));
 }
+
+// Columns flow from page to page; a page's full-width top band does not.
+type Stretch = { order: number; region: string };
+const flowRegion = (line: LayoutLine) => (line.region === "top" ? `top:${line.page}` : line.region);
+const inRightHalf = (piece: LinePiece, line: LayoutLine) => piece.x >= (line.regionLeft + line.regionRight) / 2;
 
 export function resolveImportStructure(
   structure: ResumeImportStructure,
@@ -93,7 +99,7 @@ export function resolveImportStructure(
 ): { data: ResumeData; findings: ImportFinding[]; consumed: ConsumedPiece[] } {
   const uses = new Map<string, { start: number; end: number; field: number }[]>();
   const findings: ImportFinding[] = [];
-  const placed: { key: string | null; text: string; order: number; region: LineRegion; passedOver: string[] }[] = [];
+  const placed: { key: string | null; text: string; stretches: Stretch[]; passedOver: string[] }[] = [];
   let findingId = 0;
   let fieldCount = 0;
   const nextId = () => `ai${(findingId += 1)}`;
@@ -102,18 +108,20 @@ export function resolveImportStructure(
   };
 
   // A field is one run of the PDF's text in order. A cut piece can only end or
-  // start it, and it may pass over whole lines or another stretch of a line
-  // (another column, a page break), never words inside the stretches it uses.
-  const field = (refs: readonly PieceRef[], marks: boolean): { draft: FieldDraft; passedOver: string[] } => {
+  // start it, and it may pass over whole lines or another segment of a line
+  // (another column, a page break), never words inside the segments it uses.
+  const field = (refs: readonly PieceRef[], marks: boolean): { draft: FieldDraft; passedOver: string[]; stretches: Stretch[] } => {
     const fieldIndex = (fieldCount += 1);
     const lines: LinePiece[][] = [];
     const passedOver: string[] = [];
+    const stretches: Stretch[] = [];
     let lastLine = -1;
-    let previous: { order: number; segment: number; piece: LinePiece; slice: LinePiece } | null = null;
+    let previous: { order: number; segment: number; line: number; piece: LinePiece; slice: LinePiece; region: string } | null = null;
     for (const ref of refs) {
       const pieceId = refPiece(ref);
       const entry = pieces.get(pieceId) ?? reject("The reply referenced text that was not sent.");
       const order = pieceOrder(pieceId);
+      const region = flowRegion(source.lines[entry.line]);
       if (previous && order < previous.order) reject("The reply reordered text within a field.");
       const earlier = uses.get(pieceId) ?? [];
       let slice = entry.piece;
@@ -125,17 +133,23 @@ export function resolveImportStructure(
         if (at < 0 || at + ref.text.length > entry.piece.end) reject("The reply took parts of a line out of order.");
         slice = slicePiece(entry.piece.span, at, at + ref.text.length);
       }
+      let newStretch = !previous || region !== previous.region;
       if (previous && order !== previous.order) {
         const cutAfter = previous.piece.span.text.slice(previous.slice.end, previous.piece.end);
         const cutBefore = entry.piece.span.text.slice(entry.piece.start, slice.start);
         if (cutAfter.trim() || cutBefore.trim()) reject("The reply joined part of a line to other text in one field.");
         for (let between = previous.order + 1; between < order; between += 1) {
-          const { segment } = pieces.get(`p${between}`)!;
-          if (segment === previous.segment || segment === entry.segment) reject("The reply left words out of the middle of a field.");
+          const skipped = pieces.get(`p${between}`)!;
+          if (skipped.segment === previous.segment || skipped.segment === entry.segment) reject("The reply left words out of the middle of a field.");
           passedOver.push(`p${between}`);
+          // Only a wrap keeps the stretch: past the rest of the previous line (a
+          // date beside a title), or a right-hand value wrapping past a row's start.
+          const wrapsRight = skipped.line === entry.line && inRightHalf(previous.piece, source.lines[previous.line]) && inRightHalf(entry.piece, source.lines[entry.line]);
+          if (skipped.line !== previous.line && !wrapsRight) newStretch = true;
         }
       }
-      previous = { order, segment: entry.segment, piece: entry.piece, slice };
+      if (newStretch) stretches.push({ order, region });
+      previous = { order, segment: entry.segment, line: entry.line, piece: entry.piece, slice, region };
       uses.set(pieceId, [...earlier, { start: slice.start, end: slice.end, field: fieldIndex }]);
       if (entry.line !== lastLine) {
         lines.push([]);
@@ -143,17 +157,13 @@ export function resolveImportStructure(
       }
       lines[lines.length - 1].push(slice);
     }
-    return { draft: { lines, marks }, passedOver };
+    return { draft: { lines, marks }, passedOver, stretches };
   };
   const render = (refs: readonly PieceRef[], marks: boolean, key: string | null): string => {
-    const { draft, passedOver } = field(refs, marks);
+    const { draft, passedOver, stretches } = field(refs, marks);
     const rendered = renderField(draft);
     if (rendered.joinedHyphen) findings.push({ kind: "check", id: nextId(), fieldKey: key, reason: HYPHEN_REASON, source: rendered.text });
-    if (refs.length) {
-      const first = refPiece(refs[0]);
-      const region = source.lines[pieces.get(first)!.line].region;
-      placed.push({ key, text: rendered.text, order: pieceOrder(first), region, passedOver });
-    }
+    if (refs.length) placed.push({ key, text: rendered.text, stretches, passedOver });
     return rendered.text;
   };
 
@@ -236,19 +246,21 @@ export function resolveImportStructure(
     gap(position, piece.end, false);
   }
 
-  // Text a field passed over that no field used may be a dropped word; a field
-  // that moved through its column's reading order may be a swap.
+  // Unused text a field passed over may be a dropped word; a stretch out of its
+  // column's order, or a field spanning columns, may hold misplaced text.
+  const check = (current: (typeof placed)[number], reason: string) =>
+    findings.push({ kind: "check", id: nextId(), fieldKey: current.key, reason, source: current.text });
   for (const current of placed) {
-    if (current.passedOver.some((id) => !uses.has(id))) {
-      findings.push({ kind: "check", id: nextId(), fieldKey: current.key, reason: PASSED_OVER_REASON, source: current.text });
-    }
+    if (current.passedOver.some((id) => !uses.has(id))) check(current, PASSED_OVER_REASON);
+    if (new Set(current.stretches.map((stretch) => stretch.region)).size > 1) check(current, CROSS_COLUMN_REASON);
   }
-  for (const region of new Set(placed.map((current) => current.region))) {
-    const column = placed.filter((current) => current.region === region);
-    for (const index of movedFields(column.map((current) => current.order))) {
-      findings.push({ kind: "check", id: nextId(), fieldKey: column[index].key, reason: READING_ORDER_REASON, source: column[index].text });
-    }
+  const stretches = placed.flatMap((current) => current.stretches.map((stretch) => ({ ...stretch, field: current })));
+  const moved = new Set<(typeof placed)[number]>();
+  for (const region of new Set(stretches.map((stretch) => stretch.region))) {
+    const column = stretches.filter((stretch) => stretch.region === region);
+    for (const index of movedStretches(column.map((stretch) => stretch.order))) moved.add(column[index].field);
   }
+  for (const current of placed.filter((candidate) => moved.has(candidate))) check(current, READING_ORDER_REASON);
 
   return {
     data: { header: name || contact.length ? { visible: true, name: name || null, contact } : null, sections },
