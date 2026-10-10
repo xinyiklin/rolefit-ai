@@ -635,17 +635,19 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       Prepare card, automatic Polish, the dock's Retry, the rail's Retry); the
       Cover Letter rail names the review as its resume blocker. Passed two
       independent reviews.
-    - A title or subtitle row's last segment in the right half that starts
-      within 1.5pt of another section row's (not a contact line or bullet)
-      goes to the right-hand slot; a one-off gap or one shared in the left half
-      stays combined with a Check.
+    - A title or subtitle row's dated last segment that starts within 1.5pt
+      of another body row's last segment (not a header line or bullet) goes to
+      the right-hand slot; anything else short of the margin stays combined
+      with a Check as on `main`. [USER] Limited to dates after the review of
+      `aa9f8475` found places, coursework, and awards at a tab stop read worse
+      than `main` (no text lost).
     - [USER] The accepted #205 Medium stays a documented limitation: a dated
       sidebar whose headings look like its entries, beside a column without
       bullets, reads as one column (no text lost). Three section-title cues
       were tried; each review (heads `9469ddd3`, `e27f0102`) found tab-stop or
       sidebar layouts made worse than `main`, so column detection stays as on
       `main`. Residual Low: in that misread layout, tab-stop placement pairs
-      sidebar lines into rows without the "combined" Check `main` gave.
+      dated sidebar lines into rows without the "combined" Check `main` gave.
   - [TOOL] Corpus: 7 engine + 6 foreign fixtures (one truly two pages with a
     running header) and 8 refusal kinds; synthetic and written alongside the
     parser, so real-world accuracy is UNCONFIRMED.

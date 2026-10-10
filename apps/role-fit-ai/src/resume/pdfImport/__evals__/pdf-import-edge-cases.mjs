@@ -10,6 +10,7 @@ import { PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { importResumePdf } from "../importResumePdf.ts";
 import { PdfImportError } from "../importErrors.ts";
+import { hasDate } from "../rowDates.ts";
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
@@ -371,26 +372,29 @@ test("values at a left-aligned tab stop stay with their rows, in the right-hand 
       });
     }), pdfjs);
     assert.deepEqual([...new Set(result.lines.lines.map((line) => line.region))], ["main"], label);
-    // Each value lands in its own row's right-hand slot, nothing combined.
+    // A dated value lands in its own row's right-hand slot; any other value
+    // stays with its row, at the right if it reaches the margin.
     const slots = result.data.sections.flatMap((section) => section.items.flatMap((item) => [
       [item.titleLeft, item.titleRight], [item.subtitleLeft, item.subtitleRight]
     ])).map((pair) => pair.map((text) => stripInlineMarks(text ?? "")));
     for (const [left, value] of rows.filter(([, value]) => value)) {
-      assert.ok(slots.some(([leftSlot, rightSlot]) => leftSlot === left && rightSlot === value), `${label}: ${left} / ${value}: ${JSON.stringify(slots)}`);
+      const placed = slots.some(([leftSlot, rightSlot]) => leftSlot === left && rightSlot === value) ||
+        (!hasDate(value) && slots.some(([leftSlot, rightSlot]) => leftSlot === `${left} ${value}` && rightSlot === ""));
+      assert.ok(placed, `${label}: ${left} / ${value}: ${JSON.stringify(slots)}`);
     }
-    assert.deepEqual(result.findings.filter((finding) => /combined/.test(finding.reason)), [], label);
   }
 });
 
-// Only section rows without bullets set a tab stop, and only within 1.5pt.
-test("a one-off gap, or a gap shared in a row's left half, stays combined with a Check", async () => {
+// Only body rows without bullets set a tab stop, only within 1.5pt, and only a
+// dated value moves to the right from one.
+test("a one-off gap, or a shared gap without a date, stays combined with a Check", async () => {
   const result = await importResumePdf(await pdf(({ text, fonts }) => {
     text("Jane Doe", 54, 730, 18, fonts.bold);
     text("jane@example.test", 54, 712);
     text("555-0100", 330, 712);
     text("EXPERIENCE", 54, 684, 12, fonts.bold);
     text("Acme Corp", 54, 668, 10, fonts.bold);
-    text("(acquired by Globex)", 330, 668);
+    text("(since 2015)", 330, 668);
     text("•", 57, 655);
     text("Ran the payments platform for three regions and cut settlement from two days to four hours", 68, 655);
     text("•", 57, 642);
@@ -413,12 +417,12 @@ test("a one-off gap, or a gap shared in a row's left half, stays combined with a
   const entries = result.data.sections.flatMap((section) => section.items)
     .map((item) => [stripInlineMarks(item.titleLeft), item.titleRight, stripInlineMarks(item.subtitleLeft), item.subtitleRight]);
   assert.deepEqual(entries, [
-    ["Acme Corp (acquired by Globex)", "", "", ""],
-    ["Globex", "2016 – 2019", "Engineer", "Remote"],
+    ["Acme Corp (since 2015)", "", "", ""],
+    ["Globex", "2016 – 2019", "Engineer Remote", ""],
     ["RoleFit AI TypeScript, Node", "", "", ""],
     ["Typeset React, Canvas", "", "", ""]
   ]);
-  assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 3);
+  assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 4);
 });
 
 // A same-baseline sidebar beside the main column's rows, read as its own column.
@@ -464,11 +468,10 @@ test("a mostly dated sidebar beside any kind of bullet is still a column", async
 });
 
 test("a mostly dated sidebar under its own headings is still a column beside plain lines", async () => {
-  for (const [label, side, headings] of [["larger", DATED_SIDEBAR, "larger"], ["bold", DATED_SIDEBAR, "bold"]]) {
-    const result = await importResumePdf(await sidebarPdf(side, { headings }), pdfjs);
-    assert.deepEqual(regions(result), ["left", "right"], label);
-    const found = result.data.sections.map((section) => section.heading.toUpperCase());
-    for (const heading of ["EXPERIENCE", "EDUCATION", "CERTIFICATIONS"]) assert.ok(found.includes(heading), `${label}: ${JSON.stringify(found)}`);
+  for (const headings of ["larger", "bold"]) {
+    const result = await importResumePdf(await sidebarPdf(DATED_SIDEBAR, { headings }), pdfjs);
+    assert.deepEqual(regions(result), ["left", "right"], headings);
+    assert.deepEqual(result.data.sections.map((section) => section.heading), ["EXPERIENCE", "EDUCATION", "CERTIFICATIONS"], headings);
   }
 });
 

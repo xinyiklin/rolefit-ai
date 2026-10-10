@@ -403,12 +403,12 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
   dates, flush-right years, and left-tab-stop values (places, single-word
   cities, GPAs, wide date-and-place values, numeric months with durations, a
   section word such as "Honors" among the values, all-caps values) that must
-  not read as a column and land in their row's right-hand slot, while a
-  one-off gap, a gap shared only with a contact line or bullet, or one shared
-  in the left half stays combined with a Check; and same-baseline right
-  sidebars that must read as a column: skill lists with one dated row, and a
-  mostly dated sidebar beside glyph, inline, or dingbat bullets, or under
-  larger or bold headings.
+  not read as a column, with dated values in their row's right-hand slot,
+  while a value without a date, or a dated one-off gap, or one shared only
+  with a header line or bullet, stays combined with a Check; and same-baseline
+  right sidebars that must read as a column: skill lists with one dated row,
+  and a mostly dated sidebar beside glyph, inline, or dingbat bullets, or
+  under larger or bold headings.
 - `pdf-import-interpretation.mjs` feeds crafted provider replies to the client
   rebuild: reworded or corrected substrings, free text, unknown pieces,
   duplicated, overlapping, reordered, or partly omitted text, recombined or
