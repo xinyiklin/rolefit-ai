@@ -50,10 +50,12 @@ file/layout contracts remain in `@typeset/engine`.
   column: words and case did not separate its headings from row values such
   as "Honors" without regressing tab-stop layouts.
 - A title or subtitle row's last segment is its right-hand value when it
-  reaches the margin, or when it holds a date and starts within 1.5pt of
-  another body row's last segment (a tab stop; header lines and bullets never
-  set one). Anything else short of the margin (a place, a course, a one-off
-  gap) stays in the left field with a Check, as before.
+  reaches the margin, or when it is a date ("2019 – 2021", "Jan 2019 –
+  Present") starting within 1.5pt of another body row's last segment (a tab
+  stop; header lines, the lines before the first heading, and bullets never
+  set one). Anything else short of the margin (a place, "CKA (2021)", a
+  parenthesized year, a one-off gap) stays in the left field with a Check, as
+  before.
 - `__evals__/pdf-import-corpus.mjs` is the gate (synthetic fixtures generated
   in memory from `__evals__/support/importCorpus.mjs`; never commit a PDF);
   `pdf-import-edge-cases.mjs` holds review-found layouts.

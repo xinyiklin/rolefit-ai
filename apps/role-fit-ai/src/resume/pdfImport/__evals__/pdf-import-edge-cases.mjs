@@ -10,7 +10,7 @@ import { PDFDocument, PDFName, PDFString, StandardFonts } from "pdf-lib";
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { importResumePdf } from "../importResumePdf.ts";
 import { PdfImportError } from "../importErrors.ts";
-import { hasDate } from "../rowDates.ts";
+import { isDateLike } from "../rowDates.ts";
 
 const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");
 
@@ -372,29 +372,29 @@ test("values at a left-aligned tab stop stay with their rows, in the right-hand 
       });
     }), pdfjs);
     assert.deepEqual([...new Set(result.lines.lines.map((line) => line.region))], ["main"], label);
-    // A dated value lands in its own row's right-hand slot; any other value
-    // stays with its row, at the right if it reaches the margin.
+    // A date lands in its own row's right-hand slot; any other value stays
+    // with its row, at the right if it reaches the margin.
     const slots = result.data.sections.flatMap((section) => section.items.flatMap((item) => [
       [item.titleLeft, item.titleRight], [item.subtitleLeft, item.subtitleRight]
     ])).map((pair) => pair.map((text) => stripInlineMarks(text ?? "")));
     for (const [left, value] of rows.filter(([, value]) => value)) {
       const placed = slots.some(([leftSlot, rightSlot]) => leftSlot === left && rightSlot === value) ||
-        (!hasDate(value) && slots.some(([leftSlot, rightSlot]) => leftSlot === `${left} ${value}` && rightSlot === ""));
+        (!isDateLike(value) && slots.some(([leftSlot, rightSlot]) => leftSlot === `${left} ${value}` && rightSlot === ""));
       assert.ok(placed, `${label}: ${left} / ${value}: ${JSON.stringify(slots)}`);
     }
   }
 });
 
 // Only body rows without bullets set a tab stop, only within 1.5pt, and only a
-// dated value moves to the right from one.
-test("a one-off gap, or a shared gap without a date, stays combined with a Check", async () => {
+// value that is a date moves to the right from one.
+test("a one-off gap, a gap past 1.5pt, or a value that only contains a year stays combined with a Check", async () => {
   const result = await importResumePdf(await pdf(({ text, fonts }) => {
     text("Jane Doe", 54, 730, 18, fonts.bold);
     text("jane@example.test", 54, 712);
     text("555-0100", 330, 712);
     text("EXPERIENCE", 54, 684, 12, fonts.bold);
     text("Acme Corp", 54, 668, 10, fonts.bold);
-    text("(since 2015)", 330, 668);
+    text("Since 2015", 330, 668);
     text("•", 57, 655);
     text("Ran the payments platform for three regions and cut settlement from two days to four hours", 68, 655);
     text("•", 57, 642);
@@ -403,7 +403,9 @@ test("a one-off gap, or a shared gap without a date, stays combined with a Check
     text("Globex", 54, 616, 10, fonts.bold);
     text("2016 – 2019", 360, 616);
     text("Engineer", 54, 603, 10, fonts.italic);
-    text("Remote", 360, 603);
+    text("Remote", 361, 603);
+    text("Initech", 54, 590, 10, fonts.bold);
+    text("2014 – 2016", 363.5, 590);
     text("PROJECTS", 54, 575, 12, fonts.bold);
     text("RoleFit AI", 54, 559, 10, fonts.bold);
     text("TypeScript, Node", 200, 559);
@@ -413,16 +415,30 @@ test("a one-off gap, or a shared gap without a date, stays combined with a Check
     text("React, Canvas", 200, 533);
     text("•", 57, 520);
     text("Built a browser resume editor", 68, 520);
+    // A parenthesized year at a shared stop annotates its line.
+    text("Led the ledger migration", 54, 507);
+    text("(2021)", 410, 507);
+    text("Cut build times in half", 54, 494);
+    text("(2020)", 410, 494);
+    text("CERTIFICATIONS", 54, 472, 12, fonts.bold);
+    text("AWS Solutions Architect (2022)", 54, 456);
+    text("Certified Kubernetes Admin (2021)", 300, 456);
+    text("PMP (2020)", 54, 443);
+    text("CSM (2019)", 300, 443);
   }), pdfjs);
   const entries = result.data.sections.flatMap((section) => section.items)
     .map((item) => [stripInlineMarks(item.titleLeft), item.titleRight, stripInlineMarks(item.subtitleLeft), item.subtitleRight]);
   assert.deepEqual(entries, [
-    ["Acme Corp (since 2015)", "", "", ""],
+    ["Acme Corp Since 2015", "", "", ""],
     ["Globex", "2016 – 2019", "Engineer Remote", ""],
+    ["Initech 2014 – 2016", "", "", ""],
     ["RoleFit AI TypeScript, Node", "", "", ""],
-    ["Typeset React, Canvas", "", "", ""]
+    ["Typeset React, Canvas", "", "", ""],
+    ["Led the ledger migration (2021)", "", "", ""],
+    ["Cut build times in half (2020)", "", "", ""],
+    ["AWS Solutions Architect (2022) Certified Kubernetes Admin (2021)", "", "PMP (2020) CSM (2019)", ""]
   ]);
-  assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 4);
+  assert.equal(result.findings.filter((finding) => /combined/.test(finding.reason)).length, 9);
 });
 
 // A same-baseline sidebar beside the main column's rows, read as its own column.

@@ -635,12 +635,17 @@ extension 1.3.0, desktop bridge API 13 (see 2026-10-08).
       Prepare card, automatic Polish, the dock's Retry, the rail's Retry); the
       Cover Letter rail names the review as its resume blocker. Passed two
       independent reviews.
-    - A title or subtitle row's dated last segment that starts within 1.5pt
-      of another body row's last segment (not a header line or bullet) goes to
-      the right-hand slot; anything else short of the margin stays combined
-      with a Check as on `main`. [USER] Limited to dates after the review of
-      `aa9f8475` found places, coursework, and awards at a tab stop read worse
-      than `main` (no text lost).
+    - A title or subtitle row's last segment that is a date (not a
+      parenthesized year) and starts within 1.5pt of another body row's last
+      segment (not a header line or bullet) goes to the right-hand slot; anything else short of the margin
+      stays combined with a Check as on `main`. [USER] Narrowed twice after
+      review: to dated values when places, coursework, and awards at a tab
+      stop read worse than `main` (head `aa9f8475`), then to pure dates when
+      two-column lists with years ("CKA (2021)") paired with no Check (head
+      `14f32755`). No text was lost in either. Against `main` on the
+      reviewers' 103 synthetic layouts: 82 identical; the other 21 only move
+      a date into its row's right-hand slot and drop that row's "combined"
+      Check, one of them the accepted Low.
     - [USER] The accepted #205 Medium stays a documented limitation: a dated
       sidebar whose headings look like its entries, beside a column without
       bullets, reads as one column (no text lost). Three section-title cues
