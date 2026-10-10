@@ -584,7 +584,21 @@ not yet released.
   unchanged.
   - [USER] The installed-extension check in Chrome and Firefox was WAIVED. The
     release notes say frame capture is not hand-tested.
-  - Preflight and release receipt: PENDING.
+  - [TOOL] Preflight at `49dd34d` on Windows x64 with Node 24.18.0:
+    - `npm run check --workspace apps/role-fit-ai` exit 0 (offline 179/179).
+    - `test:desktop:release` passed 14/14.
+    - `test:rolefit:desktop` failed three times: twice in the main checkout
+      and once in a fresh `npm ci` worktree. In the owned development phase,
+      the companion's 750 ms health probe read "unreachable", and one start
+      timed out.
+    - An alternating rerun in that worktree passed twice each at `aa202ba`
+      (0.11.1) and `48bed14` (#212), so #212 is not implicated. `49dd34d`
+      then passed twice in a row.
+    - A stale Vite cache after the lockfile change was tested and not
+      confirmed. The root cause is UNCONFIRMED and matches the 0.11.1 flake.
+    - `make:rolefit:desktop` and `test:rolefit:desktop:packaged` (win32-x64,
+      unpacked) passed in the clean worktree.
+  - Release receipt: PENDING.
 
 ## 2026-10-09
 
