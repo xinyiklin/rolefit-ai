@@ -444,7 +444,7 @@ assert.match(prompts.userPrompt, /Choose the experiences that most directly supp
 assert.match(prompts.userPrompt, /no requirement to mention every available fact/);
 assert.match(prompts.userPrompt, /Include an item only when it materially improves/);
 // The 2026-10-05 benchmark kept this wording: a restraint-and-length variant won on the
-// Claude models but lost on GPT-6.1 Sol, the configured cover model (see CONTINUITY.md).
+// Claude models but lost on GPT-6.1 Sol, the configured cover model (D068, docs/decisions.md).
 assert.match(prompts.userPrompt, /normally 200-400 words/, "the judged-best length line for Sol stays");
 assert.doesNotMatch(prompts.userPrompt, /verbatim/i);
 assert.doesNotMatch(prompts.userPrompt, /Your previous response was rejected/);

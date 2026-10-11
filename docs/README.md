@@ -5,8 +5,10 @@ Use the narrowest document that owns the question.
 | Document | Owns |
 | --- | --- |
 | [Architecture](architecture.md) | Workspace boundaries, dependency direction, package/app ownership, and extraction rules. |
-| [Development](development.md) | Commands, ports, generated assets, verification matrix, and docs checks. |
+| [Development](development.md) | Commands, ports, dependency changes, generated assets, verification matrix, and docs checks. |
 | [Git workflow](git-workflow.md) | Branch, commit, PR, staging, versioning, and monorepo scope conventions. |
+| [Decisions](decisions.md) | Cross-workspace rules still in force, numbered; read before changing a rule. |
+| [Continuity archive](continuity/) | Resolved `CONTINUITY.md` history by month; read on demand. |
 | [RoleFit README](../apps/role-fit-ai/README.md) | Local workbench setup, providers, extension, tracker, and workspace. |
 | [RoleFit PRODUCT](../apps/role-fit-ai/PRODUCT.md) | Browser-primary product behavior, provider setup, and priorities. |
 | [RoleFit DESIGN](../apps/role-fit-ai/DESIGN.md) | RoleFit visual and interaction contract. |
@@ -16,6 +18,7 @@ Use the narrowest document that owns the question.
 | [Typeset DESIGN](../apps/typeset/DESIGN.md) | Standalone visual and interaction contract. |
 
 Implementation instructions belong in the nearest `AGENTS.md`, not in a
-product or design document. Durable cross-workspace decisions belong in root
-`CONTINUITY.md`; app-only operational detail may live in the app ledger without
-duplicating the same decision.
+product or design document. Durable cross-workspace decisions belong in
+`docs/decisions.md` and current handoff state in root `CONTINUITY.md`; app-only
+operational detail may live in the app ledger without duplicating the same
+decision.

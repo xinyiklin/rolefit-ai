@@ -1,6 +1,6 @@
 // Cover-letter evidence warnings fire on unsupported claims, not on honest prose.
 // Each rule below was kept because the 2026-10-05 benchmark replay showed it removed
-// false warnings on real letters; the recall it gives up is recorded in CONTINUITY.md.
+// false warnings on real letters; the recall it gives up is recorded in D068, docs/decisions.md.
 // Fixtures are invented (a library-lending app, a sandbox CLI, a marina job); never paste real resume, Profile, or letter text here.
 import assert from "node:assert/strict";
 import { coverLetterParagraphClaims } from "../coverLetterParagraphEvidence.ts";

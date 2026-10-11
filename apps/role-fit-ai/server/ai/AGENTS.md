@@ -193,9 +193,9 @@ application retain blocking technical guards.
   fact, so it becomes a non-blocking warning on that paragraph, never a drop
   or a repair. Only an id the source never had is a technical defect.
 - Cover-letter evidence warnings are benchmark-backed (2026-10-05, replaying
-  real letters against GPT-6 Astra per-sentence labels; see `CONTINUITY.md`).
-  Each rule below removed false warnings on honest prose; the recall given up
-  is recorded in `CONTINUITY.md`, and the resume warning replay stayed at
+  real letters against GPT-6 Astra per-sentence labels; D068 in root
+  `docs/decisions.md`). Each rule below removed false warnings on honest prose;
+  the recall given up is recorded there, and the resume warning replay stayed at
   parity:
   - A citation grounds its whole entry: the other bullets of that resume entry
     and the Profile section the shared Profile linker ties to it
@@ -468,10 +468,10 @@ application retain blocking technical guards.
   tense-only churn that the grounding checks then flagged.
 - The cover-letter prompt wording is benchmark-backed (2026-10-05/06, 40 real
   applications plus a disjoint holdout, blinded GPT-6 Astra + Claude Opus 5.5
-  pairwise judging; numbers in `CONTINUITY.md`). A restraint-and-length variant
-  (numbers keep noun and qualifier, team wording stays, no merged entries,
-  scope notes never restated, no volunteered gaps, 3-4 paragraphs under 340
-  words) beat the current wording on Sonnet 5.5 and Opus 5.5 but lost on GPT-6.1
+  pairwise judging; numbers in D068 of root `docs/decisions.md`). A
+  restraint-and-length variant (numbers keep noun and qualifier, team wording
+  stays, no merged entries, scope notes never restated, no volunteered gaps,
+  3-4 paragraphs under 340 words) beat the current wording on Sonnet 5.5 and Opus 5.5 but lost on GPT-6.1
   Sol medium 27-7, and Sol with the current wording wrote the best-judged
   letters of any arm (and the fewest unsupported sentences, 3-4%). The cover
   stage is configured for Sol, so the current wording stays; the losing variant

@@ -8,7 +8,7 @@ repository. It contains two products over two private shared packages:
 - **Typeset** is a static, browser-only resume editor.
 
 Do not apply one app's runtime, privacy, product, or deployment assumptions to
-the other. `CLAUDE.md` adds provider-specific tool guidance; the nearest
+the other. `CLAUDE.md` adds provider-specific mechanics; the nearest
 `AGENTS.md` wins for its scope.
 
 ## Instruction Precedence
@@ -27,9 +27,9 @@ update the owning guide and documentation in the same change.
 
 - `README.md` / `docs/README.md` — workspace entry point and doc index.
 - `docs/` — `architecture.md` (boundaries, dependency direction,
-  shared-versus-host ownership), `development.md` (commands, ports, generated
-  assets, verification matrix), `git-workflow.md` (branch, commit, PR, staging,
-  versioning).
+  shared-versus-host ownership), `development.md` (commands, ports,
+  dependencies, generated assets, verification matrix), `git-workflow.md`
+  (branch, commit, PR, staging, release, versioning).
 - `apps/role-fit-ai/{README,PRODUCT,DESIGN}.md` + `docs/engineering/` — RoleFit
   behavior and engineering contracts.
 - `apps/typeset/AGENTS.md` + `{README,PRODUCT,DESIGN}.md` — Typeset shell,
@@ -37,37 +37,55 @@ update the owning guide and documentation in the same change.
 - `packages/{engine,editor}/AGENTS.md` — package boundaries and public
   contracts; their nested guides own resume domain/files and deterministic
   layout/PDF, and hooks/chrome/direct editing respectively.
-- `CONTINUITY.md` — monorepo decisions and handoff state. RoleFit's scoped
-  ledger may hold app-only operational detail; never duplicate a fact in both.
+- Nested `AGENTS.md` files under each app and package — read the nearest one
+  yourself before scoped work.
+- `CONTINUITY.md` — bounded handoff state; `docs/decisions.md` — numbered rules
+  in force, read before changing one. RoleFit's local app ledger may hold
+  app-only operational detail; never duplicate a fact in both.
 
-## Delivery Workflow
+## Product-Delivery Hook
 
-Non-trivial work runs through the portable `product-delivery` workflow
-(Product Partner → Delivery Lead → Verifier) installed at
-`~/.agents/workflows/product-delivery/`. That package owns the process: the two
-exact user-approval gates, Change Request escalation, and honest verification
-reporting. Do not copy it here. This repo may strengthen it, never weaken it.
+The installed `~/.agents/workflows/product-delivery/` contract is inactive for
+ordinary work. Its complete flow activates when the user selects Delivery Lead
+or Product Partner, explicitly requests the complete workflow, continues an
+active Implementation Plan, or a condition below matches. Selecting the
+Verifier activates independent verification only. When active, follow the
+installed contract without copying its rules or artifacts here. Project
+additions:
 
-- **Independent review:** after the implementer's own verification, one fresh
-  reviewer by default. Only the user may waive it for a specific change. If the
-  user asks for more reviewers, give a firm risk-based recommendation first,
-  then honor the request.
-- **Expect a second reviewer** for changes to `packages/engine` or
-  `packages/editor` that both apps consume, `.resume`/`.cover` schema or codec
-  behavior, AI prompt/sanitizer/provider defaults, and any version bump that
-  triggers a release workflow.
-- **Extra Change Request triggers** beyond the portable list: moving app code
-  into a package, changing the dependency direction, or any change that could
-  weaken evidence-grounded AI output or the local-only data posture.
-- **Task artifacts** live under ignored `.agent-work/tasks/<task-id>/` and stay
-  local, including after completion. Do not force-add them. Keep durable decisions,
-  outcomes, and verification summaries self-contained in tracked documentation
-  and `CONTINUITY.md`; task IDs may identify work without linking to local artifacts.
+- **Named work that activates the workflow:** changes to `packages/engine` or
+  `packages/editor`; `.resume`/`.cover` schema or codec behavior; AI prompt,
+  sanitizer, or provider-default changes; API-key handling or server network
+  exposure; moving app code into a package or changing the dependency
+  direction; a version bump that triggers a release workflow.
+- **Maintenance outside those conditions:** typo/link corrections, reflow,
+  tests of unchanged behavior, and internal refactors preserving the named
+  contracts. A change to a named contract still activates the flow; record the
+  classification.
+- **Additional material-change triggers:** the named work above, or anything
+  that could weaken evidence-grounded AI output or the local-only data posture.
+- **Required checks:** the verification matrix in `docs/development.md`.
+- **Task artifacts** stay local under ignored `.agent-work/tasks/<task-id>/`;
+  never force-add them. Durable decisions and verification summaries go
+  self-contained into tracked docs and `CONTINUITY.md`.
 
-The seven workflow templates are building blocks, not mandatory files. A normal
-task uses Product Brief, Delivery Plan, Alignment Review, Implementation
-Report, and Verification Report; create a Decision Log or Change Request only
-when its trigger occurs.
+When a listed condition matches and the workflow or its review is not run, say
+so in the response and record the reason.
+
+## Independent Review
+
+After your own verification and before local completion, every change gets one
+fresh independent review by a reviewer that did not implement it: the
+`code-reviewer` agent in Claude for code diffs, otherwise the installed
+Verifier (`mb-verifier` in Claude, `mb_verifier` in Codex). A change confined
+to typos, broken links, formatting, or comments with no change in meaning,
+behavior, or configuration needs only your own verification; state that
+classification. Add a **second reviewer** for the shared packages, `.resume`/
+`.cover` schema or codec behavior, AI prompt/sanitizer/provider defaults, and
+release-triggering version bumps. Only the user may waive a required review;
+record the waiver, never a pass. If a reviewer is unavailable, report the gap.
+If the user asks for more reviewers, give a firm risk-based recommendation
+first, then honor the request.
 
 ## Workspace Ownership
 
@@ -99,43 +117,29 @@ Apps never import from each other. Packages never import from apps. A package
 must not absorb an app-specific workflow merely because two components look
 similar.
 
-## Modularity, Reuse, And Maintainability
+## Modularity And Ownership
 
-- Choose the simplest design that fully satisfies the current requirement. Do
-  not add indirection, configuration, abstractions, compatibility layers, or
-  speculative flexibility without a demonstrated need. Keep a change local
-  until a real ownership or reuse boundary justifies extraction.
+- Choose the simplest design that fully satisfies the current requirement: no
+  speculative abstraction, configuration, compatibility layer, pass-through
+  wrapper, broad barrel, or mode-heavy component.
 - Find the current owner before adding a type, transform, option list, state
-  field, component, or CSS rule. Extend one source of truth rather than creating
-  a parallel representation.
-- Share behavior when the contract is genuinely common to both consumers or
-  forms a stable domain boundary. Keep feature-specific composition beside its
-  app until a second real consumer demonstrates the shared contract.
-- Extract by responsibility, not line count. Useful seams isolate pure logic,
-  side effects, volatile provider/platform behavior, or a focused test surface.
-  Avoid pass-through wrappers, speculative utilities, broad barrels, and
-  components that grow unrelated modes and boolean props.
-- Comment only when the code cannot express an important constraint, bug
-  prevention, or contract. Keep it to one or two lines; do not narrate
-  self-evident code, restate types, or leave process notes. Remove redundant or
-  stale comments in touched code. Durable rationale belongs in the scoped
-  `AGENTS.md`; a paragraph-long comment is filed in the wrong place.
-- Keep domain logic independent of React and the DOM where practical.
-  Components adapt deterministic helpers to state and events; hooks own
-  cohesive state/effect lifecycles; app shells compose them.
-- Keep side effects at explicit boundaries: browser/file lifecycle in app
-  shells or focused hooks, editor DOM work in the editor adapter, PDF/download
-  work at export boundaries, server I/O in RoleFit server modules.
+  field, component, or CSS rule, and extend that one source of truth.
+- Keep domain logic independent of React and the DOM where practical, and keep
+  side effects at explicit boundaries: browser/file lifecycle in app shells or
+  focused hooks, editor DOM work in the editor adapter, PDF/download work at
+  export boundaries, server I/O in RoleFit server modules.
 - Keep state close to its owner: derive rather than synchronize, keep reducer
   transitions serializable and atomic, and pass values and callbacks into
   reusable controls instead of giving them hidden storage access.
 - Shared component changes must preserve every host's accessibility, error
   handling, responsive behavior, and styling seams. Never weaken validation,
   privacy, deterministic layout, or truthful AI behavior to ease reuse.
-- Treat files near 300 lines, unrelated effects in one hook/component, or
-  repeated edits across distant modules as prompts to inspect cohesion. A large
-  cohesive controller may stay intact when extraction would only thread refs
-  without isolating behavior; record that decision in its scoped guide.
+- Comment only for a constraint, bug prevention, or contract the code cannot
+  express, in one or two lines; durable rationale belongs in the scoped
+  `AGENTS.md`. Remove stale comments in touched code.
+- Treat files near 300 lines or unrelated effects in one hook/component as
+  prompts to inspect cohesion. A cohesive controller may stay intact when
+  extraction would only thread refs; record that decision in its scoped guide.
 
 Before moving app code into a package, verify all five: two real consumers need
 the same behavior (not merely similar markup); the API needs no host state or
@@ -201,26 +205,15 @@ Before changing code or project files:
 
 While working:
 
-- Keep changes tied to the request and its necessary cleanup.
 - Keep implementation scope literal. An improvement you notice but the request
   does not require gets presented to the user and waits for approval, even in a
   file you are already editing.
 - Make one responsibility-level extraction at a time and verify before stacking
-  another structural change.
-- At the end of each coherent stage, review that stage's diff before continuing.
-  Check scope, correctness, ownership, naming, duplication, error paths, test
-  evidence, and maintainability; fix issues before stacking the next stage.
+  another structural change; review each stage's diff before continuing.
 - Surface actionable failures; do not add silent fallbacks or empty catches.
 - Ask before adding a dependency or changing schemas, provider defaults,
-  deployment shape, public runtime exposure, or paid services.
-- Once a dependency change is approved, read the root `package.json`,
-  `package-lock.json`, and the affected workspace manifest for the runtime and
-  range policy already in force, then verify the current stable release from
-  npm or the maintainer's release notes — never choose a version from memory.
-  Prefer the latest compatible stable release, keep npm workspaces and the
-  existing range style, update the lockfile, and explain any deliberate pin to
-  an older or prerelease version. Engine changes must stay React-free on the
-  subpaths the Node server imports.
+  deployment shape, public runtime exposure, or paid services. Follow
+  `docs/development.md` for approved dependency changes.
 
 ## Verification And Definition Of Done
 
@@ -241,9 +234,9 @@ While working:
 - Update affected docs and continuity when behavior, ownership, or a durable
   decision changes.
 - Before declaring completion, review the complete diff and affected surrounding
-  code as one change. Remove accidental complexity, redundant comments, dead
-  paths, duplication, and temporary scaffolding; confirm the result remains
-  readable and maintainable, then run the proportionate final checks.
+  code as one change; remove accidental complexity, redundant comments, dead
+  paths, duplication, and temporary scaffolding, then run the proportionate
+  final checks.
 
 A task is complete only when the requested outcome works, affected contracts
 agree, checks are reported honestly, and residual risks are explicit.
@@ -265,24 +258,19 @@ agree, checks are reported honestly, and residual risks are explicit.
   **tracked** here, so it is a legitimate staging candidate; `.claude/` is not.
 - Never bypass hooks (`--no-verify`, `--no-gpg-sign`); fix the cause instead.
 
-Before a requested push, review the affected README and product/engineering
-docs: update visitor-facing docs for changed behavior, commands, or
-availability, and engineering docs for changed contracts. Include the compact,
-privacy-safe continuity receipt in the behavior-slice commit.
-
-A version bump carries extra obligations: update the canonical version and
-every user-facing reference, then — during the requested push, merge, or deploy
-— trigger the matching release/publish workflow and required tag, wait for it
-to finish successfully, and retain the workflow or live-environment receipt.
-**A versioned change is incomplete until that completion is confirmed.**
-Choose the bump and decide when to suggest a release with the versioning rules
-in `docs/git-workflow.md`: suggest one unprompted when they apply, and bump only
-after the user agrees.
+Read `docs/git-workflow.md` before any push, PR, merge, release, or version
+bump; it owns the pre-push doc review, the continuity receipt, and release
+suggestions. Bump a version only after the user agrees. **A versioned change is
+incomplete until its release/publish workflow is confirmed complete.**
 
 ## Continuity
 
-Keep continuity factual and bounded. Tag entries with an ISO date and
-`[USER]`, `[CODE]`, `[TOOL]`, or `[ASSUMPTION]`; write `UNCONFIRMED` rather than
-guessing. Root continuity owns cross-workspace architecture and deploy state;
-app continuity owns only app-specific detail. Supersede changed facts instead
-of appending contradictory narratives.
+Keep `CONTINUITY.md` within its 160-line cap and limited to current state,
+next actions, and open questions. Keep rules in force in `docs/decisions.md`
+and rotate resolved entries verbatim to `docs/continuity/YYYY-MM.md`; archives
+are append-only and read only on demand. The shared `continuity` skill does
+this. Tag entries with an ISO date and `[USER]`, `[CODE]`, `[TOOL]`, or
+`[ASSUMPTION]`; write `UNCONFIRMED` rather than guessing. Root continuity owns
+cross-workspace architecture and deploy state; app continuity owns only
+app-specific detail.
+Supersede changed facts instead of appending contradictory narratives.

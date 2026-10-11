@@ -70,8 +70,8 @@ grammar, margin table, or link-normalization path.
 - `.resume` is the resume open/save format and `.cover` is the cover-letter
   open/save format. The two strict schemas do not masquerade as one another.
   PDF is final output.
-- **Pre-release policy (see root `CONTINUITY.md`, in force until the user lifts
-  it):** one live shape per format, always `schemaVersion: 1`. A change to a
+- **Pre-release policy (D007 in root `docs/decisions.md`, in force until the
+  user lifts it):** one live shape per format, always `schemaVersion: 1`. A change to a
   stored shape rewrites the existing documents through a throwaway developer
   script that is not committed; the parsers here gain no compatibility branch,
   no default for an absent field, and no second accepted shape. Spacing values

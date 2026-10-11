@@ -64,8 +64,9 @@ opportunity labels; Astra re-judged previous-wording real gap claims, not every
 real edit.
 
 Resume/Cover use private application corpora; only aggregate findings belong
-here. Their experiment history is retained in the dated root
-[continuity record](../../../../CONTINUITY.md). The current tracked Resume
+here. Their experiment history is retained in the root
+[decisions log](../../../../docs/decisions.md) and
+[continuity archive](../../../../docs/continuity/). The current tracked Resume
 regression corpus has 39 cases; that is not the sample size of every historical
 run. Commands, gates and reporting contracts are in [Testing](testing.md).
 

@@ -34,6 +34,16 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   dependencies from `packages/engine/scripts/requirements-fonts.txt` in an
   isolated environment; CI creates `.font-tools` and places it on `PATH`.
 
+## Dependency changes
+
+Add or upgrade a dependency only after the user approves it. Read the root
+`package.json`, `package-lock.json`, and the affected workspace manifest for the
+runtime and range policy in force, then verify the current stable release from
+npm or the maintainer's release notes, never from memory. Prefer the latest
+compatible stable release, keep npm workspaces and the existing range style,
+update the lockfile, and explain any deliberate pin to an older or prerelease
+version.
+
 ## Common commands
 
 ```bash
