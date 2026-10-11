@@ -1,20 +1,19 @@
-// Offline adversarial probes for Fit findings in Resume and Cover Polish: the
-// strict request block, its fence, the unchanged no-findings prompt, and the
-// tolerant per-gap statements that may cite only changes or paragraphs that exist.
+// Offline adversarial probes for Fit findings in Resume Polish: the strict request
+// block, its fence, the unchanged no-findings prompt, the tolerant per-gap
+// statements that may cite only changes that exist, and Cover Polish never using them.
 import assert from "node:assert/strict";
 import { createServer } from "node:http";
 
 import {
-  coverFitGapStatements,
   parsePolishFitFindings,
   sanitizeFitGapStatements,
   POLISH_FIT_FINDINGS_EXCERPT_LIMIT
 } from "../../../shared/polishFitFindings.ts";
 import { flattenResumeTargets } from "../../../shared/resumePolishContract.ts";
 import { handleCoverPolish } from "../coverLetter.ts";
-import { buildCoverLetterTailorPrompts, FIT_GAP_ADDRESSED_RULE, inputFirewallRule } from "../prompts.ts";
+import { inputFirewallRule } from "../prompts.ts";
 import { handleResumePolish } from "../resumePolish.ts";
-import { buildResumeProposalPrompts, generateResumeProposal } from "../resumeProposal.ts";
+import { buildResumeProposalPrompts, FIT_GAP_ADDRESSED_RULE, generateResumeProposal } from "../resumeProposal.ts";
 import { normalizeResumeScope, resumeScopeToText } from "../resumeScope.ts";
 
 const findings = {
@@ -112,7 +111,7 @@ assert.deepEqual(realTags(matchesOnly, "fit_findings"), [1, 1]);
 assert.ok(!matchesOnly.includes("fitGaps"), "no gaps, no gap statements requested");
 // Related evidence labelled ADDRESSED was the 2026-10-10 real-application failure.
 assert.ok(withInjected.includes(FIT_GAP_ADDRESSED_RULE), "gap statements carry the ADDRESSED rule");
-for (const text of ["accepts alternatives", "the posting does not accept in place of", "bare statement of comfort or familiarity", "Reordering or repeating a skill", "never changed to earn ADDRESSED"]) assert.ok(FIT_GAP_ADDRESSED_RULE.includes(text), `related evidence is named: ${text}`);
+for (const text of ["accepts alternatives", "the posting does not accept in place of", "bare statement of comfort or familiarity", "assisting the people who did it", "Reordering or repeating a skill", "never changed to earn ADDRESSED"]) assert.ok(FIT_GAP_ADDRESSED_RULE.includes(text), `related evidence is named: ${text}`);
 for (const prompt of [without.userPrompt, without.systemPrompt, matchesOnly]) assert.ok(!prompt.includes(FIT_GAP_ADDRESSED_RULE), "no gaps, no ADDRESSED rule");
 
 // --- Gap statements ------------------------------------------------------------
@@ -131,13 +130,6 @@ for (const raw of [undefined, "ADDRESSED", { gap: "gap-1" }, [{ gap: "gap-1", st
   assert.deepEqual(sanitizeFitGapStatements(raw, ["gap-1"], "targetIds", isTarget), [], `unusable statements are dropped: ${JSON.stringify(raw)}`);
 }
 assert.deepEqual(sanitizeFitGapStatements([{ gap: "gap-1", status: "NO_EVIDENCE" }], [], "targetIds", isTarget), [], "no gaps sent, no statements");
-// The cover check both the server and the client apply.
-assert.deepEqual(coverFitGapStatements([
-  { gap: "gap-1", status: "ADDRESSED", paragraphs: [7, 2.5, "2", 0] },
-  { gap: "gap-2", status: "ADDRESSED", paragraphs: [3, 1, 3] },
-  { gap: "gap-3", status: "NO_EVIDENCE", paragraphs: [1] }
-], findings, 3), [{ gap: "gap-2", status: "ADDRESSED", paragraphs: [3, 1] }],
-  "out-of-range, fractional, string, and zero paragraphs are dropped, and so is a gap the run never sent");
 const flood = [...Array.from({ length: 10 }, () => ({ gap: "gap-9", status: "NO_EVIDENCE" })), { gap: "gap-1", status: "NO_EVIDENCE" }];
 assert.deepEqual(sanitizeFitGapStatements(flood, ["gap-1"], "targetIds", isTarget), [], "only the first ten items are examined");
 
@@ -206,37 +198,7 @@ const coverPayload = {
   resolvedContext: { candidateName: "Jordan Lee", role: "Platform Engineer", company: "Acme", date: "July 28, 2026" },
   evidenceItems: [{ id: "resume:python", source: "resume", text: "Built Python services for billing." }]
 };
-const coverRoute = await routeStatus(handleCoverPolish, { ...coverPayload, fitFindings: invalid["four gaps"] });
-assert.equal(coverRoute.status, 400);
-assert.match(coverRoute.error, /unreadable Fit findings/);
-
-// --- The Cover prompt --------------------------------------------------------------
-const coverArgs = {
-  jobText: coverPayload.jobText,
-  sourceContext: { structuredTemplate: "", authoredProse: "", slots: [] },
-  evidenceItems: coverPayload.evidenceItems,
-  resolvedContext: {},
-  employerContext: [],
-  customInstructions: ""
-};
-const coverWithout = buildCoverLetterTailorPrompts(coverArgs);
-assert.deepEqual(buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: null }), coverWithout);
-for (const text of ["fit_findings", "fitGaps"]) assert.ok(!coverWithout.userPrompt.includes(text), `no findings, no ${text} in the cover prompt`);
-assert.match(buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: injected }).systemPrompt, /<fit_findings>/);
-const coverInjected = buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: injected }).userPrompt;
-assert.deepEqual(realTags(coverInjected, "fit_findings"), [1, 1]);
-assert.deepEqual(realTags(coverInjected, "job_description"), [1, 1]);
-assert.match(coverInjected, /‹\/fit_findings/);
-assert.match(coverInjected, /Never state or imply that the candidate lacks a gap's requirement\./, "a gap's words, such as the role title, may still appear");
-assert.match(coverInjected, /"fitGaps"/);
-const coverMatchesOnly = buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: { ...findings, gaps: [] } }).userPrompt;
-assert.ok(!coverMatchesOnly.includes("fitGaps"));
-assert.ok(coverInjected.includes(FIT_GAP_ADDRESSED_RULE), "cover gap statements carry the same rule");
-for (const prompt of [coverWithout.userPrompt, coverWithout.systemPrompt, coverMatchesOnly]) assert.ok(!prompt.includes(FIT_GAP_ADDRESSED_RULE));
-const coverRepair = buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: findings, repair: { violations: ["x"], rejectedOutput: {} } }).userPrompt;
-assert.deepEqual(realTags(coverRepair, "fit_findings"), [1, 1], "the single repair keeps the same findings");
-
-// --- Cover statements through the real route and a faked provider ----------------
+// --- Cover Polish ignores findings: same request, no statements --------------------
 const realFetch = globalThis.fetch;
 const previousKey = process.env.OPENAI_API_KEY;
 const paragraphs = [
@@ -244,13 +206,15 @@ const paragraphs = [
   { text: "At my last role I built Python services for billing that other teams relied on every day.", evidenceIds: ["resume:python"], slotIds: [] }
 ];
 let coverReply;
+const coverRequests = [];
 process.env.OPENAI_API_KEY = "offline-test-key";
 globalThis.fetch = async (url, init) => {
   if (String(url).startsWith("http://127.0.0.1")) return realFetch(url, init);
+  coverRequests.push(String(init?.body ?? ""));
   return new Response(JSON.stringify({ output_text: JSON.stringify(coverReply) }), { status: 200, headers: { "Content-Type": "application/json" } });
 };
-async function coverResult(fitGaps, fitFindings) {
-  coverReply = { bodyParagraphs: paragraphs, warnings: [], ...(fitGaps ? { fitGaps } : {}) };
+async function coverResult(fitFindings) {
+  coverReply = { bodyParagraphs: paragraphs, warnings: [], fitGaps: [{ gap: "gap-2", status: "ADDRESSED", paragraphs: [2] }] };
   const server = createServer((req, res) => handleCoverPolish(req, res));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   try {
@@ -264,19 +228,18 @@ async function coverResult(fitGaps, fitFindings) {
   }
 }
 try {
-  const statementsReply = [
-    { gap: "gap-1", status: "ADDRESSED", paragraphs: [3] },
-    { gap: "gap-2", status: "ADDRESSED", paragraphs: [2, 2, 0] }
-  ];
-  const cover = await coverResult(statementsReply, findings);
-  assert.equal(cover.status, "ready");
-  assert.deepEqual(cover.fitGaps, [{ gap: "gap-2", status: "ADDRESSED", paragraphs: [2] }], "statements cite only paragraphs this letter has");
-  assert.ok(![...cover.warnings, ...cover.concerns].some((item) => /gap/i.test(item)), "a gap statement never becomes a warning or concern");
-  assert.equal((await coverResult(statementsReply)).fitGaps, undefined, "without findings no statements reach the wire");
+  const plainCover = await coverResult();
+  const sentCover = await coverResult(findings);
+  assert.equal(sentCover.status, "ready");
+  assert.equal(sentCover.fitGaps, undefined, "Cover Polish returns no gap statements");
+  assert.equal(coverRequests.length, 2, "findings add no cover provider request");
+  assert.equal(coverRequests[1], coverRequests[0], "a stray findings field leaves the cover request unchanged");
+  assert.ok(!coverRequests[1].includes("fit_findings"));
+  assert.equal(sentCover.coverLetterText, plainCover.coverLetterText);
 } finally {
   globalThis.fetch = realFetch;
   if (previousKey === undefined) delete process.env.OPENAI_API_KEY;
   else process.env.OPENAI_API_KEY = previousKey;
 }
 
-console.log("Polish Fit findings probes passed: strict block, fences, unchanged no-findings prompts, tolerant gap statements, both routes.");
+console.log("Polish Fit findings probes passed: strict block, fence, unchanged no-findings prompt, tolerant gap statements, Resume route, Cover unchanged.");

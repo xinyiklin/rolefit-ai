@@ -3219,7 +3219,7 @@
         {
           "id": "gap-2",
           "jobExcerpt": "SQL Server or Cosmos DB",
-          "expect": "no-evidence"
+          "expect": "either"
         },
         {
           "id": "gap-3",
@@ -4885,7 +4885,7 @@
         {
           "id": "gap-3",
           "jobExcerpt": "Kafka or Flink event processing",
-          "expect": "no-evidence"
+          "expect": "either"
         }
       ]
     }

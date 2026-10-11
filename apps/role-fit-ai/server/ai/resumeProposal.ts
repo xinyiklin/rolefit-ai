@@ -33,7 +33,6 @@ import {
   accomplishmentStyleRules,
   clipForPrompt,
   fenceUntrusted,
-  FIT_GAP_ADDRESSED_RULE,
   polishFirewallRule,
   polishSelfAuditInstructions
 } from "./prompts.ts";
@@ -43,6 +42,9 @@ import { reviewResumeProposal, withResumeProposalReview } from "./resumeProposal
 import { containsStructuredMarkup, findUngroundedNumericClaim } from "./sanitize.ts";
 import type { NormalizedResumeScope } from "./resumeScope.ts";
 import { UserSafeAiError } from "./errors.ts";
+
+// The rail shows ADDRESSED as a claim about the gap, so related evidence must not earn it.
+export const FIT_GAP_ADDRESSED_RULE = "ADDRESSED means the cited text itself shows the requirement; when the posting accepts alternatives (\"or similar\", \"such as\"), one of them counts. Related evidence is NO_EVIDENCE, even when the change is worth keeping: a framework, tool, or platform the posting does not accept in place of the one named; teaching, coursework, assisting the people who did it, or a bare statement of comfort or familiarity instead of doing the work; general experience offered for a named system or scope. Reordering or repeating a skill the resume already lists never addresses a gap by itself, and wording is never changed to earn ADDRESSED.";
 
 type AttemptStats = { attempts?: number };
 type DropCounts = Record<ResumePolishWithheldReason, number>;

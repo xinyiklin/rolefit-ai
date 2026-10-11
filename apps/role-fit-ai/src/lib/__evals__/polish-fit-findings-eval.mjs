@@ -98,7 +98,7 @@ assert.deepEqual(terminologyCoverage("", "Python").onResume, [], "no posting, no
 const pipeline = readFileSync(new URL("../../hooks/useResumePolishPipeline.ts", import.meta.url), "utf8");
 assert.match(pipeline, /\.\.\.\(context\.fitFindings \? \{ fitFindings: context\.fitFindings \} : \{\}\)/, "Resume Polish omits the field without findings");
 const cover = readFileSync(new URL("../../hooks/useCoverLetter.ts", import.meta.url), "utf8");
-assert.match(cover, /const fitFindings = getFitFindings\?\.\(\) \?\? null;/, "Cover Polish reads the findings once, when the run starts");
-assert.match(cover, /\.\.\.\(fitFindings \? \{ fitFindings \} : \{\}\)/, "Cover Polish omits the field without findings");
+// Cover Polish scored lower with findings in the 2026-10-11 benchmark, so it never sends them.
+assert.doesNotMatch(cover, /fitFindings|FitFindings/, "Cover Polish never sends Fit findings");
 
 console.log("Polish Fit findings client eval passed: selection, decision-following statements, wire re-check, terminology coverage, request wiring.");

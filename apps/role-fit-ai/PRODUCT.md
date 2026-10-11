@@ -186,7 +186,7 @@ held-back list still there to restore from. The review's usage is recorded as
 its own Resume Polish review row.
 
 **Polish knows what Fit found.** When a completed Fit Assessment of the same
-posting exists, Resume and Cover Polish receive its matches and gaps as posting
+posting exists, Resume Polish receives its matches and gaps as posting
 excerpts only — never Fit's candidate excerpts, notes, verdict, or summary — in
 one fenced block that is a priority hint, not evidence. If the resume or
 Background changed since that assessment, or it was reopened from a saved
@@ -194,13 +194,12 @@ application, the findings are still sent and labelled as coming from an earlier
 version; a different posting, Insufficient job information, or no assessment
 sends nothing and Polish runs exactly as before. A gap may be addressed only
 with existing resume or linked Background evidence, and "no evidence" is the
-expected answer otherwise; the letter never says or implies the candidate lacks
-a gap's requirement. The proposal rail folds **What this proposal did about Fit
-gaps**, stating for each gap sent Addressed (with the edits or paragraphs), No
+expected answer otherwise. The proposal rail folds **What this proposal did about Fit
+gaps**, stating for each gap sent Addressed (with the edits), No
 evidence, or Not reported, with no count or score. Addressed means the cited text
 itself shows the requirement or an alternative the posting accepts; related
 experience, a framework the posting does not accept, or a reordered skill is No
-evidence. On the resume, Addressed holds only
+evidence. Addressed holds only
 while one of its edits is pending or accepted; discarding, holding back, or
 overwriting them turns it to Not reported. The statements are the model's own
 account and never replace the edits' evidence warnings. Beside them, the Resume

@@ -1,4 +1,4 @@
-// Frozen Fit findings for the synthetic Resume and Cover Polish corpora, sent
+// Frozen Fit findings for the synthetic Resume Polish corpus, sent
 // exactly as Polish receives them: benchmark-only labels and provenance never
 // reach the prompt.
 export function polishFitFindings(fixture) {
@@ -23,7 +23,7 @@ export function gradeFitGaps(fixture, result, edits = [], factCheck = null) {
   const rows = gaps.map((gap) => {
     const statement = statements.get(gap.id);
     const status = statement?.status ?? "NOT_REPORTED";
-    const refs = statement?.targetIds ?? statement?.paragraphs ?? [];
+    const refs = statement?.targetIds ?? [];
     return {
       gap: gap.id, expect: gap.expect, status,
       addressedNoEvidence: status === "ADDRESSED" && gap.expect === "no-evidence",

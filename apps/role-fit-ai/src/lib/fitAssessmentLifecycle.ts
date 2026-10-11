@@ -72,7 +72,7 @@ export function fitAssessmentCurrentResult(
     : null;
 }
 
-// What Resume and Cover Polish are told about Fit: posting excerpts from an
+// What Resume Polish is told about Fit: posting excerpts from an
 // assessment of this same posting. A changed resume or Background still sends
 // them, labelled earlier; a saved assessment cannot confirm its inputs, so it is
 // labelled the same way. Excerpts Polish would refuse are left out, never sent.

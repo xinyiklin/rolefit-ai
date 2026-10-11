@@ -1,6 +1,6 @@
 import { hasMarkupTag } from "./contentWarnings.ts";
 
-// What Resume and Cover Polish are told about the current Fit Assessment: posting
+// What Resume Polish is told about the current Fit Assessment: posting
 // excerpts only. Fit's candidate excerpts and notes are model output, so they
 // never travel here and can never be read as evidence.
 export const POLISH_FIT_FINDINGS_ITEM_LIMIT = 3;
@@ -89,14 +89,6 @@ export function sanitizeFitGapStatements<Ref extends string | number>(
     statements.push({ gap: item.gap, status: status as FitGapStatus, refs });
   }
   return statements;
-}
-
-// Cover statements, read by the server and again by the client: only gaps the
-// run sent, and only paragraphs this letter has.
-export function coverFitGapStatements(raw: unknown, findings: PolishFitFindings, paragraphCount: number) {
-  return sanitizeFitGapStatements(raw, findings.gaps.map((gap) => gap.id), "paragraphs",
-    (value): value is number => Number.isInteger(value) && (value as number) >= 1 && (value as number) <= paragraphCount)
-    .map(({ gap, status, refs }) => ({ gap, status, paragraphs: refs }));
 }
 
 export function fitFindingsPromptBlock(findings: PolishFitFindings): string {

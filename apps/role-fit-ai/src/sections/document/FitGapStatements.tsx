@@ -4,7 +4,7 @@ export type FitGapStatementRow = {
   id: string;
   jobExcerpt: string;
   status: FitGapDisplayStatus;
-  // Where an ADDRESSED gap is addressed: edit locations or paragraph labels.
+  // Where an ADDRESSED gap's edits are.
   where: string[];
 };
 
@@ -25,8 +25,8 @@ function detail(row: FitGapStatementRow): string {
   return "";
 }
 
-// Shared presentation for both proposal rails: what each document's run said
-// about the Fit gaps it was sent. The owning workflow decides each status.
+// What the Resume Polish run said about the Fit gaps it was sent. The decisions
+// hook decides each status; this only presents it.
 export function FitGapStatements({ rows, earlierVersion }: FitGapStatementsProps) {
   if (!rows.length) return null;
   return (

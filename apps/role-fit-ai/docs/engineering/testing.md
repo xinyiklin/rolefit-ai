@@ -492,12 +492,13 @@ Good server verification covers:
   `src/sections/resume/__evals__/resume-proposal-fit-gaps.mjs`, and the gap
   transitions in `src/hooks/__evals__/resume-proposal-restore-hook.mjs`): the strict block
   rejects extra keys, candidate excerpts or notes, more than three items, ids out
-  of sequence, oversized, markup, control or bidi text, and both routes answer
-  400 before any provider call; fence-shaped text in an excerpt is neutralized
-  and the `fit_findings` fence is named in the firewall line only when sent;
-  without findings both prompts and requests are unchanged; gap statements keep
-  one per sent gap and drop an ADDRESSED that cites a withheld change or a
-  missing paragraph (one cover check shared by server and client); findings add no provider request; the client sends findings
+  of sequence, oversized, markup, control or bidi text, and the Resume route
+  answers 400 before any provider call; fence-shaped text in an excerpt is
+  neutralized and the `fit_findings` fence is named in the firewall line only
+  when sent; without findings the prompt and request are unchanged; gap
+  statements keep one per sent gap and drop an ADDRESSED that cites a withheld
+  change; findings add no provider request; Cover Polish sends no findings and a
+  stray findings field leaves its request unchanged; the client sends findings
   only for the same posting (labelled earlier after a resume, Background, or
   saved-origin change), follows accept/discard/hold-back/restore in the Resume
   rail, and groups recognized posting terms without a score
@@ -794,11 +795,11 @@ Good server verification covers:
   Compare the same fixtures/repetitions on another model by changing those
   environment variables; each invocation retains its own receipts.
 
-  Each resume fixture, and the six cover fixtures Fit could assess, carries
+  Each resume fixture carries
   frozen `fitFindings` (Fit default model, posting excerpts only, provenance
   recorded) with a hand label per gap: `no-evidence` when closing it needs a
   posting-only term, a computed duration, promoted ownership, or a fact absent
-  from the resume and Background, otherwise `either`. Both live evals send them
+  from the resume and Background, otherwise `either`. The live eval sends them
   by default; `EVAL_FIT_FINDINGS=off` reproduces the request from before
   findings reached Polish. Receipts add per-gap statuses; ADDRESSED on a
   `no-evidence` gap, or citing an edit Astra labels unsupported, fails the case.

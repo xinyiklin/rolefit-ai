@@ -613,34 +613,37 @@ extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
   real-application rerun) needs the user's other machine and will run on the
   Stage 4 prompt. [TOOL] Codex CLI 0.162.1 was installed on this machine
   (npm global); the Codex desktop app's bundled binaries are not on PATH.
-- [USER+CODE] **Fit findings in Resume and Cover Polish, and terminology
-  coverage** (task `fit-findings-polish-20261010`; brief v2 and plan v1
-  approved). Polish receives one fenced `fit_findings` block of posting excerpts
-  (at most 3 matches and 3 gaps) from a completed Fit of the same posting,
-  labelled earlier after a resume, Background, or saved-origin change; both
-  rails fold per-gap Addressed / No evidence / Not reported statements, and the
-  Resume rail folds recognized posting terms by resume use. Contract and trust
+- [USER+CODE] **Fit findings in Resume Polish, and terminology coverage**
+  (task `fit-findings-polish-20261010`; brief v2 and plan v1 approved; Cover
+  dropped 2026-10-11, below). Resume Polish receives one fenced `fit_findings`
+  block of posting excerpts (at most 3 matches and 3 gaps) from a completed Fit
+  of the same posting, labelled earlier after a resume, Background, or
+  saved-origin change; the Resume rail folds per-gap Addressed / No evidence /
+  Not reported statements and recognized posting terms by resume use. Contract and trust
   rules: `PRODUCT.md`, `DESIGN.md`, `server/ai/AGENTS.md`.
-  - [TOOL] Without findings both Polish prompts are byte-identical to `9ee863c`
+  - [TOOL] (Before the 2026-10-11 Cover removal.) Without findings both Polish
+    prompts are byte-identical to `9ee863c`
     (52 prompts; an independent reviewer re-checked 104). Offline: check exit
     0, `npm test` 182/182. Two independent reviews: no blockers; their
     should-fix items were applied. Browser pass with synthetic data and stubbed
     Fit/Polish responses in a scratch workspace: both rails, accept/discard/undo
     transitions, tablet width, no failed requests.
   - [TOOL] Benchmark fixtures carry frozen Fit findings (Sonnet 5.5 low): 39/39
-    resume cases (82 gaps, 73 labelled no-evidence) and 6/13 cover cases (the
-    other 7 postings are Insufficient job information).
+    resume cases (82 gaps, 71 labelled no-evidence after two 2026-10-11 corrections where
+    the fixture's own resume shows the requirement).
   - [USER+TOOL] Live before-and-after (2026-10-10/11): [USER] real
-    applications, Opus as the only judge, no Astra (Codex limited). Edits stayed
-    truthful with findings (Opus unsupported 2 → 0, Sol 0 → 0), but the first
-    prompt labelled related evidence ADDRESSED (5 of 18 resume, 1 of 10 cover).
-    [CODE] `FIT_GAP_ADDRESSED_RULE` (`prompts.ts`), revised once for
-    over-suppression: 0 overclaimed of 8 resume / 5 cover ADDRESSED on Opus,
-    0 of 8 / 1 of 5 on Sol. Sol cover scored slightly lower with findings
-    (7.6 → 7.3). Numbers: `benchmarks.md`. Astra labels and opportunity
-    coverage remain UNCONFIRMED. Harness and receipts are private
-    (`workspace/fit-findings-real/`). Two reviews READY (Lows only). Merge
-    waits for the user's decision on the Sol cover result.
+    applications with Opus judging; Astra for the synthetic corpus and the 16
+    previous-wording real gap claims (final-rule claims Opus-audited only). [CODE] `FIT_GAP_ADDRESSED_RULE` (`resumeProposal.ts`), revised for
+    overclaiming, then over-suppression, then "assisting" claims. Final rule:
+    real resume Opus 7 ADDRESSED, 0 overclaimed, unsupported 2 → 2 (Opus's known
+    attribution failure in both arms); synthetic Sol 38/39 with Astra, 0
+    unsupported, 0 missed opportunities. Cover with findings scored lower on Sol
+    and Astra judged 4 of 5 Opus cover claims overclaimed, so [USER] findings
+    reach Resume Polish only; the cover wiring was removed and Cover Polish
+    matches `main`. Numbers: `benchmarks.md`. Harness and receipts are private
+    (`workspace/fit-findings-real/`).
+  - [USER] A base-letter phrase the evidence did not support (Opus kept it in
+    16 of 20 letters) was corrected in private data, backed up locally.
   - [TOOL] This machine's synthetic workspace `.resume` files predated the
     2026-09-27 `bulletIndentPt` requirement; a throwaway script added the
     default (14.73 pt) to six files, kept outside the repository.

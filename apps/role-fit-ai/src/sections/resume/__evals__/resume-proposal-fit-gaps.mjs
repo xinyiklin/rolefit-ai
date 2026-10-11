@@ -1,4 +1,4 @@
-// The proposal rails show one folded Fit gaps list when the run was sent gaps,
+// The Resume rail shows one folded Fit gaps list when the run was sent gaps,
 // naming where each addressed gap is addressed, and the Resume rail folds the
 // posting's recognized terms by whether the resume uses them. Neither renders
 // anything when it has nothing to say.
@@ -15,7 +15,6 @@ const bundled = await esbuild.build({
       import React from "react";
       import { renderToStaticMarkup } from "react-dom/server";
       import { ResumeProposalReview } from "../ResumeProposalReview.tsx";
-      import { FitGapStatements } from "../../document/FitGapStatements.tsx";
 
       const noop = () => undefined;
       const resume = {
@@ -48,10 +47,6 @@ const bundled = await esbuild.build({
         fitGapRows: rows.map((row) => ({ ...row, status: row.status === "ADDRESSED" ? "NOT_REPORTED" : row.status, suggestions: [] })) });
       export const plain = render();
       export const terms = render({ termCoverage: { onResume: [term("python"), term("postgresql")], relatedOnly: [term("ci/cd")], notOnResume: [], limitations: ["x"] } });
-      export const cover = renderToStaticMarkup(React.createElement(FitGapStatements, { earlierVersion: false, rows: [
-        { id: "gap-1", jobExcerpt: "Screen-reader support", status: "NOT_REPORTED", where: [] },
-        { id: "gap-2", jobExcerpt: "Python services", status: "ADDRESSED", where: ["paragraph 2", "paragraph 3"] }
-      ] }));
     `,
     resolveDir,
     loader: "tsx"
@@ -65,7 +60,7 @@ const bundled = await esbuild.build({
 });
 const module = { exports: {} };
 new Function("module", "exports", "require", bundled.outputFiles[0].text)(module, module.exports, createRequire(import.meta.url));
-const { withGaps, earlier, noChanges, plain, terms, cover } = module.exports;
+const { withGaps, earlier, noChanges, plain, terms } = module.exports;
 
 assert.match(withGaps, /<details class="proposal-fit-gaps"><summary>What this proposal did about Fit gaps<\/summary>/, "folded by default, with no count that reads as a score");
 assert.match(withGaps, /<blockquote>Operate Kubernetes clusters<\/blockquote><p class="proposal-fit-gaps__status"><strong>No evidence<\/strong> · your resume and Background don&#x27;t support it<\/p>/);
@@ -80,7 +75,5 @@ assert.match(terms, /<dt>On your resume<\/dt><dd>python, postgresql<\/dd>/);
 assert.match(terms, /<dt>Only a related term<\/dt><dd>ci\/cd<\/dd>/);
 assert.doesNotMatch(terms, /Not on your resume/, "an empty group is left out");
 assert.doesNotMatch(terms, /%|score/i, "coverage carries no score");
-assert.match(cover, /<strong>Addressed<\/strong> · in paragraph 2; paragraph 3/);
-assert.match(cover, /<strong>Not reported<\/strong><\/p>/);
 
 console.log("Fit gaps and terminology coverage render checks passed.");

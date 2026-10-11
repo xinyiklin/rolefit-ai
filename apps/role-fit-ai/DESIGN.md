@@ -673,8 +673,8 @@ returns an edit to the queue; the cover letter's Restore reverts an accepted
 letter). A restored row carries a neutral Restored chip, and a result whose
 every edit was held back reads "No worthwhile changes after review." above the
 same disclosure. Proposal, No changes, and Withheld remain visibly distinct.
-When the run was sent Fit gaps, both rails fold one quiet "What this proposal did
-about Fit gaps" disclosure (shared `FitGapStatements`): each gap's posting
+When the run was sent Fit gaps, the Resume rail folds one quiet "What this proposal
+did about Fit gaps" disclosure (`FitGapStatements`): each gap's posting
 excerpt with Addressed and where, No evidence, or Not reported, an earlier-version
 note when it applies, and a line that these are the model's statements, not a
 check; no count or score. The Resume rail also folds "Posting terms and your
