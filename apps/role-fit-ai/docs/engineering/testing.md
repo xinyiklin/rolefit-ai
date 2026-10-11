@@ -1411,7 +1411,8 @@ For docs-only changes:
 - no frontend build or server check is required
 - verify paths and links exist
 - run a spelling / grep sanity check when useful
-- update root `CONTINUITY.md` for cross-workspace decisions and the app ledger
-  only for RoleFit-specific operational state
+- record cross-workspace decisions in root `docs/decisions.md`, handoff state in
+  root `CONTINUITY.md`, and only RoleFit-specific operational state in the app
+  ledger
 
 Document skipped runtime checks as not applicable.

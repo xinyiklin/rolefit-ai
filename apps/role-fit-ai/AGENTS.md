@@ -368,8 +368,9 @@ bound listener rather than starting a second server.
 - Docs-only changes: verify local links, paths, commands, and stale references;
   runtime builds are not required unless the audit uncovers a code mismatch.
 
-Update root continuity for cross-workspace decisions and the app ledger only
-for RoleFit-specific operational detail. Do not duplicate the same receipt.
+Record cross-workspace decisions in root `docs/decisions.md`, handoff state in
+root `CONTINUITY.md`, and only RoleFit-specific operational detail in the app
+ledger. Do not duplicate the same receipt.
 
 ## Git
 

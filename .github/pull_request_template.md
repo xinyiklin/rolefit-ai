@@ -3,7 +3,7 @@ Solo project template: keep this concise, but include enough context for future
 self-review and portfolio/code-history clarity.
 
 Before drafting PR copy or choosing a PR title, check
-docs/git-workflow.md.
+docs/git-workflow.md. Keep this receipt factual; if a check was not run, say why.
 -->
 
 ## Summary
@@ -31,8 +31,9 @@ docs/git-workflow.md.
 - [ ] Frontend lint/build
 - [ ] Backend check/tests
 - [ ] Chrome visual QA, if UI changed
+- [ ] `git diff --check`
 - [ ] Implementer self-review completed
-- [ ] Fresh independent review completed, or user waiver recorded
+- [ ] Fresh independent review completed (reviewer and result), user waiver recorded, or not required: typo/link/format/comment-only
 - [ ] Exact PR head, required CI, mergeability, and review threads confirmed before merge
 - [ ] Not applicable; reason:
 - [ ] Not run; reason:
