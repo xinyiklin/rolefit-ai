@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.12.0** (preview).
+Current desktop source version: **0.13.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -226,6 +226,11 @@ font, size and wrapping changes still reflow the page normally.
   term, while true aliases elsewhere preserve coverage. This is terminology
   assistance, not an ATS score or interview-outcome prediction. The source
   resume stays unchanged until the user applies all or accepts an individual edit.
+  After a Fit Assessment of the same posting, Polish also receives its matches
+  and gaps, and the proposal states for each gap whether it was Addressed (and
+  where), had No evidence, or was Not reported. The proposal also lists the
+  posting's recognized terms grouped by whether your resume uses them. Cover
+  Polish does not receive Fit findings.
   **Settings > Guidance** also offers a default-on **Bold keywords in bullets**
   preference; when disabled, every bullet Polish rewrites arrives without bold
   while italic, underline, and Skills-list formatting remain untouched. Its

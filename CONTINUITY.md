@@ -395,7 +395,8 @@ and lives in the app ledger.
 ### Desktop companion, distribution, and release/deploy state
 
 Current: RoleFit 0.12.0 preview (`rolefit-preview-v0.12.0-beta.1` on `9ee863c`),
-extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
+extension 1.4.0, desktop bridge API 13 (see 2026-10-10). 0.13.0 is prepared,
+not yet released (see 2026-10-11).
 
 - 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
@@ -484,6 +485,24 @@ extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
   preamble loses focus, the server links on a clipped scope, and an oversized
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
+
+## 2026-10-11
+
+- [USER+TOOL] **#214 merged** (Fit findings in Resume Polish only; details in
+  the 2026-10-10 entry "Fit findings in Resume Polish, and terminology
+  coverage"): squash `a54ec59` on `main`, tree identical to
+  the reviewed head `fd37263`, CI green.
+- [USER+CODE] **0.13.0 prepared** (minor: #214 adds Fit findings to Resume
+  Polish, per-gap statements, and posting-term coverage; the user approved the
+  release). Notes `apps/role-fit-ai/docs/releases/0.13.0-beta.1.md`; extension
+  1.4.0 and desktop bridge API 13 unchanged; no stored-data or format change.
+  - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `npm run check
+    --workspace apps/role-fit-ai` exit 0 (offline 182/182),
+    `test:desktop:release` 14/14, `test:rolefit:desktop` passed on the first
+    run, and `make:rolefit:desktop` plus `test:rolefit:desktop:packaged`
+    (darwin-arm64, unpacked) passed. Windows and macOS x64 packaging run only in
+    the release workflow.
+  - Release receipt: PENDING.
 
 ## 2026-10-10
 
