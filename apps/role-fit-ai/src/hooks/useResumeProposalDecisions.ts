@@ -1,5 +1,5 @@
 import { sameProposalTarget } from "../resume/proposalWarnings.ts";
-import { lostAcceptedTerms } from "../resume/terminology.ts";
+import { lostAcceptedTerms, terminologyCoverage } from "../resume/terminology.ts";
 import { serializeResumeData } from "../lib/resumeText.ts";
 /**
  * useResumeProposalDecisions — accept / edit / discard state for the resume
@@ -16,7 +16,7 @@ import { serializeResumeData } from "../lib/resumeText.ts";
  * to match a proposed replacement counts as decided, and an undo that restores
  * the original text makes the edit pending again.
  */
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
 
 import {
@@ -27,6 +27,7 @@ import {
   recordProposalDecision,
   recordProposalRestore,
   restoredForProposal,
+  resumeFitGapRows,
   resumeProposalEditState,
   resumeProposalEditIsPending,
   resumeProposalKey,
@@ -127,13 +128,16 @@ type UseResumeProposalDecisionsArgs = {
   resume: ResumeData;
   actions: ResumeEditorActions;
   terminologyInputKey?: string;
+  // The prepared posting, for the live terminology coverage view.
+  jobText?: string;
 };
 
 export function useResumeProposalDecisions({
   result,
   resume,
   actions,
-  terminologyInputKey
+  terminologyInputKey,
+  jobText = ""
 }: UseResumeProposalDecisionsArgs) {
   // Generation is read at call time too, so an action never lands on a replaced document.
   const isDocumentReplaced = useCallback(() => result?.documentGeneration !== undefined
@@ -279,9 +283,24 @@ export function useResumeProposalDecisions({
     return lostAcceptedTerms(result.terminology, terminologyInputKey, currentEvidence, accepted, uncertainEdits);
   }, [decisions, resume, result, suggestions, terminologyInputKey]);
 
+  const fitGapRows = useMemo(() => resumeFitGapRows(result, suggestions, (suggestion) => isDocumentReplaced()
+    ? "changed"
+    : resumeProposalEditState(currentTargetText(resume, suggestion), suggestion, decisions[suggestion.id])
+  ), [decisions, isDocumentReplaced, result, resume, suggestions]);
+
+  // A whole-resume scan, so it follows deferred copies and typing in the resume
+  // or the brief never waits on it.
+  const deferredResume = useDeferredValue(resume);
+  const deferredJobText = useDeferredValue(jobText);
+  const termCoverage = useMemo(() => result
+    ? terminologyCoverage(deferredJobText, serializeResumeData(deferredResume))
+    : { onResume: [], relatedOnly: [], notOnResume: [], limitations: [] }, [deferredJobText, deferredResume, result]);
+
   return {
     documentReplaced,
     terminologyWarnings,
+    fitGapRows,
+    termCoverage,
     decisions,
     proposalKey,
     suggestions,

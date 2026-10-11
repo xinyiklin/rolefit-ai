@@ -37,6 +37,8 @@ const bundled = await esbuild.build({
         suggestions: [],
         outstanding: 0,
         decided: 0,
+        fitGapRows: [],
+        termCoverage: { onResume: [], relatedOnly: [], notOnResume: [], limitations: [] },
         total: 0,
         decisionsSettled: true,
         isPending: () => false,

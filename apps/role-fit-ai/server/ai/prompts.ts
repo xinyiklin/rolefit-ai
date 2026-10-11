@@ -272,12 +272,21 @@ export const RESUME_REVIEW_FENCE_NAMES = ["proposed_edits"] as const;
 // prompt's firewall line names exactly it.
 export const RESUME_IMPORT_FENCE_NAMES = ["resume_source_lines"] as const;
 
+// Resume Polish opens this fence only when Fit findings are sent, so the firewall
+// line of every other prompt, and of Polish without findings, is unchanged.
+export const FIT_FINDINGS_FENCE_NAMES = ["fit_findings"] as const;
+
+export function polishFirewallRule(withFitFindings: boolean) {
+  return inputFirewallRule(withFitFindings ? [...UNTRUSTED_FENCE_NAMES, ...FIT_FINDINGS_FENCE_NAMES] : UNTRUSTED_FENCE_NAMES);
+}
+
 const UNTRUSTED_FENCE_PATTERN = new RegExp(
   `<(\\s*/\\s*|)(${[
     ...UNTRUSTED_FENCE_NAMES,
     ...ANSWER_CONVERSATION_FENCE_NAMES,
     ...RESUME_REVIEW_FENCE_NAMES,
-    ...RESUME_IMPORT_FENCE_NAMES
+    ...RESUME_IMPORT_FENCE_NAMES,
+    ...FIT_FINDINGS_FENCE_NAMES
   ].join("|")})\\b`,
   "gi"
 );

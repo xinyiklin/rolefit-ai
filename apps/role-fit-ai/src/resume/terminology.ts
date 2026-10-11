@@ -36,6 +36,27 @@ export function jobTerminology(jobText: string): { terms: JobTerm[]; limitations
   return { terms: terms.slice(0, 48), limitations };
 }
 
+export type TerminologyCoverage = {
+  onResume: JobTerm[];
+  relatedOnly: JobTerm[];
+  notOnResume: JobTerm[];
+  limitations: string[];
+};
+
+// Which of the posting's recognized terms the resume uses, by the same matching
+// Polish uses: an affirmative mention or true alias is On resume; a related term
+// alone, or a denied mention, is not. Advisory only: no score, no coverage claim.
+export function terminologyCoverage(jobText: string, resumeText: string): TerminologyCoverage {
+  const { terms, limitations } = jobTerminology(jobText);
+  const coverage: TerminologyCoverage = { onResume: [], relatedOnly: [], notOnResume: [], limitations };
+  for (const term of terms) {
+    if (affirmativeTerm(resumeText, term.keyword)) coverage.onResume.push(term);
+    else if (terminologyMatch(resumeText, term.keyword) === "related") coverage.relatedOnly.push(term);
+    else coverage.notOnResume.push(term);
+  }
+  return coverage;
+}
+
 // Specific evidence entails its category: PostgreSQL is database work. Only that
 // direction holds, a related tool never entails a practice (CI is not CI/CD), and a
 // denied category stays unsupported. Names are case-sensitive to avoid common-word

@@ -10,6 +10,7 @@ const scheduler = `
 let slots=[],cursor=0;
 export function useState(initial){const index=cursor++;if(!(index in slots))slots[index]=typeof initial==='function'?initial():initial;return [slots[index],value=>{slots[index]=typeof value==='function'?value(slots[index]):value;}];}
 export function useMemo(factory){cursor++;return factory();}
+export function useDeferredValue(value){return value;}
 export function useCallback(callback){cursor++;return callback;}
 export function render(callback){cursor=0;return callback();}
 `;
@@ -186,5 +187,44 @@ assert.deepEqual([proposal.total, proposal.outstanding, proposal.decisionsSettle
 proposal.restore("add-1");
 proposal = hook();
 assert.deepEqual([proposal.total, proposal.outstanding, proposal.decisionsSettled], [1, 1, false]);
+
+// A Fit gap stays Addressed only while one of its cited edits is pending or
+// accepted: discard, an unrestored hold-back, an overwrite in the document, or a
+// replaced document turns it to Not reported, and restore or the accepted text
+// brings it back.
+resume = {
+  header: null,
+  sections: [{ id: "exp", heading: "Experience", type: "standard", items: [{
+    id: "acme", titleLeft: "Acme Corp", titleRight: "2024", subtitleLeft: "Software Engineer Intern", subtitleRight: "",
+    bullets: [{ id: "b1", text: "Built internal JavaScript tools." }, { id: "b3", text: "Wrote SQL reports." }]
+  }] }]
+};
+const heldRewrite = { id: "target-3", target: { sectionId: "exp", entryId: "acme", bulletId: "b3", field: "bullet" },
+  sectionHeading: "Experience", currentText: "Wrote SQL reports.", proposedText: "Wrote PostgreSQL reports.", reason: "" };
+result = reviewed({
+  runId: "run-4",
+  heldBack: [{ suggestion: heldRewrite, reason: "INCORRECT" }],
+  fitFindings: { earlierVersion: false, matches: [], gaps: [{ id: "gap-1", jobExcerpt: "PostgreSQL reporting" }] },
+  fitGaps: [{ gap: "gap-1", status: "ADDRESSED", targetIds: ["target-1", "target-3"] }]
+});
+const gapStatus = () => render(() => useResumeProposalDecisions({ result, resume, actions })).fitGapRows[0].status;
+const decide = (action, ...args) => render(() => useResumeProposalDecisions({ result, resume, actions }))[action](...args);
+assert.equal(gapStatus(), "ADDRESSED", "a pending cited edit");
+decide("discard", kept);
+assert.equal(gapStatus(), "NOT_REPORTED", "the visible edit discarded and the other held back");
+decide("restore", "target-3");
+assert.equal(gapStatus(), "ADDRESSED", "a restored held-back edit counts");
+decide("discard", heldRewrite);
+assert.equal(gapStatus(), "NOT_REPORTED", "every cited edit discarded");
+decide("revert", kept);
+decide("accept", kept);
+assert.equal(gapStatus(), "ADDRESSED", "an accepted cited edit");
+actions.updateBullet("exp", "acme", "b1", "Something else entirely.");
+assert.equal(gapStatus(), "NOT_REPORTED", "the accepted text was overwritten in the document");
+actions.updateBullet("exp", "acme", "b1", kept.proposedText);
+assert.equal(gapStatus(), "ADDRESSED", "the accepted text is back");
+generation = 2;
+assert.equal(gapStatus(), "NOT_REPORTED", "a replaced document addresses nothing");
+generation = 1;
 
 console.log("resume proposal restore-hook probes passed");

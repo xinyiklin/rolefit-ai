@@ -14,6 +14,7 @@ listed under coverage gaps.
 | --- | --- | --- | --- |
 | Prepare: Job analysis + Fit | Claude Sonnet 5.5 low, combined | 22 synthetic postings across five configurations; then 20 fresh postings × three repeats for Sonnet and the old Luna/GPT-5.5 split. Sonnet holdout: 4.9 s median versus 17.5 s, extraction 0.997 versus 0.993, zero fabricated terms in both. | Each setting had a Fit automation-flip group; synthetic labels are not human calibration. |
 | Resume Polish | GPT-6.1 Sol medium (since 2026-10-07; previously Claude Opus 5.5 high) | Factual safety favors Sol. 2026-10-07 live baseline, 39 synthetic cases, corrected opportunity gates, Astra fact-checks: Sol 39/39 passed, 88 edits, 0 unsupported, 1 immaterial; Opus High 35/39, 103 edits, 3 unsupported (each merged separately listed facts into a new relationship), 3 immaterial, 1 tense flip; both met all five gated opportunity cases. 2026-10-05, 32 fresh real applications: Opus 2/99 edits unsupported, Sol 0/123. 2026-10-04 34-case eval: Sol passed all cases; Opus passed 63/68 trap checks, then 67/68 after the round-2 prompt. Writing quality favored Opus: on the 2026-10-04 22-application holdout (older prompt), Opus High beat Sol Medium 11–5 where Astra and Opus agreed (Astra alone 11–11, Opus judge 17–5); Opus High also beat Sonnet Medium 17–1 there. | A user-directed safety-first choice. One run per synthetic case; the only fact-check judge is Astra (OpenAI family, same vendor as Sol). The quality comparison predates the current prompt and its arm labels (`opus-high-space` vs `sol-medium`) suggest unmatched guidance. A paired real-application rerun on the current prompt is pending (deferred for Codex usage). Page count is not materiality or a factuality score. |
+| Resume Polish opt-in review | Off by default (user-accepted 2026-10-10) | 2026-10-10 paired run, 39 synthetic cases, Astra labels shared by both arms, against the approved default-on bar. Sol medium: 3 of 61 edits held back, 1 harmless (33%, bar 75%), 3.3% of supported material edits held back, 0 key-evidence or opportunity losses, review probes 2/5. Opus high (37 of 39 cases ran before the Codex limit): 4 held back, 2 harmless (50%), 1 supported edit to key evidence held back (bar 0), 3.7%, probes 2/5. Both models missed all three merged-facts probes, and on Opus none of its 6 unsupported edits was held back. | One run per case; small held-back counts; Astra is the only fact-check judge. The setting remains available. |
 | Cover Polish | GPT-6.1 Sol medium, existing prompt | 40 tuning applications plus 20 holdouts, sentence fact-checking and blinded Astra/Opus pairwise judging. On the 40-case same-prompt comparison, Sol beat Sonnet 25–2 and Opus 16–0 where both judges agreed. | Model judges disagreed on some comparisons. Claude-specific prompt gains did not transfer to Sol, so the shared prompt was retained. |
 | Answers | Claude Opus 5.5 high; GPT-6.1 Sol medium as OpenAI alternative | 57 synthetic cases × nine settings, 513 completed answers; 38 fresh cases and 19 regressions. Astra High and Opus High agreed the rubric before independent judging. | Opus High's fresh mean lead over Medium was only 0.67/100. Astra slightly preferred Sol Medium to Opus High; Opus preferred Opus High. One sample per case, no human calibration. |
 | Final review | Claude Sonnet 5.5 low | Retained user preference. | No comparative benchmark supporting a winner. |
@@ -22,6 +23,45 @@ The matched Prepare downstream check used ten real applications, both brief
 sources, the same Resume/Cover generators and two blinded judges. Resume
 preferences split 5–5; Cover preferences differed between judges. It did not
 establish a downstream quality advantage for the slower Prepare setup.
+
+Fit findings in Polish (2026-10-10/11). Paired runs on 30 real applications
+(resume) and the first 20 of them (cover), sampled across Fit verdicts with at
+least one sendable gap, each saved Fit sent as an earlier-version block. Findings
+off, then on, per case; Opus 5.5 high fact-checked every replacement, judged
+every letter, and audited every ADDRESSED gap claim. The first prompt labelled
+related evidence ADDRESSED (5 of 18 resume and 1 of 10 cover claims
+overclaimed); a first rule removed that but over-suppressed honest claims
+(including "or similar" alternatives). With the shipped rule
+(`FIT_GAP_ADDRESSED_RULE`):
+
+| Run | Edits off → on | Unsupported off → on | ADDRESSED (overclaimed) |
+| --- | --- | --- | --- |
+| Real resume, Opus 5.5 high | 125 → 125 | 2 → 2 | 7 of 62 gaps (0) |
+| Real resume, GPT-6.1 Sol medium (previous rule wording) | 134 → 122 | 0 → 0 | 8 of 62 gaps (0) |
+| Synthetic 39 cases, Sol medium, Astra fact-checks | 86 → 79 | 0 → 0 | 3 of 82 gaps (1 on a no-evidence label) |
+
+Opus's unsupported edits in both arms are its known failure of crediting a
+result to one of two changes; earlier findings-on draws had 0. GPT-6 Astra
+re-judged the 16 real resume ADDRESSED claims made under the previous wording
+(Opus and Sol): all honest, agreeing with Opus; final-rule claims were audited by
+Opus only. The synthetic findings-off baseline (39 of 39, 86 edits) is the
+unreviewed Sol arm of the 2026-10-10 opt-in review run. Before the "assisting the
+people who did it" clause, the synthetic run passed 32 of 39 with 6 ADDRESSED
+claims on no-evidence labels: 2 cited "Assisted" bullets, 2 were on labels then
+corrected because the fixture's own resume shows the requirement, and 2 others.
+After the clause and relabels it passed 38 of 39 with no trap hits or missed
+opportunities; one pass is due to a corrected label and one other flip is
+resampling. The remaining failure claims a runbook fact for "write runbooks and
+improve incident response".
+
+Cover with findings scored lower on Sol over two samples (overall 7.58 → 7.37,
+support 9.30 → 9.05; 3 up, 7 down, 10 tied), with 2 generated sentences judged
+unsupported with findings and none without; Astra judged 4 of 5 Opus cover
+ADDRESSED claims overclaimed. **Decision (user, 2026-10-11): findings reach
+Resume Polish only**; Cover Polish runs as before. Limits: one sample per case;
+the same family generated and judged the Opus arms; real cases have no
+opportunity labels; Astra re-judged previous-wording real gap claims, not every
+real edit.
 
 Resume/Cover use private application corpora; only aggregate findings belong
 here. Their experiment history is retained in the dated root

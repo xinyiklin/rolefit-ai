@@ -132,7 +132,8 @@ import {
 import {
   fitAssessmentCurrentResult,
   fitAssessmentPersistenceDecision,
-  fitAssessmentMayTriggerAutoPolish
+  fitAssessmentMayTriggerAutoPolish,
+  fitFindingsForPolish
 } from "./lib/fitAssessmentLifecycle";
 import { applicationDocumentUrl, type ApplicationDocumentKind } from "./lib/applicationDocumentRequests";
 import { applicationDocumentPdfBlob } from "./lib/applicationDocumentPdf";
@@ -1615,6 +1616,7 @@ function App() {
     currentResume: () => currentResumeSelection(readPreparedResumeState()),
     extensionImportsReady: hasLoadedApplications,
   });
+  const polishFitFindings = fitFindingsForPolish(fitAssessmentState);
   const jobPreparationActive =
     isExtractingLink
     || extensionImportPhase !== null
@@ -1747,6 +1749,7 @@ function App() {
     currentResumeText,
     jobDescription,
     candidateContext,
+    fitFindings: polishFitFindings,
     profileLimitMessage,
     customInstructionsFor,
     boldBulletKeywords,
@@ -1766,7 +1769,8 @@ function App() {
     result,
     resume: editedResume,
     actions: resumeEditorActions,
-    terminologyInputKey
+    terminologyInputKey,
+    jobText: jobDescription
   });
   // Cross-tab presence: each browser tab is an independent RoleFit session, so
   // we publish this tab's coarse phase (derived from existing flow state — never

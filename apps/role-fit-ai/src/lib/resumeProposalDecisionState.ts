@@ -1,5 +1,6 @@
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 
+import type { FitGapDisplayStatus } from "../../shared/polishFitFindings.ts";
 import type { PolishedResume, ResumeProposalSuggestion } from "../resume/types.ts";
 
 export type ResumeProposalDecision =
@@ -140,4 +141,30 @@ export function resumeProposalEditState(
   if (current === key(proposalBaseline(suggestion))) return "pending";
   if (current === key(proposalValue(suggestion))) return "accepted";
   return "changed";
+}
+
+export type ResumeFitGapRow = {
+  id: string;
+  jobExcerpt: string;
+  status: FitGapDisplayStatus;
+  // The visible edits behind an ADDRESSED gap, in proposal order.
+  suggestions: ResumeProposalSuggestion[];
+};
+
+// One row per gap the run was sent. ADDRESSED holds only while a cited edit is
+// still in the list and pending or accepted; once every cited edit is
+// discarded, held back, or overwritten in the document, the gap reads as Not reported.
+export function resumeFitGapRows(
+  result: Pick<PolishedResume, "fitFindings" | "fitGaps"> | null,
+  visibleSuggestions: readonly ResumeProposalSuggestion[],
+  stateOf: (suggestion: ResumeProposalSuggestion) => ResumeProposalEditState
+): ResumeFitGapRow[] {
+  const gaps = result?.fitFindings?.gaps ?? [];
+  return gaps.map((gap) => {
+    const statement = result?.fitGaps?.find((item) => item.gap === gap.id);
+    if (statement?.status === "NO_EVIDENCE") return { ...gap, status: "NO_EVIDENCE", suggestions: [] };
+    const live = visibleSuggestions.filter((suggestion) => statement?.targetIds.includes(suggestion.id)
+      && ["pending", "accepted"].includes(stateOf(suggestion)));
+    return live.length ? { ...gap, status: "ADDRESSED", suggestions: live } : { ...gap, status: "NOT_REPORTED", suggestions: [] };
+  });
 }

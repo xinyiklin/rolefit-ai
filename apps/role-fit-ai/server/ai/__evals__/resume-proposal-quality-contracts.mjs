@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { parsePolishFitFindings } from "../../../shared/polishFitFindings.ts";
 import { flattenResumeTargets } from "../../../shared/resumePolishContract.ts";
 import { sanitizeResumeProposal, selectPromptTargets } from "../resumeProposal.ts";
 import { fixtures, evalOptions, evaluateCase, evaluateReviewProbe, JUDGE, reviewProbes, summaryRow } from "./resume-proposal-quality-eval.mjs";
+import { gradeFitGaps, polishFitFindings } from "./support/fit-findings.mjs";
 import { factCheckEdits, factCheckPrompt, fixtureIndex, gradeProposal, hasTerm, opportunityMetOnlyByChurn, plain, reviewProbeProposal, reviewSummary, tenseFlip, validateFactCheck } from "./support/resume-proposal-quality.mjs";
 
 const byName = new Map(fixtures.map((fixture) => [fixture.name, fixture]));
@@ -38,7 +40,7 @@ assert.deepEqual(
   ["profile-fact-missing"],
   "one required case expects a Profile-backed addition"
 );
-const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal", "gateOpportunity"]);
+const FIXTURE_KEYS = new Set(["name", "note", "boldBulletKeywords", "resumeScope", "candidateContext", "jobText", "customInstructions", "traps", "opportunities", "provenance", "requiresProposal", "gateOpportunity", "fitFindings"]);
 const TRAP_KEYS = new Set(["jdOnly", "perEntryForbidden", "lowOwnershipBullets", "mustKeepBullets", "numericForbidden", "injectionMarkers"]);
 const OPPORTUNITY_KEYS = new Set(["shouldTouch", "shouldReorder", "fillerBullets", "shouldAdd", "shouldRemove", "expectFewEdits", "adviceFromProfile", "addTerms", "leadBullet"]);
 // Terms an entry mentions only as denied, someone else's work, or the row's own label.
@@ -56,6 +58,12 @@ for (const fixture of fixtures) {
   assert.ok(Object.keys(fixture).every((key) => FIXTURE_KEYS.has(key)), `${where}: unknown fixture key`);
   assert.ok(Object.keys(traps).every((key) => TRAP_KEYS.has(key)), `${where}: unknown trap key`);
   assert.ok(Object.keys(opportunities).every((key) => OPPORTUNITY_KEYS.has(key)), `${where}: unknown opportunity key`);
+  if (fixture.fitFindings) {
+    const parsed = parsePolishFitFindings(polishFitFindings(fixture));
+    assert.ok(parsed && parsed !== "invalid", `${where}: frozen Fit findings are not a valid Polish block`);
+    assert.ok(typeof fixture.fitFindings.provenance === "string" && fixture.fitFindings.provenance, `${where}: Fit findings provenance`);
+    assert.ok(fixture.fitFindings.gaps.every((gap) => ["no-evidence", "either"].includes(gap.expect)), `${where}: gap expectations`);
+  }
   const index = fixtureIndex(fixture);
   const targets = flattenResumeTargets(index.scope, fixture.candidateContext);
   assert.ok(index.resumeText && targets.length, `${where}: no editable targets`);
@@ -443,6 +451,34 @@ assert.equal(judgeBad.factCheck.status, "error");
 assert.equal(summaryRow(judgeBad, 1).unsupported, null);
 const unsupported = await evaluateCase(byName.get("backend-platform"), config, { generate: async () => proposal([safe]), judge: async () => ({ edits: [{ ...label, supported: false, unsupportedClaim: "Invented scope" }] }) });
 assert.equal(unsupported.passed, false);
+
+// Fit findings: sent without benchmark labels by default, omitted when off, and
+// a gap claimed as addressed against its hand label fails the case.
+const fitBackend = byName.get("backend-platform");
+assert.ok(fitBackend.fitFindings.gaps.every((gap) => gap.expect === "no-evidence"));
+let sentFindings;
+await evaluateCase(fitBackend, config, { generate: async (request) => { sentFindings = request.fitFindings; return proposal([safe]); }, judge: async () => ({ edits: [label] }) });
+assert.deepEqual(sentFindings, polishFitFindings(fitBackend));
+assert.ok(!JSON.stringify(sentFindings).includes("expect") && !JSON.stringify(sentFindings).includes("provenance"));
+await evaluateCase(fitBackend, config, { fitFindings: false, generate: async (request) => { sentFindings = request.fitFindings; return proposal([safe]); }, judge: async () => ({ edits: [label] }) });
+assert.equal(sentFindings, null);
+assert.equal(evalOptions([], {}).fitFindings, true);
+assert.equal(evalOptions([], { EVAL_FIT_FINDINGS: "off" }).fitFindings, false);
+assert.throws(() => evalOptions([], { EVAL_FIT_FINDINGS: "yes" }));
+const withStatements = (fitGaps) => async () => ({ ...proposal([safe]), fitGaps });
+const honestGaps = await evaluateCase(fitBackend, config, { generate: withStatements(fitBackend.fitFindings.gaps.map(({ id }) => ({ gap: id, status: "NO_EVIDENCE", targetIds: [] }))), judge: async () => ({ edits: [label] }) });
+assert.equal(honestGaps.passed, true);
+assert.deepEqual(summaryRow(honestGaps, 1).fitGaps, { addressed: 0, noEvidence: 3, notReported: 0, addressedNoEvidenceGap: 0, addressedByUnsupported: 0 });
+const claimedGap = await evaluateCase(fitBackend, config, { generate: withStatements([{ gap: "gap-1", status: "ADDRESSED", targetIds: [safe.targetId] }]), judge: async () => ({ edits: [label] }) });
+assert.equal(claimedGap.passed, false);
+assert.equal(claimedGap.fitGaps.addressedNoEvidenceGap, 1);
+assert.equal(claimedGap.fitGaps.notReported, 2);
+const eitherFixture = byName.get("profile-new-bullets");
+assert.equal(eitherFixture.fitFindings.gaps[0].expect, "either");
+const onUnsupported = gradeFitGaps(eitherFixture, { fitGaps: [{ gap: "gap-1", status: "ADDRESSED", targetIds: ["target-9"] }] },
+  [{ n: 1, targetId: "target-9" }], { edits: [{ n: 1, supported: false, material: true, unsupportedClaim: "x" }] });
+assert.equal(onUnsupported.addressedNoEvidenceGap, 0);
+assert.equal(onUnsupported.addressedByUnsupported, 1);
 for (const failingStage of ["generation", "fact-check"]) {
   const result = await evaluateCase(byName.get("backend-platform"), config, {
     generate: async () => { if (failingStage === "generation") throw new Error("SENSITIVE RESPONSE"); return proposal([safe]); },

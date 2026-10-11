@@ -394,9 +394,8 @@ and lives in the app ledger.
 
 ### Desktop companion, distribution, and release/deploy state
 
-Current: RoleFit 0.11.1 preview (`rolefit-preview-v0.11.1-beta.1` on `aa202ba`),
-extension 1.3.0, desktop bridge API 13 (see 2026-10-10). 0.12.0 is prepared,
-not yet released.
+Current: RoleFit 0.12.0 preview (`rolefit-preview-v0.12.0-beta.1` on `9ee863c`),
+extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
 
 - 2026-10-01 [TOOL] 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
@@ -602,7 +601,52 @@ not yet released.
       health probe.
     - `make:rolefit:desktop` and `test:rolefit:desktop:packaged` (win32-x64,
       unpacked) passed in the clean worktree.
-  - Release receipt: PENDING.
+  - [TOOL] Release receipt: the annotated tag `rolefit-preview-v0.12.0-beta.1`
+    is on `9ee863c` (#213). Run 38082606961 succeeded and published the
+    prerelease at 2026-10-10T20:17:47Z, with arm64/x64 `.dmg`/`.zip`, the
+    Windows x64 `.exe`, and `SHA256SUMS.txt`. The product site, Typeset, and
+    Document workflow runs on `9ee863c` succeeded.
+- [USER+TOOL] **Stage 2A: the opt-in Resume Polish review stays off by
+  default** (user-accepted). A paired run over the 39 synthetic cases failed
+  the 2026-10-07 default-on bar on both Sol medium and Opus high; numbers are in
+  `apps/role-fit-ai/docs/engineering/benchmarks.md`. Stage 2B (the paired
+  real-application rerun) needs the user's other machine and will run on the
+  Stage 4 prompt. [TOOL] Codex CLI 0.162.1 was installed on this machine
+  (npm global); the Codex desktop app's bundled binaries are not on PATH.
+- [USER+CODE] **Fit findings in Resume Polish, and terminology coverage**
+  (task `fit-findings-polish-20261010`; brief v2 and plan v1 approved; Cover
+  dropped 2026-10-11, below). Resume Polish receives one fenced `fit_findings`
+  block of posting excerpts (at most 3 matches and 3 gaps) from a completed Fit
+  of the same posting, labelled earlier after a resume, Background, or
+  saved-origin change; the Resume rail folds per-gap Addressed / No evidence /
+  Not reported statements and recognized posting terms by resume use. Contract and trust
+  rules: `PRODUCT.md`, `DESIGN.md`, `server/ai/AGENTS.md`.
+  - [TOOL] (Before the 2026-10-11 Cover removal.) Without findings both Polish
+    prompts are byte-identical to `9ee863c`
+    (52 prompts; an independent reviewer re-checked 104). Offline: check exit
+    0, `npm test` 182/182. Two independent reviews: no blockers; their
+    should-fix items were applied. Browser pass with synthetic data and stubbed
+    Fit/Polish responses in a scratch workspace: both rails, accept/discard/undo
+    transitions, tablet width, no failed requests.
+  - [TOOL] Benchmark fixtures carry frozen Fit findings (Sonnet 5.5 low): 39/39
+    resume cases (82 gaps, 71 labelled no-evidence after two 2026-10-11 corrections where
+    the fixture's own resume shows the requirement).
+  - [USER+TOOL] Live before-and-after (2026-10-10/11): [USER] real
+    applications with Opus judging; Astra for the synthetic corpus and the 16
+    previous-wording real gap claims (final-rule claims Opus-audited only). [CODE] `FIT_GAP_ADDRESSED_RULE` (`resumeProposal.ts`), revised for
+    overclaiming, then over-suppression, then "assisting" claims. Final rule:
+    real resume Opus 7 ADDRESSED, 0 overclaimed, unsupported 2 → 2 (Opus's known
+    attribution failure in both arms); synthetic Sol 38/39 with Astra, 0
+    unsupported, 0 missed opportunities. Cover with findings scored lower on Sol
+    and Astra judged 4 of 5 Opus cover claims overclaimed, so [USER] findings
+    reach Resume Polish only; the cover wiring was removed and Cover Polish
+    matches `main`. Numbers: `benchmarks.md`. Harness and receipts are private
+    (`workspace/fit-findings-real/`).
+  - [USER] A base-letter phrase the evidence did not support (Opus kept it in
+    16 of 20 letters) was corrected in private data, backed up locally.
+  - [TOOL] This machine's synthetic workspace `.resume` files predated the
+    2026-09-27 `bulletIndentPt` requirement; a throwaway script added the
+    default (14.73 pt) to six files, kept outside the repository.
 
 ## 2026-10-09
 
