@@ -24,13 +24,27 @@ sources, the same Resume/Cover generators and two blinded judges. Resume
 preferences split 5–5; Cover preferences differed between judges. It did not
 establish a downstream quality advantage for the slower Prepare setup.
 
-Fit findings in Polish (2026-10-10): the live before-and-after is pending.
-Same-day before baselines on the current prompt without findings are the
-unreviewed arms of the paired run above: Sol medium 39/39, 86 edits, 0
-unsupported, 1 immaterial; Opus high 29 of 36 graded, 103 edits, 6 unsupported,
-4 immaterial. The after-runs (both corpora, both models, `EVAL_FIT_FINDINGS`
-on) stopped at the Codex usage limit after four Sol resume cases, all passed
-with every gap reported as no evidence; they are not a result.
+Fit findings in Polish (2026-10-10/11, Opus-only judging while Codex was
+limited; no Astra labels). Paired runs on 30 real applications (resume) and the
+first 20 of them (cover), sampled across Fit verdicts with at least one sendable
+gap, each saved Fit sent as an earlier-version block. Findings off, then on, per
+case; Opus 5.5 high fact-checked every replacement, judged every letter, and
+audited every ADDRESSED gap claim. The first prompt kept edits truthful (Opus
+resume unsupported 2 → 0) but labelled related evidence ADDRESSED: 5 of 18
+resume and 1 of 10 cover claims overclaimed. A first rule removed them but
+over-suppressed honest claims (including "or similar" alternatives); the
+shipped rule (`FIT_GAP_ADDRESSED_RULE`) results:
+
+| Generator | Resume edits off → on | Unsupported off → on | ADDRESSED (overclaimed) | Cover overall off → on | Cover ADDRESSED (overclaimed) |
+| --- | --- | --- | --- | --- | --- |
+| Opus 5.5 high | 125 → 116 | 2 → 0 | 8 of 62 gaps (0) | 7.6 → 7.6 (3 up, 2 down, 15 tied) | 5 of 40 (0) |
+| GPT-6.1 Sol medium | 134 → 122 | 0 → 0 | 8 of 62 gaps (0) | 7.6 → 7.3 (1 up, 7 down, 12 tied) | 5 of 40 (1) |
+
+No generated cover sentence was judged unsupported in any arm; every flag fell on
+the base letter's fixed opening line. Sol's resume immaterial edits rose 14 →
+20 and its cover scores fell slightly with findings. One sample per case; the same
+family generated and judged the Opus arms; real cases have no opportunity
+labels, so lost opportunities are unmeasured.
 
 Resume/Cover use private application corpora; only aggregate findings belong
 here. Their experiment history is retained in the dated root

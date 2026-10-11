@@ -12,7 +12,7 @@ import {
 } from "../../../shared/polishFitFindings.ts";
 import { flattenResumeTargets } from "../../../shared/resumePolishContract.ts";
 import { handleCoverPolish } from "../coverLetter.ts";
-import { buildCoverLetterTailorPrompts, inputFirewallRule } from "../prompts.ts";
+import { buildCoverLetterTailorPrompts, FIT_GAP_ADDRESSED_RULE, inputFirewallRule } from "../prompts.ts";
 import { handleResumePolish } from "../resumePolish.ts";
 import { buildResumeProposalPrompts, generateResumeProposal } from "../resumeProposal.ts";
 import { normalizeResumeScope, resumeScopeToText } from "../resumeScope.ts";
@@ -110,6 +110,10 @@ assert.match(earlier, /judge every item against the current text/);
 const matchesOnly = buildResumeProposalPrompts({ ...promptArgs, fitFindings: { ...findings, gaps: [] } }).userPrompt;
 assert.deepEqual(realTags(matchesOnly, "fit_findings"), [1, 1]);
 assert.ok(!matchesOnly.includes("fitGaps"), "no gaps, no gap statements requested");
+// Related evidence labelled ADDRESSED was the 2026-10-10 real-application failure.
+assert.ok(withInjected.includes(FIT_GAP_ADDRESSED_RULE), "gap statements carry the ADDRESSED rule");
+for (const text of ["accepts alternatives", "the posting does not accept in place of", "bare statement of comfort or familiarity", "Reordering or repeating a skill", "never changed to earn ADDRESSED"]) assert.ok(FIT_GAP_ADDRESSED_RULE.includes(text), `related evidence is named: ${text}`);
+for (const prompt of [without.userPrompt, without.systemPrompt, matchesOnly]) assert.ok(!prompt.includes(FIT_GAP_ADDRESSED_RULE), "no gaps, no ADDRESSED rule");
 
 // --- Gap statements ------------------------------------------------------------
 const isTarget = (value) => typeof value === "string" && ["target-1", "target-2"].includes(value);
@@ -227,6 +231,8 @@ assert.match(coverInjected, /Never state or imply that the candidate lacks a gap
 assert.match(coverInjected, /"fitGaps"/);
 const coverMatchesOnly = buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: { ...findings, gaps: [] } }).userPrompt;
 assert.ok(!coverMatchesOnly.includes("fitGaps"));
+assert.ok(coverInjected.includes(FIT_GAP_ADDRESSED_RULE), "cover gap statements carry the same rule");
+for (const prompt of [coverWithout.userPrompt, coverWithout.systemPrompt, coverMatchesOnly]) assert.ok(!prompt.includes(FIT_GAP_ADDRESSED_RULE));
 const coverRepair = buildCoverLetterTailorPrompts({ ...coverArgs, fitFindings: findings, repair: { violations: ["x"], rejectedOutput: {} } }).userPrompt;
 assert.deepEqual(realTags(coverRepair, "fit_findings"), [1, 1], "the single repair keeps the same findings");
 

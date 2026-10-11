@@ -321,6 +321,9 @@ application retain blocking technical guards.
   `sanitizeFitGapStatements` keeps one per sent gap, drops an ADDRESSED that
   cites no surviving change (Resume, held-back changes included) or no existing
   paragraph (Cover), and never turns one into a warning, concern, or later input.
+  Both prompts define the statuses with one shared `FIT_GAP_ADDRESSED_RULE`
+  (`prompts.ts`), because a 2026-10-10 real-application run found related
+  evidence labelled ADDRESSED (results in `docs/engineering/benchmarks.md`).
 - Resume Polish warning precision is benchmark-backed (2026-10-04): replaying
   stored proposals against independent per-edit fact checks showed most warnings
   fired on honest paraphrases. These shared checks also serve cover letters,

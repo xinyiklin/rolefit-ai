@@ -630,9 +630,17 @@ extension 1.4.0, desktop bridge API 13 (see 2026-10-10).
   - [TOOL] Benchmark fixtures carry frozen Fit findings (Sonnet 5.5 low): 39/39
     resume cases (82 gaps, 73 labelled no-evidence) and 6/13 cover cases (the
     other 7 postings are Insufficient job information).
-  - UNCONFIRMED: the live before-and-after (AC5, AC6, AC9) on Sol medium and
-    Opus high. Codex hit its usage limit after four Sol resume cases; the user
-    will run `EVAL_FIT_FINDINGS` on/off on another machine. Merge waits for it.
+  - [USER+TOOL] Live before-and-after (2026-10-10/11): [USER] real
+    applications, Opus as the only judge, no Astra (Codex limited). Edits stayed
+    truthful with findings (Opus unsupported 2 → 0, Sol 0 → 0), but the first
+    prompt labelled related evidence ADDRESSED (5 of 18 resume, 1 of 10 cover).
+    [CODE] `FIT_GAP_ADDRESSED_RULE` (`prompts.ts`), revised once for
+    over-suppression: 0 overclaimed of 8 resume / 5 cover ADDRESSED on Opus,
+    0 of 8 / 1 of 5 on Sol. Sol cover scored slightly lower with findings
+    (7.6 → 7.3). Numbers: `benchmarks.md`. Astra labels and opportunity
+    coverage remain UNCONFIRMED. Harness and receipts are private
+    (`workspace/fit-findings-real/`). Two reviews READY (Lows only). Merge
+    waits for the user's decision on the Sol cover result.
   - [TOOL] This machine's synthetic workspace `.resume` files predated the
     2026-09-27 `bulletIndentPt` requirement; a throwaway script added the
     default (14.73 pt) to six files, kept outside the repository.

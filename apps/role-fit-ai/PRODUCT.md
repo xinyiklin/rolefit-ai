@@ -197,7 +197,10 @@ with existing resume or linked Background evidence, and "no evidence" is the
 expected answer otherwise; the letter never says or implies the candidate lacks
 a gap's requirement. The proposal rail folds **What this proposal did about Fit
 gaps**, stating for each gap sent Addressed (with the edits or paragraphs), No
-evidence, or Not reported, with no count or score. On the resume, Addressed holds only
+evidence, or Not reported, with no count or score. Addressed means the cited text
+itself shows the requirement or an alternative the posting accepts; related
+experience, a framework the posting does not accept, or a reordered skill is No
+evidence. On the resume, Addressed holds only
 while one of its edits is pending or accepted; discarding, holding back, or
 overwriting them turns it to Not reported. The statements are the model's own
 account and never replace the edits' evidence warnings. Beside them, the Resume
