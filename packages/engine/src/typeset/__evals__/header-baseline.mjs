@@ -48,4 +48,4 @@ for (const fontFamily of FONT_FAMILY_IDS) {
 const schema = size => ({ header: { name: `<size=${size}>aceonmzx</size>`, contact: ['contact'] }, sections: [] });
 assert(layoutResume(schema(40), DOC_STYLE_DEFAULTS).pages[0].lines[0].baseline > layoutResume(schema(25), DOC_STYLE_DEFAULTS).pages[0].lines[0].baseline,
   'actual font-size changes still reserve additional vertical space');
-console.log(`header baseline stability: ${cases} resume/cover name/contact cases across six fonts, glyph shapes, blank fields and inline styles passed`);
+console.log(`header baseline stability: ${cases} resume/cover name/contact cases across ${FONT_FAMILY_IDS.length} fonts, glyph shapes, blank fields and inline styles passed`);

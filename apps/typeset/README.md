@@ -236,7 +236,9 @@ eval. Source Serif 4, Source Sans 3, Arimo, and Carlito use the SIL Open Font
 License stored in `fonts/SourceSerif4-OFL.txt`, `fonts/SourceSans3-OFL.txt`,
 `fonts/Arimo-OFL.txt`, and `fonts/Carlito-OFL.txt`. Tinos is Apache 2.0
 (`fonts/Tinos-LICENSE.txt`). Latin Modern's GUST Font License is stored in
-`fonts/LatinModern-GUST-FONT-LICENSE.txt`.
+`fonts/LatinModern-GUST-FONT-LICENSE.txt`. The 24 additional families are pinned in
+`scripts/additional-fonts.json`, each with its SIL Open Font License as
+`fonts/<Family>-OFL.txt`; `packages/engine/fonts/README.md` lists them.
 
 Tinos, Arimo, and Carlito are redistributable fonts that keep the per-character
 advance widths of Times New Roman, Arial, and Calibri, so a document holds its

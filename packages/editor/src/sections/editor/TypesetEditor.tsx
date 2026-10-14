@@ -57,9 +57,10 @@ import {
 import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography.ts";
 import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
-import { spaceWidth } from "@typeset/engine/typeset/measure.ts";
+import { faceFor, spaceWidth } from "@typeset/engine/typeset/measure.ts";
+import { documentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
-import { TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
+import { browserFontFaceLoaded, ensureTypesetFonts, TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { anchorsFromDoc, type BlockAnchor, type TypesetAnchors } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
@@ -806,6 +807,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const pointerSelectionRef = useRef(false);
   const [inlineFormatState, setInlineFormatState] = useState<InlineFormatState>(EMPTY_FORMAT_STATE);
   const [caretOverlay, setCaretOverlay] = useState<CaretOverlayGeometry | null>(null);
+  const [caretFontError, setCaretFontError] = useState<string | null>(null);
+  const caretFontRequestRef = useRef(0);
+  const syncSelectionRef = useRef<(() => void) | null>(null);
+  useEffect(() => () => { caretFontRequestRef.current += 1; }, []);
 
   // A host calls this the moment it OPENS a document, which is one tick before
   // the new data has been painted — placing the caret now would place it in the
@@ -837,22 +842,42 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     } finally {
       restoringSelectionRef.current = false;
     }
+    // Restoring the same range may emit no selectionchange after a menu closes.
+    syncSelectionRef.current?.();
   }, [mapFor, readSelection]);
 
   const syncCaretOverlay = useCallback(
     (selection: TypesetSelection | null, appearance: CaretAppearance) => {
+      const request = ++caretFontRequestRef.current;
       const host = hostRef.current;
       const wrapper = wrapRef.current;
       const ownsFocus = Boolean(
         host?.contains(document.activeElement) || editorToolbarOwnsFocus()
       );
-      const next =
-        host && wrapper && selection && selection.dStart === selection.dEnd && ownsFocus
-          ? caretOverlayGeometry(host, wrapper, selection, appearance, zoom)
-          : null;
-      setCaretOverlay((current) => sameCaretGeometry(current, next) ? current : next);
+      setCaretFontError(null);
+      if (!host || !wrapper || !selection || selection.dStart !== selection.dEnd || !ownsFocus) {
+        setCaretOverlay(null);
+        return;
+      }
+      const generation = actions.getDocumentGeneration();
+      const update = () => {
+        if (request !== caretFontRequestRef.current || host !== hostRef.current || generation !== actions.getDocumentGeneration()) return;
+        const focused = host.contains(document.activeElement) || editorToolbarOwnsFocus();
+        const next = focused ? caretOverlayGeometry(host, wrapper, selection, appearance, zoom) : null;
+        setCaretOverlay((current) => sameCaretGeometry(current, next) ? current : next);
+      };
+      const family = documentFontFamily(appearance.fontFamily);
+      if (browserFontFaceLoaded(family, faceFor(appearance.bold, appearance.italic))) {
+        update();
+      } else {
+        setCaretOverlay(null);
+        ensureTypesetFonts(family).then(update).catch((error: unknown) => {
+          if (request !== caretFontRequestRef.current || generation !== actions.getDocumentGeneration()) return;
+          setCaretFontError(error instanceof Error ? error.message : "The document font could not be loaded.");
+        });
+      }
     },
-    [zoom]
+    [actions, zoom]
   );
 
   useEffect(() => {
@@ -1166,6 +1191,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       pointerSelectionRef.current = false;
     };
 
+    syncSelectionRef.current = sync;
     document.addEventListener("mousedown", beginPointerSelection, true);
     document.addEventListener("mouseup", finishPointerSelection, true);
     window.addEventListener("blur", cancelPointerSelection);
@@ -1173,6 +1199,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     document.addEventListener("focusin", sync);
     sync();
     return () => {
+      syncSelectionRef.current = null;
       document.removeEventListener("mousedown", beginPointerSelection, true);
       document.removeEventListener("mouseup", finishPointerSelection, true);
       window.removeEventListener("blur", cancelPointerSelection);
@@ -3142,6 +3169,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       inputGenerationRef.current = generation;
       replayQueueRef.current = [];
       pendingCaretRef.current = null;
+      typingFormatRef.current = null;
+      typingTargetRef.current = null;
+      caretFontRequestRef.current += 1;
     }
     // 0) A freshly opened document starts at its first painted field, and a
     // remounted one resumes where the host says the caret was. Both are one-shot
@@ -3445,6 +3475,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         documentKind={documentKind}
         onPageCount={onPageCount}
       />
+      {caretFontError ? <div role="alert">{caretFontError}</div> : null}
       {caretOverlay ? (
         <span
           className="typeset-caret"

@@ -420,6 +420,10 @@ typesetting guide when a change affects painted output or layout provenance.
 - A collapsed caret remains visually anchored in the document while a toolbar
   input, popover, or portaled option menu is editing its next-typing format.
   Its height and baseline use that active format rather than adjacent text.
+  An unloaded next-typing family uses the engine's browser loader before caret
+  measurement. A superseded selection/document or unmounted editor must ignore
+  its completion; failures remain visible. Document replacement clears transient
+  typing format even when the new caret has the same field key and offset.
 - Bold/italic/underline with a collapsed caret arm the next-typing format
   instead of doing nothing. Toolbar buttons, keyboard shortcuts, and the
   browser's `formatBold`/`formatItalic`/`formatUnderline` intents all route

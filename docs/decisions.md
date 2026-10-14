@@ -114,7 +114,8 @@ later entry wins.
   enough.
 - 2026-07-24..07-25 [USER] D017 ACTIVE: Tinos, Carlito, and Arimo ship as metric-compatible
   equivalents under their own names, the metric twin shown beside them; menu
-  order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern.
+  order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern,
+  then (2026-10-14 [USER]) the 24 added catalog families alphabetically.
   New cover letters start in Carlito; resumes default to Latin Modern.
   `entryEndIndentPt` is the entry's right edge for every row; Jake is the style
   reference, not a spec; fresh starters use the Jake-derived defaults (10.8 pt

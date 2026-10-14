@@ -24,14 +24,39 @@ export type FontFamilyDefinition = Readonly<{
 // compatible with, and the house faces follow. Serif then sans within each
 // group, so a reader scanning for "a Times-like face" or "an Arial-like face"
 // meets it before the typographic defaults. Order is presentation only — the
-// ids below are the persisted values and never move with it.
+// ids below are the persisted values and never move with it. Additional families
+// follow alphabetically, retaining the original six choices at the top.
 export const FONT_FAMILIES = [
   { id: "tinos", label: "Tinos", metricsOf: "Times New Roman" },
   { id: "carlito", label: "Carlito", metricsOf: "Calibri" },
   { id: "arimo", label: "Arimo", metricsOf: "Arial" },
   { id: "source-serif", label: "Source Serif 4" },
   { id: "source-sans", label: "Source Sans 3" },
-  { id: "latin-modern", label: "Latin Modern" }
+  { id: "latin-modern", label: "Latin Modern" },
+  { id: "crimson-pro", label: "Crimson Pro" },
+  { id: "dm-sans", label: "DM Sans" },
+  { id: "fira-sans", label: "Fira Sans" },
+  { id: "ibm-plex-sans", label: "IBM Plex Sans" },
+  { id: "ibm-plex-serif", label: "IBM Plex Serif" },
+  { id: "inter", label: "Inter" },
+  { id: "lato", label: "Lato" },
+  { id: "libre-baskerville", label: "Libre Baskerville" },
+  { id: "libre-franklin", label: "Libre Franklin" },
+  { id: "lora", label: "Lora" },
+  { id: "merriweather", label: "Merriweather" },
+  { id: "merriweather-sans", label: "Merriweather Sans" },
+  { id: "montserrat", label: "Montserrat" },
+  { id: "noto-sans", label: "Noto Sans" },
+  { id: "noto-serif", label: "Noto Serif" },
+  { id: "nunito", label: "Nunito" },
+  { id: "nunito-sans", label: "Nunito Sans" },
+  { id: "open-sans", label: "Open Sans" },
+  { id: "pt-sans", label: "PT Sans" },
+  { id: "pt-serif", label: "PT Serif" },
+  { id: "raleway", label: "Raleway" },
+  { id: "roboto", label: "Roboto" },
+  { id: "rubik", label: "Rubik" },
+  { id: "work-sans", label: "Work Sans" }
 ] as const satisfies readonly FontFamilyDefinition[];
 
 export type FontFamily = (typeof FONT_FAMILIES)[number]["id"];

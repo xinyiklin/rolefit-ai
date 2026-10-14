@@ -50,6 +50,8 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
   let units = 0;
   let glyphs = 0;
   let prev = "";
+  const kern = (left: string, right: string) =>
+    m.kern[`${left}|${right}`] ?? m.kern[left[left.length - 1] + right[0]] ?? 0;
   let i = 0;
   while (i < text.length) {
     let matched = "";
@@ -62,9 +64,8 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
     if (matched) {
       units += m.lig[matched];
       glyphs += 1;
-      // Pair kerning enters the ligature through its first letter (f).
-      if (prev) units += m.kern[prev + matched[0]] ?? 0;
-      prev = matched[matched.length - 1];
+      if (prev) units += kern(prev, matched);
+      prev = matched;
       i += matched.length;
       continue;
     }
@@ -73,7 +74,7 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
     if (adv !== undefined) {
       units += adv;
       glyphs += 1;
-      if (prev) units += m.kern[prev + ch] ?? 0;
+      if (prev) units += kern(prev, ch);
       prev = ch;
     } else {
       // Unknown glyph: fall back to the average of x-height-ish letters so a

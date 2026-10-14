@@ -119,11 +119,11 @@ interface. Its rarity identifies action and state rather than decoration.
 
 **Display Font:** System UI sans, with platform-native fallbacks
 **Body Font:** System UI sans, with platform-native fallbacks
-**Document Fonts:** Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, or
-Latin Modern inside the resume only
+**Document Fonts:** 30 bundled families inside the resume only; the catalog is
+owned by `packages/engine/src/lib/fontFamilies.ts`.
 
 **Character:** Application chrome is compact, native, and immediately legible.
-The resume uses one of three restrained, bundled typesetting families, creating
+The resume uses a selected bundled typesetting family, creating
 a clear boundary between the tool and the document. Every family has committed
 metrics and faces for body, emphasis, display, and caps so editor and print line
 breaking remain deterministic.
@@ -146,7 +146,9 @@ product branding or allow an unmeasured local system font into the page.
   first, then Source Serif 4, Source Sans 3, and Latin Modern. Recognition leads:
   the families a posting or a style guide names are at the top. Each menu row
   previews in its own face, and the three compatible fonts show the proprietary
-  family whose metrics they match beside the name.
+  family whose metrics they match beside the name. The 24 additional families
+  follow alphabetically in the same scrollable, viewport-bounded menu. Opening
+  the list reveals the current choice; keyboard navigation scrolls it into view.
 - **Selected size:** A compact Docs-style minus / centered editable value / plus
   control without a separate disclosure icon. Clicking the value opens a narrow,
   centered common-preset menu; custom 6–48 pt values are stored to 0.1 pt, and

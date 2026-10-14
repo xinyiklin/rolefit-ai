@@ -14,6 +14,7 @@ const previewFamily = (value: FontFamily) =>
 // Rough per-row height used only to decide whether the menu opens up or down.
 const ROW_HEIGHT = 30;
 const MENU_PADDING = 16;
+const MAX_MENU_HEIGHT = 360;
 
 type FontFamilyControlProps = {
   value: FontFamily | null;
@@ -39,7 +40,8 @@ export function FontFamilyControl({
   const triggerRef = useRef<HTMLButtonElement | null>(null);
   const menuRef = useRef<HTMLSpanElement | null>(null);
   const [open, setOpen] = useState(false);
-  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number; placement: "down" | "up" } | null>(null);
+  const [menuPos, setMenuPos] = useState<{ left: number; top: number; width: number; maxHeight: number; placement: "down" | "up" } | null>(null);
+  const menuReady = open && menuPos !== null;
   const selectedLabel = FONT_FAMILY_OPTIONS.find((option) => option.value === value)?.label ?? "";
 
   useLayoutEffect(() => {
@@ -50,14 +52,16 @@ export function FontFamilyControl({
     const place = () => {
       const rect = rootRef.current?.getBoundingClientRect();
       if (!rect) return;
-      const menuHeight = FONT_FAMILY_OPTIONS.length * ROW_HEIGHT + MENU_PADDING;
-      const below = window.innerHeight - rect.bottom;
-      const placement = below < menuHeight + 12 && rect.top > below ? "up" : "down";
-      const width = Math.max(128, rect.width);
+      const menuHeight = Math.min(MAX_MENU_HEIGHT, FONT_FAMILY_OPTIONS.length * ROW_HEIGHT + MENU_PADDING);
+      const below = window.innerHeight - rect.bottom - 14;
+      const above = rect.top - 14;
+      const placement = below < menuHeight && above > below ? "up" : "down";
+      const width = Math.max(128, rect.width, menuRef.current?.getBoundingClientRect().width ?? 0);
       setMenuPos({
         left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)),
         top: placement === "down" ? rect.bottom + 6 : rect.top - 6,
         width,
+        maxHeight: Math.max(0, Math.min(MAX_MENU_HEIGHT, placement === "down" ? below : above)),
         placement
       });
     };
@@ -68,7 +72,7 @@ export function FontFamilyControl({
       window.removeEventListener("scroll", place, true);
       window.removeEventListener("resize", place);
     };
-  }, [open]);
+  }, [open, menuReady]);
 
   useEffect(() => {
     if (!open) return;
@@ -81,11 +85,12 @@ export function FontFamilyControl({
   }, [open]);
 
   useEffect(() => {
-    if (!open || !menuPos) return;
+    if (!menuReady) return;
     const selected = menuRef.current?.querySelector<HTMLButtonElement>('[aria-selected="true"]');
     const first = menuRef.current?.querySelector<HTMLButtonElement>("button");
-    (selected ?? first)?.focus();
-  }, [menuPos, open]);
+    (selected ?? first)?.focus({ preventScroll: true });
+    (selected ?? first)?.scrollIntoView({ block: "nearest" });
+  }, [menuReady]);
 
   const closeAndRestoreFocus = () => {
     setOpen(false);
@@ -134,6 +139,7 @@ export function FontFamilyControl({
                 // A floor, not a size: the stylesheet lets the menu grow to fit
                 // the longest family name and metric-twin label.
                 minWidth: menuPos.width,
+                maxHeight: menuPos.maxHeight,
                 transform: menuPos.placement === "down" ? undefined : "translateY(-100%)"
               }}
               onKeyDown={(event) => {

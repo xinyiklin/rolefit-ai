@@ -46,7 +46,7 @@ const spaces = layoutResume(fixture({ titleLeft: " ".repeat(600) }), DOC_STYLE_D
 assert.equal(spaces.pages.flatMap((p) => p.lines).flatMap((l) => l.runs)
   .filter((r) => r.src?.field === "titleLeft").map((r) => r.text).join(""), " ".repeat(600), "whitespace-only fields preserve every authored space");
 assert.deepEqual(graphemeClusters("🇺🇸👍🏽é👩‍💻"), ["🇺🇸", "👍🏽", "é", "👩‍💻"], "displayed emoji and combining characters stay intact");
-console.log("heading wrapping: four fields, six families, tokens, paired bounds, content, whitespace, graphemes, and oversized pagination passed");
+console.log(`heading wrapping: four fields, ${FONT_FAMILY_IDS.length} families, tokens, paired bounds, content, whitespace, graphemes, and oversized pagination passed`);
 
 const tightHeading = buildVerticalStream(fixture({
   titleLeft: `<line-height=1>${"Wrapped heading words ".repeat(30)}</line-height>`, titleRight: ""

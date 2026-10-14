@@ -3,7 +3,7 @@
 
 import assert from "node:assert/strict";
 
-import { DOC_STYLE_DEFAULTS } from "../documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
 import { buildStarterResume } from "../../sampleResume.ts";
 import {
   MAX_RESUME_FILE_BYTES,
@@ -32,6 +32,15 @@ const roundTripped = JSON.parse(
   serializeResumeFile(parsed.data, { ...parsed.documentStyle, zoom: DOC_STYLE_DEFAULTS.zoom })
 );
 assert.deepEqual(roundTripped, saved);
+for (const { value: fontFamily } of FONT_FAMILY_OPTIONS) {
+  const fontResume = structuredClone(starter);
+  fontResume.header.name = `<font=${fontFamily}>Font round trip</font>`;
+  const text = serializeResumeFile(fontResume, { ...DOC_STYLE_DEFAULTS, fontFamily });
+  const reopened = parseResumeFile(text);
+  assert.equal(reopened.documentStyle.fontFamily, fontFamily);
+  assert.equal(reopened.data.header.name, fontResume.header.name);
+  assert.equal(serializeResumeFile(reopened.data, reopened.documentStyle), text);
+}
 const hiddenHeaderResume = structuredClone(starter);
 hiddenHeaderResume.header = {
   visible: false,

@@ -2,9 +2,850 @@
    Owned resume document rendering for editor, preview, print, and PDF.
    ============================================================= */
 
-/* Every document face has a dedicated CSS family and a matching committed
-   metric table. The renderer waits for the selected family before pagination,
-   so browser fallback fonts can never silently change line breaks. */
+/* Every document face has a dedicated CSS family and committed metrics.
+   The renderer waits for used families before painting so browser glyphs
+   align with the deterministic layout. */
+@font-face {
+  font-family: "Typeset Crimson Pro Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/CrimsonPro-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Crimson Pro Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/CrimsonPro-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Crimson Pro Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/CrimsonPro-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Crimson Pro Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/CrimsonPro-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Crimson Pro Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/CrimsonPro-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset DM Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/DMSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset DM Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/DMSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset DM Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/DMSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset DM Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/DMSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset DM Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/DMSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Fira Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/FiraSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Fira Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/FiraSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Fira Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/FiraSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Fira Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/FiraSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Fira Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/FiraSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Serif Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSerif-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Serif Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSerif-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Serif Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSerif-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Serif Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSerif-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset IBM Plex Serif Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/IBMPlexSerif-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Inter Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Inter-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Inter Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Inter-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Inter Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Inter-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Inter Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Inter-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Inter Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Inter-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lato Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lato-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lato Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lato-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lato Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Lato-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lato Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Lato-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lato Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lato-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Baskerville Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreBaskerville-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Baskerville Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreBaskerville-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Baskerville Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LibreBaskerville-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Baskerville Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LibreBaskerville-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Baskerville Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreBaskerville-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Franklin Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreFranklin-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Franklin Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreFranklin-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Franklin Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LibreFranklin-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Franklin Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/LibreFranklin-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Libre Franklin Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/LibreFranklin-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lora Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lora-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lora Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lora-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lora Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Lora-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lora Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Lora-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Lora Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Lora-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Merriweather-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Merriweather-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Merriweather-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Merriweather-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Merriweather-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/MerriweatherSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/MerriweatherSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/MerriweatherSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/MerriweatherSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Merriweather Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/MerriweatherSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Montserrat Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Montserrat-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Montserrat Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Montserrat-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Montserrat Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Montserrat-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Montserrat Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Montserrat-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Montserrat Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Montserrat-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NotoSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NotoSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Serif Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSerif-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Serif Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSerif-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Serif Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NotoSerif-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Serif Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NotoSerif-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Noto Serif Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NotoSerif-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Nunito-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Nunito-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Nunito-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Nunito-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Nunito-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NunitoSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NunitoSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NunitoSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/NunitoSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Nunito Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/NunitoSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Open Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/OpenSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Open Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/OpenSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Open Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/OpenSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Open Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/OpenSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Open Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/OpenSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/PTSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/PTSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSans-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Serif Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSerif-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Serif Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSerif-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Serif Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/PTSerif-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Serif Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/PTSerif-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset PT Serif Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/PTSerif-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Raleway Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Raleway-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Raleway Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Raleway-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Raleway Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Raleway-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Raleway Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Raleway-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Raleway Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Raleway-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Roboto Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Roboto-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Roboto Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Roboto-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Roboto Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Roboto-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Roboto Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Roboto-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Roboto Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Roboto-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Rubik Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Rubik-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Rubik Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Rubik-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Rubik Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Rubik-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Rubik Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/Rubik-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Rubik Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/Rubik-Caps.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Work Sans Regular";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/WorkSans-Regular.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Work Sans Bold";
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/WorkSans-Bold.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Work Sans Italic";
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/WorkSans-Italic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Work Sans Bold Italic";
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+  src: url("/fonts/WorkSans-BoldItalic.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Typeset Work Sans Caps";
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url("/fonts/WorkSans-Caps.woff2") format("woff2");
+}
+
 @font-face {
   font-family: "Typeset LM Roman 10 Regular";
   font-weight: 400;

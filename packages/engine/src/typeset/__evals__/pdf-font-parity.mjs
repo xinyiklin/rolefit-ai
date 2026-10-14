@@ -89,6 +89,13 @@ for (const a of ACCENTS) for (const b of COMMON) { PAIRS.push(a + b); PAIRS.push
 // variant — a class of divergence only same-accent adjacency exposes.
 for (const a of ACCENTS) for (const b of ACCENTS) PAIRS.push(a + b);
 const TRIPLES = ASCII.map((c) => "ff" + c);
+const LIGATURE_BOUNDARIES = [];
+for (const ligature of ["ff", "fi", "fl", "ffi", "ffl"]) {
+  for (const character of [...ASCII, ...ACCENTS]) {
+    LIGATURE_BOUNDARIES.push(character + ligature, ligature + character);
+  }
+  for (const right of ["ff", "fi", "fl", "ffi", "ffl"]) LIGATURE_BOUNDARIES.push(ligature + right);
+}
 // letter·pivot·letter triples: contextual chains fire on 3-glyph patterns that
 // no pair can trigger — Source's Catalan `l·l` (ccmp geminada in Sans, GPOS
 // chained kerning in Serif) is the discovered case; sweep every letter pair
@@ -108,12 +115,13 @@ let worstExact = { delta: 0, where: "" };
 const grids = new Map(); // upem -> families on that design grid
 
 for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
+  const hasGlyphBoundaryMetrics = Object.keys(def.faces.regular.metrics.kern).some((key) => key.length > 2);
   for (const face of Object.keys(def.faces)) {
     const file = sfntAssetFile(family, face);
     const font = fontkit.create(readFileSync(new URL(`../../../fonts/${file}`, import.meta.url)));
     const upm = font.unitsPerEm;
     // A face is exact only if its own grid divides the metrics table's 1000ths.
-    if (1000 % upm !== 0 && upm % 1000 !== 0) quantisingFaces.add(`${family}:${face}`);
+    if (1000 % upm !== 0) quantisingFaces.add(`${family}:${face}`);
     if (!grids.has(upm)) grids.set(upm, new Set());
     grids.get(upm).add(family);
     const check = (raw) => {
@@ -140,6 +148,9 @@ for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
     for (const raw of CORPUS) check(raw);
     for (const pair of PAIRS) check(pair);
     for (const triple of TRIPLES) check(triple);
+    // The expanded catalog carries glyph-boundary kerning. Legacy families
+    // retain their existing metrics and established corpus/pair/triple gate.
+    if (hasGlyphBoundaryMetrics) for (const boundary of LIGATURE_BOUNDARIES) check(boundary);
   }
 }
 

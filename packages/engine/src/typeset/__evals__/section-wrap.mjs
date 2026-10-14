@@ -50,4 +50,4 @@ check("<size=24>Large heading words </size>".repeat(25), { ...DOC_STYLE_DEFAULTS
 check("<line-height=1>Section words </line-height>".repeat(30), { ...DOC_STYLE_DEFAULTS, lineHeight: 1 });
 const tall = check("W".repeat(4096), DOC_STYLE_DEFAULTS);
 assert(tall.doc.pages.length > 1, "very tall section heading paginates");
-console.log("section wrapping: six fonts, three case modes, lengths80/512/4096, spaces/tokens, alignment, marks, rule placement and pagination passed");
+console.log(`section wrapping: ${FONT_FAMILY_IDS.length} fonts, three case modes, lengths80/512/4096, spaces/tokens, alignment, marks, rule placement and pagination passed`);
