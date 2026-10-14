@@ -31,9 +31,16 @@ function cssFontShorthand(family: DocumentFontFamily, face: FaceName, sizePx: nu
   return `${f.italic ? "italic " : ""}${f.weight} ${sizePx}px "${f.cssFamily}"`;
 }
 
+export function browserFontFaceLoaded(family: DocumentFontFamily, face: FaceName): boolean {
+  return document.fonts.check(cssFontShorthand(family, face, 16), "Mg");
+}
+
+// Families whose every face this loader has confirmed; loaded faces stay loaded.
+const loadedFamilies = new Set<DocumentFontFamily>();
+
 // Load every face before first paint/measure (an unloaded family silently
 // falls back to a default serif with wrong metrics).
-async function ensureTypesetFonts(family: DocumentFontFamily = DEFAULT_DOCUMENT_FONT_FAMILY): Promise<void> {
+export async function ensureTypesetFonts(family: DocumentFontFamily = DEFAULT_DOCUMENT_FONT_FAMILY): Promise<void> {
   const loaded = await Promise.all(
     (Object.keys(DOCUMENT_FONT_FAMILIES[family].faces) as FaceName[]).map((face) =>
       document.fonts.load(cssFontShorthand(family, face, 16), "Mg")
@@ -42,17 +49,12 @@ async function ensureTypesetFonts(family: DocumentFontFamily = DEFAULT_DOCUMENT_
   if (loaded.some((faces) => faces.length === 0)) {
     throw new Error(`The ${DOCUMENT_FONT_FAMILIES[family].label} document font could not be loaded.`);
   }
-}
-
-async function ensureAllTypesetFonts(): Promise<void> {
-  await Promise.all((Object.keys(DOCUMENT_FONT_FAMILIES) as DocumentFontFamily[]).map(ensureTypesetFonts));
-  // Prime browser-only line-box metrics after every face is loaded and before
+  // Prime browser-only line-box metrics after faces are loaded and before
   // React paints pages, keeping the render path read-only and cache-backed.
-  for (const family of Object.keys(DOCUMENT_FONT_FAMILIES) as DocumentFontFamily[]) {
-    for (const face of Object.keys(DOCUMENT_FONT_FAMILIES[family].faces) as FaceName[]) {
-      browserFaceBox(family, face);
-    }
+  for (const face of Object.keys(DOCUMENT_FONT_FAMILIES[family].faces) as FaceName[]) {
+    browserFaceBox(family, face);
   }
+  loadedFamilies.add(family);
 }
 
 export type BrowserFaceBox = { ascent: number; descent: number }; // em ratios
@@ -72,6 +74,7 @@ export function browserFaceBox(
   const cacheKey = `${family}:${face}`;
   const cached = faceBoxCache.get(cacheKey);
   if (cached) return cached;
+  const loaded = browserFontFaceLoaded(family, face);
   const ctx = document.createElement("canvas").getContext("2d");
   let ascent = 0.95;
   let descent = 0.25;
@@ -126,7 +129,7 @@ export function browserFaceBox(
     descent = cssDescent;
   }
   const box = { ascent, descent };
-  faceBoxCache.set(cacheKey, box);
+  if (loaded) faceBoxCache.set(cacheKey, box);
   return box;
 }
 
@@ -317,37 +320,45 @@ export function TypesetDomPages({
   documentKind?: "resume" | "cover-letter";
 }) {
   const family = documentFontFamily(docStyle.fontFamily);
-  const [loadedFamily, setLoadedFamily] = useState<DocumentFontFamily | null>(null);
-  const [fontError, setFontError] = useState<string | null>(null);
-  const [doc, setDoc] = useState<LayoutDocument | null>(null);
+  const doc = useMemo(
+    () => documentKind === "cover-letter" ? layoutCoverLetter(schema, docStyle) : layoutResume(schema, docStyle),
+    [schema, docStyle, documentKind]
+  );
+  const familiesKey = [...new Set([
+    family,
+    ...doc.pages.flatMap((page) => page.lines.flatMap((line) => line.runs.map((run) => run.style.family)))
+  ])].sort().join("|");
+  // Only an unloaded family withholds the pages; swapping in the loading state
+  // for already-loaded fonts would unmount the editable host mid-edit.
+  const fontsReady = familiesKey.split("|").every((id) => loadedFamilies.has(documentFontFamily(id)));
+  const [, setFontLoads] = useState(0);
+  const [fontError, setFontError] = useState<{ familiesKey: string; message: string } | null>(null);
 
   useEffect(() => {
-    let alive = true;
     setFontError(null);
-    ensureAllTypesetFonts()
+    if (fontsReady) return;
+    let alive = true;
+    Promise.all(familiesKey.split("|").map((id) => ensureTypesetFonts(documentFontFamily(id))))
       .then(() => {
-        if (alive) setLoadedFamily(family);
+        if (alive) setFontLoads((count) => count + 1);
       })
       .catch((error: unknown) => {
         if (!alive) return;
-        setLoadedFamily(null);
-        setFontError(error instanceof Error ? error.message : "The document font could not be loaded.");
+        setFontError({
+          familiesKey,
+          message: error instanceof Error ? error.message : "The document font could not be loaded."
+        });
       });
     return () => {
       alive = false;
     };
-  }, [family]);
+  }, [familiesKey, fontsReady]);
 
   useEffect(() => {
-    if (loadedFamily !== family) return;
-    const next =
-      documentKind === "cover-letter"
-        ? layoutCoverLetter(schema, docStyle)
-        : layoutResume(schema, docStyle);
-    setDoc(next);
-    onPageCount?.(next.pages.length);
-    onDoc?.(next);
-  }, [loadedFamily, family, schema, docStyle, onPageCount, onDoc, documentKind]);
+    if (!fontsReady) return;
+    onPageCount?.(doc.pages.length);
+    onDoc?.(doc);
+  }, [fontsReady, doc, onPageCount, onDoc]);
 
 
   const unit = useMemo<Unit>(
@@ -375,15 +386,15 @@ export function TypesetDomPages({
     };
   }, [variant, zoom]);
 
-  if (fontError) {
+  if (!fontsReady && fontError?.familiesKey === familiesKey) {
     return variant === "screen" ? (
       <div className="preview-overlay__loading" role="alert">
-        <span>{fontError}</span>
+        <span>{fontError.message}</span>
       </div>
     ) : null;
   }
 
-  if (loadedFamily !== family || !doc) {
+  if (!fontsReady) {
     return variant === "screen" ? (
       <div className="preview-overlay__loading" role="status">
         <div className="preview-overlay__spinner" />

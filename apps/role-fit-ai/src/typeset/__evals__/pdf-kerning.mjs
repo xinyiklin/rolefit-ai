@@ -56,10 +56,14 @@ for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
     const bytes = fontBytes(family, face);
     fonts.set(`${family}:${face}`, bytes);
     const upm = fontkit.create(bytes).unitsPerEm;
-    const exact = 1000 % upm === 0 || upm % 1000 === 0;
+    const exact = 1000 % upm === 0;
+    const kernPair = Object.entries(def.faces[face].metrics.kern).find(([pair, adjustment]) =>
+      pair.length === 2 && pair.trim().length === 2 && adjustment !== 0 && texLigatures(pair) === pair && !/f[fil]/.test(pair)
+    )?.[0];
     const lines = [];
     const variants = [
       ...SAMPLES.map((text) => ({ text, tracking: 0 })),
+      ...(kernPair ? [{ text: kernPair, tracking: 0 }] : []),
       { text: "AVATAR", tracking: TRACKING },
       { text: "linked To", tracking: 0, href: "https://example.test/kern" }
     ];
@@ -86,7 +90,10 @@ for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
     }
     pages.push({ lines });
   }
-  if (kernedSamples === 0) fail(`${family}: no sample carries a kern pair, so this family proves nothing`);
+  const hasPairKerning = Object.values(def.faces).some(face =>
+    Object.entries(face.metrics.kern).some(([pair, adjustment]) => pair.length === 2 && adjustment !== 0)
+  );
+  if (hasPairKerning && kernedSamples === 0) fail(`${family}: no sample carries its modeled kern pairs`);
 
   const bytes = await emitPdf({ pages }, fonts, { title: `kerning ${family}` });
   const pdf = await pdfjs.getDocument({ data: bytes.slice(), useWorkerFetch: false, isEvalSupported: false }).promise;

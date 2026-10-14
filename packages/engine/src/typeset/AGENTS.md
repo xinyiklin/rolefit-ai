@@ -123,10 +123,11 @@ it truthfully.
   directory's face registry all derive from it. Never re-declare the set: a
   missed copy validates a file whose tags then fail to parse, or offers a family
   the codec rejects.
-- Supported families are the metric-compatible trio Tinos (Times New Roman),
-  Carlito (Calibri), and Arimo (Arial), then Source Serif 4, Source Sans 3, and
-  Latin Modern — that is menu order, which is presentation only; ids are the
-  persisted values. A new family requires bundled web and PDF faces, generated
+- The 30 supported families start with the metric-compatible trio Tinos (Times
+  New Roman), Carlito (Calibri), and Arimo (Arial), then Source Serif 4, Source
+  Sans 3, and Latin Modern; the remaining families follow alphabetically.
+  `lib/fontFamilies.ts` owns menu order and persisted ids; `fonts/README.md`
+  documents sources and licenses. A new family requires bundled web and PDF faces, generated
   metrics, license text, and full editor/PDF parity verification.
 - Each italic face declares `italicAngleDeg`, the slope its outlines are drawn
   at, taken from the shipped asset's `post.italicAngle` and checked against that
@@ -170,8 +171,18 @@ it truthfully.
   reproducibly converted to quadratic `glyf` outlines with the same glyph
   order, metrics, and shaping tables; this avoids ambiguous CFF/CID declarations
   across PDF viewers.
+- The DOM painter loads only the families used by the next layout, including
+  inline overrides, and primes their browser baseline metrics before painting.
+  Font-load failure remains visible; a canceled load cannot repaint a superseded
+  document. Only a family the loader has not yet confirmed withholds pages:
+  adding or removing an already-loaded inline family must not swap the editable
+  host for the loading state. The same browser-only loader serves next-typing
+  caret choices. Never cache a face box measured before that face is loaded; it
+  would preserve fallback metrics when the family later enters document content.
 - Browser fonts, PDF fonts, and committed metrics share one shaping model:
-  `liga` is limited to `ff`, `fi`, `fl`, `ffi`, and `ffl`; unmodeled default-on
+  `liga` is limited to `ff`, `fi`, `fl`, `ffi`, and `ffl`; new catalog families
+  compile them into one longest-first lookup and measure glyph-boundary kerning.
+  Original-family metrics retain their prior contract. Unmodeled default-on
   GSUB behavior is removed; GPOS kerning retains only modeled pure pairs.
 - Every full PDF font must be declared as `CIDFontType2` + `FontFile2`, with the
   identity CID-to-GID map used by the engine's glyph ids. Do not reintroduce the

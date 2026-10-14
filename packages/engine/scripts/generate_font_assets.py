@@ -37,6 +37,7 @@ from fontTools.pens.recordingPen import DecomposingRecordingPen
 from fontTools.pens.transformPen import TransformPen
 from fontTools.pens.ttGlyphPen import TTGlyphPen
 from fontTools.ttLib import TTFont
+from fontTools.ttLib.tables import otTables
 from fontTools.varLib.instancer import instantiateVariableFont
 
 
@@ -248,6 +249,8 @@ class FontJob:
     italic: bool = False
     axes: Optional[Mapping[str, float]] = None
     caps: bool = False
+    include_ink_bounds: bool = False
+    include_ligature_kerning: bool = False
 
 
 FONT_JOBS: Sequence[FontJob] = (
@@ -480,6 +483,52 @@ LICENSE_OUTPUTS = {
     "arimo-license": "Arimo-OFL.txt",
     "carlito-license": "Carlito-OFL.txt",
 }
+
+
+def add_catalog_fonts() -> None:
+    """Feed the pinned additional sources through the same shaping pipeline."""
+    global FAMILY_ORDER, FONT_JOBS
+    catalog = json.loads(Path(__file__).with_name("additional-fonts.json").read_text())
+    jobs = []
+    for family in catalog["families"]:
+        family_id, stem = family["id"], family["stem"]
+        for role, source in family["sources"].items():
+            SOURCES[f"{family_id}-{role}"] = SourceSpec(
+                source["filename"],
+                f"https://raw.githubusercontent.com/google/fonts/{catalog['commit']}/{source['path']}",
+                source["sha256"],
+            )
+        for face, suffix, weight, italic in (
+            ("regular", "Regular", 400, False),
+            ("bold", "Bold", 700, False),
+            ("italic", "Italic", 400, True),
+            ("boldItalic", "BoldItalic", 700, True),
+            ("caps", "Caps", 400, False),
+        ):
+            role = "regular" if face == "caps" else face
+            if "roman" in family["sources"]:
+                role = "italic" if italic else "roman"
+            source = family["sources"][role]
+            axes = dict(source.get("axes", {}))
+            if "wght" in axes:
+                axes["wght"] = weight
+            # Modified font names cannot contain an upstream Reserved Font Name.
+            internal_id = hashlib.sha256(family_id.encode()).hexdigest()[:12]
+            jobs.append(FontJob(
+                family_id, face, f"{family_id}-{role}", f"{stem}-{suffix}.woff2",
+                internal_family=f"Typeset Document {internal_id} {suffix}",
+                subfamily="Bold Italic" if face == "boldItalic" else suffix if face != "caps" else "Regular",
+                weight=weight, italic=italic, axes=axes or None, caps=face == "caps",
+                include_ink_bounds=True,
+                include_ligature_kerning=True,
+            ))
+        FACE_ALIASES[family_id] = {"boldDisplay": "bold"}
+        LICENSE_OUTPUTS[f"{family_id}-license"] = f"{stem}-OFL.txt"
+    FAMILY_ORDER += tuple(family["id"] for family in catalog["families"])
+    FONT_JOBS += tuple(jobs)
+
+
+add_catalog_fonts()
 
 
 def sha256(path: Path) -> str:
@@ -801,7 +850,7 @@ def strip_unmodeled_kerning(font: TTFont) -> int:
     for record in table.FeatureList.FeatureRecord:
         if record.FeatureTag != "kern":
             continue
-        kept = [index for index in record.Feature.LookupListIndex if is_pure_pairpos(index)]
+        kept = list(dict.fromkeys(index for index in record.Feature.LookupListIndex if is_pure_pairpos(index)))
         removed += len(record.Feature.LookupListIndex) - len(kept)
         record.Feature.LookupListIndex = kept
         record.Feature.LookupCount = len(kept)
@@ -856,6 +905,8 @@ def build_font(job: FontJob, sources: Mapping[str, Path], output: Path) -> None:
     strip_unmodeled_ligatures(font)
     strip_unmodeled_gsub_features(font)
     strip_unmodeled_kerning(font)
+    if job.include_ligature_kerning:
+        normalize_modeled_ligatures(font)
     if job.internal_family:
         rename_font(font, job.internal_family, job.subfamily)
         for table_tag in ("STAT",):
@@ -987,7 +1038,44 @@ def glyph_bbox(glyph_set: object, glyph_name: str, units_per_em: int) -> Optiona
     return [scaled(y_min, units_per_em), scaled(y_max, units_per_em)]
 
 
-def extract_metrics(path: Path) -> dict[str, object]:
+def normalize_modeled_ligatures(font: TTFont) -> None:
+    """Put the five modeled ligatures in one longest-first, left-to-right lookup."""
+    if "GSUB" not in font or font["GSUB"].table.FeatureList is None:
+        return
+    cmap = font.getBestCmap()
+    subtable = otTables.LigatureSubst()
+    subtable.ligatures = {}
+    for sequence in LIGATURES:
+        glyph = ligature_glyph(font, sequence, cmap)
+        if glyph is None:
+            continue
+        entry = otTables.Ligature()
+        entry.LigGlyph = glyph
+        entry.Component = [cmap[ord(character)] for character in sequence[1:]]
+        entry.CompCount = len(sequence)
+        subtable.ligatures.setdefault(cmap[ord(sequence[0])], []).append(entry)
+        # Full PDF embedding indexes cmap glyphs for widths and ToUnicode.
+        # Give unencoded ligatures their standard Unicode presentation forms.
+        codepoint = {"ff": 0xFB00, "fi": 0xFB01, "fl": 0xFB02, "ffi": 0xFB03, "ffl": 0xFB04}[sequence]
+        for cmap_table in font["cmap"].tables:
+            if cmap_table.isUnicode():
+                cmap_table.cmap[codepoint] = glyph
+    table = font["GSUB"].table
+    indices = []
+    if subtable.ligatures:
+        lookup = otTables.Lookup()
+        lookup.LookupType, lookup.LookupFlag = 4, 0
+        lookup.SubTable, lookup.SubTableCount = [subtable], 1
+        indices = [len(table.LookupList.Lookup)]
+        table.LookupList.Lookup.append(lookup)
+        table.LookupList.LookupCount = len(table.LookupList.Lookup)
+    for record in table.FeatureList.FeatureRecord:
+        if record.FeatureTag == "liga":
+            record.Feature.LookupListIndex = indices
+            record.Feature.LookupCount = len(indices)
+
+
+def extract_metrics(path: Path, include_ink_bounds: bool = False, include_ligature_kerning: bool = False) -> dict[str, object]:
     font = TTFont(path, recalcTimestamp=False)
     units_per_em = font["head"].unitsPerEm
     cmap = font.getBestCmap() or {}
@@ -1019,10 +1107,24 @@ def extract_metrics(path: Path) -> dict[str, object]:
                 kern[left_character + right_character] = value
 
     lig: dict[str, int] = {}
+    ligature_glyphs: list[tuple[str, str]] = []
     for sequence in LIGATURES:
         glyph = ligature_glyph(font, sequence, cmap)
         if glyph is not None:
             lig[sequence] = scaled(hmtx[glyph][0], units_per_em)
+            ligature_glyphs.append((sequence, glyph))
+
+    if include_ligature_kerning:
+        for left, left_glyph in supported + ligature_glyphs:
+            for right, right_glyph in supported + ligature_glyphs:
+                if len(left) == 1 and len(right) == 1:
+                    continue
+                adjustment = gpos_pair_adjustment(gpos_lookups, left_glyph, right_glyph)
+                if adjustment is None:
+                    adjustment = legacy_pair_adjustment(font, left_glyph, right_glyph)
+                # Zero is meaningful: a ligature may kern differently from its
+                # first/last component. The separator distinguishes f|fi, ff|i.
+                kern[f"{left}|{right}"] = scaled(adjustment, units_per_em)
 
     os2 = font["OS/2"]
     metrics = {
@@ -1035,6 +1137,11 @@ def extract_metrics(path: Path) -> dict[str, object]:
         "lig": lig,
         "bbox": bbox,
     }
+    if include_ink_bounds:
+        # Some upstream line boxes exclude accented Latin ink. Reserve a fixed
+        # repertoire envelope so typing accents cannot clip or move the header.
+        metrics["ascent"] = max(metrics["ascent"], max(bounds[1] for bounds in bbox.values()))
+        metrics["descent"] = min(metrics["descent"], min(bounds[0] for bounds in bbox.values()))
     font.close()
     return metrics
 
@@ -1076,7 +1183,7 @@ def generate(source_dir: Path, output_root: Path, offline: bool) -> Sequence[Pat
     for job in FONT_JOBS:
         output = output_root / "fonts" / job.output
         build_font(job, sources, output)
-        metrics[job.family][job.face] = extract_metrics(output)
+        metrics[job.family][job.face] = extract_metrics(output, job.include_ink_bounds, job.include_ligature_kerning)
         generated.append(output)
 
     for family, aliases in FACE_ALIASES.items():
@@ -1094,7 +1201,8 @@ def generate(source_dir: Path, output_root: Path, offline: bool) -> Sequence[Pat
     for source_key, filename in LICENSE_OUTPUTS.items():
         output = output_root / "fonts" / filename
         output.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(sources[source_key], output)
+        # Some upstream licenses use CRLF; committed text is LF (.gitattributes).
+        output.write_bytes(sources[source_key].read_bytes().replace(b"\r\n", b"\n"))
         generated.append(output)
 
     metrics_output = output_root / "src" / "typeset" / "metrics.gen.ts"

@@ -2,6 +2,9 @@ import { parseSuite } from "./editor-browser-contracts/suites.mjs";
 import { captureFailure } from "./editor-browser-contracts/failure-evidence.mjs";
 import { CdpConnection } from "./editor-browser-contracts/cdp.mjs";
 import { runHostAuditContracts } from "./editor-browser-contracts/host-audit.mjs";
+import { runFontMenuContracts } from "./editor-browser-contracts/font-menu.mjs";
+import { runFontLoadingContracts, runLoadedInlineFontContracts } from "./editor-browser-contracts/font-loading.mjs";
+import { runFontCaretContracts } from "./editor-browser-contracts/font-caret.mjs";
 import { runWrappedHeaderContracts } from "./editor-browser-contracts/wrapped-header.mjs";
 import { runWrappedRowContracts } from "./editor-browser-contracts/wrapped-rows.mjs";
 import { runEntryRowContracts } from "./editor-browser-contracts/entry-rows.mjs";
@@ -1201,6 +1204,10 @@ async function runSuites() {
       await runPhase('workspace replacement races', runWorkspaceResumeContracts);
       await runPhase('document workbench', runDocumentWorkbenchContracts);
       await runPhase('host audits', () => runHostAuditContracts(options));
+      await runPhase('font menu', () => runFontMenuContracts(options));
+      await runPhase('font loading', () => runFontLoadingContracts(options));
+      await runPhase('loaded inline fonts', () => runLoadedInlineFontContracts(options));
+      await runPhase('font caret', () => runFontCaretContracts(options));
     }
     await runPhase(`${selected} wrapped rows and sections`, () => runWrappedRowContracts(options));
     await runPhase(`${selected} wrapped headers`, () => runWrappedHeaderContracts(options));

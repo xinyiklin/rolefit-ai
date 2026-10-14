@@ -62,6 +62,26 @@ async function exercise(h, api, host, scenario, evidence) {
   return { label: scenario.label, characters: scenario.characters ?? 'hdjklpq', before, after: await geometry(h, api) };
 }
 
+async function replacementTypingFormat(h, api, host) {
+  const data = structuredClone(h.original);
+  data.header = { visible: true, name: 'abcdefghijklm', contact: [] };
+  await h.reset(data);
+  await h.evaluate(api => window[api].select('name', 8, 'name', 13), api);
+  await h.settle();
+  await h.key('Backspace', 8);
+  assert.equal(await h.evaluate(api => window[api].data.header.name, api), 'abcdefgh');
+  const mixed = text => `<size=32><font=source-sans>${text}X</font></size>`;
+  data.header.name = mixed('abcdefgh');
+  await h.reset(data);
+  await h.waitFor(h.page, 'document.querySelector("[contenteditable] [data-tsdf=name]") && getComputedStyle(document.querySelector("[contenteditable] [data-tsdf=name]")).fontFamily.includes("Source Sans")', `${host} replacement document fonts`);
+  await h.evaluate(api => window[api].select('name', 8), api);
+  await h.settle();
+  await h.insert('h');
+  assert.equal(await h.evaluate(api => window[api].data.header.name, api), mixed('abcdefghh'), `${host}: replacement at the same field/offset inherits the new document's format`);
+  await h.key('z', 90, 4);
+  assert.equal(await h.evaluate(api => window[api].data.header.name, api), mixed('abcdefgh'), `${host}: replacement insertion remains undoable`);
+}
+
 export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl, suite = 'all' }) {
   const evidence = process.env.ROLEFIT_EDITOR_WRAPPED_AUDIT_DIR;
   for (const host of ['typeset', 'rolefit', 'cover']) {
@@ -72,7 +92,10 @@ export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl,
     await waitFor(page, `window.${api}?.data?.header && document.querySelector('[contenteditable=true] [data-tsdf="name"]')`, `${host} baseline fixture`);
     const h = await wrappedHarness(page, waitFor, api);
     const report = { host, cases: [], limitations: ['Isolated Chromium fixture; native CDP text/key input, not OS IME', 'Cases deliberately fit one line; wrap changes are verified by wrapped-header contracts'] };
-    if (includesSuite(suite, 'core')) report.cases.push(await exercise(h, api, host, { label: 'baseline-default', name: 'aceonmzx' }, evidence));
+    if (includesSuite(suite, 'core')) {
+      await replacementTypingFormat(h, api, host);
+      report.cases.push(await exercise(h, api, host, { label: 'baseline-default', name: 'aceonmzx' }, evidence));
+    }
     if (includesSuite(suite, 'extended')) {
       if (host !== 'cover') {
         const style = await h.evaluate(api => window[api].style, api);

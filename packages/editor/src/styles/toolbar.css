@@ -322,6 +322,8 @@
   z-index: 120;
   display: grid;
   width: max-content;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   max-width: min(24rem, calc(100vw - 16px));
   gap: 2px;
   padding: 4px;

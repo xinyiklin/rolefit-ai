@@ -3,7 +3,7 @@ import {
   type FaceMetrics,
   type FaceName
 } from "./metrics.gen.ts";
-import { coerceFontFamily, DEFAULT_FONT_FAMILY, type FontFamily } from "../lib/fontFamilies.ts";
+import { FONT_FAMILIES, coerceFontFamily, DEFAULT_FONT_FAMILY, type FontFamily } from "../lib/fontFamilies.ts";
 
 // The engine-facing name for the one document font-family union owned by
 // lib/fontFamilies.ts (the persisted contract).
@@ -99,6 +99,25 @@ export function sfntAssetFile(family: DocumentFontFamily, face: FaceName): strin
 const TINOS_BOLD: FaceAsset = { file: "Tinos-Bold", cssFamily: "Typeset Tinos Bold", weight: 700 };
 const ARIMO_BOLD: FaceAsset = { file: "Arimo-Bold", cssFamily: "Typeset Arimo Bold", weight: 700 };
 const CARLITO_BOLD: FaceAsset = { file: "Carlito-Bold", cssFamily: "Typeset Carlito Bold", weight: 700 };
+
+function standardFamilyDefinition(
+  id: DocumentFontFamily,
+  stem: string,
+  italicAngleDeg: number,
+  boldItalicAngleDeg: number
+): DocumentFontFamilyDefinition {
+  const label = FONT_FAMILIES.find((family) => family.id === id)!.label;
+  const cssFamily = `Typeset ${label}`;
+  const bold: FaceAsset = { file: `${stem}-Bold`, cssFamily: `${cssFamily} Bold`, weight: 700 };
+  return familyDefinition(id, label, cssFamily, "ttf", {
+    regular: { file: `${stem}-Regular`, cssFamily: `${cssFamily} Regular`, weight: 400 },
+    bold,
+    italic: { file: `${stem}-Italic`, cssFamily: `${cssFamily} Italic`, weight: 400, italic: true, italicAngleDeg },
+    boldItalic: { file: `${stem}-BoldItalic`, cssFamily: `${cssFamily} Bold Italic`, weight: 700, italic: true, italicAngleDeg: boldItalicAngleDeg },
+    boldDisplay: bold,
+    caps: { file: `${stem}-Caps`, cssFamily: `${cssFamily} Caps`, weight: 400 }
+  });
+}
 
 export const DOCUMENT_FONT_FAMILIES: Readonly<
   Record<DocumentFontFamily, DocumentFontFamilyDefinition>
@@ -230,7 +249,31 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     },
     boldDisplay: CARLITO_BOLD,
     caps: { file: "Carlito-Caps", cssFamily: "Typeset Carlito Caps", weight: 400 }
-  })
+  }),
+  "crimson-pro": standardFamilyDefinition("crimson-pro", "CrimsonPro", -12.0, -12.0),
+  "dm-sans": standardFamilyDefinition("dm-sans", "DMSans", -10.0, -10.0),
+  "fira-sans": standardFamilyDefinition("fira-sans", "FiraSans", -8.0, -8.0),
+  "ibm-plex-sans": standardFamilyDefinition("ibm-plex-sans", "IBMPlexSans", -11.31, -11.31),
+  "ibm-plex-serif": standardFamilyDefinition("ibm-plex-serif", "IBMPlexSerif", -14.0, -14.0),
+  "inter": standardFamilyDefinition("inter", "Inter", -9.3988, -9.3988),
+  "lato": standardFamilyDefinition("lato", "Lato", -7.0, -7.0),
+  "libre-baskerville": standardFamilyDefinition("libre-baskerville", "LibreBaskerville", -15.0, -15.0),
+  "libre-franklin": standardFamilyDefinition("libre-franklin", "LibreFranklin", -8.0, -8.0),
+  "lora": standardFamilyDefinition("lora", "Lora", -3.0, -3.0),
+  "merriweather": standardFamilyDefinition("merriweather", "Merriweather", -7.8, -7.8),
+  "merriweather-sans": standardFamilyDefinition("merriweather-sans", "MerriweatherSans", -7.5, -7.5),
+  "montserrat": standardFamilyDefinition("montserrat", "Montserrat", -11.3, -11.3),
+  "noto-sans": standardFamilyDefinition("noto-sans", "NotoSans", -12.0243, -12.0243),
+  "noto-serif": standardFamilyDefinition("noto-serif", "NotoSerif", -12.0, -12.0),
+  "nunito": standardFamilyDefinition("nunito", "Nunito", -9.0, -9.0),
+  "nunito-sans": standardFamilyDefinition("nunito-sans", "NunitoSans", -9.0, -9.0),
+  "open-sans": standardFamilyDefinition("open-sans", "OpenSans", -12.0, -12.0),
+  "pt-sans": standardFamilyDefinition("pt-sans", "PTSans", -12.0, -12.0),
+  "pt-serif": standardFamilyDefinition("pt-serif", "PTSerif", -12.0, -12.0),
+  "raleway": standardFamilyDefinition("raleway", "Raleway", -12.0, -12.0),
+  "roboto": standardFamilyDefinition("roboto", "Roboto", 0.0, 0.0),
+  "rubik": standardFamilyDefinition("rubik", "Rubik", -12.0, -12.0),
+  "work-sans": standardFamilyDefinition("work-sans", "WorkSans", -13.0, -13.0)
 };
 
 export function fontFace(family: DocumentFontFamily, face: FaceName): DocumentFontFaceDefinition {

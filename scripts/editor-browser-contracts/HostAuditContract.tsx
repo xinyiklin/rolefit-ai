@@ -12,6 +12,7 @@ import { DialogProvider } from '../../apps/role-fit-ai/src/hooks/useDialog.tsx';
 import { ResumeTab } from '../../apps/role-fit-ai/src/sections/tabs/ResumeTab.tsx';
 import { CoverLetterTab } from '../../apps/role-fit-ai/src/sections/tabs/CoverLetterTab.tsx';
 import { buildCoverLetterPreflight } from '../../apps/role-fit-ai/src/lib/coverLetterPreflight.ts';
+import { FormattingToolbar } from '../../packages/editor/src/components/toolbar/FormattingToolbar.tsx';
 import { selectContractRange } from './selection-fixture.ts';
 
 const noop = () => {};
@@ -47,6 +48,7 @@ function ResumeHost() {
   const [title, setTitle] = useState('Synthetic host resume');
   const [fileName, setFileName] = useState('synthetic.resume');
   const [fileError, setFileError] = useState('');
+  const [format, setFormat] = useState(initialFormat);
   const current = useRef({ dirty: false, version: '' });
   current.current = { dirty: editor.dirty || docStyle.dirty, version: JSON.stringify([editor.editedResume, toDocumentStyle(docStyle.style)]) };
   const workspace = useWorkspaceResume({
@@ -76,9 +78,15 @@ function ResumeHost() {
       editedResume={editor.editedResume} actions={editor.actions} canUndo={editor.canUndo}
       canRedo={editor.canRedo} contentUndoSequence={editor.undoSequence} contentRedoSequence={editor.redoSequence}
       dirty={editor.dirty} draftAutosaveState="idle" result={null} docStyle={docStyle}
-      formattingToolbar={null} editorRef={editorRef} fitViewportRef={viewportRef}
+      formattingToolbar={<FormattingToolbar docStyle={docStyle}
+        onUndo={editor.actions.undo} onRedo={editor.actions.redo}
+        canUndo={editor.canUndo} canRedo={editor.canRedo}
+        inlineFormatting={{
+          onRequestEditorFocus: () => editorRef.current?.focusSelection(),
+          fontFamily: { value: format.fontFamily, onChange: family => editorRef.current?.setFontFamily(family), disabled: false }
+        }} />} editorRef={editorRef} fitViewportRef={viewportRef}
       initialCaret={null} onCaretExit={noop} initialScrollTop={0} onScrollExit={noop}
-      onInlineFormatStateChange={noop} onRequestLinkEditor={noop} polishScopeModes={{}}
+      onInlineFormatStateChange={setFormat} onRequestLinkEditor={noop} polishScopeModes={{}}
       onSetPolishScopeMode={noop} resumeReady jobReady={false} resumePolishProviderReady={false}
       isPolishStarting={false} isPolishing={false} polishProgress={{ polish: { status: 'idle' } }}
       proposalDecisions={decisions} onPolish={noop} onRetryPolish={noop} onStopPolish={noop}

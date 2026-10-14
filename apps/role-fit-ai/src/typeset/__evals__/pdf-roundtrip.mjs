@@ -289,9 +289,12 @@ for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
       assert(words.lastIndexOf("ALPHA") < words.indexOf("BETA"), "paired PDF text stays in logical field order on each page");
     }
     const lines = wrapped.pages[number - 1].lines;
+    // PDF.js can split one run at kerned punctuation such as Lato's "//".
     for (const line of lines) for (const run of line.runs.filter(run => run.text.trim())) {
-      assert(items.some(item => Math.abs(item.transform[4] - run.x) < 0.2 &&
-        Math.abs(792 - item.transform[5] - line.baseline) < 0.2 && item.str.startsWith(run.text.trimEnd().slice(0, 8))),
+      assert(items.some((item, index) => Math.abs(item.transform[4] - run.x) < 0.2 &&
+        Math.abs(792 - item.transform[5] - line.baseline) < 0.2 &&
+        items.slice(index).filter(next => Math.abs(next.transform[5] - item.transform[5]) < 0.2)
+          .map(next => next.str).join('').startsWith(run.text.trimEnd().slice(0, 8))),
       `${family}: wrapped glyph ${JSON.stringify(run.text)} stays at (${run.x}, ${line.baseline}); nearby=${JSON.stringify(items.filter(item => Math.abs(792 - item.transform[5] - line.baseline) < 0.2).map(item => ({ text: item.str, x: item.transform[4] })))}`);
     }
     const links = (await page.getAnnotations()).filter(annotation => annotation.subtype === "Link");
