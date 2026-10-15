@@ -29,8 +29,10 @@ file/layout contracts remain in `@typeset/engine`.
 - `importStyle.ts` `FAMILY_PATTERNS` needs an entry for every bundled family,
   including, for each family added after the original six, the
   `Typeset Document <hash>` name RoleFit's export embeds; the corpus font
-  round trip fails for a family without one. Added families match
-  only their upstream name plus style words, so lookalikes keep the fallback note.
+  round trip fails for a family without one. Added families match only their
+  upstream name (or an alias of the same design, such as LatoLatin) plus an
+  optical size, a variable-font marker, or style words, so lookalikes (Roboto
+  Slab, Roboto Flex, Inter Display) keep the fallback note.
 - Every source character must land in exactly one place: a document field, a
   Not placed finding, or consumed structure (a bullet marker, a spaced
   separator, a skills label's colon). Never edit words; never place text that

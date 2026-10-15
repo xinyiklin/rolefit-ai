@@ -154,10 +154,17 @@ test("font names map to the nearest bundled family", () => {
     ["Open Sans,Bold", "open-sans", true],
     ["Inter", "inter", true],
     ["IBMPlexSerif-SemiBold", "ibm-plex-serif", true],
+    ["InterVariable", "inter", true],
+    ["InterVariable-Italic", "inter", true],
+    ["IBMPlexSansVar-Bold", "ibm-plex-sans", true],
+    ["LatoLatin-Regular", "lato", true],
+    ["FiraSans-Hair", "fira-sans", true],
     ["Garamond", "tinos", false],
     ["RobotoSlab-Regular", "arimo", false],
     ["Interstate-Regular", "arimo", false],
     ["PTSansNarrow-Regular", "arimo", false],
+    ["RobotoFlex-Regular", "arimo", false],
+    ["InterDisplay-Bold", "arimo", false],
     ["TypesetDocument000000000000Regular", "arimo", false]
   ];
   for (const [font, family, exact] of expectations) assert.deepEqual(familyForFont(font), { family, exact }, font);
