@@ -571,8 +571,10 @@ Never show:
   its text label because it is a document action, not a formatting menu.
 - The formatting row's disclosure is a measured ladder: style menus move into the
   anchored More overlay first, then selected-text typography, then alignment,
-  then clear-formatting and spell check. Each threshold is the intrinsic width of
-  the set still inline above it, so the row is never cropped and never scrolls.
+  then clear-formatting and spell check; a last stage only tightens the row's
+  spacing, for the 338px Cover letter column at 390px. Each threshold is the
+  intrinsic width of the set still inline above it, so the row is never cropped
+  and never scrolls.
   Re-measure the ladder in a browser when a control is added to that row. The
   overlay never consumes editor space; do not shrink type, add a horizontally
   cropped toolbar, or make an overflowing toolbar scroll.

@@ -21,11 +21,12 @@ extension 1.4.0, desktop bridge API 13. 0.13.0 is prepared, not yet released
 
 ## Deferred backlog
 
-- 2026-10-14 [TOOL] RoleFit's Cover letter toolbar container is 338px at a
-  390px viewport (52px rail), below the shared disclosure ladder's ~355px
-  floor: the formatting row overflows 17px and More overhangs the column by
-  5px (same at 0.13.0). The section no longer scrolls into that overhang
-  (`overflow: clip`); re-measuring the ladder is a shared-package change.
+- 2026-10-14 [TOOL] Below a 390px viewport RoleFit's formatting row still
+  overflows: at 375 the toolbar container is 323px and More ends 2px past the
+  column (17px at 360). No width under 390 is a documented target; fitting one
+  needs another ladder stage (for example zoom into More). The first control's (Undo)
+  tooltip is centered and already clipped by the cover column's left edge;
+  Stage 5's 6px inset clips it ~6px more (More's bubble is right-anchored).
 - 2026-10-14 [TOOL] Original-family ligature-boundary edge differences remain
   outside the font expansion: 46 added probes also failed against the prior
   implementation (for example Carlito `Vff` and Latin Modern italic `fll`).
