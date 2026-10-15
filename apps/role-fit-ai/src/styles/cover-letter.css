@@ -1,6 +1,9 @@
 .cover-letter-page {
   min-height: 0;
-  overflow: hidden;
+  /* `clip`, not `hidden`, for the reason given on `.studio-body`: closed
+     tooltip bubbles overhang this column at phone widths, and scrolling a
+     `hidden` box into them shifted the toolbar and title sideways. */
+  overflow: clip;
 }
 
 .cover-letter-tab__toolbar {

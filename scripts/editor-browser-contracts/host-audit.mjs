@@ -71,6 +71,31 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
         receipt.push({ host, preference, ...result });
         if (evidence) await writeFile(join(evidence, 'host-audit.json'), JSON.stringify(receipt, null, 2));
       }
+      // The formatting row must fit its toolbar: RoleFit's cover column is the ladder's narrowest real container (338px at 390).
+      const fit = await evaluate(() => {
+        const trigger = [...document.querySelectorAll('button[aria-label="More formatting"]')].find(el => el.getClientRects().length > 0);
+        const toolbar = trigger?.closest('.top-toolbar'), row = trigger?.closest('.top-toolbar__secondary-row--formatting');
+        if (!trigger || !toolbar || !row) return null;
+        const t = trigger.getBoundingClientRect(), r = row.getBoundingClientRect(), style = getComputedStyle(row);
+        return { container: toolbar.getBoundingClientRect().width, trigger: [t.left, t.right], row: [r.left + parseFloat(style.paddingLeft), r.right - parseFloat(style.paddingRight)] };
+      });
+      if (host === 'cover' && width === 390) assert.equal(fit?.container, 338, `cover/390 toolbar container matches RoleFit's rail-narrowed column: ${JSON.stringify(fit)}`);
+      if (fit) assert(fit.trigger[0] >= fit.row[0] && fit.trigger[1] <= fit.row[1], `${host}/${width} More formatting stays inside its row's content box: ${JSON.stringify(fit)}`);
+      // Revealing the trigger centers it, as automation and assistive tools do; no host ancestor may scroll sideways.
+      for (const label of ['More formatting', 'Hide more formatting']) {
+        const shifted = await evaluate(async label => {
+          const trigger = [...document.querySelectorAll(`button[aria-label="${label}"]`)].find(el => el.getClientRects().length > 0);
+          if (!trigger) return null;
+          trigger.scrollIntoView({ block: 'nearest', inline: 'center' });
+          trigger.click();
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const scrolled = [];
+          for (let el = trigger.parentElement; el; el = el.parentElement) if (el.scrollLeft !== 0) scrolled.push(`${el.className}: ${el.scrollLeft}`);
+          return scrolled;
+        }, label);
+        if (host !== 'resume' && width <= 720) assert(shifted, `${host}/${width} ${label} trigger is visible`);
+        if (shifted) assert.deepEqual(shifted, [], `${host}/${width} ${label} keeps the toolbar's ancestors unscrolled`);
+      }
       if (host !== 'resume') {
         await evaluate(() => document.querySelector('button[aria-label="Open"]').focus());
         await key('Enter', 13);

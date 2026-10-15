@@ -1421,7 +1421,8 @@
    whole panel's bottom edge however many rows it has.
 
    Right-aligned regardless of the popover's own variant: the panel is pinned
-   12px from the window edge and these surfaces are at most `100vw - 24px` wide,
+   12px (6px at the <=364px stage) from the window edge and these surfaces are
+   at most `100vw - 24px` wide,
    so a right-aligned one cannot reach either edge, while a left- or
    centre-anchored one opened from a trigger near the panel's right edge can.
    Specificity, not order, is what carries this over the media queries. */

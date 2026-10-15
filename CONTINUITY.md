@@ -7,20 +7,23 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: RoleFit 0.13.0 preview (`rolefit-preview-v0.13.0-beta.1` on `51d20c4`),
-extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
-(below). Release history: `docs/continuity/2026-10.md` and D-entries in
-`docs/decisions.md`.
+Current: RoleFit 0.14.0 preview (`rolefit-preview-v0.14.0-beta.1` on `3fb6405`),
+extension 1.4.0, desktop bridge API 13. Release history:
+`docs/continuity/2026-10.md` and D-entries in `docs/decisions.md`.
 
 ## Next actions
 
-- Release 0.14.0 and record its receipt here (tag workflow per
-  `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
 ## Deferred backlog
 
+- 2026-10-14 [TOOL] Below a 390px viewport RoleFit's formatting row still
+  overflows: at 375 the toolbar container is 323px and More ends 2px past the
+  column (17px at 360). No width under 390 is a documented target; fitting one
+  needs another ladder stage (for example zoom into More). The first control's (Undo)
+  tooltip is centered and already clipped by the cover column's left edge;
+  Stage 5's 6px inset clips it ~6px more (More's bubble is right-anchored).
 - 2026-10-14 [TOOL] Original-family ligature-boundary edge differences remain
   outside the font expansion: 46 added probes also failed against the prior
   implementation (for example Carlito `Vff` and Latin Modern italic `fll`).
@@ -102,14 +105,6 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
   visible; obsolete completions cannot replace newer state. Reopening clears
   prior transient typing format, and menu focus restoration explicitly refreshes
   the caret even when the browser emits no selection-change event.
-- [TOOL] Node 24.18.0: full `npm run check` and Chromium core/extended pass.
-  Checks cover 30 families × 6 roles, 6,565,710 shaping comparisons, 3,414 PDF
-  width/text runs, file round trips/rejection, both app builds and reproducible
-  assets. All 30 screen/print/dedicated-PDF samples were rendered and compared.
-  Synthetic browser QA covers menus, compact layouts, native typing/history,
-  held/rejected font loads, stale completions and accurate next-typing carets.
-- [TOOL] Two fresh independent reviews passed; all observed asset, loading,
-  selection and caret findings were resolved and retested. No outstanding finding.
 - [USER+CODE] Follow-up review fix: the DOM painter withholds pages only for a
   family its loader has not confirmed, so adding/removing an already-loaded
   inline family (toolbar, undo/redo) no longer remounts pages behind the loading
@@ -126,7 +121,9 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
     182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
     `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
     macOS x64 packaging run only in the release workflow.
-  - Release receipt: PENDING.
+  - [TOOL] 2026-10-15 release receipt: run 38665284283 succeeded; prerelease
+    `rolefit-preview-v0.14.0-beta.1` published 01:37Z with macOS arm64/x64
+    dmg+zip, Windows x64 exe, and SHA256SUMS.
 
 ## 2026-10-15
 

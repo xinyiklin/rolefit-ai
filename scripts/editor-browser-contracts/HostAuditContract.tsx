@@ -132,7 +132,11 @@ export function HostAuditContract({ kind }: { kind: 'resume' | 'cover' }) {
     void import('../../apps/role-fit-ai/src/styles/index.css').then(() => setReady(true));
   }, []);
   if (!ready) return <p>Loading host styles</p>;
-  return <DialogProvider><main className="studio-body" data-tab={kind} style={{ height: '100vh', minWidth: 0 }}>
-    {kind === 'resume' ? <ResumeHost /> : <CoverHost />}
+  // RoleFit's real studio grid, so the rail narrows the editor column exactly as in the app (52px at <=1080px).
+  return <DialogProvider><main className="studio-pane" style={{ height: '100vh' }}>
+    <nav className="studio-sidebar" aria-label="Synthetic studio rail" />
+    <section className="studio-main"><div className="studio-body" data-tab={kind}>
+      {kind === 'resume' ? <ResumeHost /> : <CoverHost />}
+    </div></section>
   </main></DialogProvider>;
 }

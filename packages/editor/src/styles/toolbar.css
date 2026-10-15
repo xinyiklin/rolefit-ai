@@ -890,13 +890,13 @@
    Formatting-row disclosure ladder.
 
    The row never scrolls, and it must never be allowed to overflow either: a
-   RoleFit ancestor sets `overflow-x: hidden`, so an overflowing formatting row
+   RoleFit ancestor clips horizontally, so an overflowing formatting row
    loses its trailing control silently rather than becoming reachable. Each
    stage below therefore has to leave a residual set that fits its own band.
 
    The thresholds are measured, not guessed. Each one is the intrinsic width of
-   the set that is still inline above it, plus the row's 24px padding and a few
-   pixels of margin, rounded to a round number. Re-measure and retune the whole
+   the set that is still inline above it, plus the row's inline padding and a
+   few pixels of margin. Re-measure and retune the whole
    ladder after adding a control or widening an existing one; the widest stage
    is the one that breaks first.
 
@@ -906,6 +906,10 @@
    Stage 3 (<=  520px)  paragraph alignment moves in.
    Stage 4 (<=  460px)  clear formatting and spell check move in, leaving
                         history, zoom, and the four emphasis commands.
+   Stage 5 (<=  364px)  nothing moves in; the row's inline padding and its
+                        gaps halve, so that set fits down to a ~330px
+                        container (RoleFit's cover column at a 390px
+                        viewport is 338px).
    --------------------------------------------------------------------------- */
 
 @container typeset-toolbar (max-width: 920px) {
@@ -1003,7 +1007,7 @@
     display: block;
   }
 
-  /* The last band also spends the group spacing: this is what takes the row's
+  /* This band also spends the group spacing: this is what takes the row's
      own fit down to roughly a 355px container. */
   .top-toolbar__main-tools {
     gap: 4px;
@@ -1011,6 +1015,22 @@
 
   .top-toolbar__main-tools .top-toolbar__divider {
     margin: 0;
+  }
+}
+
+@container typeset-toolbar (max-width: 364px) {
+  .top-toolbar__secondary-row--formatting {
+    padding-inline: 6px;
+  }
+
+  .top-toolbar__main-tools {
+    gap: 2px;
+  }
+
+  /* The anchored tray follows the row onto the narrower inset. */
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools {
+    right: 6px;
+    max-width: calc(100cqi - 12px);
   }
 }
 
