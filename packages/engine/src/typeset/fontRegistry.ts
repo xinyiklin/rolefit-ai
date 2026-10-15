@@ -1,8 +1,5 @@
-import {
-  FONT_METRICS,
-  type FaceMetrics,
-  type FaceName
-} from "./metrics.gen.ts";
+import type { FaceName } from "./metrics.gen.ts";
+import { faceMetrics, type FaceMetrics } from "./metrics.ts";
 import { FONT_FAMILIES, coerceFontFamily, DEFAULT_FONT_FAMILY, type FontFamily } from "../lib/fontFamilies.ts";
 
 // The engine-facing name for the one document font-family union owned by
@@ -74,7 +71,9 @@ function familyDefinition(
       weight: asset.weight,
       italic: asset.italic === true,
       italicAngleDeg: asset.italic === true ? asset.italicAngleDeg : 0,
-      metrics: FONT_METRICS[id][face]
+      get metrics() {
+        return faceMetrics(id, face);
+      }
     };
   }
   return { id, label, cssFamily, sfntExtension, faces };

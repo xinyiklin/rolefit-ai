@@ -13,6 +13,11 @@ contract. Follow the repository root guide first.
   plus the engine-facing `DocumentFontFamily` name (an alias of the persisted
   `FontFamily` union in `lib/documentStyle.ts`) and its defensive coercion.
 - `metrics.gen.ts` is generated committed measurement data; never hand-edit it.
+  It is packed (one `JSON.parse` string, alias faces by name, class-matrix pair
+  kerning) because an object literal of every family's tables cost the type
+  checker over 1 GB and shipped about 9 MB eagerly. Keep the payload a string.
+- `metrics.ts` owns unpacking a face into `FaceMetrics` lookup records on first
+  use; the registry's `metrics` getter is the only caller.
 - `measure.ts` owns face selection, glyph measurement, modeled ligatures, inline
   mark segmentation, paragraph items, and underline geometry.
 - `linebreak.ts` owns deterministic paragraph breaking.
