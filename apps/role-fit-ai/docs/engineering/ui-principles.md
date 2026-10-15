@@ -571,10 +571,12 @@ Never show:
   its text label because it is a document action, not a formatting menu.
 - The formatting row's disclosure is a measured ladder: style menus move into the
   anchored More overlay first, then selected-text typography, then alignment,
-  then clear-formatting and spell check; a last stage only tightens the row's
-  spacing, for the 338px Cover letter column at 390px. Each threshold is the
-  intrinsic width of the set still inline above it, so the row is never cropped
-  and never scrolls.
+  then clear-formatting and spell check; two last stages only tighten the row
+  (its spacing for the 338px Cover letter column at 390px, then its dividers and
+  padding for the 323px column at 375px). Each threshold is the intrinsic width
+  of the set still inline above it, so the row is never cropped and never
+  scrolls. History tooltips start at their own button and More's ends at its
+  button, so neither bubble overhangs the column.
   Re-measure the ladder in a browser when a control is added to that row. The
   overlay never consumes editor space; do not shrink type, add a horizontally
   cropped toolbar, or make an overflowing toolbar scroll.

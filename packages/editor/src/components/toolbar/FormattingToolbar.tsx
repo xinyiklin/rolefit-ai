@@ -8,10 +8,10 @@
 // Responsive disclosure is staged, widest band first: the document-style menus
 // move into the anchored More overlay, then selection typography, then
 // alignment, then the two secondary emphasis commands (clear formatting and
-// spell check). Every stage moves a control into the overlay or hides a control
-// that has a duplicate mounted there — the row never scrolls and is never
-// clipped, so each stage's residual set must still fit its band. See the
-// disclosure ladder in toolbar.css, which carries the measured thresholds.
+// spell check); the last two stages only tighten spacing and hide dividers.
+// The row never scrolls and is never clipped, so each stage's residual set must
+// still fit its band. See the disclosure ladder in toolbar.css, which carries
+// the measured thresholds.
 import {
   Bold,
   EllipsisVertical,
