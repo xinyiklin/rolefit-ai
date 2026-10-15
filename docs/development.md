@@ -206,7 +206,9 @@ opts into exhaustive successful-case screen/print/PDF captures.
 Deploy workflows retain checks for their artifacts instead of repeating full
 app suites. Pages runs the landing build/boundary check and desktop release
 contracts. Typeset's container builds the app and probes its HTTP runtime; its
-existing `verify` check forwards that result without another install/build.
+existing `verify` check forwards that result without another install/build. On
+`main`, that same linux/amd64 image is the deploy artifact: the EC2 host only
+loads and runs it and never builds (D075).
 Small intentional overlap remains: landing builds retain their release-catalog
 probe, native compiler jobs check different installations, and artifact builds
 compile their inputs. Signed/preview release workflows retain their own gates.
@@ -319,7 +321,7 @@ npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=arm64 -
 npm run make:rolefit:desktop -- --arch=x64 --platform=win32
 npm run test:rolefit:desktop:packaged -- --arch=x64 --platform=win32
 npm run collect:desktop:artifacts --workspace apps/role-fit-ai -- --arch=x64 --platform=win32 --checksums=false
-npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.13.0-windows-x64.exe
+npm run test:desktop:windows-installer --workspace apps/role-fit-ai -- --installer=.forge/release/RoleFit-AI-0.14.0-windows-x64.exe
 ```
 
 Local package/make output is not publicly trusted (macOS is ad-hoc signed only)

@@ -13,7 +13,7 @@ application-data service.
 
 [Product site and companion downloads](https://rolefit.xinyiklin.com/)
 
-Current desktop source version: **0.13.0** (preview).
+Current desktop source version: **0.14.0** (preview).
 
 [Content and evidence checks](PRODUCT.md#content-and-evidence-warning-policy)
 keep otherwise usable output available with warnings before use. Accept, edit,
@@ -79,7 +79,8 @@ editable documents.
 
 Long names, contacts, section titles and entry headings wrap within the document
 margins. Header baselines remain stable while typing different letter shapes;
-font, size and wrapping changes still reflow the page normally.
+font, size and wrapping changes still reflow the page normally. The font menu
+offers 30 bundled families; each loads only when a document uses it.
 
 ## Highlights
 

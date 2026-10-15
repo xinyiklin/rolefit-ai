@@ -394,13 +394,18 @@ and lives in the app ledger.
 
 ### Desktop companion, distribution, and release/deploy state
 
-- 2026-10-01 [TOOL] D058 ACTIVE: 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
+- 2026-10-01 [TOOL] D058 AMENDED by D075: 0.8.0: `rolefit-preview-v0.8.0-beta.1` on `d7f12a0`
   (#161), run 36862392970, five installers plus `SHA256SUMS.txt`; extension
   1.2.1. `docs/releases/0.8.0-beta.1.md` discloses that `.resume` files without
   `bulletIndentPt` are rejected (add `"bulletIndentPt": 14.73` to `style`).
-  [USER+CODE] The Typeset remote deploy runs `docker builder prune -af
-  --keep-storage 1gb` before building (the user's "your call"); run 36865789743
-  reclaimed 4.42 GB and typeset.xinyiklin.com answered 200.
+  Its Typeset build-cache sentence moved verbatim to `docs/continuity/2026-10.md`.
+- 2026-10-15 [USER+CODE+TOOL] D075 ACTIVE: **The Typeset EC2 host never builds.**
+  It is a t3.micro (1 GiB, x86_64, no swap). After #219, `tsc` and `vite build`
+  peaked near 1.3 GB, and the on-host build hung the instance. The deploy now
+  ships the image the `container` job built (`--platform linux/amd64`) and
+  HTTP-probed. The host only checks it is x86_64, then runs `docker load`, retags
+  and swaps the container. A host with a different architecture or type must
+  update the platform and the guard together.
 - 2026-08-10 [USER+CODE+TOOL] D059 ACTIVE: **1.0 is deliberately not claimed**; its criteria
   are a genuinely signed release and a compatibility policy promising migrations
   for `.resume`, `.cover`, and `.rolefit-backup`; 0.x minors carry behavioral

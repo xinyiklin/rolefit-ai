@@ -7,14 +7,17 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: RoleFit 0.12.0 preview (`rolefit-preview-v0.12.0-beta.1` on `9ee863c`),
-extension 1.4.0, desktop bridge API 13. 0.13.0 is prepared, not yet released
+Current: RoleFit 0.13.0 preview (`rolefit-preview-v0.13.0-beta.1` on `51d20c4`),
+extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
 (below). Release history: `docs/continuity/2026-10.md` and D-entries in
 `docs/decisions.md`.
 
 ## Next actions
 
-- Release 0.13.0 and record its receipt here (tag workflow per
+- typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
+  user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
+  `main` and must serve the 30-family build.
+- Release 0.14.0 and record its receipt here (tag workflow per
   `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
@@ -78,7 +81,9 @@ extension 1.4.0, desktop bridge API 13. 0.13.0 is prepared, not yet released
     run, and `make:rolefit:desktop` plus `test:rolefit:desktop:packaged`
     (darwin-arm64, unpacked) passed. Windows and macOS x64 packaging run only in
     the release workflow.
-  - Release receipt: PENDING.
+  - [TOOL] Release receipt: run 38157704047 succeeded on `51d20c4`; the
+    pre-release published 2026-10-11T17:07Z with five artifacts plus
+    `SHA256SUMS.txt`.
 - [USER+TOOL] Guidance audit applied: root `CLAUDE.md` reduced to Claude-only
   mechanics; root `AGENTS.md` adopts the product-delivery hook (named-work
   activation) and one independent review for every change except typo/link/format/comment-only; the
@@ -93,7 +98,8 @@ extension 1.4.0, desktop bridge API 13. 0.13.0 is prepared, not yet released
 - [USER+CODE] Shared font catalog expanded by 24 families to 30; locally
   bundled browser/PDF assets, pinned sources/licenses and generation details
   are documented in `packages/engine/fonts/README.md`. Original six/defaults
-  and portable schema versions remain; older builds reject unfamiliar font ids.
+  and portable schema versions remain; older builds reject an unfamiliar
+  document font id and show an unfamiliar inline font mark as literal text.
 - [USER+CODE] Approved on-demand loading covers document/inline families and
   next-typing caret choices. Menus are bounded and scrollable. Failed loads are
   visible; obsolete completions cannot replace newer state. Reopening clears
@@ -111,3 +117,34 @@ extension 1.4.0, desktop bridge API 13. 0.13.0 is prepared, not yet released
   family its loader has not confirmed, so adding/removing an already-loaded
   inline family (toolbar, undo/redo) no longer remounts pages behind the loading
   state. Chromium phase `loaded inline fonts` was red on the prior gate.
+- [USER+CODE] **0.14.0 prepared** (minor: #219's 30-family font catalog; the
+  user approved the release). Notes `apps/role-fit-ai/docs/releases/0.14.0-beta.1.md`;
+  extension 1.4.0 and desktop bridge API 13 unchanged. The notes' rollback
+  section covers 0.13.0 rejecting an added document font (resume history and
+  application copies block every backup) and showing added inline fonts as tags. Resume PDF
+  import still maps only the original six families (Known issues).
+  - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `test:desktop:release`
+    14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
+    182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
+    `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
+    macOS x64 packaging run only in the release workflow.
+  - Release receipt: PENDING.
+
+## 2026-10-15
+
+- [TOOL] **Typeset outage.** The deploy for #219 (run 38656943748) built on the
+  EC2 host. `tsc && vite build` gave no output for 4.5 minutes, then SSH broke
+  ("Broken pipe"). The next deploy (run 38665258020) failed at `ssh-keyscan`,
+  and the site timed out.
+  - Cause, measured locally: #219 grew `metrics.gen.ts` from 1.17 MB to
+    10.17 MB. `tsc` peak RSS rose from 365 MB to 1.30 GB, and `vite build` from
+    541 MB to 1.29 GB.
+  - The host is a t3.micro (1 GiB, x86_64). The host's own OOM log is
+    UNCONFIRMED.
+- [USER+CODE+TOOL] Fix (D075, user-approved): the deploy ships the CI-built and HTTP-probed
+  linux/amd64 image, and the host only loads it. A local rehearsal of
+  build/save/load/tag/run served Typeset with all 337 synced font files
+  (30 families) from a 62 MB archive.
+- [TOOL] Follow-up: the client JS grew from 1.49 MB to 9.50 MB (3.51 MB gzip).
+  A lossless packed metrics format was prototyped in a side session (3.57 MB,
+  728 kB gzip; `tsc` 262 MB; bit-identical layout). It is not implemented.
