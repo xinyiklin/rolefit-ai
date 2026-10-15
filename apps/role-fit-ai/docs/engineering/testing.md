@@ -376,14 +376,15 @@ and rebound.
 All fixtures are synthetic and generated in memory; never commit a PDF.
 
 - `src/resume/pdfImport/__evals__/pdf-import-corpus.mjs` is the gate and the
-  benchmark. Engine-rendered resumes in every bundled family and pdf-lib
+  benchmark. Engine-rendered resumes in the original six families and pdf-lib
   "foreign" layouts (Word-style runs, spaced dates, symbol-font bullets, a
   two-column sidebar, unusual headings, grouped roles, running headers, page
   numbers, line-end hyphens, markerless bullets, tag-like text) must import
   with zero characters lost or added, round-trip through the strict `.resume`
   codec, export as PDF, import deterministically, and refuse non-PDF, oversized,
   malformed, image-only, over-long, encrypted, and unreadable input with the
-  right kind. Field precision and recall must reach 0.98 on single-column
+  right kind. A minimal RoleFit export in every other bundled family must
+  import as that exact family with no font note. Field precision and recall must reach 0.98 on single-column
   fixtures and 0.90 on the hard group (two-column, unusual headings, grouped
   roles), and mean reading order (LCS) 0.98. `PDF_IMPORT_VERBOSE=1` prints every
   miss and finding. Shared fixtures and scoring live in
@@ -391,7 +392,8 @@ All fixtures are synthetic and generated in memory; never commit a PDF.
 - `pdf-import-units.mjs` covers the audit's mutation-style rejections (invented,
   duplicated, dropped, or smuggled-as-structure text), field rendering, separator
   splitting, dates (alone or beside a place or duration), the font-family
-  table, columns, and bullet markers.
+  table (upstream names, lookalike designs that fall back, and RoleFit's
+  internal export names), columns, and bullet markers.
 - `pdf-import-edge-cases.mjs` holds layouts found in review: Symbol-font
   content glyphs; filled, empty, and appearance-only form fields, viewer-added
   text boxes, stamps painting text (Tj, TJ, `'`, or after a dingbat font
