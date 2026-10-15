@@ -7,18 +7,15 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: RoleFit 0.13.0 preview (`rolefit-preview-v0.13.0-beta.1` on `51d20c4`),
-extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
-(below). Release history: `docs/continuity/2026-10.md` and D-entries in
-`docs/decisions.md`.
+Current: RoleFit 0.14.0 preview (`rolefit-preview-v0.14.0-beta.1` on `3fb6405`),
+extension 1.4.0, desktop bridge API 13. Release history:
+`docs/continuity/2026-10.md` and D-entries in `docs/decisions.md`.
 
 ## Next actions
 
 - typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
   user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
   `main` and must serve the 30-family build.
-- Release 0.14.0 and record its receipt here (tag workflow per
-  `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
@@ -123,6 +120,9 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
   family its loader has not confirmed, so adding/removing an already-loaded
   inline family (toolbar, undo/redo) no longer remounts pages behind the loading
   state. Chromium phase `loaded inline fonts` was red on the prior gate.
+- [TOOL] 2026-10-15 **0.14.0 released**: run 38665284283 succeeded; prerelease
+  `rolefit-preview-v0.14.0-beta.1` published 01:37Z with macOS arm64/x64
+  dmg+zip, Windows x64 exe, and SHA256SUMS.
 - [USER+CODE] **0.14.0 prepared** (minor: #219's 30-family font catalog; the
   user approved the release). Notes `apps/role-fit-ai/docs/releases/0.14.0-beta.1.md`;
   extension 1.4.0 and desktop bridge API 13 unchanged. The notes' rollback
