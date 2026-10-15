@@ -39,7 +39,7 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
     await waitFor(page, `document.querySelector('[contenteditable=true] [data-tsdf="name"]')?.textContent.includes('Synthetic')`, `${host} real host long header`);
     await page.evaluate('document.fonts.ready');
     await settle();
-    const widths = host === 'typeset' ? [1440, 1024, 720, 390] : host === 'resume' ? [1440, 720, 390] : [1440, 390];
+    const widths = host === 'typeset' ? [1440, 1024, 720, 390, 360, 320] : host === 'resume' ? [1440, 720, 390] : [1440, 390, 375];
     for (const width of widths) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
       await settle();
@@ -71,7 +71,7 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
         receipt.push({ host, preference, ...result });
         if (evidence) await writeFile(join(evidence, 'host-audit.json'), JSON.stringify(receipt, null, 2));
       }
-      // The formatting row must fit its toolbar: RoleFit's cover column is the ladder's narrowest real container (338px at 390).
+      // The formatting row must fit its toolbar. RoleFit's rail narrows the cover column to 338px at 390 and 323px at 375.
       const fit = await evaluate(() => {
         const trigger = [...document.querySelectorAll('button[aria-label="More formatting"]')].find(el => el.getClientRects().length > 0);
         const toolbar = trigger?.closest('.top-toolbar'), row = trigger?.closest('.top-toolbar__secondary-row--formatting');
@@ -79,7 +79,17 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
         const t = trigger.getBoundingClientRect(), r = row.getBoundingClientRect(), style = getComputedStyle(row);
         return { container: toolbar.getBoundingClientRect().width, trigger: [t.left, t.right], row: [r.left + parseFloat(style.paddingLeft), r.right - parseFloat(style.paddingRight)] };
       });
-      if (host === 'cover' && width === 390) assert.equal(fit?.container, 338, `cover/390 toolbar container matches RoleFit's rail-narrowed column: ${JSON.stringify(fit)}`);
+      // Hidden tooltip bubbles keep their layout box, which is where they would paint.
+      const history = await evaluate(() => {
+        const undo = document.querySelector('.top-toolbar__secondary-row--formatting button[aria-label="Undo"]');
+        const toolbar = undo?.closest('.top-toolbar');
+        if (!toolbar) return null;
+        const c = toolbar.getBoundingClientRect();
+        const bubbles = ['Undo', 'Redo'].map(label => toolbar.querySelector(`button[aria-label="${label}"]`)?.parentElement.querySelector('.toolbar-tooltip__bubble')?.getBoundingClientRect());
+        return { column: [c.left, c.right], bubbles: bubbles.map(b => b && [b.left, b.right]) };
+      });
+      if (host !== 'resume' || width > 720) assert(history?.bubbles.every(b => b && b[1] > b[0] && b[0] >= history.column[0] && b[1] <= history.column[1]), `${host}/${width} Undo and Redo tooltips stay inside the toolbar's column: ${JSON.stringify(history)}`);
+      if (host === 'cover' && (width === 390 || width === 375)) assert.equal(fit?.container, width - 52, `cover/${width} toolbar container matches RoleFit's rail-narrowed column: ${JSON.stringify(fit)}`);
       if (fit) assert(fit.trigger[0] >= fit.row[0] && fit.trigger[1] <= fit.row[1], `${host}/${width} More formatting stays inside its row's content box: ${JSON.stringify(fit)}`);
       // Revealing the trigger centers it, as automation and assistive tools do; no host ancestor may scroll sideways.
       for (const label of ['More formatting', 'Hide more formatting']) {

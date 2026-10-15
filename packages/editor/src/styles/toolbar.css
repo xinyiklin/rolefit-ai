@@ -243,6 +243,13 @@
   translate: 0 -2px;
 }
 
+/* History opens the row, so its bubbles start at their button instead of
+   centering past the row's left edge (the mirror of More's right anchor). */
+.top-toolbar__main-tools > .top-toolbar__group:first-child .toolbar-tooltip__bubble {
+  left: 0;
+  translate: 0 -2px;
+}
+
 .top-toolbar__font-control {
   display: inline-flex;
   align-items: center;
@@ -787,7 +794,9 @@
   }
 
   .top-toolbar__more-trigger .toolbar-tooltip:hover > .toolbar-tooltip__bubble,
-  .top-toolbar__more-trigger .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble {
+  .top-toolbar__more-trigger .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble,
+  .top-toolbar__main-tools > .top-toolbar__group:first-child .toolbar-tooltip:hover > .toolbar-tooltip__bubble,
+  .top-toolbar__main-tools > .top-toolbar__group:first-child .toolbar-tooltip:has(:focus-visible) > .toolbar-tooltip__bubble {
     translate: 0 0;
   }
 
@@ -910,6 +919,10 @@
                         gaps halve, so that set fits down to a ~330px
                         container (RoleFit's cover column at a 390px
                         viewport is 338px).
+   Stage 6 (<=  336px)  the row's dividers hide and its inline padding drops
+                        to 4px, so that set fits down to a ~318px container
+                        (RoleFit's cover column at a 375px viewport is 323px).
+                        A 360px viewport's 308px column still overflows.
    --------------------------------------------------------------------------- */
 
 @container typeset-toolbar (max-width: 920px) {
@@ -1031,6 +1044,21 @@
   .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools {
     right: 6px;
     max-width: calc(100cqi - 12px);
+  }
+}
+
+@container typeset-toolbar (max-width: 336px) {
+  .top-toolbar__secondary-row--formatting {
+    padding-inline: 4px;
+  }
+
+  .top-toolbar__main-tools > .top-toolbar__divider {
+    display: none;
+  }
+
+  .top-toolbar__secondary-row--formatting.is-more-open .top-toolbar__overflow-tools {
+    right: 4px;
+    max-width: calc(100cqi - 8px);
   }
 }
 
