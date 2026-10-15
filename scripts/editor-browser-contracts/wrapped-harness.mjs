@@ -10,6 +10,9 @@ export async function wrappedHarness(page, waitFor, api = "__rowContract") {
   const reset = async (data = original) => {
     await evaluate((data, api) => window[api].reset(data), data, api);
     await settle(); await settle();
+    // An unloaded font family replaces the editable pages with a loading state until its faces load.
+    await waitFor(page, `document.querySelector('[contenteditable=true] .tsd-page') && !document.querySelector('.preview-overlay__loading')`, 'editable pages after font load', 30_000);
+    await settle();
   };
   const select = async (field, start, end = start, endField = field) => {
     await evaluate((key, start, endKey, end) => window.__rowContract.select(key, start, endKey, end), rowKey(field), start, rowKey(endField), end);
