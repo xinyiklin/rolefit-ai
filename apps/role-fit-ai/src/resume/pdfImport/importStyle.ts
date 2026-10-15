@@ -19,10 +19,11 @@ import type { ImportDraft } from "./resumeFromLayout.ts";
 export type StyleNote = { reason: string; source: string };
 
 // Added families match their upstream name only when nothing but an optical
-// size or style words follows, so another design sharing the prefix (Roboto Slab, Interstate)
-// still falls back. RoleFit's exports embed them as "Typeset Document <hash>",
-// the first 12 hex of sha256(id) (packages/engine/scripts/generate_font_assets.py).
-const STYLE_TAIL = "(?:\\d+pt)?(?:regular|roman|book|text|italic|oblique|thin|hairline|light|medium|semi|demi|extra|ultra|bold|black|heavy|caps)*$";
+// size, a variable-font marker, or style words follows, so another design
+// sharing the prefix (Roboto Slab, Interstate) still falls back. RoleFit's
+// exports embed them as "Typeset Document <hash>", the first 12 hex of
+// sha256(id) (packages/engine/scripts/generate_font_assets.py).
+const STYLE_TAIL = "(?:\\d+pt)?(?:variable|var)?(?:regular|roman|book|text|italic|oblique|thin|hairline|hair|light|medium|semi|demi|extra|ultra|bold|black|heavy|caps)*$";
 const added = (name: string, hash: string, family: FontFamily): [RegExp, FontFamily] => [
   new RegExp(`^(?:typesetdocument${hash}|${name}${STYLE_TAIL})`, "i"),
   family
@@ -41,7 +42,7 @@ const FAMILY_PATTERNS: readonly [RegExp, FontFamily][] = [
   added("ibmplexsans", "43071f94c33c", "ibm-plex-sans"),
   added("ibmplexserif", "e2262bc03e44", "ibm-plex-serif"),
   added("inter", "c84c80163560", "inter"),
-  added("lato", "4acb5d021cd5", "lato"),
+  added("lato(?:latin)?", "4acb5d021cd5", "lato"),
   added("librebaskerville", "21dfd06eac29", "libre-baskerville"),
   added("librefranklin", "5aa9eb1ad016", "libre-franklin"),
   added("lora", "d339f720de1f", "lora"),
