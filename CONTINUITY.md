@@ -13,9 +13,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## Next actions
 
-- typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
-  user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
-  `main` and must serve the 30-family build.
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
@@ -152,6 +149,14 @@ extension 1.4.0, desktop bridge API 13. Release history:
   linux/amd64 image, and the host only loads it. A local rehearsal of
   build/save/load/tag/run served Typeset with all 337 synced font files
   (30 families) from a 62 MB archive.
-- [TOOL] Follow-up: the client JS grew from 1.49 MB to 9.50 MB (3.51 MB gzip).
-  A lossless packed metrics format was prototyped in a side session (3.57 MB,
-  728 kB gzip; `tsc` 262 MB; bit-identical layout). It is not implemented.
+- [TOOL] Typeset restored 2026-10-15 by deploy run 38673945200 (#222,
+  5e1c9778) after the user rebooted the instance; all 30 families served.
+- [USER+CODE] Follow-up implemented (PR #223): the generator emits
+  `metrics.gen.ts` as one `JSON.parse` string with alias faces by name and
+  class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on first use.
+  Lossless, consumers unchanged. 10.17 MB → 3.30 MB; Typeset tsc 1.31 GB →
+  263 MB; Typeset index JS 9.50 MB (3.51 MB gz) → 3.58 MB (729 kB gz); RoleFit
+  tsc 1.41 GB → 363 MB. Per-family lazy loading (the painter finds families
+  from the layout, so it needs a schema-level scanner) is not done.
+  - [TOOL] Decoded tables deep-equal for 180 faces; 60-layout + 5.45M-measure
+    fingerprint and 60-PDF byte hash unchanged; `fonts:check` reproduces.
