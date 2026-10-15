@@ -14,6 +14,9 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
 
 ## Next actions
 
+- typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
+  user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
+  `main` and must serve the 30-family build.
 - Release 0.14.0 and record its receipt here (tag workflow per
   `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
@@ -126,12 +129,28 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
     `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
     macOS x64 packaging run only in the release workflow.
   - Release receipt: PENDING.
-- [USER+CODE] Engine metrics packed (found diagnosing the #219 deploy): the
-  generator emits `metrics.gen.ts` as one `JSON.parse` string with alias faces
-  by name and class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on
-  first use. Lossless, consumers unchanged. 10.17 MB → 3.30 MB; Typeset tsc
-  1.31 GB → 263 MB; Typeset index JS 9.50 MB (3.51 MB gz) → 3.58 MB (729 kB gz);
-  RoleFit tsc 1.41 GB → 363 MB. Per-family lazy loading (the painter finds
-  families from the layout, so it needs a schema-level scanner) is not done.
+
+## 2026-10-15
+
+- [TOOL] **Typeset outage.** The deploy for #219 (run 38656943748) built on the
+  EC2 host. `tsc && vite build` gave no output for 4.5 minutes, then SSH broke
+  ("Broken pipe"). The next deploy (run 38665258020) failed at `ssh-keyscan`,
+  and the site timed out.
+  - Cause, measured locally: #219 grew `metrics.gen.ts` from 1.17 MB to
+    10.17 MB. `tsc` peak RSS rose from 365 MB to 1.30 GB, and `vite build` from
+    541 MB to 1.29 GB.
+  - The host is a t3.micro (1 GiB, x86_64). The host's own OOM log is
+    UNCONFIRMED.
+- [USER+CODE+TOOL] Fix (D075, user-approved): the deploy ships the CI-built and HTTP-probed
+  linux/amd64 image, and the host only loads it. A local rehearsal of
+  build/save/load/tag/run served Typeset with all 337 synced font files
+  (30 families) from a 62 MB archive.
+- [USER+CODE] Follow-up implemented (PR #223): the generator emits
+  `metrics.gen.ts` as one `JSON.parse` string with alias faces by name and
+  class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on first use.
+  Lossless, consumers unchanged. 10.17 MB → 3.30 MB; Typeset tsc 1.31 GB →
+  263 MB; Typeset index JS 9.50 MB (3.51 MB gz) → 3.58 MB (729 kB gz); RoleFit
+  tsc 1.41 GB → 363 MB. Per-family lazy loading (the painter finds families
+  from the layout, so it needs a schema-level scanner) is not done.
   - [TOOL] Decoded tables deep-equal for 180 faces; 60-layout + 5.45M-measure
     fingerprint and 60-PDF byte hash unchanged; `fonts:check` reproduces.

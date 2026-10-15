@@ -294,9 +294,10 @@ resume.example.com {
 Document workflow CI owns the engine, editor, and Typeset correctness checks.
 The Typeset deployment workflow builds and HTTP-probes the immutable container
 for matching pull requests; its existing `verify` check forwards that result.
-On configured pushes to `main`, successful container verification permits it to
-rebuild and restart the same static Nginx container on the EC2 host that
-serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com).
+On configured pushes to `main`, that verified linux/amd64 image is copied to the
+EC2 host that serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com),
+which loads it and swaps the container. The host never builds: its 1 GiB of
+memory cannot hold the TypeScript and Vite build.
 
 ## Viewport support
 
