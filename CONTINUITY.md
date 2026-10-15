@@ -105,21 +105,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
   visible; obsolete completions cannot replace newer state. Reopening clears
   prior transient typing format, and menu focus restoration explicitly refreshes
   the caret even when the browser emits no selection-change event.
-- [TOOL] Node 24.18.0: full `npm run check` and Chromium core/extended pass.
-  Checks cover 30 families × 6 roles, 6,565,710 shaping comparisons, 3,414 PDF
-  width/text runs, file round trips/rejection, both app builds and reproducible
-  assets. All 30 screen/print/dedicated-PDF samples were rendered and compared.
-  Synthetic browser QA covers menus, compact layouts, native typing/history,
-  held/rejected font loads, stale completions and accurate next-typing carets.
-- [TOOL] Two fresh independent reviews passed; all observed asset, loading,
-  selection and caret findings were resolved and retested. No outstanding finding.
 - [USER+CODE] Follow-up review fix: the DOM painter withholds pages only for a
   family its loader has not confirmed, so adding/removing an already-loaded
   inline family (toolbar, undo/redo) no longer remounts pages behind the loading
   state. Chromium phase `loaded inline fonts` was red on the prior gate.
-- [TOOL] 2026-10-15 **0.14.0 released**: run 38665284283 succeeded; prerelease
-  `rolefit-preview-v0.14.0-beta.1` published 01:37Z with macOS arm64/x64
-  dmg+zip, Windows x64 exe, and SHA256SUMS.
 - [USER+CODE] **0.14.0 prepared** (minor: #219's 30-family font catalog; the
   user approved the release). Notes `apps/role-fit-ai/docs/releases/0.14.0-beta.1.md`;
   extension 1.4.0 and desktop bridge API 13 unchanged. The notes' rollback
@@ -132,7 +121,9 @@ extension 1.4.0, desktop bridge API 13. Release history:
     182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
     `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
     macOS x64 packaging run only in the release workflow.
-  - Release receipt: PENDING.
+  - [TOOL] 2026-10-15 release receipt: run 38665284283 succeeded; prerelease
+    `rolefit-preview-v0.14.0-beta.1` published 01:37Z with macOS arm64/x64
+    dmg+zip, Windows x64 exe, and SHA256SUMS.
 
 ## 2026-10-15
 
