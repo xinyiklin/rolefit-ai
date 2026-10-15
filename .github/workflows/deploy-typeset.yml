@@ -63,8 +63,10 @@ jobs:
         with:
           persist-credentials: false
 
+      # The EC2 host (t3.micro, 1 GiB, x86_64) only loads this exact image; it
+      # cannot build it, since tsc and vite now need more memory than it has.
       - name: Build immutable Typeset image
-        run: docker build --pull -f apps/typeset/Dockerfile -t "typeset-ci:${GITHUB_SHA}" .
+        run: docker build --pull --platform linux/amd64 --provenance=false -f apps/typeset/Dockerfile -t "typeset-ci:${GITHUB_SHA}" .
 
       - name: Probe static HTTP runtime
         run: |
@@ -88,6 +90,22 @@ jobs:
           fi
           grep -Fq "<title>Typeset" <<<"$response"
 
+      - name: Export verified image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        run: |
+          set -euo pipefail
+          docker save "typeset-ci:${GITHUB_SHA}" | gzip > "typeset-image-${GITHUB_SHA}.tar.gz"
+
+      - name: Upload verified image
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: typeset-image
+          path: typeset-image-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 1
+
   deploy:
     needs: [verify, container]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
@@ -101,15 +119,16 @@ jobs:
       CONTAINER_NAME: typeset
       IMAGE_NAME: typeset
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          persist-credentials: false
-
       - name: Validate deployment secrets
         run: |
           test -n "$EC2_HOST"
           test -n "$EC2_USER"
           test -n "$EC2_SSH_KEY"
+
+      - name: Download verified image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: typeset-image
 
       - name: Prepare SSH
         run: |
@@ -118,32 +137,23 @@ jobs:
           chmod 600 ~/.ssh/typeset.pem
           ssh-keyscan -H "$EC2_HOST" >> ~/.ssh/known_hosts
 
-      - name: Package source
-        # Ship only what the Typeset image build needs. apps/role-fit-ai is a
-        # local-first personal tool and job-search-workspace holds private
-        # data — neither may ever reach the public web host.
-        run: |
-          tar \
-            --exclude='.git' \
-            --exclude='node_modules' \
-            --exclude='dist' \
-            --exclude='apps/role-fit-ai' \
-            --exclude='job-search-workspace' \
-            -czf "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
-            .
-
-      - name: Copy source to EC2
+      - name: Copy image to EC2
         run: |
           scp \
             -i ~/.ssh/typeset.pem \
-            "/tmp/typeset-${GITHUB_SHA}.tar.gz" \
-            "$EC2_USER@$EC2_HOST:/tmp/typeset-${GITHUB_SHA}.tar.gz"
+            "typeset-image-${GITHUB_SHA}.tar.gz" \
+            "$EC2_USER@$EC2_HOST:/tmp/typeset-image-${GITHUB_SHA}.tar.gz"
 
-      - name: Build and restart container
+      - name: Load image and restart container
         run: |
           ssh -i ~/.ssh/typeset.pem "$EC2_USER@$EC2_HOST" \
             "CONTAINER_NAME='$CONTAINER_NAME' IMAGE_NAME='$IMAGE_NAME' RELEASE_SHA='$GITHUB_SHA' bash -s" <<'REMOTE'
           set -euo pipefail
+
+          if [ "$(uname -m)" != x86_64 ]; then
+            echo "The image is built for linux/amd64, but this host is $(uname -m)." >&2
+            exit 1
+          fi
 
           if docker ps >/dev/null 2>&1; then
             docker_cmd=(docker)
@@ -154,18 +164,15 @@ jobs:
             exit 1
           fi
 
-          # Image prune never clears build cache; cap it (least recently used goes
-          # first) before unpacking and building, so recent layers still reuse.
-          "${docker_cmd[@]}" builder prune -af --keep-storage 1gb
+          # One-time migration cleanup: the host no longer builds, so drop the
+          # build cache that server-side builds left behind.
+          "${docker_cmd[@]}" builder prune -af >/dev/null
 
-          build_dir="$(mktemp -d)"
-          tar -xzf "/tmp/typeset-${RELEASE_SHA}.tar.gz" -C "$build_dir"
-          rm -f "/tmp/typeset-${RELEASE_SHA}.tar.gz"
-
-          cd "$build_dir"
-          "${docker_cmd[@]}" build -f apps/typeset/Dockerfile -t "$IMAGE_NAME:latest" .
-          cd /
-          rm -rf "$build_dir"
+          archive="/tmp/typeset-image-${RELEASE_SHA}.tar.gz"
+          trap 'rm -f "$archive"' EXIT
+          gunzip -c "$archive" | "${docker_cmd[@]}" load
+          "${docker_cmd[@]}" tag "typeset-ci:${RELEASE_SHA}" "$IMAGE_NAME:latest"
+          "${docker_cmd[@]}" image rm "typeset-ci:${RELEASE_SHA}" >/dev/null
 
           "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
           # One-time migration cleanup: pre-rename services used these names.

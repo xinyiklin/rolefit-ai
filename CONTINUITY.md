@@ -14,6 +14,9 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
 
 ## Next actions
 
+- typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
+  user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
+  `main` and must serve the 30-family build.
 - Release 0.14.0 and record its receipt here (tag workflow per
   `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
@@ -126,3 +129,22 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
     `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
     macOS x64 packaging run only in the release workflow.
   - Release receipt: PENDING.
+
+## 2026-10-15
+
+- [TOOL] **Typeset outage.** The deploy for #219 (run 38656943748) built on the
+  EC2 host. `tsc && vite build` gave no output for 4.5 minutes, then SSH broke
+  ("Broken pipe"). The next deploy (run 38665258020) failed at `ssh-keyscan`,
+  and the site timed out.
+  - Cause, measured locally: #219 grew `metrics.gen.ts` from 1.17 MB to
+    10.17 MB. `tsc` peak RSS rose from 365 MB to 1.30 GB, and `vite build` from
+    541 MB to 1.29 GB.
+  - The host is a t3.micro (1 GiB, x86_64). The host's own OOM log is
+    UNCONFIRMED.
+- [USER+CODE+TOOL] Fix (D075, user-approved): the deploy ships the CI-built and HTTP-probed
+  linux/amd64 image, and the host only loads it. A local rehearsal of
+  build/save/load/tag/run served Typeset with all 337 synced font files
+  (30 families) from a 62 MB archive.
+- [TOOL] Follow-up: the client JS grew from 1.49 MB to 9.50 MB (3.51 MB gzip).
+  A lossless packed metrics format was prototyped in a side session (3.57 MB,
+  728 kB gzip; `tsc` 262 MB; bit-identical layout). It is not implemented.
