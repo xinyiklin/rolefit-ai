@@ -168,7 +168,7 @@ const ORIGINAL_FAMILIES = new Set(["tinos", "carlito", "arimo", "source-serif", 
 test("RoleFit's internal font names map to every added family", () => {
   for (const family of FONT_FAMILY_IDS.filter((id) => !ORIGINAL_FAMILIES.has(id))) {
     const internal = `TypesetDocument${createHash("sha256").update(family).digest("hex").slice(0, 12)}`;
-    for (const role of ["Regular", "BoldBold", "ItalicItalic", "Caps"]) {
+    for (const role of ["Regular", "BoldBold", "ItalicItalic", "BoldItalicBoldItalic", "Caps"]) {
       assert.deepEqual(familyForFont(internal + role), { family, exact: true }, `${family} ${role}`);
     }
   }
