@@ -71,6 +71,21 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
         receipt.push({ host, preference, ...result });
         if (evidence) await writeFile(join(evidence, 'host-audit.json'), JSON.stringify(receipt, null, 2));
       }
+      // Revealing the trigger centers it, as automation and assistive tools do; no host ancestor may scroll sideways.
+      for (const label of ['More formatting', 'Hide more formatting']) {
+        const shifted = await evaluate(async label => {
+          const trigger = [...document.querySelectorAll(`button[aria-label="${label}"]`)].find(el => el.getClientRects().length > 0);
+          if (!trigger) return null;
+          trigger.scrollIntoView({ block: 'nearest', inline: 'center' });
+          trigger.click();
+          await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+          const scrolled = [];
+          for (let el = trigger.parentElement; el; el = el.parentElement) if (el.scrollLeft !== 0) scrolled.push(`${el.className}: ${el.scrollLeft}`);
+          return scrolled;
+        }, label);
+        if (host !== 'resume' && width <= 720) assert(shifted, `${host}/${width} ${label} trigger is visible`);
+        if (shifted) assert.deepEqual(shifted, [], `${host}/${width} ${label} keeps the toolbar's ancestors unscrolled`);
+      }
       if (host !== 'resume') {
         await evaluate(() => document.querySelector('button[aria-label="Open"]').focus());
         await key('Enter', 13);
