@@ -14,9 +14,6 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
 
 ## Next actions
 
-- typeset.xinyiklin.com has been down since 2026-10-15 (2026-10-15 entry). The
-  user reboots the EC2 instance if SSH still fails, then the D075 deploy runs on
-  `main` and must serve the 30-family build.
 - Release 0.14.0 and record its receipt here (tag workflow per
   `docs/git-workflow.md`).
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
@@ -145,6 +142,8 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
   linux/amd64 image, and the host only loads it. A local rehearsal of
   build/save/load/tag/run served Typeset with all 337 synced font files
   (30 families) from a 62 MB archive.
+- [TOOL] Typeset restored 2026-10-15 by deploy run 38673945200 (#222,
+  5e1c9778) after the user rebooted the instance; all 30 families served.
 - [USER+CODE] Follow-up implemented (PR #223): the generator emits
   `metrics.gen.ts` as one `JSON.parse` string with alias faces by name and
   class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on first use.
