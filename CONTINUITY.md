@@ -126,3 +126,12 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
     `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed. Windows and
     macOS x64 packaging run only in the release workflow.
   - Release receipt: PENDING.
+- [USER+CODE] Engine metrics packed (found diagnosing the #219 deploy): the
+  generator emits `metrics.gen.ts` as one `JSON.parse` string with alias faces
+  by name and class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on
+  first use. Lossless, consumers unchanged. 10.17 MB → 3.30 MB; Typeset tsc
+  1.31 GB → 263 MB; Typeset index JS 9.50 MB (3.51 MB gz) → 3.58 MB (729 kB gz);
+  RoleFit tsc 1.41 GB → 363 MB. Per-family lazy loading (the painter finds
+  families from the layout, so it needs a schema-level scanner) is not done.
+  - [TOOL] Decoded tables deep-equal for 180 faces; 60-layout + 5.45M-measure
+    fingerprint and 60-PDF byte hash unchanged; `fonts:check` reproduces.

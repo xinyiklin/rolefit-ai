@@ -191,7 +191,7 @@ packages/engine/                   @typeset/engine — deterministic core, no ed
   src/lib/                         resume model, .resume codec, style contract,
                                      inline-mark grammar, links, typography
   src/typeset/                     schema adapter, measure/linebreak/blocks/layout,
-                                     fontRegistry, metrics.gen.ts, render/dom, pdf/emit
+                                     fontRegistry, metrics(.gen).ts, render/dom, pdf/emit
   src/sampleResume.ts              starter document
   fonts/                           bundled web (woff2) + PDF (otf/ttf) faces, licenses
   scripts/                         pinned font-asset + metrics generators
