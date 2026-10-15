@@ -18,13 +18,47 @@ import type { ImportDraft } from "./resumeFromLayout.ts";
 
 export type StyleNote = { reason: string; source: string };
 
+// Added families match their upstream name only when nothing but an optical
+// size or style words follows, so another design sharing the prefix (Roboto Slab, Interstate)
+// still falls back. RoleFit's exports embed them as "Typeset Document <hash>",
+// the first 12 hex of sha256(id) (packages/engine/scripts/generate_font_assets.py).
+const STYLE_TAIL = "(?:\\d+pt)?(?:regular|roman|book|text|italic|oblique|thin|hairline|light|medium|semi|demi|extra|ultra|bold|black|heavy|caps)*$";
+const added = (name: string, hash: string, family: FontFamily): [RegExp, FontFamily] => [
+  new RegExp(`^(?:typesetdocument${hash}|${name}${STYLE_TAIL})`, "i"),
+  family
+];
+
 const FAMILY_PATTERNS: readonly [RegExp, FontFamily][] = [
   [/^(?:typeset)?(?:tinos|times|liberationserif|nimbusrom|termes)/i, "tinos"],
   [/^(?:typeset)?(?:carlito|calibri)/i, "carlito"],
   [/^(?:typeset)?(?:arimo|arial|helvetica|liberationsans|nimbussans)/i, "arimo"],
   [/^(?:typeset)?(?:sourceserif|serif4)/i, "source-serif"],
   [/^(?:typeset)?(?:sourcesans|sans3)/i, "source-sans"],
-  [/^(?:lmroman|lmsans|latinmodern|cmr|cmbx|cmti|cmcsc|cmss|sfrm)/i, "latin-modern"]
+  [/^(?:lmroman|lmsans|latinmodern|cmr|cmbx|cmti|cmcsc|cmss|sfrm)/i, "latin-modern"],
+  added("crimsonpro", "8d9f5c64733d", "crimson-pro"),
+  added("dmsans", "9a232178fc32", "dm-sans"),
+  added("firasans", "b2d2fdcc8fa9", "fira-sans"),
+  added("ibmplexsans", "43071f94c33c", "ibm-plex-sans"),
+  added("ibmplexserif", "e2262bc03e44", "ibm-plex-serif"),
+  added("inter", "c84c80163560", "inter"),
+  added("lato", "4acb5d021cd5", "lato"),
+  added("librebaskerville", "21dfd06eac29", "libre-baskerville"),
+  added("librefranklin", "5aa9eb1ad016", "libre-franklin"),
+  added("lora", "d339f720de1f", "lora"),
+  added("merriweather", "e84622f018de", "merriweather"),
+  added("merriweathersans", "d4a47445e457", "merriweather-sans"),
+  added("montserrat", "3eeceb71042d", "montserrat"),
+  added("notosans", "fffe2a601bcc", "noto-sans"),
+  added("notoserif", "a96c3d229111", "noto-serif"),
+  added("nunito", "24b2322b419a", "nunito"),
+  added("nunitosans", "58a7dc0545a1", "nunito-sans"),
+  added("opensans", "5e4c8b4cd741", "open-sans"),
+  added("ptsans", "a4770ba31d29", "pt-sans"),
+  added("ptserif", "f7c7ef138168", "pt-serif"),
+  added("raleway", "b10c9f25282f", "raleway"),
+  added("roboto", "9b68aef6bbcc", "roboto"),
+  added("rubik", "85b935080587", "rubik"),
+  added("worksans", "57eac634745a", "work-sans")
 ];
 const SERIF_HINT_RE = /serif|roman|times|garamond|georgia|cambria|baskerville|palatino|minion|charter|caslon|bodoni|didot|book/i;
 

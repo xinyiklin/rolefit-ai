@@ -7,12 +7,15 @@
 //     over-long, encrypted, and unreadable input.
 // Hard gates: zero characters lost or added, no markup injection, strict
 // .resume round trip, PDF export of the import, determinism, and the refusal
-// kinds. Benchmark gates: field precision/recall and reading order.
+// kinds, and a RoleFit export in every bundled family importing as that exact
+// family. Benchmark gates: field precision/recall and reading order.
 //
 //   node apps/role-fit-ai/src/resume/pdfImport/__evals__/pdf-import-corpus.mjs
 //   PDF_IMPORT_VERBOSE=1 … prints every miss.
 import assert from "node:assert/strict";
 import { PDFDocument, StandardFonts } from "pdf-lib";
+import { FONT_FAMILY_IDS } from "@typeset/engine/lib/fontFamilies.ts";
+import { newSection, newSummaryEntry } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile, serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
@@ -131,6 +134,24 @@ for (const fixture of engineFixtures) {
       pageMarginRightPt: style.pageMarginRightPt
     }
   });
+}
+
+// The engine fixtures above cover the rich layouts; this covers the font name
+// each remaining bundled family embeds, on the smallest document that has body text.
+{
+  const data = {
+    header: { visible: true, name: "Avery Example", contact: ["avery@example.test"] },
+    sections: [{ ...newSection("summary", "Summary"), items: [newSummaryEntry("Backend engineer with six years building payment systems across three regions.")] }]
+  };
+  const covered = new Set(engineFixtures.map((fixture) => fixture.style.fontFamily));
+  const families = FONT_FAMILY_IDS.filter((family) => !covered.has(family));
+  for (const fontFamily of families) {
+    const { bytes } = await renderEngineFixture({ name: `engine/font-${fontFamily}`, data, style: { fontFamily } });
+    const { style, findings } = await importResumePdf(bytes, pdfjs);
+    const note = findings.find((finding) => finding.kind === "check" && finding.fieldKey === null && /font/.test(finding.reason));
+    if (style.fontFamily !== fontFamily || note) failures.push(`engine/font-${fontFamily}: imported as ${style.fontFamily}${note ? ` with "${note.reason}" (${note.source})` : ""}`);
+  }
+  console.log(`${"engine/font round trip".padEnd(42)} ${families.length} families`);
 }
 
 for (const fixture of foreignFixtures) {

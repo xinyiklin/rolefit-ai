@@ -5,6 +5,8 @@
 //
 //   node apps/role-fit-ai/src/resume/pdfImport/__evals__/pdf-import-units.mjs
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { FONT_FAMILY_IDS } from "@typeset/engine/lib/fontFamilies.ts";
 import { auditImport } from "../importAudit.ts";
 import { familyForFont } from "../importStyle.ts";
 import { renderField, splitOnSeparators } from "../fieldText.ts";
@@ -144,11 +146,32 @@ test("font names map to the nearest bundled family", () => {
     ["TypesetSerif4Regular", "source-serif", true],
     ["TypesetSans3Regular", "source-sans", true],
     ["LMRomanCaps10-Regular", "latin-modern", true],
+    ["Roboto-Regular", "roboto", true],
+    ["NotoSans-Regular", "noto-sans", true],
+    ["MerriweatherSans-BoldItalic", "merriweather-sans", true],
+    ["Merriweather-Regular", "merriweather", true],
+    ["NunitoSans10pt-Regular", "nunito-sans", true],
+    ["Open Sans,Bold", "open-sans", true],
+    ["Inter", "inter", true],
+    ["IBMPlexSerif-SemiBold", "ibm-plex-serif", true],
     ["Garamond", "tinos", false],
-    ["Roboto-Regular", "arimo", false],
-    ["NotoSans-Regular", "arimo", false]
+    ["RobotoSlab-Regular", "arimo", false],
+    ["Interstate-Regular", "arimo", false],
+    ["PTSansNarrow-Regular", "arimo", false],
+    ["TypesetDocument000000000000Regular", "arimo", false]
   ];
   for (const [font, family, exact] of expectations) assert.deepEqual(familyForFont(font), { family, exact }, font);
+});
+// The original six keep their own export names; every later family is embedded
+// as "Typeset Document <first 12 hex of sha256(id)>".
+const ORIGINAL_FAMILIES = new Set(["tinos", "carlito", "arimo", "source-serif", "source-sans", "latin-modern"]);
+test("RoleFit's internal font names map to every added family", () => {
+  for (const family of FONT_FAMILY_IDS.filter((id) => !ORIGINAL_FAMILIES.has(id))) {
+    const internal = `TypesetDocument${createHash("sha256").update(family).digest("hex").slice(0, 12)}`;
+    for (const role of ["Regular", "BoldBold", "ItalicItalic", "BoldItalicBoldItalic", "Caps"]) {
+      assert.deepEqual(familyForFont(internal + role), { family, exact: true }, `${family} ${role}`);
+    }
+  }
 });
 
 // ── Lines and columns ───────────────────────────────────────────────────────

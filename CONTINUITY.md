@@ -121,8 +121,9 @@ extension 1.4.0, desktop bridge API 13. 0.14.0 is prepared, not yet released
   user approved the release). Notes `apps/role-fit-ai/docs/releases/0.14.0-beta.1.md`;
   extension 1.4.0 and desktop bridge API 13 unchanged. The notes' rollback
   section covers 0.13.0 rejecting an added document font (resume history and
-  application copies block every backup) and showing added inline fonts as tags. Resume PDF
-  import still maps only the original six families (Known issues).
+  application copies block every backup) and showing added inline fonts as
+  tags. Resume PDF import mapped only the original six families in 0.14.0
+  (Known issues); all 30 map from the next release.
   - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `test:desktop:release`
     14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
     182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
