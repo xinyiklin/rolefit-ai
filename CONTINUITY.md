@@ -70,10 +70,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-16
 
-- [CODE] **Engine/editor audit patches** (uncommitted; user-directed autonomous
-  audit of `packages/engine` and `packages/editor`). A bullet, skills row, or
-  heading taller than a page fills its page and continues at a wrapped line
-  instead of running off the sheet (continuations carry `emergencyBreakBefore`;
+- [CODE] **Engine/editor audit patches** (branch `fix/engine-editor-audit`,
+  not pushed; autonomous audit of `packages/engine` and `packages/editor`). A
+  bullet, skills row, or heading taller than a page fills its page and
+  continues at a wrapped line (continuations carry `emergencyBreakBefore`;
   `layout.ts` splits an over-tall chain at the last boundary that fits; a
   page-sized bullet still moves whole). The breaker stops scanning at the first
   overfull start (9,600 differential cases identical; 16,000 words 1.2 s →
