@@ -26,6 +26,7 @@ import {
   DocumentWorkbench,
   DocumentWorkbenchEditorPane
 } from "../document/DocumentWorkbench";
+import { PolishActionButton } from "../document/PolishActionButton";
 import { RoleFitEditorOverlay } from "../editor/RoleFitEditorOverlay.tsx";
 import { ResumeImportReview } from "../resume/ResumeImportReview";
 import { ResumeWorkflowRail } from "../resume/ResumeWorkflowRail";
@@ -188,15 +189,14 @@ export function ResumeTab({
   // The rail's one primary action, handed to the shell so it sits beside the
   // disclosure control whether the rail is open or closed.
   const polishAction = (
-    <button
-      type="button"
-      className="primary-button is-compact"
-      disabled={!canPolish || isPolishStarting || isPolishing}
-      aria-busy={isPolishStarting || isPolishing}
-      onClick={onPolish}
-    >
-      {isPolishStarting ? "Starting…" : isPolishing ? "Polishing…" : result ? "Polish again" : "Polish"}
-    </button>
+    <PolishActionButton
+      label={result ? "Polish again" : "Polish"}
+      disabled={!canPolish}
+      starting={isPolishStarting}
+      polishing={isPolishing}
+      onPolish={onPolish}
+      onStop={onStopPolish}
+    />
   );
   return (
     <section className="studio-card studio-card--flush">
@@ -269,7 +269,6 @@ export function ResumeTab({
               progress={polishProgress}
               status={polishStatus}
               onRetryPolish={onRetryPolish}
-              onStop={onStopPolish}
               onHighlight={setHighlightTarget}
             />
           )

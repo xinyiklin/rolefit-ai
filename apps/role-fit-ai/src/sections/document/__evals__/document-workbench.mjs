@@ -354,13 +354,15 @@ const coverRail = readFileSync(sourceUrl("../../cover-letter/CoverLetterReview.t
 const prepareTab = readFileSync(sourceUrl("../../tabs/PrepareTab.tsx"), "utf8");
 const coverWorkflow = readFileSync(sourceUrl("../../../hooks/useCoverLetter.ts"), "utf8");
 
+const polishAction = readFileSync(sourceUrl("../PolishActionButton.tsx"), "utf8");
 for (const [name, source] of [["Resume", resumeTab], ["Cover Letter", coverTab]]) {
   assert.match(
     source,
-    /"Polishing…"[\s\S]{0,120}?"Polish again"[\s\S]{0,24}?"Polish"/,
-    `${name}'s rail action spells the run the same way in every state`
+    /<PolishActionButton\s+label=\{[^}]*"Polish again" : "Polish"\}[\s\S]{0,200}?onStop=\{/,
+    `${name}'s rail action spells the run the same way in every state and stops it in place`
   );
 }
+assert.match(polishAction, /Polishing…[\s\S]{0,200}?Stop/, "a running Polish reads Polishing… and turns to Stop");
 for (const [name, source] of [["Resume", resumeRail], ["Cover Letter", coverRail]]) {
   assert.doesNotMatch(
     source,
@@ -392,13 +394,13 @@ assert.doesNotMatch(
   />\s*Polish\s*<\/button>/,
   "and neither does the cover letter's"
 );
-for (const [name, source] of [["Resume", resumeTab], ["Cover Letter", coverTab]]) {
-  assert.match(
-    source,
-    /className="primary-button is-compact"/,
-    `${name}'s rail action is the ordinary primary button, not a bespoke control`
-  );
-}
+assert.match(
+  polishAction,
+  /className="primary-button is-compact"/,
+  "the rail action is the ordinary primary button, not a bespoke control"
+);
+// Polish stops from its own button; the rail keeps no second Stop.
+assert.doesNotMatch(resumeRail, />\s*Stop\s*<\/button>/, "the resume rail has no footer Stop");
 assert.match(coverRail, /Accept proposal/, "a proposed replacement is accepted, as in the resume's review rail");
 assert.match(coverRail, /Discard proposal/, "and discarded with the same verb the resume uses");
 assert.doesNotMatch(

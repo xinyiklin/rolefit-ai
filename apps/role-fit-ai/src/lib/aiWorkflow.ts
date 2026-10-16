@@ -11,6 +11,8 @@ export type AiStageState = {
   errorHeadline?: string;
   note?: string;
   noteTone?: "ok" | "warn" | "info";
+  // Set when a run starts, so an elapsed readout survives its view remounting.
+  startedAt?: number;
 };
 
 export type PolishProgressState = {
@@ -41,6 +43,12 @@ export const AI_WORKFLOW_TITLE: Record<AiStageKey, string> = {
   "application-answers": "Application answers",
   "resume-import": "Resume import"
 };
+
+export function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
+}
 
 // Stable-enough identity for one client workflow request. Inputs are plain
 // serializable request values; callers snapshot this before fetch and reject a

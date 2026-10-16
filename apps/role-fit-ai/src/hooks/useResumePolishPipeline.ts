@@ -213,7 +213,7 @@ export function useResumePolishPipeline({
     revealResumeOnSuccess: boolean
   ): Promise<boolean> {
     if (!requestIsCurrent(generation, context, signal)) return false;
-    setPolishProgress({ polish: { status: "running" } });
+    setPolishProgress({ polish: { status: "running", startedAt: Date.now() } });
     try {
       const response = await fetch("/api/resume-polish", {
         method: "POST",

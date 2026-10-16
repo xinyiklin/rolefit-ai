@@ -3,6 +3,7 @@ import { AlertCircle, Check, Circle, RotateCcw, Square, TriangleAlert, X } from 
 import {
   AI_STAGE_COPY,
   AI_WORKFLOW_TITLE,
+  formatElapsed,
   type AiStageKey,
   type AiStageState,
   type AiWorkflowStage
@@ -10,12 +11,6 @@ import {
 
 const DONE_HOLD_MS = 10000;
 const FADE_MS = 360;
-
-function formatElapsed(ms: number): string {
-  const seconds = Math.max(0, Math.round(ms / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
-}
 
 function StageIcon({ status, warn }: { status: AiStageState["status"]; warn: boolean }) {
   if (status === "running") return <span className="ai-workflow__spinner" />;
@@ -38,8 +33,8 @@ function StageRow({
 
   useEffect(() => {
     if (state.status === "running") {
-      startRef.current = Date.now();
-      setElapsedMs(0);
+      startRef.current = state.startedAt ?? Date.now();
+      setElapsedMs(Date.now() - startRef.current);
       const interval = window.setInterval(() => {
         if (startRef.current !== null) setElapsedMs(Date.now() - startRef.current);
       }, 1000);

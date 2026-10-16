@@ -28,7 +28,6 @@ type ResumeWorkflowRailProps = {
   progress: PolishProgressState;
   status?: string;
   onRetryPolish: () => void;
-  onStop: () => void;
   onHighlight: (target: ResumeProposalTarget | null) => void;
 };
 
@@ -52,7 +51,6 @@ export function ResumeWorkflowRail({
   progress,
   status,
   onRetryPolish,
-  onStop,
   onHighlight
 }: ResumeWorkflowRailProps) {
   proposalStale = proposalStale || decisions.documentReplaced;
@@ -77,7 +75,7 @@ export function ResumeWorkflowRail({
   // The footer's decision bar carries the count, so the description says what
   // accepting means rather than repeating the same numbers one line above it.
   const description = isPolishing
-    ? "Creating evidence-grounded resume edits. Your current resume remains unchanged."
+    ? "Creating evidence-grounded edits to review here. Your resume is unchanged until you accept them."
     : settledWithoutEdits
       ? ""
       : workflow.state === "proposal" || workflow.state === "reviewing"
@@ -109,12 +107,11 @@ export function ResumeWorkflowRail({
       : "No proposal was created. Your resume was not changed.",
     items: !stopped && progress.polish.error ? [progress.polish.error] : undefined
   } : null;
-  const resultOwnsVisibleStatus = Boolean(proposalResult || failure);
+  // A run in flight owns the rail: an earlier status line would read as news.
+  const resultOwnsVisibleStatus = Boolean(proposalResult || failure || isPolishing);
   // Both documents commit from the same place with the same verbs; only the
   // unit differs — the resume decides N edits, the letter decides one letter.
-  const footer = isPolishing ? (
-    <button type="button" className="secondary-button is-compact" onClick={onStop}>Stop</button>
-  ) : failed ? (
+  const footer = isPolishing ? null : failed ? (
     <button type="button" className="primary-button is-compact" onClick={onRetryPolish}>Retry Polish</button>
   ) : proposalResult && decisions.total > 0 ? (
     <ProposalDecisionBar
@@ -150,9 +147,13 @@ export function ResumeWorkflowRail({
       description={failure ? "" : description}
       checks={proposalResult || failure || isPolishing ? [] : checks}
       failure={failure}
+      run={isPolishing ? {
+        startedAt: progress.polish.status === "running" ? progress.polish.startedAt : undefined,
+        details: [{ label: "Sections", value: String(polishSectionCount) }]
+      } : null}
       footer={footer}
       statusLine={resultOwnsVisibleStatus ? undefined : status}
-      statusAnnouncement={proposalResult && !settledWithoutEdits ? status : undefined}
+      statusAnnouncement={isPolishing ? "Polishing resume." : proposalResult && !settledWithoutEdits ? status : undefined}
     >
       {proposalResult ? (
         <ResumeProposalReview

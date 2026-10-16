@@ -361,7 +361,12 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
   per document view (Polish beside the workflow rail's disclosure control, in the
   header while open and on the document's edge while collapsed; compact
-  `.is-compact` variant in rail actions).
+  `.is-compact` variant in rail actions). While a run is in flight that same
+  button is its Stop: a quiet raised "Polishing…" that turns warm "Stop" on
+  hover or keyboard focus (always Stop without hover), armed after 600ms so a
+  double-click never stops the run it started. The rail then shows no footer
+  Stop and no earlier status line, only a dotted-leader run ledger (resume:
+  sections; both: elapsed time).
 - **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
   border; hover tints toward the accent (`--accent-soft` fill,
   `--accent-deep` text).
