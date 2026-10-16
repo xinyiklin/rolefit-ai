@@ -71,7 +71,15 @@ export function normalizeLinkDestination(value: string): string | null {
     // The suffix comes from the HOSTNAME, so a path ending in a filename
     // ("example.com/resume.pdf") is unaffected — only a bare filename is rejected.
     if (FILE_LIKE_SUFFIXES.has(suffix)) return null;
-    return `https://${trimmed}`;
+    const destination = `https://${trimmed}`;
+    // The shape test admits ports no browser accepts ("example.com:99999");
+    // the URL parser is the authority on what can actually be opened.
+    try {
+      new URL(destination);
+    } catch {
+      return null;
+    }
+    return destination;
   }
   if (!/^https?:\/\//i.test(trimmed)) return null;
   try {
@@ -82,10 +90,39 @@ export function normalizeLinkDestination(value: string): string | null {
   }
 }
 
+const OPENER_FOR_CLOSER: Record<string, string> = { ")": "(", "]": "[", "}": "{", ">": "<" };
+const CLOSER_FOR_OPENER: Record<string, string> = { "(": ")", "[": "]", "{": "}", "<": ">" };
+
+// Trailing punctuation belongs to the sentence, not the link — except a closing
+// bracket that closes one INSIDE the candidate ("wiki/Foo_(bar)"), which is part
+// of the URL. Only a surplus closer is stripped. One pass counts the brackets;
+// the walk back then costs one step per stripped character, because this runs
+// on every word of every paragraph at every layout.
+function trimTrailingPunctuation(candidate: string): string {
+  const opens: Record<string, number> = {};
+  const closes: Record<string, number> = {};
+  for (const char of candidate) {
+    const closer = CLOSER_FOR_OPENER[char];
+    if (closer) opens[closer] = (opens[closer] ?? 0) + 1;
+    else if (char in OPENER_FOR_CLOSER) closes[char] = (closes[char] ?? 0) + 1;
+  }
+  let end = candidate.length;
+  while (end > 0) {
+    const last = candidate[end - 1];
+    if (!/[\])}>.,;:!?]/.test(last)) break;
+    if (last in OPENER_FOR_CLOSER) {
+      if ((closes[last] ?? 0) <= (opens[last] ?? 0)) break;
+      closes[last] -= 1;
+    }
+    end -= 1;
+  }
+  return candidate.slice(0, end);
+}
+
 export function automaticLinkHref(value: string): string | null {
   const telephone = normalizeTelephone(value);
   if (telephone) return telephone;
-  const candidate = value.trim().replace(/^[([{<]+/, "").replace(/[\])}>.,;:!?]+$/, "");
+  const candidate = trimTrailingPunctuation(value.trim().replace(/^[([{<]+/, ""));
   return normalizeLinkDestination(candidate);
 }
 

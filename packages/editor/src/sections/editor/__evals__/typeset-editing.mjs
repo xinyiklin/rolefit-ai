@@ -104,6 +104,21 @@ commitField(actions, skillsSrc, "Programming : React");
 assert.deepEqual(storedRow, { label: "Programming ", skills: "React" });
 assert.equal(valueForField(storedData(), skillsSrc), "Programming : React");
 
+// An unusable <size> keeps its stack slot in the editor exactly as in the
+// engine's segmenter, so its </size> cannot pop an outer size and the display
+// map agrees with the painted runs character for character.
+assert.deepEqual(
+  buildDisplayMap("<size=12>a<size=0>b</size>c</size><size=999>d</size>", { preserveWhitespace: true })
+    .chars.map((char) => [char.raw, char.fontSizePt]),
+  [["a", 12], ["b", 12], ["c", 12], ["d", null]],
+  "inert size tags are balanced but change nothing"
+);
+assert.equal(
+  applyEdit(buildDisplayMap("<size=12>a<size=0>b</size>c</size>", { preserveWhitespace: true }), 3, 3, "d").value,
+  "<size=12>abcd</size>",
+  "serializing drops the inert tag and keeps the outer size"
+);
+
 const styled = buildDisplayMap(
   "<b>A</b><font=source-sans><size=14>B</size></font>",
   { preserveWhitespace: true }

@@ -30,7 +30,8 @@ import {
   hasInlineMarkTags,
   paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks,
-  stripInlineMarks
+  stripInlineMarks,
+  uppercaseInlineMarkedText
 } from "../lib/inlineMarksText.ts";
 import {
   DOC_STYLE_DEFAULTS,
@@ -50,7 +51,8 @@ export const PAGE_HEIGHT_BP = 792;
 // text column's left edge; `dist` is the baseline distance from the PREVIOUS
 // line. Page breaking recomputes the first line from the page's minimum inset.
 export type VLine = {
-  // Wrapped heading continuations may split an otherwise over-tall keep chain.
+  // A wrapped continuation (of a heading row, or of a kept-together paragraph)
+  // where layout may split an otherwise over-tall keep chain.
   emergencyBreakBefore?: boolean;
   runs: GlyphRun[]; // x already includes the line's indent
   // The row's role-size footprint for page-top placement and page-bottom fit.
@@ -350,6 +352,14 @@ function headRowLeading(
   return { leading, afterDist: leading - lineAdvance(size, lineHeight) };
 }
 
+// The authored paragraph indent, held back so the paragraph keeps at least one
+// glyph of measure inside `room` (the column it indents into). The stored mark
+// is unchanged; only impossible geometry — a 3-inch margin plus a 3-inch
+// indent — is clamped, so text never leaves the page in any renderer.
+export function fitParagraphIndent(indentPt: number, room: number, size: number): number {
+  return Math.max(0, Math.min(indentPt, room - size));
+}
+
 // Paragraph → VLines at an indent within a column width.
 export function paragraphLines(
   value: string,
@@ -402,7 +412,11 @@ export function paragraphLines(
       dist: i === 0 ? firstDist : baselineskip,
       leading: leadingFor(line),
       afterDist: leadingFor(line) - baselineskip,
-      keepWithPrev: i === 0 ? keepFirst : keepLinesTogether
+      keepWithPrev: i === 0 ? keepFirst : keepLinesTogether,
+      // A kept-together paragraph taller than a page cannot keep together: its
+      // continuations are where the chain splitter may paginate it rather than
+      // letting lines run off the page bottom.
+      ...(i > 0 && keepLinesTogether ? { emergencyBreakBefore: true } : {})
     };
   });
 }
@@ -556,7 +570,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       const rawHeading = caseMode === "smallcaps"
         ? section.heading.replace(/<\/?(?:b|i|u)>/gi, "")
         : section.heading;
-      const headingText = caseMode === "uppercase" ? rawHeading.toUpperCase() : rawHeading;
+      const headingText = caseMode === "uppercase" ? uppercaseInlineMarkedText(rawHeading) : rawHeading;
       // Small-caps headings use the dedicated caps face with true lowercase
       // advances. That face has no bold variant; explicit inline marks remain
       // available in uppercase and plain modes.
@@ -652,7 +666,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const paragraphSpacing = paragraphSpacingFromInlineMarks(summaryText);
         // Left indent: every line of the paragraph starts further in and its
         // measure narrows to match (see paragraphIndentFromInlineMarks).
-        const summaryIndent = paragraphIndentFromInlineMarks(summaryText);
+        const summaryIndent = fitParagraphIndent(
+          paragraphIndentFromInlineMarks(summaryText),
+          geo.textWidth - geo.entryIndent - geo.entryEndIndent,
+          sizes.small
+        );
         const dist =
           lineAdvance(sizes.small, style.lineHeight) +
           (firstInSection ? gap("sectionEntryGapPt") : gap("bulletGapPt")) +
@@ -795,7 +813,11 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       let previousBulletSpaceAfterPt = 0;
       item.bullets.forEach((bullet, bi) => {
         const paragraphSpacing = paragraphSpacingFromInlineMarks(bullet);
-        const bulletIndentPt = paragraphIndentFromInlineMarks(bullet);
+        const bulletIndentPt = fitParagraphIndent(
+          paragraphIndentFromInlineMarks(bullet),
+          geo.textWidth - geo.bulletIndent - geo.entryEndIndent,
+          sizes.small
+        );
         const dist =
           lineAdvance(sizes.small, style.lineHeight) +
           (bi === 0

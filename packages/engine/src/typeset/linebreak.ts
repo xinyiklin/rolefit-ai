@@ -11,7 +11,8 @@
 //   - Demerits per line: (linepenalty + badness)² + penalty·|penalty|; the
 //     final line has no under-full penalty in any mode.
 //
-// Paragraphs here are a handful of lines, so the O(n²) DP is microseconds.
+// The DP tries, for each break, only the previous breaks that can still start a
+// feasible line, so its cost is lines × words-per-line rather than words².
 
 import type { BoxItem, GlueItem, Line, ParaItem, ParagraphAlign } from "./types.ts";
 import { measure } from "./measure.ts";
@@ -126,24 +127,32 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
     };
   };
 
-  // DP: best[c] = minimal total demerits ending a line at candidate c.
+  // DP: best[c] = minimal total demerits ending a line at candidate c. Previous
+  // breaks are tried from the latest backwards and the scan stops once the line
+  // is overfull past its shrink budget: every earlier start only adds material,
+  // so none can begin a feasible line here. That bounds the work to the lines a
+  // paragraph can actually set (words per line, not words squared) — a pasted
+  // 100,000-character bullet took over a second per keystroke without it.
   const best = new Array<number>(candidates.length).fill(INFEASIBLE);
   const prev = new Array<number>(candidates.length).fill(-1);
   for (let ci = 0; ci < candidates.length; ci += 1) {
     const cand = candidates[ci];
     const isLast = ci === candidates.length - 1;
-    for (let pi = -1; pi < ci; pi += 1) {
+    for (let pi = ci - 1; pi >= -1; pi -= 1) {
       const from = pi === -1 ? 0 : candidates[pi].index;
+      const m = measureLine(from, cand.index);
+      // The same overfull test badnessFor applies, so the cutoff and the
+      // infeasibility it stands for agree to the last rounding bit.
+      if (m.natural > target && (m.shrink <= 0 || m.natural - target > m.shrink)) break;
       const base = pi === -1 ? 0 : best[pi];
       if (base === INFEASIBLE) continue;
-      const m = measureLine(from, cand.index);
       const bad = badnessFor(m.natural, m.stretch, m.shrink, target, align, isLast);
       if (bad === INFEASIBLE) continue;
       const demerits = (LINE_PENALTY + bad) ** 2 + cand.penalty * Math.abs(cand.penalty);
-      // <= so ties prefer the LATEST previous break: in ragged modes every
-      // feasible split has badness 0 and equal demerits, so this tie-break fills
-      // each line maximally.
-      if (base + demerits <= best[ci]) {
+      // Strict so ties keep the LATEST previous break, which this backwards scan
+      // meets first: in ragged modes every feasible split has badness 0 and
+      // equal demerits, so this tie-break fills each line maximally.
+      if (base + demerits < best[ci]) {
         best[ci] = base + demerits;
         prev[ci] = pi;
       }

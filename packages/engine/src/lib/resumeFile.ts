@@ -22,6 +22,7 @@ import {
   parseJsonFile,
   serializeJsonFile
 } from "./jsonFileCodec.ts";
+import { stripInlineMarks } from "./inlineMarksText.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
 export const RESUME_FILE_SCHEMA_VERSION = 1 as const;
@@ -430,8 +431,7 @@ export async function readResumeFile(file: File): Promise<ParsedResumeFile> {
 
 export function resumeFileName(suggestedName: string): string {
   const withoutExtension = suggestedName.replace(/\.resume$/i, "");
-  const safeBase = withoutExtension
-    .replace(/<\/?(?:b|i|u)>/gi, "")
+  const safeBase = stripInlineMarks(withoutExtension)
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")

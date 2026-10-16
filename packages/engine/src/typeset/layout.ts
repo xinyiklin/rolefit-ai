@@ -68,51 +68,18 @@ export function layoutVerticalStream(
       line.depth + line.dropOverflow,
       line.rule ? line.rule.yOffset + line.rule.thickness : 0
     );
-
-  const pageSizedChains = chains.flatMap((chain) => {
-    if (!chain.some((line) => line.emergencyBreakBefore)) return [chain];
-    const parts: VLine[][] = [];
-    let start = 0;
-    while (start < chain.length) {
-      let b = startPage(chain[start]);
-      let split = start;
-      let end = chain.length;
-      for (let index = start + 1; index < chain.length; index += 1) {
-        if (chain[index].emergencyBreakBefore) split = index;
-        b += junctionDistance(chain[index - 1], chain[index]);
-        if (contentBottom(chain[index], b) > geo.lastBaselineMax && split > start) {
-          end = split;
-          break;
-        }
-      }
-      parts.push(chain.slice(start, end));
-      start = end;
+  // How many leading lines of `chain` fit the page when its first baseline is `first`.
+  const fittingCount = (chain: VLine[], first: number) => {
+    let b = first;
+    for (let i = 0; i < chain.length; i += 1) {
+      if (i > 0) b += junctionDistance(chain[i - 1], chain[i]);
+      if (contentBottom(chain[i], b) > geo.lastBaselineMax) return i;
     }
-    return parts;
-  });
-
-  for (const chain of pageSizedChains) {
-    // Tentative placement of the whole chain on the current page.
-    const page = pages[pages.length - 1];
-    let b =
-      baseline === 0 || !previousLine
-        ? startPage(chain[0])
-        : baseline + junctionDistance(previousLine, chain[0]);
-    let fits = contentBottom(chain[0], b) <= geo.lastBaselineMax;
-    if (fits) {
-      let bb = b;
-      for (let i = 1; i < chain.length && fits; i += 1) {
-        bb += junctionDistance(chain[i - 1], chain[i]);
-        if (contentBottom(chain[i], bb) > geo.lastBaselineMax) fits = false;
-      }
-    }
-    if (!fits && page.lines.length) {
-      pages.push({ lines: [] });
-      baseline = 0;
-      previousLine = null;
-      b = startPage(chain[0]);
-    }
+    return chain.length;
+  };
+  const place = (chain: VLine[], first: number) => {
     const target = pages[pages.length - 1];
+    let b = first;
     for (let i = 0; i < chain.length; i += 1) {
       if (i > 0) b += junctionDistance(chain[i - 1], chain[i]);
       const line = chain[i];
@@ -129,6 +96,57 @@ export function layoutVerticalStream(
     }
     baseline = b;
     previousLine = chain[chain.length - 1] ?? null;
+  };
+  const newPage = () => {
+    pages.push({ lines: [] });
+    baseline = 0;
+    previousLine = null;
+  };
+  const headingOnly = (line: VLine) =>
+    line.runs.length > 0 && line.runs.every((run) => run.src?.kind === "heading");
+
+  for (const chain of chains) {
+    let rest = chain;
+    while (rest.length) {
+      const page = pages[pages.length - 1];
+      const first = baseline === 0 || !previousLine
+        ? startPage(rest[0])
+        : baseline + junctionDistance(previousLine, rest[0]);
+      const fits = fittingCount(rest, first);
+      if (fits === rest.length) {
+        place(rest, first);
+        break;
+      }
+      // The chain overflows here. One that fits a fresh page moves there whole,
+      // as a keep-chain should. One that cannot fit any page splits at its last
+      // continuation boundary that still fits, so it fills this page first and
+      // continues on the next instead of leaving the page half empty.
+      const fitsFreshPage = page.lines.length > 0 && fittingCount(rest, startPage(rest[0])) === rest.length;
+      if (!fitsFreshPage) {
+        let split = 0;
+        for (let i = 1; i <= fits && i < rest.length; i += 1) {
+          if (!rest[i].emergencyBreakBefore) continue;
+          // A part that is nothing but heading rows would strand the heading at
+          // the page bottom; the chain moves to a fresh page instead.
+          if (page.lines.length && rest.slice(0, i).every(headingOnly)) continue;
+          split = i;
+        }
+        if (split > 0) {
+          place(rest.slice(0, split), first);
+          rest = rest.slice(split);
+          newPage();
+          continue;
+        }
+      }
+      if (page.lines.length) {
+        newPage();
+        continue;
+      }
+      // An empty page and no boundary that fits: nothing more can be done
+      // without shrinking or discarding text, so the content overflows.
+      place(rest, first);
+      break;
+    }
   }
   return { pages, geometry: geo };
 }

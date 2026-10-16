@@ -8,6 +8,7 @@ import "./editable-field-width.mjs";
 import "./header-baseline.mjs";
 import "./autolink.mjs";
 import "./vertical-rows.mjs";
+import "./tall-paragraphs.mjs";
 
 import {
   coverLetterResumeData

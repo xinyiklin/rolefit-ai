@@ -17,7 +17,10 @@ typesetting guide when a change affects painted output or layout provenance.
 - `inlineTextEditing.ts` owns pure value/display mapping and mark-balanced text
   transformations. Keep it free of React and DOM reads. Its anchored tag
   scanner is a deliberate second automaton over the grammar owned by
-  `lib/inlineMarksText.ts`; keep the two tag inventories in sync.
+  `lib/inlineMarksText.ts`; keep the two tag inventories in sync, including the
+  engine's rule that an unusable `<size=…>` still takes a stack slot so its
+  close pops nothing else — otherwise the display map and the painted runs
+  disagree on which characters an outer size covers.
 - `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
   `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
   while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.

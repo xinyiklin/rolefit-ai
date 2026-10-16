@@ -508,8 +508,7 @@ export async function readCoverLetterFile(file: File): Promise<ParsedCoverLetter
 
 export function coverLetterFileName(suggestedName: string): string {
   const withoutExtension = suggestedName.replace(/\.cover$/i, "");
-  const safeBase = withoutExtension
-    .replace(/<\/?(?:b|i|u)>/gi, "")
+  const safeBase = stripInlineMarks(withoutExtension)
     .replace(/[<>:"/\\|?*\u0000-\u001f]/g, " ")
     .replace(/\s+/g, " ")
     .replace(/[. ]+$/g, "")

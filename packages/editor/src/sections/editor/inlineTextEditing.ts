@@ -105,7 +105,9 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
   let italic = 0;
   let underline = 0;
   const fontStack: DocumentFontFamily[] = [];
-  const sizeStack: number[] = [];
+  // A null slot is an invalid <size=…>, pushed so its </size> pops nothing
+  // else — the same rule as the engine's segmentsFromInlineMarks.
+  const sizeStack: Array<number | null> = [];
   const alignmentStack: FieldAlignment[] = [];
   const lineHeightStack: number[] = [];
   const spaceBeforeStack: number[] = [];
@@ -125,7 +127,7 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
       else if (tag[3]) fontStack.push(tag[3] as DocumentFontFamily);
       else if (tag[4]) {
         const size = Number(tag[4]);
-        if (isInlineFontSizePt(size)) sizeStack.push(size);
+        sizeStack.push(isInlineFontSizePt(size) ? size : sizeStack[sizeStack.length - 1] ?? null);
       } else if (tag[2]) linkStack.push(decodeLinkHref(tag[2]));
       else if (tag[0].toLowerCase() === "</font>") fontStack.pop();
       else if (tag[0].toLowerCase() === "</size>") sizeStack.pop();

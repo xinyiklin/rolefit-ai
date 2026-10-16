@@ -46,6 +46,34 @@ for (const text of [
   assert.equal(automaticLinkHref(text), null, `${text} must not auto-link`);
 }
 
+// Trailing punctuation is stripped, but a closing bracket that closes one inside
+// the candidate is part of the URL ("Foo_(bar)"); only a surplus closer goes.
+for (const [text, href] of [
+  ["https://en.wikipedia.org/wiki/Foo_(bar)", "https://en.wikipedia.org/wiki/Foo_(bar)"],
+  ["https://en.wikipedia.org/wiki/Foo_(bar).", "https://en.wikipedia.org/wiki/Foo_(bar)"],
+  ["(https://en.wikipedia.org/wiki/Foo_(bar))", "https://en.wikipedia.org/wiki/Foo_(bar)"],
+  ["(linkedin.com/in/example)", "https://linkedin.com/in/example"],
+  ["linkedin.com/in/example),", "https://linkedin.com/in/example"],
+  ["example.test/a[b]", "https://example.test/a[b]"],
+  ["<example.test>", "https://example.test"],
+  ["example.test/path?!", "https://example.test/path"]
+]) {
+  assert.equal(automaticLinkHref(text), href, `${text} auto-links as ${href}`);
+}
+// Trailing-bracket balancing costs one step per character, even for a word that
+// is nothing but closers (it runs on every word of every paragraph).
+{
+  const start = performance.now();
+  for (const word of [")".repeat(50_000), `example.test/${"(".repeat(25_000)}${")".repeat(25_000)}`, `${"]".repeat(50_000)}`]) automaticLinkHref(word);
+  const elapsed = performance.now() - start;
+  assert.ok(elapsed < 200, `three 50,000-character bracket words trimmed in ${elapsed.toFixed(0)}ms`);
+}
+
+// The domain shape test admits ports no browser accepts; the URL parser decides.
+assert.equal(normalizeLinkDestination("example.test:99999"), null, "an out-of-range port is not a link");
+assert.equal(normalizeLinkDestination("example.test:8080/path"), "https://example.test:8080/path");
+assert.equal(normalizeLinkDestination("example.test"), "https://example.test", "bare domains keep their unnormalized form");
+
 // Explicit and stored destinations keep their own rules: the user chose a tel:.
 assert.equal(normalizeLinkDestination("tel:9177688848"), "tel:9177688848");
 assert.equal(decodeLinkHref(encodeURIComponent("tel:+12125550100;ext=42")), "tel:+12125550100;ext=42");

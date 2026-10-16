@@ -164,7 +164,7 @@ export async function emitPdf(
                 // Rect spans the run box generously (ascender to underline).
                 Rect: [run.x, y - ul.offset - ul.thickness - 0.5, run.x + run.width, y + run.style.size],
                 Border: [0, 0, 0],
-                A: { Type: "Action", S: "URI", URI: PDFString.of(run.href) }
+                A: { Type: "Action", S: "URI", URI: pdfUriString(run.href) }
               })
             )
           );
@@ -228,6 +228,22 @@ function kernedGlyphs(context: PDFContext, font: PDFFont, shaper: ShapingFont, t
   }
   if (start < ids.length) elements.push(PDFHexString.of(ids.slice(start)));
   return context.obj(elements);
+}
+
+// A PDF literal string ends at the first unbalanced ")" and reads a backslash
+// as an escape, and pdf-lib writes the value verbatim — so a destination such as
+// "https://x.com/a)b" produced a file pdf-lib itself could not reopen. Escape
+// those three bytes, and percent-encode everything outside printable ASCII: a
+// URI is a byte string, and UTF-8 percent-escapes are how it carries the rest.
+function pdfUriString(href: string): PDFString {
+  const ascii = href.replace(/[^\x21-\x7e]/gu, (char) => {
+    try {
+      return encodeURIComponent(char);
+    } catch {
+      return "%EF%BF%BD"; // a lone surrogate has no UTF-8 form; U+FFFD does
+    }
+  });
+  return PDFString.of(ascii.replace(/[\\()]/g, (char) => `\\${char}`));
 }
 
 function setAnnots(page: PDFPage, annots: PDFRef[]) {
