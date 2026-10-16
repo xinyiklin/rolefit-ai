@@ -120,12 +120,12 @@ and verify both apps.
   remain visible with reconnect guidance, and no configured provider disables
   AI without disabling editor, tracker, or export workflows. Provider setup and
   secret mutation remain Electron-owned.
-- The localhost browser continues to use relative same-origin `/api/*` calls. A
-  Host/Origin check and `/api/health` compatibility response are not
-  authentication for a hosted page. The public product/download page is a
-  separate Vite entry that may call only the public GitHub Releases API; never
-  bundle the Drafting Desk there, turn it into a local-companion client, or make
-  the full local application API cross-origin.
+- The localhost browser continues to use relative same-origin `/api/*` calls.
+  The Host/Origin check on every non-extension request and the `/api/health`
+  compatibility response are not authentication for a hosted page. The public
+  product/download page is a separate Vite entry that may call only the public
+  GitHub Releases API; never bundle the Drafting Desk there, turn it into a
+  local-companion client, or make the full local application API cross-origin.
 - Portable file validation happens before hydration. Unknown data is never cast
   directly to application types.
 

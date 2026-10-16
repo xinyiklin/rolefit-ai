@@ -120,7 +120,7 @@ export async function loadRoleFitLocalEnv(appRoot: string): Promise<void> {
   try {
     const env = await readFile(join(appRoot, ".env"), "utf8");
     for (const line of env.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*)\s*$/i);
+      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
       if (!match) continue;
       const [, key, rawValue] = match;
       if (process.env[key]) continue;
@@ -152,8 +152,8 @@ function decodeRouteSegment(value: string): string | null {
 
 async function serveStatic(req: IncomingMessage, res: ServerResponse, appRoot: string): Promise<void> {
   // Parse the request target against a fixed local base. The Host header is
-  // untrusted and validated separately for API routes; using it as a URL base
-  // lets a malformed Host throw before the guard can return a controlled 4xx.
+  // untrusted and validated separately by the request guard; using it as a URL
+  // base lets a malformed Host throw before the guard can return a controlled 4xx.
   const url = new URL(req.url ?? "/", "http://localhost");
   const pathname = url.pathname === "/" ? "/index.html" : url.pathname;
   const distRoot = resolve(join(appRoot, "dist"));
@@ -321,7 +321,26 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
           include: ["pdf-lib", "@pdf-lib/fontkit"]
         },
         server: {
-          middlewareMode: true
+          middlewareMode: true,
+          // The request guard below is the only cross-origin policy; Vite's
+          // default CORS would admit every localhost origin to the served root.
+          cors: false,
+          // The served root holds the workspace. Keep it out of Vite's static
+          // and /@fs/ serving: Vite 8's default deny list plus the workspace.
+          fs: {
+            strict: true,
+            deny: [
+              ".env",
+              ".env.*",
+              "*.{crt,pem,key,p12,pfx,cer,der}",
+              ".npmrc",
+              ".yarnrc.yml",
+              "**/.git/**",
+              // picomatch reads the path as a glob, so its metacharacters are
+              // escaped; a folder such as "Projects (2)" would otherwise fail open.
+              `${workspaceDir.split(sep).join("/").replace(/[\\^$.*+?()[\]{}|!@#,]/g, "\\$&")}/**`
+            ]
+          }
         }
       }));
 
@@ -337,14 +356,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     }
     const pathname = routeUrl.pathname;
 
-    // In development, serve the engine-owned font assets directly. Vite's SPA
-    // fallback would otherwise answer a missing generated public/font file with
-    // index.html and fontkit would report the opaque "Unknown font format".
-    if (!isProduction && pathname.startsWith("/fonts/")) {
-      void serveEngineFont(pathname, res, appRoot);
-      return;
-    }
-
     // The extension's CORS routes are handled BEFORE the localhost CSRF guard
     // and enforce their own extension-origin contract.
     if (pathname === "/api/extension/status" ||
@@ -355,10 +366,11 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    // Same-origin/Host guard for the local API (any loopback bind). Use the
-    // resolved listening port so an isolated port:0 runtime stays protected.
-    const loopbackBind = isLoopbackBindHost(host);
-    if (isApiPathname(pathname) && loopbackBind) {
+    // Same-origin/Host guard for every remaining request (any loopback bind),
+    // app files included: in development the served root holds the workspace,
+    // and a rebound host or another localhost page must read none of it. Use
+    // the resolved listening port so an isolated port:0 runtime stays protected.
+    if (isLoopbackBindHost(host)) {
       const allowedHosts = new Set([
         `localhost:${listeningPort}`,
         `127.0.0.1:${listeningPort}`,
@@ -381,6 +393,14 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
           return;
         }
       }
+    }
+
+    // In development, serve the engine-owned font assets directly. Vite's SPA
+    // fallback would otherwise answer a missing generated public/font file with
+    // index.html and fontkit would report the opaque "Unknown font format".
+    if (!isProduction && pathname.startsWith("/fonts/")) {
+      void serveEngineFont(pathname, res, appRoot);
+      return;
     }
 
     if (pathname === "/api/health") {

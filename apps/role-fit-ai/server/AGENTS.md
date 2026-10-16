@@ -84,13 +84,15 @@ for provider, prompt, sanitizer, and review work.
   allowlist. Never admit another installed extension, arbitrary web Origins, a
   malformed Origin, an absent Origin beyond the content-free status GET
   exception, or wildcard CORS.
-- The ordinary `/api/*` Host/Origin guard is a browser CSRF/DNS-rebinding
-  boundary, not authentication for native clients. Do not add broad web CORS,
-  bearer handling, or public Electron-management routes to this runtime. The
-  provider companion may start or compatibly reuse this server, but the browser
-  still reaches it only through the existing same-origin application. A
-  read-only `/api/providers` route may expose closed provider ids and
-  configured/readiness/auth-state enums only; it is not a vault API.
+- The ordinary Host/Origin guard covers every non-extension request, app files
+  included; it is a browser CSRF/DNS-rebinding boundary, not authentication for
+  native clients. In development Vite serves the app root, which holds the
+  workspace, with CORS off and the workspace directory denied. Do not add broad
+  web CORS, bearer handling, or public Electron-management routes to this
+  runtime. The provider companion may start or compatibly reuse this server,
+  but the browser still reaches it only through the existing same-origin
+  application. A read-only `/api/providers` route may expose closed provider
+  ids and configured/readiness/auth-state enums only; it is not a vault API.
 - Accept managed provider credentials only through a versioned, bounded private
   parent/child message from the Electron process that created this server.
   Validate and atomically replace the complete snapshot, keep decrypted values

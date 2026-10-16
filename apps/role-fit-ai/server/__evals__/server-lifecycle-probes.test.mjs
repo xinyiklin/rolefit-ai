@@ -186,6 +186,21 @@ try {
   assert.equal(foreignOrigin.status, 403);
   assert.deepEqual(JSON.parse(foreignOrigin.body), { error: "Cross-origin request blocked." });
 
+  // The guard covers app files too: a rebound host or another localhost page
+  // must not read the served root, which holds the workspace in development.
+  const foreignHostPage = await get(runtime.port, "/", { Host: "attacker.example" });
+  assert.equal(foreignHostPage.status, 403);
+  const foreignOriginPage = await get(runtime.port, "/", {
+    Host: `127.0.0.1:${runtime.port}`,
+    Origin: "http://localhost:5555"
+  });
+  assert.equal(foreignOriginPage.status, 403);
+  const ownOriginPage = await get(runtime.port, "/", {
+    Host: `127.0.0.1:${runtime.port}`,
+    Origin: `http://127.0.0.1:${runtime.port}`
+  });
+  assert.equal(ownOriginPage.status, 200, "the app's own origin still loads its files");
+
   const releasedPort = runtime.port;
   await runtime.close();
   await runtime.close();
