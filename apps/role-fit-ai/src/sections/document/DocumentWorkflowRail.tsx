@@ -1,5 +1,6 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
+import { formatElapsed } from "../../lib/aiWorkflow";
 import {
   documentWorkflowLabel,
   type DocumentWorkflowStatus
@@ -31,6 +32,12 @@ export type DocumentWorkflowFailure = {
   items?: string[];
 };
 
+// What an in-flight Polish is working on, as ledger rows above its elapsed time.
+export type DocumentWorkflowRun = {
+  startedAt?: number;
+  details?: { label: string; value: string }[];
+};
+
 type DocumentWorkflowRailProps = {
   ariaLabel: string;
   status: DocumentWorkflowStatus;
@@ -38,6 +45,7 @@ type DocumentWorkflowRailProps = {
   description?: string;
   checks?: DocumentWorkflowCheck[];
   failure?: DocumentWorkflowFailure | null;
+  run?: DocumentWorkflowRun | null;
   children?: ReactNode;
   footer?: ReactNode;
   // Visible status and hidden-only announcements share one live region.
@@ -52,12 +60,15 @@ export function DocumentWorkflowRail({
   description,
   checks = [],
   failure,
+  run,
   children,
   footer,
   statusLine,
   statusAnnouncement
 }: DocumentWorkflowRailProps) {
   const liveStatus = statusLine || statusAnnouncement;
+  const runDetails = run?.details ?? [];
+  const showRun = runDetails.length > 0 || run?.startedAt !== undefined;
 
   return (
     <aside
@@ -81,6 +92,25 @@ export function DocumentWorkflowRail({
             </ul>
           ) : null}
         </section>
+      ) : null}
+
+      {showRun ? (
+        <dl className="ledger-rows workflow-rail__run" aria-label="Polish run">
+          {runDetails.map((detail) => (
+            <div key={detail.label} className="ledger-row">
+              <dt>{detail.label}</dt>
+              <span className="ledger-row__leader" aria-hidden="true" />
+              <dd>{detail.value}</dd>
+            </div>
+          ))}
+          {run?.startedAt !== undefined ? (
+            <div className="ledger-row">
+              <dt>Elapsed</dt>
+              <span className="ledger-row__leader" aria-hidden="true" />
+              <dd><ElapsedTime startedAt={run.startedAt} /></dd>
+            </div>
+          ) : null}
+        </dl>
       ) : null}
 
       {checks.length > 0 ? (
@@ -108,4 +138,13 @@ export function DocumentWorkflowRail({
       ) : null}
     </aside>
   );
+}
+
+function ElapsedTime({ startedAt }: { startedAt: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const interval = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(interval);
+  }, []);
+  return <>{formatElapsed(now - startedAt)}</>;
 }

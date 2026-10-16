@@ -28,6 +28,7 @@ import {
   DocumentWorkbench,
   DocumentWorkbenchEditorPane
 } from "../document/DocumentWorkbench";
+import { PolishActionButton } from "../document/PolishActionButton";
 
 const COVER_LETTER_STRUCTURE_CAPABILITIES = {
   header: true,
@@ -46,6 +47,7 @@ type CoverLetterTabProps = {
   inlineFormat: InlineFormatState;
   onInlineFormatStateChange: (state: InlineFormatState) => void;
   onTailor: () => void;
+  onStopTailor: () => void;
   onDocumentChoice: () => void;
   applicationSync: ApplicationDocumentSync;
   draftAutosaveState: DraftAutosaveState;
@@ -54,6 +56,7 @@ type CoverLetterTabProps = {
   onRestoreAutosaveDraft: (draft: CoverLetterAutosavedDraft) => void;
   onDismissAutosaveDraft: () => void;
   isTailoring: boolean;
+  tailorStartedAt?: number;
   tailorStatus: string;
   resumeReady: boolean;
   // Why the resume cannot ground a letter right now, when it is not missing.
@@ -89,6 +92,7 @@ export function CoverLetterTab({
   inlineFormat,
   onInlineFormatStateChange,
   onTailor,
+  onStopTailor,
   onDocumentChoice,
   applicationSync,
   draftAutosaveState,
@@ -96,6 +100,7 @@ export function CoverLetterTab({
   onRestoreAutosaveDraft,
   onDismissAutosaveDraft,
   isTailoring,
+  tailorStartedAt,
   tailorStatus,
   resumeReady,
   resumeBlocker,
@@ -172,15 +177,13 @@ export function CoverLetterTab({
           // The rail's one primary action, handed to the shell so it sits beside
           // the disclosure control whether the rail is open or closed.
           action: (
-            <button
-              type="button"
-              className="primary-button is-compact"
+            <PolishActionButton
+              label={proposal || appliedResult ? "Polish again" : "Polish"}
               disabled={!canTailor}
-              aria-busy={isTailoring}
-              onClick={onTailor}
-            >
-              {isTailoring ? "Polishing…" : proposal || appliedResult ? "Polish again" : "Polish"}
-            </button>
+              polishing={isTailoring}
+              onPolish={onTailor}
+              onStop={onStopTailor}
+            />
           ),
           ...(issueCount > 0
             ? {
@@ -200,6 +203,7 @@ export function CoverLetterTab({
             failure={failure}
             canRestore={editor.canRestorePreTailor}
             isTailoring={isTailoring}
+            tailorStartedAt={tailorStartedAt}
             resumeReady={resumeReady}
             resumeBlocker={resumeBlocker}
             jobReady={jobReady}

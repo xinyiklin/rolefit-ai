@@ -79,7 +79,7 @@ export function AnswerModelPicker({
           <p>{selectedConnection?.guidance || availabilityMessage || "Add or reconnect a provider in the RoleFit companion."}</p>
           <button type="button" className="ghost-button is-compact" onClick={() => void onRefreshProviders()}>Check providers</button>
         </div> : null}
-        <p className="answers-model-picker__hint">Applies to your next draft and Settings › Models.</p>
+        <p className="answers-model-picker__hint">Applies to your next draft. Answers is set only here.</p>
       </div>
     </NavMenu>
   );

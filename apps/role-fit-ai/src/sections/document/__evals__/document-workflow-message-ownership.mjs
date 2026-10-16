@@ -62,7 +62,6 @@ const bundled = await esbuild.build({
         polishSectionCount: 1,
         isPolishing: false,
         onRetryPolish: noop,
-        onStop: noop,
         onHighlight: noop
       };
       const preflight = {
@@ -146,6 +145,17 @@ const bundled = await esbuild.build({
             }
           },
           status: "Polish stopped. Your resume is unchanged."
+        }));
+      }
+
+      export function renderResumePolishing() {
+        return renderToStaticMarkup(React.createElement(ResumeWorkflowRail, {
+          ...resumeBase,
+          result: null,
+          decisions: baseDecisions,
+          isPolishing: true,
+          progress: { polish: { status: "running", startedAt: Date.now() } },
+          status: "Application prepared from the browser extension."
         }));
       }
 
@@ -289,6 +299,15 @@ for (const [outcome, message] of [
     new RegExp(`class="sr-only"[^>]*>${escapeRegExp(announcement)}<`),
     "cover polishing retains one non-visual live announcement"
   );
+}
+
+{
+  const html = rendered.renderResumePolishing();
+  assert.doesNotMatch(html, /Application prepared from the browser extension\./, "resume polishing hides an earlier status line");
+  assert.doesNotMatch(html, />\s*Stop\s*<\/button>/, "resume polishing stops from the Polish action, not a rail button");
+  assert.doesNotMatch(html, /workflow-rail__footer/, "resume polishing has no footer");
+  assert.match(html, /aria-label="Polish run"[\s\S]*Sections[\s\S]*Elapsed/, "resume polishing shows what is running and for how long");
+  assert.match(html, /class="sr-only"[^>]*>Polishing resume\.</, "resume polishing announces the run, not the earlier status");
 }
 
 {

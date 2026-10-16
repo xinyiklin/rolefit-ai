@@ -368,6 +368,7 @@ export function useCoverLetter({
       status: "running",
       note: "Writing from your evidence",
       noteTone: "info",
+      startedAt: Date.now(),
     });
     try {
       const response = await fetch("/api/cover-polish", {

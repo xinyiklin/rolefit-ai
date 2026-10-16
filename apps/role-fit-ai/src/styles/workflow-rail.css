@@ -209,3 +209,62 @@
 .resume-workflow__single-step.is-failed small,
 .resume-workflow__single-step.is-stopped small,
 .resume-workflow__single-step.is-withheld small { color: var(--warm); }
+
+/* An in-flight run: dotted-leader rows saying what is being polished and for
+   how long, in the ledger voice the rest of the desk uses for facts. */
+.workflow-rail__run {
+  padding-block: var(--s2);
+  border-block: 1px solid var(--hairline-soft);
+}
+
+/* -------- Polish action while running -------- */
+/* Running, the primary action steps back to a quiet working control and turns
+   into Stop on hover or keyboard focus. Both faces share one grid cell so the
+   swap never resizes the header. The selectors carry .primary-button so they
+   outrank its own hover fill. */
+.primary-button.polish-action.is-polishing,
+.primary-button.polish-action.is-polishing:hover:not(:disabled) {
+  display: inline-grid;
+  place-items: center;
+  border-color: var(--hairline-strong);
+  background: var(--card-elev);
+  box-shadow: none;
+  color: var(--ink-soft);
+}
+
+.polish-action__face {
+  display: inline-flex;
+  grid-area: 1 / 1;
+  align-items: center;
+  gap: var(--s1);
+}
+
+.polish-action__face--stop {
+  visibility: hidden;
+}
+
+.primary-button.polish-action.is-polishing.is-armed:hover:not(:disabled),
+.primary-button.polish-action.is-polishing.is-armed:focus-visible {
+  border-color: var(--warm-soft);
+  background: var(--warm-veil);
+  color: var(--warm);
+}
+
+.polish-action.is-armed:is(:hover, :focus-visible) .polish-action__face--busy {
+  visibility: hidden;
+}
+
+.polish-action.is-armed:is(:hover, :focus-visible) .polish-action__face--stop {
+  visibility: visible;
+}
+
+/* Without hover there is nothing to reveal it, so a running action reads Stop. */
+@media (hover: none) {
+  .polish-action.is-armed .polish-action__face--busy { visibility: hidden; }
+  .polish-action.is-armed .polish-action__face--stop { visibility: visible; }
+  .primary-button.polish-action.is-polishing.is-armed {
+    border-color: var(--warm-soft);
+    background: var(--warm-veil);
+    color: var(--warm);
+  }
+}

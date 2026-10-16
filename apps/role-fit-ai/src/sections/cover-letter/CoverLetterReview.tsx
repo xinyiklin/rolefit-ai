@@ -34,6 +34,7 @@ type CoverLetterReviewProps = {
   failure: CoverLetterFailure | null;
   canRestore: boolean;
   isTailoring: boolean;
+  tailorStartedAt?: number;
   resumeReady: boolean;
   resumeBlocker?: string;
   jobReady: boolean;
@@ -105,6 +106,7 @@ export function CoverLetterReview({
   failure,
   canRestore,
   isTailoring,
+  tailorStartedAt,
   resumeReady,
   resumeBlocker,
   jobReady,
@@ -235,6 +237,7 @@ export function CoverLetterReview({
           ? { details: failureDetails }
           : { items: [errorFailure?.detail ?? "Try Polish again."] })
       } : null}
+      run={isTailoring ? { startedAt: tailorStartedAt } : null}
       footer={footer}
       statusLine={proposal || failure || isTailoring ? undefined : status}
       statusAnnouncement={(proposal && !proposal.stale) || isTailoring ? status : undefined}

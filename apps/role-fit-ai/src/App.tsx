@@ -3414,6 +3414,7 @@ function App() {
               onTailor={() => {
                 handleCoverLetterPolish();
               }}
+              onStopTailor={stopCoverPolish}
               onDocumentChoice={preemptPreparedCoverLetterResolution}
               applicationSync={coverLetterApplicationSync}
               draftAutosaveState={coverDraftAutosaveState}
@@ -3421,6 +3422,7 @@ function App() {
               onRestoreAutosaveDraft={handleRestoreCoverDraft}
               onDismissAutosaveDraft={handleDismissCoverDraft}
               isTailoring={isGeneratingCover}
+              tailorStartedAt={coverProgress.status === "running" ? coverProgress.startedAt : undefined}
               tailorStatus={coverStatus}
               resumeReady={resumeReady && !resumeImport.reviewOpen}
               resumeBlocker={resumeImportBlocker}

@@ -32,7 +32,7 @@ export function ModelsPage({
           <span>Model</span>
           <span>Effort</span>
         </div>
-        {AI_STAGES.map((stage) => (
+        {AI_STAGES.filter((stage) => stage.modelControl === "settings").map((stage) => (
           <SettingsStage
             key={stage.id}
             stage={stage.id}

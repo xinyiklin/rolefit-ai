@@ -120,8 +120,9 @@ legacy answers keep unknown provenance. Unsaved conversation remains across tab
 navigation, but is not a durable transcript; preparing a posting or opening a
 saved application asks before discarding unsaved Answers text, a draft, or a
 drafting request in flight, and Answers are read-only while a posting is being
-prepared. The model menu shares Application Answers settings;
-changes affect future requests and preserve historical configuration.
+prepared. The model menu is the only place the Answers provider, model, and
+effort are set (Settings › Models does not list Application questions); changes
+affect future requests and preserve historical configuration.
 Generation and saving never rerun Prepare or generate documents. Drafting,
 refining and every Retry, including the progress dock's, need the posting
 prepared: an edit to the Prepare source blocks them until it is prepared again.
