@@ -68,8 +68,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
-## 2026-10-15
-
 ## 2026-10-16
 
 - [CODE] **Engine/editor audit patches** (uncommitted; user-directed autonomous
@@ -103,6 +101,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
     while the editor display map keeps one char; a cover base size outside
     9–13 pt throws in `documentStyleToCoverLetterStyle` (unreachable in
     RoleFit). Editor DOM modules were exercised only through the QA above.
+
+## 2026-10-15
 
 - [USER+CODE] **0.15.0 prepared** (minor; the user approved the release). Since
   `rolefit-preview-v0.14.0-beta.1`: #228 (stop Polish from its own button, rail
