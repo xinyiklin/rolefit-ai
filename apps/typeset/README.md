@@ -49,7 +49,9 @@ static assets, and your resume content never leaves your device.
 - **Browser autosave** — status sits directly beside the filename, and the
   current document is restored from browser storage on the same browser and
   origin. Only the current strict v1 source shape is restored; retired browser
-  draft shapes are ignored rather than migrated at runtime.
+  draft shapes are ignored rather than migrated at runtime. The most recent
+  draft the parser refused is kept under `typeset-resume.autosave.v2.unreadable`
+  (one slot) rather than overwritten by the fresh resume that opens instead.
 - **Private by design** — resume content stays in the browser and is never sent
   to an application service, even though the app is served from a hosted site.
 
