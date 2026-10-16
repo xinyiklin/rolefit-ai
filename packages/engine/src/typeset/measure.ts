@@ -214,7 +214,9 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
   let italic = 0;
   let underline = 0;
   const fontStack: DocumentFontFamily[] = [];
-  const sizeStack: number[] = [];
+  // A null slot is an invalid <size=…> (see INERT_OPEN_TAG): it keeps the stack
+  // balanced for its </size> without changing the effective size.
+  const sizeStack: Array<number | null> = [];
   const lineHeightStack: number[] = [];
   const linkStack: Array<string | null> = [];
   let suppressed = 0;
@@ -247,7 +249,7 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
     else if (tag === "</font>") fontStack.pop();
     else if (tag.startsWith("<size=")) {
       const size = Number(tag.slice(6, -1));
-      if (isInlineFontSizePt(size)) sizeStack.push(size);
+      sizeStack.push(isInlineFontSizePt(size) ? size : sizeStack[sizeStack.length - 1] ?? null);
     } else if (tag === "</size>") sizeStack.pop();
     else if (tag.startsWith("<line-height=")) {
       lineHeightStack.push(paragraphLineHeight(Number(tag.slice(13, -1))));

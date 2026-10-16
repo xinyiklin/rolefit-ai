@@ -40,14 +40,18 @@ Existing string-valued `.resume` files retain their output. Older builds reject
 new files containing null row values; no file migration or schema-version bump
 is needed for the expanded current v1 value contract.
 
-Section titles wrap at the full text width, retaining heading case and alignment,
-with one section rule after the last continuation. Long title/subtitle fields wrap inside their paired row. A short date or location
+Section titles wrap at the full text width, retaining heading case and
+alignment, with one section rule after the last continuation. Long
+title/subtitle fields wrap inside their paired row. A short date or location
 keeps its natural width; two long fields share the remaining width. Names and
 individual contact values wrap across the full header width. Wrapping preserves
-authored text, marks, links, and fitting paired-row geometry, and oversized heading
-groups can continue on another page. An indivisible glyph wider or taller than
-the available page area remains outside the supported geometry; typography is
-never silently shrunk.
+authored text, marks, links, and fitting paired-row geometry, and oversized
+heading groups can continue on another page. A bullet, skills row, or heading
+taller than a page fills its page to a wrapped line and continues on the next
+instead of running off the sheet; a bullet that fits a page still keeps
+together, and a heading row is never left alone at a page bottom. An
+indivisible glyph wider or taller than the available page area remains outside
+the supported geometry; typography is never silently shrunk.
 
 Header page placement reserves font-face metrics rather than the ink of typed
 letters. Names and contacts keep stable baselines while typing at the same font,
@@ -64,10 +68,13 @@ Run from the repository root:
 
 ```bash
 npm run check --workspace packages/engine
+npm run eval:inline-marks --workspace packages/engine
 npm run eval:resume-file --workspace packages/engine
 npm run eval:cover-letter-file --workspace packages/engine
+npm run eval:layout --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
 npm run eval:pdf-export-scheduling --workspace packages/engine
+npm run eval:pdf-links --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 ```
 

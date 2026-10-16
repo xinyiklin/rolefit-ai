@@ -8,6 +8,7 @@ import {
 import { documentFontFamily } from "./fontRegistry.ts";
 import {
   buildHeaderVerticalStream,
+  fitParagraphIndent,
   pageBox,
   paragraphLines,
   type VLine
@@ -46,7 +47,7 @@ export function buildCoverLetterVerticalStream(
     const spaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
     const bulletId = item.bulletIds[0] ?? `${item.id}-paragraph`;
     // Block indentation moves every wrapped line and narrows its measure.
-    const indent = paragraphIndentFromInlineMarks(value);
+    const indent = fitParagraphIndent(paragraphIndentFromInlineMarks(value), geo.textWidth, size);
     const lines = paragraphLines(
       value,
       size,

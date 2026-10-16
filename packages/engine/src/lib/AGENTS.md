@@ -31,12 +31,23 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   the character ones: `line-height`, `space-before`, `space-after`, and
   `indent` (a left indent in points). Adding a tag here means adding it to the
   editor's anchored scanner too, and to its display-map char shape, or a value
-  the engine understands will serialize back out as literal text.
+  the engine understands will serialize back out as literal text. Every
+  tag-stack walker over the grammar (this module's truth helpers, the engine's
+  segmenter, the editor's display map) gives an open tag whose value is
+  unusable — `<size=0>`, `<size=999>` — an inert stack slot
+  (`INERT_OPEN_TAG`), so its closing tag can never pop an outer value.
+  `uppercaseInlineMarkedText` is the engine's case transform: it uppercases text
+  and leaves tag payloads (link destinations, family ids) alone. The editor's
+  display map uppercases per display character (`ß` shows as `S` there while
+  the engine paints `SS`), a known one-character drift after such a glyph.
 - `styleFieldFormatting.ts` owns reusable bulk/effective formatting across
   headings, entry columns, skill labels, and contact fields, not toolbar state
   or presentation.
 - `links.ts` owns safe link normalization, detection, and inline destination
-  encoding/decoding.
+  encoding/decoding. A bare domain is a link only when the URL parser accepts
+  it (the shape test admits ports no browser does), and automatic detection
+  strips trailing punctuation except a closing bracket that closes one inside
+  the candidate (`wiki/Foo_(bar)`).
 - `pageMargins.ts` owns page-margin types, bounds, presets, and normalization.
 - `download.ts` owns the one browser file-download side effect (object URL,
   anchor click, deferred cleanup) used by `.resume` saves and PDF export. Keep
@@ -107,7 +118,10 @@ grammar, margin table, or link-normalization path.
 - Preserve the 2 MB input cap unless a measured need changes it with matching
   tests, error copy, and documentation.
 - Reject malformed JSON, wrong magic, unsupported versions, missing/unknown
-  fields, invalid bounds, and oversized input with clear user-facing errors.
+  fields, invalid bounds, and oversized input with clear user-facing errors. A
+  leading byte-order mark is not malformed: the byte path strips it through
+  `TextDecoder` and the text path strips it itself, so a file read through
+  Node's `utf8` decoding parses the same way.
 - A future schema change requires an explicit version and migration decision
   plus compatibility and round-trip verification. Do not add alternate source
   or conversion paths as a fallback.
@@ -121,7 +135,8 @@ For model, transform, or codec changes:
 
 1. Run `npm run eval:resume-file --workspace packages/engine` for `.resume`
    changes or `npm run eval:cover-letter-file --workspace packages/engine` for
-   `.cover` changes, plus the smallest probe for other pure functions.
+   `.cover` changes, `npm run eval:inline-marks --workspace packages/engine`
+   for the tag grammar, plus the smallest probe for other pure functions.
 2. Verify the current cover-letter v1 save/open round trip without session ids;
    for resumes, verify the sole current v1 round trip without session ids.
 3. Check unsupported schema-version rejection; no prototype-version migration

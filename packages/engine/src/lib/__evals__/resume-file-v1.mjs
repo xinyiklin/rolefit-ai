@@ -109,6 +109,11 @@ expectError(legacyStyleField, "invalid-style");
 
 expectError("{", "invalid-json");
 expectError(" ".repeat(MAX_RESUME_FILE_BYTES + 1), "too-large");
+// A byte-order mark is accepted whether the file arrives as decoded text (Node's
+// "utf8" keeps it) or as bytes (TextDecoder strips it).
+assert.deepEqual(parseResumeFile(`\uFEFF${serialized}`).documentStyle, parsed.documentStyle);
+assert.deepEqual(parseResumeFile(new TextEncoder().encode(`\uFEFF${serialized}`)).documentStyle, parsed.documentStyle);
+expectError(`\uFEFF\uFEFF${serialized}`, "invalid-json");
 
 // ----- invalid-document: shape, per-level strictness, and primitive types -----
 
@@ -218,6 +223,12 @@ assert.equal(resumeFileName("My Resume"), "My Resume.resume");
 assert.equal(resumeFileName("My Resume.resume"), "My Resume.resume", "an existing extension is not doubled");
 assert.equal(resumeFileName("My Resume.RESUME"), "My Resume.resume", "the extension strip is case-insensitive");
 assert.equal(resumeFileName("<b>Jane</b> <i>Doe</i>.resume"), "Jane Doe.resume", "inline b/i/u markup is stripped");
+assert.equal(
+  resumeFileName("<font=tinos><size=24><link=https%3A%2F%2Fexample.test>Jane</link></size></font> <align=center><u>Doe</u></align>"),
+  "Jane Doe.resume",
+  "every inline mark the grammar knows is stripped, not just emphasis"
+);
+assert.equal(resumeFileName("<size=0>Jane</size>"), "Jane.resume", "an unusable size tag is still a tag");
 assert.equal(resumeFileName('a/b\\c:d*e?f"g<h>i|j'), "a b c d e f g h i j.resume", "path and shell separators become spaces");
 assert.equal(resumeFileName("tab\tand null"), "tab and null.resume", "control characters become spaces");
 assert.equal(resumeFileName("Name...   "), "Name.resume", "trailing dots and spaces are trimmed");

@@ -100,6 +100,22 @@ for (const count of [1, 10, 100]) {
   console.log(`engine stress: ${count} entries, ${doc.pages.length} pages, ${elapsed.toFixed(1)}ms`);
 }
 
+// The optimal breaker scans only the breaks that can still start a feasible line,
+// so a paragraph's cost grows with its lines, not its words squared. The
+// unbounded breaker needed about ten seconds here against ~150ms now, so the
+// bound leaves a wide margin for slow runners while a quadratic regression
+// still fails it.
+{
+  const words = 48000;
+  const text = "lorem ipsum dolor sit amet consectetur ".repeat(Math.ceil(words / 6)).slice(0, words * 6);
+  const start = performance.now();
+  const doc = layoutResume(fixture({ titleLeft: "Title", bullets: [text], bulletIds: ["long"] }), DOC_STYLE_DEFAULTS);
+  const elapsed = performance.now() - start;
+  assert(elapsed < 2000, `a ${words}-word bullet laid out in ${elapsed.toFixed(0)}ms`);
+  for (const page of doc.pages) for (const line of page.lines) assert(line.baseline <= doc.geometry.lastBaselineMax, "long bullet stays within its page");
+  console.log(`engine stress: ${words}-word bullet, ${doc.pages.length} pages, ${elapsed.toFixed(1)}ms`);
+}
+
 const suppressedHeader = layoutResume({ ...fixture({}), header: { name: null, contact: [`<nolink>https://example.test/${"path".repeat(100)}</nolink>`] } }, DOC_STYLE_DEFAULTS);
 assert(suppressedHeader.pages.flatMap(page => page.lines).flatMap(line => line.runs).filter(run => run.src?.kind === "contact").every(run => !run.href), "wrapped contact must retain explicit link suppression");
 

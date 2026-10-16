@@ -5,6 +5,7 @@ import {
   COVER_LETTER_STYLE_DEFAULTS,
   DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
   CoverLetterFileError,
+  coverLetterFileName,
   coverLetterPlainText,
   coverLetterParagraphs,
   coverLetterResumeData,
@@ -698,3 +699,9 @@ for (const { value: family } of FONT_FAMILY_OPTIONS) {
 console.log(
   `cover-letter file v1 + layout probes: PASS (incl. ${FONT_FAMILY_OPTIONS.length} families × 6 faces through the file boundary)`
 );
+
+// Download names strip the whole inline-mark grammar, not only emphasis.
+assert.equal(coverLetterFileName("<font=carlito><size=12>Jane</size></font> <b>Doe</b>.cover"), "Jane Doe.cover");
+assert.equal(coverLetterFileName("<b></b>"), "Untitled cover letter.cover");
+assert.equal(coverLetterFileName("Letter: for/Acme?"), "Letter for Acme.cover");
+console.log("cover-letter file names strip every inline mark");

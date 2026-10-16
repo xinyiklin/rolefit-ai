@@ -25,7 +25,9 @@ function decodeJsonFileInput(
       maxBytes,
       errors.tooLarge
     );
-    return input;
+    // Text read through Node's "utf8" decoding keeps a byte-order mark that the
+    // byte path below strips, and JSON.parse rejects it. One rule for both.
+    return input.charCodeAt(0) === 0xfeff ? input.slice(1) : input;
   }
 
   const bytes = input instanceof Uint8Array ? input : new Uint8Array(input);

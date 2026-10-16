@@ -70,6 +70,40 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-15
 
+## 2026-10-16
+
+- [CODE] **Engine/editor audit patches** (uncommitted; user-directed autonomous
+  audit of `packages/engine` and `packages/editor`). A bullet, skills row, or
+  heading taller than a page fills its page and continues at a wrapped line
+  instead of running off the sheet (continuations carry `emergencyBreakBefore`;
+  `layout.ts` splits an over-tall chain at the last boundary that fits; a
+  page-sized bullet still moves whole). The breaker stops scanning at the first
+  overfull start (9,600 differential cases identical; 16,000 words 1.2 s →
+  ~10 ms). PDF link URIs escape `\ ( )` and percent-encode non-ASCII (an
+  unbalanced `)` made a PDF pdf-lib could not reload). Uppercase headings keep
+  `<link=…>` destinations; `<size=0>`/`<size=999>` take an inert slot in all
+  three tag walkers; impossible ports are not links and a balanced trailing `)`
+  stays in an auto-link (linear trimming); download names strip every inline
+  mark; a leading BOM parses; `<indent>` is clamped at impossible margins. New
+  evals `eval:inline-marks`, `eval:pdf-links`, `tall-paragraphs.mjs`.
+  - [TOOL] `npm run check` for `packages/engine` (incl. fonts:check),
+    `packages/editor`, `apps/typeset`, `apps/role-fit-ai` (offline 182/182)
+    exit 0 on Node 24.18.0; 277 page-fitting documents lay out byte-identical
+    to `HEAD`. Browser QA in Typeset (Chromium pane, 3,000-word bullet over 4
+    pages) passed: no overflow; caret, typing, arrows, drag selection, copy,
+    menus, and grip across the split; PDF page count and per-page baselines
+    match; a kept bullet moves whole. Reviews: `code-reviewer` (no High; Med
+    findings fixed: linear bracket trimming, 48,000-word breaker bound, a
+    kept-bullet fixture that crosses a page; its follow-up found a
+    stranded-heading split, fixed) and `mb-verifier` (nine claims PASS over
+    48,768 breaker and 11 pagination fixtures; residual: a cover glyph wider
+    than the clamp's 1 em overshoots a 3-inch margin by <0.4 bp).
+  - [CODE] Not changed, recorded: one unbreakable 20,000-character token costs
+    ≈0.8 s, growing faster than linearly; uppercase headings paint `ß` as `SS`
+    while the editor display map keeps one char; a cover base size outside
+    9–13 pt throws in `documentStyleToCoverLetterStyle` (unreachable in
+    RoleFit). Editor DOM modules were exercised only through the QA above.
+
 - [USER+CODE] **0.15.0 prepared** (minor; the user approved the release). Since
   `rolefit-preview-v0.14.0-beta.1`: #228 (stop Polish from its own button, rail
   run ledger, Answers model only in its composer), #224/#226 (PDF import maps
@@ -118,6 +152,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
     unverified); the Typeset deploy trusts the host key on first use
     (`ssh-keyscan`) and needs a pinned known-hosts secret; Electron stays at
     its runtime-contract pin with Dependabot PRs open. Never deep-audited:
-    `packages/editor` internals beyond clipboard, the engine PDF emitter,
     extension popup UI logic (its DOM is built with `textContent`; no HTML
-    sinks), evals quality, and a full docs-drift sweep.
+    sinks), evals quality, and a full docs-drift sweep (the engine and the
+    editor's pure modules were audited 2026-10-16, above).

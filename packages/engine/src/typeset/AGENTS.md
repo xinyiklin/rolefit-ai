@@ -99,18 +99,40 @@ it truthfully.
   preserve fitting geometry and allow oversized chains to split between lines.
 - Names and contact values wrap at the header width; paired entry fields retain
   natural short-side width or divide available width when both sides are long.
-  Fitting paired rows preserve their existing geometry. Continuation boundaries allow
-  an oversized heading keep-chain to paginate. Never shrink a glyph or discard
-  text to conceal impossible page geometry.
+  Fitting paired rows preserve their existing geometry. Continuation
+  boundaries allow an oversized keep-chain to paginate: wrapped heading rows
+  and the wrapped lines of a kept-together paragraph (a bullet, a skills row)
+  carry `emergencyBreakBefore`, which `layout.ts` uses only when the chain
+  cannot fit a page. It then fills the current page to the last boundary that
+  fits and continues on the next, never leaving only heading rows behind, while
+  a page-sized bullet still moves whole. Never shrink a glyph or discard text
+  to conceal impossible page geometry. The one clamp is `fitParagraphIndent`:
+  an authored `<indent>` is held so the paragraph keeps at least one em of
+  measure inside its column, because at a 3-inch margin a 3-inch indent would
+  otherwise push text past the right edge in every renderer. The stored mark is
+  unchanged; a glyph wider than that em (a `W` at 12pt) may still overshoot by
+  its excess, the emergency allowance below.
 - Header row footprints use `faceExtent` at the run size capped by its role size,
   with oversized rise/drop counted separately. Empty runs reserve the same face
   box. Never use typed ink to place a name/contact at page top or test page fit;
   ascenders and descenders must not shift the header or following content.
+- Link annotations in `pdf/emit.ts` go through `pdfUriString`: pdf-lib writes a
+  literal string verbatim, so an unescaped `)` or `\\` in a destination produced
+  a PDF that pdf-lib itself could not reopen. Escape those bytes and
+  percent-encode everything outside printable ASCII; `pdf-links.mjs` locks the
+  round trip for brackets, backslashes, non-ASCII, and percent-encoded paths.
 - Underline and link rules come from `underlineSpans` plus `underlineRule`, so
   every renderer draws one rule per contiguous underlined phrase at one
   face-derived depth. Never derive a rule from the text a renderer happens to
   hold: the DOM painter groups merged style spans and the PDF emitter walks
   single runs, so a text-dependent rule silently disagrees between them.
+- The optimal breaker tries previous breaks from the latest backwards and stops
+  once a line is overfull past its shrink budget, so a paragraph costs its lines
+  times its words per line rather than its words squared; ties keep the latest
+  break exactly as before. A 16,000-word bullet lays out in milliseconds
+  instead of over a second. The emergency path for an oversized token still
+  measures each candidate prefix, so a single 20,000-character token costs
+  under a second and grows faster than linearly beyond that.
 - Normal prose uses optimal word/hyphen breaks. When a single token is wider
   than the text column, the emergency path may split it only at deterministic
   grapheme boundaries measured with the same font metrics; it must preserve

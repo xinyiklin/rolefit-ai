@@ -105,6 +105,13 @@ export function alignmentFromInlineMarks(text: string): FieldAlignment | null {
   return (match?.[1].toLowerCase() as FieldAlignment | undefined) ?? null;
 }
 
+// An open tag the grammar matches but whose value is unusable (a <size=0>, a
+// <size=999>). It still has a closing tag, so it must occupy a stack slot that
+// changes nothing; skipping the push would let its </size> pop an OUTER value.
+// Every tag-stack walker over the grammar (this one, measure.ts, the editor's
+// display map) applies the same rule.
+export const INERT_OPEN_TAG: unique symbol = Symbol("inert inline mark");
+
 // One tag-stack walk shared by the whole-field "effective value" helpers:
 // resolve the innermost open tag's value (or `fallback`) over each
 // non-whitespace text segment and report the value every segment agrees on,
@@ -112,7 +119,7 @@ export function alignmentFromInlineMarks(text: string): FieldAlignment | null {
 function effectiveTagValue<T>(
   text: string,
   fallback: T,
-  parseOpen: (tag: string) => T | null,
+  parseOpen: (tag: string) => T | typeof INERT_OPEN_TAG | null,
   isClose: (tag: string) => boolean
 ): T | null {
   const stack: T[] = [];
@@ -133,7 +140,8 @@ function effectiveTagValue<T>(
     include(text.slice(cursor, match.index));
     const tag = match[0];
     const opened = parseOpen(tag);
-    if (opened !== null) stack.push(opened);
+    if (opened === INERT_OPEN_TAG) stack.push(stack.length ? stack[stack.length - 1] : fallback);
+    else if (opened !== null) stack.push(opened);
     else if (isClose(tag)) stack.pop();
     cursor = match.index + match[0].length;
   }
@@ -164,6 +172,20 @@ export function clearAlignmentOverride(text: string): string {
 
 export function stripInlineMarks(text: string): string {
   return text.replace(INLINE_TAG_RE, "");
+}
+
+// Uppercase the TEXT of an inline-marked value and leave its tags alone. Running
+// toUpperCase over the whole string also uppercased every tag payload, which
+// the case-insensitive grammar still parsed: a <link=…> destination came back
+// with its path uppercased, a different URL.
+export function uppercaseInlineMarkedText(text: string): string {
+  let out = "";
+  let cursor = 0;
+  for (const match of text.matchAll(INLINE_TAG_RE)) {
+    out += text.slice(cursor, match.index).toUpperCase() + match[0];
+    cursor = match.index + match[0].length;
+  }
+  return out + text.slice(cursor).toUpperCase();
 }
 
 export type InlineOverrideKind = "fontFamily" | "fontSize";
@@ -220,7 +242,7 @@ export function effectiveFieldSize(value: string, fallback: number): number | nu
       const opened = SIZE_OPEN_RE.exec(tag);
       if (!opened) return null;
       const size = Number(opened[1]);
-      return isInlineFontSizePt(size) ? size : null;
+      return isInlineFontSizePt(size) ? size : INERT_OPEN_TAG;
     },
     (tag) => /^<\/size>$/i.test(tag)
   );
