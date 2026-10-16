@@ -302,8 +302,10 @@ The Typeset deployment workflow builds and HTTP-probes the immutable container
 for matching pull requests; its existing `verify` check forwards that result.
 On configured pushes to `main`, that verified linux/amd64 image is copied to the
 EC2 host that serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com),
-which loads it and swaps the container. The host never builds: its 1 GiB of
-memory cannot hold the TypeScript and Vite build.
+which loads it and swaps the container, keeping the previous image as
+`typeset:previous` and restarting it if the new container does not come up
+healthy. The host never builds: its 1 GiB of memory cannot hold the TypeScript
+and Vite build.
 
 ## Viewport support
 

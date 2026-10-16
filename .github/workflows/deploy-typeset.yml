@@ -187,28 +187,52 @@ jobs:
           archive="/tmp/typeset-image-${RELEASE_SHA}.tar.gz"
           trap 'rm -f "$archive"' EXIT
           gunzip -c "$archive" | "${docker_cmd[@]}" load
+
+          # Keep the image that is serving now, so a release that does not come
+          # up healthy is rolled back to it instead of leaving the site down.
+          previous=""
+          if "${docker_cmd[@]}" image inspect "$IMAGE_NAME:latest" >/dev/null 2>&1; then
+            "${docker_cmd[@]}" tag "$IMAGE_NAME:latest" "$IMAGE_NAME:previous"
+            previous="$IMAGE_NAME:previous"
+          fi
           "${docker_cmd[@]}" tag "typeset-ci:${RELEASE_SHA}" "$IMAGE_NAME:latest"
           "${docker_cmd[@]}" image rm "typeset-ci:${RELEASE_SHA}" >/dev/null
 
-          "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
+          start_container() {
+            "${docker_cmd[@]}" rm -f "$CONTAINER_NAME" 2>/dev/null || true
+            "${docker_cmd[@]}" run -d \
+              --name "$CONTAINER_NAME" \
+              --restart unless-stopped \
+              -p 127.0.0.1:5186:8080 \
+              "$1"
+          }
+          wait_healthy() {
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -fsS http://127.0.0.1:5186/ >/dev/null; then
+                return 0
+              fi
+              sleep 1
+            done
+            return 1
+          }
+
           # One-time migration cleanup: pre-rename services used these names.
           "${docker_cmd[@]}" rm -f typeset-resume 2>/dev/null || true
           "${docker_cmd[@]}" rm -f jakeforge 2>/dev/null || true
-          "${docker_cmd[@]}" run -d \
-            --name "$CONTAINER_NAME" \
-            --restart unless-stopped \
-            -p 127.0.0.1:5186:8080 \
-            "$IMAGE_NAME:latest"
-
-          healthy=""
-          for _ in 1 2 3 4 5 6 7 8 9 10; do
-            if curl -fsS http://127.0.0.1:5186/ >/dev/null; then
-              healthy=1
-              break
+          # Both calls sit in the condition, so a failed `docker run` (port in
+          # use, daemon error) rolls back as well instead of stopping the script.
+          if ! start_container "$IMAGE_NAME:latest" || ! wait_healthy; then
+            echo "The new Typeset container did not answer on 127.0.0.1:5186." >&2
+            "${docker_cmd[@]}" logs "$CONTAINER_NAME" >&2 || true
+            if [ -n "$previous" ]; then
+              echo "Rolling back to the previous image." >&2
+              "${docker_cmd[@]}" tag "$previous" "$IMAGE_NAME:latest"
+              if ! start_container "$IMAGE_NAME:latest" || ! wait_healthy; then
+                echo "The previous image did not come back either." >&2
+              fi
             fi
-            sleep 1
-          done
-          [ -n "$healthy" ]
+            exit 1
+          fi
 
           "${docker_cmd[@]}" image prune -f >/dev/null
           REMOTE
