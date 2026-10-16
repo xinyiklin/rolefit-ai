@@ -148,3 +148,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
   from the layout, so it needs a schema-level scanner) is not done.
   - [TOOL] Decoded tables deep-equal for 180 faces; 60-layout + 5.45M-measure
     fingerprint and 60-PDF byte hash unchanged; `fonts:check` reproduces.
+- [USER+CODE] Application questions left Settings › Models: the Answers composer
+  picker is its only model control (`modelControl: "composer"` in
+  `apps/role-fit-ai/src/config/aiStages.ts`); its Guidance override and Reset
+  are unchanged. Uncommitted on `main`. The parked document chat draft is
+  branch `draft/document-chat` (worktree `../role-fit-ai-document-chat-draft`).

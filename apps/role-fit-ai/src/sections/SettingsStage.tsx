@@ -125,7 +125,7 @@ export function SettingsStage({
         }}
       >
         <option value="">Copy from…</option>
-        {AI_STAGES.filter((item) => item.id !== stage).map((item) => (
+        {AI_STAGES.filter((item) => item.id !== stage && item.modelControl === "settings").map((item) => (
           <option key={item.id} value={item.id}>{item.label}</option>
         ))}
       </select>

@@ -35,6 +35,10 @@ export type AiStageDescriptor = {
     | "applicationReview"
     | "resumeImport";
   readonly supportsInstructions: boolean;
+  // Where the stage's provider, model, and effort are chosen. A composer stage
+  // is set only from its own picker, so Settings › Models and its Copy-from list
+  // leave it out; it still persists and resets like every stage.
+  readonly modelControl: "settings" | "composer";
 };
 
 export const AI_STAGES: readonly AiStageDescriptor[] = [
@@ -46,7 +50,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     settingsPrefix: "jobAnalysis",
     // Extraction is a fixed, complete posting-to-brief contract. A guidance
     // control would promise influence that the request deliberately does not accept.
-    supportsInstructions: false
+    supportsInstructions: false,
+    modelControl: "settings"
   },
   {
     id: "fit-assessment",
@@ -56,7 +61,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     settingsPrefix: "fitAssessment",
     // The assessment rubric is fixed. A free-form override could turn advisory
     // screening into a user-authored verdict preference instead of evidence review.
-    supportsInstructions: false
+    supportsInstructions: false,
+    modelControl: "settings"
   },
   {
     id: "resume-polish",
@@ -64,7 +70,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     title: "Resume Polish",
     blurb: "Creates one grounded proposal for the resume sections marked Polish.",
     settingsPrefix: "resumePolish",
-    supportsInstructions: true
+    supportsInstructions: true,
+    modelControl: "settings"
   },
   {
     id: "cover-polish",
@@ -72,7 +79,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     title: "Cover letter Polish",
     blurb: "Creates a grounded whole-letter proposal for you to accept or discard.",
     settingsPrefix: "coverPolish",
-    supportsInstructions: true
+    supportsInstructions: true,
+    modelControl: "settings"
   },
   {
     id: "application-answers",
@@ -80,7 +88,9 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     title: "Application questions",
     blurb: "Drafts grounded answers to an application's written questions.",
     settingsPrefix: "applicationAnswers",
-    supportsInstructions: true
+    supportsInstructions: true,
+    // Chosen in the Answers composer, the stage's only surface.
+    modelControl: "composer"
   },
   {
     id: "application-review",
@@ -88,7 +98,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     title: "Final application review",
     blurb: "Reviews the current included materials when you request it; never changes or submits them.",
     settingsPrefix: "applicationReview",
-    supportsInstructions: false
+    supportsInstructions: false,
+    modelControl: "settings"
   },
   {
     id: "resume-import",
@@ -98,7 +109,8 @@ export const AI_STAGES: readonly AiStageDescriptor[] = [
     settingsPrefix: "resumeImport",
     // Structure is read against a fixed references-only contract; free-form
     // guidance could only push it toward rewriting.
-    supportsInstructions: false
+    supportsInstructions: false,
+    modelControl: "settings"
   }
 ];
 

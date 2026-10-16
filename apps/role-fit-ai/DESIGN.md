@@ -709,7 +709,8 @@ Cover retries structure once, without repairing content-only concerns. Do not ba
 warnings.
 Answers uses a centered conversation column, one rounded bottom composer,
 compact Context and Saved answers disclosures, and a model/effort picker inside
-the composer. The picker uses the existing stage-settings owner and catalogs,
+the composer. The picker uses the existing stage-settings owner and catalogs and
+is the only control for the Answers stage,
 opens above its trigger, and stays inside the viewport; it is a compact
 label/control grid (Provider, Model, Effort, as in Settings › Models), and the
 trigger carries a warm dot when its provider needs attention. The composer

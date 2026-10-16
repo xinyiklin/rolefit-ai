@@ -69,6 +69,11 @@ for (const stage of AI_STAGES) {
   );
 }
 assert.deepEqual(
+  AI_STAGES.filter((stage) => stage.modelControl === "composer").map((stage) => stage.id),
+  ["application-answers"],
+  "Application questions is set only from the Answers composer, not Settings › Models"
+);
+assert.deepEqual(
   AI_STAGES.filter((stage) => stage.supportsInstructions).map((stage) => stage.id),
   ["resume-polish", "cover-polish", "application-answers"],
   "only drafting stages expose custom-instruction controls"

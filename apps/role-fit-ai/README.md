@@ -467,12 +467,12 @@ per-row collapse control:
 - **Resume Polish** — one evidence-grounded proposal request over selected fields.
 - **Cover letter** — creates one grounded whole-letter proposal for you to
   accept or discard.
-- **Application questions** — drafts grounded responses to an application's
-  free-text questions.
 - **Final application review** — checks the included documents and job context
   without changing them.
 - **Resume import** — interprets the structure of an imported PDF when you ask;
   it references the PDF's own text and never rewrites it.
+
+The Answers composer sets the Application questions model; it has no row here.
 
 Fresh settings and **Reset all settings** use these recommendations:
 
@@ -481,7 +481,7 @@ Fresh settings and **Reset all settings** use these recommendations:
 | Job analysis + Fit Assessment | Claude Code CLI | Sonnet 5.5 | Low |
 | Resume Polish | Codex CLI | GPT-6.1 Sol | Medium |
 | Cover letter | Codex CLI | GPT-6.1 Sol | Medium |
-| Application questions | Claude Code CLI | Opus 5.5 | High |
+| Application questions (Answers composer) | Claude Code CLI | Opus 5.5 | High |
 | Final application review | Claude Code CLI | Sonnet 5.5 | Low |
 | Resume import | Claude Code CLI | Sonnet 5.5 | Low |
 
@@ -601,7 +601,7 @@ verdict silently stands in.
 Open **Answers** after preparing a job. Paste an employer question, refine the
 answer conversationally or edit it directly, and copy only the answer text.
 Context and Saved answers are available from the header; the composer model
-menu uses the same Application Answers settings as Settings > Models.
+menu is the only place the Answers model and effort are set.
 
 **Save answer** keeps the original question and chosen answer revision. First
 Save creates a Draft application; Apply or Skip keeps that same record. Drafts

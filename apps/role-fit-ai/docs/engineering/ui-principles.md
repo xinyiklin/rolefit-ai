@@ -448,8 +448,9 @@ Never show:
   they belong in RoleFit Companion, not in a browser settings panel. Per-stage
   readiness is not listed separately either — a blocked stage says so in its own
   row, beside the control that fixes it.
-- Settings > Models carries one hairline row per configurable stage under
-  column heads shown once (stage, provider, model, effort). Each owns a
+- Settings > Models carries one hairline row per stage set in Settings
+  (`modelControl: "settings"`; Application questions is set only from the
+  Answers composer) under column heads shown once (stage, provider, model, effort). Each owns a
   concrete provider/model/effort config; **Copy from** is a one-shot sync
   between stages, not a live link. Instruction overrides live in Guidance,
   beside the shared custom instructions they replace, one collapsed row per

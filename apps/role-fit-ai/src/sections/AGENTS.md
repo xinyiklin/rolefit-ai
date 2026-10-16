@@ -68,7 +68,9 @@ and `docs/engineering/ui-principles.md`.
   one collapsed override per stage that accepts one (previewed when set), and
   the two Resume Polish preferences, Bold keywords in bullets and Review edits
   before showing them (off by default). Settings > Models is one hairline `SettingsStage`
-  row per stage under column heads shown once.
+  row per stage whose `modelControl` is `settings`, under column heads shown
+  once; its Copy-from list offers only those stages. Application questions is
+  `composer`: the Answers picker is its only control.
 - Settings > Automation also holds **Prepare picks from**: one checkbox per
   saved variant in two independent lists, Resumes and Cover letters (checked =
   eligible), one short line, and an empty or loading line per list. It lists

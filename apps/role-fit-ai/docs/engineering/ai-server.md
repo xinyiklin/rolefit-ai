@@ -540,7 +540,8 @@ modules under `server/ai/` so no single file carries the whole pipeline:
 ## AI Provider Layer
 
 The provider is chosen per request from the companion-managed configured
-registry. Settings > Models holds a separate config per stage and shows only
+registry. Settings > Models holds a separate config per stage, except Application
+questions, which only the Answers composer sets, and shows only
 providers the user explicitly added: `/api/job-analysis` receives the Job analysis config,
 `/api/resume-polish` receives the Resume Polish config as `provider` / `model` /
 `reasoningEffort`,
