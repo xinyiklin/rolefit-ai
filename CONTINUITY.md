@@ -67,46 +67,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
-## 2026-10-11
-
-- [USER+CODE] **0.13.0 prepared** (minor: #214 adds Fit findings to Resume
-  Polish, per-gap statements, and posting-term coverage; the user approved the
-  release). Notes `apps/role-fit-ai/docs/releases/0.13.0-beta.1.md`; extension
-  1.4.0 and desktop bridge API 13 unchanged; no stored-data or format change.
-  - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `npm run check
-    --workspace apps/role-fit-ai` exit 0 (offline 182/182),
-    `test:desktop:release` 14/14, `test:rolefit:desktop` passed on the first
-    run, and `make:rolefit:desktop` plus `test:rolefit:desktop:packaged`
-    (darwin-arm64, unpacked) passed. Windows and macOS x64 packaging run only in
-    the release workflow.
-  - [TOOL] Release receipt: run 38157704047 succeeded on `51d20c4`; the
-    pre-release published 2026-10-11T17:07Z with five artifacts plus
-    `SHA256SUMS.txt`.
-- [USER+TOOL] Guidance audit applied: root `CLAUDE.md` reduced to Claude-only
-  mechanics; root `AGENTS.md` adopts the product-delivery hook (named-work
-  activation) and one independent review for every change except typo/link/format/comment-only; the
-  dependency procedure moved to `docs/development.md`; this ledger was
-  compacted (durable rules to `docs/decisions.md` D001–D074, resolved entries
-  to `docs/continuity/2026-10.md`). Starters synced to machine-bootstrap
-  a1ecaf5 (PR-template wording adopted; its PR-size section and
-  `docs/engineering/git-workflow.md` path skipped as project choices).
-
 ## 2026-10-14
 
-- [USER+CODE] Shared font catalog expanded by 24 families to 30; locally
-  bundled browser/PDF assets, pinned sources/licenses and generation details
-  are documented in `packages/engine/fonts/README.md`. Original six/defaults
-  and portable schema versions remain; older builds reject an unfamiliar
-  document font id and show an unfamiliar inline font mark as literal text.
-- [USER+CODE] Approved on-demand loading covers document/inline families and
-  next-typing caret choices. Menus are bounded and scrollable. Failed loads are
-  visible; obsolete completions cannot replace newer state. Reopening clears
-  prior transient typing format, and menu focus restoration explicitly refreshes
-  the caret even when the browser emits no selection-change event.
-- [USER+CODE] Follow-up review fix: the DOM painter withholds pages only for a
-  family its loader has not confirmed, so adding/removing an already-loaded
-  inline family (toolbar, undo/redo) no longer remounts pages behind the loading
-  state. Chromium phase `loaded inline fonts` was red on the prior gate.
 - [USER+CODE] **0.14.0 prepared** (minor: #219's 30-family font catalog; the
   user approved the release). Notes `apps/role-fit-ai/docs/releases/0.14.0-beta.1.md`;
   extension 1.4.0 and desktop bridge API 13 unchanged. The notes' rollback
@@ -125,32 +87,17 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-15
 
-- [TOOL] **Typeset outage.** The deploy for #219 (run 38656943748) built on the
-  EC2 host. `tsc && vite build` gave no output for 4.5 minutes, then SSH broke
-  ("Broken pipe"). The next deploy (run 38665258020) failed at `ssh-keyscan`,
-  and the site timed out.
-  - Cause, measured locally: #219 grew `metrics.gen.ts` from 1.17 MB to
-    10.17 MB. `tsc` peak RSS rose from 365 MB to 1.30 GB, and `vite build` from
-    541 MB to 1.29 GB.
-  - The host is a t3.micro (1 GiB, x86_64). The host's own OOM log is
-    UNCONFIRMED.
-- [USER+CODE+TOOL] Fix (D075, user-approved): the deploy ships the CI-built and HTTP-probed
-  linux/amd64 image, and the host only loads it. A local rehearsal of
-  build/save/load/tag/run served Typeset with all 337 synced font files
-  (30 families) from a 62 MB archive.
-- [TOOL] Typeset restored 2026-10-15 by deploy run 38673945200 (#222,
-  5e1c9778) after the user rebooted the instance; all 30 families served.
-- [USER+CODE] Follow-up implemented (PR #223): the generator emits
-  `metrics.gen.ts` as one `JSON.parse` string with alias faces by name and
-  class-matrix pair kerning; `typeset/metrics.ts` unpacks a face on first use.
-  Lossless, consumers unchanged. 10.17 MB → 3.30 MB; Typeset tsc 1.31 GB →
-  263 MB; Typeset index JS 9.50 MB (3.51 MB gz) → 3.58 MB (729 kB gz); RoleFit
-  tsc 1.41 GB → 363 MB. Per-family lazy loading (the painter finds families
-  from the layout, so it needs a schema-level scanner) is not done.
-  - [TOOL] Decoded tables deep-equal for 180 faces; 60-layout + 5.45M-measure
-    fingerprint and 60-PDF byte hash unchanged; `fonts:check` reproduces.
-- [USER+CODE] Application questions left Settings › Models: the Answers composer
-  picker is its only model control (`modelControl: "composer"` in
-  `apps/role-fit-ai/src/config/aiStages.ts`); its Guidance override and Reset
-  are unchanged (PR #228). The parked document chat draft is
-  branch `draft/document-chat` (worktree `../role-fit-ai-document-chat-draft`).
+- [USER+CODE] **0.15.0 prepared** (minor; the user approved the release). Since
+  `rolefit-preview-v0.14.0-beta.1`: #228 (stop Polish from its own button, rail
+  run ledger, Answers model only in its composer), #224/#226 (PDF import maps
+  all 30 families), #225/#227 (narrow toolbar fixes), #223 (metrics packing).
+  Notes `apps/role-fit-ai/docs/releases/0.15.0-beta.1.md`; extension 1.4.0 and
+  desktop bridge API 13 unchanged; no stored-data or format change.
+  - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `test:desktop:release`
+    14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
+    182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
+    `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed.
+  - [USER] Waived the second reviewer for this bump (one review) and browser
+    QA for the version bump.
+- [USER+CODE] The parked document chat draft is branch `draft/document-chat`
+  (worktree `../role-fit-ai-document-chat-draft`).
