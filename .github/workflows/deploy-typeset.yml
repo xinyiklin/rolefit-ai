@@ -90,6 +90,22 @@ jobs:
           fi
           grep -Fq "<title>Typeset" <<<"$response"
 
+          # nginx.conf is the image's server config: the probe fails if a
+          # change there loses the response headers the app ships with.
+          headers="$(curl -fsS -D - -o /dev/null http://127.0.0.1:5186/)"
+          grep -iq "^content-security-policy: default-src 'self'" <<<"$headers"
+          grep -iq "^x-content-type-options: nosniff" <<<"$headers"
+          grep -iq "^x-frame-options: DENY" <<<"$headers"
+          grep -iq "^referrer-policy: no-referrer" <<<"$headers"
+          grep -iq "^cache-control: no-cache" <<<"$headers"
+          asset="$(grep -o '/assets/[^"]*\.js' <<<"$response" | head -1)"
+          test -n "$asset"
+          asset_headers="$(curl -fsS -D - -o /dev/null "http://127.0.0.1:5186$asset")"
+          grep -iq "^cache-control: public, max-age=31536000, immutable" <<<"$asset_headers"
+          missing_headers="$(curl -sS -D - -o /dev/null http://127.0.0.1:5186/assets/missing.js)"
+          grep -q "^HTTP/1.1 404" <<<"$missing_headers"
+          grep -iq "^cache-control: no-cache" <<<"$missing_headers"
+
       - name: Export verified image
         if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         run: |
