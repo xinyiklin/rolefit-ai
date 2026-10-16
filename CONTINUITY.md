@@ -50,7 +50,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
   labels (2026-07-25); the add-evidence focus path (2026-09-28, still
   unexercised 2026-10-06; the redesigned Settings pages themselves were
   browser-checked 2026-10-06); the Show evidence 16rem scroll bound
-  (2026-10-06).
+  (2026-10-06); the running Polish action's hover-to-Stop swap and rail run
+  ledger (2026-10-15, skipped by the user).
 - 2026-08-08..09-18 [TOOL] Live-provider behavior of the extension-arrival race
   and automatic flows (2026-08-08) is UNCONFIRMED; live providers, vendor ATS
   behavior, and hiring outcomes are unverified and no efficacy is claimed
