@@ -107,8 +107,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
     trigger; the full workflow was not run for this user-directed autonomous
     audit, and one `code-reviewer` review was run instead. Its one Med (a
     failed `docker run` skipped the rollback) and six Low findings were fixed:
-    asset 404s no longer cached immutable, the IPv6 listener left to the image
-    entrypoint, the workspace deny glob escaped, a refused draft storage will
+    asset 404s no longer cached immutable, the IPv6 listener dropped (IPv4
+    only), the workspace deny glob escaped, a refused draft storage will
     not keep reported as lost, the development font route moved behind the
     guard, and the CI probe now asserts referrer and asset caching headers.
     Not covered by a test: the development-mode Vite settings (`cors: false`,

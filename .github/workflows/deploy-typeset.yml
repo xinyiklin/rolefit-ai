@@ -223,7 +223,9 @@ jobs:
           # use, daemon error) rolls back as well instead of stopping the script.
           if ! start_container "$IMAGE_NAME:latest" || ! wait_healthy; then
             echo "The new Typeset container did not answer on 127.0.0.1:5186." >&2
-            "${docker_cmd[@]}" logs "$CONTAINER_NAME" >&2 || true
+            # Only the container's stderr (nginx errors): its stdout is the
+            # access log, which carries visitor addresses, and this log is public.
+            "${docker_cmd[@]}" logs "$CONTAINER_NAME" 2>&1 >/dev/null | tail -50 >&2 || true
             if [ -n "$previous" ]; then
               echo "Rolling back to the previous image." >&2
               "${docker_cmd[@]}" tag "$previous" "$IMAGE_NAME:latest"
