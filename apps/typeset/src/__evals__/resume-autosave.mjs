@@ -16,6 +16,13 @@ import {
 } from "@typeset/engine/lib/resumeFile.ts";
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 
+import {
+  AUTOSAVE_KEY,
+  DOCUMENT_TITLE_KEY,
+  UNREADABLE_AUTOSAVE_KEY,
+  restoreAutosavedDraft
+} from "../autosaveDraft.ts";
+
 const autosave = serializeResumeFile(buildStarterResume(), DOC_STYLE_DEFAULTS);
 
 // What the app stores is what it can restore: the same parser guards both.
@@ -54,4 +61,40 @@ for (const [label, payload] of [
   );
 }
 
-console.log("Typeset resume autosave: strict round trip and 4 malformed-draft refusals passed");
+// The app's restore path. A refused draft is kept under its own key, because
+// the starter resume autosaves over AUTOSAVE_KEY as soon as the app opens.
+const storage = (entries) => {
+  const map = new Map(Object.entries(entries));
+  return {
+    map,
+    getItem: (key) => map.get(key) ?? null,
+    setItem: (key, value) => map.set(key, value)
+  };
+};
+
+const empty = storage({});
+assert.deepEqual(restoreAutosavedDraft(empty), { kind: "none" }, "no draft restores nothing");
+assert.equal(empty.map.size, 0, "restoring nothing writes nothing");
+
+const titled = storage({ [AUTOSAVE_KEY]: autosave, [DOCUMENT_TITLE_KEY]: "Spring resume" });
+const restoredDraft = restoreAutosavedDraft(titled);
+assert.equal(restoredDraft.kind, "restored");
+assert.equal(restoredDraft.title, "Spring resume", "a restored draft carries its title");
+assert.equal(restoredDraft.parsed.data.sections.length, buildStarterResume().sections.length);
+assert.equal(titled.map.has(UNREADABLE_AUTOSAVE_KEY), false, "a readable draft is not quarantined");
+
+const refused = "Candidate Name\ncandidate@example.com";
+const broken = storage({ [AUTOSAVE_KEY]: refused });
+assert.deepEqual(restoreAutosavedDraft(broken), { kind: "unreadable", kept: true });
+assert.equal(broken.map.get(UNREADABLE_AUTOSAVE_KEY), refused, "the refused draft is kept byte for byte");
+assert.equal(broken.map.get(AUTOSAVE_KEY), refused, "restoring does not itself rewrite the draft");
+
+const full = storage({ [AUTOSAVE_KEY]: refused });
+full.setItem = () => { throw new DOMException("quota", "QuotaExceededError"); };
+assert.deepEqual(
+  restoreAutosavedDraft(full),
+  { kind: "unreadable", kept: false },
+  "a refused draft that storage will not keep is reported as lost, not thrown"
+);
+
+console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, and unreadable-draft keeping passed");

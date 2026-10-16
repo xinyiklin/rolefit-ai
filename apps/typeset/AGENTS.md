@@ -10,8 +10,9 @@ Applies to `apps/typeset/`. Read the root guide plus `PRODUCT.md` and
   identity.
 - `scripts/sync-fonts.mjs` mirrors the engine-owned fonts into generated
   `public/fonts/` before development and builds.
-- `vite.config.ts`, `Dockerfile`, and app metadata own the static Typeset
-  runtime and deployment.
+- `vite.config.ts`, `Dockerfile`, `nginx.conf` (the image's server config and
+  response headers), and app metadata own the static Typeset runtime and
+  deployment.
 - `@typeset/engine` owns the document model, strict `.resume` codec, layout,
   fonts, print painting, and PDF output.
 - `@typeset/editor` owns document/history/style hooks, direct editing,

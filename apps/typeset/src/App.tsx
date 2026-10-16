@@ -22,7 +22,6 @@ import {
 } from "@typeset/engine/lib/documentStyle.ts";
 import { useResumeEditor } from "@typeset/editor/hooks/useResumeEditor.ts";
 import {
-  parseResumeFile,
   readResumeFile,
   resumeFileName,
   serializeResumeFile,
@@ -47,11 +46,10 @@ import {
   type InlineFormatState,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
+import { AUTOSAVE_KEY, DOCUMENT_TITLE_KEY, restoreAutosavedDraft } from "./autosaveDraft.ts";
 import { commitDocumentSaveBaseline } from "./documentSaveBaseline.ts";
 import { DocumentFileMenus } from "./DocumentFileMenus.tsx";
 
-const AUTOSAVE_KEY = "typeset-resume.autosave.v2";
-const DOCUMENT_TITLE_KEY = "typeset-resume.documentTitle.v1";
 const AUTOSAVE_DELAY_MS = 450;
 const NOTICE_DISMISS_MS = 4000;
 const NOTICE_EXIT_MS = 180;
@@ -184,14 +182,18 @@ export default function App() {
     let initialTitle = UNTITLED_RESUME_TITLE;
 
     try {
-      const autosave = window.localStorage.getItem(AUTOSAVE_KEY);
-      if (autosave) {
-        // Browser drafts and disk files share one strict validation path so
-        // corrupt or manually edited state never reaches the editor reducer.
-        const restored = parseResumeFile(autosave);
-        initialData = restored.data;
-        initialDocumentStyle = restored.documentStyle;
-        initialTitle = window.localStorage.getItem(DOCUMENT_TITLE_KEY) || UNTITLED_RESUME_TITLE;
+      const draft = restoreAutosavedDraft(window.localStorage);
+      if (draft.kind === "restored") {
+        initialData = draft.parsed.data;
+        initialDocumentStyle = draft.parsed.documentStyle;
+        initialTitle = draft.title || UNTITLED_RESUME_TITLE;
+      } else if (draft.kind === "unreadable") {
+        setNotice({
+          tone: "error",
+          message: draft.kept
+            ? "Your last local draft could not be read, so a fresh resume was opened instead. The draft was kept in this browser's storage."
+            : "Your last local draft could not be read or kept, so a fresh resume was opened instead."
+        });
       }
     } catch {
       setNotice({

@@ -29,6 +29,7 @@ RUN npm run build --workspace apps/typeset
 FROM nginxinc/nginx-unprivileged:1.31.3-alpine@sha256:59ccf0943b0b8e8d9e6ea9039a39555730f544701a655c596f7df7d096c593f5
 
 COPY --from=build /repo/apps/typeset/dist /usr/share/nginx/html
+COPY apps/typeset/nginx.conf /etc/nginx/conf.d/default.conf
 
 # The unprivileged image serves static files on 8080. Deployment maps the
 # existing loopback port 5186 to this port so Caddy's upstream stays unchanged.

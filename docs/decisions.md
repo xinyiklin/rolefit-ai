@@ -405,7 +405,10 @@ and lives in the app ledger.
   ships the image the `container` job built (`--platform linux/amd64`) and
   HTTP-probed. The host only checks it is x86_64, then runs `docker load`, retags
   and swaps the container. A host with a different architecture or type must
-  update the platform and the guard together.
+  update the platform and the guard together. [CODE] 2026-10-15: before the
+  swap the host tags the serving image `typeset:previous`; when the new
+  container fails to start or does not answer within 10 s, it restarts that
+  image and the job still fails.
 - 2026-08-10 [USER+CODE+TOOL] D059 ACTIVE: **1.0 is deliberately not claimed**; its criteria
   are a genuinely signed release and a compatibility policy promising migrations
   for `.resume`, `.cover`, and `.rolefit-backup`; 0.x minors carry behavioral

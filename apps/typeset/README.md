@@ -49,7 +49,9 @@ static assets, and your resume content never leaves your device.
 - **Browser autosave** — status sits directly beside the filename, and the
   current document is restored from browser storage on the same browser and
   origin. Only the current strict v1 source shape is restored; retired browser
-  draft shapes are ignored rather than migrated at runtime.
+  draft shapes are ignored rather than migrated at runtime. The most recent
+  draft the parser refused is kept under `typeset-resume.autosave.v2.unreadable`
+  (one slot) rather than overwritten by the fresh resume that opens instead.
 - **Private by design** — resume content stays in the browser and is never sent
   to an application service, even though the app is served from a hosted site.
 
@@ -187,6 +189,7 @@ for the complete ownership contract.
 package.json                       workspace root (workspaces, root scripts)
 tsconfig.base.json                 shared compiler options (each workspace extends)
 apps/typeset/Dockerfile            builds Typeset from the workspace root
+apps/typeset/nginx.conf            the image's server config and response headers
 packages/engine/                   @typeset/engine — deterministic core, no editor
   src/lib/                         resume model, .resume codec, style contract,
                                      inline-mark grammar, links, typography
@@ -278,10 +281,13 @@ docker run --rm -p 127.0.0.1:5186:8080 typeset
 ```
 
 The multi-stage image builds with Node 24.18.0 and serves only the compiled
-assets from unprivileged Nginx. Both bases are pinned by multi-architecture
-digest and updated through dependency PRs. It has no runtime environment
-variables or application API. Put the loopback-bound container behind an HTTPS
-reverse proxy when exposing it publicly.
+assets from unprivileged Nginx, with the server config in `nginx.conf`: a
+Content Security Policy that allows only the app's own origin (plus `blob:` and
+`data:` where the editor needs them), `nosniff`, frame denial, no referrer, and
+immutable caching for hashed assets only. Both bases are pinned by
+multi-architecture digest and updated through dependency PRs. It has no runtime
+environment variables or application API. Put the loopback-bound container
+behind an HTTPS reverse proxy when exposing it publicly.
 
 Example Caddy site:
 
@@ -296,8 +302,10 @@ The Typeset deployment workflow builds and HTTP-probes the immutable container
 for matching pull requests; its existing `verify` check forwards that result.
 On configured pushes to `main`, that verified linux/amd64 image is copied to the
 EC2 host that serves [typeset.xinyiklin.com](https://typeset.xinyiklin.com),
-which loads it and swaps the container. The host never builds: its 1 GiB of
-memory cannot hold the TypeScript and Vite build.
+which loads it and swaps the container, keeping the previous image as
+`typeset:previous` and restarting it if the new container does not come up
+healthy. The host never builds: its 1 GiB of memory cannot hold the TypeScript
+and Vite build.
 
 ## Viewport support
 

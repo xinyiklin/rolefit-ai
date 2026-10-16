@@ -54,8 +54,9 @@ CORS or turn the hosted product/download page into a client of the local server.
   renderer or become a second tracker/editor/workspace host. Its compact local
   `file:` page is the setup surface for the closed catalog of three CLIs and two
   API providers.
-- The existing local `/api/*` surface is same-origin and unauthenticated. Its
-  Host/Origin guard reduces DNS-rebinding and browser CSRF risk; it does not
+- The existing local `/api/*` surface is same-origin and unauthenticated. The
+  Host/Origin guard covers it and every other non-extension request, app files
+  included; it reduces DNS-rebinding and browser CSRF risk and does not
   authenticate native processes, prove server identity, or authorize a hosted
   web origin.
 - The companion uses typed IPC between its exact local main frame and Electron
