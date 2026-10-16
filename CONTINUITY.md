@@ -152,5 +152,5 @@ extension 1.4.0, desktop bridge API 13. Release history:
 - [USER+CODE] Application questions left Settings › Models: the Answers composer
   picker is its only model control (`modelControl: "composer"` in
   `apps/role-fit-ai/src/config/aiStages.ts`); its Guidance override and Reset
-  are unchanged. Uncommitted on `main`. The parked document chat draft is
+  are unchanged (PR #228). The parked document chat draft is
   branch `draft/document-chat` (worktree `../role-fit-ai-document-chat-draft`).
