@@ -7,6 +7,7 @@ import assert from "node:assert/strict";
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys } from "../../config/aiStages.ts";
 import { seedStage, seedStages, stageFieldsToPersist } from "../stageSettings.ts";
 import { normalizeSettings } from "../settings.ts";
+import { parsePortableWorkspacePreferences } from "../workspaceBackupContract.ts";
 import { materializeAiSettings } from "../aiSettingsPersistence.ts";
 
 const fresh = seedStages({});
@@ -197,14 +198,54 @@ assert.deepEqual(
   "workspace adoption materializes one stable normalized live-settings fingerprint"
 );
 
-const retiredAntigravityNames = normalizeSettings({
+// Antigravity support was removed: a saved Antigravity stage stays readable
+// through strict workspace/backup validation and takes that stage's own default.
+const retiredAntigravity = {
   resumePolishProvider: "antigravity-cli",
-  resumePolishSelectedModel: "Gemini 3.5 Flash (Medium)",
+  resumePolishSelectedModel: "gemini-3.6-flash-high",
+  resumePolishCliReasoningEffort: "",
+  aiProvider: "antigravity-cli",
+  selectedModel: "Gemini 3.5 Flash (Medium)",
   coverPolishProvider: "antigravity-cli",
-  coverPolishSelectedModel: "Claude Opus 4.6 (Thinking)"
-});
-assert.equal(retiredAntigravityNames.resumePolishSelectedModel, "gemini-3.6-flash-high");
-assert.equal(retiredAntigravityNames.coverPolishSelectedModel, "gemini-3.6-flash-high");
+  coverPolishSelectedModel: "Claude Opus 4.6 (Thinking)",
+  applicationAnswersProvider: "claude-cli",
+  applicationAnswersSelectedModel: "claude-opus-5-5",
+  applicationAnswersCliReasoningEffort: "high",
+  applicationReviewProvider: "antigravity-cli",
+  applicationReviewSelectedModel: "gemini-3.6-flash-high",
+  fitAssessmentProvider: "openai",
+  fitAssessmentSelectedModel: "gpt-6-astra"
+};
+const repairedAntigravity = parsePortableWorkspacePreferences({ settings: retiredAntigravity, lastBaseResume: "" }).settings;
+assert.deepEqual(
+  repairedAntigravity,
+  {
+    resumePolishProvider: "codex-cli",
+    resumePolishSelectedModel: "gpt-6.1-sol",
+    resumePolishCliReasoningEffort: "medium",
+    coverPolishProvider: "codex-cli",
+    coverPolishSelectedModel: "gpt-6.1-sol",
+    coverPolishCliReasoningEffort: "medium",
+    applicationAnswersProvider: "claude-cli",
+    applicationAnswersSelectedModel: "claude-opus-5-5",
+    applicationAnswersCliReasoningEffort: "high",
+    applicationReviewProvider: "claude-cli",
+    applicationReviewSelectedModel: "claude-sonnet-5-5",
+    applicationReviewCliReasoningEffort: "low",
+    fitAssessmentProvider: "openai",
+    fitAssessmentSelectedModel: "gpt-6-astra"
+  },
+  "retired Antigravity stages take their own defaults; other stages keep theirs"
+);
+assert.equal(
+  seedStage("application-review", repairedAntigravity).provider,
+  "claude-cli",
+  "a repaired Final review never inherits Fit Assessment's paid API"
+);
+assert.deepEqual(seedStage("resume-polish", repairedAntigravity), seedStage("resume-polish", {}));
+assert.deepEqual(seedStage("cover-polish", repairedAntigravity), seedStage("cover-polish", {}));
+assert.equal(seedStage("resume-polish", repairedAntigravity).provider, "codex-cli", "a repaired stage never falls back to a paid API");
+assert.equal(normalizeSettings({ resumePolishProvider: "antigravity-cli" }).resumePolishProvider, undefined);
 
 assert.deepEqual(
   normalizeSettings({

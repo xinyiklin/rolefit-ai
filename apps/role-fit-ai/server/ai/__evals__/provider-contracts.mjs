@@ -3,7 +3,6 @@
 import assert from "node:assert/strict";
 
 import {
-  buildAntigravityCliArgs,
   buildClaudeCliArgs,
   buildCodexCliArgs,
   classifyClaudeFailure
@@ -35,7 +34,7 @@ import {
 
 const ENV_KEYS = [
   "AI_PROVIDER", "AI_MODEL", "OPENAI_API_KEY", "ANTHROPIC_API_KEY",
-  "OPENAI_MODEL", "ANTHROPIC_MODEL", "CLAUDE_CLI_MODEL", "CODEX_CLI_MODEL", "ANTIGRAVITY_CLI_MODEL"
+  "OPENAI_MODEL", "ANTHROPIC_MODEL", "CLAUDE_CLI_MODEL", "CODEX_CLI_MODEL"
 ];
 const savedEnv = new Map(ENV_KEYS.map((key) => [key, process.env[key]]));
 for (const key of ENV_KEYS) delete process.env[key];
@@ -43,8 +42,8 @@ for (const key of ENV_KEYS) delete process.env[key];
 try {
   assert.deepEqual(
     providerOptions.map(({ value }) => value),
-    ["claude-cli", "codex-cli", "antigravity-cli", "openai", "anthropic"],
-    "only the three verified CLIs and two native APIs are exposed"
+    ["claude-cli", "codex-cli", "openai", "anthropic"],
+    "only the two verified CLIs and two native APIs are exposed"
   );
   assert(
     Object.values(modelOptionsByProvider).flat().every(({ value }) => value !== "custom"),
@@ -81,23 +80,6 @@ try {
     modelOptionsByProvider["codex-cli"].map(({ value }) => value),
     ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
     "Codex CLI matches every list-visible model in the installed cache"
-  );
-  assert.deepEqual(
-    modelOptionsByProvider["antigravity-cli"].map(({ value, label }) => [value, label]),
-    [
-      ["gemini-3.6-flash-high", "Gemini 3.6 Flash (High)"],
-      ["gemini-3.6-flash-medium", "Gemini 3.6 Flash (Medium)"],
-      ["gemini-3.6-flash-low", "Gemini 3.6 Flash (Low)"],
-      ["gemini-3.5-flash-high", "Gemini 3.5 Flash (High)"],
-      ["gemini-3.5-flash-medium", "Gemini 3.5 Flash (Medium)"],
-      ["gemini-3.5-flash-low", "Gemini 3.5 Flash (Low)"],
-      ["gemini-3.1-pro-high", "Gemini 3.1 Pro (High)"],
-      ["gemini-3.1-pro-low", "Gemini 3.1 Pro (Low)"],
-      ["claude-sonnet-4-6", "Claude Sonnet 4.6 (Thinking)"],
-      ["claude-opus-4-6-thinking", "Claude Opus 4.6 (Thinking)"],
-      ["gpt-oss-120b-medium", "GPT-OSS 120B (Medium)"]
-    ],
-    "Antigravity sends the stable slugs paired with the installed CLI's display names"
   );
   assert.deepEqual(
     cliReasoningEffortOptionsFor("codex-cli", "gpt-5.6-sol")?.map(({ value }) => value),
@@ -171,15 +153,18 @@ try {
   assert.equal(reconcileCliReasoningEffort("codex-cli", "gpt-6.1-sol", "ultra"), "ultra");
   assert.equal(reconcileCliReasoningEffort("codex-cli", "gpt-6-luna", "ultra"), "medium", "an unsupported effort falls back to the provider default");
 
-  assert.equal(
-    resolveProviderRequest({ provider: "antigravity-cli" }).model,
-    "gemini-3.6-flash-high",
-    "Antigravity defaults to the current stable 3.6 Flash slug"
+  assert.throws(
+    () => resolveProviderRequest({ provider: "antigravity-cli" }),
+    /Unknown AI provider/,
+    "the removed Antigravity provider fails closed instead of selecting another provider"
   );
-  assert.equal(
-    resolveProviderRequest({ provider: "antigravity-cli", model: "Gemini 3.5 Flash (High)" }).model,
-    "gemini-3.5-flash-high",
-    "already-open tabs using a legacy Antigravity display name migrate at the server boundary"
+  process.env.AI_PROVIDER = "antigravity-cli";
+  assert.throws(() => resolveProviderRequest({}), /Unknown AI_PROVIDER/, "a stale AI_PROVIDER=antigravity-cli fails closed");
+  delete process.env.AI_PROVIDER;
+  assert.throws(
+    () => resolveProviderRequest({ provider: "claude-cli", model: "Gemini 3.5 Flash (High)" }),
+    /Model name can only use/,
+    "model names no longer accept the spaces and parentheses of Antigravity display names"
   );
 
   assert.throws(
@@ -428,7 +413,12 @@ try {
   const opus48Body = buildAnthropicMessagesBody({ model: "claude-opus-4-8", systemPrompt: "system", userPrompt: "user" });
   assert.equal("thinking" in opus48Body, false, "models that already default to no thinking are left untouched");
 
-  const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low", systemPrompt: "system" });
+  const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low" }, "/tmp/rolefit-test/system-prompt.txt");
+  assert.equal(
+    claude[claude.indexOf("--append-system-prompt-file") + 1],
+    "/tmp/rolefit-test/system-prompt.txt",
+    "Claude reads its system prompt from a private file, never from argv"
+  );
   assert(claude.includes("--no-session-persistence"));
   assert.equal(claude[claude.indexOf("--tools") + 1], "", "Claude tools remain disabled");
   assert.equal(claude[claude.indexOf("--setting-sources") + 1], "", "Claude does not load user/project settings");
@@ -472,11 +462,6 @@ try {
   assert.equal(sonnet55Args[sonnet55Args.indexOf("--model") + 1], "claude-sonnet-5-5");
   assert.equal(sonnet55Args[sonnet55Args.indexOf("--effort") + 1], "low", "Sonnet 5.5 keeps RoleFit's bounded CLI default effort");
 
-  const agy = buildAntigravityCliArgs({ model: "gemini-test", userPrompt: "Return JSON" });
-  assert(agy.includes("--sandbox"), "Antigravity runs with terminal restrictions");
-  assert.equal(agy[agy.indexOf("-p") + 1], "Return JSON", "Antigravity receives the print prompt as -p's required value");
-  assert.equal(agy[agy.indexOf("--model") + 1], "gemini-test", "Antigravity receives a stable model slug");
-  assert.equal(agy[agy.indexOf("--print-timeout") + 1], "230s", "Antigravity has an internal timeout below the server timeout");
 
   const normalizedQuestions = normalizeApplicationQuestions([
     "x".repeat(1_000),

@@ -709,7 +709,7 @@ Good server verification covers:
   non-adjacent jumps, invalid responses, provider errors, material-theme
   overlap, the automatic-Polish decision per threshold across repeats and
   between paths, per-dispatch elapsed time and reported token usage (Claude
-  Code and the API adapters report counts, Codex one total, Antigravity none,
+  Code and the API adapters report counts, Codex one total; a missing count is
   recorded as `null`, never estimated), and the job half of each Prepare
   response against the fixture's `expectedJob` block: required-term coverage,
   preferred placement, or-alternatives kept in one item, eligibility text,
@@ -1227,9 +1227,9 @@ and does not own workspace/tracker files. Focused companion probes should cover:
   browser storage;
 - shape-only installed/signed-in/signed-out/unknown CLI status with no executable
   paths, account identifiers, environment values, tokens, stdout, or stderr;
-- installed/configured Antigravity is request-eligible as ready-to-verify while
-  `authState` remains unknown; it is never labeled signed in, and the first
-  actual provider request owns authentication verification and recovery errors;
+- a CLI is request-eligible only when installed, added, and signed in; a
+  vault that still lists the removed `antigravity-cli` keeps its API keys and
+  other providers, while any other unknown id is corruption;
 - fake-binary cases for absent, malformed, timed-out, and oversized status
   output, plus fixed external-terminal sign-in argv, the install/sign-in-guide
   URL opening, sanitized child environments, and redacted failures;

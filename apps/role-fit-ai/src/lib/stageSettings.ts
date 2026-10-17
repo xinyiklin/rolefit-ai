@@ -15,6 +15,10 @@ const STAGE_DEFAULTS: Record<StageId, StageConfig> = {
   "resume-import": { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }
 };
 
+export function stageDefault(stage: StageId): StageConfig {
+  return STAGE_DEFAULTS[stage];
+}
+
 // The benchmarked setting a stage seeds when it moves to this provider.
 const STAGE_ALTERNATES: Partial<Record<StageId, StageConfig>> = {
   "resume-polish": { provider: "claude-cli", selectedModel: "claude-opus-5-5", cliReasoningEffort: "high" }

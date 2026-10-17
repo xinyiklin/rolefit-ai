@@ -62,7 +62,6 @@ const channels = Object.freeze({
 const providerIds = Object.freeze([
   "claude-cli",
   "codex-cli",
-  "antigravity-cli",
   "openai",
   "anthropic"
 ]);
@@ -105,16 +104,6 @@ const providerConnections = Object.freeze([
     authState: "signed-in",
     setupFlow: "managed-login",
     guidance: "Ready to use."
-  }),
-  Object.freeze({
-    id: "antigravity-cli",
-    kind: "cli",
-    configured: false,
-    ready: false,
-    installed: false,
-    authState: "unknown",
-    setupFlow: "manual-login",
-    guidance: "Install Antigravity before enabling it."
   }),
   Object.freeze({
     id: "openai",
@@ -473,7 +462,7 @@ assert.deepEqual(
 assert.equal(removedExtensionOrigin, firefoxOrigin);
 const handledConnections = await installedHandlers.get(channels.providers)(requestEvent());
 assert.deepEqual(handledConnections.map(({ id }) => id), providerIds);
-assert.equal(handledConnections.length, 5);
+assert.equal(handledConnections.length, 4);
 assert.equal(handledConnections[0].guidance.length, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH);
 assert.deepEqual(
   Object.keys(handledConnections.find(({ id }) => id === "openai")).sort(),
@@ -518,15 +507,21 @@ assert.equal(
 assert.deepEqual(configuredCli, { provider: "claude-cli", enabled: true });
 const terminalResult = await installedHandlers.get(channels.terminal)(
   requestEvent(),
-  "antigravity-cli"
+  "codex-cli"
 );
-assert.equal(openedTerminalProvider, "antigravity-cli");
+assert.equal(openedTerminalProvider, "codex-cli");
 assert.deepEqual(Object.keys(terminalResult).sort(), ["guidance", "status"]);
 assert.equal(terminalResult.status, "opened");
 assert.equal(terminalResult.guidance.length, ROLEFIT_PROVIDER_GUIDANCE_MAX_LENGTH);
 assert.doesNotMatch(JSON.stringify(terminalResult), /must-not-cross-ipc/);
-await installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-cli");
-assert.equal(openedInstallGuide, "antigravity-cli");
+await installedHandlers.get(channels.installGuide)(requestEvent(), "codex-cli");
+assert.equal(openedInstallGuide, "codex-cli");
+await assert.rejects(
+  async () => installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-cli"),
+  /Invalid CLI provider id/,
+  "the removed Antigravity provider has no install guide"
+);
+assert.equal(openedInstallGuide, "codex-cli");
 await installedHandlers.get(channels.extensionDirectory)(requestEvent());
 assert.equal(extensionDirectoryOpens, 1);
 for (const target of ROLEFIT_EXTENSION_SETUP_COPY_TARGETS) {
@@ -1008,7 +1003,7 @@ await assert.rejects(
 );
 extensionPairingFailure = null;
 
-connectionsResult = providerConnections.slice(0, 4);
+connectionsResult = providerConnections.slice(0, -1);
 await assert.rejects(
   installedHandlers.get(channels.providers)(requestEvent()),
   /Invalid provider connection list/
@@ -1498,7 +1493,7 @@ await exposedApi.saveApiProvider("openai", "sk-private");
 await exposedApi.removeProvider("anthropic");
 await exposedApi.setCliProviderEnabled("codex-cli", true);
 await exposedApi.openCliSignInTerminal("codex-cli");
-await exposedApi.openProviderInstallGuide("antigravity-cli");
+await exposedApi.openProviderInstallGuide("claude-cli");
 await exposedApi.openExtensionDirectory();
 await exposedApi.copyExtensionSetupValue("firefox");
 await exposedApi.openBrowserApp();
@@ -1519,7 +1514,7 @@ assert.deepEqual(invocations, [
   { channel: channels.remove, args: ["anthropic"] },
   { channel: channels.configureCli, args: ["codex-cli", true] },
   { channel: channels.terminal, args: ["codex-cli"] },
-  { channel: channels.installGuide, args: ["antigravity-cli"] },
+  { channel: channels.installGuide, args: ["claude-cli"] },
   { channel: channels.extensionDirectory, args: [] },
   { channel: channels.extensionCopy, args: ["firefox"] },
   { channel: channels.open, args: [] },

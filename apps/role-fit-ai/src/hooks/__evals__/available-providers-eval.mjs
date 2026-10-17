@@ -32,18 +32,14 @@ const managed = parseProviderConnectionsPayload({
   providers: [
     provider("openai", "api", true, "not-applicable"),
     provider("claude-cli", "cli", false, "signed-out"),
-    provider("antigravity-cli", "cli", true, "unknown", "Antigravity sign-in is verified when first used.")
+    provider("codex-cli", "cli", true, "signed-in", "Codex CLI is connected through its local CLI session.")
   ]
 });
-assert.deepEqual(managed.providers.map(({ id }) => id), ["claude-cli", "antigravity-cli", "openai"]);
+assert.deepEqual(managed.providers.map(({ id }) => id), ["claude-cli", "codex-cli", "openai"]);
 assert.equal(managed.providers[0].ready, false);
 assert.equal(managed.providers[1].ready, true);
-assert.equal(managed.providers[1].authState, "unknown");
-assert.equal(
-  managed.providers[1].guidance,
-  "Antigravity sign-in is verified when first used.",
-  "a ready-to-verify Antigravity connection preserves its honest unknown-auth guidance"
-);
+assert.equal(managed.providers[1].authState, "signed-in");
+assert.equal(managed.providers[1].guidance, "Codex CLI is connected through its local CLI session.");
 assert.equal(managed.providers[2].ready, true);
 
 assert.deepEqual(providerReadiness({
@@ -69,7 +65,7 @@ assert.deepEqual(providerReadiness({
   companionManaged: true,
   providers: managed.providers,
   message: "Providers are managed by RoleFit Companion."
-}, "antigravity-cli"), {
+}, "codex-cli"), {
   ready: true,
   message: ""
 });
@@ -89,6 +85,9 @@ const reject = (payload) => assert.throws(
 );
 reject({ ...managed, schemaVersion: 2 });
 reject({ ...managed, extra: true });
+reject({ schemaVersion: 1, companionManaged: true, providers: [
+  provider("antigravity-cli", "cli", true, "unknown")
+] });
 reject({ schemaVersion: 1, companionManaged: false, providers: [managed.providers[0]] });
 reject({ schemaVersion: 1, companionManaged: true, providers: [
   provider("claude-cli", "cli", true, "signed-in"),

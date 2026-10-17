@@ -37,7 +37,6 @@ type ProviderSnapshot = Omit<AvailableProvidersState, "refresh" | "ensureProvide
 const PROVIDER_ORDER = Object.freeze([
   "claude-cli",
   "codex-cli",
-  "antigravity-cli",
   "openai",
   "anthropic"
 ] as const satisfies readonly AiProviderValue[]);
@@ -47,7 +46,6 @@ const PROVIDER_INDEX = new Map<AiProviderValue, number>(
 const PROVIDER_KIND: Readonly<Record<AiProviderValue, "cli" | "api">> = Object.freeze({
   "claude-cli": "cli",
   "codex-cli": "cli",
-  "antigravity-cli": "cli",
   openai: "api",
   anthropic: "api"
 });

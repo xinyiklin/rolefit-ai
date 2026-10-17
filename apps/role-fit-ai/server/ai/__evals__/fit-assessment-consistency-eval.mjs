@@ -254,7 +254,7 @@ Fixtures: ${allFixtures.map((fixture) => fixture.id).join(", ")}`);
       runs: RUNS, paths: ["combined + standalone for a matching Fit request", "split for a differing one"],
       fixtures: fixtures.map((fixture) => fixture.id), corpusHash, sourceHashes: sourceHashes(),
       labelProvenance: "Repository-authored synthetic expectations; human review not recorded",
-      usageNote: "Token usage is the provider's own report: Claude Code and the API adapters report counts, Codex reports one total, Antigravity reports none (null).",
+      usageNote: "Token usage is the provider's own report: Claude Code and the API adapters report counts, Codex reports one total.",
       humanReviewed: false
     });
     save("fixtures.json", fixtures);

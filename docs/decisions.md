@@ -359,7 +359,7 @@ later entry wins.
   2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
   their stage/provider; one app-owned CLI effort contract serves settings,
   validation, and Claude argv.
-- 2026-08-08 [USER+CODE+TOOL] D050 ACTIVE: Five integrations (Claude CLI, Codex CLI,
+- 2026-08-08 [USER+CODE+TOOL] D050 AMENDED by D080: Five integrations (Claude CLI, Codex CLI,
   Antigravity CLI, OpenAI API, Claude API) and no speculative provider;
   Antigravity's full calibration matrix is unconfirmed. 2026-08-09: a private
   71-application Fit calibration found GPT-5.5 medium the strongest balanced
@@ -369,6 +369,16 @@ later entry wins.
 - 2026-10-17 [USER+CODE] D076 ACTIVE: GPT-5.5 left the Codex catalog after its
   2026-10-14 retirement; a saved GPT-5.5 stage selection repairs to the Codex
   default within its stage, as the earlier retired Codex models do.
+- 2026-10-17 [USER+CODE] D080 ACTIVE: **Antigravity CLI (`agy`, `antigravity-cli`)
+  support is removed** ("remove support for agy, everywhere in this app"). Four
+  integrations remain: Claude Code CLI, Codex CLI, OpenAI API, Claude API.
+  [CODE] Saved state stays readable: a stage saved with Antigravity is set to its
+  own Claude Code or Codex default before strict validation (browser cache,
+  workspace preferences, backups; Final review never inherits Fit's provider); a provider
+  vault listing `antigravity-cli` drops the id and keeps its API keys and
+  other providers; any other unknown id still fails closed. The manual
+  ready-to-verify state and the space/parenthesis allowance in model names
+  went with it. Historical release notes are unchanged.
 
 ### Tracker, storage, and workspace
 

@@ -215,6 +215,9 @@ function parsePersistedVault(value: unknown): PersistedVault {
   const enabledCliProviders: RoleFitCliProviderId[] = [];
   const seenCliProviders = new Set<RoleFitCliProviderId>();
   for (const providerId of value.enabledCliProviders) {
+    // Antigravity support was removed: drop its saved flag instead of treating a
+    // vault that still lists it (and holds API keys) as corrupt.
+    if (providerId === "antigravity-cli") continue;
     if (!isRoleFitCliProviderId(providerId) || seenCliProviders.has(providerId)) {
       throw new ProviderVaultCorruptError();
     }

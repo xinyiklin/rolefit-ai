@@ -1,13 +1,12 @@
 // Subscription-CLI providers. Lets the polish route use Claude Max (via
-// Claude Code), ChatGPT/Codex Plus (via Codex CLI), or Google Gemini (via the
-// Antigravity CLI `agy`, which replaced the retired Gemini CLI) without burning
-// paid API tokens. Each helper spawns the local CLI binary and returns the model
+// Claude Code) or ChatGPT/Codex Plus (via Codex CLI) without burning paid API
+// tokens. Each helper spawns the local CLI binary and returns the model
 // response as a string (the polish route then parses it as JSON).
 
 import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
 import { spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { StringDecoder } from "node:string_decoder";
@@ -24,6 +23,8 @@ import { readProviderUsage, recordProviderUsage, totalOnlyUsage, type UsageSink 
 
 type RunCliOptions = { timeoutMs?: number; cwd?: string; signal?: AbortSignal };
 type RunCliResult = { stdout: string; stderr: string };
+// The CLI was never started because its argv could not reach it intact.
+type CliLaunchRefusal = "too-long" | "multi-line-script";
 // runCli rejects with a plain Error carrying captured streams / classification
 // flags so callers (classifyClaudeFailure) can inspect them.
 type CliError = Error & {
@@ -32,6 +33,7 @@ type CliError = Error & {
   stdout?: string;
   stderr?: string;
   exitCode?: number | null;
+  launchRefused?: CliLaunchRefusal;
 };
 // The resolved provider config passed to each CLI helper (subset of the shared
 // dispatch args; the CLIs use their own subscription auth, no apiKey).
@@ -170,6 +172,36 @@ async function readBoundedFile(path: string): Promise<string> {
   return readFile(path, "utf8");
 }
 
+// cmd.exe runs Windows command scripts, including npm's .cmd shims. It ends its
+// command line at the first newline and refuses one over 8,191 characters, its
+// own path and switches included. (A script's own expansion can fail sooner.)
+const CMD_EXE_MAX_COMMAND_LINE = 8_191;
+
+function cliLaunchRefusedError(command: string, refusal: CliLaunchRefusal): CliError {
+  const error = new Error(
+    refusal === "too-long"
+      ? `${command} could not be started because its command line is too long.`
+      : `${command} is a Windows command script, which cannot pass a multi-line argument intact.`
+  ) as CliError;
+  error.launchRefused = refusal;
+  return error;
+}
+
+// cross-spawn runs a resolved script through cmd.exe with one escaped line. An
+// unresolved command takes the same path unchecked; it fails as not installed
+// unless its line passes 32,767 characters, which reports as too long.
+function windowsCliLaunchRefusal(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env: NodeJS.ProcessEnv }
+): CliLaunchRefusal | null {
+  const launch = crossSpawn._parse(command, args, options);
+  if (!launch.options.windowsVerbatimArguments || !launch.file) return null;
+  if (args.some((arg) => /[\r\n]/.test(arg))) return "multi-line-script";
+  const commandLine = [launch.command, ...launch.args].join(" ");
+  return commandLine.length > CMD_EXE_MAX_COMMAND_LINE ? "too-long" : null;
+}
+
 export function runCli(
   command: string,
   args: string[],
@@ -179,15 +211,33 @@ export function runCli(
   if (signal?.aborted) return Promise.reject(new RequestAbortedError());
   return new Promise<RunCliResult>((resolve, reject) => {
     const childEnvironment = buildAiCliProcessEnvironment(process.env);
+    const refusal = process.platform === "win32"
+      ? windowsCliLaunchRefusal(command, args, { cwd, env: childEnvironment })
+      : null;
+    if (refusal) {
+      reject(cliLaunchRefusedError(command, refusal));
+      return;
+    }
     // stdio ["pipe","pipe","pipe"] guarantees non-null stdin/stdout/stderr at runtime.
     // cross-spawn preserves argv-array semantics on native binaries and safely
     // resolves/escapes npm .cmd shims on Windows. Never replace it with a joined
     // shell string: args can contain paths, model labels, and private prompts.
-    const child = crossSpawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd,
-      env: childEnvironment
-    }) as ChildProcessWithoutNullStreams;
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = crossSpawn(command, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd,
+        env: childEnvironment
+      }) as ChildProcessWithoutNullStreams;
+    } catch (error) {
+      // An over-long command line throws here, before the CLI runs:
+      // ENAMETOOLONG from Windows CreateProcess, E2BIG from POSIX exec.
+      const code = (error as CliError).code;
+      reject(code === "ENAMETOOLONG" || code === "E2BIG"
+        ? cliLaunchRefusedError(command, "too-long")
+        : new Error(`${command} could not be started. Check the CLI installation and try again.`));
+      return;
+    }
     let stdout = "";
     let stderr = "";
     let stdoutBytes = 0;
@@ -282,13 +332,15 @@ export function runCli(
 
 // ----- Claude Code (claude --print) -----
 
-export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: CliArgs): string[] {
+export function buildClaudeCliArgs({ model, reasoningEffort }: CliArgs, systemPromptFile?: string): string[] {
   const args = [
     "-p", "--tools", "", "--no-session-persistence",
     "--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
     "--disable-slash-commands", "--no-chrome", "--output-format", "json"
   ];
-  if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
+  // The system prompt never enters argv: through an npm .cmd shim, cmd.exe would
+  // keep only its first line and drop every argument after it.
+  if (systemPromptFile) args.push("--append-system-prompt-file", systemPromptFile);
   if (model && model !== "default") args.push("--model", model);
   if (cliReasoningEffortOptionsFor("claude-cli", model ?? "")?.length) {
     args.push("--effort", reasoningEffort || "low");
@@ -297,25 +349,31 @@ export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: Cli
 }
 
 export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs, sink?: UsageSink): Promise<string> {
-  // Keep bounded JSON work at low effort unless the caller chooses another level.
-  const args = buildClaudeCliArgs({ model, reasoningEffort, systemPrompt });
-
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-claude-"));
   let stdout;
   try {
-    ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir, signal }));
-  } catch (error) {
-    // Keep the actionable "not installed" hint (it's in the SAFE set). claude
-    // also writes its JSON result — including auth/401 errors — to stdout even on
-    // a non-zero exit (attached to the error by runCli), so classify from that.
-    // Pass the error too so a timeout (no CLI stdout) maps to its own hint
-    // instead of the generic auth-flavored failure message.
-    const err = error as CliError;
-    if (err?.name === "AbortError") throw error;
-    if (/is not installed or not on PATH/.test(err?.message ?? "")) throw error;
-    throw classifyClaudeFailure(typeof err?.stdout === "string" ? err.stdout : "", err);
+    let systemPromptFile: string | undefined;
+    if (systemPrompt) {
+      systemPromptFile = join(workdir, "system-prompt.txt");
+      await writeFile(systemPromptFile, systemPrompt, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    }
+    // Keep bounded JSON work at low effort unless the caller chooses another level.
+    const args = buildClaudeCliArgs({ model, reasoningEffort }, systemPromptFile);
+    try {
+      ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir, signal }));
+    } catch (error) {
+      // Keep the actionable "not installed" hint (it's in the SAFE set). claude
+      // also writes its JSON result — including auth/401 errors — to stdout even on
+      // a non-zero exit (attached to the error by runCli), so classify from that.
+      // Pass the error too so a timeout (no CLI stdout) maps to its own hint
+      // instead of the generic auth-flavored failure message.
+      const err = error as CliError;
+      if (err?.name === "AbortError") throw error;
+      if (/is not installed or not on PATH/.test(err?.message ?? "")) throw error;
+      throw classifyClaudeFailure(typeof err?.stdout === "string" ? err.stdout : "", err);
+    }
   } finally {
-    await rm(workdir, { recursive: true, force: true }).catch(() => {});
+    await rm(workdir, { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
   }
 
   let envelope;
@@ -396,74 +454,6 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
     recordProviderUsage(sink, totalOnlyUsage(extractCodexTokensUsed(stdout)));
     const directOutput = await readBoundedFile(outputPath);
     return directOutput.trim() || extractCodexFinalOutput(stdout);
-  } finally {
-    await rm(workdir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
-// ----- Antigravity CLI (agy — Google's Gemini CLI successor, non-interactive) -----
-
-export function buildAntigravityCliArgs({ model, userPrompt }: CliArgs): string[] {
-  // PRIVACY TRADE-OFF (documented — agy 1.1.x offers no fix): the print prompt —
-  // here the COMBINED system prompt + resume + job description, i.e. private
-  // personal data — is passed as the VALUE of -p, so it lands in this process's
-  // argv and is readable by any local user who lists processes (e.g. `ps -eww`).
-  // The Claude and Codex helpers instead pipe the prompt on stdin, keeping it out
-  // of argv; agy cannot. Verified against `agy --help` (v1.1.4): --print / -p /
-  // --prompt all take the prompt as their value, and there is NO documented stdin
-  // read, `-` sentinel, or prompt-file flag to route it through — `-p ""` exits
-  // non-zero without dispatching. Spawn still uses an argv array (never a shell),
-  // so the prompt text cannot be interpreted as flags or commands, but it is not
-  // hidden from a process listing. Do not "fix" this by moving the prompt to
-  // stdin without re-verifying a future agy build actually reads it there.
-  const args = ["-p", userPrompt ?? "", "--print-timeout", "230s"];
-  if (model && model !== "default") args.push("--model", model);
-  // --sandbox supplies the terminal restrictions that the throwaway cwd alone
-  // cannot provide. Permission auto-approval remains necessary in print mode.
-  args.push("--sandbox", "--dangerously-skip-permissions");
-  return args;
-}
-
-export async function callAntigravityCli({ model, systemPrompt, userPrompt, signal }: CliArgs): Promise<string> {
-  // agy has no separate system-prompt flag, so combine like Codex/Gemini.
-  const combined = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
-
-  // agy 1.1.x has no non-argv prompt path (see buildAntigravityCliArgs for the
-  // `agy --help` verification): the combined prompt is passed as -p's value and
-  // therefore appears in the local process command line while agy runs — a weaker
-  // boundary than the stdin delivery the Claude/Codex CLIs use, exposing private
-  // resume/job text to a local `ps` listing. RoleFit documents this limitation
-  // rather than claiming the Antigravity path has the stronger stdin privacy
-  // boundary. The argv-array spawn, --sandbox, throwaway cwd, and runCli timeout
-  // below are the mitigations that remain available.
-  // --model: stable slug from the first column of `agy models` (supported since
-  //   1.1.5), e.g. `gemini-3.6-flash-high`. agy has NO `-m` short alias (it
-  //   errors "flags provided but not defined: -m").
-  //   --dangerously-skip-permissions: a
-  //   non-interactive spawn otherwise blocks on a tool-approval prompt that never
-  //   renders (agy is an agentic harness). The CLI also receives --sandbox and a
-  //   throwaway cwd to reduce access; this is defense in depth, not a claim of
-  //   absolute OS isolation. The runCli timeout still bounds any hang.
-  const args = buildAntigravityCliArgs({ model, userPrompt: combined });
-
-  // Throwaway working dir keeps project instruction files out of automatic
-  // discovery. Together with --sandbox it reduces filesystem exposure, but it
-  // is not an OS-level guarantee against absolute reads or network access.
-  // UX/color warnings go to stderr, so stdout stays clean.
-  const workdir = await mkdtemp(join(tmpdir(), "rolefit-antigravity-"));
-  try {
-    const { stdout } = await runCli("agy", args, undefined, { cwd: workdir, signal });
-    return stdout.trim();
-  } catch (error) {
-    // Keep the actionable "not installed" hint (it's in the SAFE set); turn any
-    // other non-zero exit — most often an unauthenticated CLI or an inaccessible
-    // model — into a specific, actionable hint instead of a generic 500.
-    const message = error instanceof Error ? error.message : "";
-    if ((error as CliError)?.name === "AbortError" || (error as CliError)?.timedOut) throw error;
-    if (/is not installed or not on PATH/.test(message)) throw error;
-    throw new Error(
-      "Antigravity CLI could not complete the request. Run `agy` and complete Google sign-in, confirm the selected model is available, then try again."
-    );
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }

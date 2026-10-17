@@ -6,7 +6,8 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
 
 - The ordinary browser is the only RoleFit product surface. `desktop/` owns a
   compact Electron companion for keeping the local server available, managing
-  exactly three subscription CLIs plus the OpenAI and Claude API providers,
+  exactly two subscription CLIs (Claude Code and Codex) plus the OpenAI and
+  Claude API providers,
   hosting the workspace Backup/Restore/Open-folder actions, and opening RoleFit
   in the default browser. It does not own resume editing, application
   navigation, tracker/workspace persistence, or the shared React renderer.
@@ -112,7 +113,7 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   executable/Squirrel identity `RoleFitLocalCompanion`, AppUserModelID, bundle
   ID, and Electron runtime name as internal compatibility identities so
   upgrades and user data stay in place.
-- Provider connection composition owns the complete five-provider state and
+- Provider connection composition owns the complete four-provider state and
   sends bounded, versioned credential snapshots only to a server process the
   companion owns. A reused standalone listener never receives vault data and
   provider save/remove/enable mutations must fail until the user stops that
@@ -180,11 +181,13 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   CLI probes, and never refresh or inject provider state into a reused
   standalone server.
 - Keep CLI status distinctions truthful: installed/signed-in/signed-out/unknown.
-  Antigravity 1.1.x has no non-interactive auth-status command: when it is
-  installed and explicitly configured, it may be request-eligible as
-  ready-to-verify while `authState` remains `unknown`. Never infer or label it
-  signed in from installation alone; the first actual provider request verifies
-  the session and owns any authentication recovery error. CLI credentials stay
+  A CLI is request-eligible only when installed, added, and signed in by its
+  own status probe; never infer sign-in from installation alone. A provider
+  vault that still lists the removed `antigravity-cli` drops that id on read and
+  keeps its API keys and other providers; any other unknown id is corruption.
+  The packaged smoke enables a fake signed-in `claude` and pins only the
+  snapshot's shape, because a real install on a packaged search path answers
+  first. CLI credentials stay
   in provider-owned stores; RoleFit must not ask for usernames, passwords, MFA,
   authorization codes, or recovery tokens.
 - Persist API keys only when the operating-system encryption backend is secure.

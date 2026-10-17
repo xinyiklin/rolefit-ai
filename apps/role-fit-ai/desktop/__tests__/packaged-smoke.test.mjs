@@ -164,11 +164,21 @@ await Promise.all([
   mkdir(fakeBin, { recursive: true })
 ]);
 
+// A signed-in Claude Code for the companion's status probes. A real install on a
+// packaged search path can answer first; the smoke pins only the snapshot shape.
 if (platform === "win32") {
-  await writeFile(join(fakeBin, "agy.cmd"), "@echo off\r\necho agy 1.1.4\r\n", "utf8");
+  await writeFile(
+    join(fakeBin, "claude.cmd"),
+    "@echo off\r\nif \"%~1\"==\"auth\" goto auth\r\necho 2.1.300\r\nexit /b 0\r\n:auth\r\necho {\"loggedIn\":true}\r\n",
+    "utf8"
+  );
 } else {
-  const fakeAgy = join(fakeBin, "agy");
-  await writeFile(fakeAgy, "#!/bin/sh\necho 'agy 1.1.4'\n", { mode: 0o755 });
+  const fakeClaude = join(fakeBin, "claude");
+  await writeFile(
+    fakeClaude,
+    "#!/bin/sh\nif [ \"$1\" = auth ]; then echo '{\"loggedIn\":true}'; else echo '2.1.300'; fi\n",
+    { mode: 0o755 }
+  );
 }
 
 const port = await pickPort();

@@ -4,19 +4,13 @@ export {
   defaultCliReasoningEffort
 } from "../../shared/cliReasoning.ts";
 
-import {
-  ANTIGRAVITY_MODEL_OPTIONS,
-  DEFAULT_ANTIGRAVITY_MODEL
-} from "../../shared/antigravityModels.ts";
-
 // Shared AI option types and provider tables live together so the UI and
 // settings normalization use one catalog.
 export type AiProviderValue =
   | "openai"
   | "anthropic"
   | "claude-cli"
-  | "codex-cli"
-  | "antigravity-cli";
+  | "codex-cli";
 
 export type ProviderOption = {
   readonly value: AiProviderValue;
@@ -56,7 +50,6 @@ export function groupModelOptions(options: readonly ModelOption[]): ModelOptionS
 export const providerOptions: readonly ProviderOption[] = [
   { value: "claude-cli", label: "Claude · CLI", model: "claude-sonnet-5-5" },
   { value: "codex-cli", label: "Codex · CLI", model: "gpt-6.1-sol" },
-  { value: "antigravity-cli", label: "Antigravity · CLI", model: DEFAULT_ANTIGRAVITY_MODEL },
   { value: "openai", label: "OpenAI · API", model: "gpt-5.6-terra" },
   { value: "anthropic", label: "Claude · API", model: "claude-sonnet-5-5" }
 ];
@@ -104,11 +97,7 @@ export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOptio
     { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
     { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
     { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" }
-  ],
-  // Full list from `agy models` on 1.1.11. Version 1.1.5 made the stable slugs
-  // accepted by `--model`; the shared catalog keeps those request values paired
-  // with the display names shown in Settings.
-  "antigravity-cli": ANTIGRAVITY_MODEL_OPTIONS
+  ]
 };
 
 // Friendly display label for a provider value (falls back to the raw value).

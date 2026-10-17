@@ -24,9 +24,7 @@ export const CLAUDE_CLI_TIMEOUT_MESSAGE =
 // sees the precise remediation. Shared by /api/resume-polish and /api/application-answers.
 const SAFE_CONFIG_MESSAGES = new Set([
   "codex is not installed or not on PATH.",
-  "claude is not installed or not on PATH.",
-  "agy is not installed or not on PATH.",
-  "Antigravity CLI could not complete the request. Run `agy` and complete Google sign-in, confirm the selected model is available, then try again."
+  "claude is not installed or not on PATH."
 ]);
 
 // Returns the message verbatim when it is a known actionable config error, else

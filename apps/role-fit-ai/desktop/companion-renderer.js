@@ -14,12 +14,6 @@ const SUPPORTED_PROVIDERS = Object.freeze([
     tag: "codex"
   }),
   Object.freeze({
-    id: "antigravity-cli",
-    kind: "cli",
-    name: "Antigravity CLI",
-    tag: "agy"
-  }),
-  Object.freeze({
     id: "openai",
     kind: "api",
     name: "OpenAI API",
@@ -713,11 +707,7 @@ function connectionStatus(provider, record) {
     }
     return { key: "not-added", label: "Not added" };
   }
-  if (record.ready) {
-    return record.setupFlow === "manual-login" && record.authState === "unknown"
-      ? { key: "connected", label: "Ready to verify" }
-      : { key: "connected", label: "Ready" };
-  }
+  if (record.ready) return { key: "connected", label: "Ready" };
   if (provider.kind === "cli" && record.authState === "signed-in") {
     return { key: "connected", label: "Signed in" };
   }

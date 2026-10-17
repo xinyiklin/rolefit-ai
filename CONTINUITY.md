@@ -76,9 +76,8 @@ extension 1.4.0, desktop bridge API 13. Release history:
 - [USER+CODE+TOOL] **Repository audit, round 2** (16 read-only slices; every
   High re-checked by the coordinator; report kept local). Fixed in this batch:
   tracker attachment overwrites and silent notes clipping (#232), quadratic
-  job-import parsing (#233), and literal tag text (below). The Claude CLI
-  Windows argv fix is on branch `claude/nostalgic-goldwasser-716680`, not yet
-  merged. Still open, by severity:
+  job-import parsing (#233), literal tag text, and the CLI argv fix (both
+  below). Still open, by severity:
   - High: Typeset tabs overwrite one autosave key and the losing tab gets no
     leave warning; the engine measures characters outside its metric set at
     0.5 em (`→ ™ £ ©`, Polish/Czech letters overlap or drift in the PDF) and
@@ -100,6 +99,16 @@ extension 1.4.0, desktop bridge API 13. Release history:
   - [TOOL] Mutation-checked: the backup contract eval fails without the
     repair entry. `npm run check --workspace apps/role-fit-ai` passed;
     mb-verifier READY after one fix round.
+- [USER+CODE] **CLI argv delivery and Antigravity removal** (branch
+  `claude/nostalgic-goldwasser-716680`): Claude Code reads its unchanged system
+  prompt via `--append-system-prompt-file` (an npm `claude.cmd` shim made
+  cmd.exe keep only its first line and drop `--model`/`--effort`); `runCli`
+  refuses multi-line or over-8,191-character argv through cmd.exe. Antigravity
+  (`agy`) support is removed (D080): retired stages take their own CLI default
+  and vaults drop the id, keeping API keys. Next: the landing fact strip
+  ("3 CLIs + 2 APIs") changes with the release that ships D080.
+  - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
+    UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
 - [USER+CODE+TOOL] **Literal tag text** (D079): `<lt>` is a literal `<`
   written only where a raw `<` would start a tag, so typed or pasted `<b>`,
   `<size=12>`, or `<link=…>` stays text in both apps; merges and whole-field
