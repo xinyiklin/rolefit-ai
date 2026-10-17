@@ -14,6 +14,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## Next actions
 
+- After the 0.16.0 release PR merges, and only on the user's go-ahead: tag
+  `rolefit-preview-v0.16.0-beta.1` on its squash commit, confirm the
+  prerelease (macOS arm64/x64 dmg+zip, Windows x64 exe, `SHA256SUMS.txt`), then
+  record the receipt and the "Current" line in the next PR.
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
@@ -99,14 +103,14 @@ extension 1.4.0, desktop bridge API 13. Release history:
   - [TOOL] Mutation-checked: the backup contract eval fails without the
     repair entry. `npm run check --workspace apps/role-fit-ai` passed;
     mb-verifier READY after one fix round.
-- [USER+CODE] **CLI argv delivery and Antigravity removal** (branch
-  `claude/nostalgic-goldwasser-716680`): Claude Code reads its unchanged system
+- [USER+CODE] **CLI argv delivery and Antigravity removal** (#235): Claude
+  Code reads its unchanged system
   prompt via `--append-system-prompt-file` (an npm `claude.cmd` shim made
   cmd.exe keep only its first line and drop `--model`/`--effort`); `runCli`
   refuses multi-line or over-8,191-character argv through cmd.exe. Antigravity
   (`agy`) support is removed (D080): retired stages take their own CLI default
-  and vaults drop the id, keeping API keys. Next: the landing fact strip
-  ("3 CLIs + 2 APIs") changes with the release that ships D080.
+  and vaults drop the id, keeping API keys. The 0.16.0 release PR changes the
+  landing fact strip to "2 CLIs + 2 APIs".
   - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
     UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
 - [USER+CODE+TOOL] **Literal tag text** (D079): `<lt>` is a literal `<`
@@ -123,3 +127,22 @@ extension 1.4.0, desktop bridge API 13. Release history:
   - [USER] Deferred: the RoleFit proposal Edit box still edits raw grammar.
     Limits: Final review evidence and cover-letter AI output read decoded text
     back as grammar; PDF import excludes tag-shaped source text.
+- [USER+CODE] **0.16.0 prepared** (minor: Antigravity removed, GPT-5.5
+  retired; the user asked for the preview). Since
+  `rolefit-preview-v0.15.0-beta.1`: #230-#233, GPT-5.5 retirement (D076),
+  literal tag text (D079), and #235 (D080). Notes
+  `apps/role-fit-ai/docs/releases/0.16.0-beta.1.md`; extension 1.4.0 and
+  desktop bridge API 13 unchanged; no file format change.
+  - [TOOL] Preflight on Windows x64 with Node 24.18.0: `test:desktop:release`
+    14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
+    186/186), `test:rolefit:desktop` passed on rerun (first run hit companion
+    request timeouts under load), `make:rolefit:desktop` plus
+    `test:rolefit:desktop:packaged` (win32-x64, unpacked) passed, and
+    `test:rolefit:windows-runtime` passed. Not run locally: the Windows
+    installer smoke (it installs into the real profile; the release workflow
+    runs it) and any macOS packaging (no Mac here; the changed packaged smoke
+    first runs on darwin in the tag's jobs).
+  - [TOOL] Two fresh mb-verifier reviews. Mechanics: READY (the CONTINUITY
+    receipt was missing; added). Notes: three Medium and eight Low wording
+    findings fixed (job-import and Claude Code claims narrowed, cover-letter
+    and Edit-box known issues corrected, the Polish hidden-link fix added).
