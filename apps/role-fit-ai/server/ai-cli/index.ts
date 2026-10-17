@@ -191,7 +191,8 @@ function cliLaunchRefusedError(command: string, refusal: CliLaunchRefusal): CliE
 }
 
 // cross-spawn runs a resolved script through cmd.exe with one escaped line. An
-// unresolved command takes the same path and is left to fail as not installed.
+// unresolved command takes the same path unchecked; it fails as not installed
+// unless its line passes 32,767 characters, which reports as too long.
 function windowsCliLaunchRefusal(
   command: string,
   args: string[],
@@ -232,7 +233,7 @@ export function runCli(
         env: childEnvironment
       }) as ChildProcessWithoutNullStreams;
     } catch (error) {
-      // An over-long command line throws here, before any process exists:
+      // An over-long command line throws here, before the CLI runs:
       // ENAMETOOLONG from Windows CreateProcess, E2BIG from POSIX exec.
       const code = (error as CliError).code;
       reject(code === "ENAMETOOLONG" || code === "E2BIG"
@@ -361,19 +362,21 @@ export async function callClaudeCli({ model, reasoningEffort, systemPrompt, user
     }
     // Keep bounded JSON work at low effort unless the caller chooses another level.
     const args = buildClaudeCliArgs({ model, reasoningEffort }, systemPromptFile);
-    ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir, signal }));
-  } catch (error) {
-    // Keep the actionable "not installed" hint (it's in the SAFE set). claude
-    // also writes its JSON result — including auth/401 errors — to stdout even on
-    // a non-zero exit (attached to the error by runCli), so classify from that.
-    // Pass the error too so a timeout (no CLI stdout) maps to its own hint
-    // instead of the generic auth-flavored failure message.
-    const err = error as CliError;
-    if (err?.name === "AbortError") throw error;
-    if (/is not installed or not on PATH/.test(err?.message ?? "")) throw error;
-    throw classifyClaudeFailure(typeof err?.stdout === "string" ? err.stdout : "", err);
+    try {
+      ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir, signal }));
+    } catch (error) {
+      // Keep the actionable "not installed" hint (it's in the SAFE set). claude
+      // also writes its JSON result — including auth/401 errors — to stdout even on
+      // a non-zero exit (attached to the error by runCli), so classify from that.
+      // Pass the error too so a timeout (no CLI stdout) maps to its own hint
+      // instead of the generic auth-flavored failure message.
+      const err = error as CliError;
+      if (err?.name === "AbortError") throw error;
+      if (/is not installed or not on PATH/.test(err?.message ?? "")) throw error;
+      throw classifyClaudeFailure(typeof err?.stdout === "string" ? err.stdout : "", err);
+    }
   } finally {
-    await rm(workdir, { recursive: true, force: true }).catch(() => {});
+    await rm(workdir, { recursive: true, force: true, maxRetries: 3 }).catch(() => {});
   }
 
   let envelope;

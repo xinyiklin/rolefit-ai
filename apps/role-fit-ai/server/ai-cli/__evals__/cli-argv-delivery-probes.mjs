@@ -8,6 +8,7 @@ import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
+import { setTimeout as delay } from "node:timers/promises";
 
 import {
   buildClaudeCliArgs,
@@ -89,6 +90,13 @@ async function launches() {
   return (await readFile(launchLog, "utf8").catch(() => "")).split("\n").filter(Boolean);
 }
 
+async function lastLaunch() {
+  const line = (await launches()).at(-1);
+  if (!line) return null;
+  const [name, mode, file] = line.split("\t");
+  return { name, mode, file };
+}
+
 async function installFakeCli(name) {
   if (isWindows) {
     await writeFile(
@@ -112,27 +120,46 @@ try {
       'import { fileURLToPath } from "node:url";',
       'const name = process.argv[2];',
       'const args = process.argv.slice(3);',
-      'appendFileSync(join(dirname(fileURLToPath(import.meta.url)), "launches.log"), `${name}\\n`);',
+      'if (args[0] === "--rolefit-probe-sentinel") {',
+      '  process.stdout.write(`rolefit-fake-cli ${name}`);',
+      '  process.exit(0);',
+      '}',
       'let stdin = "";',
       'for await (const chunk of process.stdin) stdin += chunk;',
       'const fileIndex = args.indexOf("--append-system-prompt-file");',
       'const systemPromptFile = fileIndex >= 0 ? args[fileIndex + 1] : null;',
-      'const report = {',
-      '  args,',
-      '  stdin,',
-      '  systemPromptFile,',
-      '  systemPrompt: systemPromptFile ? readFileSync(systemPromptFile, "utf8") : null,',
-      '  systemPromptMode: systemPromptFile ? statSync(systemPromptFile).mode & 0o777 : null',
-      '};',
-      'process.stdout.write(name === "claude"',
-      '  ? JSON.stringify({ type: "result", is_error: false, result: JSON.stringify(report), usage: { input_tokens: 1, output_tokens: 1 } })',
-      '  : JSON.stringify(report));'
+      'const mode = stdin.includes("ROLEFIT_PROBE_HANG") ? "hang" : stdin.includes("ROLEFIT_PROBE_FAIL") ? "fail" : "ok";',
+      'appendFileSync(join(dirname(fileURLToPath(import.meta.url)), "launches.log"), `${name}\\t${mode}\\t${systemPromptFile ?? ""}\\n`);',
+      'if (mode === "hang") {',
+      '  setInterval(() => {}, 1_000);',
+      '} else if (mode === "fail") {',
+      '  process.exitCode = 1;',
+      '  process.stdout.write(JSON.stringify({ type: "result", is_error: true, result: "synthetic failure" }));',
+      '} else {',
+      '  const report = {',
+      '    args,',
+      '    stdin,',
+      '    systemPromptFile,',
+      '    systemPrompt: systemPromptFile ? readFileSync(systemPromptFile, "utf8") : null,',
+      '    systemPromptMode: systemPromptFile ? statSync(systemPromptFile).mode & 0o777 : null',
+      '  };',
+      '  process.stdout.write(name === "claude"',
+      '    ? JSON.stringify({ type: "result", is_error: false, result: JSON.stringify(report), usage: { input_tokens: 1, output_tokens: 1 } })',
+      '    : JSON.stringify(report));',
+      '}'
     ].join("\n"),
     "utf8"
   );
   await installFakeCli("claude");
   await installFakeCli("agy");
   process.env.PATH = `${root}${delimiter}${originalPath ?? ""}`;
+  // A real CLI resolved here would make this a live provider call. Real CLIs
+  // reject the sentinel flag before any request, so stop unless the fakes answer.
+  for (const name of ["claude", "agy"]) {
+    const { stdout } = await runCli(name, ["--rolefit-probe-sentinel"], undefined, { timeoutMs: 10_000 })
+      .catch(() => ({ stdout: "" }));
+    assert.equal(stdout, `rolefit-fake-cli ${name}`, `the fake ${name} must resolve first on PATH`);
+  }
 
   // Claude Code receives the whole system prompt, every flag after it, and the
   // user prompt on stdin; through a .cmd shim on Windows this is the path that
@@ -152,6 +179,31 @@ try {
   assert.equal(report.args[report.args.indexOf("--mcp-config") + 1], '{"mcpServers":{}}');
   if (!isWindows) assert.equal(report.systemPromptMode, 0o600, "the system prompt file is private to the user");
   assert.equal(existsSync(report.systemPromptFile), false, "the system prompt file is removed after the call");
+
+  // The file is also removed when the CLI fails and when the request is stopped.
+  await assert.rejects(
+    () => callClaudeCli({ model: "claude-sonnet-5-5", systemPrompt: SYSTEM_PROMPT, userPrompt: "ROLEFIT_PROBE_FAIL" }),
+    UserSafeAiError
+  );
+  const failed = await lastLaunch();
+  assert.equal(failed?.mode, "fail");
+  assert.equal(existsSync(failed.file), false, "the system prompt file is removed after a CLI failure");
+  const controller = new AbortController();
+  const stopped = callClaudeCli({
+    model: "claude-sonnet-5-5",
+    systemPrompt: SYSTEM_PROMPT,
+    userPrompt: "ROLEFIT_PROBE_HANG",
+    signal: controller.signal
+  });
+  let hanging = null;
+  for (let attempt = 0; attempt < 250 && hanging?.mode !== "hang"; attempt += 1) {
+    await delay(20);
+    hanging = await lastLaunch();
+  }
+  assert.equal(hanging?.mode, "hang", "the fake Claude started before Stop");
+  controller.abort();
+  await assert.rejects(stopped, { name: "AbortError" });
+  assert.equal(existsSync(hanging.file), false, "the system prompt file is removed after Stop");
 
   if (isWindows) {
     // A multi-line argument through a command script is refused before cmd.exe

@@ -676,9 +676,12 @@ Per-provider rules:
   Antigravity provider stays `authState: "unknown"` and is ready-to-verify on
   first use rather than falsely labeled signed in. It also requires the print
   prompt as `-p`'s argv value; stdin is not a supported prompt source, so its
-  local process argument list briefly contains the request. RoleFit submits the
-  stable slug from the first column of `agy models`; settings saved by older
-  builds migrate their display-name values before dispatch.
+  local process argument list briefly contains the request. A prompt too long
+  for the command line returns 413 and a Windows `agy` command script returns
+  400 (it cannot pass a multi-line prompt), both before `agy` runs. Claude Code
+  and Codex keep prompt text out of argv (`server/ai-cli/AGENTS.md`). RoleFit
+  submits the stable slug from the first column of `agy models`; settings saved
+  by older builds migrate their display-name values before dispatch.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
   The catalog includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol/Luna, and GPT-5.6
   Sol/Terra/Luna; the balanced default remains `gpt-5.6-terra`.
