@@ -102,6 +102,40 @@ export function safeAttachmentFileName(raw: string): { fileName: string; extensi
   return { fileName: `${stem}.${extension}`, extension };
 }
 
+// Whether an upload carries the same original name as a stored attachment's
+// label, ignoring case as the stored name does. The label keeps at most 120
+// characters, so a longer name cannot be confirmed and counts as different.
+function isSameAttachmentName(label: string, rawFileName: string): boolean {
+  const original = (rawFileName.split(/[\\/]/).pop() ?? "").trim();
+  return original.length <= 120 && label.trim().toLowerCase() === original.toLowerCase();
+}
+
+// The stored name for an upload. Distinct names can fold to one stored name
+// ("成绩单.pdf" and "推荐信.pdf" are both "_.pdf"), so only the same original
+// name replaces a file; another gets the first free "-2", "-3", ... variant,
+// still a name safeAttachmentFileName returns unchanged.
+export function attachmentStorageName(
+  safe: { fileName: string; extension: string },
+  rawFileName: string,
+  existing: readonly { fileName: string; label: string }[]
+): string {
+  const stem = safe.fileName.slice(0, -(safe.extension.length + 1));
+  const variant = (n: number) => {
+    const suffix = n === 1 ? "" : `-${n}`;
+    return `${stem.slice(0, 80 - suffix.length).replace(/[.\s]+$/, "")}${suffix}.${safe.extension}`;
+  };
+  // Any variant may hold the earlier upload, even above the first free one.
+  const isVariant = (fileName: string) =>
+    fileName === variant(Number(fileName.match(/-(\d+)\.[a-z0-9]+$/)?.[1] ?? 1)) || fileName === variant(1);
+  const previous = existing.find(
+    (attachment) => isVariant(attachment.fileName) && isSameAttachmentName(attachment.label, rawFileName)
+  );
+  if (previous) return previous.fileName;
+  let n = 1;
+  while (existing.some((attachment) => attachment.fileName === variant(n))) n += 1;
+  return variant(n);
+}
+
 export function attachmentContentType(fileName: string): string {
   const extension = (fileName.match(/\.([A-Za-z0-9]+)$/)?.[1] ?? "").toLowerCase();
   return ATTACHMENT_TYPES[extension]?.contentType ?? "application/octet-stream";

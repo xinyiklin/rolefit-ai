@@ -2452,6 +2452,14 @@ button.table-sort svg {
 
 .application-fieldset__row--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 
+/* Visible length of a bounded note; the textarea's maxLength enforces it. */
+.application-fieldset__count {
+  justify-self: end;
+  color: var(--ink-faint);
+  font-size: 0.68rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .text-input.is-data,
 .application-modal .is-data {
   font-family: var(--font-mono);

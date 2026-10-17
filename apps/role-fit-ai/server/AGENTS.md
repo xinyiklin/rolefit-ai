@@ -44,9 +44,14 @@ for provider, prompt, sanitizer, and review work.
   only their HTTP workflows. `documents.ts` owns per-file validation rules.
   Each document slot stores either strict editable source or an explicitly
   uploaded PDF. Additional uploads are validated by extension + magic bytes
-  and capped per application. Every byte served back is a download (narrow
-  content type, `nosniff`, no inline render). Draft and skipped records cannot
-  mutate document packets; either may retain application answers:
+  and capped per application. Only the same original name (ignoring case, at
+  most the label's 120 characters) replaces an attachment; any other name that
+  folds to a taken stored name gets the first free `-2`, `-3`, ... variant.
+  Notes and interview preparation past `APPLICATION_NOTES_MAX_LENGTH` are
+  refused, never clipped. Every byte served back is a download (narrow content
+  type, `nosniff`, no inline render).
+  Draft and skipped records cannot mutate document packets; either may retain
+  application answers:
   every document and attachment mutation must pass the shared
   `routeSupport.ts` guard before any file I/O.
   Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
