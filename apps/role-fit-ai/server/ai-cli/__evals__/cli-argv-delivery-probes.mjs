@@ -201,10 +201,11 @@ try {
     await delay(20);
     hanging = await lastLaunch();
   }
-  assert.equal(hanging?.mode, "hang", "the fake Claude started before Stop");
-  assert(hanging.file, "the stopped call received a system prompt file");
+  // Stop before asserting, so a failed check never leaves the fake running.
   controller.abort();
   await assert.rejects(stopped, { name: "AbortError" });
+  assert.equal(hanging?.mode, "hang", "the fake Claude started before Stop");
+  assert(hanging.file, "the stopped call received a system prompt file");
   assert.equal(existsSync(hanging.file), false, "the system prompt file is removed after Stop");
 
   if (isWindows) {
