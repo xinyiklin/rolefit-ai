@@ -867,8 +867,8 @@ function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnershi
   return connection.id === "claude-cli" &&
     connection.kind === "cli" &&
     connection.configured === true &&
-    typeof connection.ready === "boolean" &&
     (connection.authState === "signed-in" || connection.authState === "signed-out" || connection.authState === "unknown") &&
+    connection.ready === (connection.authState === "signed-in") &&
     typeof connection.guidance === "string" &&
     Object.keys(connection).length === 6;
 }

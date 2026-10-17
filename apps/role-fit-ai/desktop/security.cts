@@ -50,6 +50,6 @@ export function hardenWindow(
   window.webContents.on("will-redirect", (event) => event.preventDefault());
   // External navigation is never renderer-directed. The only legitimate
   // launches are fixed main-owned targets reached through typed IPC: the
-  // canonical local RoleFit origin and the three official CLI install guides.
+  // canonical local RoleFit origin and the two official CLI install guides.
   window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
 }

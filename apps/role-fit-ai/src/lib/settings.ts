@@ -2,6 +2,7 @@ import { cliReasoningEffortOptionsByProvider, reconcileCliReasoningEffort } from
 import type { AiProviderValue } from "../config/aiOptions.ts";
 import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
 import { AI_STAGES, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
+import { stageDefault } from "./stageSettings.ts";
 import { FIT_ASSESSMENT_VERDICTS } from "../../shared/fitAssessmentContract.ts";
 import type { AutoPolishThreshold } from "./autoPolishPolicy.ts";
 import {
@@ -176,16 +177,19 @@ function renameLegacySettings(source: Record<string, unknown>): Record<string, u
 
 function migrateProviderSettings(source: Record<string, unknown>): Record<string, unknown> {
   const migrated = { ...source };
+  for (const stage of AI_STAGES) {
+    const keys = stageSettingsKeys(stage);
+    if (migrated[keys.provider] !== "antigravity-cli") continue;
+    // Antigravity support was removed. Write this stage's own default: an unset
+    // Final review would otherwise inherit Fit Assessment's provider, maybe an API.
+    const fallback = stageDefault(stage.id);
+    migrated[keys.provider] = fallback.provider;
+    migrated[keys.model] = fallback.selectedModel;
+    migrated[keys.effort] = fallback.cliReasoningEffort;
+  }
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     const provider = migrated[providerKey];
     const storedModel = migrated[modelKey];
-    if (provider === "antigravity-cli") {
-      // Antigravity support was removed; the stage reseeds its own CLI default.
-      delete migrated[providerKey];
-      delete migrated[modelKey];
-      delete migrated[effortKey];
-      continue;
-    }
     if (provider !== "codex-cli" && provider !== "claude-cli") continue;
     if (typeof storedModel !== "string") continue;
     let model = storedModel;

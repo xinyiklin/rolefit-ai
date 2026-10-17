@@ -199,7 +199,7 @@ assert.deepEqual(
 );
 
 // Antigravity support was removed: a saved Antigravity stage stays readable
-// through strict workspace/backup validation and reseeds that stage's default.
+// through strict workspace/backup validation and takes that stage's own default.
 const retiredAntigravity = {
   resumePolishProvider: "antigravity-cli",
   resumePolishSelectedModel: "gemini-3.6-flash-high",
@@ -210,17 +210,37 @@ const retiredAntigravity = {
   coverPolishSelectedModel: "Claude Opus 4.6 (Thinking)",
   applicationAnswersProvider: "claude-cli",
   applicationAnswersSelectedModel: "claude-opus-5-5",
-  applicationAnswersCliReasoningEffort: "high"
+  applicationAnswersCliReasoningEffort: "high",
+  applicationReviewProvider: "antigravity-cli",
+  applicationReviewSelectedModel: "gemini-3.6-flash-high",
+  fitAssessmentProvider: "openai",
+  fitAssessmentSelectedModel: "gpt-6-astra"
 };
 const repairedAntigravity = parsePortableWorkspacePreferences({ settings: retiredAntigravity, lastBaseResume: "" }).settings;
 assert.deepEqual(
   repairedAntigravity,
   {
+    resumePolishProvider: "codex-cli",
+    resumePolishSelectedModel: "gpt-6.1-sol",
+    resumePolishCliReasoningEffort: "medium",
+    coverPolishProvider: "codex-cli",
+    coverPolishSelectedModel: "gpt-6.1-sol",
+    coverPolishCliReasoningEffort: "medium",
     applicationAnswersProvider: "claude-cli",
     applicationAnswersSelectedModel: "claude-opus-5-5",
-    applicationAnswersCliReasoningEffort: "high"
+    applicationAnswersCliReasoningEffort: "high",
+    applicationReviewProvider: "claude-cli",
+    applicationReviewSelectedModel: "claude-sonnet-5-5",
+    applicationReviewCliReasoningEffort: "low",
+    fitAssessmentProvider: "openai",
+    fitAssessmentSelectedModel: "gpt-6-astra"
   },
-  "retired Antigravity stages drop their provider, model, and effort; other stages keep theirs"
+  "retired Antigravity stages take their own defaults; other stages keep theirs"
+);
+assert.equal(
+  seedStage("application-review", repairedAntigravity).provider,
+  "claude-cli",
+  "a repaired Final review never inherits Fit Assessment's paid API"
 );
 assert.deepEqual(seedStage("resume-polish", repairedAntigravity), seedStage("resume-polish", {}));
 assert.deepEqual(seedStage("cover-polish", repairedAntigravity), seedStage("cover-polish", {}));

@@ -1,5 +1,5 @@
-import type { AiProviderValue } from "../config/aiOptions";
-import type { AiStageId } from "../config/aiStages";
+import type { AiProviderValue } from "../config/aiOptions.ts";
+import type { AiStageId } from "../config/aiStages.ts";
 
 // Every configurable AI stage has its own concrete provider config (no "same as
 // Resume Polish" live link — Settings' "Copy settings" control does a one-shot copy

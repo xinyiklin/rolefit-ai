@@ -574,7 +574,7 @@ hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` is a fail-fast configuration error; it does not silently select
 OpenAI. When OpenAI is selected explicitly, its model comes from
 `OPENAI_MODEL` (`gpt-5.6-terra` default). The other account-backed CLI (Codex
-CLI) is a similar path for its vendor. They avoid a separate metered API key in
+CLI) is a similar path for its vendor. Both avoid a separate metered API key in
 RoleFit, but access and usage limits remain governed by the installed CLI and
 signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured

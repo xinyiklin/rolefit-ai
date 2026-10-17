@@ -518,6 +518,7 @@ await installedHandlers.get(channels.installGuide)(requestEvent(), "codex-cli");
 assert.equal(openedInstallGuide, "codex-cli");
 await assert.rejects(
   async () => installedHandlers.get(channels.installGuide)(requestEvent(), "antigravity-cli"),
+  /Invalid CLI provider id/,
   "the removed Antigravity provider has no install guide"
 );
 assert.equal(openedInstallGuide, "codex-cli");

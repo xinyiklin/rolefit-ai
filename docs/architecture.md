@@ -47,7 +47,7 @@ never import each other.
 | AI workflow, job intake, tracker, workspace | `apps/role-fit-ai/` | RoleFit-only product behavior. |
 | RoleFit section-scope/review overlay | `apps/role-fit-ai/src/sections/editor/` | Injected through shared editor seams; never fork the editor. |
 | Public product/download page | `apps/role-fit-ai/landing/` | Separate static entry graph; public GitHub release metadata only, with no loopback calls or app renderer. |
-| Electron provider setup, lifecycle, and security | `apps/role-fit-ai/desktop/` | Required distributed-product launcher and compact local manager for three supported CLIs and two supported API providers; it never hosts the RoleFit product renderer or enters shared packages. |
+| Electron provider setup, lifecycle, and security | `apps/role-fit-ai/desktop/` | Required distributed-product launcher and compact local manager for two supported CLIs and two supported API providers; it never hosts the RoleFit product renderer or enters shared packages. |
 
 Standard entry row presence is owned by `ResumeData` and the strict `.resume`
 codec: paired strings preserve a title/subtitle row, including a blank row;
@@ -99,7 +99,7 @@ and verify both apps.
   required distributed-product launcher and a compact four-provider manager,
   not another application host: it starts
   or reuses the same loopback server, loads only a local static companion page,
-  manages the three supported subscription CLIs and the OpenAI/Claude API
+  manages the two supported subscription CLIs and the OpenAI/Claude API
   providers, and opens the Drafting Desk in the system browser. API keys are
   encrypted with Electron `safeStorage` beneath its local `userData` and are
   never returned to the renderer, browser storage, or HTTP. The server remains

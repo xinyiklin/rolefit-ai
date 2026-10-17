@@ -355,9 +355,9 @@ later entry wins.
 - 2026-10-17 [USER+CODE] D076 ACTIVE: **Antigravity CLI (`agy`, `antigravity-cli`)
   support is removed** ("remove support for agy, everywhere in this app"). Four
   integrations remain: Claude Code CLI, Codex CLI, OpenAI API, Claude API.
-  [CODE] Saved state stays readable: a stage saved with Antigravity drops its
-  provider/model/effort before strict validation and reseeds its Claude Code or
-  Codex default (browser cache, workspace preferences, backups); a provider
+  [CODE] Saved state stays readable: a stage saved with Antigravity is set to its
+  own Claude Code or Codex default before strict validation (browser cache,
+  workspace preferences, backups; Final review never inherits Fit's provider); a provider
   vault listing `antigravity-cli` drops the id and keeps its API keys and
   other providers; any other unknown id still fails closed. The manual
   ready-to-verify state and the space/parenthesis allowance in model names

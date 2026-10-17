@@ -79,7 +79,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
     `mb-verifier` reviews PASS; UNCONFIRMED: macOS and a real npm shim.
   - **Antigravity (`agy`) removed** (D076), with read-repairs for saved stage
     selections and provider vaults; the packaged smoke now enables a fake
-    `claude` and pins only snapshot shape. UNCONFIRMED: the packaged smoke run.
+    `claude` and pins snapshot shape plus `ready` = signed in. [TOOL] Packaged
+    smoke passed on win32-x64 (unpacked); macOS UNCONFIRMED. Next: the landing
+    fact strip (`landing/index.html`, "3 CLIs + 2 APIs") changes with the
+    release that ships D076, since the live 0.15.0 download still has `agy`.
 
 ## 2026-10-16
 
