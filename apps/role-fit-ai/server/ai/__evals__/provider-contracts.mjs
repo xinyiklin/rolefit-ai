@@ -428,7 +428,12 @@ try {
   const opus48Body = buildAnthropicMessagesBody({ model: "claude-opus-4-8", systemPrompt: "system", userPrompt: "user" });
   assert.equal("thinking" in opus48Body, false, "models that already default to no thinking are left untouched");
 
-  const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low", systemPrompt: "system" });
+  const claude = buildClaudeCliArgs({ model: "claude-test", reasoningEffort: "low" }, "/tmp/rolefit-test/system-prompt.txt");
+  assert.equal(
+    claude[claude.indexOf("--append-system-prompt-file") + 1],
+    "/tmp/rolefit-test/system-prompt.txt",
+    "Claude reads its system prompt from a private file, never from argv"
+  );
   assert(claude.includes("--no-session-persistence"));
   assert.equal(claude[claude.indexOf("--tools") + 1], "", "Claude tools remain disabled");
   assert.equal(claude[claude.indexOf("--setting-sources") + 1], "", "Claude does not load user/project settings");

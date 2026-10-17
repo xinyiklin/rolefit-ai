@@ -582,7 +582,10 @@ no API key required.
 The CLI auth/session remains provider-owned and tied to the device.
 Antigravity 1.1.x requires its non-interactive prompt in the local process
 argument list; unlike the Claude and Codex wrappers, that path cannot keep
-resume/job text exclusively on stdin while the subprocess is running. RoleFit
+resume/job text exclusively on stdin while the subprocess is running. The
+command-line limit also caps that prompt (about 32,000 characters on Windows),
+and a Windows `agy` command script cannot pass a multi-line prompt at all;
+RoleFit reports either case instead of starting `agy`. RoleFit
 uses the stable model slugs printed by current `agy models`; older saved display
 names migrate without losing the selected model.
 

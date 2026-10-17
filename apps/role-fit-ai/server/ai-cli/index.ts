@@ -7,13 +7,15 @@
 import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
 import { spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
+import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, win32 } from "node:path";
 import { StringDecoder } from "node:string_decoder";
 import crossSpawn from "cross-spawn";
 
 import {
+  ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE,
+  ANTIGRAVITY_CLI_SCRIPT_MESSAGE,
   CLAUDE_CLI_AUTH_MESSAGE,
   CLAUDE_CLI_FAILED_MESSAGE,
   CLAUDE_CLI_TIMEOUT_MESSAGE,
@@ -24,6 +26,8 @@ import { readProviderUsage, recordProviderUsage, totalOnlyUsage, type UsageSink 
 
 type RunCliOptions = { timeoutMs?: number; cwd?: string; signal?: AbortSignal };
 type RunCliResult = { stdout: string; stderr: string };
+// The CLI was never started because its argv could not reach it intact.
+type CliLaunchRefusal = "too-long" | "multi-line-script";
 // runCli rejects with a plain Error carrying captured streams / classification
 // flags so callers (classifyClaudeFailure) can inspect them.
 type CliError = Error & {
@@ -32,6 +36,7 @@ type CliError = Error & {
   stdout?: string;
   stderr?: string;
   exitCode?: number | null;
+  launchRefused?: CliLaunchRefusal;
 };
 // The resolved provider config passed to each CLI helper (subset of the shared
 // dispatch args; the CLIs use their own subscription auth, no apiKey).
@@ -170,6 +175,35 @@ async function readBoundedFile(path: string): Promise<string> {
   return readFile(path, "utf8");
 }
 
+// cmd.exe runs Windows command scripts, including npm's .cmd shims. It ends its
+// command line at the first newline and refuses one over 8,191 characters, its
+// own path and switches included. (A script's own expansion can fail sooner.)
+const CMD_EXE_MAX_COMMAND_LINE = 8_191;
+
+function cliLaunchRefusedError(command: string, refusal: CliLaunchRefusal): CliError {
+  const error = new Error(
+    refusal === "too-long"
+      ? `${command} could not be started because its command line is too long.`
+      : `${command} is a Windows command script, which cannot pass a multi-line argument intact.`
+  ) as CliError;
+  error.launchRefused = refusal;
+  return error;
+}
+
+// cross-spawn runs a resolved script through cmd.exe with one escaped line. An
+// unresolved command takes the same path and is left to fail as not installed.
+function windowsCliLaunchRefusal(
+  command: string,
+  args: string[],
+  options: { cwd?: string; env: NodeJS.ProcessEnv }
+): CliLaunchRefusal | null {
+  const launch = crossSpawn._parse(command, args, options);
+  if (!launch.options.windowsVerbatimArguments || !launch.file) return null;
+  if (args.some((arg) => /[\r\n]/.test(arg))) return "multi-line-script";
+  const commandLine = [launch.command, ...launch.args].join(" ");
+  return commandLine.length > CMD_EXE_MAX_COMMAND_LINE ? "too-long" : null;
+}
+
 export function runCli(
   command: string,
   args: string[],
@@ -179,15 +213,33 @@ export function runCli(
   if (signal?.aborted) return Promise.reject(new RequestAbortedError());
   return new Promise<RunCliResult>((resolve, reject) => {
     const childEnvironment = buildAiCliProcessEnvironment(process.env);
+    const refusal = process.platform === "win32"
+      ? windowsCliLaunchRefusal(command, args, { cwd, env: childEnvironment })
+      : null;
+    if (refusal) {
+      reject(cliLaunchRefusedError(command, refusal));
+      return;
+    }
     // stdio ["pipe","pipe","pipe"] guarantees non-null stdin/stdout/stderr at runtime.
     // cross-spawn preserves argv-array semantics on native binaries and safely
     // resolves/escapes npm .cmd shims on Windows. Never replace it with a joined
     // shell string: args can contain paths, model labels, and private prompts.
-    const child = crossSpawn(command, args, {
-      stdio: ["pipe", "pipe", "pipe"],
-      cwd,
-      env: childEnvironment
-    }) as ChildProcessWithoutNullStreams;
+    let child: ChildProcessWithoutNullStreams;
+    try {
+      child = crossSpawn(command, args, {
+        stdio: ["pipe", "pipe", "pipe"],
+        cwd,
+        env: childEnvironment
+      }) as ChildProcessWithoutNullStreams;
+    } catch (error) {
+      // An over-long command line throws here, before any process exists:
+      // ENAMETOOLONG from Windows CreateProcess, E2BIG from POSIX exec.
+      const code = (error as CliError).code;
+      reject(code === "ENAMETOOLONG" || code === "E2BIG"
+        ? cliLaunchRefusedError(command, "too-long")
+        : new Error(`${command} could not be started. Check the CLI installation and try again.`));
+      return;
+    }
     let stdout = "";
     let stderr = "";
     let stdoutBytes = 0;
@@ -282,13 +334,15 @@ export function runCli(
 
 // ----- Claude Code (claude --print) -----
 
-export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: CliArgs): string[] {
+export function buildClaudeCliArgs({ model, reasoningEffort }: CliArgs, systemPromptFile?: string): string[] {
   const args = [
     "-p", "--tools", "", "--no-session-persistence",
     "--setting-sources", "", "--strict-mcp-config", "--mcp-config", '{"mcpServers":{}}',
     "--disable-slash-commands", "--no-chrome", "--output-format", "json"
   ];
-  if (systemPrompt) args.push("--append-system-prompt", systemPrompt);
+  // The system prompt never enters argv: through an npm .cmd shim, cmd.exe would
+  // keep only its first line and drop every argument after it.
+  if (systemPromptFile) args.push("--append-system-prompt-file", systemPromptFile);
   if (model && model !== "default") args.push("--model", model);
   if (cliReasoningEffortOptionsFor("claude-cli", model ?? "")?.length) {
     args.push("--effort", reasoningEffort || "low");
@@ -297,12 +351,16 @@ export function buildClaudeCliArgs({ model, reasoningEffort, systemPrompt }: Cli
 }
 
 export async function callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }: CliArgs, sink?: UsageSink): Promise<string> {
-  // Keep bounded JSON work at low effort unless the caller chooses another level.
-  const args = buildClaudeCliArgs({ model, reasoningEffort, systemPrompt });
-
   const workdir = await mkdtemp(join(tmpdir(), "rolefit-claude-"));
   let stdout;
   try {
+    let systemPromptFile: string | undefined;
+    if (systemPrompt) {
+      systemPromptFile = join(workdir, "system-prompt.txt");
+      await writeFile(systemPromptFile, systemPrompt, { encoding: "utf8", mode: 0o600, flag: "wx" });
+    }
+    // Keep bounded JSON work at low effort unless the caller chooses another level.
+    const args = buildClaudeCliArgs({ model, reasoningEffort }, systemPromptFile);
     ({ stdout } = await runCli("claude", args, userPrompt, { cwd: workdir, signal }));
   } catch (error) {
     // Keep the actionable "not installed" hint (it's in the SAFE set). claude
@@ -461,6 +519,9 @@ export async function callAntigravityCli({ model, systemPrompt, userPrompt, sign
     const message = error instanceof Error ? error.message : "";
     if ((error as CliError)?.name === "AbortError" || (error as CliError)?.timedOut) throw error;
     if (/is not installed or not on PATH/.test(message)) throw error;
+    const refusal = (error as CliError)?.launchRefused;
+    if (refusal === "too-long") throw new UserSafeAiError(ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE, 413);
+    if (refusal === "multi-line-script") throw new UserSafeAiError(ANTIGRAVITY_CLI_SCRIPT_MESSAGE, 400);
     throw new Error(
       "Antigravity CLI could not complete the request. Run `agy` and complete Google sign-in, confirm the selected model is available, then try again."
     );

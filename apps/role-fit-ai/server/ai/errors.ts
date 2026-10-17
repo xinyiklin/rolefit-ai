@@ -19,6 +19,13 @@ export const CLAUDE_CLI_FAILED_MESSAGE =
 export const CLAUDE_CLI_TIMEOUT_MESSAGE =
   "Claude Code timed out before finishing. Try again, or switch to a faster model or lower the reasoning effort.";
 
+// Antigravity takes its whole prompt as a command-line argument, so the OS
+// command-line limit (or cmd.exe's, for a Windows command script) bounds it.
+export const ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE =
+  "This request is too long for the Antigravity CLI, which receives its prompt on the command line. Shorten the resume or job text, or choose another provider, then try again.";
+export const ANTIGRAVITY_CLI_SCRIPT_MESSAGE =
+  "The agy command on this computer is a Windows command script (.cmd or .bat), which cannot pass RoleFit's multi-line prompt intact. Put the Antigravity CLI executable first on PATH, or choose another provider, then try again.";
+
 // Provider/CLI configuration errors that carry their own actionable, already
 // user-safe wording. Routes map these to a 400 (not a generic 500) so the user
 // sees the precise remediation. Shared by /api/resume-polish and /api/application-answers.
