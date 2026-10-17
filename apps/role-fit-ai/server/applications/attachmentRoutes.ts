@@ -17,6 +17,7 @@ import {
   assertAttachmentBytes,
   attachmentContentType,
   attachmentDisposition,
+  attachmentStorageName,
   safeAttachmentFileName,
   writeApplicationFile
 } from "./documents.ts";
@@ -53,9 +54,8 @@ export async function handleUploadApplicationAttachment(
   }
   try {
     const body = JSON.parse(await readBody(req, 11_500_000));
-    const safe = safeAttachmentFileName(
-      typeof body.fileName === "string" ? body.fileName : ""
-    );
+    const rawFileName = typeof body.fileName === "string" ? body.fileName : "";
+    const safe = safeAttachmentFileName(rawFileName);
     if (!safe) {
       sendJson(res, 400, {
         error: `Use a file named with one of: ${ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(", ")}.`
@@ -90,12 +90,17 @@ export async function handleUploadApplicationAttachment(
       );
       assertApplicationAcceptsDocuments(current);
       await mkdir(dir, { recursive: true });
-      // Replacing a file of the same name is an update, not a new attachment,
-      // so it never counts against the cap.
+      // Replacing a file of the same original name is an update, not a new
+      // attachment, so it never counts against the cap.
       const trackedAttachments = current.attachments ?? [];
+      const fileName = attachmentStorageName(
+        safe,
+        rawFileName,
+        trackedAttachments
+      );
       if (
         !trackedAttachments.some(
-          (attachment) => attachment.fileName === safe.fileName
+          (attachment) => attachment.fileName === fileName
         ) &&
         trackedAttachments.length >= MAX_ATTACHMENTS_PER_APPLICATION
       ) {
@@ -105,21 +110,21 @@ export async function handleUploadApplicationAttachment(
         );
       }
       const previousBytes = await readOptionalApplicationFile(
-        join(dir, safe.fileName)
+        join(dir, fileName)
       );
       const attachment = {
-        fileName: safe.fileName,
+        fileName,
         label:
           typeof body.label === "string" && body.label.trim()
             ? body.label.trim().slice(0, 120)
-            : safe.fileName,
+            : fileName,
         size: bytes.length,
-        contentType: attachmentContentType(safe.fileName),
+        contentType: attachmentContentType(fileName),
         savedAt: new Date().toISOString()
       };
       const attachments = [
         ...trackedAttachments.filter(
-          (entry) => entry.fileName !== safe.fileName
+          (entry) => entry.fileName !== fileName
         ),
         attachment
       ];
@@ -132,7 +137,7 @@ export async function handleUploadApplicationAttachment(
         application.id === id ? nextApplication : application
       );
       try {
-        await writeApplicationFile(dir, safe.fileName, bytes);
+        await writeApplicationFile(dir, fileName, bytes);
         const applications = await writeApplications(
           workspaceDir,
           nextApplications
@@ -147,7 +152,7 @@ export async function handleUploadApplicationAttachment(
       } catch (error) {
         await restoreApplicationFile(
           dir,
-          safe.fileName,
+          fileName,
           previousBytes
         ).catch(() => undefined);
         throw error;

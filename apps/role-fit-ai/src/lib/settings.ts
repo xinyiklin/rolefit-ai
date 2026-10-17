@@ -193,7 +193,7 @@ function migrateProviderSettings(source: Record<string, unknown>): Record<string
     if (provider !== "codex-cli" && provider !== "claude-cli") continue;
     if (typeof storedModel !== "string") continue;
     let model = storedModel;
-    if (provider === "codex-cli" && ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"].includes(model)) {
+    if (provider === "codex-cli" && ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"].includes(model)) {
       model = providerOptions.find((option) => option.value === provider)!.model;
       migrated[modelKey] = model;
     }

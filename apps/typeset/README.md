@@ -75,10 +75,10 @@ Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
 download a finished `.pdf`: the owned typeset engine renders the pages and the app
 serializes them to PDF entirely in your browser (embedded fonts, vector rules, and
 clickable links), with no print dialog, document upload, or server-side conversion.
-PDF is final output, not an editable source format. A successful **Save**
-establishes the durable baseline for both content and print style, so a
-style-only change does not leave a false unsaved-leave warning after the file
-downloads.
+PDF is final output, not an editable source format. A completed autosave
+or **Save** establishes the baseline for both content and print style, so the
+browser's leave warning appears only while an edit is not yet stored in this
+browser or local saving has failed.
 
 Autosave is a recovery convenience, not a replacement for saving a `.resume`
 file that can be backed up or moved to another device.
@@ -98,7 +98,9 @@ state at that location. Family, size, bold, italic, and underline changes on a
 range restore its exact start and end after toolbar interaction. The browser
 typesetter automatically detects email addresses and web links. Selected text
 can also receive a custom destination from the Link control, where detected or
-explicit links can be edited or persistently removed. The typesetter measures
+explicit links can be edited or persistently removed. Text that only looks
+like formatting code, such as `<b>` or `<size=12>`, stays literal text when
+typed or pasted. The typesetter measures
 mixed runs with committed metrics before it breaks lines, so the editable page,
 browser print layer, and dedicated PDF output stay aligned. Typography stays in
 the direct toolbar; selecting all text is the explicit way to restyle the entire

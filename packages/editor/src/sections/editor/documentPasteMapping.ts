@@ -1,14 +1,17 @@
+import { escapeInlineMarkText } from "@typeset/engine/lib/inlineMarksText.ts";
 import { paragraphFragmentsFromHtml } from "./clipboardHtmlImport.ts";
 
 // Structural paste choices operate on logical blocks. Rich HTML wins because
 // it retains the supported inline grammar; plain text is only a fallback and
 // splits on authored, nonempty lines rather than guessing at header roles.
+// Its lines are literal text, so tag-shaped text is escaped, never parsed.
 export function clipboardBlocks(html: string, plainText: string): string[] {
   const rich = paragraphFragmentsFromHtml(html);
   if (rich?.length) return rich;
   return plainText
     .split(/\r?\n/)
-    .filter((line) => line.trim().length > 0);
+    .filter((line) => line.trim().length > 0)
+    .map(escapeInlineMarkText);
 }
 
 export function defaultDocumentPasteMapping(blockCount: number): {

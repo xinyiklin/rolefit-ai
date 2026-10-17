@@ -378,7 +378,7 @@ assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a tra
 
 
 // Catalog retirement must not make the canonical file or a valid backup unreadable.
-for (const model of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
+for (const model of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
   const old = { ...validStoredPrefs, settings: {
     aiProvider: "codex-cli", selectedModel: model, cliReasoningEffort: "high",
     coverProvider: "claude-cli", coverSelectedModel: "claude-haiku-4-5", coverCliReasoningEffort: "low",

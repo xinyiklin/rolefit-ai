@@ -171,7 +171,7 @@ non-interactive status contract is ready when its executable and usable session
 are confirmed. An expired or missing CLI remains configured but not ready so
 the browser can show a reconnect state without erasing stage preferences.
 
-Antigravity (`agy`) was removed from the catalog (D076); it had no
+Antigravity (`agy`) was removed from the catalog (D080); it had no
 non-interactive auth-status command and could take prompts only in argv. A
 vault that still lists it drops the id on read and keeps its API keys and
 other providers.
@@ -473,7 +473,7 @@ tracker, extension inbox, and multi-tab behavior remain browser-owned.
 1. Add official installation links for missing CLIs and `Check again`.
 2. Keep Claude/Codex fixed browser-opening login flows.
 3. Add explicit terminal fallback where interactive input is required.
-4. (Retired with Antigravity, D076: the manual ready-to-verify state.)
+4. (Retired with Antigravity, D080: the manual ready-to-verify state.)
 
 Acceptance: no custom password form, auto-installer, renderer shell input, or
 false signed-in claim; request eligibility is not presented as detected auth.

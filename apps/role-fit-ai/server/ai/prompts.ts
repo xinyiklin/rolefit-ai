@@ -280,8 +280,10 @@ export function polishFirewallRule(withFitFindings: boolean) {
   return inputFirewallRule(withFitFindings ? [...UNTRUSTED_FENCE_NAMES, ...FIT_FINDINGS_FENCE_NAMES] : UNTRUSTED_FENCE_NAMES);
 }
 
+// Resume text spells a literal "<" as `<lt>` and the Polish prompts say so, so a
+// fence spelled `<lt>/job_description>` is neutralized like a real one.
 const UNTRUSTED_FENCE_PATTERN = new RegExp(
-  `<(\\s*/\\s*|)(${[
+  `<(?:lt>)?(\\s*/\\s*|)(${[
     ...UNTRUSTED_FENCE_NAMES,
     ...ANSWER_CONVERSATION_FENCE_NAMES,
     ...RESUME_REVIEW_FENCE_NAMES,

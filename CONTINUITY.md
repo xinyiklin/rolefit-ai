@@ -43,6 +43,9 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## Open questions and UNCONFIRMED items
 
+- 2026-10-17 [TOOL] The parked document chat draft recorded on 2026-10-15
+  (branch `draft/document-chat`, worktree `../role-fit-ai-document-chat-draft`)
+  is absent locally and on origin; where it lives is UNCONFIRMED.
 - 2026-07-25..10-06 [TOOL] Browser QA never run (flag-first) for shipping
   surfaces: Prepare states and 1080/980/860/720px breakpoints and the Firefox
   footer band (2026-07-30); prepared two-pane scrolling (2026-08-07); Apply's
@@ -70,89 +73,53 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-17
 
-- [USER+CODE] Branch `claude/nostalgic-goldwasser-716680`, not pushed, no PR:
-  - **CLI argv delivery** (audit H2; 9b9d626, 2792e4a, a5e81ff, 37e73e8): an
-    npm `claude.cmd` shim made cmd.exe keep only the system prompt's first
-    line and drop `--model`/`--effort`. Claude Code now reads the unchanged
-    prompt via `--append-system-prompt-file` (private temp file); `runCli`
-    refuses multi-line or over-8,191-character argv through cmd.exe. [TOOL] Two
-    `mb-verifier` reviews PASS; UNCONFIRMED: macOS and a real npm shim.
-  - **Antigravity (`agy`) removed** (D076), with read-repairs for saved stage
-    selections and provider vaults; the packaged smoke now enables a fake
-    `claude` and pins snapshot shape plus `ready` = signed in. [TOOL] Packaged
-    smoke passed on win32-x64 (unpacked); macOS UNCONFIRMED. Next: the landing
-    fact strip (`landing/index.html`, "3 CLIs + 2 APIs") changes with the
-    release that ships D076, since the live 0.15.0 download still has `agy`.
-
-## 2026-10-16
-
-- [CODE] **Engine/editor audit patches** (branch `fix/engine-editor-audit`,
-  not pushed; autonomous audit of `packages/engine` and `packages/editor`). A
-  bullet, skills row, or heading taller than a page fills its page and
-  continues at a wrapped line (continuations carry `emergencyBreakBefore`;
-  `layout.ts` splits an over-tall chain at the last boundary that fits; a
-  page-sized bullet still moves whole). The breaker stops scanning at the first
-  overfull start (9,600 differential cases identical; 16,000 words 1.2 s →
-  ~10 ms). PDF link URIs escape `\ ( )` and percent-encode non-ASCII (an
-  unbalanced `)` made a PDF pdf-lib could not reload). Uppercase headings keep
-  `<link=…>` destinations; `<size=0>`/`<size=999>` take an inert slot in all
-  three tag walkers; impossible ports are not links and a balanced trailing `)`
-  stays in an auto-link (linear trimming); download names strip every inline
-  mark; a leading BOM parses; `<indent>` is clamped at impossible margins. New
-  evals `eval:inline-marks`, `eval:pdf-links`, `tall-paragraphs.mjs`.
-  - [TOOL] `npm run check` for `packages/engine` (incl. fonts:check),
-    `packages/editor`, `apps/typeset`, `apps/role-fit-ai` (offline 182/182)
-    exit 0 on Node 24.18.0; 277 page-fitting documents lay out byte-identical
-    to `HEAD`. Browser QA in Typeset (Chromium pane, 3,000-word bullet over 4
-    pages) passed: no overflow; caret, typing, arrows, drag selection, copy,
-    menus, and grip across the split; PDF page count and per-page baselines
-    match; a kept bullet moves whole. Reviews: `code-reviewer` (no High; Med
-    findings fixed: linear bracket trimming, 48,000-word breaker bound, a
-    kept-bullet fixture that crosses a page; its follow-up found a
-    stranded-heading split, fixed) and `mb-verifier` (nine claims PASS over
-    48,768 breaker and 11 pagination fixtures; residual: a cover glyph wider
-    than the clamp's 1 em overshoots a 3-inch margin by <0.4 bp).
-  - [CODE] Not changed, recorded: one unbreakable 20,000-character token costs
-    ≈0.8 s, growing faster than linearly; uppercase headings paint `ß` as `SS`
-    while the editor display map keeps one char; a cover base size outside
-    9–13 pt throws in `documentStyleToCoverLetterStyle` (unreachable in
-    RoleFit). Editor DOM modules were exercised only through the QA above.
-
-## 2026-10-15
-
-- [USER+CODE] The parked document chat draft is branch `draft/document-chat`
-  (worktree `../role-fit-ai-document-chat-draft`).
-- [CODE] **Repository audit patches** (PR #230, four behavior commits): the
-  loopback Host/Origin guard covers every non-extension
-  request, and development Vite runs with CORS off and the workspace directory
-  denied (before, another localhost-origin page could read `workspace/` from
-  the development server; the packaged server was unaffected); Typeset keeps a
-  draft its parser refuses under `typeset-resume.autosave.v2.unreadable`
-  instead of overwriting it; the Typeset image sends CSP, nosniff, frame
-  denial, no-referrer, and hashed-asset caching from `apps/typeset/nginx.conf`,
-  which CI's container probe asserts; the Typeset deploy rolls back to the
-  previous image when the new container is not healthy.
-  - [TOOL] Verified: `test:server-lifecycle` with new page-level guard
-    assertions; a 5183 development server probe set (foreign Host/Origin 403,
-    workspace and `/@fs/` 403, same-origin 200); `npm run check` for
-    `apps/typeset` and `apps/role-fit-ai` (offline 182/182); `nginx -t` and the
-    live headers in the pinned image; the built Typeset under that CSP in the
-    browser pane with no console errors.
-  - [CODE] The guard change touches server network exposure, a product-delivery
-    trigger; the full workflow was not run for this user-directed autonomous
-    audit, and one `code-reviewer` review was run instead. Its one Med (a
-    failed `docker run` skipped the rollback) and six Low findings were fixed:
-    asset 404s no longer cached immutable, the IPv6 listener dropped (IPv4
-    only), the workspace deny glob escaped, a refused draft storage will
-    not keep reported as lost, the development font route moved behind the
-    guard, and the CI probe now asserts referrer and asset caching headers.
-    Not covered by a test: the development-mode Vite settings (`cors: false`,
-    the workspace deny); the lifecycle probe runs production mode only.
-  - Still open from the 2026-10-03 review (the Antigravity
-    `--dangerously-skip-permissions` item ended with D076): the Typeset deploy
-    trusts the host key on first use (`ssh-keyscan`) and needs a pinned
-    known-hosts secret; Electron stays at
-    its runtime-contract pin with Dependabot PRs open. Never deep-audited:
-    extension popup UI logic (its DOM is built with `textContent`; no HTML
-    sinks), evals quality, and a full docs-drift sweep (the engine and the
-    editor's pure modules were audited 2026-10-16, above).
+- [USER+CODE+TOOL] **Repository audit, round 2** (16 read-only slices; every
+  High re-checked by the coordinator; report kept local). Fixed in this batch:
+  tracker attachment overwrites and silent notes clipping (#232), quadratic
+  job-import parsing (#233), literal tag text, and the CLI argv fix (both
+  below). Still open, by severity:
+  - High: Typeset tabs overwrite one autosave key and the losing tab gets no
+    leave warning; the engine measures characters outside its metric set at
+    0.5 em (`→ ™ £ ©`, Polish/Czech letters overlap or drift in the PDF) and
+    paints a face's missing glyphs as `.notdef` with the wrong ToUnicode;
+    editor IME composition over a selection can diverge from the model (code
+    path; unverified in a browser); the companion's extension-pairing
+    ownership guard has no executing test; `AGENTS.md` requires a
+    `code-reviewer` agent that is not installed (`mb-verifier` is).
+  - Medium (selected): `HOST=0.0.0.0` drops the Origin check; restore staging
+    folders sit unignored beside `workspace/`; job import ignores
+    Content-Type; a corrupt provider vault blocks companion startup; packaged
+    macOS CLI lookup omits nvm/fnm; base-resume Save discards open proposals;
+    landing ZIP links lack "Unsigned"; `main` has no required status checks
+    and the `ec2` environment no branch policy.
+- [USER+CODE] **GPT-5.5 retired** from the Codex catalog; saved selections,
+  workspace preferences, and backups repair to the Codex default (D076). Docs
+  aligned with code: extension intake follows the automatic Polish settings
+  (D077), and a Typeset autosave clears unsaved changes (D078).
+  - [TOOL] Mutation-checked: the backup contract eval fails without the
+    repair entry. `npm run check --workspace apps/role-fit-ai` passed;
+    mb-verifier READY after one fix round.
+- [USER+CODE] **CLI argv delivery and Antigravity removal** (branch
+  `claude/nostalgic-goldwasser-716680`): Claude Code reads its unchanged system
+  prompt via `--append-system-prompt-file` (an npm `claude.cmd` shim made
+  cmd.exe keep only its first line and drop `--model`/`--effort`); `runCli`
+  refuses multi-line or over-8,191-character argv through cmd.exe. Antigravity
+  (`agy`) support is removed (D080): retired stages take their own CLI default
+  and vaults drop the id, keeping API keys. Next: the landing fact strip
+  ("3 CLIs + 2 APIs") changes with the release that ships D080.
+  - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
+    UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
+- [USER+CODE+TOOL] **Literal tag text** (D079): `<lt>` is a literal `<`
+  written only where a raw `<` would start a tag, so typed or pasted `<b>`,
+  `<size=12>`, or `<link=…>` stays text in both apps; merges and whole-field
+  style changes keep it; screen, PDF text, copy-out, and the PDF Title decode
+  it. The Polish markup gate now rejects every grammar tag except b/i/u and
+  `<lt>`, closing a hidden-link bypass (also an older `<link=…<b>` variant).
+  - [TOOL] Engine, editor, Typeset, and RoleFit checks passed (183/183);
+    in-app browser QA in both apps (typing, Enter/Backspace, paste, Styles);
+    two mb-verifier reviews READY after three rounds. Headless Chrome
+    contracts could not start on this Windows machine (Chrome refused the CDP
+    attach; Edge failed to start); Document CI runs them.
+  - [USER] Deferred: the RoleFit proposal Edit box still edits raw grammar.
+    Limits: Final review evidence and cover-letter AI output read decoded text
+    back as grammar; PDF import excludes tag-shaped source text.

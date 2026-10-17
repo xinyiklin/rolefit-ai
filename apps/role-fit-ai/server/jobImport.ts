@@ -75,15 +75,32 @@ function greenhouseParam(value: unknown, pattern: RegExp): string {
   return pattern.test(param) ? param : "";
 }
 
+// The `for=` board in the query of the first `prefix` URL that names one, with
+// each query (up to a quote or angle bracket) read once: a later prefix inside
+// a query shares its tail, so it cannot name a board the earlier query lacked.
+function wrapperQueryBoard(source: string, prefix: RegExp): string {
+  for (let match = prefix.exec(source); match; match = prefix.exec(source)) {
+    const queryStart = match.index + match[0].length;
+    const stop = /["'<>]/g;
+    stop.lastIndex = queryStart;
+    const queryEnd = stop.exec(source)?.index ?? source.length;
+    const board = source.slice(queryStart, queryEnd)
+      .match(/\bfor=([a-z0-9][a-z0-9_-]{0,80})(?=(?:&(?:amp;)?|["'<>\s]|$))/i)?.[1];
+    if (board) return board;
+    prefix.lastIndex = queryEnd;
+  }
+  return "";
+}
+
 function greenhouseBoardFromWrapperHtml(html: string): string {
   const source = String(html || "");
-  const patterns = [
-    /(?:https?:)?\/\/boards\.greenhouse\.io\/embed\/job_board\/js\?[^"'<>]*?\bfor=([a-z0-9][a-z0-9_-]{0,80})(?=(?:&(?:amp;)?|["'<>\s]|$))/i,
-    /(?:https?:)?\/\/job-boards\.greenhouse\.io\/embed\/job_app\?[^"'<>]*?\bfor=([a-z0-9][a-z0-9_-]{0,80})(?=(?:&(?:amp;)?|["'<>\s]|$))/i,
-    /(?:https?:)?\/\/boards-api\.greenhouse\.io\/v1\/boards\/([a-z0-9][a-z0-9_-]{0,80})(?=\/)/i
+  const candidates = [
+    wrapperQueryBoard(source, /\/\/boards\.greenhouse\.io\/embed\/job_board\/js\?/gi),
+    wrapperQueryBoard(source, /\/\/job-boards\.greenhouse\.io\/embed\/job_app\?/gi),
+    source.match(/(?:https?:)?\/\/boards-api\.greenhouse\.io\/v1\/boards\/([a-z0-9][a-z0-9_-]{0,80})(?=\/)/i)?.[1]
   ];
-  for (const pattern of patterns) {
-    const board = greenhouseParam(source.match(pattern)?.[1], /^[a-z0-9][a-z0-9_-]{0,80}$/i);
+  for (const candidate of candidates) {
+    const board = greenhouseParam(candidate, /^[a-z0-9][a-z0-9_-]{0,80}$/i);
     if (board) return board;
   }
   return "";

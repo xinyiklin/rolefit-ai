@@ -1,4 +1,5 @@
 import { parseSavedApplicationAnswers } from "../../shared/applicationAnswerStorage.ts";
+import { APPLICATION_NOTES_MAX_LENGTH } from "../../shared/applicationNotesContract.ts";
 import { sanitizeJobAnalysisWarnings } from "../../shared/jobAnalysisWarnings.ts";
 import { dedupeSourceUrls } from "../../src/lib/jobIdentity.ts";
 import {
@@ -355,6 +356,10 @@ function sanitizeApplication(raw: unknown) {
   const resumeArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.resumeArtifacts);
   const coverLetterArtifacts = jobOnlySkipped ? undefined : sanitizeDocumentArtifacts(r.coverLetterArtifacts);
   if (resumeArtifacts === null || coverLetterArtifacts === null) return null;
+  // Refused whole rather than cut: a clipped tail is user text lost silently.
+  const notes = typeof r.notes === "string" ? r.notes : "";
+  const interviewTips = typeof r.interviewTips === "string" ? r.interviewTips : "";
+  if (notes.length > APPLICATION_NOTES_MAX_LENGTH || interviewTips.length > APPLICATION_NOTES_MAX_LENGTH) return null;
 
   return {
     id,
@@ -387,12 +392,12 @@ function sanitizeApplication(raw: unknown) {
     salaryMax: sanitizeSalary(r.salaryMax),
     salaryCurrency: typeof r.salaryCurrency === "string" ? r.salaryCurrency.slice(0, 8) : "",
     salaryPeriod: inList(SALARY_PERIODS, r.salaryPeriod) ? r.salaryPeriod : undefined,
-    interviewTips: typeof r.interviewTips === "string" ? r.interviewTips.slice(0, 8_000) : "",
+    interviewTips,
     contacts: sanitizeContacts(r.contacts),
     resumeArtifacts,
     coverLetterArtifacts,
     attachments: jobOnlySkipped ? undefined : sanitizeAttachments(r.attachments),
-    notes: typeof r.notes === "string" ? r.notes.slice(0, 8_000) : "",
+    notes,
     fitAssessment: sanitizeFitAssessmentSnapshot(r.fitAssessment),
     templateId: typeof r.templateId === "string" ? r.templateId.slice(0, 80) : "",
     resumeUsed:

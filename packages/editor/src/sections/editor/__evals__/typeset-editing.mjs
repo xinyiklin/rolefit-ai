@@ -11,6 +11,7 @@ import {
   applyEdit,
   applyPlainTextInputEdit,
   buildDisplayMap,
+  displayIndexForValueIndex,
   expandToLinkRun,
   inlineFragmentForRange,
   replaceWithParagraphFragments,
@@ -24,6 +25,7 @@ import {
   setFontSize,
   splitValueAt,
   suppressedAutoLinkValue,
+  toggleMark,
   trailingLinkWordAt,
   typingFormatForDeletedRange
 } from "../inlineTextEditing.ts";
@@ -53,8 +55,11 @@ import {
 import { anchorsFromDoc } from "../typesetStructure.ts";
 import { FONT_FAMILY_OPTIONS } from "@typeset/engine/lib/documentStyle.ts";
 import {
+  canonicalInlineMarkText,
   clearInlineOverride,
   effectiveFieldFont,
+  inlineMarkTagStartsAt,
+  joinInlineMarkText,
   paragraphSpacingFromInlineMarks
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import { automaticLinkHref } from "@typeset/engine/lib/links.ts";
@@ -1715,6 +1720,106 @@ assert.match(
   "the stale overlay caret is hidden during IME composition"
 );
 
+// ---- tag-shaped text stays literal (<lt>) ----
+{
+  const plainChars = (map) =>
+    map.chars.every((c) => !c.bold && !c.italic && !c.underline && !c.linkHref && c.fontSizePt === null && !c.linkSuppressed);
+  const literal = buildDisplayMap("a<lt>b>c");
+  assert.equal(literal.display, "a<b>c", "<lt> displays as one literal <");
+  assert.equal(literal.chars[1].raw, "<lt>");
+  assert.equal(buildDisplayMap("<lt>b>tag", { uppercase: true }).display, "<B>TAG");
+
+  const typed = applyEdit(buildDisplayMap(""), 0, 0, "Use <b> and <i> tags");
+  assert.equal(typed.value, "Use <lt>b> and <lt>i> tags", "typed tag text is escaped");
+  assert.equal(buildDisplayMap(typed.value).display, "Use <b> and <i> tags");
+  assert.ok(plainChars(buildDisplayMap(typed.value)), "typed tag text applies no formatting");
+  assert.equal(
+    displayIndexForValueIndex(buildDisplayMap(typed.value), typed.caretValueIndex),
+    "Use <b> and <i> tags".length,
+    "the caret lands after the typed text"
+  );
+  assert.equal(applyEdit(buildDisplayMap(""), 0, 0, "a < b, List<String>, <div>").value, "a < b, List<String>, <div>", "text that forms no tag is not escaped");
+  assert.equal(applyEdit(buildDisplayMap(""), 0, 0, "<lt>").value, "<lt>lt>", "typing the token itself stays literal");
+
+  const legacy = buildDisplayMap("x<");
+  assert.equal(applyEdit(legacy, 2, 2, "b>").value, "x<lt>b>", "completing a tag next to an existing < escapes it");
+  const midway = buildDisplayMap("<lt>b>x");
+  assert.equal(applyEdit(midway, 1, 2, "").value, "<>x", "an escape no longer needed is dropped on the next edit");
+
+  assert.equal(
+    applyEdit(buildDisplayMap(""), 0, 0, "<b>", { bold: true }).value,
+    "<b><lt>b></b>",
+    "real formatting still writes real tags around the literal"
+  );
+  assert.equal(toggleMark(buildDisplayMap("<lt>b>tag"), 0, 6, "italic").value, "<i><lt>b>tag</i>");
+
+  assert.equal(
+    applyInlineFragment(buildDisplayMap("xy"), 1, 1, "<lt>size=200>big").value,
+    "x<lt>size=200>bigy",
+    "an escaped fragment inserts literal text"
+  );
+  const blocks = clipboardBlocks("", "Use <b> tags\n<link=https%3A%2F%2Fevil.test>portfolio</link>\na < b");
+  assert.deepEqual(
+    blocks,
+    ["Use <lt>b> tags", "<lt>link=https%3A%2F%2Fevil.test>portfolio<lt>/link>", "a <lt> b"],
+    "plain-text paste lines are literal text"
+  );
+  const linked = applyInlineFragment(buildDisplayMap(""), 0, 0, blocks[1]);
+  assert.equal(buildDisplayMap(linked.value).display, "<link=https%3A%2F%2Fevil.test>portfolio</link>");
+  assert.ok(plainChars(buildDisplayMap(linked.value)), "pasted link markup creates no link");
+  assert.deepEqual(
+    replaceWithParagraphFragments(buildDisplayMap(""), 0, 0, [blocks[0], blocks[2]]).values,
+    ["Use <lt>b> tags", "a < b"],
+    "pasted paragraphs keep only the escapes they need"
+  );
+
+  // Enter then Backspace (split, then the editor's merge join) restores the
+  // literal text at every split point, with the caret back at the seam.
+  const sentence = typed.value;
+  const sentenceMap = buildDisplayMap(sentence);
+  for (let at = 0; at <= sentenceMap.display.length; at += 1) {
+    const { before, after } = splitValueAt(sentenceMap, at);
+    const merged = joinInlineMarkText(before, after);
+    assert.equal(buildDisplayMap(merged.value).display, sentenceMap.display, `split and merge at ${at}`);
+    assert.ok(plainChars(buildDisplayMap(merged.value)), `split and merge at ${at} forms no mark`);
+    assert.equal(displayIndexForValueIndex(buildDisplayMap(merged.value), merged.index), at, `the merge caret returns to ${at}`);
+  }
+  assert.equal(canonicalInlineMarkText(blocks[2]), "a < b", "stored header and document paste blocks use the canonical spelling");
+
+  // Any text inserted anywhere into literal text stays literal, with only
+  // needed escapes (seeded, so failures reproduce).
+  let seed = 0x1e7;
+  const random = () => {
+    seed = (seed * 1103515245 + 12345) % 2147483648;
+    return seed / 2147483648;
+  };
+  const pieces = ["<", ">", "/", "b", "i", "u", "lt", "link=x", "size=12", "align=left", " ", "a"];
+  const randomText = () => {
+    let text = "";
+    const length = Math.floor(random() * 8);
+    for (let index = 0; index < length; index += 1) text += pieces[Math.floor(random() * pieces.length)];
+    return text;
+  };
+  const preserve = { preserveWhitespace: true };
+  for (let run = 0; run < 1500; run += 1) {
+    const first = randomText();
+    const start = applyEdit(buildDisplayMap("", preserve), 0, 0, first);
+    const startMap = buildDisplayMap(start.value, preserve);
+    assert.equal(startMap.display, first, `typing ${JSON.stringify(first)}`);
+    const at = Math.floor(random() * (first.length + 1));
+    const second = randomText();
+    const next = applyEdit(startMap, at, at, second);
+    const nextMap = buildDisplayMap(next.value, preserve);
+    const expected = first.slice(0, at) + second + first.slice(at);
+    assert.equal(nextMap.display, expected, `inserting ${JSON.stringify(second)} into ${JSON.stringify(first)} at ${at}`);
+    assert.ok(plainChars(nextMap), `${JSON.stringify(expected)} carries no formatting`);
+    for (let index = next.value.indexOf("<lt>"); index >= 0; index = next.value.indexOf("<lt>", index + 1)) {
+      const unescaped = next.value.slice(0, index) + "<" + next.value.slice(index + 4);
+      assert.ok(inlineMarkTagStartsAt(unescaped, index), `the escape at ${index} in ${JSON.stringify(next.value)} is needed`);
+    }
+  }
+}
+
 console.log(
-  `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, and hyperlink-editing checks passed`
+  `typeset editing: whitespace, rich clipboard, bounded typography, indentation stops, drag hit-area, selection-boundary resolution, ${FONT_FAMILY_OPTIONS.length}-family tag round-trip, literal tag text, and hyperlink-editing checks passed`
 );

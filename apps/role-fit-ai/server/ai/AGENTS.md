@@ -33,6 +33,12 @@ application retain blocking technical guards.
 - `prompts.ts` owns fenced input construction and truthfulness/output rules.
 - `sanitize.ts` owns shared deterministic markup and numeric-claim guards. Stage
   modules own their response schemas and outcome derivation.
+- The inline grammar's `<lt>` token (one literal `<`) is text, not markup: the
+  Polish scope keeps it, the Resume Polish and review prompts explain it, an
+  edit that drops one is warned, and `fenceUntrusted` neutralizes a fence
+  spelled with it. `containsStructuredMarkup` reads text as the engine does and
+  rejects every grammar tag except b/i/u and `<lt>`, including a `<link=…>`
+  whose destination hides another token (`literal-tag-probes.mjs`).
 - `resumeProposal.ts` owns normal Resume Polish: one generation dispatch, flat
   target IDs, deterministic mutation grounding, tolerant optional feedback,
   and truthful Proposal / No changes / Withheld outcomes. Oversized target sets

@@ -41,6 +41,9 @@ import {
   type StyleTextField
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import {
+  canonicalInlineMarkText,
+  escapeInlineMarkText,
+  joinInlineMarkText,
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
 } from "@typeset/engine/lib/inlineMarksText.ts";
@@ -1425,7 +1428,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const dividerBlocks = plainText
         .split(divider)
         .map((item) => item.trim())
-        .filter(Boolean);
+        .filter(Boolean)
+        .map(escapeInlineMarkText);
       setHeaderPastePrompt({
         selection,
         blocks: [...blocks],
@@ -1460,18 +1464,20 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         name: null,
         contact: []
       };
+      // Pasted blocks escape every "<"; store each in its canonical spelling.
+      const stored = blocks.map(canonicalInlineMarkText);
       const header = src.kind === "name"
         ? {
             visible: true,
-            name: blocks[0] ?? "",
-            contact: blocks.slice(1)
+            name: stored[0] ?? "",
+            contact: stored.slice(1)
           }
         : {
             ...current,
             visible: true,
             contact: [
               ...current.contact.slice(0, src.index),
-              ...blocks,
+              ...stored,
               ...current.contact.slice(src.index + 1)
             ]
           };
@@ -1753,6 +1759,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const list = listOf(range.src);
         if (list && !survivorOfList.has(list)) survivorOfList.set(list, range.key);
       }
+      // Folding the tail into the head joins two values: a literal "<" ending
+      // the head must not open a tag with the tail's text.
+      const joinedHead = joinsTail
+        ? joinInlineMarkText(head.value, remainderOf(last, "").value, head.caretValueIndex)
+        : { value: head.value, index: head.caretValueIndex };
 
       const edits: FieldEdit[] = [
         paragraphReplacement && first.src.kind === "bullet"
@@ -1763,10 +1774,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               bulletId: first.src.bulletId,
               values: paragraphReplacement.values
             }
-          : fieldEditFor(
-              first.src,
-              joinsTail ? head.value + remainderOf(last, "").value : head.value
-            )
+          : fieldEditFor(first.src, joinedHead.value)
       ];
       for (const range of ranges.slice(1)) {
         const src = range.src;
@@ -1840,7 +1848,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
       const caretKey = first.key;
       const caretSrc = first.src;
-      const caretValueIndex = head.caretValueIndex;
+      const caretValueIndex = joinedHead.index;
       pendingCaretRef.current = (fresh) => ({
         key: caretKey,
         valueIndex: Math.min(caretValueIndex, valueForField(fresh, caretSrc).length)
@@ -2354,7 +2362,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   const applyDocumentPaste = useCallback(() => {
     const prompt = documentPastePrompt;
     if (!prompt) return;
-    const { blocks, bodyStart, nameIndex } = prompt;
+    const { bodyStart, nameIndex } = prompt;
+    const blocks = prompt.blocks.map(canonicalInlineMarkText);
     const body = blocks.slice(bodyStart);
     if (!body.length) return;
     const contact = blocks.filter(
@@ -3091,11 +3100,14 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         const upper = upperEntry.bullets[0];
         const lower = lowerEntry.bullets[0];
         if (!upper || !lower) return false;
+        // A literal "<" ending the upper paragraph must not open a tag with
+        // the lower one's text; the join escapes it and moves the caret.
+        const merged = joinInlineMarkText(upper.text, lower.text);
         markPending();
-        actions.mergeSummaryParagraphUp(sectionId, lowerEntry.id, upper.text + lower.text);
+        actions.mergeSummaryParagraphUp(sectionId, lowerEntry.id, merged.value);
         pendingCaretRef.current = () => ({
           key: fieldKey({ kind: "bullet", sectionId, entryId: upperEntry.id, bulletId: upper.id }),
-          valueIndex: upper.text.length
+          valueIndex: merged.index
         });
         return true;
       }
@@ -3106,10 +3118,10 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       if (!mergeId || !upperId) return false;
       const upper = entry.bullets.find((b) => b.id === upperId)!;
       const lower = entry.bullets.find((b) => b.id === mergeId)!;
-      const joined = upper.text + lower.text;
+      const merged = joinInlineMarkText(upper.text, lower.text);
       markPending();
-      actions.mergeBulletUp(sectionId, entryId, mergeId, joined);
-      const caretValue = upper.text.length;
+      actions.mergeBulletUp(sectionId, entryId, mergeId, merged.value);
+      const caretValue = merged.index;
       pendingCaretRef.current = () => ({
         key: fieldKey({ kind: "bullet", sectionId, entryId, bulletId: upperId }),
         valueIndex: caretValue

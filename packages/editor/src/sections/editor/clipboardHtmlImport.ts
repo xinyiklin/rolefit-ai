@@ -5,6 +5,7 @@ import {
   normalizeLinkDestination
 } from "@typeset/engine/lib/links.ts";
 import {
+  escapeInlineMarkText,
   inlineFontSizePt,
   paragraphLineHeight,
   paragraphSpacePt
@@ -169,8 +170,9 @@ function styleForElement(element: HTMLElement, inherited: RichStyle): RichStyle 
   return next;
 }
 
+// Clipboard text is literal: tag-shaped text such as "<b>" must not become marks.
 function wrapText(text: string, style: RichStyle): string {
-  let value = text;
+  let value = escapeInlineMarkText(text);
   if (style.underline) value = `<u>${value}</u>`;
   if (style.italic) value = `<i>${value}</i>`;
   if (style.bold) value = `<b>${value}</b>`;

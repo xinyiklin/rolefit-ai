@@ -11,9 +11,9 @@ import { FONT_FAMILY_ALTERNATION, type FontFamily } from "./fontFamilies.ts";
 // sections/editor/inlineTextEditing.ts is a deliberate second automaton over
 // the same grammar — keep the two tag inventories in sync. Both take the font
 // alternation from lib/fontFamilies.ts so a new family cannot parse in one and
-// not the other.
+// not the other. `<lt>` is the one text token (INLINE_LITERAL_LESS_THAN).
 export const INLINE_MARK_TAG_PATTERN =
-  `<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>|<line-height=\\d+(?:\\.\\d+)?>|<\\/line-height>|<space-before=\\d+(?:\\.\\d+)?>|<\\/space-before>|<space-after=\\d+(?:\\.\\d+)?>|<\\/space-after>|<indent=\\d+(?:\\.\\d+)?>|<\\/indent>`;
+  `<lt>|<\\/?(?:b|i|u|nolink)>|<link=([^>\\s]+)>|<\\/link>|<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>|<size=\\d+(?:\\.\\d+)?>|<\\/size>|<align=(?:left|center|right|justify)>|<\\/align>|<line-height=\\d+(?:\\.\\d+)?>|<\\/line-height>|<space-before=\\d+(?:\\.\\d+)?>|<\\/space-before>|<space-after=\\d+(?:\\.\\d+)?>|<\\/space-after>|<indent=\\d+(?:\\.\\d+)?>|<\\/indent>`;
 
 export const INLINE_FONT_SIZE_MIN_PT = 1;
 export const INLINE_FONT_SIZE_MAX_PT = 200;
@@ -35,6 +35,114 @@ export function isInlineFontSizePt(value: number): boolean {
 }
 
 const INLINE_TAG_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
+const INLINE_TAG_AT_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "iy");
+
+// A literal "<" stored where the raw character would start a tag, so typed or
+// pasted "<b>" stays text. Every walker reads it as the text "<".
+export const INLINE_LITERAL_LESS_THAN = "<lt>";
+
+export function isInlineLiteralLessThan(token: string): boolean {
+  return token.toLowerCase() === INLINE_LITERAL_LESS_THAN;
+}
+
+// Encode plain text for the grammar. Escaping every "<" keeps any later
+// concatenation from forming a tag; the editor's serializer then keeps `<lt>`
+// only where a raw "<" would start one.
+export function escapeInlineMarkText(text: string): string {
+  return text.replace(/</g, INLINE_LITERAL_LESS_THAN);
+}
+
+// True when a grammar token (a tag or `<lt>`) starts at `index`.
+export function inlineMarkTagStartsAt(text: string, index: number): boolean {
+  INLINE_TAG_AT_RE.lastIndex = index;
+  return INLINE_TAG_AT_RE.test(text);
+}
+
+// `text` holds every literal "<" as a bare "<" at `literalStarts` (ascending).
+// Escape exactly those that start a token, so `<lt>` stays only where needed;
+// `index` is carried through. Each decision is independent of the others: an
+// escape adds "lt>" after a "<" that already starts a token, and no token that
+// starts earlier can end differently because of it.
+export function escapeInlineLiteralStarts(
+  text: string,
+  literalStarts: readonly number[],
+  index = text.length
+): { value: string; index: number } {
+  let value = "";
+  let cursor = 0;
+  let shifted = index;
+  for (const at of literalStarts) {
+    if (!inlineMarkTagStartsAt(text, at)) continue;
+    value += text.slice(cursor, at) + INLINE_LITERAL_LESS_THAN;
+    cursor = at + 1;
+    if (at < index) shifted += INLINE_LITERAL_LESS_THAN.length - 1;
+  }
+  return { value: value + text.slice(cursor), index: shifted };
+}
+
+// A value with every literal "<" (escaped or not) written bare, their
+// positions, and where `index` lands. Real tags are kept as written.
+function literalForm(value: string, index: number): { text: string; starts: number[]; index: number } {
+  let text = "";
+  const starts: number[] = [];
+  let mapped = -1;
+  let cursor = 0;
+  const addText = (from: number, to: number) => {
+    for (let position = from; position < to; position += 1) {
+      if (position === index) mapped = text.length;
+      if (value[position] === "<") starts.push(text.length);
+      text += value[position];
+    }
+  };
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    addText(cursor, match.index);
+    const end = match.index + match[0].length;
+    if (mapped < 0 && index >= match.index && index < end) mapped = text.length;
+    if (isInlineLiteralLessThan(match[0])) {
+      starts.push(text.length);
+      text += "<";
+    } else {
+      text += match[0];
+    }
+    cursor = end;
+  }
+  addText(cursor, value.length);
+  return { text, starts, index: mapped < 0 ? text.length : mapped };
+}
+
+// The canonical spelling of a value: `<lt>` exactly where a raw "<" would
+// start a token, and nowhere else. Meaning is unchanged; idempotent.
+export function canonicalInlineMarkText(value: string): string {
+  const form = literalForm(value, value.length);
+  return escapeInlineLiteralStarts(form.text, form.starts).value;
+}
+
+// Join two values (a paragraph merge) without letting a literal "<" at the end
+// of `a` start a tag with the text of `b`. `aIndex` (default: the end of `a`)
+// is returned at its new position in the joined value.
+export function joinInlineMarkText(a: string, b: string, aIndex = a.length): { value: string; index: number } {
+  const left = literalForm(a, aIndex);
+  const right = literalForm(b, b.length);
+  return escapeInlineLiteralStarts(
+    left.text + right.text,
+    [...left.starts, ...right.starts.map((at) => at + left.text.length)],
+    left.index
+  );
+}
+
+// Run a raw-string transform (strip or wrap tags) with every literal "<"
+// escaped, so removing a tag can never let a literal complete another one,
+// then return the canonical spelling.
+export function withInlineLiteralsProtected(value: string, transform: (escaped: string) => string): string {
+  const form = literalForm(value, value.length);
+  let escaped = "";
+  let cursor = 0;
+  for (const at of form.starts) {
+    escaped += form.text.slice(cursor, at) + INLINE_LITERAL_LESS_THAN;
+    cursor = at + 1;
+  }
+  return canonicalInlineMarkText(transform(escaped + form.text.slice(cursor)));
+}
 
 // Boolean probe that leaves the shared global regex reset for matchAll users.
 export function hasInlineMarkTags(text: string): boolean {
@@ -137,6 +245,8 @@ function effectiveTagValue<T>(
   };
 
   for (const match of text.matchAll(INLINE_TAG_RE)) {
+    // A literal "<" is text: it stays inside the pending text segment.
+    if (isInlineLiteralLessThan(match[0])) continue;
     include(text.slice(cursor, match.index));
     const tag = match[0];
     const opened = parseOpen(tag);
@@ -167,33 +277,41 @@ export function effectiveFieldAlignment(
 }
 
 export function clearAlignmentOverride(text: string): string {
-  return text.replace(/<align=(?:left|center|right|justify)>|<\/align>/gi, "");
+  return withInlineLiteralsProtected(text, (escaped) =>
+    escaped.replace(/<align=(?:left|center|right|justify)>|<\/align>/gi, "")
+  );
 }
 
 export function stripInlineMarks(text: string): string {
-  return text.replace(INLINE_TAG_RE, "");
+  return text.replace(INLINE_TAG_RE, (token) => isInlineLiteralLessThan(token) ? "<" : "");
 }
 
 // Uppercase the TEXT of an inline-marked value and leave its tags alone. Running
 // toUpperCase over the whole string also uppercased every tag payload, which
 // the case-insensitive grammar still parsed: a <link=…> destination came back
-// with its path uppercased, a different URL.
+// with its path uppercased, a different URL. Literals are escaped first, so an
+// uppercase mapping such as "ı" → "I" cannot complete a tag ("<ı>" → "<I>").
 export function uppercaseInlineMarkedText(text: string): string {
-  let out = "";
-  let cursor = 0;
-  for (const match of text.matchAll(INLINE_TAG_RE)) {
-    out += text.slice(cursor, match.index).toUpperCase() + match[0];
-    cursor = match.index + match[0].length;
-  }
-  return out + text.slice(cursor).toUpperCase();
+  return withInlineLiteralsProtected(text, (escaped) => {
+    let out = "";
+    let cursor = 0;
+    for (const match of escaped.matchAll(INLINE_TAG_RE)) {
+      out += escaped.slice(cursor, match.index).toUpperCase() + match[0];
+      cursor = match.index + match[0].length;
+    }
+    return out + escaped.slice(cursor).toUpperCase();
+  });
 }
 
 export type InlineOverrideKind = "fontFamily" | "fontSize";
 
+const FONT_OVERRIDE_RE = new RegExp(`<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>`, "gi");
+const SIZE_OVERRIDE_RE = /<size=\d+(?:\.\d+)?>|<\/size>/gi;
+
 export function clearInlineOverride(text: string, kind: InlineOverrideKind): string {
-  return kind === "fontFamily"
-    ? text.replace(new RegExp(`<font=(?:${FONT_FAMILY_ALTERNATION})>|<\\/font>`, "gi"), "")
-    : text.replace(/<size=\d+(?:\.\d+)?>|<\/size>/gi, "");
+  return withInlineLiteralsProtected(text, (escaped) =>
+    escaped.replace(kind === "fontFamily" ? FONT_OVERRIDE_RE : SIZE_OVERRIDE_RE, "")
+  );
 }
 
 // Whole-field font family, used by the Styles menu's per-field font control.
@@ -226,10 +344,12 @@ export function effectiveFieldFont(value: string, fallback: FieldFontFamily): Fi
 // it never nests), or strip the family entirely so the field follows the
 // document font. Empty fields are left untouched.
 export function setFieldFont(value: string, family: FieldFontFamily | "default"): string {
-  const stripped = clearInlineOverride(value, "fontFamily");
-  if (family === "default") return stripped;
-  if (!stripped.trim()) return value;
-  return `<font=${family}>${stripped}</font>`;
+  return withInlineLiteralsProtected(value, (escaped) => {
+    const stripped = escaped.replace(FONT_OVERRIDE_RE, "");
+    if (family === "default") return stripped;
+    if (!stripped.trim()) return escaped;
+    return `<font=${family}>${stripped}</font>`;
+  });
 }
 
 // The one font size (pt) covering the whole field — resolving to `fallback`
@@ -251,10 +371,12 @@ export function effectiveFieldSize(value: string, fallback: number): number | nu
 // Wrap the whole field in one size, or strip the size so the field follows its
 // role default. Empty fields are left untouched.
 export function setFieldSize(value: string, sizePt: number | "default"): string {
-  const stripped = clearInlineOverride(value, "fontSize");
-  if (sizePt === "default") return stripped;
-  if (!stripped.trim()) return value;
-  return `<size=${inlineFontSizePt(sizePt)}>${stripped}</size>`;
+  return withInlineLiteralsProtected(value, (escaped) => {
+    const stripped = escaped.replace(SIZE_OVERRIDE_RE, "");
+    if (sizePt === "default") return stripped;
+    if (!stripped.trim()) return escaped;
+    return `<size=${inlineFontSizePt(sizePt)}>${stripped}</size>`;
+  });
 }
 
 // Whole-field emphasis helpers used by the Styles menu's entry-field matrix.
@@ -279,6 +401,7 @@ export function fieldMarkState(value: string, mark: FieldMark): boolean | null {
     }
   };
   for (const match of value.matchAll(INLINE_TAG_RE)) {
+    if (isInlineLiteralLessThan(match[0])) continue;
     check(match.index);
     const t = match[0].toLowerCase();
     if (t === `<${tag}>`) depth += 1;
@@ -294,9 +417,11 @@ export function fieldMarkState(value: string, mark: FieldMark): boolean | null {
 // Wrap the whole field in the mark (stripping any existing tags of that mark
 // first so it never nests), or strip the mark entirely. Empty fields untouched.
 export function setFieldMark(value: string, mark: FieldMark, on: boolean): string {
-  const stripped = value.replace(markTagRe(mark), "");
-  if (!on) return stripped;
-  if (!stripped.trim()) return value;
-  const tag = MARK_TAG[mark];
-  return `<${tag}>${stripped}</${tag}>`;
+  return withInlineLiteralsProtected(value, (escaped) => {
+    const stripped = escaped.replace(markTagRe(mark), "");
+    if (!on) return stripped;
+    if (!stripped.trim()) return escaped;
+    const tag = MARK_TAG[mark];
+    return `<${tag}>${stripped}</${tag}>`;
+  });
 }

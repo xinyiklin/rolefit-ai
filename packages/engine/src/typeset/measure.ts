@@ -22,6 +22,7 @@ import type {
 import {
   INLINE_MARK_TAG_PATTERN,
   isInlineFontSizePt,
+  isInlineLiteralLessThan,
   paragraphLineHeight
 } from "../lib/inlineMarksText.ts";
 import { automaticLinkHref, decodeLinkHref } from "../lib/links.ts";
@@ -221,10 +222,11 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
   const linkStack: Array<string | null> = [];
   let suppressed = 0;
   let cursor = 0;
-  const push = (end: number) => {
-    if (end > cursor) {
+  let text = "";
+  const push = () => {
+    if (text) {
       out.push({
-        text: value.slice(cursor, end),
+        text,
         bold: bold > 0,
         italic: italic > 0,
         underline: underline > 0,
@@ -234,10 +236,18 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
         href: linkStack[linkStack.length - 1] ?? null,
         linkSuppressed: suppressed > 0
       });
+      text = "";
     }
   };
   for (const match of value.matchAll(INLINE_TAG_RE)) {
-    push(match.index);
+    text += value.slice(cursor, match.index);
+    cursor = match.index + match[0].length;
+    // A literal "<" joins the current run; only real tags split a segment.
+    if (isInlineLiteralLessThan(match[0])) {
+      text += "<";
+      continue;
+    }
+    push();
     const tag = match[0].toLowerCase();
     if (tag === "<b>") bold += 1;
     else if (tag === "</b>") bold = Math.max(0, bold - 1);
@@ -258,9 +268,9 @@ export function segmentsFromInlineMarks(value: string): StyledSegment[] {
     else if (tag === "</link>") linkStack.pop();
     else if (tag === "<nolink>") suppressed += 1;
     else if (tag === "</nolink>") suppressed = Math.max(0, suppressed - 1);
-    cursor = match.index + match[0].length;
   }
-  push(value.length);
+  text += value.slice(cursor);
+  push();
   return out;
 }
 
