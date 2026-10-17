@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { Readable } from "node:stream";
 import { handleListApplications, handleSaveApplications } from "../trackerRoutes.ts";
 import { sanitizeApplications } from "../schema.ts";
+import { APPLICATION_NOTES_MAX_LENGTH } from "../../../shared/applicationNotesContract.ts";
 import {
   applicationsFilePath,
   invalidateApplicationsSnapshot,
@@ -198,6 +199,35 @@ try {
   assert.deepEqual(afterRace.json.applications.map((entry) => entry.id), ["outside"], "the outside file is re-read");
   const next = await save([record("ours3")], [{ id: "ours3", operation: "upsert", baseUpdatedAt: null }], afterRace.json.revision);
   assert.deepEqual(next.json.order, ["ours3", "outside"], "the next save keeps the outside writer's record");
+
+  // Notes and interview preparation past the form's limit are refused whole,
+  // never cut: the request gets a 400 and the saved text stays intact.
+  {
+    const atLimit = record("notes-limit", {
+      notes: "n".repeat(APPLICATION_NOTES_MAX_LENGTH),
+      interviewTips: "t".repeat(APPLICATION_NOTES_MAX_LENGTH)
+    });
+    const fits = await save([atLimit], [{ id: "notes-limit", operation: "upsert", baseUpdatedAt: null }]);
+    assert.equal(fits.status, 200, "notes exactly at the limit save");
+    for (const field of ["notes", "interviewTips"]) {
+      const over = { ...atLimit, [field]: `${atLimit[field]}x`, updatedAt: later(atLimit.updatedAt) };
+      const refused = await save([over], [{ id: "notes-limit", operation: "upsert", baseUpdatedAt: atLimit.updatedAt }]);
+      assert.equal(refused.status, 400, `an over-limit ${field} edit is refused`);
+      assert.match(refused.json.error, /No tracker changes were saved/);
+      invalidateApplicationsSnapshot();
+      const stored = (await readApplications(workspaceDir)).find((entry) => entry.id === "notes-limit");
+      assert.equal(stored[field], atLimit[field], `a refused ${field} edit leaves the saved text whole`);
+    }
+    const newOver = record("notes-over", { interviewTips: "t".repeat(APPLICATION_NOTES_MAX_LENGTH + 1) });
+    const created = await save([newOver], [{ id: "notes-over", operation: "upsert", baseUpdatedAt: null }]);
+    assert.equal(created.status, 400, "a new record with over-limit interview preparation is refused");
+    invalidateApplicationsSnapshot();
+    assert.ok(
+      !(await readApplications(workspaceDir)).some((entry) => entry.id === "notes-over"),
+      "the refused record is not stored"
+    );
+    assert.equal(sanitizeApplications([newOver]).length, 0, "the schema never clips an over-limit note to fit");
+  }
 
   console.log("tracker revision probes passed");
 } finally {

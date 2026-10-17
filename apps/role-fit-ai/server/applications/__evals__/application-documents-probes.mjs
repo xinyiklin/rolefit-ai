@@ -22,7 +22,8 @@ import {
 } from "../documentRoutes.ts";
 import { persistApplicationDocument } from "../documentService.ts";
 import { handleSaveApplications } from "../trackerRoutes.ts";
-import { MAX_ATTACHMENTS_PER_APPLICATION, safeAttachmentFileName } from "../documents.ts";
+import { MAX_ATTACHMENTS_PER_APPLICATION, attachmentStorageName, safeAttachmentFileName } from "../documents.ts";
+import { isManagedWorkspaceBackupPath } from "../../../src/lib/workspaceBackupContract.ts";
 import { invalidateApplicationsSnapshot, readApplications as readCachedApplications, writeApplications } from "../storage.ts";
 import {
   COVER_LETTER_STYLE_DEFAULTS,
@@ -199,7 +200,8 @@ try {
     "app-rollback-source-to-pdf",
     "app-delete",
     "app-cap",
-    "app-traversal"
+    "app-traversal",
+    "app-collide"
   ]);
 
   {
@@ -763,6 +765,99 @@ try {
       await readdir(join(dirOf("app-traversal"), "attachments")),
       before,
       "a case-only variant replaces rather than adding a second file"
+    );
+  }
+
+  // Distinct names that fold to one stored name must not overwrite each other:
+  // the later file gets a "-2" variant, and only the same original name (any
+  // case) replaces a stored file.
+  {
+    const bytesFor = (tag) => Buffer.from(`%PDF-1.7\n% ${tag}\n%%EOF`, "utf8");
+    const upload = (name, tag = name) =>
+      uploadAttachment("app-collide", { fileName: name, label: name, dataBase64: b64(bytesFor(tag)) });
+    const tracked = async () =>
+      (await readApplications(workspaceDir)).find((application) => application.id === "app-collide").attachments;
+    for (const [first, second, firstStored, secondStored] of [
+      ["成绩单.pdf", "推荐信.pdf", "_.pdf", "_-2.pdf"],
+      ["Résumé.pdf", "Résumè.pdf", "r_sum_.pdf", "r_sum_-2.pdf"],
+      ["Transcript (1).pdf", "Transcript [1].pdf", "transcript _1_.pdf", "transcript _1_-2.pdf"]
+    ]) {
+      for (const [name, stored] of [[first, firstStored], [second, secondStored]]) {
+        const res = await upload(name);
+        assert.equal(res.status, 200, `${JSON.stringify(name)} uploads`);
+        assert.equal(res.json.attachment.fileName, stored, `${JSON.stringify(name)} is stored as ${JSON.stringify(stored)}`);
+        assert.equal(res.json.attachment.label, name, `${JSON.stringify(name)} keeps its original name as the label`);
+      }
+    }
+    const kept = await tracked();
+    assert.equal(kept.length, 6, "every distinct original name keeps its own record");
+    assert.equal((await readdir(join(dirOf("app-collide"), "attachments"))).length, 6, "every distinct original name keeps its own file");
+    for (const { fileName, label } of kept) {
+      const res = await attachmentFile("app-collide", fileName);
+      assert.equal(res.status, 200, `${JSON.stringify(fileName)} downloads`);
+      assert.ok(res.buffer.equals(bytesFor(label)), `${JSON.stringify(label)} still downloads its own bytes`);
+      assert.ok(
+        isManagedWorkspaceBackupPath(`applications/app-collide/attachments/${fileName}`),
+        `${JSON.stringify(fileName)} is a path a workspace backup carries`
+      );
+    }
+
+    const replaced = await upload("推荐信.pdf", "推荐信 v2");
+    assert.equal(replaced.json.attachment.fileName, "_-2.pdf", "the same original name replaces its own variant");
+    const recased = await upload("résumè.PDF", "résumè v2");
+    assert.equal(recased.json.attachment.fileName, "r_sum_-2.pdf", "a case-only variant of an original name replaces it");
+    assert.equal((await tracked()).length, 6, "replacements add no record");
+    assert.ok((await attachmentFile("app-collide", "_.pdf")).buffer.equals(bytesFor("成绩单.pdf")), "replacing one file leaves its namesake intact");
+    assert.ok((await attachmentFile("app-collide", "_-2.pdf")).buffer.equals(bytesFor("推荐信 v2")), "the replacement wrote the new bytes");
+
+    // A freed base name goes to a new file, never to a re-upload of a file
+    // that already has its own variant.
+    assert.equal((await attachmentFile("app-collide", "_.pdf", "DELETE")).status, 200);
+    assert.equal((await upload("推荐信.pdf", "推荐信 v3")).json.attachment.fileName, "_-2.pdf", "a re-upload keeps its variant after the base name is freed");
+    assert.equal((await upload("履历.pdf")).json.attachment.fileName, "_.pdf", "a new file takes the first free stored name");
+    assert.equal((await tracked()).length, 6);
+
+    // An earlier upload is found on any variant, not only below the first free one.
+    assert.equal((await upload("三.pdf")).json.attachment.fileName, "_-3.pdf");
+    assert.equal((await attachmentFile("app-collide", "_.pdf", "DELETE")).status, 200);
+    assert.equal((await attachmentFile("app-collide", "_-2.pdf", "DELETE")).status, 200);
+    assert.equal((await upload("三.pdf", "三 v2")).json.attachment.fileName, "_-3.pdf", "a re-upload above two freed names still replaces its own file");
+    assert.equal((await tracked()).filter(({ label }) => label === "三.pdf").length, 1, "the re-upload left no stale duplicate");
+
+    // A label keeps 120 characters, so two longer names sharing that prefix
+    // cannot be told apart and are both kept rather than one replacing the other.
+    const longNames = [`${"L".repeat(125)} (1).pdf`, `${"L".repeat(125)} (2).pdf`];
+    const longStored = [];
+    for (const name of longNames) {
+      const res = await upload(name);
+      assert.equal(res.status, 200);
+      longStored.push(res.json.attachment.fileName);
+    }
+    assert.notEqual(longStored[0], longStored[1], "two long names sharing a 120-character prefix keep separate files");
+    for (const [index, fileName] of longStored.entries()) {
+      assert.ok((await attachmentFile("app-collide", fileName)).buffer.equals(bytesFor(longNames[index])), "each long-named file keeps its own bytes");
+    }
+  }
+
+  // A variant suffix keeps the 80-character stem bound without leaving a
+  // trailing dot, so the stored name still derives back to itself.
+  for (const raw of [`${"x".repeat(80)}.pdf`, `${"x".repeat(77)}.yy.pdf`]) {
+    const safe = safeAttachmentFileName(raw);
+    const variant = attachmentStorageName(safe, raw, [{ fileName: safe.fileName, label: "another file.pdf" }]);
+    assert.notEqual(variant, safe.fileName, `a taken stored name gets a variant for ${JSON.stringify(raw)}`);
+    assert.match(variant, /-2\.pdf$/);
+    assert.equal(safeAttachmentFileName(variant)?.fileName, variant, `the variant is canonical for ${JSON.stringify(raw)}`);
+  }
+  {
+    // A base name that itself ends in "-<n>" still matches as the base.
+    const safe = safeAttachmentFileName("File-5.pdf");
+    assert.equal(attachmentStorageName(safe, "FILE-5.pdf", [{ fileName: "file-5.pdf", label: "File-5.pdf" }]), "file-5.pdf");
+    assert.equal(attachmentStorageName(safe, "File-5.pdf", [{ fileName: "file-5.pdf", label: "other.pdf" }]), "file-5-2.pdf");
+    // The only remaining variant sits above the first free name.
+    assert.equal(
+      attachmentStorageName(safeAttachmentFileName("三.pdf"), "三.pdf", [{ fileName: "_-3.pdf", label: "三.pdf" }]),
+      "_-3.pdf",
+      "a lone higher variant is still found for its re-upload"
     );
   }
 

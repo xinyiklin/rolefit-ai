@@ -1,4 +1,5 @@
 import { editedSavedApplicationAnswer } from "../../shared/applicationAnswerStorage.ts";
+import { APPLICATION_NOTES_MAX_LENGTH } from "../../shared/applicationNotesContract.ts";
 import { FitFindings } from "../components/FitFindings";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -1057,11 +1058,17 @@ export function ApplicationModal({
                 <div className="application-fieldset__row application-fieldset__row--2">
                   <label className="field">
                     <span>Application notes</span>
-                    <textarea className="textarea" value={form.notes} onChange={(e) => update("notes", e.target.value)} placeholder="Recruiter context, reminders, or useful role details." rows={4} />
+                    <textarea className="textarea" value={form.notes} onChange={(e) => update("notes", e.target.value)} maxLength={APPLICATION_NOTES_MAX_LENGTH} aria-describedby="application-notes-count" placeholder="Recruiter context, reminders, or useful role details." rows={4} />
+                    <small className="application-fieldset__count" id="application-notes-count" aria-hidden="true">
+                      {form.notes.length.toLocaleString("en-US")} / {APPLICATION_NOTES_MAX_LENGTH.toLocaleString("en-US")}
+                    </small>
                   </label>
                   <label className="field">
                     <span>Interview preparation</span>
-                    <textarea className="textarea" value={form.interviewTips} onChange={(e) => update("interviewTips", e.target.value)} rows={4} placeholder="Rounds, people, topics to drill, and questions to ask." />
+                    <textarea className="textarea" value={form.interviewTips} onChange={(e) => update("interviewTips", e.target.value)} maxLength={APPLICATION_NOTES_MAX_LENGTH} aria-describedby="application-interview-count" rows={4} placeholder="Rounds, people, topics to drill, and questions to ask." />
+                    <small className="application-fieldset__count" id="application-interview-count" aria-hidden="true">
+                      {form.interviewTips.length.toLocaleString("en-US")} / {APPLICATION_NOTES_MAX_LENGTH.toLocaleString("en-US")}
+                    </small>
                   </label>
                 </div>
               </fieldset>
