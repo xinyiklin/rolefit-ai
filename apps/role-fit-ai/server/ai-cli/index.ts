@@ -1,7 +1,6 @@
 // Subscription-CLI providers. Lets the polish route use Claude Max (via
-// Claude Code), ChatGPT/Codex Plus (via Codex CLI), or Google Gemini (via the
-// Antigravity CLI `agy`, which replaced the retired Gemini CLI) without burning
-// paid API tokens. Each helper spawns the local CLI binary and returns the model
+// Claude Code) or ChatGPT/Codex Plus (via Codex CLI) without burning paid API
+// tokens. Each helper spawns the local CLI binary and returns the model
 // response as a string (the polish route then parses it as JSON).
 
 import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
@@ -14,8 +13,6 @@ import { StringDecoder } from "node:string_decoder";
 import crossSpawn from "cross-spawn";
 
 import {
-  ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE,
-  ANTIGRAVITY_CLI_SCRIPT_MESSAGE,
   CLAUDE_CLI_AUTH_MESSAGE,
   CLAUDE_CLI_FAILED_MESSAGE,
   CLAUDE_CLI_TIMEOUT_MESSAGE,
@@ -457,77 +454,6 @@ export async function callCodexCli({ model, reasoningEffort, systemPrompt, userP
     recordProviderUsage(sink, totalOnlyUsage(extractCodexTokensUsed(stdout)));
     const directOutput = await readBoundedFile(outputPath);
     return directOutput.trim() || extractCodexFinalOutput(stdout);
-  } finally {
-    await rm(workdir, { recursive: true, force: true }).catch(() => {});
-  }
-}
-
-// ----- Antigravity CLI (agy — Google's Gemini CLI successor, non-interactive) -----
-
-export function buildAntigravityCliArgs({ model, userPrompt }: CliArgs): string[] {
-  // PRIVACY TRADE-OFF (documented — agy 1.1.x offers no fix): the print prompt —
-  // here the COMBINED system prompt + resume + job description, i.e. private
-  // personal data — is passed as the VALUE of -p, so it lands in this process's
-  // argv and is readable by any local user who lists processes (e.g. `ps -eww`).
-  // The Claude and Codex helpers instead pipe the prompt on stdin, keeping it out
-  // of argv; agy cannot. Verified against `agy --help` (v1.1.4): --print / -p /
-  // --prompt all take the prompt as their value, and there is NO documented stdin
-  // read, `-` sentinel, or prompt-file flag to route it through — `-p ""` exits
-  // non-zero without dispatching. Spawn still uses an argv array (never a shell),
-  // so the prompt text cannot be interpreted as flags or commands, but it is not
-  // hidden from a process listing. Do not "fix" this by moving the prompt to
-  // stdin without re-verifying a future agy build actually reads it there.
-  const args = ["-p", userPrompt ?? "", "--print-timeout", "230s"];
-  if (model && model !== "default") args.push("--model", model);
-  // --sandbox supplies the terminal restrictions that the throwaway cwd alone
-  // cannot provide. Permission auto-approval remains necessary in print mode.
-  args.push("--sandbox", "--dangerously-skip-permissions");
-  return args;
-}
-
-export async function callAntigravityCli({ model, systemPrompt, userPrompt, signal }: CliArgs): Promise<string> {
-  // agy has no separate system-prompt flag, so combine like Codex/Gemini.
-  const combined = systemPrompt ? `${systemPrompt}\n\n---\n\n${userPrompt}` : userPrompt;
-
-  // agy 1.1.x has no non-argv prompt path (see buildAntigravityCliArgs for the
-  // `agy --help` verification): the combined prompt is passed as -p's value and
-  // therefore appears in the local process command line while agy runs — a weaker
-  // boundary than the stdin delivery the Claude/Codex CLIs use, exposing private
-  // resume/job text to a local `ps` listing. RoleFit documents this limitation
-  // rather than claiming the Antigravity path has the stronger stdin privacy
-  // boundary. The argv-array spawn, --sandbox, throwaway cwd, and runCli timeout
-  // below are the mitigations that remain available.
-  // --model: stable slug from the first column of `agy models` (supported since
-  //   1.1.5), e.g. `gemini-3.6-flash-high`. agy has NO `-m` short alias (it
-  //   errors "flags provided but not defined: -m").
-  //   --dangerously-skip-permissions: a
-  //   non-interactive spawn otherwise blocks on a tool-approval prompt that never
-  //   renders (agy is an agentic harness). The CLI also receives --sandbox and a
-  //   throwaway cwd to reduce access; this is defense in depth, not a claim of
-  //   absolute OS isolation. The runCli timeout still bounds any hang.
-  const args = buildAntigravityCliArgs({ model, userPrompt: combined });
-
-  // Throwaway working dir keeps project instruction files out of automatic
-  // discovery. Together with --sandbox it reduces filesystem exposure, but it
-  // is not an OS-level guarantee against absolute reads or network access.
-  // UX/color warnings go to stderr, so stdout stays clean.
-  const workdir = await mkdtemp(join(tmpdir(), "rolefit-antigravity-"));
-  try {
-    const { stdout } = await runCli("agy", args, undefined, { cwd: workdir, signal });
-    return stdout.trim();
-  } catch (error) {
-    // Keep the actionable "not installed" hint (it's in the SAFE set); turn any
-    // other non-zero exit — most often an unauthenticated CLI or an inaccessible
-    // model — into a specific, actionable hint instead of a generic 500.
-    const message = error instanceof Error ? error.message : "";
-    if ((error as CliError)?.name === "AbortError" || (error as CliError)?.timedOut) throw error;
-    if (/is not installed or not on PATH/.test(message)) throw error;
-    const refusal = (error as CliError)?.launchRefused;
-    if (refusal === "too-long") throw new UserSafeAiError(ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE, 413);
-    if (refusal === "multi-line-script") throw new UserSafeAiError(ANTIGRAVITY_CLI_SCRIPT_MESSAGE, 400);
-    throw new Error(
-      "Antigravity CLI could not complete the request. Run `agy` and complete Google sign-in, confirm the selected model is available, then try again."
-    );
   } finally {
     await rm(workdir, { recursive: true, force: true }).catch(() => {});
   }

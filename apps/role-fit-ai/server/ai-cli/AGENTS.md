@@ -24,15 +24,13 @@ owned by the AI layer.
   "Append system prompt file not found" error for a missing path, which needs
   no provider call. `runCli` refuses multi-line or over-long argv through a
   command script, and maps a synchronous `ENAMETOOLONG`/`E2BIG` spawn refusal,
-  before the CLI runs. Antigravity, whose prompt is argv-only, reports either
-  refusal as its own user-safe error, never as a sign-in problem.
-  `cli-argv-delivery-probes.mjs` pins all of this and stops before any prompt
-  is sent if a real CLI, not its fake, resolves first on PATH.
+  before the CLI runs. `cli-argv-delivery-probes.mjs` pins all of this and
+  stops before any prompt is sent if a real CLI, not its fake, resolves first
+  on PATH.
 - Build every execution child environment through the AI CLI sanitizer. Keep
   normal executable discovery and provider-owned config/session locations, but
   never forward Node/Electron launch controls, native API keys, or alternate
-  API/access-token environment variables into Claude, Codex, or Antigravity
-  subprocesses.
+  API/access-token environment variables into Claude or Codex subprocesses.
 - Preserve bounded execution, abort handling, output-size caps, safe error
   classification, and child-process cleanup.
 - A missing executable, auth failure, unavailable model, malformed output, or

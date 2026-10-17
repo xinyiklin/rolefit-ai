@@ -179,6 +179,13 @@ function migrateProviderSettings(source: Record<string, unknown>): Record<string
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     const provider = migrated[providerKey];
     const storedModel = migrated[modelKey];
+    if (provider === "antigravity-cli") {
+      // Antigravity support was removed; the stage reseeds its own CLI default.
+      delete migrated[providerKey];
+      delete migrated[modelKey];
+      delete migrated[effortKey];
+      continue;
+    }
     if (provider !== "codex-cli" && provider !== "claude-cli") continue;
     if (typeof storedModel !== "string") continue;
     let model = storedModel;

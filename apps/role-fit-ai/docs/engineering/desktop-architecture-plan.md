@@ -21,7 +21,7 @@ RoleFit has one product surface and one local setup surface:
 - the Drafting Desk in a normal browser at the companion-selected loopback
   port (`http://localhost:5181` by default);
 - the existing browser extension, which imports jobs into fresh browser tabs;
-- a compact Electron companion that manages exactly five supported providers.
+- a compact Electron companion that manages exactly four supported providers.
 
 The supported provider catalog is:
 
@@ -29,7 +29,6 @@ The supported provider catalog is:
 | --- | --- | --- |
 | Claude Code | CLI | detect `claude`, link to official install/sign-in docs and offer an external-terminal sign-in |
 | Codex | CLI | detect `codex`, link to official install/sign-in docs and offer an external-terminal sign-in |
-| Antigravity | CLI | detect `agy`, hand off to its interactive provider-owned terminal flow |
 | OpenAI | API | accept and securely persist one local API key |
 | Claude | API | accept and securely persist one local API key |
 
@@ -172,13 +171,10 @@ non-interactive status contract is ready when its executable and usable session
 are confirmed. An expired or missing CLI remains configured but not ready so
 the browser can show a reconnect state without erasing stage preferences.
 
-Antigravity 1.1.x has no non-interactive auth-status command. After the user
-explicitly adds an installed `agy`, RoleFit marks it request-eligible as ready
-to verify while retaining `authState: "unknown"`; `ready` in this one manual
-case means RoleFit may attempt a user-requested call, not that authentication
-was detected. It must never be labeled signed in from installation alone. The
-first actual Antigravity provider request verifies the provider-owned session
-and returns actionable sign-in guidance if authentication fails.
+Antigravity (`agy`) was removed from the catalog (D076); it had no
+non-interactive auth-status command and could take prompts only in argv. A
+vault that still lists it drops the id on read and keeps its API keys and
+other providers.
 
 For an owned server, Electron main periodically republishes this shape-only
 snapshot while the companion renderer is hidden or closed. The browser must not
@@ -279,7 +275,7 @@ small auth-state enum, and bounded user-safe recovery guidance. It never
 returns keys, account identifiers, executable paths, versions, raw CLI output,
 errors, operation ids, or workspace details.
 
-The browser keeps the complete five-provider catalog for validation, labels,
+The browser keeps the complete four-provider catalog for validation, labels,
 models, and server contracts, then filters display options by the endpoint.
 Persisted stage selections are reconciled without a paid-provider fallback:
 
@@ -311,7 +307,6 @@ codes, refresh tokens, or CLI credential files.
 | --- | --- | --- |
 | Claude Code | fixed `claude auth login --claudeai` | open a real terminal when callback-code interaction is required |
 | Codex | fixed `codex login` | structured/version-gated provider flow or real terminal/device flow |
-| Antigravity | open a real terminal with fixed `agy` | constrained PTY only in a separately reviewed phase |
 
 Hidden `stdio: "ignore"` is insufficient when a provider needs a URL, device
 code, callback code, or diagnostic. The first robust implementation keeps the
@@ -404,7 +399,7 @@ apps/role-fit-ai/
     desktop-settings.cts            versioned non-secret site-port setting
     runtime-paths.cts               source/package app, server, and workspace paths
     forge.config.cjs                native package/signing/fuse contract
-    main.cts                        lifecycle + five-provider state composition + owned-server snapshot sync
+    main.cts                        lifecycle + four-provider state composition + owned-server snapshot sync
     companion.*                     local setup UI
   server/
     provider-connections.ts         validated in-memory snapshot + public route
@@ -478,9 +473,7 @@ tracker, extension inbox, and multi-tab behavior remain browser-owned.
 1. Add official installation links for missing CLIs and `Check again`.
 2. Keep Claude/Codex fixed browser-opening login flows.
 3. Add explicit terminal fallback where interactive input is required.
-4. Keep Antigravity auth state unknown, make installed/configured Antigravity
-   request-eligible as ready-to-verify, and let the first actual provider
-   request verify or report authentication failure.
+4. (Retired with Antigravity, D076: the manual ready-to-verify state.)
 
 Acceptance: no custom password form, auto-installer, renderer shell input, or
 false signed-in claim; request eligibility is not presented as detected auth.

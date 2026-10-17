@@ -10,7 +10,7 @@ One job seeker (the project owner) tailoring a resume to a specific job
 description in a desktop browser (Chrome, ~1440px) during focused
 application-prep sessions. The browser is the product surface. A required
 device-local Electron companion starts and keeps the loopback server available, shows
-the complete five-provider setup catalog, encrypts supported API keys locally,
+the complete four-provider setup catalog, encrypts supported API keys locally,
 offers official installation guidance for missing CLIs and provider-owned
 external-terminal sign-in, manages portable workspace backups and extension
 pairing, and opens RoleFit in the default browser. It is not a second Drafting
@@ -392,14 +392,13 @@ be saved/reloaded as a `.resume` file). Success = a one-page,
 interview-defensible resume exported in minutes after every AI proposal has been
 reviewed against source evidence.
 
-Provider setup is explicit: the companion offers Claude Code, Codex, and
-Antigravity CLIs plus OpenAI and Claude APIs, while the browser shows only
-providers the user added. A configured provider that becomes unavailable stays
-visible but disabled with reconnect guidance; a never-added provider is absent.
-Because Antigravity 1.1.x has no non-interactive auth-status command, an added,
-installed Antigravity CLI is request-eligible as **Ready to verify** while its
-auth state remains unknown; the first real provider request verifies the
-provider-owned session or reports sign-in recovery guidance.
+Provider setup is explicit: the companion offers the Claude Code and Codex CLIs
+plus OpenAI and Claude APIs, while the browser shows only providers the user
+added. A configured provider that becomes unavailable stays visible but
+disabled with reconnect guidance; a never-added provider is absent. A CLI is
+ready only when its own status check reports it signed in. Antigravity (`agy`)
+is no longer supported: a stage saved with it returns to that stage's default
+Claude Code or Codex setting, and the companion drops it from its provider list.
 With none configured, editing, tracking, export, and deterministic URL/paste
 preparation remain available while provider-backed improvement, Fit Assessment,
 and Polish stop with a direct instruction to add a provider. RoleFit never

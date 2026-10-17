@@ -1,8 +1,8 @@
 // Prompt delivery through CLI argv. cmd.exe (which runs npm .cmd shims on
 // Windows) ends a command line at its first newline and refuses one over 8,191
-// characters, so prompt text must never reach Claude or Codex argv, and
-// Antigravity's argv-only prompt must fail honestly when it cannot be passed.
-// Fake CLIs only: no provider is called.
+// characters, so prompt text must never reach Claude or Codex argv, and runCli
+// refuses argv that cmd.exe would cut or reject. Fake CLIs only: no provider is
+// called.
 import assert from "node:assert/strict";
 import { chmod, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
@@ -13,15 +13,10 @@ import { setTimeout as delay } from "node:timers/promises";
 import {
   buildClaudeCliArgs,
   buildCodexCliArgs,
-  callAntigravityCli,
   callClaudeCli,
   runCli
 } from "../index.ts";
-import {
-  ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE,
-  ANTIGRAVITY_CLI_SCRIPT_MESSAGE,
-  UserSafeAiError
-} from "../../ai/errors.ts";
+import { UserSafeAiError } from "../../ai/errors.ts";
 
 const isWindows = process.platform === "win32";
 const MARKER = "rolefit-probe-private-marker";
@@ -70,9 +65,8 @@ assertArgvCarriesNoPrompt(codexArgs, "Codex argv");
 // ----- Over-long direct launches (every platform) -----
 
 // Past Windows' 32,767-character command line, Linux's per-argument limit, and
-// macOS's total argument space: Node refuses before any process exists.
-const oversized = "x".repeat(4_200_000);
-const directRefusal = await runCli(process.execPath, ["-e", "", oversized], undefined, { timeoutMs: 5_000 }).then(
+// macOS's total argument space: Node refuses before the command runs.
+const directRefusal = await runCli(process.execPath, ["-e", "", "x".repeat(4_200_000)], undefined, { timeoutMs: 5_000 }).then(
   () => null,
   (error) => error
 );
@@ -143,23 +137,18 @@ try {
       '    systemPrompt: systemPromptFile ? readFileSync(systemPromptFile, "utf8") : null,',
       '    systemPromptMode: systemPromptFile ? statSync(systemPromptFile).mode & 0o777 : null',
       '  };',
-      '  process.stdout.write(name === "claude"',
-      '    ? JSON.stringify({ type: "result", is_error: false, result: JSON.stringify(report), usage: { input_tokens: 1, output_tokens: 1 } })',
-      '    : JSON.stringify(report));',
+      '  process.stdout.write(JSON.stringify({ type: "result", is_error: false, result: JSON.stringify(report), usage: { input_tokens: 1, output_tokens: 1 } }));',
       '}'
     ].join("\n"),
     "utf8"
   );
   await installFakeCli("claude");
-  await installFakeCli("agy");
   process.env.PATH = `${root}${delimiter}${originalPath ?? ""}`;
-  // A real CLI resolved here would make this a live provider call. Real CLIs
-  // reject the sentinel flag before any request, so stop unless the fakes answer.
-  for (const name of ["claude", "agy"]) {
-    const { stdout } = await runCli(name, ["--rolefit-probe-sentinel"], undefined, { timeoutMs: 10_000 })
-      .catch(() => ({ stdout: "" }));
-    assert.equal(stdout, `rolefit-fake-cli ${name}`, `the fake ${name} must resolve first on PATH`);
-  }
+  // A real CLI resolved here would make this a live provider call. Real Claude
+  // Code rejects the sentinel flag before any request, so stop unless the fake answers.
+  const sentinel = await runCli("claude", ["--rolefit-probe-sentinel"], undefined, { timeoutMs: 10_000 })
+    .catch(() => ({ stdout: "" }));
+  assert.equal(sentinel.stdout, "rolefit-fake-cli claude", "the fake claude must resolve first on PATH");
 
   // Claude Code receives the whole system prompt, every flag after it, and the
   // user prompt on stdin; through a .cmd shim on Windows this is the path that
@@ -217,32 +206,14 @@ try {
       (error) => error
     );
     assert.equal(multiLine?.launchRefused, "multi-line-script", "multi-line argv never crosses cmd.exe");
-    assert.equal((await launches()).length, before, "the refused script never ran");
 
-    // Antigravity: a single-line prompt runs through the script; RoleFit's real
-    // prompts are multi-line and are refused with the script message; a line too
-    // long for cmd.exe is refused as too long. Neither refusal launches agy.
-    const runs = JSON.parse(await callAntigravityCli({ model: "gemini-test", userPrompt: "Return JSON & stop" }));
-    assert.equal(runs.args[runs.args.indexOf("-p") + 1], "Return JSON & stop");
-    const afterRun = (await launches()).length;
-    await assert.rejects(
-      () => callAntigravityCli({ model: "gemini-test", systemPrompt: SYSTEM_PROMPT, userPrompt: USER_PROMPT }),
-      (error) => error instanceof UserSafeAiError && error.status === 400 && error.message === ANTIGRAVITY_CLI_SCRIPT_MESSAGE
+    // A single line too long for cmd.exe is refused before launch too.
+    const tooLong = await runCli("claude", ["-p", "y".repeat(9_000)], undefined, { timeoutMs: 5_000 }).then(
+      () => null,
+      (error) => error
     );
-    await assert.rejects(
-      () => callAntigravityCli({ model: "gemini-test", userPrompt: "y".repeat(9_000) }),
-      (error) => error instanceof UserSafeAiError && error.status === 413 && error.message === ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE
-    );
-    assert.equal((await launches()).length, afterRun, "refused Antigravity prompts never launch agy");
-  } else {
-    // The OS refuses an over-long exec (E2BIG) before agy runs; RoleFit reports
-    // the length, not a sign-in problem.
-    const before = (await launches()).length;
-    await assert.rejects(
-      () => callAntigravityCli({ model: "gemini-test", systemPrompt: SYSTEM_PROMPT, userPrompt: oversized }),
-      (error) => error instanceof UserSafeAiError && error.status === 413 && error.message === ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE
-    );
-    assert.equal((await launches()).length, before, "the refused prompt never launched agy");
+    assert.equal(tooLong?.launchRefused, "too-long", "a line over cmd.exe's limit never reaches the script");
+    assert.equal((await launches()).length, before, "the refused scripts never ran");
   }
 } finally {
   if (originalPath === undefined) delete process.env.PATH;

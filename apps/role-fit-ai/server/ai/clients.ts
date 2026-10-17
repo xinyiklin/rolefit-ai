@@ -3,7 +3,7 @@
 // and returns parsed JSON. Single source of truth for outbound AI calls,
 // shared by /api/resume-polish and /api/application-answers.
 
-import { callAntigravityCli, callClaudeCli, callCodexCli } from "../ai-cli/index.ts";
+import { callClaudeCli, callCodexCli } from "../ai-cli/index.ts";
 import { fetchWithTimeout } from "../http.ts";
 import { UserSafeAiError } from "./errors.ts";
 import { parseAiJson } from "./json.ts";
@@ -261,10 +261,6 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, 
 async function dispatchProvider({ provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
   if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
   if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
-  if (provider === "antigravity-cli") {
-    recordProviderUsage(sink, null);
-    return parseAiJson(await callAntigravityCli({ model, systemPrompt, userPrompt, signal }));
-  }
   if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }, sink);
   if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt, signal }, fetchWithTimeout, sink);
   throw new UserSafeAiError("Unsupported AI provider. Pick one of the configured CLI or API providers.", 400);

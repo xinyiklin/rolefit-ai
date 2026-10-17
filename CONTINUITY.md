@@ -68,6 +68,19 @@ extension 1.4.0, desktop bridge API 13. Release history:
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
+## 2026-10-17
+
+- [USER+CODE] Branch `claude/nostalgic-goldwasser-716680`, not pushed, no PR:
+  - **CLI argv delivery** (audit H2; 9b9d626, 2792e4a, a5e81ff, 37e73e8): an
+    npm `claude.cmd` shim made cmd.exe keep only the system prompt's first
+    line and drop `--model`/`--effort`. Claude Code now reads the unchanged
+    prompt via `--append-system-prompt-file` (private temp file); `runCli`
+    refuses multi-line or over-8,191-character argv through cmd.exe. [TOOL] Two
+    `mb-verifier` reviews PASS; UNCONFIRMED: macOS and a real npm shim.
+  - **Antigravity (`agy`) removed** (D076), with read-repairs for saved stage
+    selections and provider vaults; the packaged smoke now enables a fake
+    `claude` and pins only snapshot shape. UNCONFIRMED: the packaged smoke run.
+
 ## 2026-10-16
 
 - [CODE] **Engine/editor audit patches** (branch `fix/engine-editor-audit`,
@@ -104,21 +117,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-15
 
-- [USER+CODE] **0.15.0 prepared** (minor; the user approved the release). Since
-  `rolefit-preview-v0.14.0-beta.1`: #228 (stop Polish from its own button, rail
-  run ledger, Answers model only in its composer), #224/#226 (PDF import maps
-  all 30 families), #225/#227 (narrow toolbar fixes), #223 (metrics packing).
-  Notes `apps/role-fit-ai/docs/releases/0.15.0-beta.1.md`; extension 1.4.0 and
-  desktop bridge API 13 unchanged; no stored-data or format change.
-  - [TOOL] Preflight on macOS arm64 with Node 24.18.0: `test:desktop:release`
-    14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
-    182/182), `test:rolefit:desktop` passed, and `make:rolefit:desktop` plus
-    `test:rolefit:desktop:packaged` (darwin-arm64, unpacked) passed.
-  - [USER] Waived the second reviewer for this bump (one review) and browser
-    QA for the version bump.
-  - [TOOL] 2026-10-16 release receipt: run 38833828940 succeeded; prerelease
-    `rolefit-preview-v0.15.0-beta.1` published 01:33Z with macOS arm64/x64
-    dmg+zip, Windows x64 exe, and SHA256SUMS.
 - [USER+CODE] The parked document chat draft is branch `draft/document-chat`
   (worktree `../role-fit-ai-document-chat-draft`).
 - [CODE] **Repository audit patches** (PR #230, four behavior commits): the
@@ -147,10 +145,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
     guard, and the CI probe now asserts referrer and asset caching headers.
     Not covered by a test: the development-mode Vite settings (`cors: false`,
     the workspace deny); the lifecycle probe runs production mode only.
-  - Still open from the 2026-10-03 review: Antigravity runs with
-    `--dangerously-skip-permissions` (documented trade-off; `--sandbox` scope
-    unverified); the Typeset deploy trusts the host key on first use
-    (`ssh-keyscan`) and needs a pinned known-hosts secret; Electron stays at
+  - Still open from the 2026-10-03 review (the Antigravity
+    `--dangerously-skip-permissions` item ended with D076): the Typeset deploy
+    trusts the host key on first use (`ssh-keyscan`) and needs a pinned
+    known-hosts secret; Electron stays at
     its runtime-contract pin with Dependabot PRs open. Never deep-audited:
     extension popup UI logic (its DOM is built with `textContent`; no HTML
     sinks), evals quality, and a full docs-drift sweep (the engine and the

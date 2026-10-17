@@ -58,11 +58,10 @@ unconfirmed feedback, but an invalid mutation target cannot authorize an edit.
 - The browser lists only providers explicitly added through the companion.
   Configured-but-unready providers remain visible with reconnect guidance; a
   missing provider must never trigger a silent fallback to a paid provider.
-- Provider readiness must not overclaim authentication. Antigravity 1.1.x has
-  no non-interactive auth-status command, so an installed/configured manual
-  provider may be request-eligible as ready-to-verify while `authState` remains
-  unknown; the first actual provider request verifies the session or fails with
-  recovery guidance.
+- Provider readiness must not overclaim authentication: a CLI provider is
+  request-eligible only when it is installed, added, and its own status probe
+  reports it signed in. Antigravity (`agy`) support was removed (D076); saved
+  Antigravity selections are repaired on read, never treated as corruption.
 - Generation prompts must forbid invented employers, dates, metrics, education,
   tools, experience, and outcomes, and ask for finished text without drafting
   placeholders. Missing facts and questionable output become visible warnings
@@ -172,7 +171,7 @@ RoleFit owns:
 - `src/lib/` and `src/resume/`: RoleFit-only job, workflow, evidence, and
   deterministic mechanical analysis helpers;
 - `extension/`: a vanilla MV3 client of the local extension API.
-- `desktop/`: the compact five-provider manager, encrypted API-key vault,
+- `desktop/`: the compact four-provider manager, encrypted API-key vault,
   provider-owned CLI setup, private owned-server credential bridge, and local
   server lifecycle. It never owns the Drafting Desk or personal workspace.
 - `landing/`: the isolated static product/download site. It may read public

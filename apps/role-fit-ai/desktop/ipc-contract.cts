@@ -93,8 +93,7 @@ export type RoleFitExtensionPairingSettings = Readonly<{
 
 export const ROLEFIT_CLI_PROVIDER_IDS = Object.freeze([
   "claude-cli",
-  "codex-cli",
-  "antigravity-cli"
+  "codex-cli"
 ] as const);
 export const ROLEFIT_API_PROVIDER_IDS = Object.freeze([
   "openai",
@@ -137,7 +136,6 @@ export type RoleFitProviderAuthState =
   | "not-applicable";
 export type RoleFitProviderSetupFlow =
   | "managed-login"
-  | "manual-login"
   | "api-key";
 
 // Internal CLI probing still uses this narrower status before the main process
@@ -151,7 +149,6 @@ export type RoleFitCliProviderStatus = Readonly<{
   label: string;
   installed: boolean;
   authState: RoleFitCliAuthState;
-  signInFlow: "managed" | "manual";
   guidance: string;
 }>;
 
@@ -323,9 +320,7 @@ export function normalizeRoleFitExtensionOrigin(value: unknown): string {
 }
 
 export function isRoleFitCliProviderId(value: unknown): value is RoleFitCliProviderId {
-  return value === "claude-cli" ||
-    value === "codex-cli" ||
-    value === "antigravity-cli";
+  return value === "claude-cli" || value === "codex-cli";
 }
 
 export function isRoleFitApiProviderId(value: unknown): value is RoleFitApiProviderId {

@@ -62,10 +62,9 @@ const CLI_CHILD_ALLOWED_ENV_KEYS = new Set([
 type ProviderSpec = Readonly<{
   id: RoleFitCliProviderId;
   label: string;
-  command: "claude" | "codex" | "agy";
+  command: "claude" | "codex";
   versionArgs: readonly string[];
-  statusArgs: readonly string[] | null;
-  signInArgs: readonly string[] | null;
+  statusArgs: readonly string[];
   terminalSignInArgs: readonly string[];
 }>;
 
@@ -78,7 +77,6 @@ const PROVIDER_SPECS: readonly ProviderSpec[] = Object.freeze([
     statusArgs: Object.freeze(["auth", "status", "--json"]),
     // Pin the subscription path. The alternative --console flow uses API billing
     // and is not the account-backed CLI connection RoleFit offers.
-    signInArgs: Object.freeze(["auth", "login", "--claudeai"]),
     terminalSignInArgs: Object.freeze(["auth", "login", "--claudeai"])
   }),
   Object.freeze({
@@ -89,19 +87,7 @@ const PROVIDER_SPECS: readonly ProviderSpec[] = Object.freeze([
     statusArgs: Object.freeze(["login", "status"]),
     // Deliberately exclude --with-api-key and --with-access-token. RoleFit uses
     // the CLI's normal account-backed browser flow and never handles its token.
-    signInArgs: Object.freeze(["login"]),
     terminalSignInArgs: Object.freeze(["login"])
-  }),
-  Object.freeze({
-    id: "antigravity-cli",
-    label: "Antigravity CLI",
-    command: "agy",
-    versionArgs: Object.freeze(["--version"]),
-    // agy 1.1.x has no auth-only command or machine-readable auth status. Its
-    // first-run sign-in is part of the interactive TUI, so it remains manual.
-    statusArgs: null,
-    signInArgs: null,
-    terminalSignInArgs: Object.freeze([])
   })
 ]);
 
@@ -212,7 +198,6 @@ export function packagedCliSearchPaths(
     const candidates = [
       win32.join(homeDirectory, ".local", "bin"),
       environment.APPDATA ? win32.join(environment.APPDATA, "npm") : null,
-      environment.LOCALAPPDATA ? win32.join(environment.LOCALAPPDATA, "agy", "bin") : null,
       environment.LOCALAPPDATA
         ? win32.join(environment.LOCALAPPDATA, "Microsoft", "WinGet", "Links")
         : null
@@ -468,15 +453,6 @@ function terminalProcessRequests(
 ): readonly TerminalProcessRequest[] {
   const commandLine = fixedTerminalCommand(request);
   if (platform === "darwin") {
-    if (request.providerId === "antigravity-cli") {
-      return [Object.freeze({
-        executable: "/usr/bin/open",
-        args: Object.freeze(["-a", "Terminal"]),
-        detached: false,
-        waitForExit: true,
-        environment: request.environment
-      })];
-    }
     const appleScript = [
       'tell application "Terminal"',
       "activate",
@@ -671,9 +647,6 @@ function guidanceFor(
   authState: RoleFitCliAuthState
 ): string {
   if (!installed) return `Install ${spec.label} to connect this provider.`;
-  if (spec.id === "antigravity-cli") {
-    return "Antigravity is installed. Its CLI does not expose a non-interactive sign-in check, so RoleFit verifies the session when first used.";
-  }
   if (authState === "signed-in") return `${spec.label} is connected through its local CLI session.`;
   if (authState === "signed-out") return `Sign in to ${spec.label} to use this provider.`;
   return `${spec.label} is installed, but RoleFit could not confirm its sign-in status.`;
@@ -718,9 +691,7 @@ export function createCliProviderManager(
     }
     return Object.freeze({
       status: "opened",
-      guidance: spec.id === "antigravity-cli"
-        ? "Terminal opened. Run `agy` to complete or confirm Google sign-in, then check again."
-        : `${spec.label} sign-in opened in a terminal. Finish it there, then check again.`
+      guidance: `${spec.label} sign-in opened in a terminal. Finish it there, then check again.`
     });
   };
 
@@ -735,7 +706,7 @@ export function createCliProviderManager(
       );
       const installed = versionProbe.kind === "completed";
       let authState: RoleFitCliAuthState = "unknown";
-      if (installed && spec.statusArgs) {
+      if (installed) {
         authState = authStateFor(
           spec.id,
           await safeProbe(runProbe, spec, spec.statusArgs, childEnvironment)
@@ -746,7 +717,6 @@ export function createCliProviderManager(
         label: spec.label,
         installed,
         authState,
-        signInFlow: spec.signInArgs ? "managed" as const : "manual" as const,
         guidance: guidanceFor(spec, installed, authState)
       });
     }));

@@ -62,7 +62,7 @@ assert.equal(isRoleFitApiProviderId("anthropic"), true);
 assert.equal(isRoleFitApiProviderId("claude-cli"), false);
 assert.equal(isRoleFitCliProviderId("claude-cli"), true);
 assert.equal(isRoleFitCliProviderId("codex-cli"), true);
-assert.equal(isRoleFitCliProviderId("antigravity-cli"), true);
+assert.equal(isRoleFitCliProviderId("antigravity-cli"), false);
 assert.equal(isRoleFitCliProviderId("shell"), false);
 assert.equal(isRoleFitProviderId("openai"), true);
 assert.equal(isRoleFitProviderId("shell"), false);
@@ -82,7 +82,6 @@ try {
     providers: [
       { id: "claude-cli", kind: "cli", configured: false },
       { id: "codex-cli", kind: "cli", configured: false },
-      { id: "antigravity-cli", kind: "cli", configured: false },
       { id: "openai", kind: "api", configured: false },
       { id: "anthropic", kind: "api", configured: false }
     ]
@@ -107,7 +106,6 @@ try {
   assert.equal(providerState(configured, "anthropic").configured, true);
   assert.equal(providerState(configured, "codex-cli").configured, true);
   assert.equal(providerState(configured, "claude-cli").configured, true);
-  assert.equal(providerState(configured, "antigravity-cli").configured, false);
 
   const snapshot = await vault.decryptApiCredentialSnapshot();
   assert.deepEqual(snapshot, {
@@ -260,6 +258,53 @@ try {
   await assert.rejects(
     () => corruptCiphertextVault.getConfiguredState(),
     ProviderVaultCorruptError
+  );
+
+  // A vault written while Antigravity was supported keeps its API keys and other
+  // providers; the retired id is dropped on read and absent after the next write.
+  const retiredRoot = await tempRoot("retired-antigravity");
+  const retiredDirectory = join(retiredRoot, "provider-vault");
+  await mkdir(retiredDirectory, { recursive: true });
+  const retiredStorage = new FakeSafeStorage();
+  const retiredCiphertext = (await retiredStorage.encryptStringAsync("sk-rolefit-retired")).toString("base64");
+  await writeFile(join(retiredDirectory, "providers.json"), JSON.stringify({
+    schemaVersion: 1,
+    apiCredentials: { openai: retiredCiphertext },
+    enabledCliProviders: ["antigravity-cli", "codex-cli"]
+  }), "utf8");
+  const retiredVault = createProviderVault({
+    userDataDirectory: retiredRoot,
+    safeStorage: retiredStorage,
+    platform: "darwin"
+  });
+  const retiredState = await retiredVault.getConfiguredState();
+  assert.deepEqual(
+    retiredState.providers.map(({ id, configured }) => [id, configured]),
+    [["claude-cli", false], ["codex-cli", true], ["openai", true], ["anthropic", false]]
+  );
+  assert.deepEqual(await retiredVault.decryptApiCredentialSnapshot(), { openai: "sk-rolefit-retired" });
+  await retiredVault.setCliProviderEnabled("claude-cli", true);
+  assert.deepEqual(
+    JSON.parse(await readFile(join(retiredDirectory, "providers.json"), "utf8")).enabledCliProviders,
+    ["claude-cli", "codex-cli"]
+  );
+
+  const unknownCliRoot = await tempRoot("unknown-cli");
+  const unknownCliDirectory = join(unknownCliRoot, "provider-vault");
+  await mkdir(unknownCliDirectory, { recursive: true });
+  await writeFile(join(unknownCliDirectory, "providers.json"), JSON.stringify({
+    schemaVersion: 1,
+    apiCredentials: {},
+    enabledCliProviders: ["gemini-cli"]
+  }), "utf8");
+  await assert.rejects(
+    () => createProviderVault({
+      userDataDirectory: unknownCliRoot,
+      safeStorage: new FakeSafeStorage(),
+      platform: "darwin"
+    }).getConfiguredState(),
+    ProviderVaultCorruptError,
+    "an unknown CLI id other than the retired one still fails closed"
   );
 
   assert.throws(

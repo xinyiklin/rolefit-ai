@@ -92,7 +92,6 @@ export type CompanionIpcOptions = {
 const PROVIDER_METADATA = Object.freeze({
   "claude-cli": Object.freeze({ kind: "cli", setupFlow: "managed-login" }),
   "codex-cli": Object.freeze({ kind: "cli", setupFlow: "managed-login" }),
-  "antigravity-cli": Object.freeze({ kind: "cli", setupFlow: "manual-login" }),
   openai: Object.freeze({ kind: "api", setupFlow: "api-key" }),
   anthropic: Object.freeze({ kind: "api", setupFlow: "api-key" })
 } as const);

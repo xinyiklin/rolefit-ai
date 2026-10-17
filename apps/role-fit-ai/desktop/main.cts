@@ -162,8 +162,7 @@ let workspaceTransferActive = false;
 
 const PROVIDER_INSTALL_GUIDES = Object.freeze({
   "claude-cli": "https://code.claude.com/docs/en/getting-started",
-  "codex-cli": "https://developers.openai.com/codex/cli/",
-  "antigravity-cli": "https://antigravity.google/docs/cli-install"
+  "codex-cli": "https://developers.openai.com/codex/cli/"
 } as const);
 
 function getDesktopRuntimeInfo(): RoleFitDesktopRuntimeInfo {
@@ -611,15 +610,7 @@ function cliProviderConnection(
   configured: boolean,
   managedServer: boolean
 ): RoleFitProviderConnection {
-  const setupFlow = status.signInFlow === "managed" ? "managed-login" : "manual-login";
-  // Antigravity 1.1.x has no side-effect-free, non-interactive auth-status
-  // command. Do not turn that missing API into a permanent false negative:
-  // configured + installed makes the manual provider eligible for a real
-  // request, while authState remains truthfully unknown until `agy` itself
-  // accepts or rejects the provider-owned keyring session.
-  const authEligible = status.authState === "signed-in" ||
-    (setupFlow === "manual-login" && status.authState === "unknown");
-  const ready = configured && managedServer && status.installed && authEligible;
+  const ready = configured && managedServer && status.installed && status.authState === "signed-in";
   let guidance = status.guidance;
   if (!configured) {
     guidance = status.installed
@@ -635,7 +626,7 @@ function cliProviderConnection(
     ready,
     installed: status.installed,
     authState: status.authState,
-    setupFlow,
+    setupFlow: "managed-login",
     guidance
   });
 }
@@ -839,7 +830,7 @@ function connectionStatusMatches(
 }
 
 function providerStatusesMatch(value: unknown): value is readonly RoleFitProviderConnection[] {
-  if (!Array.isArray(value) || value.length !== 5) return false;
+  if (!Array.isArray(value) || value.length !== ROLEFIT_PROVIDER_IDS.length) return false;
   const expectedIds = [...ROLEFIT_PROVIDER_IDS].sort();
   const ids = value.map((item) => item && typeof item === "object"
     ? String((item as Record<string, unknown>).id ?? "")
@@ -852,7 +843,7 @@ function providerStatusesMatch(value: unknown): value is readonly RoleFitProvide
       typeof status.ready === "boolean" &&
       (typeof status.installed === "boolean" || status.installed === null) &&
       (status.authState === "signed-in" || status.authState === "signed-out" || status.authState === "unknown" || status.authState === "not-applicable") &&
-      (status.setupFlow === "managed-login" || status.setupFlow === "manual-login" || status.setupFlow === "api-key") &&
+      (status.setupFlow === "managed-login" || status.setupFlow === "api-key") &&
       typeof status.guidance === "string" &&
       Object.keys(status).length === 8;
   });
@@ -871,11 +862,13 @@ function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnershi
   const provider = payload.providers[0];
   if (!provider || typeof provider !== "object" || Array.isArray(provider)) return false;
   const connection = provider as Record<string, unknown>;
-  return connection.id === "antigravity-cli" &&
+  // Readiness follows the first claude on the CLI search path (the smoke's fake
+  // or a real install), so only the snapshot's shape is pinned here.
+  return connection.id === "claude-cli" &&
     connection.kind === "cli" &&
     connection.configured === true &&
-    connection.ready === true &&
-    connection.authState === "unknown" &&
+    typeof connection.ready === "boolean" &&
+    (connection.authState === "signed-in" || connection.authState === "signed-out" || connection.authState === "unknown") &&
     typeof connection.guidance === "string" &&
     Object.keys(connection).length === 6;
 }
@@ -961,7 +954,7 @@ async function inspectSmokeRenderer(
         localSiteSettingsError = error instanceof Error ? error.message : String(error);
       }
       try {
-        if (bridge) await bridge.setCliProviderEnabled('antigravity-cli', true);
+        if (bridge) await bridge.setCliProviderEnabled('claude-cli', true);
       } catch (error) {
         providerMutationError = error instanceof Error ? error.message : String(error);
       }
@@ -1088,7 +1081,7 @@ async function inspectSmokeRenderer(
       : typeof result.providerMutationError === "string" &&
         result.providerMutationError.includes("let this companion start the local service")],
     ["provider status contract", providerStatusesMatch(result.providerStatus)],
-    ["provider landmarks", result.providerLandmarks === 5],
+    ["provider landmarks", result.providerLandmarks === ROLEFIT_PROVIDER_IDS.length],
     ["provider descriptions absent", result.providerDescriptions === 0],
     ["provider ordinals absent", result.providerOrdinals === 0],
     ["provider entry animations settled", result.replayingProviderAnimations === 0],

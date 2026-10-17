@@ -159,10 +159,9 @@ assert.deepEqual(
   [
     "C:\\Users\\provider\\.local\\bin",
     "C:\\Users\\provider\\AppData\\Roaming\\npm",
-    "C:\\Users\\provider\\AppData\\Local\\agy\\bin",
     "C:\\Users\\provider\\AppData\\Local\\Microsoft\\WinGet\\Links"
   ],
-  "packaged Windows discovery covers fixed native, npm, Antigravity, and WinGet locations"
+  "packaged Windows discovery covers fixed native, npm, and WinGet locations"
 );
 assert.deepEqual(
   buildCliProcessEnvironment(
@@ -182,8 +181,7 @@ const probeResponses = new Map([
   ["claude --version", completed("2.1.212 (Claude Code)\n")],
   ["claude auth status --json", completed('{"loggedIn":false,"email":"must-not-escape"}', "", 1)],
   ["codex --version", completed("codex-cli 0.144.5\n")],
-  ["codex login status", completed("", "warning\nLogged in using ChatGPT\n")],
-  ["agy --version", completed("1.1.4\n")]
+  ["codex login status", completed("", "warning\nLogged in using ChatGPT\n")]
 ]);
 const terminalLaunches = [];
 const manager = createCliProviderManager({
@@ -225,7 +223,6 @@ assert.deepEqual(initial, [
     label: "Claude Code",
     installed: true,
     authState: "signed-out",
-    signInFlow: "managed",
     guidance: "Sign in to Claude Code to use this provider."
   },
   {
@@ -233,16 +230,7 @@ assert.deepEqual(initial, [
     label: "Codex CLI",
     installed: true,
     authState: "signed-in",
-    signInFlow: "managed",
     guidance: "Codex CLI is connected through its local CLI session."
-  },
-  {
-    id: "antigravity-cli",
-    label: "Antigravity CLI",
-    installed: true,
-    authState: "unknown",
-    signInFlow: "manual",
-    guidance: "Antigravity is installed. Its CLI does not expose a non-interactive sign-in check, so RoleFit verifies the session when first used."
   }
 ]);
 assert(Object.isFrozen(initial));
@@ -259,11 +247,10 @@ assert.deepEqual(
   [
     { command: "claude", args: ["--version"], timeoutMs: 5_000, outputLimitBytes: 16_384 },
     { command: "codex", args: ["--version"], timeoutMs: 5_000, outputLimitBytes: 16_384 },
-    { command: "agy", args: ["--version"], timeoutMs: 5_000, outputLimitBytes: 16_384 },
     { command: "claude", args: ["auth", "status", "--json"], timeoutMs: 5_000, outputLimitBytes: 16_384 },
     { command: "codex", args: ["login", "status"], timeoutMs: 5_000, outputLimitBytes: 16_384 }
   ],
-  "status checks use only the fixed, bounded provider commands; Antigravity has no fake auth probe"
+  "status checks use only the fixed, bounded provider commands"
 );
 for (const request of probeRequests) {
   assert.deepEqual(request.environment, {
@@ -284,10 +271,7 @@ assert.deepEqual(await manager.openSignInInTerminal("codex-cli"), {
   status: "opened",
   guidance: "Codex CLI sign-in opened in a terminal. Finish it there, then check again."
 });
-assert.deepEqual(await manager.openSignInInTerminal("antigravity-cli"), {
-  status: "opened",
-  guidance: "Terminal opened. Run `agy` to complete or confirm Google sign-in, then check again."
-});
+await assert.rejects(() => manager.openSignInInTerminal("antigravity-cli"), /Unsupported CLI provider/);
 assert.deepEqual(
   terminalLaunches.map(({ providerId, command, args }) => ({
     providerId,
@@ -300,8 +284,7 @@ assert.deepEqual(
       command: "claude",
       args: ["auth", "login", "--claudeai"]
     },
-    { providerId: "codex-cli", command: "codex", args: ["login"] },
-    { providerId: "antigravity-cli", command: "agy", args: [] }
+    { providerId: "codex-cli", command: "codex", args: ["login"] }
   ],
   "terminal launch accepts only the manager-owned provider command mapping"
 );

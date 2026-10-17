@@ -210,7 +210,7 @@ offers 30 bundled families; each loads only when a document uses it.
   that exact browser origin once in the companion. The extension does not
   estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
-- **Explicit five-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **Antigravity CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
+- **Explicit four-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish (optional review pass)** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
@@ -371,7 +371,7 @@ React 19 · TypeScript · Vite · Node.js (reusable `server/runtime.ts`) ·
 Electron 43 desktop companion · shared `@typeset/engine` / `@typeset/editor`
 workspaces · custom CSS · `lucide-react` icons
 
-No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude Code CLI · Codex CLI · Antigravity CLI · OpenAI API · Claude API.
+No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude Code CLI · Codex CLI · OpenAI API · Claude API.
 
 ## Run
 
@@ -407,7 +407,7 @@ integer from 1 through 65535 and applies it through a clean companion restart.
 `ROLEFIT_DESKTOP_PORT` is a locked per-launch override. Its typed
 preload exposes fixed write-only API-key setup, provider removal/status,
 external-terminal sign-in, install/sign-in-guide, and browser-open methods for
-the closed five-provider catalog. The companion never renders the Drafting Desk,
+the closed four-provider catalog. The companion never renders the Drafting Desk,
 duplicates product APIs, or receives resume/job payloads over Electron IPC. Its
 local server owns workspace and tracker files. Changing the port also changes
 the browser origin, so browser-local draft and preference storage is separate
@@ -526,11 +526,12 @@ in-app login form and never
 asks for a vendor username, password, MFA value, OAuth code, or recovery token;
 signing in happens entirely through the provider's own CLI. Claude Code and
 Codex expose a machine-readable auth status, so the companion can show
-**Sign-in required**, **Signed in**, or **Ready** for them. Antigravity 1.1.x exposes no
-non-interactive auth-status command, so an installed `agy` shows **Ready to
-verify** with `authState` still `unknown`, not a false signed-in claim. The
-first actual Antigravity provider request verifies the provider-owned session
-and reports actionable guidance if that request fails authentication.
+**Sign-in required**, **Signed in**, or **Ready** for them.
+
+Antigravity (`agy`) is no longer supported. A stage saved with Antigravity
+returns to that stage's default Claude Code or Codex setting, saved backups and
+preferences stay readable, and the companion drops Antigravity from its provider
+list while keeping your API keys and other providers.
 
 Settings includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna for Codex
 and OpenAI API, plus Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 for Claude CLI
@@ -559,10 +560,6 @@ claude auth login --claudeai
 
 # requires a current Codex CLI installation and an account with CLI access
 codex login
-
-# requires a current Antigravity CLI installation and Google account access
-# first launch opens the supported sign-in flow
-agy
 ```
 
 When a supported CLI executable is missing, the companion shows **Not
@@ -579,17 +576,11 @@ only with an explicit warning beside the download controls.
 The local server shells out to configured, ready CLIs for AI-backed job
 preparation, resume tailoring, cover-letter, and application-answer requests —
 no API key required.
-The CLI auth/session remains provider-owned and tied to the device.
-Antigravity 1.1.x requires its non-interactive prompt in the local process
-argument list; unlike the Claude and Codex wrappers, that path cannot keep
-resume/job text exclusively on stdin while the subprocess is running. The
-command-line limit also caps that prompt (about 32,000 characters on Windows),
-and a Windows `agy` command script cannot pass a multi-line prompt at all;
-RoleFit reports either case instead of starting `agy`. RoleFit
-uses the stable model slugs printed by current `agy models`; older saved display
-names migrate without losing the selected model.
+The CLI auth/session remains provider-owned and tied to the device. Prompts
+reach both CLIs on stdin (Claude Code's system prompt through a private temp
+file), never in the process argument list.
 
-> **Provider support:** RoleFit intentionally exposes only the three subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
+> **Provider support:** RoleFit intentionally exposes only the two subscription CLIs plus the native OpenAI Responses and Claude Messages APIs. Other adapters were removed until they have current contracts and live verification. CLI entitlements and API model access still depend on the signed-in account.
 
 URL, pasted-text, and extension intake request AI-backed Job analysis when its
 provider is available. RoleFit publishes the deterministic brief first; without
@@ -880,7 +871,7 @@ server/
   ai/                            # /api/resume-polish + /api/job-analysis: routes, providers,
                                  #   clients, prompts, sanitize, grounding,
                                  #   json, errors, coverLetter + applicationAnswers
-  ai-cli/index.ts               # Claude Code / Codex / Antigravity CLI shell-out
+  ai-cli/index.ts               # Claude Code / Codex CLI shell-out
   applications/                  # pipeline tracker storage (index) + HTTP routes
   base64.ts                     # base64 <-> Buffer helpers (base-resume / PDF artifact I/O)
   extension/                     # browser-extension API routes, duplicate status, inbox handoff

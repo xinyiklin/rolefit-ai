@@ -52,7 +52,7 @@ CORS or turn the hosted product/download page into a client of the local server.
 
 - The browser is the only RoleFit product UI. Electron must not load the React
   renderer or become a second tracker/editor/workspace host. Its compact local
-  `file:` page is the setup surface for the closed catalog of three CLIs and two
+  `file:` page is the setup surface for the closed catalog of two CLIs and two
   API providers.
 - The existing local `/api/*` surface is same-origin and unauthenticated. The
   Host/Origin guard covers it and every other non-extension request, app files
@@ -94,12 +94,9 @@ CORS or turn the hosted product/download page into a client of the local server.
   CLI config locations, but strip native API/token/service-account credentials
   and Electron/Node injection variables so a subscription-CLI request cannot
   silently fall through to browser- or server-managed API credentials.
-- Antigravity 1.1.x exposes no non-interactive auth-status command. Its
-  installed/configured manual state is request-eligible as ready-to-verify
-  while `authState` remains unknown; this must never be presented as detected
-  sign-in. The first real Antigravity provider request verifies the
-  provider-owned session and returns sanitized recovery guidance on auth
-  failure.
+- A CLI provider is request-eligible only when the companion's status probe
+  reports it installed and signed in; installation alone is never presented as
+  sign-in.
 - Browser-extension origins and inbox claim tokens are a separate trust domain.
   Never route extension requests through companion IPC or treat a claim token
   as authentication for CLI status/sign-in actions.
@@ -127,8 +124,8 @@ owns:
 - `/api/providers`, a shape-only same-origin registry of configured/readiness
   state. It never returns keys, account identifiers, executable paths, versions,
   raw CLI output, operation ids, or workspace details
-- `/api/resume-polish` AI provider routing — subscription CLIs (Claude Code,
-  Codex CLI, Antigravity CLI) shelled out to local subprocesses,
+- `/api/resume-polish` AI provider routing — subscription CLIs (Claude Code
+  and Codex CLI) shelled out to local subprocesses,
   plus the native OpenAI and Anthropic APIs. Normal Resume Polish sends
   `mode: "resume-proposal"` and performs one provider operation. An optional
   boolean `reviewEdits` (sent only when Settings > Guidance > Review edits
@@ -576,9 +573,8 @@ hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` supplies that headless fallback. A non-empty, unrecognized
 `AI_PROVIDER` is a fail-fast configuration error; it does not silently select
 OpenAI. When OpenAI is selected explicitly, its model comes from
-`OPENAI_MODEL` (`gpt-5.6-terra` default). The other account-backed CLIs (Codex CLI
-and the Antigravity CLI `agy`, which replaced the retired Gemini CLI) are
-similar paths for their vendors. They avoid a separate metered API key in
+`OPENAI_MODEL` (`gpt-5.6-terra` default). The other account-backed CLI (Codex
+CLI) is a similar path for its vendor. They avoid a separate metered API key in
 RoleFit, but access and usage limits remain governed by the installed CLI and
 signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured
@@ -667,21 +663,16 @@ Sources: [Codex availability and retirements](https://learn.chatgpt.com/docs/mod
 
 Per-provider rules:
 
-- **Subscription CLIs** (Claude Code `claude-cli`, Codex CLI `codex-cli`, and
-  the Antigravity CLI `antigravity-cli` — the `agy` binary that replaced the
-  retired Gemini CLI) shell out to local subprocesses via `server/ai-cli/`
-  using the CLI's existing account auth. RoleFit needs no API key for these
-  paths; provider entitlements and usage limits still apply. Antigravity 1.1.x
-  has no non-interactive auth-status command, so an installed/configured
-  Antigravity provider stays `authState: "unknown"` and is ready-to-verify on
-  first use rather than falsely labeled signed in. It also requires the print
-  prompt as `-p`'s argv value; stdin is not a supported prompt source, so its
-  local process argument list briefly contains the request. A prompt too long
-  for the command line returns 413 and a Windows `agy` command script returns
-  400 (it cannot pass a multi-line prompt), both before `agy` runs. Claude Code
-  and Codex keep prompt text out of argv (`server/ai-cli/AGENTS.md`). RoleFit
-  submits the stable slug from the first column of `agy models`; settings saved
-  by older builds migrate their display-name values before dispatch.
+- **Subscription CLIs** (Claude Code `claude-cli` and Codex CLI `codex-cli`)
+  shell out to local subprocesses via `server/ai-cli/` using the CLI's
+  existing account auth. RoleFit needs no API key for these paths; provider
+  entitlements and usage limits still apply. Both keep prompt text out of argv
+  (`server/ai-cli/AGENTS.md`). The Antigravity CLI (`antigravity-cli`, `agy`)
+  was removed (D076): it could pass prompts only in argv, so private
+  resume/job text appeared in local process listings and was capped by the
+  command-line limit. Its saved stage selections repair to the stage default
+  before strict validation, and model names no longer accept the spaces and
+  parentheses of its old display names.
 - **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
   The catalog includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol/Luna, and GPT-5.6
   Sol/Terra/Luna; the balanced default remains `gpt-5.6-terra`.
@@ -706,11 +697,11 @@ Per-provider rules:
   an explicit standalone/headless fallback, not companion-managed storage.
 - Default provider: `AI_PROVIDER`.
 - Provider-specific model overrides: `OPENAI_MODEL`, `ANTHROPIC_MODEL`,
-  `CLAUDE_CLI_MODEL`, `CODEX_CLI_MODEL`, and `ANTIGRAVITY_CLI_MODEL`.
+  `CLAUDE_CLI_MODEL`, and `CODEX_CLI_MODEL`.
   `AI_MODEL` remains an explicit model override for the headless/default path.
-- The only known provider ids are `claude-cli`, `codex-cli`,
-  `antigravity-cli`, `openai`, and `anthropic`. Removed ids fail closed even if
-  an old tab or saved setting submits one.
+- The only known provider ids are `claude-cli`, `codex-cli`, `openai`, and
+  `anthropic`. Removed ids, including `antigravity-cli`, fail closed even if
+  an old tab or `AI_PROVIDER` submits one; saved settings drop it first.
 
 The AI must:
 

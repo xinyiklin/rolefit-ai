@@ -96,7 +96,7 @@ and verify both apps.
   immutable app and mutable workspace paths. `server.ts` remains the thin web
   executable, not a catch-all service.
 - RoleFit's React renderer remains browser-owned. The Electron process is the
-  required distributed-product launcher and a compact five-provider manager,
+  required distributed-product launcher and a compact four-provider manager,
   not another application host: it starts
   or reuses the same loopback server, loads only a local static companion page,
   manages the three supported subscription CLIs and the OpenAI/Claude API

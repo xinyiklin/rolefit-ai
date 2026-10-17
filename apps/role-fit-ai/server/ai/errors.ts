@@ -19,21 +19,12 @@ export const CLAUDE_CLI_FAILED_MESSAGE =
 export const CLAUDE_CLI_TIMEOUT_MESSAGE =
   "Claude Code timed out before finishing. Try again, or switch to a faster model or lower the reasoning effort.";
 
-// Antigravity takes its whole prompt as a command-line argument, so the OS
-// command-line limit (or cmd.exe's, for a Windows command script) bounds it.
-export const ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE =
-  "This request is too long for the Antigravity CLI, which receives its prompt on the command line. Shorten the resume or job text, or choose another provider, then try again.";
-export const ANTIGRAVITY_CLI_SCRIPT_MESSAGE =
-  "The agy command RoleFit found is a Windows command script, not an executable, so it cannot pass RoleFit's multi-line prompt intact. Remove or replace that script with an Antigravity CLI installation that provides agy.exe, or choose another provider, then try again.";
-
 // Provider/CLI configuration errors that carry their own actionable, already
 // user-safe wording. Routes map these to a 400 (not a generic 500) so the user
 // sees the precise remediation. Shared by /api/resume-polish and /api/application-answers.
 const SAFE_CONFIG_MESSAGES = new Set([
   "codex is not installed or not on PATH.",
-  "claude is not installed or not on PATH.",
-  "agy is not installed or not on PATH.",
-  "Antigravity CLI could not complete the request. Run `agy` and complete Google sign-in, confirm the selected model is available, then try again."
+  "claude is not installed or not on PATH."
 ]);
 
 // Returns the message verbatim when it is a known actionable config error, else

@@ -7,8 +7,7 @@ export const ROLEFIT_PROVIDER_CONNECTIONS_SCHEMA_VERSION = 1 as const;
 export type RoleFitManagedApiProviderId = "openai" | "anthropic";
 export type RoleFitManagedCliProviderId =
   | "claude-cli"
-  | "codex-cli"
-  | "antigravity-cli";
+  | "codex-cli";
 export type RoleFitManagedProviderId =
   | RoleFitManagedCliProviderId
   | RoleFitManagedApiProviderId;
@@ -37,7 +36,6 @@ export type RoleFitProviderConnectionsPayload = Readonly<{
 const PROVIDER_ORDER = Object.freeze([
   "claude-cli",
   "codex-cli",
-  "antigravity-cli",
   "openai",
   "anthropic"
 ] as const);
@@ -47,7 +45,6 @@ const PROVIDER_ORDER_INDEX = new Map<RoleFitManagedProviderId, number>(
 const PROVIDER_KIND = Object.freeze({
   "claude-cli": "cli",
   "codex-cli": "cli",
-  "antigravity-cli": "cli",
   openai: "api",
   anthropic: "api"
 } satisfies Record<RoleFitManagedProviderId, RoleFitManagedProviderKind>);

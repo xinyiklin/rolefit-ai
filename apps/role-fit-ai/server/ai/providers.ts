@@ -5,10 +5,6 @@
 import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
 import { UserSafeAiError } from "./errors.ts";
 import {
-  DEFAULT_ANTIGRAVITY_MODEL,
-  normalizeAntigravityModelId
-} from "../../shared/antigravityModels.ts";
-import {
   getManagedApiKey,
   getManagedProviderConnection,
   isCompanionManaged,
@@ -56,8 +52,7 @@ export function providerLabel(provider: string): string {
       openai: "OpenAI",
       anthropic: "Claude",
       "claude-cli": "Claude Code",
-      "codex-cli": "Codex CLI",
-      "antigravity-cli": "Antigravity CLI"
+      "codex-cli": "Codex CLI"
     }[provider] ?? "AI provider"
   );
 }
@@ -68,8 +63,7 @@ const KNOWN_PROVIDERS = new Set([
   "openai",
   "anthropic",
   "claude-cli",
-  "codex-cli",
-  "antigravity-cli"
+  "codex-cli"
 ]);
 
 function isKnownProvider(value: unknown): boolean {
@@ -84,7 +78,7 @@ function normalizeProvider(provider: unknown): string {
 }
 
 export function isCliProvider(provider: string): boolean {
-  return provider === "claude-cli" || provider === "codex-cli" || provider === "antigravity-cli";
+  return provider === "claude-cli" || provider === "codex-cli";
 }
 
 function normalizeCliReasoningEffort(provider: string, model: string, effort: unknown): string | null {
@@ -103,8 +97,7 @@ function providerDefaultModel(provider: string): string {
       openai: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5-5",
-      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.1-sol",
-      "antigravity-cli": process.env.ANTIGRAVITY_CLI_MODEL ?? DEFAULT_ANTIGRAVITY_MODEL
+      "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.1-sol"
     }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
   );
 }
@@ -170,10 +163,7 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   // explicit request provider keeps its provider-specific default so a stale
   // global override cannot silently select an incompatible model after the user
   // chooses another provider in the UI.
-  const selectedModel = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
-  const model = provider === "antigravity-cli"
-    ? normalizeAntigravityModelId(selectedModel)
-    : selectedModel;
+  const model = requestedModel || (requestedProvider ? providerDefaultModel(provider) : getDefaultModel());
   if (model.length > 120) {
     throw new UserSafeAiError("Configured model name is too long. Check AI settings and try again.", 400);
   }
@@ -187,17 +177,13 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
   }
   if (model && model.startsWith("-")) {
     // A leading dash could read as a flag to the spawned CLI providers
-    // (`--model <value>`); no real model id starts with one. This guard stays
-    // even though spaces/parens are allowed below.
+    // (`--model <value>`); no real model id starts with one.
     throw new UserSafeAiError("Model name cannot start with a dash.", 400);
   }
-  // Spaces and parentheses remain permitted for bounded compatibility with
-  // earlier Antigravity display-name values. Current Antigravity requests use
-  // stable lowercase slugs. Every CLI still receives the model as one argv
-  // element (never through a shell), and the leading-dash guard blocks flags.
-  if (model && !/^[a-z0-9 _.:/@+()-]+$/i.test(model)) {
+  // Every CLI receives the model as one argv element (never through a shell).
+  if (model && !/^[a-z0-9_.:/@+-]+$/i.test(model)) {
     throw new UserSafeAiError(
-      "Model name can only use letters, numbers, spaces, dots, dashes, underscores, slashes, at signs, pluses, parentheses, or colons.",
+      "Model name can only use letters, numbers, dots, dashes, underscores, slashes, at signs, pluses, or colons.",
       400
     );
   }

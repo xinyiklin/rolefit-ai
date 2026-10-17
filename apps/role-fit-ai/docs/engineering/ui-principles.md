@@ -422,8 +422,8 @@ Never show:
   server's no-`AI_PROVIDER` fallback is the account-backed Claude Code CLI. A non-empty,
   unrecognized `AI_PROVIDER` fails configuration instead of silently selecting
   OpenAI.
-- First-class provider choices: subscription CLIs (Claude Code, Codex,
-  Antigravity CLI) plus the native OpenAI and Claude APIs. Do not expose an
+- First-class provider choices: subscription CLIs (Claude Code and Codex) plus
+  the native OpenAI and Claude APIs. Do not expose an
   adapter until its current request contract and a live smoke are verified.
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
   of the studio tab rail. Its five pages sit in two groups — **You**: Profile
@@ -499,8 +499,6 @@ Never show:
   only through the local provider companion; the browser never collects,
   stores, renders, or submits them. Settings shows only explicitly added
   providers and makes an added-but-unready provider visibly unavailable.
-  Antigravity may be request-eligible as **Ready to verify** while its auth
-  state remains unknown; never describe that state as signed in.
 
 ## Interaction
 
