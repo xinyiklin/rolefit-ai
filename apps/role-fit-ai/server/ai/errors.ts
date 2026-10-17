@@ -24,7 +24,7 @@ export const CLAUDE_CLI_TIMEOUT_MESSAGE =
 export const ANTIGRAVITY_CLI_PROMPT_TOO_LONG_MESSAGE =
   "This request is too long for the Antigravity CLI, which receives its prompt on the command line. Shorten the resume or job text, or choose another provider, then try again.";
 export const ANTIGRAVITY_CLI_SCRIPT_MESSAGE =
-  "The agy command RoleFit found is a Windows command script, not an executable, so it cannot pass RoleFit's multi-line prompt intact. Use an Antigravity CLI installation that provides agy.exe, or choose another provider, then try again.";
+  "The agy command RoleFit found is a Windows command script, not an executable, so it cannot pass RoleFit's multi-line prompt intact. Remove or replace that script with an Antigravity CLI installation that provides agy.exe, or choose another provider, then try again.";
 
 // Provider/CLI configuration errors that carry their own actionable, already
 // user-safe wording. Routes map these to a 400 (not a generic 500) so the user

@@ -26,8 +26,8 @@ owned by the AI layer.
   command script, and maps a synchronous `ENAMETOOLONG`/`E2BIG` spawn refusal,
   before the CLI runs. Antigravity, whose prompt is argv-only, reports either
   refusal as its own user-safe error, never as a sign-in problem.
-  `cli-argv-delivery-probes.mjs` pins all of this and stops before any call if
-  a real CLI, not its fake, resolves first on PATH.
+  `cli-argv-delivery-probes.mjs` pins all of this and stops before any prompt
+  is sent if a real CLI, not its fake, resolves first on PATH.
 - Build every execution child environment through the AI CLI sanitizer. Keep
   normal executable discovery and provider-owned config/session locations, but
   never forward Node/Electron launch controls, native API keys, or alternate

@@ -187,6 +187,7 @@ try {
   );
   const failed = await lastLaunch();
   assert.equal(failed?.mode, "fail");
+  assert(failed.file, "the failing call received a system prompt file");
   assert.equal(existsSync(failed.file), false, "the system prompt file is removed after a CLI failure");
   const controller = new AbortController();
   const stopped = callClaudeCli({
@@ -201,6 +202,7 @@ try {
     hanging = await lastLaunch();
   }
   assert.equal(hanging?.mode, "hang", "the fake Claude started before Stop");
+  assert(hanging.file, "the stopped call received a system prompt file");
   controller.abort();
   await assert.rejects(stopped, { name: "AbortError" });
   assert.equal(existsSync(hanging.file), false, "the system prompt file is removed after Stop");
