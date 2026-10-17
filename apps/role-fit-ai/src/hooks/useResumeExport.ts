@@ -2,6 +2,7 @@ import { useState } from "react";
 
 import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { serializeResumeFile } from "@typeset/engine/lib/resumeFile.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
@@ -84,7 +85,7 @@ export function useResumeExport({
     const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
     return emitPdf(document, fonts, {
       title: documentTitle.trim() || (
-        schema.header?.name ? `${schema.header.name} Resume` : "Resume"
+        schema.header?.name ? `${stripInlineMarks(schema.header.name)} Resume` : "Resume"
       )
     });
   }

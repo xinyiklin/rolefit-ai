@@ -1,4 +1,4 @@
-import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
+import { INLINE_MARK_TAG_PATTERN, isInlineLiteralLessThan } from "@typeset/engine/lib/inlineMarksText.ts";
 import { texLigatures } from "@typeset/engine/typeset/measure.ts";
 
 // Instance over the engine's single inline-mark grammar (D057). Only b/i/u
@@ -24,7 +24,8 @@ export function inlineMarksToHtml(value: string): string {
   for (const match of source.matchAll(INLINE_TAG_RE)) {
     const tag = match[0].toLowerCase();
     html += escapeHtml(texLigatures(source.slice(cursor, match.index)));
-    if (tag === "<b>") html += "<strong>";
+    if (isInlineLiteralLessThan(tag)) html += "&lt;";
+    else if (tag === "<b>") html += "<strong>";
     else if (tag === "</b>") html += "</strong>";
     else if (tag === "<i>") html += "<em>";
     else if (tag === "</i>") html += "</em>";

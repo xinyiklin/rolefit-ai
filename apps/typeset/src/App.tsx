@@ -29,6 +29,7 @@ import {
 } from "@typeset/engine/lib/resumeFile.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { downloadBlob, downloadResumeFile } from "@typeset/engine/lib/download.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
   STYLE_FIELD_MARK_DEFAULTS,
   globalAlignmentState,
@@ -344,7 +345,7 @@ export default function App() {
       const fontAssetBaseUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/fonts`;
       const fonts = await fetchFontBytes(doc, fontAssetBaseUrl);
       const bytes = await emitPdf(doc, fonts, {
-        title: schema.header?.name ? `${schema.header.name} — Resume` : "Resume"
+        title: schema.header?.name ? `${stripInlineMarks(schema.header.name)} — Resume` : "Resume"
       });
       const fileName = `${resumeFileName(documentTitle).replace(/\.resume$/i, "")}.pdf`;
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);

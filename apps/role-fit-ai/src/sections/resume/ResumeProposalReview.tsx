@@ -128,8 +128,11 @@ export function ResumeProposalReview({
         const where = item.kind === "add-from-profile"
           ? "Profile · Not on this resume"
           : `${section?.heading} · ${stripInlineMarks(entry?.titleLeft ?? "")}`;
-        const references = [item.jobExcerpt, item.candidateExcerpt, item.profileExcerpt].filter(Boolean);
-        return <li key={index}><strong>{where}</strong><p>{item.rationale}</p><ContentWarnings warnings={item.warnings} />{item.warnings?.length ? <p>Unconfirmed references: {references.join(" / ")}</p> : <><blockquote>{item.jobExcerpt}</blockquote>{item.candidateExcerpt ? <blockquote>{item.candidateExcerpt}</blockquote> : null}{item.profileExcerpt ? <><p className="resume-proposal__label">Profile</p><blockquote>{item.profileExcerpt}</blockquote></> : null}</>}</li>;
+        // Resume text (and model prose echoing it) may carry the literal "<"
+        // token; the posting and Profile excerpts are plain text already.
+        const candidateExcerpt = item.candidateExcerpt ? stripInlineMarks(item.candidateExcerpt) : undefined;
+        const references = [item.jobExcerpt, candidateExcerpt, item.profileExcerpt].filter(Boolean);
+        return <li key={index}><strong>{where}</strong><p>{stripInlineMarks(item.rationale)}</p><ContentWarnings warnings={item.warnings} />{item.warnings?.length ? <p>Unconfirmed references: {references.join(" / ")}</p> : <><blockquote>{item.jobExcerpt}</blockquote>{candidateExcerpt ? <blockquote>{candidateExcerpt}</blockquote> : null}{item.profileExcerpt ? <><p className="resume-proposal__label">Profile</p><blockquote>{item.profileExcerpt}</blockquote></> : null}</>}</li>;
       })}</ul>
     </details>
   ) : null;

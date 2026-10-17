@@ -9,14 +9,19 @@
 // The display model mirrors measure.ts exactly: segmentsFromInlineMarks's tag
 // grammar (<b>/<i>/<u>, unclosed tolerated) and texLigatures's sequential
 // replaces (which a longest-match walker reproduces for any hyphen run).
+// `<lt>` is one display "<"; serializeChars writes it back only where a raw "<"
+// would start a tag, so typed or pasted tag-shaped text always stays text.
 
 import type { FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type { DocumentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import { FONT_FAMILY_ALTERNATION } from "@typeset/engine/lib/fontFamilies.ts";
 import {
   alignmentFromInlineMarks,
+  escapeInlineLiteralStarts,
+  INLINE_LITERAL_LESS_THAN,
   inlineFontSizePt,
   isInlineFontSizePt,
+  isInlineLiteralLessThan,
   paragraphIndentFromInlineMarks,
   paragraphIndentPt,
   paragraphLineHeight,
@@ -220,7 +225,10 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
     }
     let raw: string;
     let shown: string;
-    if (value.startsWith("---", i)) {
+    if (ch === "<" && isInlineLiteralLessThan(value.slice(i, i + INLINE_LITERAL_LESS_THAN.length))) {
+      raw = value.slice(i, i + INLINE_LITERAL_LESS_THAN.length);
+      shown = "<";
+    } else if (value.startsWith("---", i)) {
       raw = "---";
       shown = "—";
     } else if (value.startsWith("--", i)) {
@@ -257,6 +265,8 @@ export function buildDisplayMap(value: string, opts?: { uppercase?: boolean; pre
 function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, boundary: number): { value: string; boundaryIndex: number } {
   let value = prefix;
   let boundaryIndex = -1;
+  // Value indexes of every literal "<" written below, escaped afterwards.
+  const literalStarts: number[] = [];
   let open: Pick<DisplayChar, "bold" | "italic" | "underline" | "fontFamily" | "fontSizePt" | "alignment" | "lineHeight" | "spaceBeforePt" | "spaceAfterPt" | "indentPt" | "linkHref" | "linkSuppressed"> = {
     bold: false,
     italic: false,
@@ -343,13 +353,21 @@ function serializeChars(prefix: string, chars: DisplayChar[], suffix: string, bo
         linkSuppressed: c.linkSuppressed
       };
     }
-    value += c.raw;
+    if (c.raw === "<" || isInlineLiteralLessThan(c.raw)) {
+      literalStarts.push(value.length);
+      value += "<";
+    } else {
+      value += c.raw;
+    }
   });
   if (boundary >= chars.length) boundaryIndex = value.length;
   closeAll();
   value += suffix;
   if (boundaryIndex < 0) boundaryIndex = value.length - suffix.length;
-  return { value, boundaryIndex };
+  // Escape a literal "<" exactly where the final value would read it as a tag,
+  // so an edit can never complete a tag with text on either side of it.
+  const escaped = escapeInlineLiteralStarts(value, literalStarts, boundaryIndex);
+  return { value: escaped.value, boundaryIndex: escaped.index };
 }
 
 function emptyFieldFormat(map: DisplayMap): DisplayChar {

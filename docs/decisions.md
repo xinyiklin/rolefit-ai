@@ -154,6 +154,16 @@ later entry wins.
   clears content and print-style dirty state like an explicit `.resume` Save,
   so the leave warning covers only edits not yet stored in this browser or a
   failed autosave.
+- 2026-10-17 [USER+CODE+TOOL] D079 ACTIVE: The inline grammar's `<lt>` token is a
+  literal `<`, written only where a raw `<` would start a tag, so text typed or
+  pasted into either editor stays text. Paragraph merges and whole-field
+  strip/wrap transforms keep literals literal; values the editor stores use that
+  canonical spelling. It is string content within `schemaVersion: 1` (D007);
+  older builds show it as `<lt>`. Resume Polish and its review prompts explain
+  it, the Polish markup gate rejects every grammar tag except b/i/u and `<lt>`,
+  and an edit that drops an escaped literal is warned. Limits: RoleFit's proposal Edit
+  box edits the raw grammar; Final review evidence and cover-letter AI output
+  read decoded text back as grammar; PDF import excludes tag-shaped source text.
 
 ### RoleFit product behavior and trust decisions
 

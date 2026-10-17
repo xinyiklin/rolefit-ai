@@ -20,7 +20,14 @@ typesetting guide when a change affects painted output or layout provenance.
   `lib/inlineMarksText.ts`; keep the two tag inventories in sync, including the
   engine's rule that an unusable `<size=…>` still takes a stack slot so its
   close pops nothing else — otherwise the display map and the painted runs
-  disagree on which characters an outer size covers.
+  disagree on which characters an outer size covers. The display map reads
+  `<lt>` as one literal `<`, and `serializeChars` writes `<lt>` back only
+  where a raw `<` would start a tag, so typed and pasted tag-shaped text stays
+  text. HTML and plain-text paste encode clipboard text with
+  `escapeInlineMarkText` before it reaches the grammar. Paragraph merges and
+  cross-field folds join values with `joinInlineMarkText`, and header or
+  document paste stores blocks through `canonicalInlineMarkText`; never join
+  stored values with `+`.
 - `clipboardPrivateCodec.ts` owns the versioned same-editor payload.
   `clipboardHtmlImport.ts` owns the allowlisted HTML-to-inline-mark sanitizer,
   while `clipboardHtmlExport.ts` owns model-derived external HTML/plain copy.

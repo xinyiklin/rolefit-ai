@@ -122,6 +122,7 @@ Rules:
 - DROP with reason INCORRECT when the edit states something its evidence does not support (an invented or changed number, tool, ownership level, outcome, or date; separate facts merged into a new claim; a skill named only in the job description), borrows another entry's facts, removes the only evidence of a job requirement, or makes a claim less accurate.
 - KEEP every other edit, including a qualifier correction that makes a claim more accurate, a cut of filler or a redundant clause that makes the claim read faster, a new bullet that adds job-relevant facts from its entry's linkedProfile, and an edit that uses the posting's term for the same work the entry shows.
 - When unsure, KEEP. Keeping an edit does not verify it.
+- <lt> in resume text and edits is one literal "<" character, not markup; judge the text as if it read "<".
 - user_guidance holds the candidate's standing preferences. Use them when judging impact; they never make an INCORRECT edit acceptable.
 - note is optional on a DROP: one short plain sentence saying why. Never add a note to a KEEP.
 - Return exactly one item for every id in proposed_edits.edits and no other ids.

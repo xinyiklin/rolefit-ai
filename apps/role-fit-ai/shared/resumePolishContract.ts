@@ -1,4 +1,4 @@
-import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
+import { INLINE_MARK_TAG_PATTERN, withInlineLiteralsProtected } from "@typeset/engine/lib/inlineMarksText.ts";
 
 import { linkProfileBlocks } from "./candidateProfileContract.ts";
 import { hasMarkupTag, sanitizeContentWarnings } from "./contentWarnings.ts";
@@ -46,13 +46,22 @@ export type ResumePolishAdvice = {
   warnings?: string[];
 };
 
+function rationaleHasMarkup(text: string): boolean {
+  for (const match of text.matchAll(new RegExp(INLINE_MARK_TAG_PATTERN, "gi"))) {
+    if (!/^<lt>$/i.test(match[0])) return true;
+  }
+  return hasMarkupTag(text.replace(/<lt>/gi, ""));
+}
+
 export function sanitizeResumePolishAdvice(raw: unknown): ResumePolishAdvice[] {
   if (!Array.isArray(raw)) return [];
   return raw.slice(0, 3).flatMap((item) => {
     if (!item || typeof item !== "object" || Array.isArray(item)) return [];
     const value = item as Record<string, unknown>;
     if (!(RESUME_POLISH_ADVICE_KINDS as readonly string[]).includes(String(value.kind))) return [];
-    if (typeof value.rationale !== "string" || !value.rationale.trim() || value.rationale.length > 500 || hasMarkupTag(value.rationale)) return [];
+    // `<lt>` (a literal "<" echoed from resume text) is not markup, but any
+    // other grammar token is, even one whose <link=…> value hides an `<lt>`.
+    if (typeof value.rationale !== "string" || !value.rationale.trim() || value.rationale.length > 500 || rationaleHasMarkup(value.rationale)) return [];
     for (const key of ["sectionId", "entryId", "jobExcerpt", "candidateExcerpt", "profileExcerpt"]) {
       if (value[key] !== undefined && (typeof value[key] !== "string" || value[key].length > 500)) return [];
     }
@@ -148,11 +157,11 @@ const STRUCTURAL_MARK_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
 
 // The server strips structural (non b/i/u) marks from the scope before
 // polishing, so every inclusion, lock, and id decision here uses the same view.
+// A literal "<" (`<lt>`) is text, not structure, so it stays; literals are
+// protected so removing a tag can never let one complete another.
 export function stripStructuralInlineMarks(value: unknown): string {
-  STRUCTURAL_MARK_RE.lastIndex = 0;
-  return String(value ?? "").replace(
-    STRUCTURAL_MARK_RE,
-    (tag) => /^<\/?(?:b|i|u)>$/i.test(tag) ? tag : ""
+  return withInlineLiteralsProtected(String(value ?? ""), (escaped) =>
+    escaped.replace(STRUCTURAL_MARK_RE, (tag) => /^<\/?(?:b|i|u)>$|^<lt>$/i.test(tag) ? tag : "")
   );
 }
 
