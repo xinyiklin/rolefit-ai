@@ -30,18 +30,76 @@ export function decodeEntities(text: string): string {
     .replace(/&[a-z]+;/gi, " ");
 }
 
+// --- Linear HTML scanning ----------------------------------------------------
+// Fetched pages are hostile input of up to 5 MB, and a backtracking regex that
+// rescans to the end of input for every unclosed opener is quadratic. These
+// scanners read forward once; a missing closer ends the scan, because every
+// later opener would search the same remaining text and fail the same way.
+
+// `pattern` must be global: only `lastIndex` makes the search start at `from`.
+function findFrom(source: string, pattern: RegExp, from: number): RegExpExecArray | null {
+  pattern.lastIndex = from;
+  return pattern.exec(source);
+}
+
+// Replaces each span from `open` through the first `close` after it.
+function replaceSpans(source: string, open: RegExp, close: RegExp, replacement: string): string {
+  let text = "";
+  let from = 0;
+  for (;;) {
+    const start = findFrom(source, open, from);
+    const end = start && findFrom(source, close, start.index + start[0].length);
+    if (!start || !end) break;
+    text += source.slice(from, start.index) + replacement;
+    from = end.index + end[0].length;
+  }
+  return text + source.slice(from);
+}
+
+// Each opening tag (`open` through its first ">") that `accept`s, with its body
+// up to `close` when one is given. An attribute value containing ">" ends its
+// tag early, so that element can be skipped or read from the wrong boundary.
+function elements(
+  source: string,
+  open: RegExp,
+  close?: RegExp,
+  accept: (tag: string) => boolean = () => true
+): Array<{ tag: string; body: string }> {
+  const found: Array<{ tag: string; body: string }> = [];
+  let from = 0;
+  for (;;) {
+    const start = findFrom(source, open, from);
+    const gt = start ? source.indexOf(">", start.index + start[0].length) : -1;
+    if (!start || gt < 0) break;
+    const tag = source.slice(start.index, gt + 1);
+    from = gt + 1;
+    if (!accept(tag)) continue;
+    const end = close ? findFrom(source, close, from) : null;
+    if (close && !end) break;
+    found.push({ tag, body: end ? source.slice(from, end.index) : "" });
+    if (end) from = end.index + end[0].length;
+  }
+  return found;
+}
+
+// Whether a quoted class value in `tag` matches `pattern`. The lookahead starts
+// a candidate at every `class=` while reading each quoted value once.
+function classMatches(tag: string, pattern: RegExp): boolean {
+  for (const match of tag.matchAll(/class=(?=["']([^"']*)["'])/gi)) {
+    if (pattern.test(match[1])) return true;
+  }
+  return false;
+}
+
 // Convert posting HTML to readable text while keeping paragraph/bullet breaks
 // (the front-end job analyzer and the description box both read better with them).
 export function htmlToText(html: unknown): string {
-  return decodeEntities(
-    String(html || "")
-      .replace(/<script[\s\S]*?<\/script>/gi, " ")
-      .replace(/<style[\s\S]*?<\/style>/gi, " ")
-      .replace(/<li[^>]*>/gi, "\n• ")
-      .replace(/<br\s*\/?>/gi, "\n")
-      .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n")
-      .replace(/<[^>]+>/g, " ")
-  )
+  let markup = replaceSpans(String(html || ""), /<script/gi, /<\/script>/gi, " ");
+  markup = replaceSpans(markup, /<style/gi, /<\/style>/gi, " ");
+  markup = replaceSpans(markup, /<li/gi, />/g, "\n• ")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|ul|ol|tr|section|header|footer|article)>/gi, "\n");
+  return decodeEntities(replaceSpans(markup, /<(?=[^>])/g, />/g, " "))
     .replace(/[ \t]+/g, " ")
     .split("\n")
     .map((line) => line.trim())
@@ -109,30 +167,41 @@ function sections(parts: Array<[string, unknown]>): string {
 }
 
 function metaContent(html: string, name: string): string {
-  const meta = String(html || "")
-    .match(/<meta\b[^>]*>/gi)
-    ?.find((tag) => {
+  const meta = elements(String(html || ""), /<meta\b/gi)
+    .map(({ tag }) => tag)
+    .find((tag) => {
       const key = htmlAttr(tag, "name") || htmlAttr(tag, "property");
       return key.toLowerCase() === name.toLowerCase();
     });
   return meta ? htmlToText(htmlAttr(meta, "content")) : "";
 }
 
+// A one-line "<company> hiring <role> in <location> | LinkedIn", taking the
+// first of each marker; no field is blank. Markers start only where whitespace
+// runs start, so each run is read once (lazy groups backtracked combinatorially);
+// that needs the trimmed title metaContent returns.
 function linkedInHeaderLines(html: string): string[] {
   const title = metaContent(html, "og:title") || metaContent(html, "twitter:title");
-  const match = title.match(/^(.+?)\s+hiring\s+(.+?)\s+in\s+(.+?)\s*\|\s*LinkedIn\b/i);
-  if (!match) return [];
+  if (!/^.*$/.test(title)) return [];
+  const hiring = findFrom(title, /(?<!\s)\s+hiring\s+/gi, 1);
+  const roleStart = hiring ? hiring.index + hiring[0].length : 0;
+  const inMarker = hiring && findFrom(title, /(?<!\s)\s+in\s+/gi, roleStart + 1);
+  const locationStart = inMarker ? inMarker.index + inMarker[0].length : 0;
+  const end = inMarker && findFrom(title, /(?<!\s)\s*\|\s*LinkedIn\b/gi, locationStart + 1);
+  if (!hiring || !inMarker || !end) return [];
   return [
-    `Company: ${match[1].trim()}`,
-    `Role: ${match[2].trim()}`,
-    `Location: ${match[3].trim()}`
+    `Company: ${title.slice(0, hiring.index).trim()}`,
+    `Role: ${title.slice(roleStart, inMarker.index).trim()}`,
+    `Location: ${title.slice(locationStart, end.index).trim()}`
   ];
 }
 
 function linkedInCriteriaLines(html: string): string[] {
-  const items = [...String(html || "").matchAll(/<li[^>]*class=["'][^"']*description__job-criteria-item[^"']*["'][^>]*>([\s\S]*?)<\/li>/gi)];
+  const items = elements(String(html || ""), /<li/gi, /<\/li>/gi, (tag) =>
+    classMatches(tag, /description__job-criteria-item/i)
+  );
   return items
-    .map((item) => htmlToText(item[1]).split("\n").map((line) => line.trim()).filter(Boolean))
+    .map((item) => htmlToText(item.body).split("\n").map((line) => line.trim()).filter(Boolean))
     .map((parts) => {
       if (parts.length < 2) return "";
       return `${parts[0].replace(/:$/, "")}: ${parts.slice(1).join(" ")}`;
@@ -144,8 +213,10 @@ export function linkedInJobText(html: string): string {
   if (!/(\bshow-more-less-html__markup\b|\bdescription__job-criteria-item\b)/i.test(String(html || ""))) {
     return "";
   }
-  const body = [...String(html || "").matchAll(/<div[^>]*class=["'][^"']*show-more-less-html__markup[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)]
-    .map((match) => htmlToText(match[1]))
+  const body = elements(String(html || ""), /<div/gi, /<\/div>/gi, (tag) =>
+    classMatches(tag, /show-more-less-html__markup/i)
+  )
+    .map((element) => htmlToText(element.body))
     .filter((text) => text.length > 80);
   if (!body.length) return "";
 
@@ -284,8 +355,8 @@ const titleKey = (value: unknown): string =>
   String(value ?? "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 
 function canonicalUrl(html: string, base: URL): URL | null {
-  const tag = html.match(/<link\b[^>]*\brel=["']canonical["'][^>]*>/i)?.[0] ?? "";
-  return parseUrl(htmlAttr(tag, "href"), base);
+  const link = elements(html, /<link\b/gi).find(({ tag }) => /\brel=["']canonical["']/i.test(tag));
+  return parseUrl(htmlAttr(link?.tag ?? "", "href"), base);
 }
 
 // A provider-prefixed requisition (e.g. ACMEUSR117614EXTERNALENUS) binds only
@@ -334,11 +405,11 @@ export function jobPostingJsonLdText(html: string, requested: URL): string {
   const canonical = canonicalUrl(source, requested);
   const ids = requestedIds(requested);
   const texts = new Set<string>();
-  for (const match of source.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)) {
-    if (!/\btype=["']?application\/ld\+json/i.test(match[1])) continue;
+  for (const script of elements(source, /<script\b/gi, /<\/script>/gi)) {
+    if (!/\btype=["']?application\/ld\+json/i.test(script.tag)) continue;
     let value: unknown;
     try {
-      value = JSON.parse(match[2]);
+      value = JSON.parse(script.body);
     } catch {
       continue; // a malformed block is not evidence
     }
