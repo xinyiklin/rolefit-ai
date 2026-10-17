@@ -367,8 +367,9 @@ dispatch attempts but never an API key.
   `claimToken` and open a fresh app tab with that token and its own `tabId`, so
   a new posting starts a new independent preparation session instead of
   replacing an existing tab's job. The first progress or delivered-posting
-  callback selects Prepare before updating intake state, and extension intake
-  stops there after Job analysis and the duplicate gates. `extensionImport`,
+  callback selects Prepare before updating intake state; after Job analysis and
+  the duplicate gates, automatic Polish follows the Settings switches as for any
+  preparation. `extensionImport`,
   `claimToken`, `tabId`, and the `"preparing"` progress token remain stable;
   the retired `autoTailor`, `distillAi`, and pre-extracted `fields` values are
   ignored and never cross the inbox handoff. Ordinary Prepare may still rank
@@ -622,14 +623,16 @@ Codex catalog (client 0.158.0, fetched 2026-09-27) lists GPT-6 Astra/Sol/Luna,
 GPT-5.6 Sol/Terra/Luna, and GPT-5.5. Codex's default is GPT-6 Sol in both the
 browser and server fallback. GPT-5.4 and GPT-5.4 Mini retired from ChatGPT
 sign-in on August 31; Spark is absent from this visible catalog, which is not
-proof of global API retirement. GPT-5.5 is retained with its announced October
-14 retirement in the label. API and subscription catalogs have separate lifecycles.
+proof of global API retirement. GPT-5.5 was kept with its announced October
+14 retirement in the label until its removal on 2026-10-17; a saved GPT-5.5
+selection now repairs to the Codex default. API and subscription catalogs have
+separate lifecycles.
 The existing Claude legacy choices have no confirmed retirement in this refresh
 and are retained alongside Fable 5.1 and Opus 5.5.
 
 `shared/cliReasoning.ts` owns CLI effort capabilities for the picker, settings,
 request validation, and Claude argv. GPT-6 Astra/Sol and GPT-5.6 Sol/Terra support
-low through ultra; both Luna models stop at max; GPT-5.5 stops at xhigh. Claude
+low through ultra; both Luna models stop at max. Claude
 Haiku has no effort flag, Opus/Sonnet 4.6 omit xhigh, and the other listed Claude
 models expose low through max. CLI modes are not assumed to be API parameters.
 Model changes reconcile effort in the same state update; startup and persisted
@@ -637,7 +640,7 @@ settings use the same helper. Unsupported nonempty efforts are rejected at the
 server boundary, except Haiku's obsolete effort is discarded.
 
 Strict workspace and backup parsing permits only known provider-catalog repairs:
-the three removed Codex ids move to the current Codex default, and previously
+the four removed Codex ids move to the current Codex default, and previously
 recognized CLI efforts reconcile against a known model. Unknown model ids,
 unknown efforts, invalid provider pairs, extra keys, and unrelated invalid fields
 remain rejected. Reads do not rewrite the canonical file; the next normal save

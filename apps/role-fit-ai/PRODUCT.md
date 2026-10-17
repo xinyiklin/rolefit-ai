@@ -607,8 +607,9 @@ starter and short stubs are not applicant resumes. A blank document becomes an
 applicant-authored resume once it has substantive dirty content.
 
 Resume and Cover Letter automatic Polish controls remain independent from each
-other. The first Fit Assessment launched by each successful Prepare is the only
-assessment that may trigger either configured automatic Polish action. Reassess
+other. The first Fit Assessment launched by each successful Prepare, whether
+from a link, pasted text, or the browser extension, is the only assessment that
+may trigger either configured automatic Polish action. Reassess
 fit, assessment retries, resume-change assessments, and restored history remain
 advisory and never start another automatic Polish. Both switches default off;
 Resume defaults to Reasonable or better and Cover Letter to Strong only. Manual
@@ -744,9 +745,11 @@ disappears into the task. Quiet competence, not salesmanship.
     application date remains job-only and gains one only when moved to an
     active stage; stage changes never invent documents.
 11. Preserve safe extension intake: a claimed extension posting requests
-    AI-backed Job analysis and stops on Prepare; it never implicitly starts
-    resume Polish. A failed analysis leaves the deterministic brief editable and
-    manual Polish available. Every preparation resolves which resume it speaks
+    AI-backed Job analysis on Prepare like any other preparation; automatic
+    Polish then follows only the Settings switches and thresholds, and the
+    extension has no automation control of its own. A failed analysis leaves
+    the deterministic brief editable and manual Polish available. Every
+    preparation resolves which resume it speaks
     for exactly once, before the provider request: it waits for the local
     workspace to finish loading, keeps a real current document (including an
     explicitly uploaded resume), and otherwise

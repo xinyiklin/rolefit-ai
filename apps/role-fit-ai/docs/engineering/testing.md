@@ -909,7 +909,8 @@ Good frontend verification covers:
   analysis after the local preview is published. Provider failure leaves that
   preview usable, and retry/stale guards cannot apply an earlier posting to the
   current session
-- extension intake never launches Resume Polish; multiple saved resume
+- extension intake reaches automatic Polish only through the Settings
+  switches and thresholds, like any preparation; multiple saved resume
   variants may still be ranked from their actual strict document contents and
   a clear high-confidence winner selected while the editor is clean, but that
   is source selection, not tailoring, and the only persisted variant input is

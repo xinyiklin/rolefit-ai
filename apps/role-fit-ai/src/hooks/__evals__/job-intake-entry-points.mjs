@@ -894,6 +894,15 @@ const sharedCommitOrder = [
 }
 
 {
+  const harness = createHarness();
+  await runExtension(harness);
+  assert.ok(
+    harness.state[5].latestCompleted?.automationToken,
+    "an extension Prepare carries the same automatic-Polish receipt as a pasted posting (D077)"
+  );
+}
+
+{
   const readinessGate = deferred();
   const requestFieldsRef = {
     current: { provider: "codex-cli", model: "synthetic-model", reasoningEffort: "medium" }

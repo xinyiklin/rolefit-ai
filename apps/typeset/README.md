@@ -75,10 +75,10 @@ Use **Save** to download a reopenable `.resume` file. Use **Export PDF** to
 download a finished `.pdf`: the owned typeset engine renders the pages and the app
 serializes them to PDF entirely in your browser (embedded fonts, vector rules, and
 clickable links), with no print dialog, document upload, or server-side conversion.
-PDF is final output, not an editable source format. A successful **Save**
-establishes the durable baseline for both content and print style, so a
-style-only change does not leave a false unsaved-leave warning after the file
-downloads.
+PDF is final output, not an editable source format. A completed autosave
+or **Save** establishes the baseline for both content and print style, so the
+browser's leave warning appears only while an edit is not yet stored in this
+browser or local saving has failed.
 
 Autosave is a recovery convenience, not a replacement for saving a `.resume`
 file that can be backed up or moved to another device.

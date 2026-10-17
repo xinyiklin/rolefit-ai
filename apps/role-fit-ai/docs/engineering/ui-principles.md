@@ -103,9 +103,10 @@ grouped reasons (any number, with local suggestions) and a note, and it is gover
 resume, cover-letter, Fit Assessment, provider, or Apply readiness. A restored
 Skipped decision replaces both application actions with Save job updates.
 
-Extension intake requests AI-backed Job analysis and stops on Prepare. Its local
-brief remains usable when provider work fails, and it never implicitly starts
-resume Polish. Independently, Prepare may rank the actual contents of the saved
+Extension intake requests AI-backed Job analysis on Prepare. Its local brief
+remains usable when provider work fails, and automatic Polish follows the
+Settings switches as for any preparation. Independently, Prepare may rank the
+actual contents of the saved
 `.resume` and `.cover` variants the user left eligible in Settings > Automation
 against weighted prepared-job sections. For
 either document, auto-select a meaningful unique winner only while its editor

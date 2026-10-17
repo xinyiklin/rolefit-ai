@@ -55,8 +55,10 @@ and implementation or conversion language in the user experience.
 3. **Reveal precision progressively.** Common commands stay visible; detailed
    typography and spacing controls live in contextual popovers.
 4. **Make ownership explicit.** Autosave status, `.resume` files, and PDF export
-   communicate exactly where the user's work lives. A completed explicit
-   `.resume` save clears both content and print-style dirty state.
+   communicate exactly where the user's work lives. A completed browser
+   autosave or explicit `.resume` save clears both content and print-style
+   dirty state, so the leave warning guards only edits not yet stored in this
+   browser or a failed autosave.
 5. **Keep the source truthful.** One versioned structured format drives reopen,
    autosave, layout, and export without lossy conversion paths.
 

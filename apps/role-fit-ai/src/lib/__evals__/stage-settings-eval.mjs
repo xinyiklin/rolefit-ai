@@ -339,7 +339,7 @@ assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic
 // Model retirement and effort repair must stay isolated to each stage.
 for (const stage of AI_STAGES) {
   const keys = stageSettingsKeys(stage);
-  for (const retired of ["gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
+  for (const retired of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
     const saved = { [keys.provider]: "codex-cli", [keys.model]: retired, [keys.effort]: "high" };
     const repaired = normalizeSettings(saved);
     assert.equal(repaired[keys.model], "gpt-6.1-sol");
@@ -348,7 +348,7 @@ for (const stage of AI_STAGES) {
     assert.equal(saved[keys.model], retired, "normalization must not mutate its input");
     assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
   }
-  for (const model of ["gpt-5.5", "gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"]) {
+  for (const model of ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"]) {
     const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "high" };
     assert.deepEqual(normalizeSettings(saved), saved, "supported explicit selections survive the refresh");
   }

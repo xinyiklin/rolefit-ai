@@ -238,9 +238,10 @@ or workspace state, keep it here and expose the smallest host seam instead.
   Apply status names which PDF failed. Apply is synchronously single-flight from
   duplicate resolution through a direct commit and again through every selected
   post-commit export; the pre-commit naming prompt remains interactive.
-- Extension intake requests AI-backed Job analysis and stops on Prepare. Its
-  local brief remains usable when that request fails, and it never implicitly
-  launches Polish.
+- Extension intake requests AI-backed Job analysis on Prepare. Its local brief
+  remains usable when that request fails. Automatic Polish follows only the
+  Settings switches and thresholds, exactly as for a linked or pasted posting;
+  the extension has no automation control of its own.
 - **Which resume a preparation speaks for has exactly ONE owner**
   (`usePreparedResume` over the pure rules in `lib/preparedResume.ts`). It runs
   once per preparation, after the deterministic local job analysis and before

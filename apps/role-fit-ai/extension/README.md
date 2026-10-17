@@ -23,9 +23,10 @@ registered for this install — reload the extension (Firefox reads
 `manifest.json` only when the add-on is loaded, while it re-reads the popup
 files every time you open them, so an add-on loaded before this change shows
 the new UI with no shortcuts).
-Both paths do exactly the same thing: import the posting and stop on Prepare
-after AI-backed job analysis. Neither one tailors or polishes anything
-automatically.
+Both paths do exactly the same thing: import the posting into Prepare, where
+RoleFit runs AI-backed job analysis. Neither path has an automation setting of
+its own; automatic Polish then runs only when its RoleFit Settings switch is on
+and the Fit threshold is met, as for any preparation.
 
 It sends requests **only** to your local RoleFit AI server at the validated
 `http://localhost:<port>` origin stored in one versioned
@@ -148,16 +149,18 @@ the keyboard command is an ES module.
    while that resolve runs, and the delivered inbox payload contains only
    `{text, url}`. The receiving tab always runs provider-backed job analysis and
    loads the brief into that tab's Prepare page. If the analysis fails, a
-   deterministic brief may remain available for inspection, but the stage is
-   failed and Polish does not start automatically.
+   deterministic brief may remain available for inspection and the stage is
+   failed. Automatic Polish still needs a completed Fit Assessment and the
+   Settings switches, exactly as for any preparation.
 4. The `Ctrl+Shift+U` / `⌘⇧U` command runs steps 1 and 3 with no popup open,
    through the same shared bridge and the same status/approval handshake. It
    skips the tracker preview in step 2 — the app still runs its own duplicate
    gates on arrival. A failure leaves a badge on the toolbar icon and a single
    short explanation the popup shows and clears the next time you open it.
 5. The popup has no extension AI/deterministic or automatic-proposal toggles.
-   Neither entry point has one. The handoff stops on Prepare after the
-   duplicate gates and the Job analysis stage.
+   Neither entry point has one; automatic Polish follows RoleFit's Settings.
+   The handoff lands on Prepare after the duplicate gates and the Job
+   analysis stage.
    The claim token keeps the new posting out of older visible tabs, and the
    extension preserves the source tab's Firefox container when the browser
    accepts that option, with a normal fresh-tab fallback elsewhere.

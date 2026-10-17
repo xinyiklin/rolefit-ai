@@ -131,7 +131,8 @@ V3 client of the local RoleFit server.
   intake sends only `text`, `url`, `frameUrls`, and `claimToken` to import; the same-origin
   inbox delivers only `text` and `url`. The app always owns provider-backed AI
   job analysis, duplicate gates, the deterministic brief used only for failed-run
-  inspection, and the stop on Prepare. Claim-token routing and Firefox
+  inspection, and the Prepare handoff, after which automatic Polish follows only
+  the app's Settings switches. Claim-token routing and Firefox
   container preservation remain part of the handoff. This holds for the
   keyboard command exactly as it does for the popup button.
 - Visual contract: the popup is the Drafting Desk at 344px, not a second visual
