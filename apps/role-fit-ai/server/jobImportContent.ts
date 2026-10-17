@@ -2,6 +2,8 @@
 // and the exact-posting selectors for each recognized source. No I/O here;
 // jobImport.ts owns URL targets, fetch sequencing, caches, and HTTP outcomes.
 
+import { includesEach } from "./textSearch.ts";
+
 // Decode a numeric character reference, clamping control chars (which could
 // inject fake structure into the prompt) and rejecting out-of-range values.
 // fromCodePoint (not fromCharCode) so astral code points aren't truncated.
@@ -439,12 +441,11 @@ export function jobPostingJsonLdText(html: string, requested: URL): string {
 // body, so a working generic import is kept rather than replaced.
 export function pageShowsPosting(pageText: string, posting: string): boolean {
   const key = (line: string): string => line.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-  const page = key(pageText);
   const lines = posting.split("\n")
     .filter((line) => !/^(Role|Company|Location): /.test(line))
     .map(key)
     .filter((line) => line.length >= 30);
-  return lines.length > 0 && lines.filter((line) => page.includes(line)).length / lines.length >= 0.8;
+  return lines.length > 0 && includesEach(key(pageText), lines).filter(Boolean).length / lines.length >= 0.8;
 }
 
 // --- Source-specific posting data -------------------------------------------

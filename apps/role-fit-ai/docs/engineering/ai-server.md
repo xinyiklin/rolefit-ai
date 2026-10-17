@@ -827,10 +827,14 @@ Keep the import pipeline split by responsibility:
   5 MB byte cap, so page scans must stay linear in page size: no regex that
   rescans to the end of input for each unclosed opener, and no lazy groups
   that backtrack against each other. A tag ends at its first `>`; a LinkedIn
-  title adds header lines only on one line with no blank field.
+  title adds header lines only on one line with no blank field. Whether a
+  readable page already shows a bound JobPosting is one multi-line search
+  (`server/textSearch.ts`), not one `includes` scan of the page per line.
   `server/__evals__/job-import-parse-time-probes.mjs` bounds hostile pages up
-  to 1 MB and pins parity with the earlier regex parsers. Exceptions not yet
-  linear are listed under the known limits below.
+  to 1 MB and pins parity with the earlier parsers;
+  `server/__evals__/text-search-probes.mjs` pins the search against
+  `String.includes`. The exception not yet linear is recorded under the known
+  parsing-time limit below.
 - A direct Ashby board that omits the job, answers 404/410, or exceeds the
   byte cap falls back to that exact job page's bound JobPosting. Only the
   byte-cap error (`ResponseTooLargeError`) is caught; every other network
@@ -858,18 +862,14 @@ Keep the import pipeline split by responsibility:
     and postings removed from their board.
   - Oracle recognition covers `*.oraclecloud.com` plus one observed branded
     origin; other branded Oracle origins stay generic.
-- Known parsing-time limits (2026-10-17), which can stall the server rather
-  than fail an import:
-  - `pageShowsPosting` checks every bound JobPosting line against the whole
-    page text, O(lines × page), on any generic URL import: about 18 s for a
-    hostile 1.1 MB page, growing fourfold per doubling toward the byte cap.
-  - `greenhouseEmbeddedJobText`, `icimsJobText`, `dayforceJobText`, and the
-    iCIMS `<iframe>` scan still use backtracking regexes (quadratic, and cubic
-    for the Greenhouse location). They read only HTML fetched from their
-    vendor targets, so an attack needs hostile markup served from that vendor
-    or a redirect it follows: unclosed tags, or for the Greenhouse location
-    even well-formed repeated `job__location` divs. Neither path has been
-    verified impossible.
+- Known parsing-time limit (2026-10-17), which can stall the server rather
+  than fail an import: `greenhouseEmbeddedJobText`, `icimsJobText`,
+  `dayforceJobText`, and the iCIMS `<iframe>` scan still use backtracking
+  regexes (quadratic, and cubic for the Greenhouse location). They read only
+  HTML fetched from their vendor targets, so an attack needs hostile markup
+  served from that vendor or a redirect it follows: unclosed tags, or for the
+  Greenhouse location even well-formed repeated `job__location` divs. Neither
+  path has been verified impossible.
 - `src/lib/jobExtract.ts` is the dependency-free analyzer. It should keep
   résumé-tailoring content (role intro, seniority/employment metadata,
   responsibilities, requirements, preferred qualifications) in a compact

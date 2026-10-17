@@ -885,6 +885,7 @@ server/
   jobImport.ts                  # /api/import-job: recognized job sources, fetch sequencing, outcomes
   jobImportContent.ts           # HTML→text + exact-posting parsers (ATS data, JobPosting JSON-LD)
   network.ts                    # job-link fetch + SSRF guards
+  textSearch.ts                 # linear multi-needle substring search (page-shows-posting check)
   starter.resume                # bundled starter resume seeded when the workspace has no base resume
   workspace.ts                  # resume variants, migration, and shared workspace snapshot
   coverLetterWorkspace.ts       # cover-letter variants + isolated version history

@@ -8,7 +8,14 @@
 import assert from "node:assert/strict";
 
 import { greenhouseJobAppUrl } from "../jobImport.ts";
-import { decodeEntities, htmlAttr, htmlToText, jobPostingJsonLdText, linkedInJobText } from "../jobImportContent.ts";
+import {
+  decodeEntities,
+  htmlAttr,
+  htmlToText,
+  jobPostingJsonLdText,
+  linkedInJobText,
+  pageShowsPosting
+} from "../jobImportContent.ts";
 
 // --- Legacy regex oracles ----------------------------------------------------
 
@@ -283,6 +290,63 @@ for (const [label, html, now] of intended) {
 }
 console.log(`PASS LinkedIn titles parse as before apart from ${intended.length} pinned differences`);
 
+// --- Page and posting comparison ---------------------------------------------
+
+function legacyPageShowsPosting(pageText, posting) {
+  const key = (line) => line.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+  const page = key(pageText);
+  const lines = posting.split("\n")
+    .filter((line) => !/^(Role|Company|Location): /.test(line))
+    .map(key)
+    .filter((line) => line.length >= 30);
+  return lines.length > 0 && lines.filter((line) => page.includes(line)).length / lines.length >= 0.8;
+}
+
+// The pairs genericPageOutcome compares: readable page text and bound posting.
+let comparedFixtures = 0;
+for (const [label, html] of Object.entries(fixtures)) {
+  for (const url of [NUMERIC_URL, PREFIXED_URL]) {
+    const posting = jobPostingJsonLdText(html, url);
+    if (!posting) continue;
+    const pageText = linkedInJobText(html) || htmlToText(html);
+    comparedFixtures += 1;
+    assert.equal(pageShowsPosting(pageText, posting), legacyPageShowsPosting(pageText, posting), `${label} compares as before`);
+  }
+}
+
+const postingLines = [
+  "Design, build, and operate reliable platform services and REST APIs.",
+  "Ship well-tested features with product and design partners.",
+  "Review code and improve observability across the platform.",
+  "Experience with TypeScript, Python, and relational databases.",
+  "Clear written communication across distributed teams.",
+  "Mentor engineers and lead incident reviews for scheduling.",
+  "Short line.",
+  "Role: Platform Engineer",
+  "Company: Lifeco",
+  "Location: Remote"
+];
+// Page copies drift in case, punctuation, and length, as rendered pages do.
+const pageVariants = [
+  (line) => line,
+  (line) => line.toUpperCase(),
+  (line) => `• ${line.replace(/,/g, " ,")}!`,
+  (line) => line.slice(0, 40)
+];
+const pick = (count) => Array.from({ length: count }, () => postingLines[nextRandom(postingLines.length)]);
+const outcomes = { shown: 0, hidden: 0 };
+for (let doc = 0; doc < 3_000; doc += 1) {
+  const posting = pick(1 + nextRandom(8)).join("\n");
+  const pageText = pick(nextRandom(10))
+    .map((line) => pageVariants[nextRandom(pageVariants.length)](line))
+    .join(nextRandom(2) ? "\n" : " ");
+  const shown = legacyPageShowsPosting(pageText, posting);
+  assert.equal(pageShowsPosting(pageText, posting), shown, `posting comparison ${JSON.stringify([pageText, posting])}`);
+  outcomes[shown ? "shown" : "hidden"] += 1;
+}
+assert.ok(comparedFixtures >= 4 && outcomes.shown >= 25 && outcomes.hidden >= 25, `comparisons reach both answers (${JSON.stringify(outcomes)})`);
+console.log(`PASS pageShowsPosting compares as before (${comparedFixtures} fixture pairs, ${outcomes.shown}/${outcomes.hidden} generated)`);
+
 // --- Hostile pages ----------------------------------------------------------
 
 const fill = (unit, size) => unit.repeat(Math.ceil(size / unit.length));
@@ -307,20 +371,37 @@ const hostileTitles = {
   "whitespace runs in a LinkedIn title": (size) => titled(fill(` hiring${"&#8192;".repeat(6)}in${"&#8192;".repeat(6)}`, size)),
   "a long LinkedIn title": (size) => titled(fill("a hiring  in  ", size))
 };
+// [page text, posting], splitting the size between them.
+const hostilePostings = {
+  "near-miss posting lines over a repeated page": (size) => ["a".repeat(size / 2), fill(`${"a".repeat(29)}b\n`, size / 2)],
+  "distinct posting lines over a repeated page": (size) => [
+    "a".repeat(size / 2),
+    Array.from({ length: Math.ceil(size / 62) }, (_, index) => "a".repeat(25) + index.toString(36).padStart(5, "0")).join("\n")
+  ]
+};
 for (const [label, build] of Object.entries(hostile)) assertParity(`small ${label}`, build(1_000));
+for (const [label, build] of Object.entries(hostilePostings)) {
+  const [pageText, posting] = build(1_000);
+  assert.equal(pageShowsPosting(pageText, posting), legacyPageShowsPosting(pageText, posting), `small ${label} compares as before`);
+}
 
+function assertWithin(limit, description, run) {
+  const started = performance.now();
+  run();
+  const elapsed = performance.now() - started;
+  assert.ok(elapsed < limit, `${description} in ${elapsed.toFixed(0)} ms (limit ${limit} ms)`);
+}
 // Small rungs fail a regression quickly and by name; the 1 MB rung bounds scale.
-const LIMITS = [[500, 50], [4_000, 50], [64_000, 100], [1_000_000, 500]];
+const LIMITS = [[500, 50], [4_000, 50], [64_000, 100], [256_000, 250], [1_000_000, 500]];
 for (const [size, limit] of LIMITS) {
   for (const [label, build] of Object.entries({ ...hostile, ...hostileTitles })) {
     const html = build(size);
-    for (const [name, current] of parsers) {
-      const started = performance.now();
-      current(html);
-      const elapsed = performance.now() - started;
-      assert.ok(elapsed < limit, `${name} parses ${size} B of ${label} in ${elapsed.toFixed(0)} ms (limit ${limit} ms)`);
-    }
+    for (const [name, current] of parsers) assertWithin(limit, `${name} parses ${size} B of ${label}`, () => current(html));
+  }
+  for (const [label, build] of Object.entries(hostilePostings)) {
+    const [pageText, posting] = build(size);
+    assertWithin(limit, `pageShowsPosting compares ${size} B of ${label}`, () => pageShowsPosting(pageText, posting));
   }
 }
-const shapes = Object.keys(hostile).length + Object.keys(hostileTitles).length;
+const shapes = Object.keys(hostile).length + Object.keys(hostileTitles).length + Object.keys(hostilePostings).length;
 console.log(`PASS hostile pages up to 1 MB parse within bounds (${shapes} shapes, ${LIMITS.length} sizes)`);
