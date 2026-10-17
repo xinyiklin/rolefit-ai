@@ -1,3 +1,4 @@
+import { stripInlineMarks as stripAllInlineMarks, withInlineLiteralsProtected } from "@typeset/engine/lib/inlineMarksText.ts";
 import { CANDIDATE_CONTEXT_CHAR_LIMIT, linkProfileBlocks, profileHeadings, profileTextOnResume } from "../../shared/candidateProfileContract.ts";
 import { sanitizeContentWarnings } from "../../shared/contentWarnings.ts";
 import { affirmativeTerm, jobTerminology, unsupportedTerminology, type JobTerm } from "../../src/resume/terminology.ts";
@@ -233,6 +234,7 @@ Rules:
 ${boldBulletKeywords
   ? "- Preserve supported inline <b>, <i>, and <u> marks when relevant; return no other markup or newlines."
   : "- Preserve supported inline <b>, <i>, and <u> marks when relevant, except never use <b> in a bullet replacement; return no other markup or newlines."}
+- <lt> in the resume text is one literal "<" character, not markup. Copy it exactly as <lt>; never turn it into a bare "<" or into a mark.
 - skill-list contains actual skills only. It may reorder, deduplicate, or surface skills already supported by the resume or candidate context.
 - Skill category labels are locked and never appear in editable_targets. Never replace a skill list with a category label.
 - A new skill may come only from the resume or candidate context, never merely from the job description.
@@ -281,7 +283,12 @@ function increment(counts: DropCounts, reason: ResumePolishWithheldReason): void
 }
 
 function stripInlineMarks(value: string): string {
-  return value.replace(/<\/?(?:b|i|u)>/gi, "").trim();
+  return stripAllInlineMarks(value).trim();
+}
+
+// The literal "<" characters a value displays (escaped or bare).
+function literalLessThanCount(value: string): number {
+  return (stripAllInlineMarks(value).match(/</g) ?? []).length;
 }
 
 function plainText(value: string): string {
@@ -289,7 +296,9 @@ function plainText(value: string): string {
 }
 
 function stripBoldMarks(value: string): string {
-  return value.replace(/<\/?b>/gi, "").replace(/\s+/g, " ").trim();
+  return withInlineLiteralsProtected(value, (escaped) => escaped.replace(/<\/?b>/gi, ""))
+    .replace(/\s+/g, " ")
+    .trim();
 }
 
 function normalizedSkillText(value: string): string {
@@ -703,6 +712,11 @@ export function sanitizeResumeProposal(
       const warnings = unsupportedTerminology(replacement, target.sectionType === "standard" ? entryGrounding(target) : `${scopeText}\n${candidateContext}`, postingTerms);
       const issues = replacementIssues(replacement, target, evidence);
       if (issues.length) warnings.push(`Not supported by provided evidence. ${issues.join("; ").replace(/[.!?]+$/, "")}.`);
+      // Only an escaped literal can be decoded into formatting; ordinary "<"
+      // text (e.g. "<100ms") keeps the existing warning behavior.
+      if (/<lt>/i.test(target.currentText) && literalLessThanCount(replacement) < literalLessThanCount(target.currentText)) {
+        warnings.push("A literal \"<\" from the current text was dropped or may have become formatting. Check the edit before accepting it.");
+      }
       const usesProfile = Boolean(target.profileText) && (
         target.kind === "new-bullet"
         || change.evidence === "profile"

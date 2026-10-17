@@ -186,4 +186,16 @@ assert.deepEqual(
   "pre-wrap runs from the editor's export keep their edge spaces"
 );
 
+// Clipboard text is literal: entity-escaped tag text never becomes marks.
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<p>Use &lt;b&gt; and &lt;size=200&gt;big&lt;/size&gt; tags</p>"),
+  ["Use <lt>b> and <lt>size=200>big<lt>/size> tags"],
+  "tag-shaped clipboard text is escaped, not parsed"
+);
+assert.deepEqual(
+  paragraphFragmentsFromHtml("<p><b>a &lt; b</b></p>"),
+  ["<b>a <lt> b</b>"],
+  "every pasted < is escaped; the editor keeps only the needed ones on insert"
+);
+
 console.log("clipboard HTML whitespace probes: PASS");

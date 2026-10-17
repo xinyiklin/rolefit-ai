@@ -36,6 +36,13 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   segmenter, the editor's display map) gives an open tag whose value is
   unusable — `<size=0>`, `<size=999>` — an inert stack slot
   (`INERT_OPEN_TAG`), so its closing tag can never pop an outer value.
+  `<lt>` is the one text token: a literal `<` stored where the raw character
+  would start a tag. Every walker reads it as text, `stripInlineMarks` decodes
+  it, and `escapeInlineMarkText` encodes plain text entering the grammar.
+  Never concatenate or regex-strip stored values directly: a bare literal `<`
+  at a seam can complete a tag. Join with `joinInlineMarkText`, run raw
+  strip/wrap transforms inside `withInlineLiteralsProtected`, and use
+  `canonicalInlineMarkText` for the stored spelling.
   `uppercaseInlineMarkedText` is the engine's case transform: it uppercases text
   and leaves tag payloads (link destinations, family ids) alone. The editor's
   display map uppercases per display character (`ß` shows as `S` there while

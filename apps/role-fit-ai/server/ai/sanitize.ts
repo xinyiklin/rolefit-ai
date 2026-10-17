@@ -1,14 +1,25 @@
+import { INLINE_MARK_TAG_PATTERN } from "@typeset/engine/lib/inlineMarksText.ts";
 import { findUngroundedToolClaimTerm } from "./grounding.ts";
 
 // Shared deterministic guards used by the current document workflows.
+
+const GRAMMAR_TOKEN_RE = new RegExp(INLINE_MARK_TAG_PATTERN, "gi");
 
 export function containsStructuredMarkup(value: unknown): boolean {
   const text = String(value ?? "");
   if (/[\r\n]/.test(text)) return true;
   if (/\\(?:begin|end|section|subsection|item|href)\b/i.test(text)) return true;
+  // Read the text the way the engine will: any grammar token other than
+  // b/i/u and the literal `<lt>` is structure. This also catches a <link=…>
+  // whose destination swallows "<lt>" or "<b>" and so hides from the checks
+  // below.
+  for (const match of text.matchAll(GRAMMAR_TOKEN_RE)) {
+    if (!/^<\/?(?:b|i|u)>$|^<lt>$/i.test(match[0])) return true;
+  }
 
   // The editor's exact inline-mark vocabulary is allowed only when nested and
-  // closed correctly. All other HTML-like markup is rejected.
+  // closed correctly, plus the literal-"<" token `<lt>`. All other HTML-like
+  // markup is rejected.
   const stack: string[] = [];
   for (const match of text.matchAll(/<(\/)?(b|i|u)>/gi)) {
     const tag = match[2].toLowerCase();
@@ -16,7 +27,7 @@ export function containsStructuredMarkup(value: unknown): boolean {
     else if (stack.pop() !== tag) return true;
   }
   if (stack.length) return true;
-  return /<\/?[a-z][^>]*>/i.test(text.replace(/<\/?(?:b|i|u)>/gi, ""));
+  return /<\/?[a-z][^>]*>/i.test(text.replace(/<\/?(?:b|i|u)>|<lt>/gi, ""));
 }
 
 const SMALL_NUMBER_WORDS: Record<string, number> = {

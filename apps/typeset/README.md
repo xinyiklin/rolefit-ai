@@ -98,7 +98,9 @@ state at that location. Family, size, bold, italic, and underline changes on a
 range restore its exact start and end after toolbar interaction. The browser
 typesetter automatically detects email addresses and web links. Selected text
 can also receive a custom destination from the Link control, where detected or
-explicit links can be edited or persistently removed. The typesetter measures
+explicit links can be edited or persistently removed. Text that only looks
+like formatting code, such as `<b>` or `<size=12>`, stays literal text when
+typed or pasted. The typesetter measures
 mixed runs with committed metrics before it breaks lines, so the editable page,
 browser print layer, and dedicated PDF output stay aligned. Typography stays in
 the direct toolbar; selecting all text is the explicit way to restyle the entire

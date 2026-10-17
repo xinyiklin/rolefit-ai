@@ -100,3 +100,17 @@ extension 1.4.0, desktop bridge API 13. Release history:
   - [TOOL] Mutation-checked: the backup contract eval fails without the
     repair entry. `npm run check --workspace apps/role-fit-ai` passed;
     mb-verifier READY after one fix round.
+- [USER+CODE+TOOL] **Literal tag text** (D079): `<lt>` is a literal `<`
+  written only where a raw `<` would start a tag, so typed or pasted `<b>`,
+  `<size=12>`, or `<link=…>` stays text in both apps; merges and whole-field
+  style changes keep it; screen, PDF text, copy-out, and the PDF Title decode
+  it. The Polish markup gate now rejects every grammar tag except b/i/u and
+  `<lt>`, closing a hidden-link bypass (also an older `<link=…<b>` variant).
+  - [TOOL] Engine, editor, Typeset, and RoleFit checks passed (183/183);
+    in-app browser QA in both apps (typing, Enter/Backspace, paste, Styles);
+    two mb-verifier reviews READY after three rounds. Headless Chrome
+    contracts could not start on this Windows machine (Chrome refused the CDP
+    attach; Edge failed to start); Document CI runs them.
+  - [USER] Deferred: the RoleFit proposal Edit box still edits raw grammar.
+    Limits: Final review evidence and cover-letter AI output read decoded text
+    back as grammar; PDF import excludes tag-shaped source text.
