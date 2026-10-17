@@ -150,6 +150,10 @@ later entry wins.
   background prioritization (consistent with Mozilla bug 1960734) still delays
   hidden tabs; the READMEs give the foreground workaround; the user's exact
   10–20 s case is unverified.
+- 2026-10-17 [USER+CODE] D078 ACTIVE: In Typeset a completed browser autosave
+  clears content and print-style dirty state like an explicit `.resume` Save,
+  so the leave warning covers only edits not yet stored in this browser or a
+  failed autosave.
 
 ### RoleFit product behavior and trust decisions
 
@@ -339,7 +343,7 @@ later entry wins.
   stages. Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and
   Codex CLI 0.159.2. Receipt: `apps/role-fit-ai/docs/engineering/ai-server.md`.
   UNCONFIRMED: live provider calls.
-- 2026-09-27 [USER+CODE] D049 ACTIVE: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
+- 2026-09-27 [USER+CODE] D049 AMENDED by D076: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
   joined the CLI/API catalogs (the user waived the Product Partner flow); Codex
   5.4, 5.4 Mini, and Spark were removed; GPT-5.5 remains until its announced
   2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
@@ -352,6 +356,9 @@ later entry wins.
   configuration and rejected a broader prescriptive rubric.
 - 2026-07-24 [TOOL] D051 ACTIVE: Application-writing guidance sources and the resulting
   prompt policy are in `apps/role-fit-ai/docs/engineering/ai-server.md`.
+- 2026-10-17 [USER+CODE] D076 ACTIVE: GPT-5.5 left the Codex catalog after its
+  2026-10-14 retirement; a saved GPT-5.5 stage selection repairs to the Codex
+  default within its stage, as the earlier retired Codex models do.
 
 ### Tracker, storage, and workspace
 
@@ -391,6 +398,9 @@ and lives in the app ledger.
 - 2026-07-27 [USER+CODE+TOOL] D057 ACTIVE: The companion writes its validated port into the
   materialized extension runtime config, which since 2026-08-01 is only the
   first-install seed.
+- 2026-10-17 [USER+CODE] D077 ACTIVE: Extension intake is an ordinary Prepare:
+  automatic Polish after it follows only the Settings switches and thresholds
+  (D028), and the extension has no automation control of its own.
 
 ### Desktop companion, distribution, and release/deploy state
 

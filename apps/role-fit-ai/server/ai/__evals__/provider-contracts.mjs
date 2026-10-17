@@ -79,7 +79,7 @@ try {
   );
   assert.deepEqual(
     modelOptionsByProvider["codex-cli"].map(({ value }) => value),
-    ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna", "gpt-5.5"],
+    ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
     "Codex CLI matches every list-visible model in the installed cache"
   );
   assert.deepEqual(
@@ -108,8 +108,9 @@ try {
     ["low", "medium", "high", "xhigh", "max"]
   );
   assert.deepEqual(
-    cliReasoningEffortOptionsFor("codex-cli", "gpt-5.5")?.map(({ value }) => value),
-    ["low", "medium", "high", "xhigh"]
+    cliReasoningEffortOptionsFor("codex-cli", "gpt-unlisted")?.map(({ value }) => value),
+    ["low", "medium", "high", "xhigh"],
+    "an unlisted Codex model gets the conservative effort range"
   );
 
   for (const model of ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol"]) {
@@ -119,7 +120,6 @@ try {
   assert.equal(resolveProviderRequest({ provider: "codex-cli" }).model, "gpt-6.1-sol");
   for (const [provider, model, effort] of [
     ["codex-cli", "gpt-6-luna", "ultra"],
-    ["codex-cli", "gpt-5.5", "max"],
     ["claude-cli", "claude-sonnet-4-6", "xhigh"],
     ["claude-cli", "claude-opus-4-6", "xhigh"]
   ]) {

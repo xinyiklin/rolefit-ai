@@ -539,10 +539,9 @@ start at GPT-6.1 Sol for Codex and Sonnet 5.5 for Claude. The OpenAI API default
 GPT-5.6 Terra. GPT-6.1 Sol may need a newer Codex CLI (0.159 lists it), and
 Sonnet 5.5 needs Claude Code 2.1.284 or later.
 
-The Codex picker omits retired GPT-5.4/5.4 Mini and the no-longer-listed Codex
-Spark. GPT-5.5 remains selectable and is labeled with its announced October 14,
-2026 Codex retirement; that notice does not retire it from the OpenAI API. Supported older
-Claude models remain available. Saved removed choices move to the same provider's
+The Codex picker omits GPT-5.5 (retired October 14, 2026), retired GPT-5.4/5.4
+Mini, and the no-longer-listed Codex Spark. Supported older Claude models remain
+available. Saved removed choices move to the same provider's
 default, and effort controls follow each model's capabilities.
 
 Use a current provider CLI. **Claude Opus 5.5 requires Claude Code 2.1.280 or
@@ -663,13 +662,14 @@ preparation and duplicate checking to the job board. On any posting, click the
 - a one-click **Prepare in RoleFit** that opens a fresh independent RoleFit
   tab on Prepare, lets the server resolve the raw page text, and always runs
   AI-backed job analysis with that tab's selected provider. The extension
-  handoff stops on Prepare; it never implicitly starts resume Polish. If the
+  handoff lands on Prepare; automatic Polish then runs only when its Settings
+  switch is on and the Fit threshold is met, as for any preparation. If the
   analysis fails, the deterministic brief remains usable and Fit Assessment shows
   a separate retryable state. The popup has no workflow automation toggle.
 
 A keyboard shortcut (`Ctrl+Shift+U` / `⌘⇧U` by default) imports the current page
-without opening the popup at all, through the same approval handshake and with
-the same stop on Prepare. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
+without opening the popup at all, through the same approval handshake and the same
+Prepare handoff. `Ctrl+Shift+Y` / `⌘⇧Y` opens the popup. Both are
 editable in the browser's own extension-shortcut settings, and the popup's
 **Settings** view lists the assigned keys beside the localhost port and links
 there. A keyboard import that cannot finish badges the toolbar icon and explains

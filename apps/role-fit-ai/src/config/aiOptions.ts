@@ -103,8 +103,7 @@ export const modelOptionsByProvider: Record<AiProviderValue, readonly ModelOptio
     { value: "gpt-6-luna", label: "GPT-6 Luna" },
     { value: "gpt-5.6-sol", label: "GPT-5.6 Sol" },
     { value: "gpt-5.6-terra", label: "GPT-5.6 Terra" },
-    { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" },
-    { value: "gpt-5.5", label: "GPT-5.5 (retires Oct 14, 2026)" }
+    { value: "gpt-5.6-luna", label: "GPT-5.6 Luna" }
   ],
   // Full list from `agy models` on 1.1.11. Version 1.1.5 made the stable slugs
   // accepted by `--model`; the shared catalog keeps those request values paired
