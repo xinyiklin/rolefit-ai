@@ -272,7 +272,8 @@ or workspace state, keep it here and expose the smallest host seam instead.
   tie or incomplete comparison returns no recommendation and keeps the current
   selection. Cover letters resolve independently after Prepare: wait for
   workspace startup, adopt the sole eligible letter or a meaningful
-  unique winner, and preserve Prepare's output title. Body/style edits,
+  unique winner, and keep Prepare's output title (which then follows the
+  adopted letterhead name, D085). Body/style edits,
   application ownership, saves, and manual selection still block replacement.
   The only persisted input to either choice is the Settings > Automation
   eligibility pool (`excludedResumeVariants` / `excludedCoverLetterVariants`
