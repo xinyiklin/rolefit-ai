@@ -169,9 +169,11 @@ later entry wins.
   scale.** Every text role has its own default (`TEXT_SIZES_PT`: name 25,
   section heading 12, titles 11, subtitles, contact, skill labels and body 10),
   shared by resumes and letters. Text without its own size paints at its role
-  default (what the editor shows); a field's spacing follows the size most of
-  its text carries, however the tags are spelled, and empty fields never set a
-  row's size. The Styles menu has
+  default (what the editor shows). A field's spacing follows the one size all
+  its text carries (else its default, larger words making room), so typing
+  never makes spacing jump; the Styles state and Body control use the size most
+  of its text carries. Both read meaning, not tag spelling, and empty fields
+  never set a row's size. The Styles menu has
   Name (default bold, now a removable `<b>`, painted in the display bold face)
   and Body rows (no B/I/U, so per-word emphasis survives). Resumes and letters
   share behavior and names: a letter's style keys are the resume's
