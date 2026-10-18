@@ -173,7 +173,7 @@ whose public package contract changed.
 
 `Document workflow CI` (`document-workflows.yml`) owns ordinary correctness:
 root dependency/script/harness contracts, the five-platform native TypeScript
-matrix, engine codec/layout/PDF/font checks, shared editor checks, both app
+matrix, engine codec/layout/PDF checks and font assets, shared editor checks, both app
 checks, server lifecycle, and core/extended Chromium contracts. RoleFit's app
 check automatically discovers the seven document-workflow probes; the server
 job runs only the separate `.test.mjs` lifecycle suite. The standalone
@@ -185,10 +185,21 @@ host audits, and representative wrapping for both resume hosts and cover headers
 and header-baseline combinations. They are disjoint; the default local browser
 command runs core then extended once, clearing synthetic origin storage before
 each group. Section fixtures wait for restored styles to persist before closing.
+`scripts/ci-coverage-selection.mjs` compares the PR (or pushed range) once per
+job and skips a job's test steps, still reporting success, when no changed path
+can affect it. The engine depends on no app or editor code, so `Engine codecs,
+layout, and PDF` (typecheck + evals) runs only for `packages/engine/**` or a
+root input (manifest, lockfile, `.node-version`, `.npmrc`, `tsconfig.base.json`,
+this workflow, the selector), and `Engine font assets` (`fonts:check`, about
+seven minutes of regeneration) runs in parallel only for
+`packages/engine/{scripts,fonts}/**`, `metrics.gen.ts`, the engine manifest, or
+the CI wiring. Diff-based selection tests each push's own range, so a failed
+engine run on `main` stays red only on that run; re-run it after a fix.
+Locally, `npm run check --workspace packages/engine` still runs both.
 Extended runs alongside core unless every changed path is Markdown or under
 RoleFit's backend-only `server/ai/` or
-`server/ai-cli/`. Shared/configuration/unknown paths, mixed changes, manual runs,
-and unavailable Git comparisons run extended. Skipping its test steps still
+`server/ai-cli/`. Shared/configuration/unknown paths and mixed changes run
+extended; manual runs and unavailable Git comparisons run every selected job. Skipping its test steps still
 reports the extended job's selection and successful status. The existing
 `Chromium editor contracts` check requires both jobs to succeed, preserving its
 blocking behavior without re-running tests.
