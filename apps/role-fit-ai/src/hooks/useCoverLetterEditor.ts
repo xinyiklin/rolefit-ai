@@ -118,6 +118,8 @@ type UseCoverLetterEditorOptions = {
   // document. Deliberately NOT fired for a tailored result: that arrives while
   // the user is reading the review, and taking focus there would interrupt them.
   onOpenDocument?: () => void;
+  // The title Blank and Starter open with: the resume's, retargeted.
+  defaultTitle?: string;
 };
 
 type WorkspaceCoverLetterOpenOptions = {
@@ -135,6 +137,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
+  const defaultTitleRef = useRef(options.defaultTitle ?? "");
+  defaultTitleRef.current = options.defaultTitle ?? "";
   const cancelStartupOpenRef = useRef(false);
   const workspaceReplacementOwnershipRef = useRef<
     ReturnType<typeof createCoverLetterReplacementOwnership> | null
@@ -466,39 +470,45 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument, setDocumentTitleValue]
   );
 
+  // Blank and Starter both open in the default style, like the resume's, and
+  // take their title from the resume's so the pair names one application.
+  const openFreshDocument = useCallback(
+    (data: ResumeData, nextStatus: string) => {
+      openDocument(data);
+      editor.markClean();
+      setStyle((current) => ({
+        ...coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS),
+        zoom: current.zoom,
+        spellCheck: current.spellCheck
+      }));
+      const title = defaultTitleRef.current.trim() || "Cover letter";
+      // A fresh letter has nothing to lose, so it opens clean rather than
+      // "unsaved" — which warned on close and prompted to replace it.
+      commitPersistenceBaseline(
+        serializeCoverLetterFile(data, COVER_LETTER_STYLE_DEFAULTS),
+        title
+      );
+      setActiveCoverFileName("");
+      saveLastCoverLetterName("");
+      setDocumentTitleValue(title);
+      setStatus(nextStatus);
+    },
+    [commitPersistenceBaseline, editor.markClean, openDocument, setDocumentTitleValue]
+  );
+
   const startBlank = useCallback(() => {
-    const data = blankCoverLetterData();
-    openDocument(data);
-    editor.markClean();
-    // A blank letter is the same document the page opens with, so New must not
-    // leave it permanently "unsaved" — that warned on close and prompted to
-    // replace an empty letter that had nothing to lose.
-    commitPersistenceBaseline(
-      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
-      "Cover letter"
-    );
-    setActiveCoverFileName("");
-    saveLastCoverLetterName("");
-    setDocumentTitleValue("Cover letter");
-    setStatus("Blank cover letter ready.");
-  }, [commitPersistenceBaseline, editor.markClean, openDocument, setDocumentTitleValue]);
+    openFreshDocument(blankCoverLetterData(), "Blank cover letter ready.");
+  }, [openFreshDocument]);
 
   const startStarter = useCallback(() => {
-    const data = coverLetterResumeData(
-      coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
-      starterDocumentHeader()
+    openFreshDocument(
+      coverLetterResumeData(
+        coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
+        starterDocumentHeader()
+      ),
+      "Starter opened. Complete the details beside the document before polishing."
     );
-    openDocument(data);
-    editor.markClean();
-    commitPersistenceBaseline(
-      serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current)),
-      "Cover letter"
-    );
-    setActiveCoverFileName("");
-    saveLastCoverLetterName("");
-    setDocumentTitleValue("Cover letter");
-    setStatus("Starter opened. Complete the details beside the document before polishing.");
-  }, [commitPersistenceBaseline, editor.markClean, openDocument, setDocumentTitleValue]);
+  }, [openFreshDocument]);
 
   const openFile = useCallback(
     async (file: File) => {

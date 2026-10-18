@@ -82,6 +82,12 @@ export function buildResumeFileName(name: string, company: string, ext: string):
   return `${buildResumeDocumentTitle(name, company)}.${ext}`;
 }
 
+// The untouched titles the cover-letter editor sets itself (blank and starter
+// retarget the default "Resume" to "Cover Letter", the workspace default). Only
+// these — never a title the user typed — are upgraded to the shared
+// Name_Company_Cover_Letter form.
+export const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Cover Letter", "Untitled cover letter"] as const;
+
 // Job intake and document loading are independent async paths, so a title is
 // often built from partial identity first (Company_Resume) and completed when
 // the applicant name arrives. Rewrite only a title the app itself produced —

@@ -120,9 +120,10 @@ offers 30 bundled families; each loads only when a document uses it.
   application output name, and both editor headers use the same
   `Role at Company` sublabel.
   A new letter starts with a new resume's page defaults and text sizes (D081),
-  8 pt before each paragraph and an additional 8 pt before its date; its
-  Paragraph menu sets header and body alignment, and any bundled family is a
-  menu away.
+  8 pt before each paragraph and an additional 8 pt before its date; Blank and
+  Starter reset a letter style you set earlier and take their title from the
+  resume's (`Name_Company_Cover_Letter`, D084). Its Paragraph menu sets header
+  and body alignment, and any bundled family is a menu away.
 - **One Prepare workspace** — Prepare is the first/default studio page and the
   only place a job enters the current session. It leads PREPARE / DRAFT / TRACK
   navigation while the masthead carries only the RoleFit identity and Apply.

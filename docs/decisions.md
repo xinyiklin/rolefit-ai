@@ -113,7 +113,7 @@ later entry wins.
   trigger; RoleFit's formatting-row menus are icon-only (Typeset keeps labels
   until 1210px); menu rows carry a description only when the title is not
   enough.
-- 2026-07-24..07-25 [USER] D017 ACTIVE: Tinos, Carlito, and Arimo ship as metric-compatible
+- 2026-07-24..07-25 [USER] D017 AMENDED by D081: Tinos, Carlito, and Arimo ship as metric-compatible
   equivalents under their own names, the metric twin shown beside them; menu
   order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern,
   then (2026-10-14 [USER]) the 24 added catalog families alphabetically.
@@ -299,7 +299,7 @@ later entry wins.
   candidate evidence. [USER+CODE] The cover quality corpus stays synthetic and
   never reads `workspace/cover-letters/`. [ASSUMPTION] Future employer research
   must never block Polish or send resume or Profile text to a fetcher.
-- 2026-07-24..07-25 [USER] D036 ACTIVE: The cover letter has its own always-present editor
+- 2026-07-24..07-25 [USER] D036 AMENDED by D081: The cover letter has its own always-present editor
   page and starts from the user's own letter, tailored to the job and truthful
   evidence; it is plain correspondence (no resume sections, rules, columns,
   bullets, or resume spacing settings; AMENDED by D083: it has the resume's
@@ -389,6 +389,16 @@ later entry wins.
   `normalizeSettings` may repair and remove but never add. [USER+CODE+TOOL] The
   masthead owns only identity and Apply; Sessions sits in the studio-rail
   utilities.
+- 2026-10-18 [USER+CODE] D084 ACTIVE: **A letter's Blank and Starter match the
+  resume's** ("blank resume/letter should same default font/style. use resume
+  as the default, same for start bundler for both and the editor file name").
+  Cover Blank and Starter (and restoring an application with no saved letter,
+  which opens a Blank) reset the persisted letter style to the D081 defaults,
+  as the resume's Blank does, and take their title from the resume's
+  (`Name_Company_Resume` -> `Name_Company_Cover_Letter`, `Resume` ->
+  `Cover Letter`). Saved `.cover` files keep their own style, and the letter
+  shown on page load keeps the browser's stored style until the next Blank or
+  Starter.
 
 ### AI providers, defaults, and benchmark outcomes
 
