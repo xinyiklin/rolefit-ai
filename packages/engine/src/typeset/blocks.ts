@@ -462,8 +462,11 @@ export function buildHeaderVerticalStream(
   const header = schema.header;
   if (header?.name !== null && header?.name !== undefined) {
     const nameSize = fieldRoleSizePt(header.name, sizes.name);
+    // An empty name's caret run takes the name's default emphasis (bold), so
+    // typing the first character never changes its face or baseline.
+    const nameIsEmpty = !stripInlineMarks(header.name).trim();
     const nameRuns = styledFieldRuns(
-      header.name, sizes.name, false, false, 0, family, tracking, { kind: "name" }, "display"
+      header.name, sizes.name, nameIsEmpty, false, 0, family, tracking, { kind: "name" }, "display"
     );
     const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, sizes.name, family, tracking, "display");
     const nameAlignment = alignmentFromInlineMarks(header.name) ?? headerAlign;
