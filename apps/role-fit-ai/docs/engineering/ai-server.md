@@ -599,6 +599,12 @@ Sol and GPT-5.6 as previous/older generations; Luna stops at Max. Claude Code
 notice on stderr; 2.1.302 is current). The OpenAI latest-model guide documents
 GPT-6.1 Sol's Low through Max API efforts.
 
+Live Claude Code receipt (2026-10-18, macOS arm64, Claude Code 2.1.285): the
+tracked Prepare (`fit-assessment-consistency-eval.mjs`), Resume import, and
+Cover letter live evals ran Sonnet 5.5, Haiku 5.5, and Opus 5.5 through
+`callClaudeCli` with `--append-system-prompt-file`, returning valid structured
+output; Windows was not run.
+
 ### Model catalog receipt — 2026-09-30 (catalog and API thinking superseded 2026-10-18)
 
 GPT-6.1 Sol (`gpt-6.1-sol`) joins Codex and OpenAI API, and Claude Sonnet 5.5
