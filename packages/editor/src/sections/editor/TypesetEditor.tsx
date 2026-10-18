@@ -1368,16 +1368,31 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const normalized = insert.replace(/\r/g, "");
       const text = singleLine ? normalized.replace(/\s*\n+\s*/g, " ") : normalized;
       const typingFormat = dStart === dEnd ? typingFormatRef.current ?? undefined : undefined;
-      const removed = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
-      // Emptying the name returns it to its default bold, which its bare empty
-      // placeholder shows, so the next character matches what is painted.
+      const deletedTypingFormat = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
+      // Emptying the name keeps its format for the next character. A format
+      // other than the name's default is stored as a textless carrier so the
+      // engine paints the empty name exactly as the next character will look.
       const emptiesName = sel.src.kind === "name" && dStart === 0 && dEnd >= sel.map.chars.length;
-      const deletedTypingFormat = removed && emptiesName ? { ...removed, bold: true } : removed;
+      const nameCarrier = emptiesName && deletedTypingFormat && (
+        deletedTypingFormat.bold !== STYLE_FIELD_MARK_DEFAULTS.name.bold || deletedTypingFormat.italic ||
+        deletedTypingFormat.underline || deletedTypingFormat.fontFamily !== null ||
+        deletedTypingFormat.fontSizePt !== null || deletedTypingFormat.alignment !== null
+      )
+        ? {
+            ...deletedTypingFormat,
+            fontFamily: deletedTypingFormat.fontFamily ?? docStyle.style.fontFamily,
+            fontSizePt: deletedTypingFormat.fontSizePt ?? defaultFontSizeForField(sel.src),
+            alignment: deletedTypingFormat.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
+          }
+        : null;
       if (deletedTypingFormat) {
-        typingFormatRef.current = deletedTypingFormat;
+        typingFormatRef.current = nameCarrier ?? deletedTypingFormat;
         typingTargetRef.current = `${sel.key}:${dStart}`;
       }
-      const { value, caretValueIndex } = applyEdit(sel.map, dStart, dEnd, text, typingFormat);
+      const edited = applyEdit(sel.map, dStart, dEnd, text, typingFormat);
+      const { value, caretValueIndex } = nameCarrier
+        ? setEmptyFieldTypingFormat(buildDisplayMap(edited.value), nameCarrier)
+        : edited;
       recordPreEditSelection(sel);
       markPending();
       commitField(

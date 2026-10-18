@@ -355,6 +355,25 @@ function overrideOpen(kind: OverrideKind, tag: string): string | typeof INERT_OP
 const overrideClose = (kind: OverrideKind, tag: string) =>
   kind === "size" ? /^<\/size>$/i.test(tag) : /^<\/font>$/i.test(tag);
 
+// The next-typing format a textless field stores in its tags (a carrier the
+// editor writes so an empty field keeps its chosen format), read the way the
+// editor reads it.
+export function emptyFieldCarrier(value: string): {
+  bold: boolean;
+  italic: boolean;
+  sizePt: number | null;
+  fontFamily: FieldFontFamily | null;
+} {
+  const size = /<size=(\d+(?:\.\d+)?)>/i.exec(value)?.[1];
+  const family = new RegExp(`<font=(${FONT_FAMILY_ALTERNATION})>`, "i").exec(value)?.[1];
+  return {
+    bold: /<b>/i.test(value),
+    italic: /<i>/i.test(value),
+    sizePt: size && isInlineFontSizePt(Number(size)) ? Number(size) : null,
+    fontFamily: (family?.toLowerCase() as FieldFontFamily | undefined) ?? null
+  };
+}
+
 // The override value a field's first visible character carries (null: no
 // override), or undefined when it has no visible text. It reads meaning, not
 // tag spelling, so the runs the editor writes back after an edit read the same

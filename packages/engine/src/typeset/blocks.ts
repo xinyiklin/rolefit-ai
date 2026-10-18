@@ -29,10 +29,12 @@ import {
   type FaceOverride
 } from "./measure.ts";
 import { automaticLinkHref } from "../lib/links.ts";
+import { STYLE_FIELD_MARK_DEFAULTS } from "../lib/styleFieldFormatting.ts";
 import { breakParagraph } from "./linebreak.ts";
 import { wrapHeadRow, wrapSingleField } from "./headRows.ts";
 import {
   alignmentFromInlineMarks,
+  emptyFieldCarrier,
   hasInlineMarkTags,
   paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks,
@@ -464,14 +466,15 @@ export function buildHeaderVerticalStream(
 
   const header = schema.header;
   if (header?.name !== null && header?.name !== undefined) {
-    const nameSize = fieldRoleSizePt(header.name, sizes.name);
     // An empty name's caret run shows what typing will produce: the name's
-    // default bold when it is bare, or the emphasis its stored tags carry.
+    // default bold when it is bare, or the format its stored carrier holds.
     const nameIsEmpty = !stripInlineMarks(header.name).trim();
-    const emptyNameBold = nameIsEmpty && (hasInlineMarkTags(header.name) ? /<b>/i.test(header.name) : true);
-    const emptyNameItalic = nameIsEmpty && /<i>/i.test(header.name);
+    const carrier = nameIsEmpty && hasInlineMarkTags(header.name) ? emptyFieldCarrier(header.name) : null;
+    const nameSize = carrier?.sizePt ?? fieldRoleSizePt(header.name, sizes.name);
+    const nameFamily = carrier?.fontFamily ? documentFontFamily(carrier.fontFamily) : family;
     const nameRuns = styledFieldRuns(
-      header.name, sizes.name, emptyNameBold, emptyNameItalic, 0, family, tracking, { kind: "name" }, "display"
+      header.name, carrier?.sizePt ?? sizes.name, nameIsEmpty && (carrier?.bold ?? STYLE_FIELD_MARK_DEFAULTS.name.bold),
+      carrier?.italic ?? false, 0, nameFamily, tracking, { kind: "name" }, "display"
     );
     const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, sizes.name, family, tracking, "display");
     const nameAlignment = alignmentFromInlineMarks(header.name) ?? headerAlign;

@@ -239,5 +239,14 @@ console.log("uppercase headings transform text, not tags");
   assert.equal(nameFace("<i></i>"), "italic", "a tag-only empty name without bold keeps its own emphasis");
   assert.equal(nameFace("Jane"), "regular", "a typed name without <b> is regular");
   assert.equal(nameFace("<b>Jane</b>"), "boldDisplay", "a bold typed name paints in the display bold");
+  // An emptied name keeps its format in a textless carrier: the empty caret
+  // run sits where text typed into that carrier will.
+  const nameLine = (name) => {
+    const doc = layoutResume(toTypesetSchema({ header: { visible: true, name, contact: [] }, sections: [] }), DOC_STYLE_DEFAULTS);
+    const line = lines(doc)[0];
+    return { baseline: line.baseline, face: line.runs[0].style.face, size: line.runs[0].style.size };
+  };
+  const carrier = (text) => `<align=center><size=30><font=latin-modern><i>${text}</i></font></size></align>`;
+  assert.deepEqual(nameLine(carrier("")), nameLine(carrier("Jane")), "an emptied 30 pt italic name paints where its next character will");
   console.log("an empty name's caret run matches what typing produces");
 }
