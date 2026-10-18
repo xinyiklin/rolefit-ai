@@ -172,3 +172,25 @@ console.log("uppercase headings transform text, not tags");
     [["Languages", 10], [":", 10], ["Python, Java", 12]], "sized skills leave an unsized label at its default");
   console.log("unsized text paints at its role default beside sized text");
 }
+
+// 7. A field's size is its first character's: sizing a word inside it, or the
+//    editor re-spelling its runs, never re-spaces the paragraph.
+{
+  const long = "words that wrap across several lines of the bullet ".repeat(4).trim();
+  const gaps = (bullet) => {
+    const doc = layoutResume(toTypesetSchema(data([standard([bullet, "<size=12>next</size>"])])), DOC_STYLE_DEFAULTS);
+    const baselines = lines(doc).filter((line) => line.runs.some((run) => run.src?.kind === "bullet")).map((line) => line.baseline);
+    return baselines.slice(1).map((baseline, index) => Math.round((baseline - baselines[index]) * 1000) / 1000);
+  };
+  const plain = gaps(`<size=12>Built ${long}</size>`);
+  for (const variant of [
+    `<size=12>Built <size=9>tiny</size> ${long}</size>`,
+    `<size=12>Built </size><size=9>tiny</size><size=12> ${long}</size>`,
+    `<size=12>Built <size=13>bump</size> ${long}</size>`
+  ]) {
+    const variantGaps = gaps(variant);
+    assert.equal(variantGaps.length, plain.length, "the variant wraps to the same line count");
+    assert.deepEqual(variantGaps.slice(1), plain.slice(1), `${variant.slice(0, 40)}…: lines after the odd word keep the 12 pt spacing`);
+  }
+  console.log("a word sized inside a field never re-spaces it");
+}

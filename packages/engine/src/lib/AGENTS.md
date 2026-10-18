@@ -62,10 +62,11 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   the engine paints `SS`), a known one-character drift after such a glyph.
 - `styleFieldFormatting.ts` owns reusable bulk/effective formatting across the
   name, contact, headings, entry columns, skill labels, and body text, not
-  toolbar state or presentation. A field's Styles size is the one most of its
-  text carries (`fieldSizePt`, read from meaning so editor re-spelled runs count
-  the same); layout spacing instead uses the size all its text agrees on
-  (`fieldRoleSizePt`), which never jumps while typing. Body text changes only that main size or font
+  toolbar state or presentation. A field's size is the size its first
+  character carries (`fieldSizePt`, read from meaning so editor re-spelled runs
+  count the same); layout spacing (`fieldRoleSizePt`), the Styles state, and the
+  Body control all use it, so typing or sizing a word inside a field never moves
+  it. Body text changes that main size or font
   (`setFieldOuterSize`/`setFieldOuterFont`) and has no whole-field emphasis, so
   per-word formatting survives; `withWholeFieldFormat` carries a field's size
   and font onto Polish replacements, which arrive without them.

@@ -36,7 +36,6 @@ import {
   hasInlineMarkTags,
   paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks,
-  fieldSizePt,
   skillsRowText,
   stripInlineMarks,
   uppercaseInlineMarkedText
@@ -879,7 +878,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           const marker = {
             ...styledRun(
               "•",
-              bulletMarkerSizePt(fieldSizePt(bullet) ?? bulletSize),
+              bulletMarkerSizePt(bulletSize),
               false,
               false,
               geo.bulletMarker + bulletIndentPt,
