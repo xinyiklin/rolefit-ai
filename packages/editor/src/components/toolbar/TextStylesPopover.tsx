@@ -150,6 +150,7 @@ export function TextStylesPopover({
   const idPrefix = `text-styles-${useId()}`;
   const headingsId = `${idPrefix}-headings`;
   const entriesId = `${idPrefix}-entries`;
+  const ruleId = `${idPrefix}-rule`;
   const styleMarksAreDefault = styleMarkStates
     ? TEXT_STYLE_ROWS.every(({ field }) => !STYLE_FIELD_HAS_MARKS[field] || ENTRY_MARK_OPTIONS.every(({ mark }) =>
         styleMarkStates[field][mark] === STYLE_FIELD_MARK_DEFAULTS[field][mark]
@@ -188,44 +189,56 @@ export function TextStylesPopover({
       )}
     >
       {() => (
-        <div className="style-popover style-popover--text">
+        <div className="style-popover style-popover--styles">
           <div className="style-popover__body">
             <section className="style-popover__section" aria-labelledby={headingsId}>
               <h3 id={headingsId} className="style-popover__section-title">
                 Section headings
               </h3>
-              <div className="style-popover__segmented" role="group" aria-label="Section heading case">
-                {HEADING_CASE_OPTIONS.map((option) => (
+              <div className="style-popover__heading-row">
+                <div className="style-popover__segmented" role="group" aria-label="Section heading case">
+                  {HEADING_CASE_OPTIONS.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={style.headingCase === option.value ? "is-selected" : ""}
+                      aria-pressed={style.headingCase === option.value}
+                      onClick={() => docStyle.set("headingCase", option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="style-popover__toggle-row">
+                  <span id={ruleId}>Divider</span>
                   <button
-                    key={option.value}
                     type="button"
-                    className={style.headingCase === option.value ? "is-selected" : ""}
-                    aria-pressed={style.headingCase === option.value}
-                    onClick={() => docStyle.set("headingCase", option.value)}
+                    role="switch"
+                    aria-checked={style.sectionRule}
+                    aria-labelledby={ruleId}
+                    title="Divider rule under section headings"
+                    className={`style-popover__switch${style.sectionRule ? " is-on" : ""}`}
+                    onClick={() => docStyle.set("sectionRule", !style.sectionRule)}
                   >
-                    {option.label}
+                    <span className="style-popover__switch-knob" aria-hidden="true" />
                   </button>
-                ))}
-              </div>
-              <div className="style-popover__toggle-row">
-                <span>Divider rule</span>
-                <button
-                  type="button"
-                  role="switch"
-                  aria-checked={style.sectionRule}
-                  className={`style-popover__switch${style.sectionRule ? " is-on" : ""}`}
-                  onClick={() => docStyle.set("sectionRule", !style.sectionRule)}
-                >
-                  <span className="style-popover__switch-knob" aria-hidden="true" />
-                </button>
+                </div>
               </div>
             </section>
 
             <section className="style-popover__section" aria-labelledby={entriesId}>
               <h3 id={entriesId} className="style-popover__section-title">
-                Text styles
+                Text
               </h3>
               <div className="style-popover__entry-marks" aria-label="Text element formatting">
+                <div className="style-popover__field-style style-popover__field-style--head" aria-hidden="true">
+                  <span />
+                  <div className="style-popover__field-style-controls">
+                    <span>Font</span>
+                    <span>Size</span>
+                    <span>Emphasis</span>
+                  </div>
+                </div>
                 {TEXT_STYLE_ROWS.map(({ field, label }) => (
                   <FieldStyleRow
                     key={field}

@@ -318,11 +318,11 @@ async function runEditorContracts() {
     "popover focus restoration"
   );
 
-  await click(win, 'button[aria-label="Header"]');
+  await click(win, 'button[aria-label="Spacing"]');
   await waitFor(
     win,
-    'document.querySelector(\'input[type="range"]\')',
-    "header spacing sliders"
+    'document.querySelector(\'[aria-label="Document spacing"] input[type="range"]\')',
+    "letter spacing sliders"
   );
   const spacingBefore = await win.webContents.executeJavaScript(
     "window.__editorContract.spacing.nameContactGapPt"
@@ -336,7 +336,9 @@ async function runEditorContracts() {
     "disabled open spacing controls"
   );
   const rangePoint = await win.webContents.executeJavaScript(`(() => {
-    const input = document.querySelector('input[type="range"]');
+    const input = [...document.querySelectorAll('[aria-label="Document spacing"] .style-popover__range')]
+      .find((row) => row.textContent.includes("Name to contact"))
+      .querySelector('input[type="range"]');
     const rect = input.getBoundingClientRect();
     return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   })()`);

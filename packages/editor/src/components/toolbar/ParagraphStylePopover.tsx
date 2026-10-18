@@ -96,11 +96,11 @@ export function ParagraphStylePopover({
           <div className="style-popover__body">
             <section className="style-popover__section" aria-labelledby={alignmentId}>
               <h3 id={alignmentId} className="style-popover__section-title">
-                Alignment (global)
+                Alignment
               </h3>
               <div className="style-popover__alignment-list">
                 <AlignmentPicker
-                  label="Body paragraphs"
+                  label="Body"
                   value={globalAlignments?.body ?? null}
                   onChange={(value) => onGlobalAlignmentChange?.("body", value)}
                 />
@@ -121,37 +121,37 @@ export function ParagraphStylePopover({
               </div>
             </section>
 
-            {isResume && <section className="style-popover__section" aria-label="Entry layout">
-              <h3 className="style-popover__section-title">Entry layout</h3>
+            {isResume && <section className="style-popover__section" aria-label="Entry indents">
+              <h3 className="style-popover__section-title">Indents</h3>
               <div className="style-popover__range-list">
                 <StyleRange
                   id={`${idPrefix}-entry-indent`}
-                  label="Start indent"
+                  label="Entry start"
                   value={style.entryIndentPt}
                   min={DOC_STYLE_BOUNDS.entryIndentPt.min}
                   max={DOC_STYLE_BOUNDS.entryIndentPt.max}
                   step={DOC_STYLE_BOUNDS.entryIndentPt.step}
-                  displayValue={`${style.entryIndentPt.toFixed(1)} pt`}
+                  unit="pt"
                   onChange={(value) => docStyle.set("entryIndentPt", value)}
                 />
                 <StyleRange
                   id={`${idPrefix}-entry-end-indent`}
-                  label="End indent"
+                  label="Entry end"
                   value={style.entryEndIndentPt}
                   min={DOC_STYLE_BOUNDS.entryEndIndentPt.min}
                   max={DOC_STYLE_BOUNDS.entryEndIndentPt.max}
                   step={DOC_STYLE_BOUNDS.entryEndIndentPt.step}
-                  displayValue={`${style.entryEndIndentPt.toFixed(1)} pt`}
+                  unit="pt"
                   onChange={(value) => docStyle.set("entryEndIndentPt", value)}
                 />
                 <StyleRange
                   id={`${idPrefix}-bullet-indent`}
-                  label="Bullet indent"
+                  label="Bullets"
                   value={style.bulletIndentPt}
                   min={DOC_STYLE_BOUNDS.bulletIndentPt.min}
                   max={DOC_STYLE_BOUNDS.bulletIndentPt.max}
                   step={DOC_STYLE_BOUNDS.bulletIndentPt.step}
-                  displayValue={`${style.bulletIndentPt.toFixed(1)} pt`}
+                  unit="pt"
                   onChange={(value) => docStyle.set("bulletIndentPt", value)}
                 />
               </div>

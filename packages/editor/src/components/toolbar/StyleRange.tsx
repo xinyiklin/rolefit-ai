@@ -1,6 +1,13 @@
-// One labeled range-slider row for the style popovers (spacing gaps, entry
-// indents): label + live value readout above a native range input. Callers
-// format the readout so each popover keeps its own precision and unit.
+import { useEffect, useRef, useState } from "react";
+
+import { numericDraftCommit } from "./numericDraft";
+import { formatSpacingValue } from "./styleOptions";
+
+const stepDecimals = (step: number) => (String(step).split(".")[1] ?? "").length;
+
+// One style-popover row: label, range, and a typeable value. The value box
+// commits on blur, Enter, or the menu closing, through the shared numeric-draft
+// decision, clamped to the range and snapped to its step.
 export function StyleRange({
   id,
   label,
@@ -8,7 +15,7 @@ export function StyleRange({
   min,
   max,
   step,
-  displayValue,
+  unit = "",
   disabled = false,
   onChange
 }: {
@@ -18,18 +25,36 @@ export function StyleRange({
   min: number;
   max: number;
   step: number;
-  displayValue: string;
+  unit?: string;
   disabled?: boolean;
   onChange: (value: number) => void;
 }) {
+  const display = formatSpacingValue(value, "");
+  const [draft, setDraft] = useState(display);
+  const commitRef = useRef<() => void>(() => undefined);
+
+  useEffect(() => setDraft(display), [display]);
+  // Closing the menu (Escape or an outside click) unmounts the row before its
+  // blur reaches React, so a typed value commits here, as preset names do.
+  useEffect(() => () => commitRef.current(), []);
+
+  const commit = () => {
+    const next = numericDraftCommit(draft, display, value, (parsed) =>
+      Number(Math.min(max, Math.max(min, Math.round(parsed / step) * step)).toFixed(stepDecimals(step)))
+    );
+    if (next === null) {
+      setDraft(display);
+      return;
+    }
+    onChange(next);
+  };
+  commitRef.current = commit;
+
   return (
-    <label className="style-popover__range" htmlFor={id}>
-      <span className="style-popover__range-head">
-        <span>{label}</span>
-        <output className="style-popover__range-value" htmlFor={id}>
-          {displayValue}
-        </output>
-      </span>
+    <div className="style-popover__range">
+      <label className="style-popover__range-label" htmlFor={id}>
+        {label}
+      </label>
       <input
         id={id}
         type="range"
@@ -40,6 +65,24 @@ export function StyleRange({
         disabled={disabled}
         onChange={(event) => onChange(Number(event.target.value))}
       />
-    </label>
+      <span className="style-popover__range-value">
+        <input
+          type="text"
+          inputMode="decimal"
+          aria-label={unit ? `${label} in ${unit === "pt" ? "points" : unit}` : `${label} value`}
+          value={draft}
+          disabled={disabled}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={commit}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter") return;
+            event.preventDefault();
+            commit();
+            event.currentTarget.select();
+          }}
+        />
+        {unit ? <span aria-hidden="true">{unit}</span> : null}
+      </span>
+    </div>
   );
 }

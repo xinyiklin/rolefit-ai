@@ -22,6 +22,8 @@ import "../../apps/typeset/src/styles/app.css";
 import "../../apps/role-fit-ai/src/styles/tokens.css";
 import "../../apps/role-fit-ai/src/styles/document-workbench.css";
 import { DocumentStructureControls } from "../../packages/editor/src/components/toolbar/DocumentStructureControls.tsx";
+import { SpacingStylePopover } from "../../packages/editor/src/components/toolbar/SpacingStylePopover.tsx";
+import { LETTER_SPACING_CONTROL_GROUPS } from "../../packages/editor/src/components/toolbar/styleOptions.ts";
 import { ZoomControl } from "../../packages/editor/src/components/toolbar/ZoomControl.tsx";
 import { createHistoryClock } from "../../packages/editor/src/hooks/historyClock.ts";
 import { useDocStyle } from "../../packages/editor/src/hooks/useDocStyle.ts";
@@ -142,16 +144,15 @@ function EditorContractApp() {
   const docStyle = useDocStyle(historyClock);
   const editorRef = useRef<TypesetEditorCommands>(null);
   const [disabled, setDisabled] = useState(false);
-  const [spacing, setSpacing] = useState({
-    nameContactGapPt: docStyle.style.nameContactGapPt,
-    contactGapPt: docStyle.style.contactGapPt,
-    headerSectionGapPt: docStyle.style.headerSectionGapPt
-  });
 
   useEffect(() => {
     window.__editorContract = {
       data: editor.editedResume,
-      spacing,
+      spacing: {
+        nameContactGapPt: docStyle.style.nameContactGapPt,
+        contactGapPt: docStyle.style.contactGapPt,
+        headerSectionGapPt: docStyle.style.headerSectionGapPt
+      },
       reset: editor.seedData,
       layout: () => layoutCoverLetter(toTypesetSchema(editor.editedResume!), docStyle.style),
       pdf: async () => {
@@ -167,7 +168,7 @@ function EditorContractApp() {
       pasteAsDocument: () =>
         editorRef.current?.pasteAsDocumentFromClipboard() ?? Promise.resolve()
     };
-  }, [editor.actions.undo, editor.editedResume, spacing]);
+  }, [editor.actions.undo, editor.editedResume, docStyle.style]);
 
   if (!editor.editedResume) return null;
 
@@ -178,11 +179,6 @@ function EditorContractApp() {
         header={editor.editedResume.header}
         contactDivider={docStyle.style.contactDivider}
         disabled={disabled}
-        headerSpacing={{
-          values: spacing,
-          onChange: (key, value) =>
-            setSpacing((current) => ({ ...current, [key]: value }))
-        }}
         onCreateHeader={() => editorRef.current?.createHeader()}
         onSetHeaderVisible={editor.actions.setHeaderVisible}
         onSetHeaderName={(value) =>
@@ -198,6 +194,12 @@ function EditorContractApp() {
           docStyle.set("contactDivider", value)
         }
         showSections={false}
+      />
+      <SpacingStylePopover
+        docStyle={docStyle}
+        disabled={disabled}
+        groups={LETTER_SPACING_CONTROL_GROUPS}
+        savedPresets={false}
       />
       <button type="button" data-testid="undo" onClick={editor.actions.undo}>
         Undo

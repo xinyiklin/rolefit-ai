@@ -77,7 +77,8 @@ later entry wins.
   in as "Custom".
 - 2026-07-26 [USER+CODE] D012 ACTIVE: Page margins are Narrow (0.5 in), Normal (1 in), or
   Custom per side; files store only physical values. [USER] Resume line height
-  is a global setting inside Spacing; preset numeric controls stay expanded;
+  is a global setting inside Spacing (the letter's too, under its inline line
+  height, per D083); preset numeric controls stay expanded;
   cover-letter inline line height adds room below the targeted lines only.
   [USER+CODE] The line-height menu offers Single, 1.15, 1.5, Double, paragraph
   before/after, and Custom; a caret or partial selection applies to the painted
@@ -204,6 +205,11 @@ later entry wins.
   free, interword shrink keeps its budget); justify only stretches the spaces
   of the lines already chosen, as word processors do. Justified text set before
   this may re-break once; none of the 398 local documents used justify.
+- 2026-10-18 [USER+CODE+TOOL] D083 ACTIVE: **The cover letter has the resume's
+  Spacing menu** over the values a letter reads (line spacing and the three
+  header gaps); built-in presets apply only those keys and saved presets stay
+  resume-only. Header gaps leave the Header menu in both documents. Spacing and
+  Paragraph values are one line each with a typeable value; Styles is a table.
 
 ### RoleFit product behavior and trust decisions
 
@@ -296,7 +302,8 @@ later entry wins.
 - 2026-07-24..07-25 [USER] D036 ACTIVE: The cover letter has its own always-present editor
   page and starts from the user's own letter, tailored to the job and truthful
   evidence; it is plain correspondence (no resume sections, rules, columns,
-  bullets, or resume spacing settings) with the same toolbar family, named
+  bullets, or resume spacing settings; AMENDED by D083: it has the resume's
+  Spacing menu over its line spacing and header gaps) with the same toolbar family, named
   variants and history like base resumes, and the same PDF rename prompt. New
   letters use double line spacing with 0.5 in top/bottom and 0.75 in side
   margins (2026-07-27, which also recorded 8 pt after each paragraph);

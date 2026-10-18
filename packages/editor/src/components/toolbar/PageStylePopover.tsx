@@ -125,7 +125,7 @@ export function PageStylePopover({ docStyle, disabled = false }: PageStylePopove
         <div className="style-popover style-popover--page">
           <div className="style-popover__body">
             <section className="style-popover__section" aria-labelledby={marginsId}>
-              <h3 id={marginsId} className="style-popover__section-title">Page margins (inches)</h3>
+              <h3 id={marginsId} className="style-popover__section-title">Margins (inches)</h3>
               <div className="style-popover__segmented" role="group" aria-label="Page margins">
                 {([
                   ["narrow", "Narrow"],

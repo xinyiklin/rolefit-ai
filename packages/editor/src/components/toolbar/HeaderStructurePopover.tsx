@@ -12,25 +12,14 @@ import { useEffect, useId, useState } from "react";
 
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocumentHeader } from "@typeset/engine/lib/resumeData.ts";
-import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
 import { Popover } from "../Popover";
-import {
-  CONTACT_DIVIDERS,
-  HEADER_SPACING_CONTROLS,
-  formatSpacingValue,
-  type HeaderSpacingKey
-} from "./styleOptions";
-import { StyleRange } from "./StyleRange";
+import { CONTACT_DIVIDERS } from "./styleOptions";
 import { ToolbarButton } from "./ToolbarButton";
 
 type HeaderStructurePopoverProps = {
   header: DocumentHeader | null;
   contactDivider: string;
   disabled: boolean;
-  headerSpacing?: {
-    values: Pick<DocStyle, HeaderSpacingKey>;
-    onChange: (key: HeaderSpacingKey, value: number) => void;
-  };
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
@@ -45,7 +34,6 @@ export function HeaderStructurePopover({
   header,
   contactDivider,
   disabled,
-  headerSpacing,
   onCreateHeader,
   onSetHeaderVisible,
   onSetHeaderName,
@@ -242,34 +230,6 @@ export function HeaderStructurePopover({
                   </label>
                 </div>
               </div>
-              {headerSpacing ? (
-                <div className="structure-popover__field">
-                  <span id={`${dividerId}-spacing`}>Spacing</span>
-                  <div
-                    className="style-popover__range-list"
-                    role="group"
-                    aria-labelledby={`${dividerId}-spacing`}
-                  >
-                    {HEADER_SPACING_CONTROLS.map((control) => (
-                      <StyleRange
-                        key={control.key}
-                        id={`${dividerId}-${control.key}`}
-                        label={control.label}
-                        value={headerSpacing.values[control.key]}
-                        min={control.min}
-                        max={control.max}
-                        step={control.step}
-                        disabled={disabled}
-                        displayValue={formatSpacingValue(
-                          headerSpacing.values[control.key],
-                          control.unit
-                        )}
-                        onChange={(value) => headerSpacing.onChange(control.key, value)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
             </>
           )}
         </div>
