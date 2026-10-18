@@ -30,6 +30,7 @@ import {
   hasInlineMarkTags,
   paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks,
+  skillsRowText,
   stripInlineMarks,
   uppercaseInlineMarkedText
 } from "../lib/inlineMarksText.ts";
@@ -639,7 +640,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         let skills = f.subtitleLeft;
         // Keep the complete separator even before any skills are typed so the
         // first trailing space after a rebuilt label survives the repaint.
-        const text = label ? `${label}: ${skills}` : skills;
+        const text = skillsRowText(label, skills);
         const dist =
           lineAdvance(size, style.lineHeight) +
           (firstInSection ? gap("sectionEntryGapPt") : gap("skillsRowGapPt"));

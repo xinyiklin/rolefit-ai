@@ -43,6 +43,7 @@ import {
 import {
   canonicalInlineMarkText,
   escapeInlineMarkText,
+  inlineFontSizePt,
   joinInlineMarkText,
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
@@ -99,6 +100,7 @@ import {
   splitValueAt,
   setFontFamily,
   setFontSize,
+  stepFontSize,
   setAlignment,
   setLineHeightRanges,
   setParagraphSpaceBefore,
@@ -247,6 +249,7 @@ export type TypesetEditorHandle = {
   toggleMark: (mark: "bold" | "italic" | "underline") => void;
   setFontFamily: (fontFamily: FontFamily) => void;
   setFontSize: (fontSizePt: number) => void;
+  stepFontSize: (deltaPt: number) => void;
   setAlignment: (alignment: BodyAlign) => void;
   setParagraphLineHeight: (lineHeight: number) => void;
   setParagraphSpaceBefore: (spaceBeforePt: number) => void;
@@ -2504,15 +2507,39 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   );
 
   const commitFontSize = useCallback(
-    (sel: TypesetSelection, fontSizePt: number) => {
+    (sel: TypesetSelection, resize: (map: DisplayMap) => { value: string }) => {
       if (sel.dStart === sel.dEnd) return;
-      const { value } = setFontSize(sel.map, sel.dStart, sel.dEnd, fontSizePt);
+      const { value } = resize(sel.map);
       recordPreEditSelection(sel);
       markPending();
       commitField(actions, sel.src, value);
       restoreRangeAfterRepaint(sel, sel.dStart, sel.dEnd);
     },
     [actions, markPending, recordPreEditSelection, restoreRangeAfterRepaint]
+  );
+
+  // A caret has no characters to resize: arm the next-typing size instead,
+  // starting from the size typing would otherwise inherit.
+  const armCaretFontSize = useCallback(
+    (selection: TypesetSelection, sizeFrom: (currentPt: number) => number) => {
+      const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
+      const fontSizePt = sizeFrom(
+        typingFormatRef.current?.fontSizePt ?? char?.fontSizePt ?? defaultFontSizeForField(selection.src, docStyle.style)
+      );
+      const next: TypingFormat = {
+        bold: typingFormatRef.current?.bold ?? char?.bold ?? false,
+        italic: typingFormatRef.current?.italic ?? char?.italic ?? false,
+        underline: typingFormatRef.current?.underline ?? char?.underline ?? false,
+        fontFamily: typingFormatRef.current?.fontFamily ?? char?.fontFamily ?? docStyle.style.fontFamily,
+        fontSizePt,
+        alignment: typingFormatRef.current?.alignment ?? char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
+      };
+      if (commitEmptyTypingFormat(selection, next)) return;
+      typingFormatRef.current = next;
+      typingTargetRef.current = typingTargetFor(selection);
+      setInlineFormatState((state) => ({ ...state, fontSizePt }));
+    },
+    [commitEmptyTypingFormat, docStyle.style]
   );
 
   const commitAlignment = useCallback(
@@ -2707,22 +2734,34 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
           return;
         }
         const selection = target.selection;
-        if (selection.dEnd > selection.dStart) commitFontSize(selection, fontSizePt);
-        else {
-          const char = selection.map.chars[Math.max(0, Math.min(selection.dStart - 1, selection.map.chars.length - 1))];
-          const next: TypingFormat = {
-            bold: typingFormatRef.current?.bold ?? char?.bold ?? false,
-            italic: typingFormatRef.current?.italic ?? char?.italic ?? false,
-            underline: typingFormatRef.current?.underline ?? char?.underline ?? false,
-            fontFamily: typingFormatRef.current?.fontFamily ?? char?.fontFamily ?? docStyle.style.fontFamily,
-            fontSizePt,
-            alignment: typingFormatRef.current?.alignment ?? char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
-          };
-          if (commitEmptyTypingFormat(selection, next)) return;
-          typingFormatRef.current = next;
-          typingTargetRef.current = typingTargetFor(selection);
-          setInlineFormatState((state) => ({ ...state, fontSizePt }));
+        if (selection.dEnd > selection.dStart) {
+          commitFontSize(selection, (map) => setFontSize(map, selection.dStart, selection.dEnd, fontSizePt));
+        } else armCaretFontSize(selection, () => fontSizePt);
+      },
+      // A mixed selection has no one size to add to, so each run steps from its
+      // own; the toolbar's +/- route here rather than through setFontSize.
+      stepFontSize: (deltaPt) => {
+        const target = commandTarget();
+        if (!target) return;
+        if (target.kind === "cross") {
+          commitRangesFormatting(target.ranges, (range) =>
+            stepFontSize(
+              range.map,
+              range.dStart,
+              range.dEnd,
+              deltaPt,
+              defaultFontSizeForField(range.src, docStyle.style)
+            ).value
+          );
+          return;
         }
+        const selection = target.selection;
+        const defaultSizePt = defaultFontSizeForField(selection.src, docStyle.style);
+        if (selection.dEnd > selection.dStart) {
+          commitFontSize(selection, (map) =>
+            stepFontSize(map, selection.dStart, selection.dEnd, deltaPt, defaultSizePt)
+          );
+        } else armCaretFontSize(selection, (current) => inlineFontSizePt(current + deltaPt));
       },
       setAlignment: (alignment) => {
         const target = commandTarget();
@@ -2901,6 +2940,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       applyMark,
       applyMarkAcross,
       commandTarget,
+      armCaretFontSize,
       commitAlignment,
       commitClearFormatting,
       commitEmptyTypingFormat,

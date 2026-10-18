@@ -75,6 +75,15 @@ extension 1.4.0, desktop bridge API 13. Release history:
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
+## 2026-10-18
+
+- [USER+CODE+TOOL] Whole skills-row / whole-document size and font fix
+  (uncommitted, branch `claude/skill-doc-selection-bugs-b6aee8`): toolbar +/-
+  step each run from its own size (`stepFontSize`); a skills row's `: ` is one
+  engine join (`skillsRowText`) carrying the format both columns share; the row
+  splits back by display character; a mixed family shows blank. Both
+  reviewers' findings fixed and re-verified; RoleFit-host browser QA not run.
+
 ## 2026-10-17
 
 - [USER+CODE+TOOL] **Repository audit, round 2** (16 read-only slices; every

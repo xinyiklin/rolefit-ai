@@ -803,17 +803,37 @@ export function setFontFamily(
   return withBoundary(serializeChars(map.prefix, chars, map.suffix, dEnd));
 }
 
+function mapFontSize(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  sizeOf: (current: number | null) => number
+): { value: string; caretValueIndex: number } {
+  const chars = map.chars.map((char, index) =>
+    index >= dStart && index < dEnd ? { ...char, fontSizePt: inlineFontSizePt(sizeOf(char.fontSizePt)) } : char
+  );
+  return withBoundary(serializeChars(map.prefix, chars, map.suffix, dEnd));
+}
+
 export function setFontSize(
   map: DisplayMap,
   dStart: number,
   dEnd: number,
   fontSizePt: number
 ): { value: string; caretValueIndex: number } {
-  const size = inlineFontSizePt(fontSizePt);
-  const chars = map.chars.map((char, index) =>
-    index >= dStart && index < dEnd ? { ...char, fontSizePt: size } : char
-  );
-  return withBoundary(serializeChars(map.prefix, chars, map.suffix, dEnd));
+  return mapFontSize(map, dStart, dEnd, () => fontSizePt);
+}
+
+// Grow or shrink each character from its OWN size, as a word processor steps a
+// mixed selection; unsized characters step from the field's default size.
+export function stepFontSize(
+  map: DisplayMap,
+  dStart: number,
+  dEnd: number,
+  deltaPt: number,
+  defaultSizePt: number
+): { value: string; caretValueIndex: number } {
+  return mapFontSize(map, dStart, dEnd, (current) => (current ?? defaultSizePt) + deltaPt);
 }
 
 export function setAlignment(
