@@ -89,10 +89,11 @@ export const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Cover Letter", 
 export type DocumentTitleIdentity = { name: string; company: string };
 
 // Both editors' titles follow their document's identity (applicant name and
-// target company) until the user names the document. A placeholder, or any
-// full or partial title of the current or an `earlier` identity, is one the app
-// produced and is rewritten — so a name typed one character at a time keeps the
-// title in step; anything else the user typed is preserved.
+// target company) until the user names the document. A placeholder, or a title
+// pairing any current or `earlier` name with any of their companies (either
+// may be absent), is one the app produced and is rewritten — so a name typed
+// one character at a time, or a name and company changing in one render, keeps
+// the title in step; anything else the user typed is preserved.
 export function followDocumentIdentityTitle(
   kind: DocumentTitleKind,
   currentTitle: string,
@@ -100,12 +101,11 @@ export function followDocumentIdentityTitle(
   earlier: readonly DocumentTitleIdentity[],
   placeholders: readonly string[]
 ): string {
+  const identities = [identity, ...earlier];
   const automaticTitles = new Set<string>(placeholders);
-  for (const { name, company } of [identity, ...earlier]) {
-    for (const titleName of [name, ""]) {
-      for (const titleCompany of [company, ""]) {
-        automaticTitles.add(buildDocumentTitle(kind, titleName, titleCompany));
-      }
+  for (const titleName of ["", ...identities.map(({ name }) => name)]) {
+    for (const titleCompany of ["", ...identities.map(({ company }) => company)]) {
+      automaticTitles.add(buildDocumentTitle(kind, titleName, titleCompany));
     }
   }
   return automaticTitles.has(currentTitle)

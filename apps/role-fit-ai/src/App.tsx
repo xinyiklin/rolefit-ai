@@ -767,13 +767,13 @@ function App() {
     }
   }, [documentTitle]);
 
-  // A queued extension run commits through the setter from its delivery render; compare with the live job.
   // Job analysis commits from an async run, so read the names it titles with live.
   const documentNamesRef = useRef({ resume: "", coverLetter: "" });
   documentNamesRef.current = {
     resume: resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText),
     coverLetter: resolveResumeApplicantName(coverLetterEditor.data.header?.name, "")
   };
+  // A queued extension run commits through the setter from its delivery render; compare with the live job.
   const importedJobRef = useRef(importedJob);
   importedJobRef.current = importedJob;
   const setImportedJobAndDocumentTitle = useCallback(
@@ -2588,13 +2588,10 @@ function App() {
             }
           : null
       );
+      // Set before startBlank so a Blank opened here is titled for the restored company.
       titleCompanyRef.current = restoredCompany;
       setDocumentTitle(resumeTitle);
-      if (!savedCoverSource) {
-        // A Blank opened here is titled for the restored company, not the old one.
-        coverLetterEditor.startBlank();
-        followCoverLetterTitle(() => buildDocumentTitle("coverLetter", "", restoredCompany));
-      }
+      if (!savedCoverSource) coverLetterEditor.startBlank();
       // Restore a consistent AI-usage/raw-text pair regardless of which branch
       // below runs — a tracker-restore must not carry over the PREVIOUS working
       // job's provider attribution or raw text.

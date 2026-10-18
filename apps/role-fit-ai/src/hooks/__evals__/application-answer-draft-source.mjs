@@ -71,7 +71,6 @@ export function renderPreparationDesk(context) {
   // Document-title and material-card effects of a commit are outside this eval.
   const setMaterialSelection = () => undefined, DEFAULT_MATERIAL_SELECTION = null;
   const clearPreparedResumeRecommendationRef = { current: () => undefined };
-  const resolveResumeApplicantName = () => "", editedResume = null, currentResumeText = "", resumeText = "";
   const setDocumentTitle = () => undefined, documentTitleForJob = () => "", setCoverLetterTitle = () => undefined;
   const documentNamesRef = { current: { resume: "", coverLetter: "" } }, titleCompanyRef = { current: "" };
   const handleLoadApplication = async () => false;

@@ -67,6 +67,11 @@ assert.equal(
   "editing the name never rewrites a title the user typed"
 );
 assert.equal(
+  follow("resume", "Your_Name_Acme_Resume", { name: "Xinyi Lin", company: "Acme" }, [{ name: "Your Name", company: "" }]),
+  "Xinyi_Lin_Acme_Resume",
+  "a title of the old name and the new company follows when both change in one render"
+);
+assert.equal(
   follow("resume", "Jane_Doe_Acme_Resume", none, [none]),
   "Jane_Doe_Acme_Resume",
   "a stored title survives startup before its identity has loaded"
