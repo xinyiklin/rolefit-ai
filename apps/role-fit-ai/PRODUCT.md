@@ -264,7 +264,7 @@ one role's materials read as one application. Each title uses the name in its
 own document's header and the prepared company (`Company_Resume` /
 `Company_Cover_Letter` with no name). Blank and Starter always retitle (Starter
 opens as `Your_Name_Resume`), and editing the name retitles a title you have not
-renamed. Preparing a job, or editing its tracked fields in Prepare, retitles both,
+renamed. Preparing a job, or editing its role or company in Prepare, retitles both,
 renamed or not. A new session with nothing saved opens both Starters. Selecting
 a saved variant changes the document content and keeps that application output
 name, except that an unrenamed title follows the variant's header name; both

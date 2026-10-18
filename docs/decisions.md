@@ -409,12 +409,13 @@ later entry wins.
   never the resume's name). Blank and Starter
   open with that title for the document they open; editing the name, opening
   another document, or the job and resume loading in either order retitle any
-  automatic title (a placeholder, or a full or partial title of the current or
-  previous identity, or for a letter one an earlier build named for the
-  resume's applicant); a title the user typed is never rewritten. An automatic
+  automatic title (a placeholder, or a title pairing any current or previous
+  name, or for a letter the resume's applicant name an earlier build used, with
+  any of their companies, either part optional); a title the user typed is
+  never rewritten. An automatic
   retitle keeps a clean letter clean. A newly prepared job is a new session and
   still retitles both, typed titles included ([USER] confirmed); so does
-  editing the prepared job's tracked fields in Prepare. Accepted tradeoff: a
+  editing the prepared job's role or company in Prepare. Accepted tradeoff: a
   typed letter title that exactly matches the resume-applicant form is treated
   as automatic.
 - 2026-10-18 [USER+CODE] D086 ACTIVE: **A new session opens both Starters**
