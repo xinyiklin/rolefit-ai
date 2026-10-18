@@ -413,8 +413,9 @@ export function fieldSizePt(value: string): number | null {
 }
 
 // A field's main size: the explicit size most of its text carries, or null when
-// most of it follows the role default. The Styles state, Body changes, Polish
-// carry, and new-field seeding use it (one-shot reads, never re-run per key).
+// most of it follows the role default. Only one-shot reads use it (the Styles
+// state, Body changes, Polish carry, new-field seeding), never layout, which
+// would then shift while typing.
 export function fieldMainSizePt(value: string): number | null {
   const size = mainOverride(value, "size");
   return size === null || size === undefined ? null : Number(size);
@@ -605,10 +606,10 @@ export function skillsRowText(label: string, skills: string): string {
     return isInlineFontSizePt(Number(opened[1])) ? Number(opened[1]) : INERT_OPEN_TAG;
   }, /^<\/size>$/i);
   const family = shared((tag) => FONT_OPEN_RE.exec(tag)?.[1].toLowerCase() as FieldFontFamily ?? null, /^<\/font>$/i);
-  // One skill set apart must not drop the separator to the default: fall back
-  // to the main size both columns agree on.
-  const mainSize = fieldMainSizePt(label) === fieldMainSizePt(skills) ? fieldMainSizePt(skills) : null;
-  const separatorSize = sizePt ?? mainSize ?? undefined;
+  // One skill set apart must not drop the separator to the default. It is
+  // layout, so like spacing it follows the skills' first character, which
+  // typing never moves (and which text typed after it inherits).
+  const separatorSize = sizePt ?? fieldSizePt(skills) ?? undefined;
   const tags = [
     alignment ? `align=${alignment}` : "",
     separatorSize ? `size=${separatorSize}` : "",

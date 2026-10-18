@@ -175,8 +175,8 @@ later entry wins.
   (larger words make room through overflow; a sized lead-in word spaces its
   whole paragraph, accepted [USER]). The Styles state, Body changes, Polish
   carry, and new-field seeding use the main size, the one most of its text
-  carries. Empty fields never set a row's size; the skills `: ` takes the main
-  size both columns share. The Styles menu has
+  carries. Empty fields never set a row's size; the skills `: ` takes the size
+  both columns share, else the skills' first character's. The Styles menu has
   Name (default bold, now a removable `<b>`, painted in the display bold face)
   and Body rows (no B/I/U, so per-word emphasis survives). Resumes and letters
   share behavior and names: a letter's style keys are the resume's

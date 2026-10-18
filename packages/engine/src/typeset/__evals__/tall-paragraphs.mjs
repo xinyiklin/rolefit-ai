@@ -170,7 +170,7 @@ console.log("uppercase headings transform text, not tags");
   assert.deepEqual(skillsRow("<size=12><b>Languages</b></size>", "Python, Java"),
     [["Languages", 12], [":", 10], ["Python, Java", 10]], "a sized label leaves unsized skills at their default");
   assert.deepEqual(skillsRow("<b>Languages</b>", "<size=12>Python, Java</size>"),
-    [["Languages", 10], [":", 10], ["Python, Java", 12]], "sized skills leave an unsized label at its default");
+    [["Languages", 10], [":", 12], ["Python, Java", 12]], "sized skills leave an unsized label at its default; the separator goes with the skills");
   console.log("unsized text paints at its role default beside sized text");
 }
 
@@ -212,12 +212,17 @@ console.log("uppercase headings transform text, not tags");
   console.log("a sized lead-in spaces its paragraph; carry follows the main text");
 }
 
-// 9. The skills separator takes the main size both columns agree on, even when
-//    one skill is set apart.
+// 9. The skills separator follows the skills' first character, even when one
+//    skill is set apart, and typing never moves it.
 {
   const separator = skillsRowText("<size=12><b>Languages</b></size>", "<size=12>Python, </size><size=13>Go</size>");
   assert.match(separator, /<size=12>(?:<b>)?: /, "the separator keeps the columns' shared main size");
   assert.doesNotMatch(skillsRowText("<size=12><b>Languages</b></size>", "Python, Java"), /<size=12>(?:<b>)?: /,
     "a size only the label has stays off the separator");
-  console.log("the skills separator follows the columns' main size");
+  // Typing inside the set-apart run never moves the separator.
+  for (const typed of ["", ", Rust, Kotlin, Swift, Scala, Elixir"]) {
+    assert.match(skillsRowText("<size=12><b>Languages</b></size>", `<size=12>Python, </size><size=13>Go${typed}</size>`),
+      /<size=12>(?:<b>)?: /, `the separator holds while typing (${typed.length} chars)`);
+  }
+  console.log("the skills separator follows the skills' first character");
 }
