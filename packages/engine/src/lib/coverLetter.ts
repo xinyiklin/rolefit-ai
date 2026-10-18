@@ -52,26 +52,20 @@ export type CoverLetterStyle = {
   headerSectionGapPt: number;
 };
 
+// A new letter starts in the resume's default face, size, line height, margins,
+// and letterhead, so a resume and its letter read as one application.
 export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
-  // A cover letter is business correspondence, and the face business
-  // correspondence is written in is Calibri — the word processor default most
-  // applications are drafted in, and one of the handful career offices name.
-  // Carlito carries its metrics, so a letter keeps its line and page count if
-  // the reader ever opens it in Word. The resume default stays Latin Modern:
-  // that document is a typographic artifact, this one is a letter.
-  fontFamily: "carlito",
-  fontSizePt: 11,
-  lineHeight: 2,
-  marginTopPt: 36,
-  marginRightPt: 54,
-  marginBottomPt: 36,
-  marginLeftPt: 54,
-  contactDivider: "|",
-  // Tuned on the letterhead itself: the contact line sits close under the name,
-  // the separators breathe, and the body clears the header.
-  nameContactGapPt: 10,
-  contactGapPt: 18,
-  headerSectionGapPt: 14
+  fontFamily: DOC_STYLE_DEFAULTS.fontFamily,
+  fontSizePt: DOC_STYLE_DEFAULTS.baseFontSizePt,
+  lineHeight: DOC_STYLE_DEFAULTS.lineHeight,
+  marginTopPt: DOC_STYLE_DEFAULTS.pageMarginTopPt,
+  marginRightPt: DOC_STYLE_DEFAULTS.pageMarginRightPt,
+  marginBottomPt: DOC_STYLE_DEFAULTS.pageMarginBottomPt,
+  marginLeftPt: DOC_STYLE_DEFAULTS.pageMarginLeftPt,
+  contactDivider: DOC_STYLE_DEFAULTS.contactDivider,
+  nameContactGapPt: DOC_STYLE_DEFAULTS.nameContactGapPt,
+  contactGapPt: DOC_STYLE_DEFAULTS.contactGapPt,
+  headerSectionGapPt: DOC_STYLE_DEFAULTS.headerSectionGapPt
 };
 
 export type CoverLetterFileV1 = {
@@ -347,8 +341,8 @@ export function coverLetterPlainText(data: ResumeData): string {
 // A letter has no sections, entries, or bullets, so none of these settings can
 // reach its page. They exist only because the shared editor's DocStyle is the
 // resume's shape; they are stated here as inert zeroes rather than inherited
-// from the resume defaults, so changing a resume default can never move a
-// letter. What a letter's layout actually reads is CoverLetterDocumentStyle.
+// from the resume defaults, so changing a resume body default can never move
+// a letter. What a letter's layout actually reads is CoverLetterDocumentStyle.
 const NO_RESUME_BODY: ResumeBodyStyle = {
   entryIndentPt: 0,
   entryEndIndentPt: 0,

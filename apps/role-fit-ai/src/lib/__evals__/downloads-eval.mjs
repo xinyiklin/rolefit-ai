@@ -5,7 +5,9 @@ import {
   buildResumeDocumentTitle,
   buildResumeFileName,
   completeAutoDocumentTitle,
-  resolveResumeApplicantName
+  COVER_LETTER_TITLE_PLACEHOLDERS,
+  resolveResumeApplicantName,
+  swapDocumentTitleKind
 } from "../downloads.ts";
 
 assert.equal(
@@ -40,7 +42,25 @@ assert.equal(
 
 // The cover letter names documents the same way, so a resume and its letter for
 // one role read as one application.
-const COVER_PLACEHOLDERS = ["Cover letter", "Untitled cover letter"];
+const COVER_PLACEHOLDERS = COVER_LETTER_TITLE_PLACEHOLDERS;
+// Blank and Starter take the resume's title retargeted; the untouched default
+// still upgrades once the identity is known.
+assert.equal(
+  completeAutoDocumentTitle(
+    "coverLetter",
+    swapDocumentTitleKind("Resume", "coverLetter"),
+    "Xinyi Lin",
+    "Intuit",
+    COVER_PLACEHOLDERS
+  ),
+  "Xinyi_Lin_Intuit_Cover_Letter",
+  "a letter titled from the default resume title upgrades like the resume"
+);
+assert.equal(
+  swapDocumentTitleKind("Xinyi_Lin_Intuit_Resume", "coverLetter"),
+  "Xinyi_Lin_Intuit_Cover_Letter",
+  "a letter titled from an automatic resume title names the same application"
+);
 assert.equal(
   buildCoverLetterDocumentTitle("Xinyi Lin", "Hadrian"),
   "Xinyi_Lin_Hadrian_Cover_Letter",

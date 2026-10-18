@@ -112,11 +112,12 @@ later entry wins.
   trigger; RoleFit's formatting-row menus are icon-only (Typeset keeps labels
   until 1210px); menu rows carry a description only when the title is not
   enough.
-- 2026-07-24..07-25 [USER] D017 ACTIVE: Tinos, Carlito, and Arimo ship as metric-compatible
+- 2026-07-24..07-25 [USER] D017 AMENDED by D081: Tinos, Carlito, and Arimo ship as metric-compatible
   equivalents under their own names, the metric twin shown beside them; menu
   order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern,
   then (2026-10-14 [USER]) the 24 added catalog families alphabetically.
-  New cover letters start in Carlito; resumes default to Latin Modern.
+  New cover letters start in Carlito; resumes default to Latin Modern
+  (superseded by D081: new letters take the resume defaults).
   `entryEndIndentPt` is the entry's right edge for every row; Jake is the style
   reference, not a spec; fresh starters use the Jake-derived defaults (10.8 pt
   start, 5.4 pt end) and the bundled starter is the canonical starter.
@@ -253,7 +254,7 @@ later entry wins.
   candidate evidence. [USER+CODE] The cover quality corpus stays synthetic and
   never reads `workspace/cover-letters/`. [ASSUMPTION] Future employer research
   must never block Polish or send resume or Profile text to a fetcher.
-- 2026-07-24..07-25 [USER] D036 ACTIVE: The cover letter has its own always-present editor
+- 2026-07-24..07-25 [USER] D036 AMENDED by D081: The cover letter has its own always-present editor
   page and starts from the user's own letter, tailored to the job and truthful
   evidence; it is plain correspondence (no resume sections, rules, columns,
   bullets, or resume spacing settings) with the same toolbar family, named
@@ -261,7 +262,7 @@ later entry wins.
   letters use double line spacing with 0.5 in top/bottom and 0.75 in side
   margins (2026-07-27, which also recorded 8 pt after each paragraph);
   2026-07-28 [USER]: the default rhythm is explicit 8 pt space-before on every
-  paragraph.
+  paragraph. The spacing and margin defaults are superseded by D081.
 - 2026-07-25..08-13 [USER+CODE] D037 ACTIVE: Resume and cover letter share `DocumentOpenMenu`
   and `DocumentSaveMenu` (no Starter button); Resume Open accepts only strict
   `.resume` and Cover Open only strict `.cover`. Cover-letter startup mirrors
@@ -342,6 +343,19 @@ later entry wins.
   `normalizeSettings` may repair and remove but never add. [USER+CODE+TOOL] The
   masthead owns only identity and Apply; Sessions sits in the studio-rail
   utilities.
+- 2026-10-18 [USER+CODE] D081 ACTIVE: **A new letter takes the resume's
+  defaults** ("blank resume/letter should same default font/style. use resume
+  as the default"). `COVER_LETTER_STYLE_DEFAULTS` derives from
+  `DOC_STYLE_DEFAULTS`: Latin Modern 10 pt, 1.18 line height, 0.5 in margins,
+  and the resume's letterhead gaps and divider; the 8 pt paragraph rhythm
+  stays. Cover Blank and Starter (and restoring an application with no saved
+  letter, which opens a Blank) reset the persisted letter style to that
+  default, as the resume's Blank does, and take their title from the resume's
+  (`Name_Company_Resume` -> `Name_Company_Cover_Letter`, `Resume` ->
+  `Cover Letter`). Saved `.cover` files keep their own style, and the letter
+  shown on page load keeps the browser's stored style until the next Blank or
+  Starter. The cover benchmark's one-page measure uses these defaults, so its
+  receipts before and after 2026-10-18 are not comparable on that measure.
 
 ### AI providers, defaults, and benchmark outcomes
 

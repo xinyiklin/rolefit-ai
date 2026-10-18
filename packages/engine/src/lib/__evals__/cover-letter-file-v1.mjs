@@ -10,6 +10,7 @@ import {
   coverLetterParagraphs,
   coverLetterResumeData,
   parseCoverLetterFile,
+  parseCoverLetterStyle,
   parseCoverLetterText,
   serializeCoverLetterFile
 } from "../coverLetter.ts";
@@ -22,7 +23,7 @@ import {
   coverLetterStyleToDocumentStyle,
   documentStyleToCoverLetterStyle
 } from "../coverLetter.ts";
-import { FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
 import { pageMarginValuesFor, pageMarginsForValues } from "../pageMargins.ts";
 
 assert.deepEqual(pageMarginValuesFor("narrow"), { top: 36, right: 36, bottom: 36, left: 36 });
@@ -30,19 +31,30 @@ assert.deepEqual(pageMarginValuesFor("normal"), { top: 72, right: 72, bottom: 72
 assert.equal(pageMarginsForValues({ top: 36, right: 36, bottom: 36, left: 36 }), "narrow");
 assert.equal(pageMarginsForValues({ top: 72, right: 72, bottom: 72, left: 72 }), "normal");
 assert.equal(pageMarginsForValues({ top: 54, right: 72, bottom: 54, left: 72 }), "custom");
-assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMargins, "custom");
+assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMargins, "narrow");
+for (const [letterKey, resumeKey] of [
+  ["fontFamily", "fontFamily"],
+  ["fontSizePt", "baseFontSizePt"],
+  ["lineHeight", "lineHeight"],
+  ["marginTopPt", "pageMarginTopPt"],
+  ["marginRightPt", "pageMarginRightPt"],
+  ["marginBottomPt", "pageMarginBottomPt"],
+  ["marginLeftPt", "pageMarginLeftPt"],
+  ["contactDivider", "contactDivider"],
+  ["nameContactGapPt", "nameContactGapPt"],
+  ["contactGapPt", "contactGapPt"],
+  ["headerSectionGapPt", "headerSectionGapPt"]
+]) {
+  assert.equal(
+    COVER_LETTER_STYLE_DEFAULTS[letterKey],
+    DOC_STYLE_DEFAULTS[resumeKey],
+    `a new cover letter's ${letterKey} is the resume default`
+  );
+}
 assert.deepEqual(
-  {
-    lineHeight: COVER_LETTER_STYLE_DEFAULTS.lineHeight,
-    margins: [
-      COVER_LETTER_STYLE_DEFAULTS.marginTopPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginRightPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginBottomPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
-    ]
-  },
-  { lineHeight: 2, margins: [36, 54, 36, 54] },
-  "new cover letters default to double spacing, no hidden paragraph gap, and 0.5/0.75-inch margins"
+  parseCoverLetterStyle(COVER_LETTER_STYLE_DEFAULTS),
+  COVER_LETTER_STYLE_DEFAULTS,
+  "the resume-derived letter defaults are a valid .cover style"
 );
 assert.deepEqual(
   documentStyleToCoverLetterStyle({
@@ -490,10 +502,11 @@ for (const line of boundaryTokenLines.slice(0, -1)) {
 }
 
 const prefix = "A".repeat(24);
+// Emergency-break fixtures are measured at 11 pt, independent of letter defaults.
 const smallStyle = {
   family: "latin-modern",
   face: "regular",
-  size: COVER_LETTER_STYLE_DEFAULTS.fontSizePt,
+  size: 11,
   tracking: 0
 };
 const largeStyle = { ...smallStyle, size: 36 };

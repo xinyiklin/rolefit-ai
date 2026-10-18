@@ -77,12 +77,12 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] Whole skills-row / whole-document size and font fix
-  (uncommitted, branch `claude/skill-doc-selection-bugs-b6aee8`): toolbar +/-
-  step each run from its own size (`stepFontSize`); a skills row's `: ` is one
-  engine join (`skillsRowText`) carrying the format both columns share; the row
-  splits back by display character; a mixed family shows blank. Both
-  reviewers' findings fixed and re-verified; RoleFit-host browser QA not run.
+- [USER+CODE+TOOL] **New letters take the resume defaults** (D081): Cover
+  Blank/Starter reset to Latin Modern 10 pt, 1.18, 0.5 in margins and take the
+  resume's title retargeted (`..._Cover_Letter`). Engine and RoleFit checks
+  passed (pdf-roundtrip fixture lengthened to stay multi-page); browser QA not
+  run. Open: `isStyleDefault` key-order compare is always false (pre-existing).
+- [CODE] Whole-row/whole-document size and font fix merged as #237 (archived).
 
 ## 2026-10-17
 

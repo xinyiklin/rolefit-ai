@@ -79,9 +79,11 @@ import { subscribeWorkspaceRestoreAdoption, type PresencePhase } from "./lib/tab
 import {
   buildDocumentTitle,
   completeAutoDocumentTitle,
+  COVER_LETTER_TITLE_PLACEHOLDERS,
   type DocumentTitleKind,
   resolveResumeApplicantName,
-  sanitizeFileBase
+  sanitizeFileBase,
+  swapDocumentTitleKind
 } from "./lib/downloads";
 import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
@@ -301,10 +303,6 @@ const EMPTY_INLINE_FORMAT: InlineFormatState = {
 };
 
 const DEFAULT_DOCUMENT_TITLE = "Resume";
-// The untouched titles the cover-letter editor sets itself (blank, starter, the
-// workspace default). Only these — never a title the user typed — are upgraded
-// to the shared Name_Company_Cover_Letter form.
-const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Untitled cover letter"] as const;
 const DOCUMENT_TITLE_STORAGE_KEY = "rolefit:documentTitle";
 const OUTPUT_TABS: OutputTabDescriptor[] = [
   { id: "prepare", label: "Prepare", group: "PREPARE" },
@@ -726,7 +724,8 @@ function App() {
       coverLetterCaretRef.current = null;
       coverLetterScrollTopRef.current = 0;
       coverLetterEditorRef.current?.focusDocumentStart();
-    }, [])
+    }, []),
+    defaultTitle: swapDocumentTitleKind(documentTitle, "coverLetter")
   });
   const setCoverLetterTitle = coverLetterEditor.setOutputDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);

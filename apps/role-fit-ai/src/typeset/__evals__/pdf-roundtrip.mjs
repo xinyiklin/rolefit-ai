@@ -231,7 +231,7 @@ if (familyFailures.length) {
 // used to cross a page boundary; the first carries the same link/underline and
 // shaping stress as the resume fixture.
 const coverParagraphs = Array.from(
-  { length: 36 },
+  { length: 72 },
   (_, index) => index === 0
     ? "<b><i>Efficient AVA café résumé workflow</i></b> with "
       + "<u><link=https://example.test/cover-audit>one underlined link</link></u>."
