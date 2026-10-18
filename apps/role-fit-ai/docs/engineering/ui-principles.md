@@ -278,9 +278,14 @@ physical values persist in editable files. Custom supports 0.25 through
 3 inches per side, and all four inch values stay visible under every preset.
 The resume keeps global line height inside Spacing, alongside inspectable
 Compact, Balanced, Spacious, and up to eight saved, renamable structural presets.
-Cover-letter line spacing is a vertical, selection-scoped menu: Single, 1.15, 1.5, Double,
+The cover letter has the same Spacing menu over the values a letter reads:
+document line spacing and the three header gaps, with the built-in presets
+(applied to those values only) and no saved presets. Header gaps live in
+Spacing for both documents, never in the Header menu.
+Cover-letter line spacing is also a vertical, selection-scoped menu: Single, 1.15, 1.5, Double,
 paragraph space before/after, and Custom spacing. The menu is compact and uses
-a line-list icon; Custom spacing opens a focused modal with Cancel and Apply.
+a line-list icon; a value that matches no preset checks Custom spacing and shows
+the value there. Custom spacing opens a focused modal with Cancel and Apply.
 Line height adds space below each targeted visual line, never above it; selecting
 the complete paragraph targets all its lines. Before/after spacing remains
 paragraph-local, and every action must preserve the active editor selection.

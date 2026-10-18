@@ -84,6 +84,12 @@ extension 1.4.0, desktop bridge API 13. Release history:
   never moves line breaks. Parsers convert retired keys; 398 workspace files
   rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
   letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+- [USER+CODE+TOOL] **Letter Spacing menu and menu polish** (D083; branch
+  `claude/letter-resume-menu-polish`, stacked on `feature/per-field-text-sizes`):
+  letter gets Spacing; all style menus compacted. Headless-Chrome QA in both
+  apps (behavior, 375-1440px ladder); core `test:editor:browser` passes;
+  extended fails only at `typeset-empty-first-character` (`<b>h</b>`, D081
+  name bold, inherited from the base; UNCONFIRMED at base). Firefox not checked.
 - [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
   row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
 
@@ -108,13 +114,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
     macOS CLI lookup omits nvm/fnm; base-resume Save discards open proposals;
     landing ZIP links lack "Unsigned"; `main` has no required status checks
     and the `ec2` environment no branch policy.
-- [USER+CODE] **GPT-5.5 retired** from the Codex catalog; saved selections,
-  workspace preferences, and backups repair to the Codex default (D076). Docs
-  aligned with code: extension intake follows the automatic Polish settings
-  (D077), and a Typeset autosave clears unsaved changes (D078).
-  - [TOOL] Mutation-checked: the backup contract eval fails without the
-    repair entry. `npm run check --workspace apps/role-fit-ai` passed;
-    mb-verifier READY after one fix round.
 - [USER+CODE] **CLI argv delivery and Antigravity removal** (#235): Claude
   Code reads its unchanged system
   prompt via `--append-system-prompt-file` (an npm `claude.cmd` shim made

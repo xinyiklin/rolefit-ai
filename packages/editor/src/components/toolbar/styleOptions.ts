@@ -8,7 +8,6 @@ import {
 
 import {
   DOC_STYLE_BOUNDS,
-  DOC_SPACING_KEYS,
   DOC_SPACING_PRESETS,
   type BodyAlign,
   type DocSpacingKey,
@@ -51,70 +50,70 @@ export type SpacingControlGroup = {
   controls: SpacingControl[];
 };
 
-function pointControl(key: DocSpacingKey, label: string): SpacingControl {
+function spacingControl(key: DocSpacingKey, label: string, unit = "pt"): SpacingControl {
   return {
     key,
     label,
     min: DOC_STYLE_BOUNDS[key].min,
     max: DOC_STYLE_BOUNDS[key].max,
     step: DOC_STYLE_BOUNDS[key].step,
-    unit: " pt"
+    unit
   };
 }
 
-// The header's own gaps. A document whose only structure is a header (a cover
-// letter) offers these from its Header menu instead of the resume's full
-// document-spacing popover, so both surfaces read one definition.
-export type HeaderSpacingKey =
-  | "nameContactGapPt"
-  | "contactGapPt"
-  | "headerSectionGapPt";
+const LINE_SPACING_GROUP: SpacingControlGroup = {
+  label: "Lines",
+  controls: [spacingControl("lineHeight", "Line spacing", "")]
+};
 
-export const HEADER_SPACING_CONTROLS: readonly (SpacingControl & {
-  key: HeaderSpacingKey;
-})[] = [
-  pointControl("nameContactGapPt", "Name to contact"),
-  // Horizontal slot width between contact items (not a vertical line gap):
-  // the label says so to set it apart from the surrounding vertical gaps.
-  pointControl("contactGapPt", "Contact spacing"),
-  pointControl("headerSectionGapPt", "Header to body")
-] as (SpacingControl & { key: HeaderSpacingKey })[];
+// The header's own gaps, shared by the resume and letter Spacing menus; each
+// names the last gap for what follows the header in that document.
+const headerSpacingGroup = (headerToBodyLabel: string): SpacingControlGroup => ({
+  label: "Header",
+  controls: [
+    spacingControl("nameContactGapPt", "Name to contact"),
+    // Horizontal slot width between contact items (not a vertical line gap):
+    // the label says so to set it apart from the surrounding vertical gaps.
+    spacingControl("contactGapPt", "Contact spacing"),
+    spacingControl("headerSectionGapPt", headerToBodyLabel)
+  ]
+});
 
-// Shared so every popover prints a gap the same way.
+// Shared so every popover prints a value the same way.
 export const formatSpacingValue = (value: number, unit: string) =>
   `${value.toFixed(2).replace(/\.00$/, "").replace(/(\.\d)0$/, "$1")}${unit}`;
 
+// A letter has a header and prose only, so its Spacing menu offers the line
+// spacing and header gaps its layout reads. Its line spacing is the default
+// under the selection-scoped Line spacing menu, which overrides it per line.
+export const LETTER_SPACING_CONTROL_GROUPS: SpacingControlGroup[] = [
+  { label: "Lines", controls: [spacingControl("lineHeight", "Default line spacing", "")] },
+  headerSpacingGroup("Header to body")
+];
+
 export const SPACING_CONTROL_GROUPS: SpacingControlGroup[] = [
-  {
-    label: "Header",
-    // A resume's first body element is a section heading, so this surface names
-    // that gap for what actually follows the header here.
-    controls: HEADER_SPACING_CONTROLS.map((control) =>
-      control.key === "headerSectionGapPt"
-        ? { ...control, label: "Header to section" }
-        : { ...control }
-    )
-  },
+  LINE_SPACING_GROUP,
+  headerSpacingGroup("Header to section"),
   {
     label: "Sections",
     controls: [
-      pointControl("sectionGapPt", "Section gap"),
-      pointControl("sectionEntryGapPt", "Heading to entry")
+      spacingControl("sectionGapPt", "Section gap"),
+      spacingControl("sectionEntryGapPt", "Heading to entry")
     ]
   },
   {
     label: "Entries",
     controls: [
-      pointControl("entryGapPt", "Entry gap"),
-      pointControl("titleSubGapPt", "Title to subtitle"),
-      pointControl("headBulletGapPt", "Entry to bullets")
+      spacingControl("entryGapPt", "Entry gap"),
+      spacingControl("titleSubGapPt", "Title to subtitle"),
+      spacingControl("headBulletGapPt", "Entry to bullets")
     ]
   },
   {
     label: "Lists",
     controls: [
-      pointControl("bulletGapPt", "Bullet gap"),
-      pointControl("skillsRowGapPt", "Skill row gap")
+      spacingControl("bulletGapPt", "Bullet gap"),
+      spacingControl("skillsRowGapPt", "Skill row gap")
     ]
   }
 ];
@@ -127,18 +126,20 @@ export const HEADING_CASE_OPTIONS: { value: HeadingCase; label: string }[] = [
 
 export const CONTACT_DIVIDERS = ["|", "•", "·", "–", "/"];
 
-export function spacingMatches(style: DocStyle, values: DocSpacingPreset) {
-  return DOC_SPACING_KEYS.every((key) => Math.abs(style[key] - values[key]) < 0.005);
+export const spacingKeysOf = (groups: readonly SpacingControlGroup[]): DocSpacingKey[] =>
+  groups.flatMap((group) => group.controls.map((control) => control.key));
+
+// A preset is matched and applied only over the keys a menu shows, so a letter
+// takes a preset's line spacing and header gaps and nothing a letter ignores.
+export function spacingMatches(style: DocStyle, values: DocSpacingPreset, keys: readonly DocSpacingKey[]) {
+  return keys.every((key) => Math.abs(style[key] - values[key]) < 0.005);
 }
+
+export const pickSpacing = (values: DocSpacingPreset, keys: readonly DocSpacingKey[]): Partial<DocStyle> =>
+  Object.fromEntries(keys.map((key) => [key, values[key]]));
 
 export type BuiltInSpacingPresetId = keyof typeof DOC_SPACING_PRESETS;
 
 export const BUILT_IN_SPACING_PRESET_OPTIONS = (
   Object.entries(DOC_SPACING_PRESETS) as [BuiltInSpacingPresetId, { label: string }][]
 ).map(([value, preset]) => ({ value, label: preset.label }));
-
-export function activeBuiltInSpacingPresetId(style: DocStyle): BuiltInSpacingPresetId | null {
-  return BUILT_IN_SPACING_PRESET_OPTIONS.find(({ value }) =>
-    spacingMatches(style, DOC_SPACING_PRESETS[value].values)
-  )?.value ?? null;
-}

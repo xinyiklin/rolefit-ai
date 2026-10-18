@@ -2,8 +2,6 @@ import type {
   DocumentHeader,
   ResumeSectionType
 } from "@typeset/engine/lib/resumeData.ts";
-import type { DocStyle } from "@typeset/engine/lib/documentStyle.ts";
-import type { HeaderSpacingKey } from "./styleOptions";
 import { AddSectionPopover } from "./AddSectionPopover";
 import { HeaderStructurePopover } from "./HeaderStructurePopover";
 
@@ -11,12 +9,6 @@ export type DocumentStructureControlsProps = {
   header: DocumentHeader | null;
   contactDivider: string;
   disabled?: boolean;
-  // Supplied by a host whose document has no document-spacing popover of its
-  // own: the header's gaps are then adjustable from the header itself.
-  headerSpacing?: {
-    values: Pick<DocStyle, HeaderSpacingKey>;
-    onChange: (key: HeaderSpacingKey, value: number) => void;
-  };
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
@@ -36,7 +28,6 @@ export function DocumentStructureControls({
   header,
   contactDivider,
   disabled = false,
-  headerSpacing,
   onCreateHeader,
   onSetHeaderVisible,
   onSetHeaderName,
@@ -58,7 +49,6 @@ export function DocumentStructureControls({
         header={header}
         contactDivider={contactDivider}
         disabled={disabled}
-        headerSpacing={headerSpacing}
         onCreateHeader={onCreateHeader}
         onSetHeaderVisible={onSetHeaderVisible}
         onSetHeaderName={onSetHeaderName}

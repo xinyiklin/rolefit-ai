@@ -89,15 +89,21 @@ paints).
   touched cover-letter visual lines, adding room below each line only, while
   before/after values remain paragraph-level.
   Custom values open the shared modal and commit through one host callback so
-  the change forms one history step. `SpacingStylePopover` owns resume-global
-  line height plus document-level structural gaps. Preset and numeric values
-  stay expanded together. Built-in spacing presets are fixed engine values;
-  `SpacingPresets` renders built-in and saved presets in one section from
-  `DocStyleControls` and never touches storage. A host with no
-  document-spacing popover passes `headerSpacing` to
-  `DocumentStructureControls` so the header's own gaps stay reachable from the
-  Header menu; both surfaces read `HEADER_SPACING_CONTROLS`,
-  which is where a per-surface label for the same gap belongs.
+  the change forms one history step. `SpacingStylePopover` owns document line
+  height plus document-level structural gaps for both documents: its `groups`
+  (default `SPACING_CONTROL_GROUPS`; the letter passes
+  `LETTER_SPACING_CONTROL_GROUPS`) name the values a document's layout reads,
+  and built-in presets match and apply only those keys. Saved presets carry
+  every resume gap, so a host showing a subset passes `savedPresets={false}`.
+  Preset and numeric values stay expanded together. Built-in spacing presets are
+  fixed engine values; `SpacingPresets` renders built-in and saved presets in
+  one section from `DocStyleControls` and never touches storage. Header gaps
+  live only in Spacing; per-document labels for the same gap belong in the
+  group definitions in `styleOptions.ts`.
+- `StyleRange` is one line per value — label, range, and a typeable value box
+  that commits through `numericDraftCommit`, clamped and snapped to the step.
+  Closing the menu (Escape or an outside click) unmounts the row before its
+  blur reaches React, so a typed draft commits on unmount, as preset names do.
 - Committing a font-family or font-size menu choice returns focus through the
   host-provided editor callback to the saved page caret or range. Escape still
   returns to the menu trigger, and merely editing a numeric draft does not make
@@ -110,7 +116,9 @@ paints).
   Let flexbox shrink it only when neighboring controls exhaust the real row
   width; do not introduce breakpoint-specific filename caps.
 - Numeric text inputs follow the draft pattern: local draft state, commit on
-  blur/Enter (parse, clamp, round), reset on Escape. Each control keeps its
+  blur/Enter (parse, clamp, round), reset on Escape — except a `StyleRange`
+  value box inside a popover, which commits when Escape closes its menu (see
+  above). Each control keeps its
   own units and precision; there is deliberately no shared draft-input hook.
   `toolbar/numericDraft.ts` is only the shared commit decision: an empty,
   unparsable, or unchanged draft reverts without calling `onChange`.

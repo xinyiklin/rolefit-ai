@@ -118,8 +118,9 @@ together, so a preset is inspectable. The built-in presets are fixed; the
 current spacing can be saved as up to eight named presets that can be
 reapplied, updated, renamed, or deleted. Saved presets are local browser
 preferences and never enter `.resume` files.
-Cover-letter hosts may instead use the shared selection-scoped line-spacing
-control for their paragraph grammar.
+Cover-letter hosts pass the Spacing menu the letter's own groups (default line
+spacing and the header gaps, built-in presets only) and also use the shared
+selection-scoped line-spacing control for paragraph-level spacing.
 
 Saved page-spacing controls also use physical points. `em` is useful when a gap
 should grow automatically with nearby text, but it makes a print-layout control

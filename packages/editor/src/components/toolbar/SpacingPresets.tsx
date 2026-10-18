@@ -7,8 +7,8 @@ import {
   MAX_SPACING_PRESET_NAME_LENGTH,
   normalizeSpacingPresetName
 } from "../../hooks/spacingPresets.ts";
-import { DOC_SPACING_PRESETS } from "@typeset/engine/lib/documentStyle.ts";
-import { BUILT_IN_SPACING_PRESET_OPTIONS, spacingMatches } from "./styleOptions";
+import { DOC_SPACING_PRESETS, type DocSpacingKey, type DocSpacingPreset } from "@typeset/engine/lib/documentStyle.ts";
+import { BUILT_IN_SPACING_PRESET_OPTIONS, pickSpacing, spacingMatches } from "./styleOptions";
 
 type RowMode = { id: string; kind: "rename" | "delete" } | null;
 
@@ -60,11 +60,15 @@ function PresetNameInput({
 export function SpacingPresets({
   docStyle,
   idPrefix,
-  disabled
+  disabled,
+  keys,
+  savedPresets
 }: {
   docStyle: DocStyleControls;
   idPrefix: string;
   disabled: boolean;
+  keys: readonly DocSpacingKey[];
+  savedPresets: boolean;
 }) {
   const { spacingPresets, style } = docStyle;
   const [mode, setMode] = useState<RowMode>(null);
@@ -84,9 +88,11 @@ export function SpacingPresets({
   const rowId = (id: string, part: string) => `${idPrefix}-preset-${id}-${part}`;
   const saveId = `${idPrefix}-preset-save`;
   const atCap = spacingPresets.length >= MAX_SAVED_SPACING_PRESETS;
+  const matches = (values: DocSpacingPreset) => spacingMatches(style, values, keys);
+  const apply = (values: DocSpacingPreset) => docStyle.applyStyle(pickSpacing(values, keys));
   const alreadyPreset =
-    BUILT_IN_SPACING_PRESET_OPTIONS.some(({ value }) => spacingMatches(style, DOC_SPACING_PRESETS[value].values)) ||
-    spacingPresets.some((preset) => spacingMatches(style, preset.values));
+    BUILT_IN_SPACING_PRESET_OPTIONS.some(({ value }) => matches(DOC_SPACING_PRESETS[value].values)) ||
+    spacingPresets.some((preset) => matches(preset.values));
 
   const saveCurrent = () => {
     const saved = docStyle.saveSpacingPreset();
@@ -96,29 +102,31 @@ export function SpacingPresets({
   return (
     <section ref={sectionRef} className="style-popover__section" aria-labelledby={`${idPrefix}-preset`}>
       <div className="style-popover__section-head">
-        <h3 id={`${idPrefix}-preset`} className="style-popover__section-title">Spacing preset</h3>
-        <button
-          id={saveId}
-          type="button"
-          className="style-popover__secondary"
-          disabled={disabled || atCap || alreadyPreset}
-          title={
-            atCap
-              ? `Up to ${MAX_SAVED_SPACING_PRESETS} saved presets`
-              : alreadyPreset
-                ? "Current spacing is already a preset"
-                : undefined
-          }
-          onClick={saveCurrent}
-        >
-          <Plus size={13} aria-hidden="true" />
-          Save current
-        </button>
+        <h3 id={`${idPrefix}-preset`} className="style-popover__section-title">Presets</h3>
+        {savedPresets ? (
+          <button
+            id={saveId}
+            type="button"
+            className="style-popover__secondary"
+            disabled={disabled || atCap || alreadyPreset}
+            title={
+              atCap
+                ? `Up to ${MAX_SAVED_SPACING_PRESETS} saved presets`
+                : alreadyPreset
+                  ? "Current spacing is already a preset"
+                  : undefined
+            }
+            onClick={saveCurrent}
+          >
+            <Plus size={13} aria-hidden="true" />
+            Save current
+          </button>
+        ) : null}
       </div>
       <div className="style-popover__segmented" role="group" aria-label="Built-in presets">
         {BUILT_IN_SPACING_PRESET_OPTIONS.map((option) => {
           const values = DOC_SPACING_PRESETS[option.value].values;
-          const selected = spacingMatches(style, values);
+          const selected = matches(values);
           return (
             <button
               key={option.value}
@@ -126,17 +134,17 @@ export function SpacingPresets({
               className={selected ? "is-selected" : ""}
               aria-pressed={selected}
               disabled={disabled}
-              onClick={() => docStyle.applyStyle(values)}
+              onClick={() => apply(values)}
             >
               {option.label}
             </button>
           );
         })}
       </div>
-      {spacingPresets.length > 0 && (
+      {savedPresets && spacingPresets.length > 0 && (
         <ul className="style-popover__preset-list" aria-label="Saved presets">
           {spacingPresets.map((preset) => {
-            const selected = spacingMatches(style, preset.values);
+            const selected = matches(preset.values);
             if (mode?.id === preset.id && mode.kind === "rename") {
               return (
                 <li key={preset.id} className="style-popover__preset-row">
@@ -193,7 +201,7 @@ export function SpacingPresets({
                   className={`style-popover__preset-apply${selected ? " is-selected" : ""}`}
                   aria-pressed={selected}
                   disabled={disabled}
-                  onClick={() => docStyle.applyStyle(preset.values)}
+                  onClick={() => apply(preset.values)}
                 >
                   {preset.name}
                 </button>

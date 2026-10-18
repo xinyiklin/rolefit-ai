@@ -15,6 +15,8 @@ import { DocumentStructureControls } from "@typeset/editor/components/toolbar/Do
 import { FormattingToolbar } from "@typeset/editor/components/toolbar/FormattingToolbar.tsx";
 import { LineSpacingPopover } from "@typeset/editor/components/toolbar/LineSpacingPopover.tsx";
 import { PageStylePopover } from "@typeset/editor/components/toolbar/PageStylePopover.tsx";
+import { SpacingStylePopover } from "@typeset/editor/components/toolbar/SpacingStylePopover.tsx";
+import { LETTER_SPACING_CONTROL_GROUPS } from "@typeset/editor/components/toolbar/styleOptions.ts";
 import { ParagraphStylePopover } from "@typeset/editor/components/toolbar/ParagraphStylePopover.tsx";
 import { globalAlignmentState } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import type {
@@ -373,12 +375,6 @@ export function CoverLetterToolbar({
             header={editor.data.header}
             contactDivider={editor.docStyle.style.contactDivider}
             disabled={!hasLetter}
-            // A cover letter has no document-spacing popover: paragraph spacing
-            // covers its body, so the header's own gaps live in the Header menu.
-            headerSpacing={{
-              values: editor.docStyle.style,
-              onChange: (key, value) => editor.docStyle.set(key, value)
-            }}
             onCreateHeader={() => {
               if (editorRef.current) editorRef.current.createHeader();
               else editor.actions.createHeader();
@@ -401,6 +397,12 @@ export function CoverLetterToolbar({
         )}
         documentStyleTools={(
           <>
+            <SpacingStylePopover
+              docStyle={editor.docStyle}
+              disabled={!hasLetter}
+              groups={LETTER_SPACING_CONTROL_GROUPS}
+              savedPresets={false}
+            />
             <LineSpacingPopover
               controls={{
                 lineHeight: inlineFormat.paragraphLineHeight,
