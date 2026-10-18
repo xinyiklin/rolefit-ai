@@ -80,11 +80,11 @@ release/publish workflow, wait for successful completion, and retain the
 workflow or live-environment receipt. A versioned change is incomplete until
 that release/deploy completion is confirmed.
 
-The receipt exists only after the tag runs, so it cannot ride in the release
-PR. Report it to the user at once, then record it in `CONTINUITY.md` (including
-its "Current" release line) in the next PR, not a dedicated receipt PR. Open a
-receipt-only PR only when no other change is expected soon, because a stale
-"Current" line misleads the next session.
+GitHub is the release record: `gh release list` and `gh release view <tag>`
+show the release, publish time, and assets, and `gh run list --workflow <file>`
+shows the workflow result. Report the tag, run, and asset check to the user at
+once, and do not copy them into `CONTINUITY.md`. A release therefore needs no
+follow-up PR.
 
 ## Versioning and release suggestions
 

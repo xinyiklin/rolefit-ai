@@ -7,17 +7,13 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: RoleFit 0.15.0 preview (`rolefit-preview-v0.15.0-beta.1` on `cd12b2c2`,
-release run 38833828940 succeeded; published 2026-10-16T01:33:48Z with 6 assets),
-extension 1.4.0, desktop bridge API 13. Release history:
-`docs/continuity/2026-10.md` and D-entries in `docs/decisions.md`.
+Current: extension 1.4.0, desktop bridge API 13. The published RoleFit release
+is the newest `rolefit-*` entry in `gh release list` (not recorded here;
+see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
+D-entries in `docs/decisions.md`.
 
 ## Next actions
 
-- After the 0.16.0 release PR merges, and only on the user's go-ahead: tag
-  `rolefit-preview-v0.16.0-beta.1` on its squash commit, confirm the
-  prerelease (macOS arm64/x64 dmg+zip, Windows x64 exe, `SHA256SUMS.txt`), then
-  record the receipt and the "Current" line in the next PR.
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
