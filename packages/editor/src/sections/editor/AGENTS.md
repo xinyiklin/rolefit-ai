@@ -426,7 +426,13 @@ typesetting guide when a change affects painted output or layout provenance.
   more empty rows.
 - Mixed font-family and font-size selections are indeterminate and leave their
   toolbar controls blank. Typed inline sizes clamp to 1–200 pt; the curated
-  preset menu remains a smaller unchanged list.
+  preset menu remains a smaller unchanged list. The size control's +/- step
+  each run from its OWN size (`stepFontSize`); a blank size once stepped from
+  the 1 pt minimum and shrank a whole document to 2 pt.
+- A skills row writes back to its two columns by DISPLAY character, dropping
+  exactly one separator space even when the row's tags enclose it. Stripping it
+  as a raw leading space missed it inside `<size=…>` and added a space per
+  whole-row command, which also shortened the restored selection by one.
 - A collapsed caret remains visually anchored in the document while a toolbar
   input, popover, or portaled option menu is editing its next-typing format.
   Its height and baseline use that active format rather than adjacent text.

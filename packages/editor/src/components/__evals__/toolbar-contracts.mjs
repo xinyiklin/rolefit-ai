@@ -85,7 +85,16 @@ assert.match(
   "a reverted size draft restores the displayed value without calling onChange"
 );
 const step = fontSize.slice(fontSize.indexOf("const step = "), fontSize.indexOf("const returnFocusAfterCommit"));
-assert.match(step, /draft\.trim\(\) === ""/, "stepping from an empty draft starts from the current value, not 0");
+assert.doesNotMatch(step, /\?\? min/, "a mixed (blank) size never steps from the minimum");
+assert.match(step, /else if \(onStep\) onStep\(delta\)/, "an untouched draft steps each run from its own size");
+assert.match(fontSize, /const stepUnavailable = value === null && !onStep;/, "with no relative step, a mixed size disables +/-");
+const formattingToolbar = source("../toolbar/FormattingToolbar.tsx");
+assert.match(formattingToolbar, /onStep=\{inlineFormatting\?\.fontSize\?\.onStep\}/, "the selection toolbar wires the relative step");
+assert.doesNotMatch(
+  formattingToolbar,
+  /fontFamily\?\.value \?\? docStyle/,
+  "a mixed family stays blank instead of showing the document font"
+);
 
 const page = source("../toolbar/PageStylePopover.tsx");
 assert.match(

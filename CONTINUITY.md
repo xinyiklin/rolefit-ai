@@ -78,14 +78,14 @@ extension 1.4.0, desktop bridge API 13. Release history:
 ## 2026-10-18
 
 - [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
-  uncommitted on `main`): no base size or LaTeX scale; one default per text
-  role shared by both documents; Styles gains Name (default bold, removable)
-  and Body rows; letter style keys and page defaults match the resume's; name
-  removable and one starter header in both editors. Parsers still read the
-  retired keys and convert them. Workspace: 398 files rewritten, layout
-  unchanged; originals in `.agent-work/tasks/base-size-removal-2026-10-17/backup/`.
-  - [TOOL] Old vs new on 416 local files: 10 pt resumes and 70/81 letters
-    identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+  D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
+  default per role for both documents; Styles adds Name and Body rows; letters
+  share the resume's keys, defaults, header behavior, and alignment; alignment
+  never moves line breaks. Parsers convert retired keys; 398 workspace files
+  rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
+  letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+- [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
+  row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
 
 ## 2026-10-17
 

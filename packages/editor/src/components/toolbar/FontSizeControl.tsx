@@ -13,6 +13,9 @@ const COMMON_SIZES = [6, 8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32, 36, 48];
 type FontSizeControlProps = {
   value: number | null;
   onChange: (value: number) => void;
+  // Steps every run from its own size. Without it, a mixed (null) value has
+  // nothing to step from and the +/- buttons are disabled.
+  onStep?: (delta: -1 | 1) => void;
   onCommitFocus?: () => void;
   disabled?: boolean;
   min?: number;
@@ -29,6 +32,7 @@ function displaySize(value: number | null) {
 export function FontSizeControl({
   value,
   onChange,
+  onStep,
   onCommitFocus,
   disabled = false,
   min = INLINE_FONT_SIZE_MIN_PT,
@@ -101,10 +105,16 @@ export function FontSizeControl({
     }
     commitValue(next);
   };
+  // A typed but uncommitted size steps from what was typed; otherwise the step
+  // is relative to the current size, never to the minimum.
   const step = (delta: -1 | 1) => {
-    const parsed = draft.trim() === "" ? Number.NaN : Number(draft.trim());
-    commitValue((Number.isFinite(parsed) ? parsed : value ?? min) + delta);
+    const typed = draft.trim();
+    const parsed = typed === "" || typed === displaySize(value) ? Number.NaN : Number(typed);
+    if (Number.isFinite(parsed)) commitValue(parsed + delta);
+    else if (onStep) onStep(delta);
+    else if (value !== null) commitValue(value + delta);
   };
+  const stepUnavailable = value === null && !onStep;
   const returnFocusAfterCommit = () => {
     if (!onCommitFocus) return;
     if (document.activeElement === inputRef.current) {
@@ -119,7 +129,7 @@ export function FontSizeControl({
       <button
         type="button"
         className="font-size-control__step"
-        disabled={disabled || (value !== null && value <= min)}
+        disabled={disabled || stepUnavailable || (value !== null && value <= min)}
         aria-label="Decrease font size by 1 point"
         title="Decrease font size by 1 pt"
         onMouseDown={(event) => event.preventDefault()}
@@ -175,7 +185,7 @@ export function FontSizeControl({
       <button
         type="button"
         className="font-size-control__step"
-        disabled={disabled || (value !== null && value >= max)}
+        disabled={disabled || stepUnavailable || (value !== null && value >= max)}
         aria-label="Increase font size by 1 point"
         title="Increase font size by 1 pt"
         onMouseDown={(event) => event.preventDefault()}

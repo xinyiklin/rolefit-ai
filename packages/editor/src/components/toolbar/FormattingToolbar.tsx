@@ -57,6 +57,7 @@ export type InlineFormattingControls = {
   fontSize?: {
     value: number | null;
     onChange: (fontSizePt: number) => void;
+    onStep?: (deltaPt: -1 | 1) => void;
     disabled?: boolean;
   };
   alignment?: {
@@ -137,7 +138,9 @@ function SelectionTypographyControls({
       <label className="top-toolbar__font-control top-toolbar__font-control--family">
         <span className="sr-only">Font family for selected text</span>
         <FontFamilyControl
-          value={inlineFormatting?.fontFamily?.value ?? docStyle.style.fontFamily}
+          // null is a mixed selection and stays blank; only a host with no
+          // family control falls back to the document's font.
+          value={inlineFormatting?.fontFamily ? inlineFormatting.fontFamily.value : docStyle.style.fontFamily}
           onChange={(value) => inlineFormatting?.fontFamily?.onChange(value)}
           onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontFamily?.disabled !== false}
@@ -150,6 +153,7 @@ function SelectionTypographyControls({
         <FontSizeControl
           value={inlineFormatting?.fontSize?.value ?? null}
           onChange={(value) => inlineFormatting?.fontSize?.onChange(value)}
+          onStep={inlineFormatting?.fontSize?.onStep}
           onCommitFocus={inlineFormatting?.onRequestEditorFocus}
           disabled={formattingDisabled || inlineFormatting?.fontSize?.disabled !== false}
           ariaLabel="Font size for selected text in points"
