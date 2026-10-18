@@ -345,7 +345,7 @@ export default function App() {
       const fontAssetBaseUrl = `${import.meta.env.BASE_URL.replace(/\/$/, "")}/fonts`;
       const fonts = await fetchFontBytes(doc, fontAssetBaseUrl);
       const bytes = await emitPdf(doc, fonts, {
-        title: schema.header?.name ? `${stripInlineMarks(schema.header.name)} — Resume` : "Resume"
+        title: stripInlineMarks(schema.header?.name ?? "").trim() ? `${stripInlineMarks(schema.header!.name!)} — Resume` : "Resume"
       });
       const fileName = `${resumeFileName(documentTitle).replace(/\.resume$/i, "")}.pdf`;
       downloadBlob(new Blob([bytes as BlobPart], { type: "application/pdf" }), fileName);

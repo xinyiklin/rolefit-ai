@@ -96,7 +96,7 @@ export function parseResumeData(text: string, sourceText?: string): ResumeData {
 
   // Recover a name/contact from the original source when the polished output
   // dropped its header.
-  if (!data.header?.name && sourceText) {
+  if (!stripInlineMarks(data.header?.name ?? "").trim() && sourceText) {
     const src = parsePlainResume(sourceText);
     if (src.header?.name) {
       data.header = {
@@ -206,7 +206,7 @@ export function serializeResumeData(data: ResumeData): string {
   const lines: string[] = [];
   const header = data.header?.visible ? data.header : null;
   const name = header?.name?.trim() ?? "";
-  if (name) lines.push(name);
+  if (stripInlineMarks(name).trim()) lines.push(name);
   const contact = (header?.contact ?? []).map((item) => item.trim()).filter(Boolean);
   if (contact.length) lines.push(contact.join(" | "));
 

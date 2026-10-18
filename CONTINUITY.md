@@ -85,11 +85,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
   rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
   letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
 - [USER+CODE+TOOL] **Letter Spacing menu and menu polish** (D083; branch
-  `claude/letter-resume-menu-polish`, stacked on `feature/per-field-text-sizes`):
-  letter gets Spacing; all style menus compacted. Headless-Chrome QA in both
-  apps (behavior, 375-1440px ladder); core `test:editor:browser` passes;
-  extended fails only at `typeset-empty-first-character` (`<b>h</b>`, D081
-  name bold, inherited from the base; UNCONFIRMED at base). Firefox not checked.
+  `claude/letter-resume-menu-polish`, after #239): letter gets Spacing; all
+  style menus compacted. Headless-Chrome QA in both apps (behavior,
+  375-1440px ladder) and `test:editor:browser` core and extended pass; two
+  independent reviews READY. Firefox not checked.
 - [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
   row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
 

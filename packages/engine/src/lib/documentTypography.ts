@@ -15,8 +15,10 @@ export const TEXT_SIZES_PT = {
   body: 10
 } as const;
 
-// The size a field is set at: the size most of its text carries (words may
-// carry their own), else the role default.
+// The size a field's spacing follows: the size its first character is set at
+// (read from meaning, so re-spelled runs agree), else the role default. Words
+// set larger make room through overflow; typing later in the field never moves
+// the spacing.
 export function fieldRoleSizePt(value: string, defaultSizePt: number): number {
   return fieldSizePt(value) ?? defaultSizePt;
 }

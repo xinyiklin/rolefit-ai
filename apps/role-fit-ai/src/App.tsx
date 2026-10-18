@@ -92,6 +92,7 @@ import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
   defaultResumePolishScopeModes,
   editablePolishSectionCount,
@@ -1155,7 +1156,9 @@ function App() {
     sourceRevision: coverLetterEditor.sourceRevision,
     tailorApplied: coverLetterEditor.canRestorePreTailor,
     candidateName: resolveResumeApplicantName(
-      coverLetterEditor.data.header?.name || editedResume?.header?.name,
+      stripInlineMarks(coverLetterEditor.data.header?.name ?? "").trim()
+        ? coverLetterEditor.data.header?.name
+        : editedResume?.header?.name,
       currentResumeText || resumeText
     ),
     jobTarget: {

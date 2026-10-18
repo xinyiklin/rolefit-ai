@@ -85,7 +85,7 @@ export function useResumeExport({
     const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
     return emitPdf(document, fonts, {
       title: documentTitle.trim() || (
-        schema.header?.name ? `${stripInlineMarks(schema.header.name)} Resume` : "Resume"
+        stripInlineMarks(schema.header?.name ?? "").trim() ? `${stripInlineMarks(schema.header!.name!)} Resume` : "Resume"
       )
     });
   }

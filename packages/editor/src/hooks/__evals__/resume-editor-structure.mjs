@@ -1182,10 +1182,19 @@ assert.equal(resetFormatting.header.contact[0], "a@b.com", "reset leaves unmarke
     bullets: [{ id: "b", text: "<size=13>Built </size><size=15>fast</size><size=13> things</size>" }] }] }] };
   const respelledBody = reduceResumeData(respelled, { type: "setStyleFieldSize", field: "body", sizePt: 9 });
   assert.equal(respelledBody.sections[0].items[0].bullets[0].text, "<size=9>Built </size><size=15>fast</size><size=9> things</size>",
-    "Body sets the size most of the text carries, however the runs are spelled");
+    "Body sets the main size, however the runs are spelled");
   assert.equal(styleFieldSizeStates(respelledBody).body, 9, "the Body row reports the size the main text paints at");
   assert.equal(reduceResumeData(respelledBody, { type: "resetStyleFieldFormatting" }).sections[0].items[0].bullets[0].text,
     "Built <size=15>fast</size> things", "reset returns the main text to the default and keeps the word");
+  // A sized lead-in word is a word set apart: Body, reset, and the Styles state
+  // follow the main text.
+  const leadIn = { ...doc, sections: [{ ...doc.sections[0], items: [{ ...doc.sections[0].items[0],
+    bullets: [{ id: "b", text: "<size=14>Built</size><size=12> fast services for many partners</size>" }] }] }] };
+  assert.equal(styleFieldSizeStates(leadIn).body, 12, "the Body row reads the main text, not the lead-in");
+  assert.equal(reduceResumeData(leadIn, { type: "setStyleFieldSize", field: "body", sizePt: 9 }).sections[0].items[0].bullets[0].text,
+    "<size=14>Built</size><size=9> fast services for many partners</size>", "Body resizes the main text and keeps the lead-in");
+  assert.equal(reduceResumeData(leadIn, { type: "resetStyleFieldFormatting" }).sections[0].items[0].bullets[0].text,
+    "<size=14>Built</size> fast services for many partners", "reset clears the main size and keeps the lead-in");
   const bodyFont = reduceResumeData(doc, { type: "setStyleFieldFont", field: "body", family: "arimo" });
   assert.equal(bodyFont.sections[0].items[0].bullets[0].text, `<font=arimo>${bullet}</font>`, "Body font keeps inner fonts");
 }

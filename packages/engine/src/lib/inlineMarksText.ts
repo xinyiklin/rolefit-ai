@@ -340,31 +340,6 @@ export function effectiveFieldFont(value: string, fallback: FieldFontFamily): Fi
   );
 }
 
-// Remove only override pairs that wrap all of the field's visible text, so a
-// whole-field change keeps the sizes or fonts set on words inside it.
-function stripWholeFieldPairs(escaped: string, overrideRe: RegExp): string {
-  for (;;) {
-    const stack: RegExpExecArray[] = [];
-    let next: string | null = null;
-    for (const tag of escaped.matchAll(new RegExp(overrideRe.source, "gi"))) {
-      if (!tag[0].startsWith("</")) {
-        stack.push(tag as RegExpExecArray);
-        continue;
-      }
-      const open = stack.pop();
-      if (!open) continue;
-      const before = escaped.slice(0, open.index);
-      const after = escaped.slice(tag.index + tag[0].length);
-      if (!stripInlineMarks(before + after).trim()) {
-        next = before + escaped.slice(open.index + open[0].length, tag.index) + after;
-        break;
-      }
-    }
-    if (next === null) return escaped;
-    escaped = next;
-  }
-}
-
 type OverrideKind = "size" | "font";
 
 function overrideOpen(kind: OverrideKind, tag: string): string | typeof INERT_OPEN_TAG | null {
@@ -380,11 +355,49 @@ function overrideOpen(kind: OverrideKind, tag: string): string | typeof INERT_OP
 const overrideClose = (kind: OverrideKind, tag: string) =>
   kind === "size" ? /^<\/size>$/i.test(tag) : /^<\/font>$/i.test(tag);
 
-// The override value most of a field's visible characters carry (null: no
+// The next-typing format a textless field stores in its tags (a carrier the
+// editor writes so an empty field keeps its chosen format), read the way the
+// editor reads it.
+export function emptyFieldCarrier(value: string): {
+  bold: boolean;
+  italic: boolean;
+  sizePt: number | null;
+  fontFamily: FieldFontFamily | null;
+} {
+  const size = /<size=(\d+(?:\.\d+)?)>/i.exec(value)?.[1];
+  const family = new RegExp(`<font=(${FONT_FAMILY_ALTERNATION})>`, "i").exec(value)?.[1];
+  return {
+    bold: /<b>/i.test(value),
+    italic: /<i>/i.test(value),
+    sizePt: size && isInlineFontSizePt(Number(size)) ? Number(size) : null,
+    fontFamily: (family?.toLowerCase() as FieldFontFamily | undefined) ?? null
+  };
+}
+
+// The override value a field's first visible character carries (null: no
 // override), or undefined when it has no visible text. It reads meaning, not
-// tag spelling, so the runs the editor writes back after any edit count the
-// same as one wrapper. Ties go to the larger size or the earlier family.
-function dominantOverride(value: string, kind: OverrideKind): string | null | undefined {
+// tag spelling, so the runs the editor writes back after an edit read the same
+// as one wrapper, and typing after the first character never changes it.
+function leadingOverride(value: string, kind: OverrideKind): string | null | undefined {
+  const stack: (string | null)[] = [];
+  const top = () => (stack.length ? stack[stack.length - 1] : null);
+  let cursor = 0;
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    if (value.slice(cursor, match.index).trim() || isInlineLiteralLessThan(match[0])) return top();
+    cursor = match.index + match[0].length;
+    const opened = overrideOpen(kind, match[0]);
+    if (opened === INERT_OPEN_TAG) stack.push(top());
+    else if (opened !== null) stack.push(opened);
+    else if (overrideClose(kind, match[0])) stack.pop();
+  }
+  return value.slice(cursor).trim() ? top() : undefined;
+}
+
+// The override most of a field's visible characters carry (null: none), ties
+// going to the first character's; undefined when it has no visible text.
+function mainOverride(value: string, kind: OverrideKind): string | null | undefined {
+  const lead = leadingOverride(value, kind);
+  if (lead === undefined) return undefined;
   const counts = new Map<string | null, number>();
   const stack: (string | null)[] = [];
   const top = () => (stack.length ? stack[stack.length - 1] : null);
@@ -405,33 +418,36 @@ function dominantOverride(value: string, kind: OverrideKind): string | null | un
     else if (overrideClose(kind, match[0])) stack.pop();
   }
   count(value.slice(cursor).replace(/\s+/g, "").length);
-  let best: string | null | undefined;
-  let bestCount = 0;
-  for (const [key, total] of counts) {
-    const larger = kind === "size" && total === bestCount && Number(key ?? 0) > Number(best ?? 0);
-    if (total > bestCount || larger) {
-      best = key;
-      bestCount = total;
-    }
-  }
+  let best = lead;
+  for (const [key, total] of counts) if (total > (counts.get(best) ?? 0)) best = key;
   return best;
 }
 
-// The explicit size most of the field's text is set at, or null when most of
-// it has no size of its own (it follows the role default).
+// A field's spacing size: the explicit size its first character is set at, or
+// null when that character follows the role default. Typing later in the field
+// never changes it, so layout spacing and the bullet dot use it.
 export function fieldSizePt(value: string): number | null {
-  const size = dominantOverride(value, "size");
+  const size = leadingOverride(value, "size");
   return size === null || size === undefined ? null : Number(size);
 }
 
-function fieldFontOverride(value: string): FieldFontFamily | null {
-  return (dominantOverride(value, "font") ?? null) as FieldFontFamily | null;
+// A field's main size: the explicit size most of its text carries, or null when
+// most of it follows the role default. Only one-shot reads use it (the Styles
+// state, Body changes, Polish carry, new-field seeding), never layout, which
+// would then shift while typing.
+export function fieldMainSizePt(value: string): number | null {
+  const size = mainOverride(value, "size");
+  return size === null || size === undefined ? null : Number(size);
+}
+
+function fieldMainFont(value: string): FieldFontFamily | null {
+  return (mainOverride(value, "font") ?? null) as FieldFontFamily | null;
 }
 
 export type WholeFieldFormat = { sizePt: number | null; fontFamily: FieldFontFamily | null };
 
 export function wholeFieldFormat(value: string): WholeFieldFormat {
-  return { sizePt: fieldSizePt(value), fontFamily: fieldFontOverride(value) };
+  return { sizePt: fieldMainSizePt(value), fontFamily: fieldMainFont(value) };
 }
 
 // The field size and font every non-empty value agrees on.
@@ -446,8 +462,8 @@ export function sharedWholeFieldFormat(values: readonly string[]): WholeFieldFor
 // its own, so an accepted rewrite keeps the field's look.
 export function withWholeFieldFormat(value: string, format: WholeFieldFormat): string {
   let next = value;
-  if (format.fontFamily !== null && fieldFontOverride(next) === null) next = setFieldOuterFont(next, format.fontFamily);
-  if (format.sizePt !== null && fieldSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
+  if (format.fontFamily !== null && fieldMainFont(next) === null) next = setFieldOuterFont(next, format.fontFamily);
+  if (format.sizePt !== null && fieldMainSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
   return next;
 }
 
@@ -475,18 +491,21 @@ function retagOverridePairs(escaped: string, kind: OverrideKind, from: string, t
     .reduce((text, edit) => text.slice(0, edit.at) + edit.text + text.slice(edit.at + edit.length), escaped);
 }
 
-// Set the size of a field's main text (the size most of it carries), keeping
-// words set to other sizes, for body text. "default" returns that text to the
-// role default.
+// Set the size (or font) of a field's main text, the override most of it
+// carries, keeping words set otherwise, for body text. null returns that text
+// to the role default (unwrapping nested main wrappers until none is left).
 function setFieldMainOverride(value: string, kind: OverrideKind, next: string | null): string {
   return withInlineLiteralsProtected(value, (escaped) => {
-    if (!stripInlineMarks(escaped).trim()) return escaped;
-    const unwrapped = stripWholeFieldPairs(escaped, kind === "size" ? SIZE_OVERRIDE_RE : FONT_OVERRIDE_RE);
-    const main = dominantOverride(unwrapped, kind);
-    if (main !== null && main !== undefined) return retagOverridePairs(unwrapped, kind, main, next);
-    if (next === null) return unwrapped;
+    let main = mainOverride(escaped, kind);
+    if (main === undefined) return escaped;
+    if (main !== null && next !== null) return retagOverridePairs(escaped, kind, main, next);
+    for (let guard = 0; main !== null && main !== undefined && guard < 64; guard += 1) {
+      escaped = retagOverridePairs(escaped, kind, main, null);
+      main = mainOverride(escaped, kind);
+    }
+    if (next === null) return escaped;
     const tag = kind === "size" ? "size" : "font";
-    return `<${tag}=${next}>${unwrapped}</${tag}>`;
+    return `<${tag}=${next}>${escaped}</${tag}>`;
   });
 }
 
@@ -606,9 +625,13 @@ export function skillsRowText(label: string, skills: string): string {
     return isInlineFontSizePt(Number(opened[1])) ? Number(opened[1]) : INERT_OPEN_TAG;
   }, /^<\/size>$/i);
   const family = shared((tag) => FONT_OPEN_RE.exec(tag)?.[1].toLowerCase() as FieldFontFamily ?? null, /^<\/font>$/i);
+  // One skill set apart must not drop the separator to the default. It is
+  // layout, so like spacing it follows the skills' first character, which
+  // typing never moves (and which text typed after it inherits).
+  const separatorSize = sizePt ?? fieldSizePt(skills) ?? undefined;
   const tags = [
     alignment ? `align=${alignment}` : "",
-    sizePt ? `size=${sizePt}` : "",
+    separatorSize ? `size=${separatorSize}` : "",
     family ? `font=${family}` : "",
     ...(["bold", "italic", "underline"] as const).map((mark) => (fieldMarkState(row, mark) === true ? MARK_TAG[mark] : ""))
   ].filter(Boolean);

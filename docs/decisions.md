@@ -170,9 +170,14 @@ later entry wins.
   scale.** Every text role has its own default (`TEXT_SIZES_PT`: name 25,
   section heading 12, titles 11, subtitles, contact, skill labels and body 10),
   shared by resumes and letters. Text without its own size paints at its role
-  default (what the editor shows); a field's spacing follows the size most of
-  its text carries, however the tags are spelled, and empty fields never set a
-  row's size. The Styles menu has
+  default (what the editor shows). Sizes read meaning, not tag spelling. A
+  field's spacing and bullet dot follow its first character's size, so typing
+  later in it, sizing a word inside it, or re-spelled runs never re-space it
+  (larger words make room through overflow; a sized lead-in word spaces its
+  whole paragraph, accepted [USER]). The Styles state, Body changes, Polish
+  carry, and new-field seeding use the main size, the one most of its text
+  carries. Empty fields never set a row's size; the skills `: ` takes the size
+  both columns share, else the skills' first character's. The Styles menu has
   Name (default bold, now a removable `<b>`, painted in the display bold face)
   and Body rows (no B/I/U, so per-word emphasis survives). Resumes and letters
   share behavior and names: a letter's style keys are the resume's
@@ -192,8 +197,8 @@ later entry wins.
   continuation-page top rises 1 pt; italic text in an
   old name now paints italic; an accepted Polish rewrite keeps its field's
   whole size and font but not per-word sizes inside it (Polish never sees
-  them). Body's size and font change only a whole-field wrapper, keeping
-  per-word overrides. Saved style preferences (a letter's stored default style,
+  them). Body's size and font change the main text and keep words set
+  otherwise. Saved style preferences (a letter's stored default style,
   resume style presets) drop the retired size key and take the defaults.
 - 2026-10-18 [USER+CODE+TOOL] D082 ACTIVE: **Alignment never changes line
   breaks.** Every alignment breaks as a ragged paragraph does (unused width is
