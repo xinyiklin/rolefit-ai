@@ -70,6 +70,14 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-18
 
+- [USER+CODE+TOOL] **Server runtime hardening** (branch
+  `fix/rolefit-server-runtime-hardening`): no "Default AI provider/model"
+  startup log (the UI sends each stage's provider; an unknown `AI_PROVIDER`
+  still fails startup); every route dispatches through a 500-not-crash safety
+  net that logs only the error name; production CSP drops `ws:`/`wss:`; an
+  unreadable `.env` fails startup. Lifecycle probe (negative controls), offline
+  evals, desktop contracts pass; one code-reviewer pass (its Low fixed).
+  Dev-mode CSP checked by inspection only.
 - [USER+CODE+TOOL] **One Prepare intake** (#248): link over a full-height
   posting box, one submit (typed text, else link, else capture); no
   provider-check note. Intake browser-checked 1440/1080/720 (Chromium pane).
@@ -139,22 +147,3 @@ D-entries in `docs/decisions.md`.
   landing fact strip to "2 CLIs + 2 APIs".
   - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
     UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
-- [USER+CODE] **0.16.0 prepared** (minor: Antigravity removed, GPT-5.5
-  retired; the user asked for the preview). Since
-  `rolefit-preview-v0.15.0-beta.1`: #230-#233, GPT-5.5 retirement (D076),
-  literal tag text (D079), and #235 (D080). Notes
-  `apps/role-fit-ai/docs/releases/0.16.0-beta.1.md`; extension 1.4.0 and
-  desktop bridge API 13 unchanged; no file format change.
-  - [TOOL] Preflight on Windows x64 with Node 24.18.0: `test:desktop:release`
-    14/14, `npm run check --workspace apps/role-fit-ai` exit 0 (offline
-    186/186), `test:rolefit:desktop` passed on rerun (first run hit companion
-    request timeouts under load), `make:rolefit:desktop` plus
-    `test:rolefit:desktop:packaged` (win32-x64, unpacked) passed, and
-    `test:rolefit:windows-runtime` passed. Not run locally: the Windows
-    installer smoke (it installs into the real profile; the release workflow
-    runs it) and any macOS packaging (no Mac here; the changed packaged smoke
-    first runs on darwin in the tag's jobs).
-  - [TOOL] Two fresh mb-verifier reviews. Mechanics: READY (the CONTINUITY
-    receipt was missing; added). Notes: three Medium and eight Low wording
-    findings fixed (job-import and Claude Code claims narrowed, cover-letter
-    and Edit-box known issues corrected, the Polish hidden-link fix added).

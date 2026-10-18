@@ -15,6 +15,8 @@ for provider, prompt, sanitizer, and review work.
   not listen or create storage merely because it was imported. Reusability does
   not make the full server a desktop companion protocol. Preview route renames
   replace their old dispatch paths; do not retain compatibility aliases.
+  Handlers answer their own expected failures; route dispatch only backstops an
+  unexpected throw with a generic 500 and a name-only log, never a crash.
 - `http.ts` owns body/JSON/fetch utilities and request limits.
 - `network.ts` owns SSRF-safe public-page fetching and redirect validation.
 - `jobImport.ts` owns recognized job-source targets, fetch sequencing, caches,

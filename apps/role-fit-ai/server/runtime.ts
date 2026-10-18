@@ -6,7 +6,7 @@ import { readFile } from "node:fs/promises";
 import { extname, join, resolve, sep } from "node:path";
 import { handleResumePolish } from "./ai/resumePolish.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
-import { getDefaultModel, getDefaultProvider } from "./ai/providers.ts";
+import { getDefaultProvider } from "./ai/providers.ts";
 import { handleApplicationAnswers } from "./ai/applicationAnswers.ts";
 import { handleCoverPolish } from "./ai/coverLetter.ts";
 import { isApiPathname, sendJson } from "./http.ts";
@@ -99,16 +99,18 @@ const ROLEFIT_CONTENT_SECURITY_POLICY = [
   "script-src 'self'",
   // React-PDF reads generated previews from an in-memory object URL; without
   // this narrow source Chromium blocks the PDF.js fetch before parsing starts.
-  "connect-src 'self' blob: ws: wss:",
+  "connect-src 'self' blob:",
   "worker-src 'self' blob:",
   "child-src 'self' blob:"
 ].join("; ");
 
 function setRoleFitSecurityHeaders(res: ServerResponse, development = false): void {
-  // Vite injects an inline React-refresh preamble in source development. Keep
-  // that one development-only exception out of packaged production responses.
+  // Vite injects an inline React-refresh preamble and opens an HMR WebSocket in
+  // source development. Keep both exceptions out of packaged production responses.
   const policy = development
-    ? ROLEFIT_CONTENT_SECURITY_POLICY.replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+    ? ROLEFIT_CONTENT_SECURITY_POLICY
+        .replace("script-src 'self'", "script-src 'self' 'unsafe-inline'")
+        .replace("connect-src 'self' blob:", "connect-src 'self' blob: ws: wss:")
     : ROLEFIT_CONTENT_SECURITY_POLICY;
   res.setHeader("Content-Security-Policy", policy);
   res.setHeader("X-Content-Type-Options", "nosniff");
@@ -117,17 +119,20 @@ function setRoleFitSecurityHeaders(res: ServerResponse, development = false): vo
 }
 
 export async function loadRoleFitLocalEnv(appRoot: string): Promise<void> {
+  let env: string;
   try {
-    const env = await readFile(join(appRoot, ".env"), "utf8");
-    for (const line of env.split(/\r?\n/)) {
-      const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
-      if (!match) continue;
-      const [, key, rawValue] = match;
-      if (process.env[key]) continue;
-      process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
-    }
-  } catch {
-    // Local .env is optional.
+    env = await readFile(join(appRoot, ".env"), "utf8");
+  } catch (error) {
+    // A missing .env is optional; an unreadable one must not silently drop settings.
+    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") return;
+    throw error;
+  }
+  for (const line of env.split(/\r?\n/)) {
+    const match = line.match(/^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$/i);
+    if (!match) continue;
+    const [, key, rawValue] = match;
+    if (process.env[key]) continue;
+    process.env[key] = rawValue.replace(/^['"]|['"]$/g, "");
   }
 }
 
@@ -189,16 +194,8 @@ async function serveStatic(req: IncomingMessage, res: ServerResponse, appRoot: s
     res.writeHead(200, { "Content-Type": type });
     res.end(data);
   } catch {
-    // Unmatched /api/* paths fall through to static serving in production;
-    // serving index.html as 200 would turn a mistyped or removed route into
-    // an opaque JSON parse error client-side instead of a visible 404.
-    if (isApiPathname(pathname)) {
-      sendJson(res, 404, { error: "Not found." });
-      return;
-    }
-    // The fallback read must not escape: serveStatic is dispatched fire-and-
-    // forget, so an unguarded ENOENT here (missing/corrupt dist) would become
-    // an unhandled rejection that kills the whole server process.
+    // Answer a missing/corrupt dist with an actionable 500 rather than the
+    // generic unexpected-error response.
     let index: Buffer;
     try {
       index = await readFile(join(appRoot, "dist", "index.html"));
@@ -306,8 +303,8 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
   if (!host) throw new Error("RoleFit server host cannot be empty.");
 
   if (options.loadLocalEnv !== false) await loadRoleFitLocalEnv(appRoot);
-  const defaultProvider = getDefaultProvider();
-  const defaultModel = getDefaultModel();
+  // Fail fast on an unknown AI_PROVIDER instead of at the first AI request.
+  getDefaultProvider();
   await ensureJobWorkspace(workspaceDir);
 
   // Keep Vite out of the packaged production runtime. It is a development
@@ -344,8 +341,26 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         }
       }));
 
+  // Handlers answer their expected failures. This catches the rest so one bug
+  // fails its own request instead of crashing the server process.
+  const failRequest = (res: ServerResponse, error: unknown): void => {
+    if (!res.destroyed && !res.writableEnded) {
+      if (res.headersSent) res.destroy();
+      else sendJson(res, 500, { error: "Unexpected server error." });
+    }
+    try {
+      // Name only: an error message can carry request, resume, or job text.
+      logger?.warn(`RoleFit request failed unexpectedly (${error instanceof Error ? error.name : typeof error}).`);
+    } catch {
+      // A failing logger must not turn one failed request into a server crash.
+    }
+  };
+  const dispatch = (res: ServerResponse, task: Promise<void>): void => {
+    task.catch((error: unknown) => failRequest(res, error));
+  };
+
   let listeningPort = configuredPort;
-  const server = createServer((req, res) => {
+  const routeRequest = (req: IncomingMessage, res: ServerResponse): void => {
     setRoleFitSecurityHeaders(res, !isProduction);
     let routeUrl: URL;
     try {
@@ -362,7 +377,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         pathname === "/api/extension/analyze" ||
         pathname === "/api/extension/import" ||
         pathname === "/api/extension/pairing-request") {
-      void handleExtensionRoutes(req, res, pathname, workspaceDir);
+      dispatch(res, handleExtensionRoutes(req, res, pathname, workspaceDir));
       return;
     }
 
@@ -382,13 +397,13 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         return;
       }
       if (req.headers.origin) {
-        let originHost = "";
+        let requestOriginHost = "";
         try {
-          originHost = new URL(req.headers.origin).host;
+          requestOriginHost = new URL(req.headers.origin).host;
         } catch {
           // Keep the non-matching sentinel for a malformed Origin.
         }
-        if (!allowedHosts.has(originHost)) {
+        if (!allowedHosts.has(requestOriginHost)) {
           sendJson(res, 403, { error: "Cross-origin request blocked." });
           return;
         }
@@ -399,7 +414,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     // fallback would otherwise answer a missing generated public/font file with
     // index.html and fontkit would report the opaque "Unknown font format".
     if (!isProduction && pathname.startsWith("/fonts/")) {
-      void serveEngineFont(pathname, res, appRoot);
+      dispatch(res, serveEngineFont(pathname, res, appRoot));
       return;
     }
 
@@ -422,7 +437,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     if (pathname === "/api/extension/inbox") {
       const tabId = routeUrl.searchParams.get("tabId") || "";
       const claimToken = cleanExtensionClaimToken(routeUrl.searchParams.get("claimToken"));
-      void handleExtensionInbox(req, res, tabId, claimToken);
+      dispatch(res, handleExtensionInbox(req, res, tabId, claimToken));
       return;
     }
 
@@ -432,47 +447,47 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     }
 
     if (pathname === "/api/resume-polish") {
-      void handleResumePolish(req, res);
+      dispatch(res, handleResumePolish(req, res));
       return;
     }
 
     if (pathname === "/api/job-analysis") {
-      void handleJobAnalysis(req, res);
+      dispatch(res, handleJobAnalysis(req, res));
       return;
     }
 
     if (pathname === "/api/application-review") {
-      void handleApplicationReview(req, res);
+      dispatch(res, handleApplicationReview(req, res));
       return;
     }
 
     if (pathname === "/api/resume-import") {
-      void handleResumeImport(req, res);
+      dispatch(res, handleResumeImport(req, res));
       return;
     }
 
     if (pathname === "/api/application-answers") {
-      void handleApplicationAnswers(req, res);
+      dispatch(res, handleApplicationAnswers(req, res));
       return;
     }
 
     if (pathname === "/api/cover-polish") {
-      void handleCoverPolish(req, res);
+      dispatch(res, handleCoverPolish(req, res));
       return;
     }
 
     if (pathname === "/api/import-job") {
-      void handleImportJob(req, res);
+      dispatch(res, handleImportJob(req, res));
       return;
     }
 
     if (pathname === "/api/workspace") {
-      void handleWorkspace(req, res, workspaceLocations);
+      dispatch(res, handleWorkspace(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/preferences") {
-      void handleWorkspacePreferences(req, res, workspaceDir);
+      dispatch(res, handleWorkspacePreferences(req, res, workspaceDir));
       return;
     }
 
@@ -482,55 +497,55 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     }
 
     if (pathname === "/api/presence") {
-      void handlePresence(req, res);
+      dispatch(res, handlePresence(req, res));
       return;
     }
 
     if (pathname === "/api/workspace/base-resume") {
-      void handleWorkspaceBaseResume(req, res, workspaceLocations);
+      dispatch(res, handleWorkspaceBaseResume(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/base-resume/select") {
-      void handleSelectBaseResume(req, res, workspaceLocations);
+      dispatch(res, handleSelectBaseResume(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/base-resume/candidates") {
-      void handleBaseResumeCandidates(req, res, workspaceLocations);
+      dispatch(res, handleBaseResumeCandidates(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/base-resume/restore") {
-      void handleRestoreBaseResume(req, res, workspaceLocations);
+      dispatch(res, handleRestoreBaseResume(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/cover-letter") {
-      void handleWorkspaceCoverLetter(req, res, workspaceLocations);
+      dispatch(res, handleWorkspaceCoverLetter(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/cover-letter/select") {
-      void handleSelectCoverLetter(req, res, workspaceLocations);
+      dispatch(res, handleSelectCoverLetter(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/cover-letter/candidates") {
-      void handleCoverLetterCandidates(req, res, workspaceLocations);
+      dispatch(res, handleCoverLetterCandidates(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/workspace/cover-letter/restore") {
-      void handleRestoreCoverLetter(req, res, workspaceLocations);
+      dispatch(res, handleRestoreCoverLetter(req, res, workspaceLocations));
       return;
     }
 
     if (pathname === "/api/applications") {
       if (req.method === "GET") {
-        void handleListApplications(req, res, workspaceDir);
+        dispatch(res, handleListApplications(req, res, workspaceDir));
       } else if (req.method === "PUT" || req.method === "POST") {
-        void handleSaveApplications(req, res, workspaceDir);
+        dispatch(res, handleSaveApplications(req, res, workspaceDir));
       } else {
         sendJson(res, 405, { error: "Use GET or PUT." });
       }
@@ -544,7 +559,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 400, { error: "Invalid application id." });
         return;
       }
-      void handleDeleteApplication(req, res, id, workspaceDir);
+      dispatch(res, handleDeleteApplication(req, res, id, workspaceDir));
       return;
     }
 
@@ -557,7 +572,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 400, { error: "Invalid application document." });
         return;
       }
-      void handleApplicationDocumentFile(req, res, id, documentFileMatch[2], documentFileMatch[3], workspaceDir);
+      dispatch(res, handleApplicationDocumentFile(req, res, id, documentFileMatch[2], documentFileMatch[3], workspaceDir));
       return;
     }
 
@@ -568,7 +583,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 400, { error: "Invalid application document." });
         return;
       }
-      void handleSaveApplicationDocument(req, res, id, documentSaveMatch[2], workspaceDir);
+      dispatch(res, handleSaveApplicationDocument(req, res, id, documentSaveMatch[2], workspaceDir));
       return;
     }
 
@@ -580,7 +595,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 400, { error: "Invalid attachment." });
         return;
       }
-      void handleApplicationAttachmentFile(req, res, id, fileName, workspaceDir);
+      dispatch(res, handleApplicationAttachmentFile(req, res, id, fileName, workspaceDir));
       return;
     }
 
@@ -591,7 +606,7 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
         sendJson(res, 400, { error: "Invalid application id." });
         return;
       }
-      void handleUploadApplicationAttachment(req, res, id, workspaceDir);
+      dispatch(res, handleUploadApplicationAttachment(req, res, id, workspaceDir));
       return;
     }
 
@@ -609,7 +624,14 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    void serveStatic(req, res, appRoot);
+    dispatch(res, serveStatic(req, res, appRoot));
+  };
+  const server = createServer((req, res) => {
+    try {
+      routeRequest(req, res);
+    } catch (error) {
+      failRequest(res, error);
+    }
   });
 
   try {
@@ -625,8 +647,6 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
     if (!isLoopbackBindHost(host)) {
       logger?.warn(`Bound to ${host} (HOST override): potentially reachable from the network. This app has no auth.`);
     }
-    logger?.info(`Default AI provider: ${defaultProvider}`);
-    logger?.info(`Default AI model: ${defaultModel || "(CLI default)"}`);
   } catch (error) {
     await Promise.all([closeHttpServer(server), vite?.close()]);
     throw error;

@@ -15,7 +15,7 @@ import {
   ROLEFIT_HEALTH_API_VERSION,
   computeWorkspaceFingerprint
 } from "../health-contract.ts";
-import { startRoleFitServer } from "../runtime.ts";
+import { loadRoleFitLocalEnv, startRoleFitServer } from "../runtime.ts";
 
 const sourceAppRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 const temporaryRoot = await mkdtemp(join(tmpdir(), "rolefit-server-runtime-"));
@@ -24,6 +24,7 @@ const workspaceDir = join(temporaryRoot, "workspace");
 const indexMarker = "rolefit isolated runtime";
 const envSentinelKey = "ROLEFIT_RUNTIME_LOCAL_ENV_SENTINEL";
 const previousEnvSentinel = process.env[envSentinelKey];
+const previousAiProvider = process.env.AI_PROVIDER;
 
 function get(port, pathname, headers = {}) {
   return new Promise((resolveResponse, rejectResponse) => {
@@ -93,8 +94,8 @@ try {
   assert.match(String(page.headers["content-security-policy"]), /frame-ancestors 'none'/);
   assert.match(
     String(page.headers["content-security-policy"]),
-    /connect-src 'self' blob: ws: wss:/,
-    "saved PDF previews fetch an in-memory object URL through PDF.js"
+    /connect-src 'self' blob:(;|$)/,
+    "saved PDF previews fetch an in-memory object URL through PDF.js; production opens no WebSocket"
   );
   assert.equal(page.headers["x-content-type-options"], "nosniff");
   assert.equal(page.headers["referrer-policy"], "no-referrer");
@@ -305,6 +306,32 @@ try {
   await restarted.close();
   restarted = null;
 
+  process.env.AI_PROVIDER = "opneai";
+  await assert.rejects(
+    startRoleFitServer({
+      appRoot,
+      workspaceDir,
+      mode: "production",
+      host: "127.0.0.1",
+      port: releasedPort,
+      logger: null,
+      loadLocalEnv: false
+    }),
+    /Unknown AI_PROVIDER/,
+    "an unknown AI_PROVIDER fails at startup, not at the first AI request"
+  );
+  delete process.env.AI_PROVIDER;
+
+  const envAppRoot = join(temporaryRoot, "env-app");
+  await mkdir(envAppRoot, { recursive: true });
+  await loadRoleFitLocalEnv(envAppRoot);
+  await mkdir(join(envAppRoot, ".env"));
+  await assert.rejects(
+    loadRoleFitLocalEnv(envAppRoot),
+    { code: "EISDIR" },
+    "an unreadable .env is reported instead of silently dropping settings"
+  );
+
   console.log("server lifecycle probes: passed");
 } finally {
   if (launcher && launcher.exitCode === null) {
@@ -315,5 +342,7 @@ try {
   await restarted?.close();
   if (previousEnvSentinel === undefined) delete process.env[envSentinelKey];
   else process.env[envSentinelKey] = previousEnvSentinel;
+  if (previousAiProvider === undefined) delete process.env.AI_PROVIDER;
+  else process.env.AI_PROVIDER = previousAiProvider;
   await rm(temporaryRoot, { recursive: true, force: true });
 }
