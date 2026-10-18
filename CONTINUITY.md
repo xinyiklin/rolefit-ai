@@ -73,6 +73,9 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-18
 
+- [USER+CODE] **0.17.0 preview prepared** (minor: provider plans, effort
+  parity, model refresh, per-field sizes). Notes
+  `apps/role-fit-ai/docs/releases/0.17.0-beta.1.md`.
 - [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D087; branch
   `feature/rolefit-provider-plans`): API calls send the stage effort (no off
   setting anywhere); labels are Claude/OpenAI · CLI/API; Settings > Models adds
