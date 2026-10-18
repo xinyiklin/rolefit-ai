@@ -1370,19 +1370,25 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const typingFormat = dStart === dEnd ? typingFormatRef.current ?? undefined : undefined;
       const deletedTypingFormat = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
       // Emptying the name keeps its format for the next character. A format
-      // other than the name's default is stored as a textless carrier so the
-      // engine paints the empty name exactly as the next character will look.
+      // other than the name's default is stored as a textless carrier holding
+      // only what differs, so the engine paints the empty name as the next
+      // character will look. A plain (not bold) name with nothing else set
+      // keeps the name's fixed default size as the tag that marks it.
       const emptiesName = sel.src.kind === "name" && dStart === 0 && dEnd >= sel.map.chars.length;
-      const nameCarrier = emptiesName && deletedTypingFormat && (
+      const differs = deletedTypingFormat !== null && (
         deletedTypingFormat.bold !== STYLE_FIELD_MARK_DEFAULTS.name.bold || deletedTypingFormat.italic ||
         deletedTypingFormat.underline || deletedTypingFormat.fontFamily !== null ||
         deletedTypingFormat.fontSizePt !== null || deletedTypingFormat.alignment !== null
-      )
+      );
+      const nameCarrier = emptiesName && deletedTypingFormat && differs
         ? {
             ...deletedTypingFormat,
-            fontFamily: deletedTypingFormat.fontFamily ?? docStyle.style.fontFamily,
-            fontSizePt: deletedTypingFormat.fontSizePt ?? defaultFontSizeForField(sel.src),
-            alignment: deletedTypingFormat.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
+            fontSizePt: deletedTypingFormat.fontSizePt ?? (
+              deletedTypingFormat.bold || deletedTypingFormat.italic || deletedTypingFormat.underline ||
+              deletedTypingFormat.fontFamily !== null || deletedTypingFormat.alignment !== null
+                ? null
+                : defaultFontSizeForField(sel.src)
+            )
           }
         : null;
       if (deletedTypingFormat) {
@@ -2696,7 +2702,9 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // Text typed into an empty field takes the format typing on the page
       // would give it: the field's default emphasis and its siblings' size.
       let value = replacement.value;
-      if (!stripInlineMarks(current).trim()) {
+      // A stored carrier already holds the empty field's format; seed only a
+      // bare empty field.
+      if (!stripInlineMarks(current).trim() && !typingFormatForEmptyField(buildDisplayMap(current))) {
         const emphasis = emphasisSeedForField(dataRef.current, src);
         for (const mark of ["bold", "italic", "underline"] as const) {
           if (emphasis?.[mark]) value = setFieldMark(value, mark, true);

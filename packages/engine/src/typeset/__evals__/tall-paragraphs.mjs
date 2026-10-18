@@ -246,7 +246,7 @@ console.log("uppercase headings transform text, not tags");
     const line = lines(doc)[0];
     return { baseline: line.baseline, face: line.runs[0].style.face, size: line.runs[0].style.size };
   };
-  const carrier = (text) => `<align=center><size=30><font=latin-modern><i>${text}</i></font></size></align>`;
+  const carrier = (text) => `<align=left><size=30><font=arimo><i>${text}</i></font></size></align>`;
   assert.deepEqual(nameLine(carrier("")), nameLine(carrier("Jane")), "an emptied 30 pt italic name paints where its next character will");
   console.log("an empty name's caret run matches what typing produces");
 }
