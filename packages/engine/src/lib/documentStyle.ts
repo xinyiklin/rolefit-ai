@@ -17,12 +17,11 @@ export type HeaderAlign = "left" | "center" | "right";
 export type BodyAlign = FieldAlignment;
 export type AlignmentScope = "body" | "header" | "heading";
 
-// The page every document is set on: its face, its body size and leading, its
-// text alignment, and the four physical margins. A resume and a letter are the
+// The page every document is set on: its face, its body leading, its text
+// alignment, and the four physical margins. A resume and a letter are the
 // same page; only what sits on it differs.
 export type PageStyle = {
   fontFamily: FontFamily;
-  baseFontSizePt: number;
   lineHeight: number; // unitless body-leading multiplier
   bodyAlign: BodyAlign;
   pageMarginTopPt: number;
@@ -103,7 +102,6 @@ export const FONT_FAMILY_OPTIONS: readonly {
 // space added at that junction.
 export const DOC_STYLE_BOUNDS = {
   zoom: { min: 0.5, max: 2, step: 0.01 },
-  baseFontSizePt: { min: 8, max: 12, step: 0.5 },
   lineHeight: { min: 1, max: 2, step: 0.01 },
   entryIndentPt: { min: 0, max: 36, step: 0.1 },
   entryEndIndentPt: { min: 0, max: 36, step: 0.1 },
@@ -135,13 +133,11 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
   zoom: 1,
   spellCheck: false,
   fontFamily: "latin-modern",
-  baseFontSizePt: 10,
   lineHeight: 1.18,
   entryIndentPt: 10.8,
   // A 5.4 pt end inset at the default US-Letter text width, matching the
   // entry's 0.15in start inset.
   entryEndIndentPt: 5.4,
-  // The LaTeX-derived dot position at the default 10pt body size.
   bulletIndentPt: 14.73,
   nameContactGapPt: 4,
   contactGapPt: 18,
@@ -169,7 +165,6 @@ export const DOC_STYLE_DEFAULTS: DocStyle = {
 export function toDocumentStyle(style: DocStyle): DocumentStyle {
   return {
     fontFamily: style.fontFamily,
-    baseFontSizePt: style.baseFontSizePt,
     lineHeight: style.lineHeight,
     entryIndentPt: style.entryIndentPt,
     entryEndIndentPt: style.entryEndIndentPt,
@@ -367,7 +362,6 @@ export function coerceDocStyle(raw: unknown): DocStyle {
     zoom: clampStyleNumber("zoom", r.zoom, DOC_STYLE_DEFAULTS.zoom),
     spellCheck: typeof r.spellCheck === "boolean" ? r.spellCheck : DOC_STYLE_DEFAULTS.spellCheck,
     fontFamily: coerceFontFamily(r.fontFamily, DOC_STYLE_DEFAULTS.fontFamily),
-    baseFontSizePt: clampStyleNumber("baseFontSizePt", r.baseFontSizePt, DOC_STYLE_DEFAULTS.baseFontSizePt),
     lineHeight: clampStyleNumber("lineHeight", r.lineHeight, DOC_STYLE_DEFAULTS.lineHeight),
     entryIndentPt: clampStyleNumber("entryIndentPt", r.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt),
     entryEndIndentPt: clampStyleNumber(

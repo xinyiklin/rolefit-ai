@@ -26,6 +26,29 @@ assert.equal(Object.hasOwn(saved.style, "pageMargins"), false, "preset identity 
 assert.equal(saved.style.pageMarginTopPt, 36);
 assert.equal(Object.hasOwn(saved.style, "boldTitles"), false);
 assert.match(saved.document.sections[0].items[0].titleLeft, /^<b>/);
+assert.equal(saved.document.header.name, "<b>Your Name</b>", "the name's default bold is stored, so it can be turned off");
+assert.equal(Object.hasOwn(saved.style, "baseFontSizePt"), false, "text sizes are per field, with no document base");
+// A file saved with the retired base size opens looking as it did: the sizes
+// it implied and the name's bold move onto the fields, and it saves without it.
+{
+  const legacy = structuredClone(saved);
+  legacy.style.baseFontSizePt = 10.5;
+  legacy.document.header.name = "Jane Doe";
+  const upgraded = parseResumeFile(JSON.stringify(legacy));
+  assert.equal(upgraded.data.header.name, "<b><size=26>Jane Doe</size></b>");
+  assert.equal(upgraded.data.header.contact[0], `<size=10.5>${saved.document.header.contact[0]}</size>`);
+  assert.equal(upgraded.data.sections[0].heading, `<size=13>${saved.document.sections[0].heading}</size>`);
+  assert.equal(upgraded.data.sections[0].items[0].titleLeft, saved.document.sections[0].items[0].titleLeft, "11 pt titles need no size");
+  const resaved = JSON.parse(serializeResumeFile(upgraded.data, upgraded.documentStyle));
+  assert.equal(Object.hasOwn(resaved.style, "baseFontSizePt"), false);
+  const atDefault = parseResumeFile(JSON.stringify({ ...saved, style: { ...saved.style, baseFontSizePt: 10 } }));
+  assert.equal(atDefault.data.header.name, saved.document.header.name, "a 10 pt file only gains the name's bold, which it has");
+  assert.throws(
+    () => parseResumeFile(JSON.stringify({ ...saved, style: { ...saved.style, baseFontSizePt: 40 } })),
+    ResumeFileError,
+    "the retired size is still range-checked"
+  );
+}
 
 const parsed = parseResumeFile(serialized);
 const roundTripped = JSON.parse(

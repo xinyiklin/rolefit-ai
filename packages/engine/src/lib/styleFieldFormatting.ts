@@ -1,15 +1,17 @@
 import type { ResumeData } from "./resumeData.ts";
 import type { DocumentStyle } from "./documentStyle.ts";
-import { fontSizesFor } from "./documentTypography.ts";
+import { TEXT_SIZES_PT } from "./documentTypography.ts";
 import {
   effectiveFieldAlignment,
   effectiveFieldFont,
-  effectiveFieldSize,
   fieldMarkState,
   setFieldFont,
   setFieldMark,
+  setFieldOuterFont,
+  setFieldOuterSize,
   setFieldSize,
   stripInlineMarks,
+  fieldMainSizePt,
   type FieldAlignment,
   type FieldFontFamily,
   type FieldFontState,
@@ -17,21 +19,15 @@ import {
 } from "./inlineMarksText.ts";
 
 export type EntryTextField = "titleLeft" | "titleRight" | "subtitleLeft" | "subtitleRight";
-export type StyleTextField = EntryTextField | "sectionHeading" | "skillLabel" | "contact";
+export type StyleTextField = EntryTextField | "name" | "sectionHeading" | "skillLabel" | "contact" | "body";
 export type StyleFieldMarkStates = Record<StyleTextField, Record<FieldMark, boolean | null>>;
 export type StyleFieldFontStates = Record<StyleTextField, FieldFontState>;
 export type StyleFieldSizeStates = Record<StyleTextField, number | null>;
 export type { FieldFontFamily } from "./inlineMarksText.ts";
 
-// Each style field renders at a size derived from the document base size (the
-// same hierarchy the engine uses in defaultFontSizeForField): headings large,
-// entry titles normalsize, everything else small. This is the fallback the
-// per-field size control resolves to when nothing overrides it.
-export function styleFieldDefaultSizePt(field: StyleTextField, baseFontSizePt: number): number {
-  const sizes = fontSizesFor(baseFontSizePt);
-  if (field === "sectionHeading") return sizes.large;
-  if (field === "titleLeft" || field === "titleRight") return sizes.normalsize;
-  return sizes.small;
+// The size a style field renders at when nothing overrides it.
+export function styleFieldDefaultSizePt(field: StyleTextField): number {
+  return TEXT_SIZES_PT[field];
 }
 
 const ENTRY_TEXT_FIELDS: readonly EntryTextField[] = [
@@ -42,28 +38,45 @@ const ENTRY_TEXT_FIELDS: readonly EntryTextField[] = [
 ];
 
 const STYLE_TEXT_FIELDS: readonly StyleTextField[] = [
+  "name",
   "sectionHeading",
   ...ENTRY_TEXT_FIELDS,
   "skillLabel",
-  "contact"
+  "contact",
+  "body"
 ];
 
 export const STYLE_FIELD_MARK_DEFAULTS: Record<StyleTextField, Record<FieldMark, boolean>> = {
+  name: { bold: true, italic: false, underline: false },
   sectionHeading: { bold: false, italic: false, underline: false },
   titleLeft: { bold: true, italic: false, underline: false },
   titleRight: { bold: false, italic: false, underline: false },
   subtitleLeft: { bold: false, italic: true, underline: false },
   subtitleRight: { bold: false, italic: true, underline: false },
   skillLabel: { bold: true, italic: false, underline: false },
-  contact: { bold: false, italic: false, underline: false }
+  contact: { bold: false, italic: false, underline: false },
+  body: { bold: false, italic: false, underline: false }
 };
 
-function valuesForStyleField(data: ResumeData, field: StyleTextField): string[] {
+// The non-empty values one style field covers across the document.
+export function styleFieldValues(data: ResumeData, field: StyleTextField): string[] {
+  if (field === "name") {
+    const name = data.header?.name ?? null;
+    return name !== null && stripInlineMarks(name).trim() ? [name] : [];
+  }
   if (field === "contact") {
     return (data.header?.contact ?? []).filter((value) => stripInlineMarks(value).trim());
   }
   if (field === "sectionHeading") {
     return data.sections.map((section) => section.heading).filter((value) => stripInlineMarks(value).trim());
+  }
+  if (field === "body") {
+    // Bullets, summary paragraphs, and the skills after each skill label.
+    return data.sections
+      .flatMap((section) => section.items.flatMap((entry) =>
+        section.type === "skills" ? [entry.subtitleLeft ?? ""] : entry.bullets.map((bullet) => bullet.text)
+      ))
+      .filter((value) => stripInlineMarks(value).trim());
   }
   if (field === "skillLabel") {
     return data.sections
@@ -78,14 +91,19 @@ function valuesForStyleField(data: ResumeData, field: StyleTextField): string[] 
 }
 
 // Apply a per-value text transform to every instance of one style field: the
-// section headings, one entry column across standard entries, or the skill
-// labels. Shared by the emphasis and font bulk controls so both walk the same
+// section headings, one entry column across standard entries, the skill
+// labels, or the body text. Shared by the emphasis and font bulk controls so both walk the same
 // fields identically.
 function mapStyleField(
   data: ResumeData,
   field: StyleTextField,
   transform: (value: string) => string
 ): ResumeData {
+  if (field === "name") {
+    if (data.header?.name === null || data.header?.name === undefined) return data;
+    const name = transform(data.header.name);
+    return name === data.header.name ? data : { ...data, header: { ...data.header, name } };
+  }
   if (field === "contact") {
     if (!data.header) return data;
     let contactChanged = false;
@@ -98,6 +116,31 @@ function mapStyleField(
   }
   let changed = false;
   const sections = data.sections.map((section) => {
+    if (field === "body") {
+      let sectionChanged = false;
+      const items = section.items.map((entry) => {
+        if (section.type === "skills") {
+          if (entry.subtitleLeft === null) return entry;
+          const subtitleLeft = transform(entry.subtitleLeft);
+          if (subtitleLeft === entry.subtitleLeft) return entry;
+          sectionChanged = true;
+          return { ...entry, subtitleLeft };
+        }
+        let bulletsChanged = false;
+        const bullets = entry.bullets.map((bullet) => {
+          const text = transform(bullet.text);
+          if (text === bullet.text) return bullet;
+          bulletsChanged = true;
+          return { ...bullet, text };
+        });
+        if (!bulletsChanged) return entry;
+        sectionChanged = true;
+        return { ...entry, bullets };
+      });
+      if (!sectionChanged) return section;
+      changed = true;
+      return { ...section, items };
+    }
     if (field === "sectionHeading") {
       const heading = transform(section.heading);
       if (heading === section.heading) return section;
@@ -139,7 +182,9 @@ export function setStyleFieldFont(
   field: StyleTextField,
   family: FieldFontFamily | "default"
 ): ResumeData {
-  return mapStyleField(data, field, (value) => setFieldFont(value, family));
+  return mapStyleField(data, field, (value) =>
+    field === "body" ? setFieldOuterFont(value, family) : setFieldFont(value, family)
+  );
 }
 
 export function setStyleFieldSize(
@@ -147,16 +192,18 @@ export function setStyleFieldSize(
   field: StyleTextField,
   sizePt: number | "default"
 ): ResumeData {
-  return mapStyleField(data, field, (value) => setFieldSize(value, sizePt));
+  return mapStyleField(data, field, (value) =>
+    field === "body" ? setFieldOuterSize(value, sizePt) : setFieldSize(value, sizePt)
+  );
 }
 
 export function styleFieldMarkStates(data: ResumeData): StyleFieldMarkStates {
   const marks: FieldMark[] = ["bold", "italic", "underline"];
   return Object.fromEntries(STYLE_TEXT_FIELDS.map((field) => {
-    const values = valuesForStyleField(data, field);
+    const values = styleFieldValues(data, field);
     return [field, Object.fromEntries(marks.map((mark) => {
       const states = values.map((value) => fieldMarkState(value, mark));
-      if (!states.length) return [mark, false];
+      if (!states.length) return [mark, STYLE_FIELD_MARK_DEFAULTS[field][mark]];
       const first = states[0];
       return [mark, first !== null && states.every((state) => state === first) ? first : null];
     }))];
@@ -167,7 +214,7 @@ export function styleFieldMarkStates(data: ResumeData): StyleFieldMarkStates {
 // document font where unoverridden), or null when the field's instances diverge.
 export function styleFieldFontStates(data: ResumeData, documentFont: FieldFontFamily): StyleFieldFontStates {
   return Object.fromEntries(STYLE_TEXT_FIELDS.map((field) => {
-    const values = valuesForStyleField(data, field);
+    const values = styleFieldValues(data, field);
     if (!values.length) return [field, documentFont];
     const states = values.map((value) => effectiveFieldFont(value, documentFont));
     const first = states[0];
@@ -177,12 +224,13 @@ export function styleFieldFontStates(data: ResumeData, documentFont: FieldFontFa
 
 // Same truth model for size: the shared resolved size (falling back to each
 // field's role default), or null when the field's instances diverge.
-export function styleFieldSizeStates(data: ResumeData, baseFontSizePt: number): StyleFieldSizeStates {
+export function styleFieldSizeStates(data: ResumeData): StyleFieldSizeStates {
   return Object.fromEntries(STYLE_TEXT_FIELDS.map((field) => {
-    const fallback = styleFieldDefaultSizePt(field, baseFontSizePt);
-    const values = valuesForStyleField(data, field);
+    const fallback = styleFieldDefaultSizePt(field);
+    const values = styleFieldValues(data, field);
     if (!values.length) return [field, fallback];
-    const states = values.map((value) => effectiveFieldSize(value, fallback));
+    // A field's main size: the one most of its text carries; words may differ.
+    const states = values.map((value) => fieldMainSizePt(value) ?? fallback);
     const first = states[0];
     return [field, first !== null && states.every((state) => state === first) ? first : null];
   })) as StyleFieldSizeStates;
@@ -225,10 +273,26 @@ export function globalAlignmentState(resume: ResumeData, style: DocumentStyle) {
   };
 }
 
+// Fields whose emphasis the Styles menu sets as a whole. Body text is left out:
+// its bold/italic/underline are per-word choices a whole-field toggle or reset
+// would erase; its size and font change only a whole-field wrapper, keeping
+// per-word sizes and fonts.
+export const STYLE_FIELD_HAS_MARKS: Record<StyleTextField, boolean> = {
+  name: true,
+  sectionHeading: true,
+  titleLeft: true,
+  titleRight: true,
+  subtitleLeft: true,
+  subtitleRight: true,
+  skillLabel: true,
+  contact: true,
+  body: false
+};
+
 export function resetStyleFieldFormatting(data: ResumeData): ResumeData {
   let next = data;
   for (const field of STYLE_TEXT_FIELDS) {
-    for (const mark of ["bold", "italic", "underline"] as const) {
+    if (STYLE_FIELD_HAS_MARKS[field]) for (const mark of ["bold", "italic", "underline"] as const) {
       next = setStyleFieldMark(next, field, mark, STYLE_FIELD_MARK_DEFAULTS[field][mark]);
     }
     next = setStyleFieldFont(next, field, "default");

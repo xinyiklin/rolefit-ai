@@ -27,7 +27,6 @@ type HeaderStructurePopoverProps = {
   header: DocumentHeader | null;
   contactDivider: string;
   disabled: boolean;
-  allowNameRemoval?: boolean;
   headerSpacing?: {
     values: Pick<DocStyle, HeaderSpacingKey>;
     onChange: (key: HeaderSpacingKey, value: number) => void;
@@ -35,7 +34,7 @@ type HeaderStructurePopoverProps = {
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
-  onRemoveHeaderName?: () => void;
+  onRemoveHeaderName: () => void;
   onUpdateContact: (index: number, value: string) => void;
   onInsertContact: (index: number) => void;
   onRemoveContact: (index: number) => void;
@@ -46,7 +45,6 @@ export function HeaderStructurePopover({
   header,
   contactDivider,
   disabled,
-  allowNameRemoval = false,
   headerSpacing,
   onCreateHeader,
   onSetHeaderVisible,
@@ -112,7 +110,7 @@ export function HeaderStructurePopover({
               <div className="structure-popover__field">
                 <div className="structure-popover__field-head">
                   <span>Name</span>
-                  {allowNameRemoval && header.name === null ? (
+                  {header.name === null ? (
                     <button
                       type="button"
                       disabled={disabled}
@@ -121,7 +119,7 @@ export function HeaderStructurePopover({
                       <Plus size={12} aria-hidden="true" />
                       Add name
                     </button>
-                  ) : allowNameRemoval && onRemoveHeaderName ? (
+                  ) : (
                     <button
                       type="button"
                       className="is-danger"
@@ -132,9 +130,9 @@ export function HeaderStructurePopover({
                     >
                       <Trash2 size={12} aria-hidden="true" />
                     </button>
-                  ) : null}
+                  )}
                 </div>
-                {allowNameRemoval && header.name === null ? null : (
+                {header.name === null ? null : (
                   <input
                     value={stripInlineMarks(header.name ?? "")}
                     placeholder="Your name"

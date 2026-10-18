@@ -32,8 +32,7 @@ import { PolishActionButton } from "../document/PolishActionButton";
 
 const COVER_LETTER_STRUCTURE_CAPABILITIES = {
   header: true,
-  sections: false,
-  nameRemovable: true
+  sections: false
 } as const;
 
 type CoverLetterTabProps = {

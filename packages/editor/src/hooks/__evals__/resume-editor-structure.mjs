@@ -9,6 +9,7 @@ import { documentStyleIsDirty, styleReducer } from "../useDocStyle.ts";
 import { createHistoryClock, historySourceFor } from "../historyClock.ts";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { fieldMarkState, setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
+import { styleFieldSizeStates } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import {
   applyPlainTextInputEdit,
   buildDisplayMap
@@ -1152,6 +1153,51 @@ assert.equal(resetFormatting.sections[0].items[0].titleLeft, "<b>Engineer</b>", 
 assert.equal(resetFormatting.sections[0].items[0].subtitleLeft, "<i>Acme</i>", "reset restores the default subtitle italic and clears the size override");
 assert.equal(resetFormatting.sections[2].items[0].titleLeft, "<b>Languages</b>", "reset restores the default bold skill label");
 assert.equal(resetFormatting.header.contact[0], "a@b.com", "reset leaves unmarked contact defaults untouched");
+
+// Name and Body rows: the name's default bold is a stored mark; Body changes
+// only a whole-field wrapper and never touches per-word formatting.
+{
+  const bullet = "Built <size=14>big</size> and <font=tinos>serif</font> <b>bold</b> words";
+  const doc = {
+    header: { visible: true, name: "Jane Doe", contact: [] },
+    sections: [{ id: "s", heading: "Experience", type: "standard", items: [{
+      id: "e", titleLeft: "<b>Engineer</b>", titleRight: "", subtitleLeft: "<i>Acme</i>", subtitleRight: "",
+      bullets: [{ id: "b", text: bullet }]
+    }] }]
+  };
+  const reset = reduceResumeData(doc, { type: "resetStyleFieldFormatting" });
+  assert.equal(reset.header.name, "<b>Jane Doe</b>", "reset restores the name's default bold");
+  assert.equal(reset.sections[0].items[0].bullets[0].text, bullet, "reset keeps per-word body sizes, fonts, and marks");
+  const unbold = reduceResumeData(reset, { type: "setStyleFieldMark", field: "name", mark: "bold", on: false });
+  assert.equal(unbold.header.name, "Jane Doe", "the name's bold can be turned off");
+  const bodySized = reduceResumeData(doc, { type: "setStyleFieldSize", field: "body", sizePt: 11 });
+  assert.equal(bodySized.sections[0].items[0].bullets[0].text, `<size=11>${bullet}</size>`, "Body size wraps, keeping inner sizes");
+  const resized = reduceResumeData(bodySized, { type: "setStyleFieldSize", field: "body", sizePt: 12 });
+  assert.equal(resized.sections[0].items[0].bullets[0].text, `<size=12>${bullet}</size>`, "Body size replaces only its own wrapper");
+  const bodyReset = reduceResumeData(resized, { type: "resetStyleFieldFormatting" });
+  assert.equal(bodyReset.sections[0].items[0].bullets[0].text, bullet, "reset removes only the Body wrapper");
+  // After an edit re-spells a field as one size tag per run, Body still sets
+  // the main text and keeps the word that differs.
+  const respelled = { ...doc, sections: [{ ...doc.sections[0], items: [{ ...doc.sections[0].items[0],
+    bullets: [{ id: "b", text: "<size=13>Built </size><size=15>fast</size><size=13> things</size>" }] }] }] };
+  const respelledBody = reduceResumeData(respelled, { type: "setStyleFieldSize", field: "body", sizePt: 9 });
+  assert.equal(respelledBody.sections[0].items[0].bullets[0].text, "<size=9>Built </size><size=15>fast</size><size=9> things</size>",
+    "Body sets the main size, however the runs are spelled");
+  assert.equal(styleFieldSizeStates(respelledBody).body, 9, "the Body row reports the size the main text paints at");
+  assert.equal(reduceResumeData(respelledBody, { type: "resetStyleFieldFormatting" }).sections[0].items[0].bullets[0].text,
+    "Built <size=15>fast</size> things", "reset returns the main text to the default and keeps the word");
+  // A sized lead-in word is a word set apart: Body, reset, and the Styles state
+  // follow the main text.
+  const leadIn = { ...doc, sections: [{ ...doc.sections[0], items: [{ ...doc.sections[0].items[0],
+    bullets: [{ id: "b", text: "<size=14>Built</size><size=12> fast services for many partners</size>" }] }] }] };
+  assert.equal(styleFieldSizeStates(leadIn).body, 12, "the Body row reads the main text, not the lead-in");
+  assert.equal(reduceResumeData(leadIn, { type: "setStyleFieldSize", field: "body", sizePt: 9 }).sections[0].items[0].bullets[0].text,
+    "<size=14>Built</size><size=9> fast services for many partners</size>", "Body resizes the main text and keeps the lead-in");
+  assert.equal(reduceResumeData(leadIn, { type: "resetStyleFieldFormatting" }).sections[0].items[0].bullets[0].text,
+    "<size=14>Built</size> fast services for many partners", "reset clears the main size and keeps the lead-in");
+  const bodyFont = reduceResumeData(doc, { type: "setStyleFieldFont", field: "body", family: "arimo" });
+  assert.equal(bodyFont.sections[0].items[0].bullets[0].text, `<font=arimo>${bullet}</font>`, "Body font keeps inner fonts");
+}
 
 assert.deepEqual(structuralBase, structuralPristine, "style-formatting actions never mutate their input state");
 

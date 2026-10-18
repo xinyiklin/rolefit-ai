@@ -77,12 +77,15 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] Whole skills-row / whole-document size and font fix
-  (uncommitted, branch `claude/skill-doc-selection-bugs-b6aee8`): toolbar +/-
-  step each run from its own size (`stepFontSize`); a skills row's `: ` is one
-  engine join (`skillsRowText`) carrying the format both columns share; the row
-  splits back by display character; a mixed family shows blank. Both
-  reviewers' findings fixed and re-verified; RoleFit-host browser QA not run.
+- [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
+  D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
+  default per role for both documents; Styles adds Name and Body rows; letters
+  share the resume's keys, defaults, header behavior, and alignment; alignment
+  never moves line breaks. Parsers convert retired keys; 398 workspace files
+  rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
+  letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+- [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
+  row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
 
 ## 2026-10-17
 

@@ -5,6 +5,7 @@ import {
   COVER_LETTER_STYLE_DEFAULTS,
   DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
   CoverLetterFileError,
+  coverLetterDocumentStyle,
   coverLetterFileName,
   coverLetterPlainText,
   coverLetterParagraphs,
@@ -14,6 +15,7 @@ import {
   serializeCoverLetterFile
 } from "../coverLetter.ts";
 import { paragraphSpacingFromInlineMarks } from "../inlineMarksText.ts";
+import { TEXT_SIZES_PT } from "../documentTypography.ts";
 import { toTypesetSchema } from "../../typeset/schema.ts";
 import { layoutCoverLetter } from "../../typeset/layout.ts";
 import { inkExtent, measure, paragraphItems, underlineRule, underlineSpans } from "../../typeset/measure.ts";
@@ -22,7 +24,7 @@ import {
   coverLetterStyleToDocumentStyle,
   documentStyleToCoverLetterStyle
 } from "../coverLetter.ts";
-import { FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
+import { DOC_STYLE_DEFAULTS, FONT_FAMILY_OPTIONS } from "../documentStyle.ts";
 import { pageMarginValuesFor, pageMarginsForValues } from "../pageMargins.ts";
 
 assert.deepEqual(pageMarginValuesFor("narrow"), { top: 36, right: 36, bottom: 36, left: 36 });
@@ -30,20 +32,10 @@ assert.deepEqual(pageMarginValuesFor("normal"), { top: 72, right: 72, bottom: 72
 assert.equal(pageMarginsForValues({ top: 36, right: 36, bottom: 36, left: 36 }), "narrow");
 assert.equal(pageMarginsForValues({ top: 72, right: 72, bottom: 72, left: 72 }), "normal");
 assert.equal(pageMarginsForValues({ top: 54, right: 72, bottom: 54, left: 72 }), "custom");
-assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMargins, "custom");
-assert.deepEqual(
-  {
-    lineHeight: COVER_LETTER_STYLE_DEFAULTS.lineHeight,
-    margins: [
-      COVER_LETTER_STYLE_DEFAULTS.marginTopPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginRightPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginBottomPt,
-      COVER_LETTER_STYLE_DEFAULTS.marginLeftPt
-    ]
-  },
-  { lineHeight: 2, margins: [36, 54, 36, 54] },
-  "new cover letters default to double spacing, no hidden paragraph gap, and 0.5/0.75-inch margins"
-);
+assert.equal(coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS).pageMargins, DOC_STYLE_DEFAULTS.pageMargins);
+for (const [key, value] of Object.entries(COVER_LETTER_STYLE_DEFAULTS)) {
+  assert.equal(value, DOC_STYLE_DEFAULTS[key], `a new letter's ${key} is a new resume's`);
+}
 assert.deepEqual(
   documentStyleToCoverLetterStyle({
     ...coverLetterStyleToDocumentStyle(COVER_LETTER_STYLE_DEFAULTS),
@@ -55,10 +47,10 @@ assert.deepEqual(
   }),
   {
     ...COVER_LETTER_STYLE_DEFAULTS,
-    marginTopPt: 36,
-    marginRightPt: 36,
-    marginBottomPt: 36,
-    marginLeftPt: 36
+    pageMarginTopPt: 36,
+    pageMarginRightPt: 36,
+    pageMarginBottomPt: 36,
+    pageMarginLeftPt: 36
   },
   "cover-letter saves persist physical margins rather than preset identity"
 );
@@ -185,7 +177,7 @@ const unspacedParagraphs = layoutCoverLetter(
 ).pages[0].lines;
 assert.equal(
   unspacedParagraphs[1].baseline - unspacedParagraphs[0].baseline,
-  COVER_LETTER_STYLE_DEFAULTS.fontSizePt * COVER_LETTER_STYLE_DEFAULTS.lineHeight
+  TEXT_SIZES_PT.body * COVER_LETTER_STYLE_DEFAULTS.lineHeight
     + DEFAULT_COVER_LETTER_SPACE_BEFORE_PT,
   "default paragraph rhythm comes from visible space-before formatting"
 );
@@ -230,7 +222,7 @@ const doubleSpacedLayout = layoutCoverLetter(
 );
 assert(
   doubleSpacedLayout.pages[0].lines[1].baseline - doubleSpacedLayout.pages[0].lines[0].baseline
-    > compactCoverStyle.fontSizePt * compactCoverStyle.lineHeight,
+    > TEXT_SIZES_PT.body * compactCoverStyle.lineHeight,
   "whole-paragraph line spacing affects every wrapped line without changing the document default"
 );
 
@@ -493,7 +485,7 @@ const prefix = "A".repeat(24);
 const smallStyle = {
   family: "latin-modern",
   face: "regular",
-  size: COVER_LETTER_STYLE_DEFAULTS.fontSizePt,
+  size: 11,
   tracking: 0
 };
 const largeStyle = { ...smallStyle, size: 36 };
@@ -566,13 +558,63 @@ for (const mutation of [
   { ...raw, format: "typeset-resume" },
   { ...raw, schemaVersion: 2 },
   { ...raw, document: { header: null, paragraphs: [] } },
-  { ...raw, style: { ...raw.style, fontSizePt: 40 } },
+  { ...raw, style: { ...raw.style, lineHeight: 40 } },
+  { ...raw, style: { ...raw.style, fontSizePt: 11 } },
   { ...raw, extra: true }
 ]) {
   assert.throws(
     () => parseCoverLetterFile(JSON.stringify(mutation)),
     CoverLetterFileError
   );
+}
+
+// A letter saved with the retired paragraph size and margin names opens looking
+// as it did: sizes and the name's bold move onto the fields, keys take the
+// resume's names, and it saves without the retired key.
+{
+  const legacy = {
+    ...raw,
+    document: { header: { visible: true, name: "Jane Doe", contact: ["jane@example.com"] }, paragraphs: ["Hello."] },
+    style: {
+      fontFamily: "carlito", fontSizePt: 11, lineHeight: 2, marginTopPt: 36, marginRightPt: 54, marginBottomPt: 36,
+      marginLeftPt: 54, contactDivider: "|", nameContactGapPt: 10, contactGapPt: 18, headerSectionGapPt: 14
+    }
+  };
+  const upgraded = parseCoverLetterFile(JSON.stringify(legacy));
+  assert.equal(upgraded.data.header.name, "<b><size=27>Jane Doe</size></b>");
+  assert.deepEqual(upgraded.data.header.contact, ["<size=11>jane@example.com</size>"]);
+  assert.equal(upgraded.data.sections[0].items[0].bullets[0].text, "<size=11>Hello.</size>");
+  assert.equal(upgraded.style.pageMarginRightPt, 54);
+  assert.deepEqual([upgraded.style.headerAlign, upgraded.style.bodyAlign], ["center", "left"], "an old letter keeps its fixed alignment");
+  const resaved = JSON.parse(serializeCoverLetterFile(upgraded.data, upgraded.style));
+  assert.equal(Object.hasOwn(resaved.style, "fontSizePt"), false);
+  assert.equal(Object.hasOwn(resaved.style, "marginRightPt"), false);
+  for (const style of [{ ...legacy.style, pageMarginTopPt: 99 }, { pageMarginTopPt: 99, ...legacy.style }]) {
+    assert.throws(
+      () => parseCoverLetterFile(JSON.stringify({ ...legacy, style })),
+      CoverLetterFileError,
+      "a style mixing legacy and current names is rejected in any key order"
+    );
+  }
+  assert.throws(
+    () => parseCoverLetterFile(JSON.stringify({ ...legacy, style: { ...legacy.style, fontSizePt: 40 } })),
+    CoverLetterFileError,
+    "the retired size is still range-checked"
+  );
+}
+
+// Header and body alignment are letter settings: saved, read back, and checked.
+{
+  const aligned = { ...COVER_LETTER_STYLE_DEFAULTS, headerAlign: "right", bodyAlign: "justify" };
+  const reread = parseCoverLetterFile(serializeCoverLetterFile(parseCoverLetterText("Hello."), aligned));
+  assert.deepEqual([reread.style.headerAlign, reread.style.bodyAlign], ["right", "justify"]);
+  assert.equal(coverLetterDocumentStyle(reread.style).headerAlign, "right", "the letter's layout reads its own alignment");
+  for (const bad of [{ headerAlign: "justify" }, { bodyAlign: "middle" }]) {
+    assert.throws(
+      () => parseCoverLetterFile(JSON.stringify({ ...raw, style: { ...raw.style, ...bad } })),
+      CoverLetterFileError
+    );
+  }
 }
 
 const manyContacts = { ...withHeader, header: { ...withHeader.header, contact: Array.from({ length: 21 }, (_, index) => `item-${index}`) } };

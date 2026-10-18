@@ -11,7 +11,6 @@ export type DocumentStructureControlsProps = {
   header: DocumentHeader | null;
   contactDivider: string;
   disabled?: boolean;
-  allowNameRemoval?: boolean;
   // Supplied by a host whose document has no document-spacing popover of its
   // own: the header's gaps are then adjustable from the header itself.
   headerSpacing?: {
@@ -21,7 +20,7 @@ export type DocumentStructureControlsProps = {
   onCreateHeader: () => void;
   onSetHeaderVisible: (visible: boolean) => void;
   onSetHeaderName: (name: string) => void;
-  onRemoveHeaderName?: () => void;
+  onRemoveHeaderName: () => void;
   onUpdateContact: (index: number, value: string) => void;
   onInsertContact: (index: number) => void;
   onRemoveContact: (index: number) => void;
@@ -37,7 +36,6 @@ export function DocumentStructureControls({
   header,
   contactDivider,
   disabled = false,
-  allowNameRemoval = false,
   headerSpacing,
   onCreateHeader,
   onSetHeaderVisible,
@@ -60,7 +58,6 @@ export function DocumentStructureControls({
         header={header}
         contactDivider={contactDivider}
         disabled={disabled}
-        allowNameRemoval={allowNameRemoval}
         headerSpacing={headerSpacing}
         onCreateHeader={onCreateHeader}
         onSetHeaderVisible={onSetHeaderVisible}

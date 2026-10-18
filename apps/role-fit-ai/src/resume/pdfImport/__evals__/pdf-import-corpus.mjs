@@ -21,6 +21,7 @@ import { layoutResume } from "@typeset/engine/typeset/layout.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { importResumePdf } from "../importResumePdf.ts";
+import { fieldMarkState } from "@typeset/engine/lib/inlineMarksText.ts";
 import { MAX_IMPORT_PDF_BYTES, PdfImportError } from "../importErrors.ts";
 import {
   TIMES,
@@ -55,8 +56,12 @@ async function runFixture(name, group, bytes, truth, expectations = {}) {
     return;
   }
   timings.push(performance.now() - started);
-  const { data, style, findings, audit } = result;
+  const { data, style, bodySizePt, findings, audit } = result;
+  if (expectations.bodySizePt !== undefined && bodySizePt !== expectations.bodySizePt) {
+    failures.push(`${name}: body size ${bodySizePt} ≠ ${expectations.bodySizePt}`);
+  }
   if (!audit.ok) failures.push(`${name}: audit lost=${audit.lost.join(",")} added=${audit.added.join(",")}`);
+  if (data.header?.name && fieldMarkState(data.header.name, "bold") !== true) failures.push(`${name}: the imported name is not bold`);
 
   const scored = score(truth, data);
   orders.push(scored.order);
@@ -122,9 +127,9 @@ async function runFixture(name, group, bytes, truth, expectations = {}) {
 for (const fixture of engineFixtures) {
   const { bytes, style } = await renderEngineFixture(fixture);
   await runFixture(fixture.name, "single", bytes, fixture.data, {
+    bodySizePt: fixture.bodySizePt ?? 10,
     style: {
       fontFamily: style.fontFamily,
-      baseFontSizePt: style.baseFontSizePt,
       headerAlign: style.headerAlign,
       sectionRule: style.sectionRule,
       // Uppercase headings are imported as verbatim capitals; small caps come

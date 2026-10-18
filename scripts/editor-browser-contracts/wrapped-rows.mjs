@@ -81,12 +81,12 @@ export async function runWrappedRowContracts({ makeWindow, waitFor, baseUrl, sui
       }
       await h.evaluate(style => window.__rowContract.applyStyle(style), style);
       await h.evaluate(style => window.__rowContract.applyStyle(style), {
-        ...style, baseFontSizePt: bounds.baseFontSizePt.max,
+        ...style,
         pageMarginLeftPt: bounds.pageMarginLeftPt.max, pageMarginRightPt: bounds.pageMarginRightPt.max,
         entryIndentPt: bounds.entryIndentPt.max, entryEndIndentPt: bounds.entryEndIndentPt.max,
         bulletIndentPt: bounds.bulletIndentPt.max
       });
-      await assertWrappedBounds(h, paired, `${host} combined narrow maximum size`);
+      await assertWrappedBounds(h, paired, `${host} combined narrow maximum geometry`);
       await h.evaluate(style => window.__rowContract.applyStyle(style), style);
       const mixed = h.fixture('<size=18><u>Mixed heading</u></size> <font=source-sans>and more words </font>'.repeat(8), '<i>Right partner words </i>'.repeat(10));
       await assertWrappedBounds(h, mixed, `${host} mixed inline styles`);

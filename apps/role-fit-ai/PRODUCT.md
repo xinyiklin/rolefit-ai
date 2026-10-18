@@ -897,9 +897,10 @@ discard it.") and never starts from an import.
   import as Discard's destination. Resume Polish and Cover letter Polish
   (which reads the resume), including a failed run's Retry and automatic
   Polish after Prepare, are unavailable until the review ends.
-- **Formatting.** The nearest bundled family, body size, page margins, header
+- **Formatting.** The nearest bundled family, page margins, header
   alignment, heading case (verbatim capitals or small caps), and section rules
-  are inferred within the editor's limits; spacing keeps the defaults. Content
+  are inferred within the editor's limits, and the body text size is applied to
+  the body, subtitle, contact, and skill-label fields; spacing keeps the defaults. Content
   accuracy comes before visual likeness.
 - **AI interpretation is optional and explicit.** **Interpret with ‹provider ·
   model›** (Settings › Models › Resume import, default Claude CLI · Sonnet 5.5 ·

@@ -92,6 +92,7 @@ import { extractJobPosting, type ExtractedJobTracking } from "./lib/jobExtract";
 import { serializeResumeData } from "./lib/resumeText";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { parseResumeFile } from "@typeset/engine/lib/resumeFile.ts";
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import {
   defaultResumePolishScopeModes,
   editablePolishSectionCount,
@@ -924,8 +925,8 @@ function App() {
     [docStyle.style.fontFamily, editedResume]
   );
   const styleSizeStates = useMemo(
-    () => (editedResume ? styleFieldSizeStates(editedResume, docStyle.style.baseFontSizePt) : undefined),
-    [docStyle.style.baseFontSizePt, editedResume]
+    () => (editedResume ? styleFieldSizeStates(editedResume) : undefined),
+    [editedResume]
   );
   const fitResumePage = useCallback(() => {
     const pane = resumeFitViewportRef.current;
@@ -1155,7 +1156,9 @@ function App() {
     sourceRevision: coverLetterEditor.sourceRevision,
     tailorApplied: coverLetterEditor.canRestorePreTailor,
     candidateName: resolveResumeApplicantName(
-      coverLetterEditor.data.header?.name || editedResume?.header?.name,
+      stripInlineMarks(coverLetterEditor.data.header?.name ?? "").trim()
+        ? coverLetterEditor.data.header?.name
+        : editedResume?.header?.name,
       currentResumeText || resumeText
     ),
     jobTarget: {
@@ -3113,7 +3116,7 @@ function App() {
                   styleSizeStates={styleSizeStates}
                   onStyleFieldSizeChange={(field, sizePt) => {
                     const isDefault =
-                      Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
+                      Math.abs(sizePt - styleFieldDefaultSizePt(field)) < 0.05;
                     resumeEditorActions.setStyleFieldSize(field, isDefault ? "default" : sizePt);
                     setInlineFormat((current) =>
                       current.entryField === field ? { ...current, fontSizePt: sizePt } : current
@@ -3145,6 +3148,7 @@ function App() {
                         }
                       }}
                       onSetHeaderVisible={resumeEditorActions.setHeaderVisible}
+                      onRemoveHeaderName={resumeEditorActions.removeHeaderName}
                       onSetHeaderName={(nextText) => {
                         if (typesetEditorRef.current) {
                           typesetEditorRef.current.replaceHeaderNameText(nextText);

@@ -8,10 +8,7 @@ import {
   type FontFamily,
   type ResumeBodyStyle
 } from "./documentStyle.ts";
-import {
-  PAGE_MARGIN_BOUNDS_PT,
-  pageMarginsForValues
-} from "./pageMargins.ts";
+import { pageMarginsForValues } from "./pageMargins.ts";
 import {
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
@@ -28,50 +25,44 @@ import {
   parseJsonFile,
   serializeJsonFile
 } from "./jsonFileCodec.ts";
+import { upgradeLegacyTextSizes } from "./legacyTextSizes.ts";
 
 export const COVER_LETTER_FILE_MAGIC = "typeset-cover-letter" as const;
 export const COVER_LETTER_FILE_SCHEMA_VERSION = 1 as const;
 export const MAX_COVER_LETTER_FILE_BYTES = 2 * 1024 * 1024;
 export const DEFAULT_COVER_LETTER_SPACE_BEFORE_PT = 8;
 
-export type CoverLetterStyle = {
-  fontFamily: FontFamily;
-  fontSizePt: number;
-  lineHeight: number;
-  marginTopPt: number;
-  marginRightPt: number;
-  marginBottomPt: number;
-  marginLeftPt: number;
-  contactDivider: string;
-  // The three gaps a letter shares with a resume, all of them the header's:
-  // name to contact, the contact separator's slot, and header to body. The
-  // other structural gaps belong to sections and entries, which a letter has
-  // none of. Absolute points, same meaning and bounds as a resume's.
-  nameContactGapPt: number;
-  contactGapPt: number;
-  headerSectionGapPt: number;
-};
+// The letter's style keys share the resume's names and bounds, so one value
+// means the same thing in both documents.
+export type CoverLetterStyle = Pick<
+  DocumentStyle,
+  | "fontFamily"
+  | "lineHeight"
+  | "pageMarginTopPt"
+  | "pageMarginRightPt"
+  | "pageMarginBottomPt"
+  | "pageMarginLeftPt"
+  | "contactDivider"
+  | "nameContactGapPt"
+  | "contactGapPt"
+  | "headerSectionGapPt"
+  | "headerAlign"
+  | "bodyAlign"
+>;
 
 export const COVER_LETTER_STYLE_DEFAULTS: CoverLetterStyle = {
-  // A cover letter is business correspondence, and the face business
-  // correspondence is written in is Calibri — the word processor default most
-  // applications are drafted in, and one of the handful career offices name.
-  // Carlito carries its metrics, so a letter keeps its line and page count if
-  // the reader ever opens it in Word. The resume default stays Latin Modern:
-  // that document is a typographic artifact, this one is a letter.
-  fontFamily: "carlito",
-  fontSizePt: 11,
-  lineHeight: 2,
-  marginTopPt: 36,
-  marginRightPt: 54,
-  marginBottomPt: 36,
-  marginLeftPt: 54,
-  contactDivider: "|",
-  // Tuned on the letterhead itself: the contact line sits close under the name,
-  // the separators breathe, and the body clears the header.
-  nameContactGapPt: 10,
-  contactGapPt: 18,
-  headerSectionGapPt: 14
+  fontFamily: DOC_STYLE_DEFAULTS.fontFamily,
+  lineHeight: DOC_STYLE_DEFAULTS.lineHeight,
+  pageMarginTopPt: DOC_STYLE_DEFAULTS.pageMarginTopPt,
+  pageMarginRightPt: DOC_STYLE_DEFAULTS.pageMarginRightPt,
+  pageMarginBottomPt: DOC_STYLE_DEFAULTS.pageMarginBottomPt,
+  pageMarginLeftPt: DOC_STYLE_DEFAULTS.pageMarginLeftPt,
+  contactDivider: DOC_STYLE_DEFAULTS.contactDivider,
+  nameContactGapPt: DOC_STYLE_DEFAULTS.nameContactGapPt,
+  contactGapPt: DOC_STYLE_DEFAULTS.contactGapPt,
+  headerSectionGapPt: DOC_STYLE_DEFAULTS.headerSectionGapPt,
+  headerAlign: DOC_STYLE_DEFAULTS.headerAlign,
+  bodyAlign: DOC_STYLE_DEFAULTS.bodyAlign
 };
 
 export type CoverLetterFileV1 = {
@@ -115,17 +106,24 @@ type JsonRecord = Record<string, unknown>;
 
 const STYLE_KEYS = [
   "fontFamily",
-  "fontSizePt",
   "lineHeight",
-  "marginTopPt",
-  "marginRightPt",
-  "marginBottomPt",
-  "marginLeftPt",
+  "pageMarginTopPt",
+  "pageMarginRightPt",
+  "pageMarginBottomPt",
+  "pageMarginLeftPt",
   "contactDivider",
   "nameContactGapPt",
   "contactGapPt",
-  "headerSectionGapPt"
+  "headerSectionGapPt",
+  "headerAlign",
+  "bodyAlign"
 ] as const satisfies readonly (keyof CoverLetterStyle)[];
+// Letters saved before alignment was a letter setting omit these keys and keep
+// the alignment they were drawn with.
+const OPTIONAL_STYLE_DEFAULTS = {
+  headerAlign: "center",
+  bodyAlign: "left"
+} as const satisfies Partial<CoverLetterStyle>;
 
 function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -169,28 +167,61 @@ function requireNumber(
   return value;
 }
 
+// Letters saved before the style keys took the resume's names (see
+// legacyTextSizes.ts): the old margin names and the retired paragraph size.
+const LEGACY_STYLE_KEY_NAMES = {
+  marginTopPt: "pageMarginTopPt",
+  marginRightPt: "pageMarginRightPt",
+  marginBottomPt: "pageMarginBottomPt",
+  marginLeftPt: "pageMarginLeftPt"
+} as const;
+const LEGACY_FONT_SIZE_KEY = "fontSizePt";
+
+function readLegacyStyle(style: JsonRecord): { style: JsonRecord; legacySizeBasePt: number | null } {
+  const isLegacy = [LEGACY_FONT_SIZE_KEY, ...Object.keys(LEGACY_STYLE_KEY_NAMES)]
+    .every((key) => Object.prototype.hasOwnProperty.call(style, key));
+  if (!isLegacy) return { style, legacySizeBasePt: null };
+  for (const current of Object.values(LEGACY_STYLE_KEY_NAMES)) {
+    if (Object.prototype.hasOwnProperty.call(style, current)) {
+      fail("invalid-style", `Cover-letter style mixes legacy and current field ${JSON.stringify(current)}.`);
+    }
+  }
+  const { [LEGACY_FONT_SIZE_KEY]: legacySize, ...rest } = style;
+  const renamed: JsonRecord = {};
+  for (const [key, value] of Object.entries(rest)) {
+    renamed[LEGACY_STYLE_KEY_NAMES[key as keyof typeof LEGACY_STYLE_KEY_NAMES] ?? key] = value;
+  }
+  return { style: renamed, legacySizeBasePt: requireNumber(legacySize, LEGACY_FONT_SIZE_KEY, 9, 13) };
+}
+
+// Accepts the legacy shape too (renamed, its paragraph size dropped), so a
+// letter style saved anywhere before the rename still loads.
 export function parseCoverLetterStyle(value: unknown): CoverLetterStyle {
-  const style = requireRecord(value, "invalid-style", "Cover-letter style");
+  const { style: read } = readLegacyStyle(requireRecord(value, "invalid-style", "Cover-letter style"));
+  const style: JsonRecord = { ...OPTIONAL_STYLE_DEFAULTS, ...read };
   requireExactKeys(style, STYLE_KEYS, "invalid-style", "Cover-letter style");
   const fontFamilies = FONT_FAMILY_OPTIONS.map((option) => option.value);
   if (typeof style.fontFamily !== "string" || !fontFamilies.includes(style.fontFamily as FontFamily)) {
     fail("invalid-style", "Cover-letter style fontFamily is unsupported.");
   }
-  const fontSizePt = requireNumber(style.fontSizePt, "fontSizePt", 9, 13);
-  const lineHeight = requireNumber(style.lineHeight, "lineHeight", 1, 2);
-  const spacing = (key: "nameContactGapPt" | "contactGapPt" | "headerSectionGapPt") =>
+  const bounded = (key: Exclude<(typeof STYLE_KEYS)[number], "fontFamily" | "contactDivider" | "headerAlign" | "bodyAlign">) =>
     requireNumber(style[key], key, DOC_STYLE_BOUNDS[key].min, DOC_STYLE_BOUNDS[key].max);
   return {
     fontFamily: style.fontFamily as FontFamily,
-    fontSizePt,
-    lineHeight,
-    nameContactGapPt: spacing("nameContactGapPt"),
-    contactGapPt: spacing("contactGapPt"),
-    headerSectionGapPt: spacing("headerSectionGapPt"),
-    marginTopPt: requireNumber(style.marginTopPt, "marginTopPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
-    marginRightPt: requireNumber(style.marginRightPt, "marginRightPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
-    marginBottomPt: requireNumber(style.marginBottomPt, "marginBottomPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
-    marginLeftPt: requireNumber(style.marginLeftPt, "marginLeftPt", PAGE_MARGIN_BOUNDS_PT.min, PAGE_MARGIN_BOUNDS_PT.max),
+    lineHeight: bounded("lineHeight"),
+    nameContactGapPt: bounded("nameContactGapPt"),
+    contactGapPt: bounded("contactGapPt"),
+    headerSectionGapPt: bounded("headerSectionGapPt"),
+    pageMarginTopPt: bounded("pageMarginTopPt"),
+    pageMarginRightPt: bounded("pageMarginRightPt"),
+    pageMarginBottomPt: bounded("pageMarginBottomPt"),
+    pageMarginLeftPt: bounded("pageMarginLeftPt"),
+    headerAlign: ["left", "center", "right"].includes(style.headerAlign as string)
+      ? style.headerAlign as CoverLetterStyle["headerAlign"]
+      : fail("invalid-style", "Cover-letter style headerAlign must be left, center, or right."),
+    bodyAlign: ["left", "center", "right", "justify"].includes(style.bodyAlign as string)
+      ? style.bodyAlign as CoverLetterStyle["bodyAlign"]
+      : fail("invalid-style", "Cover-letter style bodyAlign must be left, center, right, or justify."),
     contactDivider:
       typeof style.contactDivider === "string" &&
           style.contactDivider.length >= 1 &&
@@ -371,15 +402,14 @@ export function coverLetterDocumentStyle(
 ): CoverLetterDocumentStyle {
   return {
     fontFamily: style.fontFamily,
-    baseFontSizePt: style.fontSizePt,
     lineHeight: style.lineHeight,
-    bodyAlign: "left",
-    pageMarginTopPt: style.marginTopPt,
-    pageMarginRightPt: style.marginRightPt,
-    pageMarginBottomPt: style.marginBottomPt,
-    pageMarginLeftPt: style.marginLeftPt,
+    bodyAlign: style.bodyAlign,
+    pageMarginTopPt: style.pageMarginTopPt,
+    pageMarginRightPt: style.pageMarginRightPt,
+    pageMarginBottomPt: style.pageMarginBottomPt,
+    pageMarginLeftPt: style.pageMarginLeftPt,
     contactDivider: style.contactDivider,
-    headerAlign: "center",
+    headerAlign: style.headerAlign,
     nameContactGapPt: style.nameContactGapPt,
     contactGapPt: style.contactGapPt,
     headerSectionGapPt: style.headerSectionGapPt
@@ -396,10 +426,10 @@ export function coverLetterStyleToDocumentStyle(
   }
 ): DocStyle {
   const pageMargins = pageMarginsForValues({
-    top: style.marginTopPt,
-    right: style.marginRightPt,
-    bottom: style.marginBottomPt,
-    left: style.marginLeftPt
+    top: style.pageMarginTopPt,
+    right: style.pageMarginRightPt,
+    bottom: style.pageMarginBottomPt,
+    left: style.pageMarginLeftPt
   });
   return {
     ...NO_RESUME_BODY,
@@ -412,16 +442,17 @@ export function coverLetterStyleToDocumentStyle(
 export function documentStyleToCoverLetterStyle(style: DocumentStyle): CoverLetterStyle {
   return parseCoverLetterStyle({
     fontFamily: style.fontFamily,
-    fontSizePt: style.baseFontSizePt,
     lineHeight: style.lineHeight,
-    marginTopPt: style.pageMarginTopPt,
-    marginRightPt: style.pageMarginRightPt,
-    marginBottomPt: style.pageMarginBottomPt,
-    marginLeftPt: style.pageMarginLeftPt,
+    pageMarginTopPt: style.pageMarginTopPt,
+    pageMarginRightPt: style.pageMarginRightPt,
+    pageMarginBottomPt: style.pageMarginBottomPt,
+    pageMarginLeftPt: style.pageMarginLeftPt,
     contactDivider: style.contactDivider,
     nameContactGapPt: style.nameContactGapPt,
     contactGapPt: style.contactGapPt,
-    headerSectionGapPt: style.headerSectionGapPt
+    headerSectionGapPt: style.headerSectionGapPt,
+    headerAlign: style.headerAlign,
+    bodyAlign: style.bodyAlign
   });
 }
 
@@ -491,8 +522,10 @@ export function parseCoverLetterFile(
   if (document.header !== null) {
     header = validateHeader(document.header);
   }
+  const legacy = readLegacyStyle(requireRecord(file.style, "invalid-style", "Cover-letter style"));
+  const data = coverLetterResumeData(paragraphs, header);
   return {
-    data: coverLetterResumeData(paragraphs, header),
+    data: legacy.legacySizeBasePt === null ? data : upgradeLegacyTextSizes(data, legacy.legacySizeBasePt),
     style: parseCoverLetterStyle(file.style)
   };
 }

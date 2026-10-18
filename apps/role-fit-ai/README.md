@@ -119,10 +119,10 @@ offers 30 bundled families; each loads only when a document uses it.
   a saved cover-letter variant changes its contents without replacing that
   application output name, and both editor headers use the same
   `Role at Company` sublabel.
-  A new letter starts in Carlito at 11 pt with double line spacing, 8 pt after
-  each paragraph, an additional 8 pt before its date, 0.5 inch top/bottom
-  margins, and 0.75 inch side margins — Calibri's metrics, the shape business
-  correspondence is usually written in — and any bundled family is a menu away.
+  A new letter starts with a new resume's page defaults and text sizes (D081),
+  8 pt before each paragraph and an additional 8 pt before its date; its
+  Paragraph menu sets header and body alignment, and any bundled family is a
+  menu away.
 - **One Prepare workspace** — Prepare is the first/default studio page and the
   only place a job enters the current session. It leads PREPARE / DRAFT / TRACK
   navigation while the masthead carries only the RoleFit identity and Apply.

@@ -2,6 +2,8 @@
 // import it from there. This file keeps only the RoleFit-specific naming and
 // text-scanning helpers below.
 
+import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
+
 // Pull the applicant's name from a resume's plain text so downloads can be named
 // after the person. Scans the first lines and takes the first "First Last"
 // sequence. Returns "" when nothing confident is found. (Callers prefer the
@@ -22,7 +24,7 @@ export function extractApplicantName(text: string): string {
 }
 
 export function resolveResumeApplicantName(structuredName: string | null | undefined, resumeText: string): string {
-  return (structuredName ?? "").replace(/<\/?[a-z]+>/gi, "").trim() || extractApplicantName(resumeText);
+  return stripInlineMarks(structuredName ?? "").trim() || extractApplicantName(resumeText);
 }
 
 // Filesystem-safe slug: keep letters/digits, collapse the rest to underscores.

@@ -216,7 +216,8 @@ export function useWorkspaceResume({
     clearRecoveryOnCommit = false,
     shouldCancel?: () => boolean
   ): Promise<{ text: string } | null> {
-    if (!baseResume.exists || !baseResume.text) return null;
+    // The bundled starter is never saved (exists: false) but has text to open.
+    if (!baseResume.text) return null;
 
     let candidate: ReturnType<typeof parseResumeFile>;
     try {
@@ -257,9 +258,11 @@ export function useWorkspaceResume({
       replacementGuard.onReplacementCommitted();
     }
 
-    saveLastBaseResumeName(baseResume.fileName ?? "");
-    setFileName(baseResume.fileName ?? "default");
-    setBaseResumeName(baseResume.fileName ?? "");
+    // An unsaved document (the bundled starter) takes no saved-file identity,
+    // so its first Save creates the default base rather than "starter.resume".
+    saveLastBaseResumeName(baseResume.exists ? baseResume.fileName ?? "" : "");
+    setFileName(baseResume.exists ? baseResume.fileName ?? "default" : "default");
+    setBaseResumeName(baseResume.exists ? baseResume.fileName ?? "" : "");
     setResult(null);
     resetCoverWorkflow();
     setFileError("");
@@ -390,8 +393,8 @@ export function useWorkspaceResume({
       );
       if (!applied) return;
       setResumeOrigin("starter");
+      setDocumentTitle("Resume");
       saveLastBaseResumeName("");
-      setBaseResumeName("");
       updateWorkspaceState(workspace);
       // The starter is intentionally detached from any saved base. Saving it
       // next creates the default base or a named variant instead of silently

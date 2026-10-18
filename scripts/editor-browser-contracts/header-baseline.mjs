@@ -107,7 +107,9 @@ export async function runHeaderBaselineContracts({ makeWindow, waitFor, baseUrl,
         await h.evaluate((api, style) => window[api].applyStyle(style), api, style);
       }
       for (const name of ['', 'ACEONMZX', 'gypqj', 'éàöñç']) {
-        report.cases.push(await exercise(h, api, host, { label: name ? `variant-${name}` : 'empty-first-character', name }));
+        // Typing into an empty name gives it the name's default bold (D081).
+        const emptyName = name ? {} : { display: '', sourceWith: value => (value ? `<b>${value}</b>` : '') };
+        report.cases.push(await exercise(h, api, host, { label: name ? `variant-${name}` : 'empty-first-character', name, ...emptyName }));
       }
       report.cases.push(await exercise(h, api, host, { label: 'uppercase-diacritic-insertion', name: 'aceonmzx', characters: 'HÉÜÅÇ' }));
       const mixed = value => `<size=32><font=source-sans>${value}X</font></size><size=16> Small</size>`;

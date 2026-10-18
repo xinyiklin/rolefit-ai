@@ -979,9 +979,11 @@
   font-weight: 590;
 }
 
+/* The emphasis column has a fixed width (three 32px buttons plus the group's
+   border) so the Body row, which has no emphasis group, stays aligned. */
 .style-popover__field-style-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr) auto calc(3 * 32px + 2px);
   align-items: stretch;
   gap: 6px;
 }

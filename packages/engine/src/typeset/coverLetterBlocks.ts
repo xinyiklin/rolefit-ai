@@ -5,6 +5,7 @@ import {
   paragraphSpacingFromInlineMarks,
   stripInlineMarks
 } from "../lib/inlineMarksText.ts";
+import { fieldRoleSizePt, TEXT_SIZES_PT } from "../lib/documentTypography.ts";
 import { documentFontFamily } from "./fontRegistry.ts";
 import {
   buildHeaderVerticalStream,
@@ -20,14 +21,13 @@ import type { TypesetSchema } from "./schema.ts";
 // inline-mark grammar, DOM painter, and PDF emitter as resumes. Only this
 // vertical composition differs: the constrained cover-letter adapter exposes
 // each prose paragraph as a summary field, and this stream gives those fields
-// correspondence-style margins, body size, leading, and paragraph spacing.
+// correspondence-style margins, paragraph size, leading, and spacing.
 export function buildCoverLetterVerticalStream(
   schema: TypesetSchema,
   style: CoverLetterDocumentStyle
 ): VLine[] {
   const geo = pageBox(style);
   const family = documentFontFamily(style.fontFamily);
-  const size = style.baseFontSizePt;
   // See buildVerticalStream: tracking is the font's own, never adjusted.
   const tracking = 0;
   const bodyAlign = (
@@ -38,10 +38,15 @@ export function buildCoverLetterVerticalStream(
   const section = schema.sections[0];
   const items = section?.items ?? [];
   let previousSpaceAfterPt = 0;
+  // A blank paragraph keeps the previous paragraph's size (letters use them as
+  // spacing), so it keeps the letter's rhythm.
+  let previousSize: number = TEXT_SIZES_PT.body;
 
   items.forEach((item, index) => {
     const value = item.bullets[0] ?? "";
     const paragraphSpacing = paragraphSpacingFromInlineMarks(value);
+    const size = stripInlineMarks(value).trim() ? fieldRoleSizePt(value, TEXT_SIZES_PT.body) : previousSize;
+    previousSize = size;
     const leading = size * style.lineHeight;
     const spaceBeforePt = paragraphSpacing.spaceBeforePt ?? 0;
     const spaceAfterPt = paragraphSpacing.spaceAfterPt ?? 0;
@@ -70,7 +75,8 @@ export function buildCoverLetterVerticalStream(
       },
       stripInlineMarks(value).trim().length === 0
         ? paragraphSpacing.lineHeight ?? undefined
-        : undefined
+        : undefined,
+      TEXT_SIZES_PT.body
     );
     if (lines.length) {
       lines[0].paragraphSpaceBefore = spaceBeforePt;

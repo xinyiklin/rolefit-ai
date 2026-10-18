@@ -4,7 +4,7 @@
   "document": {
     "header": {
       "visible": true,
-      "name": "Your Name",
+      "name": "<b>Your Name</b>",
       "contact": [
         "you@email.com",
         "linkedin.com/in/yourprofile",
@@ -119,7 +119,6 @@
   },
   "style": {
     "fontFamily": "latin-modern",
-    "baseFontSizePt": 10,
     "lineHeight": 1.18,
     "entryIndentPt": 10.8,
     "entryEndIndentPt": 5.4,

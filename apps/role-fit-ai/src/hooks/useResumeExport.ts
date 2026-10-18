@@ -85,7 +85,7 @@ export function useResumeExport({
     const fonts = await fetchFontBytes(document, `${publicBase}/fonts`);
     return emitPdf(document, fonts, {
       title: documentTitle.trim() || (
-        schema.header?.name ? `${stripInlineMarks(schema.header.name)} Resume` : "Resume"
+        stripInlineMarks(schema.header?.name ?? "").trim() ? `${stripInlineMarks(schema.header!.name!)} Resume` : "Resume"
       )
     });
   }
@@ -125,7 +125,7 @@ export function useResumeExport({
     // Prefer the structured model's name; fall back to scanning the serialized
     // text only when there is no structured model yet (text-only polish result).
     const applicant =
-      (editedResume?.header?.name ?? "").replace(/<\/?[a-z]+>/gi, "").trim() ||
+      stripInlineMarks(editedResume?.header?.name ?? "").trim() ||
       extractApplicantName(currentResumeText || resumeText);
     return buildResumeFileName(applicant, company, ext);
   }

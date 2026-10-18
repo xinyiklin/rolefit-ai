@@ -18,6 +18,7 @@ import {
   coverLetterResumeData,
   coverLetterStyleToDocumentStyle,
   documentStyleToCoverLetterStyle,
+  type CoverLetterStyle,
   parseCoverLetterFile,
   parseCoverLetterStyle,
   parseCoverLetterText,
@@ -25,7 +26,12 @@ import {
 } from "@typeset/engine/lib/coverLetter.ts";
 import { downloadBlob } from "@typeset/engine/lib/download.ts";
 import { DOC_STYLE_DEFAULTS, type DocStyle, type DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
-import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import { sharedWholeFieldFormat, withWholeFieldFormat } from "@typeset/engine/lib/inlineMarksText.ts";
+import {
+  newDocumentHeader,
+  starterDocumentHeader,
+  type ResumeData
+} from "@typeset/engine/lib/resumeData.ts";
 import { clearCoverLetterAutosaveDraft } from "./useCoverLetterAutosaveDraft";
 import { prepareCoverLetterUpload } from "../lib/documentOpenFiles.ts";
 import {
@@ -78,14 +84,10 @@ Dear [Hiring manager],
 Sincerely,
 [Your name]`;
 
-// The starter's header is placeholder text for the same reason its body is:
-// a letter opens with the letterhead already in place, ready to be typed over
-// rather than added from a menu the writer has to find.
-const COVER_LETTER_STARTER_HEADER = {
-  visible: true,
-  name: "[Your name]",
-  contact: ["[email]", "[phone]", "[city, state]"]
-};
+// A blank letter has the same empty header a blank resume has.
+function blankCoverLetterData(): ResumeData {
+  return coverLetterResumeData(coverLetterParagraphs(parseCoverLetterText("")), newDocumentHeader());
+}
 
 function loadSpellCheck(): boolean {
   try {
@@ -127,7 +129,7 @@ type WorkspaceCoverLetterOpenOptions = {
 
 export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) {
   const [style, setStyle] = useState<DocStyle>(loadStyle);
-  const [initialData] = useState(() => parseCoverLetterText(""));
+  const [initialData] = useState(blankCoverLetterData);
   const [sourceRevision, setSourceRevision] = useState(0);
   const sourceRevisionRef = useRef(0);
   const editor = useTypesetResumeEditor(initialData);
@@ -314,9 +316,11 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
       redoSequence: null,
       undo: () => undefined,
       redo: () => undefined,
-      isStyleDefault:
-        JSON.stringify(documentStyleToCoverLetterStyle(style)) ===
-        JSON.stringify(COVER_LETTER_STYLE_DEFAULTS)
+      isStyleDefault: (() => {
+        const current = documentStyleToCoverLetterStyle(style);
+        return (Object.keys(COVER_LETTER_STYLE_DEFAULTS) as (keyof CoverLetterStyle)[])
+          .every((key) => current[key] === COVER_LETTER_STYLE_DEFAULTS[key]);
+      })()
     }),
     [applyStyle, dirty, replaceDocumentStyle, set, style]
   );
@@ -344,7 +348,12 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const applyTailoredText = useCallback(
     (tailored: string) => {
       cancelStartupOpenRef.current = true;
-      const parsed = parseCoverLetterText(tailored);
+      // Polish returns plain paragraphs; keep the size and font the letter's
+      // paragraphs share.
+      const format = sharedWholeFieldFormat(editor.editedResume ? coverLetterParagraphs(editor.editedResume) : []);
+      const parsed = coverLetterResumeData(
+        coverLetterParagraphs(parseCoverLetterText(tailored)).map((paragraph) => withWholeFieldFormat(paragraph, format))
+      );
       const data = editor.editedResume
         ? {
             ...parsed,
@@ -458,7 +467,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   );
 
   const startBlank = useCallback(() => {
-    const data = parseCoverLetterText("");
+    const data = blankCoverLetterData();
     openDocument(data);
     editor.markClean();
     // A blank letter is the same document the page opens with, so New must not
@@ -477,7 +486,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const startStarter = useCallback(() => {
     const data = coverLetterResumeData(
       coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
-      COVER_LETTER_STARTER_HEADER
+      starterDocumentHeader()
     );
     openDocument(data);
     editor.markClean();

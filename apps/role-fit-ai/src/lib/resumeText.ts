@@ -19,7 +19,7 @@ import {
   type ResumeEntry,
   type ResumeSectionData
 } from "@typeset/engine/lib/resumeData.ts";
-import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
+import { setFieldMark, stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections.ts";
 
 function titleCase(s: string): string {
@@ -96,7 +96,7 @@ export function parseResumeData(text: string, sourceText?: string): ResumeData {
 
   // Recover a name/contact from the original source when the polished output
   // dropped its header.
-  if (!data.header?.name && sourceText) {
+  if (!stripInlineMarks(data.header?.name ?? "").trim() && sourceText) {
     const src = parsePlainResume(sourceText);
     if (src.header?.name) {
       data.header = {
@@ -183,7 +183,8 @@ function parsePlainResume(text: string): ResumeData {
 
   return {
     header: name || contact.length
-      ? { visible: true, name: name || null, contact }
+      // A name is bold by default (see STYLE_FIELD_MARK_DEFAULTS).
+      ? { visible: true, name: name ? setFieldMark(name, "bold", true) : null, contact }
       : null,
     sections
   };
@@ -205,7 +206,7 @@ export function serializeResumeData(data: ResumeData): string {
   const lines: string[] = [];
   const header = data.header?.visible ? data.header : null;
   const name = header?.name?.trim() ?? "";
-  if (name) lines.push(name);
+  if (stripInlineMarks(name).trim()) lines.push(name);
   const contact = (header?.contact ?? []).map((item) => item.trim()).filter(Boolean);
   if (contact.length) lines.push(contact.join(" | "));
 

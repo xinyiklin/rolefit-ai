@@ -1,33 +1,36 @@
-// Shared document type scale. This is domain math used by formatting controls
-// and the deterministic engine, so it lives below both UI and rendering layers.
+// Default size, in points, of every text role, shared by resumes and cover
+// letters. Text without its own <size> paints at its role default; nothing
+// derives one role's size from another's.
+import { fieldSizePt, stripInlineMarks } from "./inlineMarksText.ts";
 
-
-const FONT_SIZE_RATIOS = {
-  tiny: 0.59992,
-  small: 1,
-  normalsize: 1.094951,
-  large: 1.19994,
-  Large: 1.727893,
-  LARGE: 2.073974,
-  Huge: 2.487905
+export const TEXT_SIZES_PT = {
+  name: 25,
+  contact: 10,
+  sectionHeading: 12,
+  titleLeft: 11,
+  titleRight: 11,
+  subtitleLeft: 10,
+  subtitleRight: 10,
+  skillLabel: 10,
+  body: 10
 } as const;
 
-export type FontSizeScale = { [K in keyof typeof FONT_SIZE_RATIOS]: number };
-
-// `small` is the user-selected body size. Display roles round to whole points
-// so controls show stable 11/12/25-style values instead of ratio artifacts.
-export function fontSizesFor(baseFontSizePt: number): FontSizeScale {
-  return Object.fromEntries(
-    Object.entries(FONT_SIZE_RATIOS).map(([key, ratio]) => {
-      const size = baseFontSizePt * ratio;
-      return [key, key === "small" ? size : Math.round(size)];
-    })
-  ) as FontSizeScale;
+// The size a field's spacing follows: the size its first character is set at
+// (read from meaning, so re-spelled runs agree), else the role default. Words
+// set larger make room through overflow; typing later in the field never moves
+// the spacing.
+export function fieldRoleSizePt(value: string, defaultSizePt: number): number {
+  return fieldSizePt(value) ?? defaultSizePt;
 }
 
-// The display size the resume name renders at. One truth shared by the layout
-// engine and the editor's caret-format fallbacks. It was briefly a three-way
-// document setting that no surface ever exposed.
-export function nameSizePt(sizes: FontSizeScale): number {
-  return sizes.Huge;
+// The role size of a row of fields: the largest among fields with text, so an
+// empty partner (a blank date) never pulls the row back to its default.
+export function rowRoleSizePt(fields: readonly (readonly [string, number])[]): number {
+  const filled = fields.filter(([value]) => stripInlineMarks(value).trim());
+  return Math.max(...(filled.length ? filled : fields).map(([value, size]) => fieldRoleSizePt(value, size)));
+}
+
+// The bullet dot follows its bullet's size (6 pt beside 10 pt text).
+export function bulletMarkerSizePt(bulletSizePt: number): number {
+  return Math.round(bulletSizePt * 0.6);
 }
