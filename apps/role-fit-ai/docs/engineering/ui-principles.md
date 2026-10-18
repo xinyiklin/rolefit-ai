@@ -54,10 +54,11 @@ masthead into the first/default Prepare page on 2026-07-29):
 
 Prepare treats the paired extension as the primary intake path, with URL fetch
 and pasted text as deliberate fallbacks on the same page. Before preparation,
-one centered Source panel is the whole task: URL and pasted text are two
-keyboard-navigable methods and only the selected method is visible. Empty Job
-brief, Answers, and readiness scaffolds stay out of the page. Extension
-receipt and Job analysis progress navigate to and remain visible on Prepare.
+one centered Source panel is the whole task: a job link field over a posting
+box, with one Prepare button that prepares typed text, else fetches the link,
+else re-prepares the captured posting. Empty Job brief, Answers, and readiness
+scaffolds stay out of the page. Extension receipt and Job analysis progress
+navigate to and remain visible on Prepare.
 
 Once ready, Source collapses to its head — captured size and origin — behind
 explicit View, Replace, and Prepare again paths. The structured brief leads the

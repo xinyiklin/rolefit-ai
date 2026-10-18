@@ -37,13 +37,31 @@
   align-items: start;
 }
 
+/* Before preparation the posting box is the page's whole task: the intake
+   fills the page height and the box takes whatever the link field and submit
+   row leave, never shrinking below its own minimum. */
 .prepare-layout.is-intake {
   grid-template-columns: minmax(0, 1fr);
+  align-items: stretch;
 }
 
 .prepare-layout.is-intake .prepare-main {
-  width: min(100%, 1080px);
+  width: min(100%, 880px);
+  grid-template-rows: minmax(min-content, 1fr);
   margin-inline: auto;
+}
+
+.prepare-layout.is-intake .prepare-panel,
+.prepare-layout.is-intake .prepare-source-form,
+.prepare-layout.is-intake .prepare-source-field {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.prepare-layout.is-intake .prepare-source-textarea {
+  height: 100%;
+  min-height: 220px;
+  max-height: none;
+  resize: none;
 }
 
 .prepare-layout.is-intake .prepare-job-brief {
@@ -176,17 +194,6 @@
   color: var(--warm);
 }
 
-.prepare-action-hint,
-.field > .prepare-action-hint {
-  display: block;
-  margin: 0;
-  color: var(--ink-muted);
-  font-size: 0.72rem;
-  font-weight: 400;
-  letter-spacing: 0;
-  line-height: 1.4;
-}
-
 /* -------- Source -------- */
 
 .prepare-source-preview {
@@ -210,68 +217,6 @@
   gap: var(--s3);
 }
 
-.prepare-source-methods {
-  display: flex;
-  gap: var(--s3);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.prepare-source-method {
-  position: relative;
-  min-height: 32px;
-  padding: 0 2px var(--s2);
-  border: 0;
-  background: transparent;
-  color: var(--ink-muted);
-  font: inherit;
-  font-size: 0.76rem;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.prepare-source-method::after {
-  position: absolute;
-  right: 0;
-  bottom: -1px;
-  left: 0;
-  height: 1px;
-  background: transparent;
-  content: "";
-}
-
-.prepare-source-method:hover {
-  color: var(--ink-strong);
-}
-
-.prepare-source-method[aria-selected="true"] {
-  color: var(--accent-deep);
-}
-
-.prepare-source-method[aria-selected="true"]::after {
-  background: var(--accent);
-}
-
-.prepare-source-method:focus-visible {
-  border-radius: var(--r-sm);
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.prepare-source-method-panel {
-  display: grid;
-  gap: var(--s2);
-}
-
-.prepare-source-method-panel[hidden] {
-  display: none;
-}
-
-.prepare-input-action {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s2);
-}
-
 .prepare-source-textarea {
   min-height: 112px;
   max-height: 240px;
@@ -283,6 +228,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--s3);
+}
+
+.prepare-source-submit .primary-button {
+  margin-left: auto;
 }
 
 .prepare-source-submit > span {
@@ -1021,6 +970,15 @@
 }
 
 @media (max-width: 1080px) {
+  /* Here the studio body itself scrolls; stretch the intake page to its height. */
+  .studio-body[data-tab="prepare"]:has(.prepare-layout.is-intake) {
+    grid-template-rows: minmax(min-content, 1fr) auto;
+  }
+
+  .prepare-page:has(> .prepare-layout.is-intake) {
+    grid-template-rows: auto minmax(min-content, 1fr);
+  }
+
   .prepare-layout {
     grid-template-columns: 1fr;
   }
@@ -1051,7 +1009,6 @@
     max-width: 100%;
   }
 
-  .prepare-input-action,
   .prepare-detail-grid,
   .prepare-gaps,
   .prepare-compensation {
@@ -1065,8 +1022,6 @@
     border-top: 1px solid var(--hairline-soft);
   }
 
-  .prepare-input-action .secondary-button,
-  .prepare-input-action .primary-button,
   .prepare-source-submit .primary-button {
     width: 100%;
     justify-content: center;

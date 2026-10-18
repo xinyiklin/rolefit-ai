@@ -133,9 +133,9 @@ offers 30 bundled families; each loads only when a document uses it.
   outside the output tablist; its label/count condenses to an icon plus compact
   count/working state when the rail collapses, and its popover opens rightward
   within the viewport. The paired extension is the primary path; URL fetch and
-  pasted text remain available there as deliberate one-at-a-time fallbacks.
-  Before preparation, the focused
-  Source panel shows only the selected URL or pasted-text method. Afterward it
+  pasted text remain available there as fallbacks. Before preparation, the
+  focused Source panel shows a job link and a posting box together with one
+  Prepare button (typed text wins, else the link is fetched). Afterward it
   collapses above the complete editable job brief—tracked job facts, company
   context, responsibilities, required and preferred qualifications, technical
   keywords, seniority and domain signals, benefits, and any extraction gaps—while

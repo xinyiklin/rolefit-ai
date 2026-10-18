@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { ArrowRight, Check, Circle, LoaderCircle } from "lucide-react";
 
 import { APPLICATION_SOURCES, JOB_TYPES, type Application } from "../../hooks/useApplications";
@@ -20,10 +20,6 @@ import {
 } from "./prepare/PrepareApplicationRail";
 import type { FitAssessmentState } from "../../../shared/fitAssessmentContract.ts";
 import type { PolishedResume } from "../../resumeEngine";
-
-type SourceMethod = "url" | "paste";
-
-const SOURCE_METHODS: readonly SourceMethod[] = ["url", "paste"];
 
 // Prepare owns which multi-item brief sections exist and how they read. Each one
 // becomes a tab over an individually editable row list.
@@ -94,6 +90,7 @@ export type PrepareTabProps = {
   jobAnalysisProgress: AiStageState;
   preparationStatus: string;
   jobAnalysisProviderReady: boolean;
+  // Empty while the provider check is in flight.
   jobAnalysisProviderMessage: string;
   // The Resume Polish provider's recovery step, else the no-editable-section blocker, else empty.
   resumePolishBlocker: string;
@@ -230,9 +227,6 @@ export function PrepareTab({
   onSkip
 }: PrepareTabProps) {
   const [sourceMode, setSourceMode] = useState<"collapsed" | "view" | "replace">(jobPrepared ? "collapsed" : "replace");
-  const [sourceMethod, setSourceMethod] = useState<SourceMethod>(() =>
-    jobUrl.trim() || (!jobRawText.trim() && !jobDescription.trim()) ? "url" : "paste"
-  );
 
   useEffect(() => {
     setSourceMode(jobPrepared ? "collapsed" : "replace");
@@ -310,25 +304,19 @@ export function PrepareTab({
   // control to the user's replacement on the first keystroke.
   const preparationSourceText = jobRawText || jobDescription;
   const canPreparePaste = preparationSourceText.trim().length >= 80 && !jobEditingDisabled;
-  const fetchHint = !jobUrl.trim()
-    ? "Enter a job URL first."
-    : jobEditingDisabled
-      ? applicationActionsBusy
-        ? "Wait for the current application action to finish."
-        : "Wait for the current preparation to finish."
-      : "";
+  const busyHint = !jobEditingDisabled
+    ? ""
+    : applicationActionsBusy
+      ? "Wait for the current application action to finish."
+      : "Wait for the current preparation to finish.";
   const prepareHint =
     preparationSourceText.trim().length < 80
       ? "Paste at least 80 characters from the job posting."
-      : jobEditingDisabled
-        ? applicationActionsBusy
-          ? "Wait for the current application action to finish."
-          : "Wait for the current preparation to finish."
-        : "";
-  const localFallbackHint = !jobAnalysisProviderReady
+      : busyHint;
+  const localFallbackHint = !jobAnalysisProviderReady && jobAnalysisProviderMessage
     ? jobPrepared || hasPreparedPreview
       ? "Local brief ready. Connect an AI provider to improve it."
-      : `${jobAnalysisProviderMessage} Prepare will still create a local brief.`
+      : `${jobAnalysisProviderMessage} Prepare still builds a local brief.`
     : "";
   const polishResumeHint = !jobPrepared
     ? "Prepare the job first."
@@ -390,23 +378,31 @@ export function PrepareTab({
     </span>
   );
 
-  function handleSourceMethodKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
-    const currentIndex = SOURCE_METHODS.indexOf(sourceMethod);
-    const nextIndex =
-      event.key === "Home"
-        ? 0
-        : event.key === "End"
-          ? SOURCE_METHODS.length - 1
-          : event.key === "ArrowRight"
-            ? (currentIndex + 1) % SOURCE_METHODS.length
-            : event.key === "ArrowLeft"
-              ? (currentIndex - 1 + SOURCE_METHODS.length) % SOURCE_METHODS.length
-              : -1;
-    if (nextIndex < 0) return;
+  // Typed text wins (the link stays attached as the posting URL); otherwise a
+  // link is fetched. A captured posting is not typed text, so a new link after
+  // it fetches instead of re-preparing the old capture.
+  const hasTypedText = !jobRawText && jobDescription.trim().length > 0;
+  const usesLink = !hasTypedText && Boolean(jobUrl.trim());
+  const canSubmitSource = usesLink ? canFetch : canPreparePaste;
+  const sourceHint = canSubmitSource
+    ? ""
+    : usesLink
+      ? busyHint
+      : preparationSourceText.trim()
+        ? prepareHint
+        : busyHint || "Add a job link or paste the posting.";
+  const headHintShown = jobPrepared && !canPreparePaste && Boolean(prepareHint);
+  // The prepared head already shows the same line beside Prepare again.
+  const sourceHintId = !sourceHint
+    ? undefined
+    : headHintShown && sourceHint === prepareHint
+      ? "prepare-source-action-hint"
+      : "prepare-source-submit-hint";
+
+  function handleSourceSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const nextMethod = SOURCE_METHODS[nextIndex];
-    setSourceMethod(nextMethod);
-    document.getElementById(`prepare-source-${nextMethod}-tab`)?.focus();
+    if (!canSubmitSource) return;
+    void (usesLink ? onFetchPosting() : onPreparePosting(preparationSourceText));
   }
 
   return (
@@ -435,7 +431,7 @@ export function PrepareTab({
                   {sourceLength.toLocaleString()} characters · {jobUrl.trim() ? "linked posting" : "pasted text"}
                 </span>
               ) : (
-                <span className="prepare-panel__meta">URL or pasted text</span>
+                <span className="prepare-panel__meta">Send it from the extension, or add it here</span>
               )}
               {jobPrepared ? (
                 <div className="prepare-panel__actions">
@@ -449,10 +445,7 @@ export function PrepareTab({
                   <button
                     className="ghost-button is-compact"
                     type="button"
-                    onClick={() => {
-                      setSourceMethod(jobUrl.trim() ? "url" : "paste");
-                      setSourceMode("replace");
-                    }}
+                    onClick={() => setSourceMode("replace")}
                     disabled={jobEditingDisabled}
                   >
                     Replace
@@ -478,112 +471,54 @@ export function PrepareTab({
             {sourceMode === "view" && jobPrepared ? (
               <pre className="prepare-source-preview">{jobRawText || jobDescription}</pre>
             ) : sourceMode === "collapsed" && jobPrepared ? null : (
-              <div className="prepare-source-form">
-                <div className="prepare-source-methods" role="tablist" aria-label="Job source method">
-                  {SOURCE_METHODS.map((method) => {
-                    const selected = sourceMethod === method;
-                    return (
-                      <button
-                        id={`prepare-source-${method}-tab`}
-                        className="prepare-source-method"
-                        type="button"
-                        role="tab"
-                        aria-selected={selected}
-                        aria-controls={`prepare-source-${method}-panel`}
-                        tabIndex={selected ? 0 : -1}
-                        onClick={() => setSourceMethod(method)}
-                        onKeyDown={handleSourceMethodKeyDown}
-                        key={method}
-                      >
-                        {method === "url" ? "Job URL" : "Paste description"}
-                      </button>
-                    );
-                  })}
-                </div>
+              <form className="prepare-source-form" onSubmit={handleSourceSubmit} noValidate>
+                <label className="field">
+                  <span>Job link</span>
+                  <input
+                    className="text-input"
+                    type="url"
+                    value={jobUrl}
+                    onChange={(event) => onJobUrlChange(event.target.value)}
+                    placeholder="https://company.example/jobs/role"
+                    disabled={jobEditingDisabled}
+                  />
+                </label>
 
-                <div
-                  id="prepare-source-url-panel"
-                  className="prepare-source-method-panel"
-                  role="tabpanel"
-                  aria-labelledby="prepare-source-url-tab"
-                  hidden={sourceMethod !== "url"}
-                >
-                  <label className="field">
-                    <span>Job URL</span>
-                    <span className="prepare-input-action">
-                      <input
-                        className="text-input"
-                        type="url"
-                        value={jobUrl}
-                        onChange={(event) => onJobUrlChange(event.target.value)}
-                        placeholder="https://company.example/jobs/role"
-                        disabled={jobEditingDisabled}
-                      />
-                      <button
-                        className="primary-button is-compact"
-                        type="button"
-                        onClick={() => void onFetchPosting()}
-                        disabled={!canFetch}
-                        aria-describedby={!canFetch && fetchHint ? "prepare-fetch-action-hint" : undefined}
-                      >
-                        {isPreparing ? <LoaderCircle className="spin" size={14} aria-hidden="true" /> : null}
-                        Prepare from URL
-                      </button>
-                    </span>
-                    {!canFetch && fetchHint ? (
-                      <span className="prepare-action-hint" id="prepare-fetch-action-hint">
-                        {fetchHint}
-                      </span>
-                    ) : null}
-                  </label>
-                </div>
+                <label className="field prepare-source-field">
+                  <span>Job description</span>
+                  <textarea
+                    className="textarea prepare-source-textarea"
+                    value={preparationSourceText}
+                    onChange={(event) => onJobDescriptionChange(event.target.value)}
+                    placeholder="Or paste the posting: role, qualifications, location, compensation, and benefits."
+                    disabled={jobEditingDisabled}
+                  />
+                </label>
 
-                <div
-                  id="prepare-source-paste-panel"
-                  className="prepare-source-method-panel"
-                  role="tabpanel"
-                  aria-labelledby="prepare-source-paste-tab"
-                  hidden={sourceMethod !== "paste"}
-                >
-                  <label className="field">
-                    <span>Job description</span>
-                    <textarea
-                      className="textarea prepare-source-textarea"
-                      value={preparationSourceText}
-                      onChange={(event) => onJobDescriptionChange(event.target.value)}
-                      placeholder="Paste the role description, qualifications, location, compensation, and benefits."
-                      disabled={jobEditingDisabled}
-                    />
-                  </label>
-                  <div className="prepare-source-submit">
+                <div className="prepare-source-submit">
+                  {usesLink ? null : (
                     <span>
                       {preparationSourceText.trim().length.toLocaleString()} characters
                       {preparationSourceText.trim().length > 0 && preparationSourceText.trim().length < 80
                         ? " · add more of the posting"
                         : ""}
                     </span>
-                    <button
-                      className="primary-button is-compact"
-                      type="button"
-                      onClick={() => void onPreparePosting(preparationSourceText)}
-                      disabled={!canPreparePaste}
-                      aria-describedby={
-                        !canPreparePaste
-                          ? jobPrepared
-                            ? "prepare-source-action-hint"
-                            : "prepare-paste-action-hint"
-                          : undefined
-                      }
-                    >
-                      Prepare posting
-                    </button>
-                  </div>
-                  {!jobPrepared && !canPreparePaste && prepareHint ? (
-                    <p className="prepare-note" id="prepare-paste-action-hint">
-                      {prepareHint}
-                    </p>
-                  ) : null}
+                  )}
+                  <button
+                    className="primary-button is-compact"
+                    type="submit"
+                    disabled={!canSubmitSource}
+                    aria-describedby={sourceHintId}
+                  >
+                    {isPreparing ? <LoaderCircle className="spin" size={14} aria-hidden="true" /> : null}
+                    {usesLink ? "Prepare from link" : "Prepare posting"}
+                  </button>
                 </div>
+                {sourceHintId === "prepare-source-submit-hint" ? (
+                  <p className="prepare-note" id="prepare-source-submit-hint">
+                    {sourceHint}
+                  </p>
+                ) : null}
 
                 {localFallbackHint ? (
                   <p className="prepare-note is-info" role="status">
@@ -599,7 +534,7 @@ export function PrepareTab({
                     {activity.message}
                   </p>
                 ) : null}
-              </div>
+              </form>
             )}
           </section>
 

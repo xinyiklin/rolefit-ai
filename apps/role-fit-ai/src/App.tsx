@@ -532,7 +532,11 @@ function App() {
   const resumePolishProviderReady = providerReady(resumePolishStage.provider);
   const coverProviderReady = providerReady(stages["cover-polish"].provider);
   const answersProviderReady = providerReady(stages["application-answers"].provider);
-  const jobAnalysisProviderMessage = providerRecoveryMessage(jobAnalysisStage.provider);
+  // Prepare awaits the in-flight provider check itself, so the transient check
+  // is not a Prepare note; only a settled, unready provider is.
+  const jobAnalysisProviderMessage = providerAvailability.status === "loading"
+    ? ""
+    : providerRecoveryMessage(jobAnalysisStage.provider);
   const resumePolishProviderMessage = resumePolishProviderReady ? "" : providerRecoveryMessage(resumePolishStage.provider);
   const coverProviderMessage = providerRecoveryMessage(stages["cover-polish"].provider);
   const answersProviderMessage = providerRecoveryMessage(stages["application-answers"].provider);
