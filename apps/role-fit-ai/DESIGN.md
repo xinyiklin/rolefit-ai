@@ -423,9 +423,10 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   Extension receipt is primary; URL fetch and pasted text are compact fallback
   controls on the same page, never masthead inputs or a second intake menu.
 - **Composition:** before a posting is prepared, one centered Source panel is
-  the whole task. URL and pasted text are two keyboard-navigable methods inside
-  that panel, and only the selected method is visible; empty Job brief,
-  Materials, and readiness scaffolds do not render. After preparation, Source
+  the whole task: a job link field over a posting box, with one Prepare button
+  that prepares typed text, else fetches the link, else re-prepares the
+  captured posting; empty Job brief, Materials, and readiness scaffolds do not
+  render. After preparation, Source
   collapses into its head (captured size and origin), the editable Job brief
   leads the main column, and one Application rail combines Resume and Cover
   Letter choices, readiness, the saved-application summary, and Apply. Panels

@@ -98,9 +98,12 @@ and `docs/engineering/ui-principles.md`.
   technical keywords, seniority/domain signals, and benefits. Candidate gaps
   restored from a saved Apply snapshot remain clearly historical compatibility
   data rather than masquerading as current evidence.
-- Before preparation, Source is the only visible panel. URL and pasted text are
-  two APG-tabbed methods inside it, only the selected method renders, and the
-  intake column is centered instead of reserving an empty rail. A prepared
+- Before preparation, Source is the only visible panel: one form with a job
+  link and a posting box (no method tabs) and one Prepare submit, derived from
+  intake state rather than stored: typed text wins (the link stays attached),
+  otherwise the link is fetched, so a new link after a captured posting fetches
+  instead of re-preparing the capture.
+  The intake column is centered instead of reserving an empty rail. A prepared
   source collapses into its panel head — captured size and origin — rather than
   repeating them in the body.
 - After preparation, the brief leads the main column and one Application rail

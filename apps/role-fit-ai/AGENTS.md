@@ -202,8 +202,8 @@ or workspace state, keep it here and expose the smallest host seam instead.
   brief editable: tracked job facts through one role context, responsibilities,
   required and preferred qualifications, technical keywords, seniority and
   domain signals, benefits, plus deterministic extraction gaps.
-- Prepare is state-shaped: before preparation, one centered Source panel exposes
-  one URL-or-paste method at a time and no empty downstream scaffolds; afterward,
+- Prepare is state-shaped: before preparation, one centered Source panel shows
+  the link and posting fields together and no empty downstream scaffolds; afterward,
   the editable brief leads beside one Application rail containing both material
   choices, readiness, the saved-application summary, and the session-derived
   primary action.
