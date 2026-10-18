@@ -389,7 +389,9 @@ export function PrepareTab({
     : usesLink
       ? busyHint
       : preparationSourceText.trim()
-        ? prepareHint
+        ? jobUrl.trim() && !busyHint && preparationSourceText.trim().length < 80
+          ? "Paste at least 80 characters, or clear the description to use the link."
+          : prepareHint
         : busyHint || "Add a job link or paste the posting.";
   const headHintShown = jobPrepared && !canPreparePaste && Boolean(prepareHint);
   // The prepared head already shows the same line beside Prepare again.

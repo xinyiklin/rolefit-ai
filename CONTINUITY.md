@@ -44,7 +44,7 @@ D-entries in `docs/decisions.md`.
 ## Open questions and UNCONFIRMED items
 
 - 2026-07-25..10-06 [TOOL] Browser QA never run (flag-first) for shipping
-  surfaces: Prepare states and 1080/980/860/720px breakpoints and the Firefox
+  surfaces: prepared Prepare states, 980/860px, Firefox intake, and the Firefox
   footer band (2026-07-30); prepared two-pane scrolling (2026-08-07); Apply's
   download dialog (2026-07-31); Sessions rail placement (2026-08-01); Fit
   staleness and inspector layout (2026-08-08..08-09); populated Open-menu
@@ -70,10 +70,10 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] **One Prepare intake**: link over a full-height posting box,
-  one submit (typed text, else link, else capture); no provider-check note.
-  Intake browser-checked 1440/1080/720 (prepared layout, Firefox unchecked).
-  `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
+- [USER+CODE+TOOL] **One Prepare intake** (#248): link over a full-height
+  posting box, one submit (typed text, else link, else capture); no
+  provider-check note. Intake browser-checked 1440/1080/720 (Chromium pane).
+- [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
 - [USER+CODE] **0.17.0 preview prepared** (minor: provider plans, effort
   parity, model refresh, per-field sizes). Notes
   `apps/role-fit-ai/docs/releases/0.17.0-beta.1.md`.
