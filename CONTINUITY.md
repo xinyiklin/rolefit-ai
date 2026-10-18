@@ -103,10 +103,9 @@ D-entries in `docs/decisions.md`.
   never moves line breaks. Parsers convert retired keys; 398 workspace files
   rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
   letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
-- [USER+CODE+TOOL] **Engine CI runs only when the engine can change**:
-  `scripts/ci-coverage-selection.mjs` skips `Engine codecs, layout, and PDF`
-  unless `packages/engine/**` or a root input changed, and the ~7 min
-  `fonts:check` moved to a parallel `Engine font assets` job for font paths.
+- [USER+CODE+TOOL] **CI runs only the jobs a change can reach**: one selector
+  job gates every Document workflow job but dependency contracts by measured
+  reach (docs/development.md); a version-only RoleFit release runs only RoleFit.
 
 ## 2026-10-17
 
