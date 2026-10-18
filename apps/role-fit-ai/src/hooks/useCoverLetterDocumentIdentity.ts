@@ -26,8 +26,13 @@ export function useCoverLetterDocumentIdentity(
   currentFingerprint: string | null
 ) {
   const [documentTitle, setDocumentTitleState] = useState(loadTitle);
-  const [persistedDocumentTitle, setPersistedDocumentTitle] =
+  const [persistedDocumentTitle, setPersistedDocumentTitleState] =
     useState(documentTitle);
+  const persistedDocumentTitleRef = useRef(persistedDocumentTitle);
+  const setPersistedDocumentTitle = useCallback((title: string) => {
+    persistedDocumentTitleRef.current = title;
+    setPersistedDocumentTitleState(title);
+  }, []);
   const [persistedFingerprint, setPersistedFingerprint] =
     useState<string | null>(initialFingerprint);
   const persistenceBaselineOwnershipRef = useRef<
@@ -53,6 +58,18 @@ export function useCoverLetterDocumentIdentity(
     );
     setDocumentTitleState(resolved);
   }, []);
+  // An automatic retitle (D085) is not an edit: a title that still matches the
+  // saved one moves the saved title with it, so a clean letter stays clean.
+  const followDocumentTitle = useCallback(
+    (next: (current: string) => string) => {
+      const current = documentTitleRef.current;
+      const resolved = next(current);
+      if (resolved === current) return;
+      if (current === persistedDocumentTitleRef.current) setPersistedDocumentTitle(resolved);
+      setDocumentTitle(resolved);
+    },
+    [setDocumentTitle, setPersistedDocumentTitle]
+  );
 
   useEffect(() => {
     try {
@@ -71,7 +88,7 @@ export function useCoverLetterDocumentIdentity(
       setPersistedFingerprint(fingerprint);
       setPersistedDocumentTitle(title.trim() || "Cover letter");
     },
-    []
+    [setPersistedDocumentTitle]
   );
 
   const capturePersistenceBaselineRevision = useCallback(
@@ -96,7 +113,7 @@ export function useCoverLetterDocumentIdentity(
       setPersistedDocumentTitle(title.trim() || "Cover letter");
       return true;
     },
-    []
+    [setPersistedDocumentTitle]
   );
 
   const documentDirty =
@@ -112,6 +129,7 @@ export function useCoverLetterDocumentIdentity(
     documentTitle,
     persistedDocumentTitle,
     setDocumentTitle,
+    followDocumentTitle,
     dirty: documentDirty,
     recoveryDirty,
     commitPersistenceBaseline,

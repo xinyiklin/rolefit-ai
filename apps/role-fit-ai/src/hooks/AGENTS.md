@@ -141,7 +141,8 @@ browser-side effects; components render them and App composes them.
   letters the cover-letter pool leaves eligible. The pool is a snapshot input,
   not a re-resolution trigger: changing it cancels a pending adoption but never
   re-resolves a settled preparation. Adoption
-  preserves Prepare's output title and uses the editor's guarded loader; edits,
+  keeps Prepare's output title (then following the adopted letterhead name per
+  D085) and uses the editor's guarded loader; edits,
   application ownership, saves, manual intent, ties, and incomplete reads keep
   the current document. Its pending signal gates Cover Letter Polish and Apply.
 - `useApplications` sends only mutation-named records, keeps optimistic updates

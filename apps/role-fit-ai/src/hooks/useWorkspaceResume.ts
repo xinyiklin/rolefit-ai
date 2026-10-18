@@ -109,6 +109,8 @@ type UseWorkspaceResumeArgs = {
   setResumeText: (text: string) => void;
   setFileName: (name: string) => void;
   setDocumentTitle: (title: string) => void;
+  // The title Blank and Starter open with, named for the resume they open.
+  freshDocumentTitle: (data: ResumeData) => string;
   setResult: (updater: PolishedResume | null | ((prev: PolishedResume | null) => PolishedResume | null)) => void;
   resetCoverWorkflow: () => void;
   setFileError: (value: string) => void;
@@ -134,6 +136,7 @@ export function useWorkspaceResume({
   setResumeText,
   setFileName,
   setDocumentTitle,
+  freshDocumentTitle,
   setResult,
   resetCoverWorkflow,
   setFileError,
@@ -215,7 +218,7 @@ export function useWorkspaceResume({
     skipGuard = false,
     clearRecoveryOnCommit = false,
     shouldCancel?: () => boolean
-  ): Promise<{ text: string } | null> {
+  ): Promise<{ text: string; data: ResumeData } | null> {
     // The bundled starter is never saved (exists: false) but has text to open.
     if (!baseResume.text) return null;
 
@@ -277,7 +280,8 @@ export function useWorkspaceResume({
     docStyle.replaceDocumentStyle(candidate.documentStyle);
     setFileStatus(status);
     return {
-      text: serializeResumeData(candidate.data)
+      text: serializeResumeData(candidate.data),
+      data: candidate.data
     };
   }
 
@@ -393,7 +397,7 @@ export function useWorkspaceResume({
       );
       if (!applied) return;
       setResumeOrigin("starter");
-      setDocumentTitle("Resume");
+      setDocumentTitle(freshDocumentTitle(applied.data));
       saveLastBaseResumeName("");
       updateWorkspaceState(workspace);
       // The starter is intentionally detached from any saved base. Saving it
@@ -419,9 +423,10 @@ export function useWorkspaceResume({
     // workspace files are deliberately untouched.
     replacementGuard.onReplacementCommitted();
     detachBaseResumeIdentity();
+    const blankData = createBlankResumeData();
     setResumeOrigin("blank");
     setFileName("");
-    setDocumentTitle("Resume");
+    setDocumentTitle(freshDocumentTitle(blankData));
     setResumeText("");
     setResult(null);
     resetCoverWorkflow();
@@ -431,7 +436,7 @@ export function useWorkspaceResume({
     setPolishStatus("");
     resetExportStatuses();
     setExportStatus("");
-    seedResumeData(createBlankResumeData());
+    seedResumeData(blankData);
     docStyle.replaceDocumentStyle(toDocumentStyle(DOC_STYLE_DEFAULTS));
   }
 

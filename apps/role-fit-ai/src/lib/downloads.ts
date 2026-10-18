@@ -82,31 +82,35 @@ export function buildResumeFileName(name: string, company: string, ext: string):
   return `${buildResumeDocumentTitle(name, company)}.${ext}`;
 }
 
-// The untouched titles the cover-letter editor sets itself (blank and starter
-// retarget the default "Resume" to "Cover Letter", the workspace default). Only
-// these — never a title the user typed — are upgraded to the shared
-// Name_Company_Cover_Letter form.
+// The cover letter's own untouched default titles. Like the resume's "Resume",
+// they follow the document's identity until the user names the letter.
 export const COVER_LETTER_TITLE_PLACEHOLDERS = ["Cover letter", "Cover Letter", "Untitled cover letter"] as const;
 
-// Job intake and document loading are independent async paths, so a title is
-// often built from partial identity first (Company_Resume) and completed when
-// the applicant name arrives. Rewrite only a title the app itself produced —
-// anything the user typed is preserved. `placeholders` are the kind's own
-// untouched defaults ("Resume", "Cover letter").
-export function completeAutoDocumentTitle(
+export type DocumentTitleIdentity = { name: string; company: string };
+
+// Both editors' titles follow their document's identity (applicant name and
+// target company) until the user names the document. A placeholder, or a title
+// pairing any current or `earlier` name with any of their companies (either
+// may be absent), is one the app produced and is rewritten — so a name typed
+// one character at a time, or a name and company changing in one render, keeps
+// the title in step; anything else the user typed is preserved.
+export function followDocumentIdentityTitle(
   kind: DocumentTitleKind,
   currentTitle: string,
-  name: string,
-  company: string,
+  identity: DocumentTitleIdentity,
+  earlier: readonly DocumentTitleIdentity[],
   placeholders: readonly string[]
 ): string {
-  const automaticTitles = new Set([
-    ...placeholders,
-    buildDocumentTitle(kind, "", ""),
-    buildDocumentTitle(kind, name, ""),
-    buildDocumentTitle(kind, "", company)
-  ]);
-  return automaticTitles.has(currentTitle) ? buildDocumentTitle(kind, name, company) : currentTitle;
+  const identities = [identity, ...earlier];
+  const automaticTitles = new Set<string>(placeholders);
+  for (const titleName of ["", ...identities.map(({ name }) => name)]) {
+    for (const titleCompany of ["", ...identities.map(({ company }) => company)]) {
+      automaticTitles.add(buildDocumentTitle(kind, titleName, titleCompany));
+    }
+  }
+  return automaticTitles.has(currentTitle)
+    ? buildDocumentTitle(kind, identity.name, identity.company)
+    : currentTitle;
 }
 
 // Sanitize a user-typed file name into a safe base (extension excluded): the
