@@ -75,6 +75,18 @@ extension 1.4.0, desktop bridge API 13. Release history:
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
 
+## 2026-10-18
+
+- [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
+  uncommitted on `main`): no base size or LaTeX scale; one default per text
+  role shared by both documents; Styles gains Name (default bold, removable)
+  and Body rows; letter style keys and page defaults match the resume's; name
+  removable and one starter header in both editors. Parsers still read the
+  retired keys and convert them. Workspace: 398 files rewritten, layout
+  unchanged; originals in `.agent-work/tasks/base-size-removal-2026-10-17/backup/`.
+  - [TOOL] Old vs new on 416 local files: 10 pt resumes and 70/81 letters
+    identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+
 ## 2026-10-17
 
 - [USER+CODE+TOOL] **Repository audit, round 2** (16 read-only slices; every

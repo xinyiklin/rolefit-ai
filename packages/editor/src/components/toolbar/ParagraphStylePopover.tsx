@@ -17,6 +17,9 @@ export type ParagraphStylePopoverProps = {
   disabled?: boolean;
   globalAlignments?: Record<AlignmentScope, BodyAlign | null>;
   onGlobalAlignmentChange?: (scope: AlignmentScope, alignment: BodyAlign) => void;
+  // A letter has no section headings or entries, so its menu shows only the
+  // body and header alignment.
+  documentKind?: "resume" | "cover-letter";
 };
 
 function AlignmentPicker({
@@ -62,8 +65,10 @@ export function ParagraphStylePopover({
   docStyle,
   disabled = false,
   globalAlignments,
-  onGlobalAlignmentChange
+  onGlobalAlignmentChange,
+  documentKind = "resume"
 }: ParagraphStylePopoverProps) {
+  const isResume = documentKind === "resume";
   const { style } = docStyle;
   const idPrefix = `paragraph-style-${useId()}`;
   const alignmentId = `${idPrefix}-alignment`;
@@ -100,21 +105,23 @@ export function ParagraphStylePopover({
                   onChange={(value) => onGlobalAlignmentChange?.("body", value)}
                 />
                 <AlignmentPicker
-                  label="Resume header"
+                  label="Header"
                   value={globalAlignments?.header ?? null}
                   options={NON_JUSTIFIED_ALIGNMENT_OPTIONS}
                   onChange={(value) => onGlobalAlignmentChange?.("header", value)}
                 />
-                <AlignmentPicker
-                  label="Section headings"
-                  value={globalAlignments?.heading ?? null}
-                  options={NON_JUSTIFIED_ALIGNMENT_OPTIONS}
-                  onChange={(value) => onGlobalAlignmentChange?.("heading", value)}
-                />
+                {isResume && (
+                  <AlignmentPicker
+                    label="Section headings"
+                    value={globalAlignments?.heading ?? null}
+                    options={NON_JUSTIFIED_ALIGNMENT_OPTIONS}
+                    onChange={(value) => onGlobalAlignmentChange?.("heading", value)}
+                  />
+                )}
               </div>
             </section>
 
-            <section className="style-popover__section" aria-label="Entry layout">
+            {isResume && <section className="style-popover__section" aria-label="Entry layout">
               <h3 className="style-popover__section-title">Entry layout</h3>
               <div className="style-popover__range-list">
                 <StyleRange
@@ -148,7 +155,7 @@ export function ParagraphStylePopover({
                   onChange={(value) => docStyle.set("bulletIndentPt", value)}
                 />
               </div>
-            </section>
+            </section>}
           </div>
         </div>
       )}

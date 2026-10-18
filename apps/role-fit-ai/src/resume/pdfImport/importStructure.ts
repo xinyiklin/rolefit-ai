@@ -24,10 +24,12 @@ import {
   type ResumeImportStructure
 } from "../../../shared/resumeImportContract.ts";
 import { auditImport } from "./importAudit.ts";
+import { applyImportedBodySize } from "./importStyle.ts";
 import type { PdfImportResult } from "./importResumePdf.ts";
 import { renderField, type FieldDraft } from "./fieldText.ts";
 import { slicePiece, type LayoutLine, type LayoutLines, type LinePiece } from "./layoutLines.ts";
 import type { ConsumedPiece, ImportFinding } from "./resumeFromLayout.ts";
+import { setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
 
 type ImportRequestPieces = Map<string, { piece: LinePiece; line: number; segment: number }>;
 
@@ -263,7 +265,11 @@ export function resolveImportStructure(
   for (const current of placed.filter((candidate) => moved.has(candidate))) check(current, READING_ORDER_REASON);
 
   return {
-    data: { header: name || contact.length ? { visible: true, name: name || null, contact } : null, sections },
+    data: {
+      // A name is bold by default (STYLE_FIELD_MARK_DEFAULTS); it rendered without marks.
+      header: name || contact.length ? { visible: true, name: name ? setFieldMark(name, "bold", true) : null, contact } : null,
+      sections
+    },
     findings,
     consumed
   };
@@ -289,5 +295,8 @@ export function interpretedImport(
   if (!audit.ok) {
     return { ok: false, reason: audit.added.length ? "The reply repeated or added text." : "The reply lost text without leaving it out." };
   }
-  return { ok: true, result: { ...local, data: resolved.data, findings, audit } };
+  return {
+    ok: true,
+    result: { ...local, data: applyImportedBodySize(resolved.data, local.bodySizePt), findings, audit }
+  };
 }

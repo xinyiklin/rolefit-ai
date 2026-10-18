@@ -1153,6 +1153,32 @@ assert.equal(resetFormatting.sections[0].items[0].subtitleLeft, "<i>Acme</i>", "
 assert.equal(resetFormatting.sections[2].items[0].titleLeft, "<b>Languages</b>", "reset restores the default bold skill label");
 assert.equal(resetFormatting.header.contact[0], "a@b.com", "reset leaves unmarked contact defaults untouched");
 
+// Name and Body rows: the name's default bold is a stored mark; Body changes
+// only a whole-field wrapper and never touches per-word formatting.
+{
+  const bullet = "Built <size=14>big</size> and <font=tinos>serif</font> <b>bold</b> words";
+  const doc = {
+    header: { visible: true, name: "Jane Doe", contact: [] },
+    sections: [{ id: "s", heading: "Experience", type: "standard", items: [{
+      id: "e", titleLeft: "<b>Engineer</b>", titleRight: "", subtitleLeft: "<i>Acme</i>", subtitleRight: "",
+      bullets: [{ id: "b", text: bullet }]
+    }] }]
+  };
+  const reset = reduceResumeData(doc, { type: "resetStyleFieldFormatting" });
+  assert.equal(reset.header.name, "<b>Jane Doe</b>", "reset restores the name's default bold");
+  assert.equal(reset.sections[0].items[0].bullets[0].text, bullet, "reset keeps per-word body sizes, fonts, and marks");
+  const unbold = reduceResumeData(reset, { type: "setStyleFieldMark", field: "name", mark: "bold", on: false });
+  assert.equal(unbold.header.name, "Jane Doe", "the name's bold can be turned off");
+  const bodySized = reduceResumeData(doc, { type: "setStyleFieldSize", field: "body", sizePt: 11 });
+  assert.equal(bodySized.sections[0].items[0].bullets[0].text, `<size=11>${bullet}</size>`, "Body size wraps, keeping inner sizes");
+  const resized = reduceResumeData(bodySized, { type: "setStyleFieldSize", field: "body", sizePt: 12 });
+  assert.equal(resized.sections[0].items[0].bullets[0].text, `<size=12>${bullet}</size>`, "Body size replaces only its own wrapper");
+  const bodyReset = reduceResumeData(resized, { type: "resetStyleFieldFormatting" });
+  assert.equal(bodyReset.sections[0].items[0].bullets[0].text, bullet, "reset removes only the Body wrapper");
+  const bodyFont = reduceResumeData(doc, { type: "setStyleFieldFont", field: "body", family: "arimo" });
+  assert.equal(bodyFont.sections[0].items[0].bullets[0].text, `<font=arimo>${bullet}</font>`, "Body font keeps inner fonts");
+}
+
 assert.deepEqual(structuralBase, structuralPristine, "style-formatting actions never mutate their input state");
 
 // ----- clearAlignmentOverrides per scope -----

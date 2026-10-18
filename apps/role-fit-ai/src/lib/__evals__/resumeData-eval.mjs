@@ -75,7 +75,7 @@ const typeOf = (r, re) => r.sections.find((s) => re.test(s.heading))?.type;
 const checks = [
   // Title-Case is recognized (the core fix)
   ["Title-Case headers parse into 3 sections", tc.sections.length === 3],
-  ["name kept out of contact", tc.header?.name === "Jane Dev"],
+  ["name kept out of contact (bold by default)", tc.header?.name === "<b>Jane Dev</b>"],
   ["body not collapsed into contact (exactly the 2 contact entries)", tc.header?.contact.length === 2],
 
   // trailing-colon headers parse + the stored heading drops the colon

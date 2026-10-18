@@ -1,15 +1,15 @@
 // Optimal line breaker: dynamic programming over legal break points minimizes
 // total demerits, producing stable wrapping that greedy CSS cannot reproduce.
 //
-// Semantics implemented for the resume's alignment modes:
-//   - Ragged modes (left/center/right) do not penalize unused width. A line can
-//     still shrink interword space, which can keep one more word on the line.
-//   - Justify: badness comes from stretch or shrink ratio; shrink has a hard
-//     budget, while stretch is bounded by the tolerance threshold.
+// Alignment never changes where lines break: every mode breaks as a ragged
+// paragraph would, and justify only stretches the spaces of lines already
+// chosen (as word processors do), so switching alignment never reflows text.
+//   - Unused width is not penalized. A line can still shrink interword space,
+//     which can keep one more word on the line; shrink has a hard budget.
 //   - Breaking after an explicit hyphen costs 50, so an equal-line-count break
 //     at a space is preferred over splitting a compound.
-//   - Demerits per line: (linepenalty + badness)² + penalty·|penalty|; the
-//     final line has no under-full penalty in any mode.
+//   - Demerits per line: (linepenalty + badness)² + penalty·|penalty|; no
+//     line has an under-full penalty.
 //
 // The DP tries, for each break, only the previous breaks that can still start a
 // feasible line, so its cost is lines × words-per-line rather than words².
@@ -33,14 +33,7 @@ function texBadness(r: number): number {
 
 type Candidate = { index: number; penalty: number }; // break AFTER items[index-1]
 
-function badnessFor(
-  natural: number,
-  stretch: number,
-  shrink: number,
-  target: number,
-  align: ParagraphAlign,
-  isLast: boolean
-): number {
+function badnessFor(natural: number, shrink: number, target: number): number {
   if (natural > target) {
     // Overfull at natural width: even the final line must shrink real interword
     // space to fit.
@@ -49,16 +42,7 @@ function badnessFor(
     const b = texBadness(need / shrink);
     return b > TOLERANCE ? INFEASIBLE : b;
   }
-  if (isLast) return 0; // unused width on the final line is free
-  if (align !== "justify") return 0; // unused width in ragged modes is free
-  const need = target - natural;
-  if (need === 0) return 0;
-  if (stretch <= 0) return INFEASIBLE;
-  // Unlike shrink (a hard physical limit), stretch can exceed its preferred
-  // budget with badness growing as 100r³. The tolerance check is the cutoff; an
-  // r>1 early-out would incorrectly reject usable justified lines.
-  const b = texBadness(need / stretch);
-  return b > TOLERANCE ? INFEASIBLE : b;
+  return 0; // unused width is free in every alignment
 }
 
 // Break a paragraph's item stream to `target` bp. Returns lines of positioned
@@ -137,7 +121,6 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
   const prev = new Array<number>(candidates.length).fill(-1);
   for (let ci = 0; ci < candidates.length; ci += 1) {
     const cand = candidates[ci];
-    const isLast = ci === candidates.length - 1;
     for (let pi = ci - 1; pi >= -1; pi -= 1) {
       const from = pi === -1 ? 0 : candidates[pi].index;
       const m = measureLine(from, cand.index);
@@ -146,11 +129,11 @@ function breakSoftParagraph(items: SoftParaItem[], target: number, align: Paragr
       if (m.natural > target && (m.shrink <= 0 || m.natural - target > m.shrink)) break;
       const base = pi === -1 ? 0 : best[pi];
       if (base === INFEASIBLE) continue;
-      const bad = badnessFor(m.natural, m.stretch, m.shrink, target, align, isLast);
+      const bad = badnessFor(m.natural, m.shrink, target);
       if (bad === INFEASIBLE) continue;
       const demerits = (LINE_PENALTY + bad) ** 2 + cand.penalty * Math.abs(cand.penalty);
       // Strict so ties keep the LATEST previous break, which this backwards scan
-      // meets first: in ragged modes every feasible split has badness 0 and
+      // meets first: every feasible split without shrink has badness 0 and
       // equal demerits, so this tie-break fills each line maximally.
       if (base + demerits < best[ci]) {
         best[ci] = base + demerits;

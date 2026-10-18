@@ -19,7 +19,7 @@ import {
   type ResumeEntry,
   type ResumeSectionData
 } from "@typeset/engine/lib/resumeData.ts";
-import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
+import { setFieldMark, stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { BULLET_GLYPHS, inferSectionType, isSectionHeader } from "../resume/sections.ts";
 
 function titleCase(s: string): string {
@@ -183,7 +183,8 @@ function parsePlainResume(text: string): ResumeData {
 
   return {
     header: name || contact.length
-      ? { visible: true, name: name || null, contact }
+      // A name is bold by default (see STYLE_FIELD_MARK_DEFAULTS).
+      ? { visible: true, name: name ? setFieldMark(name, "bold", true) : null, contact }
       : null,
     sections
   };

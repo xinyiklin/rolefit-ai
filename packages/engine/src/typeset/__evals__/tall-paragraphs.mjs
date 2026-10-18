@@ -78,16 +78,16 @@ for (let fillerWords = 2300; fillerWords <= 2600; fillerWords += 4) {
 console.log("tall paragraphs paginate at wrapped continuations; fitting bullets keep together; headings are never stranded");
 
 // 2. An authored indent is held inside the column at impossible geometry.
-const wide = { ...DOC_STYLE_DEFAULTS, pageMarginTopPt: 216, pageMarginRightPt: 216, pageMarginBottomPt: 216, pageMarginLeftPt: 216, entryIndentPt: 36, entryEndIndentPt: 36, bulletIndentPt: 36, baseFontSizePt: 12 };
+const wide = { ...DOC_STYLE_DEFAULTS, pageMarginTopPt: 216, pageMarginRightPt: 216, pageMarginBottomPt: 216, pageMarginLeftPt: 216, entryIndentPt: 36, entryEndIndentPt: 36, bulletIndentPt: 36 };
 const indented = layoutResume(toTypesetSchema(data([
-  standard(["<indent=216>Indented bullet words that wrap</indent>", "Plain bullet"]),
-  { id: "sum", heading: "Summary", type: "summary", items: [{ id: "p", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "sp", text: "<indent=216>Indented summary words</indent>" }] }] }
+  standard(["<size=12><indent=216>Indented bullet words that wrap</indent></size>", "Plain bullet"]),
+  { id: "sum", heading: "Summary", type: "summary", items: [{ id: "p", titleLeft: "", titleRight: "", subtitleLeft: "", subtitleRight: "", bullets: [{ id: "sp", text: "<size=12><indent=216>Indented summary words</indent></size>" }] }] }
 ])), wide);
 for (const run of lines(indented).flatMap((line) => line.runs)) {
   const edge = run.src?.kind === "bullet" ? 612 - wide.pageMarginRightPt - wide.entryEndIndentPt : 612 - wide.pageMarginRightPt;
   assert.ok(run.x + run.width <= edge + 1e-6, `indented run ${JSON.stringify(run.text)} stays inside its column edge`);
 }
-const cover = layoutCoverLetter(toTypesetSchema(coverLetterResumeData(["<indent=216>Indented letter paragraph words</indent>"])), wide);
+const cover = layoutCoverLetter(toTypesetSchema(coverLetterResumeData(["<size=12><indent=216>Indented letter paragraph words</indent></size>"])), wide);
 for (const run of lines(cover).flatMap((line) => line.runs)) {
   assert.ok(run.x + run.width <= 612 - wide.pageMarginRightPt + 1e-6, "indented cover paragraph stays inside the right margin");
 }
@@ -105,3 +105,47 @@ assert.deepEqual(linked.map((run) => [run.text, run.href]), [["MY SITE", "https:
 const fonted = headingRuns("Plain <font=tinos><size=14>Styled</size></font> ß");
 assert.deepEqual(fonted.map((run) => [run.text.trim(), run.style.family, run.style.size]), [["PLAIN", "latin-modern", 12], ["STYLED", "tinos", 14], ["SS", "latin-modern", 12]], "uppercase heading keeps font and size tags and uppercases text only");
 console.log("uppercase headings transform text, not tags");
+
+// 4. Alignment never moves a line break: each alignment sets the same words on
+//    the same lines, in resumes, letters, and across fonts and widths.
+{
+  const words = "Led migration of 40 services to event-driven architecture, cutting p99 latency 38% and saving $1.2M annually while mentoring six engineers through on-call rotations".split(" ");
+  const breaksFor = (doc) => doc.pages.map((page) => page.lines.map((line) =>
+    line.runs.filter((run) => !run.marker).map((run) => run.text).join("").replace(/\s+/g, " ").trim()));
+  let cases = 0;
+  for (const fontFamily of ["latin-modern", "carlito", "tinos", "source-sans"]) {
+    for (let count = 6; count <= words.length; count += 3) {
+      const text = words.slice(0, count).join(" ");
+      for (const margin of [36, 90, 160]) {
+        const resumeBreaks = [];
+        const letterBreaks = [];
+        for (const bodyAlign of ["left", "center", "right", "justify"]) {
+          const style = { ...DOC_STYLE_DEFAULTS, fontFamily, bodyAlign, pageMarginLeftPt: margin, pageMarginRightPt: margin };
+          resumeBreaks.push(breaksFor(layoutResume(toTypesetSchema(data([standard([text, `${text} ${text}`])])), style)));
+          letterBreaks.push(breaksFor(layoutCoverLetter(toTypesetSchema(coverLetterResumeData([text, `${text} ${text}`])), style)));
+          cases += 2;
+        }
+        for (const breaks of resumeBreaks) assert.deepEqual(breaks, resumeBreaks[0], `${fontFamily} ${count} words @${margin}: resume breaks are the same in every alignment`);
+        for (const breaks of letterBreaks) assert.deepEqual(breaks, letterBreaks[0], `${fontFamily} ${count} words @${margin}: letter breaks are the same in every alignment`);
+      }
+    }
+  }
+  console.log(`alignment leaves line breaks unchanged (${cases} layouts)`);
+}
+
+// 5. An empty partner field never sets a row's spacing: a 9 pt title with a
+//    blank date sits exactly where a 9 pt title with a 9 pt date does.
+{
+  const rowBaselines = (titleRight, subtitleRight) => {
+    const doc = layoutResume(toTypesetSchema(data([standard(["A bullet", "Another bullet"], {
+      titleLeft: "<size=9>Engineer</size>", titleRight, subtitleLeft: "<size=8>Acme</size>", subtitleRight
+    })])), DOC_STYLE_DEFAULTS);
+    return lines(doc).map((line) => line.baseline);
+  };
+  assert.deepEqual(
+    rowBaselines("", ""),
+    rowBaselines("<size=9>2026</size>", "<size=8>Remote</size>"),
+    "blank right fields keep the rows their filled partners give"
+  );
+  console.log("empty partner fields never set a row's spacing");
+}

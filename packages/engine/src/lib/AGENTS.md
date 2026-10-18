@@ -11,16 +11,21 @@ remain in `PRODUCT.md` and `DESIGN.md`.
 - `documentStyle.ts` owns the pure persisted document-style contract, defaults,
   bounds, spacing presets, coercion for browser preferences, and conversion that
   excludes local zoom. The contract is composed from three slices so each
-  consumer can name what it reads: `PageStyle` (face, body size, leading,
-  alignment, margins), `HeaderStyle` (the letterhead and its gaps), and
+  consumer can name what it reads: `PageStyle` (face, leading, alignment,
+  margins), `HeaderStyle` (the letterhead and its gaps), and
   `ResumeBodyStyle` (sections, entries, bullets). `DocumentStyle` is all three
   — an unchanged field set, still the `.resume` contract — and
   `CoverLetterDocumentStyle` is page + header, which is everything a letter's
   layout reads. A letter must never inherit `ResumeBodyStyle` values from the
   resume defaults; `coverLetter.ts` states them as inert zeroes for the shared
   editor's sake alone.
-- `documentTypography.ts` owns shared document-size scale math used by domain,
-  editor, and typesetting consumers.
+- `documentTypography.ts` owns the per-role default text sizes (`TEXT_SIZES_PT`)
+  that resumes and letters share, and `fieldRoleSizePt`: a field's whole-field
+  `<size>` replaces its role default. No role derives from another (D081).
+- `legacyTextSizes.ts` converts files saved with the retired document size
+  (`baseFontSizePt`, a letter's `fontSizePt`) on read: the implied sizes and
+  the name's former forced bold move onto the fields. Both codecs call it;
+  nothing writes those keys.
 - `resumeFile.ts` owns portable `.resume` validation, serialization, versioning,
   size limits, and download naming.
 - `coverLetter.ts` owns the strict `.cover` paragraph/style contract and the
@@ -47,9 +52,12 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   and leaves tag payloads (link destinations, family ids) alone. The editor's
   display map uppercases per display character (`ß` shows as `S` there while
   the engine paints `SS`), a known one-character drift after such a glyph.
-- `styleFieldFormatting.ts` owns reusable bulk/effective formatting across
-  headings, entry columns, skill labels, and contact fields, not toolbar state
-  or presentation.
+- `styleFieldFormatting.ts` owns reusable bulk/effective formatting across the
+  name, contact, headings, entry columns, skill labels, and body text, not
+  toolbar state or presentation. Body text changes only a whole-field size or
+  font wrapper (`setFieldOuterSize`/`setFieldOuterFont`) and has no whole-field
+  emphasis, so per-word formatting survives; `withWholeFieldFormat` carries a
+  field's wrapper onto Polish replacements, which arrive without it.
 - `links.ts` owns safe link normalization, detection, and inline destination
   encoding/decoding. A bare domain is a link only when the URL parser accepts
   it (the shape test admits ports no browser does), and automatic detection

@@ -116,7 +116,8 @@ later entry wins.
   equivalents under their own names, the metric twin shown beside them; menu
   order is Tinos, Carlito, Arimo, Source Serif 4, Source Sans 3, Latin Modern,
   then (2026-10-14 [USER]) the 24 added catalog families alphabetically.
-  New cover letters start in Carlito; resumes default to Latin Modern.
+  New cover letters start in Carlito; resumes default to Latin Modern
+  (letter defaults AMENDED by D081: a new letter starts with the resume's).
   `entryEndIndentPt` is the entry's right edge for every row; Jake is the style
   reference, not a spec; fresh starters use the Jake-derived defaults (10.8 pt
   start, 5.4 pt end) and the bundled starter is the canonical starter.
@@ -164,6 +165,38 @@ later entry wins.
   and an edit that drops an escaped literal is warned. Limits: RoleFit's proposal Edit
   box edits the raw grammar; Final review evidence and cover-letter AI output
   read decoded text back as grammar; PDF import excludes tag-shaped source text.
+- 2026-10-18 [USER+CODE+TOOL] D081 ACTIVE: **No document base size and no size
+  scale.** Every text role has its own default (`TEXT_SIZES_PT`: name 25,
+  section heading 12, titles 11, subtitles, contact, skill labels and body 10),
+  shared by resumes and letters; a `<size>` wrapping a field's text (the Styles
+  menu writes it) replaces the default and sets that field's spacing, and empty
+  fields never set a row's size. The Styles menu has
+  Name (default bold, now a removable `<b>`, painted in the display bold face)
+  and Body rows (no B/I/U, so per-word emphasis survives). Resumes and letters
+  share behavior and names: a letter's style keys are the resume's
+  (`pageMargin*Pt`), a new letter takes the resume's page defaults, both
+  starters share one placeholder header, both blanks one empty header, the
+  name is removable in both, and a letter's Paragraph menu sets its header and
+  body alignment (`headerAlign`/`bodyAlign`, optional on read, default
+  center/left). Both stay `schemaVersion: 1` (D007): the parsers
+  still read the retired `baseFontSizePt`, `fontSizePt`, and `margin*Pt` keys
+  and write the sizes they implied, and the name's former forced bold, onto the
+  fields; nothing writes them. Workspace files were rewritten the same way on
+  2026-10-18 (398 files, layout unchanged; originals under ignored `.agent-work`).
+  Accepted residue: 10.5 pt-base resumes' bullet text moves 0.74 pt right and
+  their section rule 0.14 pt. In general any non-10 base moves the bullet text
+  (fixed 9.47 pt gap), the section rule (scales with the heading), and a
+  headerless page's first baseline (fixed 11 pt inset); an 11 pt letter's
+  continuation-page top rises 1 pt; italic text in an
+  old name now paints italic; an accepted Polish rewrite keeps its field's
+  whole size and font but not per-word sizes inside it (Polish never sees
+  them). Body's size and font change only a whole-field wrapper, keeping
+  per-word overrides.
+- 2026-10-18 [USER+CODE+TOOL] D082 ACTIVE: **Alignment never changes line
+  breaks.** Every alignment breaks as a ragged paragraph does (unused width is
+  free, interword shrink keeps its budget); justify only stretches the spaces
+  of the lines already chosen, as word processors do. Justified text set before
+  this may re-break once; none of the 398 local documents used justify.
 
 ### RoleFit product behavior and trust decisions
 
@@ -261,7 +294,7 @@ later entry wins.
   letters use double line spacing with 0.5 in top/bottom and 0.75 in side
   margins (2026-07-27, which also recorded 8 pt after each paragraph);
   2026-07-28 [USER]: the default rhythm is explicit 8 pt space-before on every
-  paragraph.
+  paragraph. (Page defaults AMENDED by D081: a new letter takes the resume's.)
 - 2026-07-25..08-13 [USER+CODE] D037 ACTIVE: Resume and cover letter share `DocumentOpenMenu`
   and `DocumentSaveMenu` (no Starter button); Resume Open accepts only strict
   `.resume` and Cover Open only strict `.cover`. Cover-letter startup mirrors

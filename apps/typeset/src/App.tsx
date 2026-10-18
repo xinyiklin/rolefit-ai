@@ -170,8 +170,8 @@ export default function App() {
     [resume, docStyle.style.fontFamily]
   );
   const styleSizeStates = useMemo(
-    () => resume ? styleFieldSizeStates(resume, docStyle.style.baseFontSizePt) : undefined,
-    [resume, docStyle.style.baseFontSizePt]
+    () => resume ? styleFieldSizeStates(resume) : undefined,
+    [resume]
   );
 
   useEffect(() => {
@@ -470,6 +470,7 @@ export default function App() {
             else editor.actions.createHeader();
           },
           onSetHeaderVisible: editor.actions.setHeaderVisible,
+          onRemoveHeaderName: editor.actions.removeHeaderName,
           onSetHeaderName: (nextText) => {
             if (editorRef.current) editorRef.current.replaceHeaderNameText(nextText);
             else editor.actions.setHeaderName(nextText);
@@ -566,7 +567,7 @@ export default function App() {
         onStyleFieldSizeChange={(field, sizePt) => {
           // Snapping back to the role default clears the override; otherwise the
           // exact point size is stored on every instance of the field.
-          const isDefault = Math.abs(sizePt - styleFieldDefaultSizePt(field, docStyle.style.baseFontSizePt)) < 0.05;
+          const isDefault = Math.abs(sizePt - styleFieldDefaultSizePt(field)) < 0.05;
           editor.actions.setStyleFieldSize(field, isDefault ? "default" : sizePt);
           setInlineFormat((current) =>
             current.entryField === field ? { ...current, fontSizePt: sizePt } : current

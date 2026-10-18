@@ -57,7 +57,6 @@ type ContextMenuControllerArgs = {
   structureCapabilities: {
     header: boolean;
     sections: boolean;
-    nameRemovable?: boolean;
   };
   canPasteAsDocument: boolean;
   headerCommands: HeaderStructureCommands;
@@ -260,7 +259,7 @@ export function useTypesetContextMenu({
         deleteItem("delete-contact", "contact", () =>
           headerCommands.removeContact(headerSource.index)
         ),
-        ...(structureCapabilities.nameRemovable && data.header?.name === null
+        ...(data.header?.name === null
           ? [{
               id: "add-name",
               label: "Add name",
@@ -285,14 +284,12 @@ export function useTypesetContextMenu({
           icon: <ListPlus size={14} />,
           onSelect: headerCommands.addContactAtEnd
         },
-        ...(structureCapabilities.nameRemovable
-          ? [{
-              id: "remove-name",
-              label: "Remove name",
-              icon: <Trash2 size={14} />,
-              onSelect: headerCommands.removeName
-            } satisfies ContextMenuItem]
-          : []),
+        {
+          id: "remove-name",
+          label: "Remove name",
+          icon: <Trash2 size={14} />,
+          onSelect: headerCommands.removeName
+        },
         "divider",
         {
           id: "hide-header",

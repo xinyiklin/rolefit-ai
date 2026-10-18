@@ -340,6 +340,107 @@ export function effectiveFieldFont(value: string, fallback: FieldFontFamily): Fi
   );
 }
 
+// Remove only override pairs that wrap all of the field's visible text, so a
+// whole-field change keeps the sizes or fonts set on words inside it.
+function stripWholeFieldPairs(escaped: string, overrideRe: RegExp): string {
+  for (;;) {
+    const stack: RegExpExecArray[] = [];
+    let next: string | null = null;
+    for (const tag of escaped.matchAll(new RegExp(overrideRe.source, "gi"))) {
+      if (!tag[0].startsWith("</")) {
+        stack.push(tag as RegExpExecArray);
+        continue;
+      }
+      const open = stack.pop();
+      if (!open) continue;
+      const before = escaped.slice(0, open.index);
+      const after = escaped.slice(tag.index + tag[0].length);
+      if (!stripInlineMarks(before + after).trim()) {
+        next = before + escaped.slice(open.index + open[0].length, tag.index) + after;
+        break;
+      }
+    }
+    if (next === null) return escaped;
+    escaped = next;
+  }
+}
+
+// The value of the innermost override pair that wraps all of the field's
+// visible text (the size or font the field is set at), or null.
+function wholeFieldPairValue(value: string, overrideRe: RegExp): string | null {
+  const stack: RegExpExecArray[] = [];
+  let found: string | null = null;
+  let foundDepth = -1;
+  for (const tag of value.matchAll(new RegExp(overrideRe.source, "gi"))) {
+    if (!tag[0].startsWith("</")) {
+      stack.push(tag as RegExpExecArray);
+      continue;
+    }
+    const open = stack.pop();
+    if (!open) continue;
+    const inner = value.slice(open.index + open[0].length, tag.index);
+    const outside = value.slice(0, open.index) + value.slice(tag.index + tag[0].length);
+    if (stack.length > foundDepth && stripInlineMarks(inner).trim() && !stripInlineMarks(outside).trim()) {
+      found = /=([^>]+)>/.exec(open[0])?.[1] ?? null;
+      foundDepth = stack.length;
+    }
+  }
+  return found;
+}
+
+export function wholeFieldSizePt(value: string): number | null {
+  const raw = wholeFieldPairValue(value, SIZE_OVERRIDE_RE);
+  const size = raw === null ? NaN : Number(raw);
+  return isInlineFontSizePt(size) ? size : null;
+}
+
+export type WholeFieldFormat = { sizePt: number | null; fontFamily: FieldFontFamily | null };
+
+export function wholeFieldFormat(value: string): WholeFieldFormat {
+  return {
+    sizePt: wholeFieldSizePt(value),
+    fontFamily: wholeFieldPairValue(value, FONT_OVERRIDE_RE) as FieldFontFamily | null
+  };
+}
+
+// The whole-field size and font every non-empty value agrees on.
+export function sharedWholeFieldFormat(values: readonly string[]): WholeFieldFormat {
+  const formats = values.filter((value) => stripInlineMarks(value).trim()).map(wholeFieldFormat);
+  const agreed = <K extends keyof WholeFieldFormat>(key: K): WholeFieldFormat[K] | null =>
+    formats.length && formats.every((format) => format[key] === formats[0][key]) ? formats[0][key] : null;
+  return { sizePt: agreed("sizePt"), fontFamily: agreed("fontFamily") };
+}
+
+// Give replacement text the whole-field size and font its field had, unless it
+// sets its own, so an accepted rewrite keeps the field's look.
+export function withWholeFieldFormat(value: string, format: WholeFieldFormat): string {
+  let next = value;
+  if (format.fontFamily !== null && wholeFieldPairValue(next, FONT_OVERRIDE_RE) === null) {
+    next = setFieldOuterFont(next, format.fontFamily);
+  }
+  if (format.sizePt !== null && wholeFieldSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
+  return next;
+}
+
+// Whole-field size and font that keep word-level overrides, for body text.
+export function setFieldOuterSize(value: string, sizePt: number | "default"): string {
+  return withInlineLiteralsProtected(value, (escaped) => {
+    const stripped = stripWholeFieldPairs(escaped, SIZE_OVERRIDE_RE);
+    if (sizePt === "default") return stripped;
+    if (!stripped.trim()) return escaped;
+    return `<size=${inlineFontSizePt(sizePt)}>${stripped}</size>`;
+  });
+}
+
+export function setFieldOuterFont(value: string, family: FieldFontFamily | "default"): string {
+  return withInlineLiteralsProtected(value, (escaped) => {
+    const stripped = stripWholeFieldPairs(escaped, FONT_OVERRIDE_RE);
+    if (family === "default") return stripped;
+    if (!stripped.trim()) return escaped;
+    return `<font=${family}>${stripped}</font>`;
+  });
+}
+
 // Wrap the whole field in one font family (stripping any existing font tags so
 // it never nests), or strip the family entirely so the field follows the
 // document font. Empty fields are left untouched.

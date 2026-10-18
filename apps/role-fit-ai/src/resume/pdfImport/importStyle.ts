@@ -1,16 +1,21 @@
 // Maps what the PDF shows onto the existing document style: the nearest
-// bundled family, body size, page margins, header alignment, heading case,
-// and section rules. Everything else keeps the editor defaults; spacing is not
-// inferred.
+// bundled family, page margins, header alignment, heading case, and section
+// rules, plus the body size the body-sized fields take. Everything else keeps
+// the editor defaults; spacing is not inferred.
 
 import {
-  DOC_STYLE_BOUNDS,
   DOC_STYLE_DEFAULTS,
   toDocumentStyle,
   type DocumentStyle,
   type HeaderAlign
 } from "@typeset/engine/lib/documentStyle.ts";
 import type { FontFamily } from "@typeset/engine/lib/fontFamilies.ts";
+import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
+import {
+  setStyleFieldSize,
+  styleFieldDefaultSizePt,
+  type StyleTextField
+} from "@typeset/engine/lib/styleFieldFormatting.ts";
 import { PAGE_MARGIN_BOUNDS_PT } from "@typeset/engine/lib/pageMargins.ts";
 import type { LayoutLine } from "./layoutLines.ts";
 import type { PdfLayout } from "./pdfLayout.ts";
@@ -76,11 +81,33 @@ function clampMargin(value: number): { value: number; clamped: boolean } {
   return { value: bounded, clamped: bounded !== rounded };
 }
 
-export function inferImportStyle(layout: PdfLayout, evidence: ImportDraft["evidence"]): { style: DocumentStyle; notes: StyleNote[] } {
+// The range an inferred body size is kept within, so a misread size cannot set
+// unreadable text.
+const BODY_SIZE_BOUNDS_PT = { min: 8, max: 12 } as const;
+// The fields a PDF's body text size applies to: body text and the small roles
+// set beside it. Titles, headings, and the name keep their defaults.
+const BODY_SIZED_FIELDS: readonly StyleTextField[] = ["body", "subtitleLeft", "subtitleRight", "contact", "skillLabel"];
+
+export function applyImportedBodySize(data: ResumeData, bodySizePt: number): ResumeData {
+  return BODY_SIZED_FIELDS.reduce(
+    (next, field) => bodySizePt === styleFieldDefaultSizePt(field) ? next : setStyleFieldSize(next, field, bodySizePt),
+    data
+  );
+}
+
+export function inferImportStyle(
+  layout: PdfLayout,
+  evidence: ImportDraft["evidence"]
+): { style: DocumentStyle; bodySizePt: number; notes: StyleNote[] } {
   const notes: StyleNote[] = [];
   const style = toDocumentStyle(DOC_STYLE_DEFAULTS);
   const lines = evidence.contentLines;
-  if (!lines.length) return { style, notes };
+  const detectedSize = Math.round(evidence.bodySize * 2) / 2;
+  const bodySizePt = Math.min(BODY_SIZE_BOUNDS_PT.max, Math.max(BODY_SIZE_BOUNDS_PT.min, detectedSize));
+  if (bodySizePt !== detectedSize) {
+    notes.push({ reason: `Body text size ${detectedSize} pt is outside the import's ${BODY_SIZE_BOUNDS_PT.min}–${BODY_SIZE_BOUNDS_PT.max} pt range and was adjusted.`, source: "" });
+  }
+  if (!lines.length) return { style, bodySizePt, notes };
 
   const fontWeights = new Map<string, number>();
   for (const line of lines) {
@@ -97,13 +124,6 @@ export function inferImportStyle(layout: PdfLayout, evidence: ImportDraft["evide
     if (!exact) notes.push({ reason: "The PDF's font isn't bundled; the closest available family was used.", source: bodyFont });
   } else {
     notes.push({ reason: "The PDF's font couldn't be identified; the default family was used.", source: "" });
-  }
-
-  const sizeBounds = DOC_STYLE_BOUNDS.baseFontSizePt;
-  const size = Math.round(evidence.bodySize * 2) / 2;
-  style.baseFontSizePt = Math.min(sizeBounds.max, Math.max(sizeBounds.min, size));
-  if (style.baseFontSizePt !== size) {
-    notes.push({ reason: `Body text size ${size} pt is outside the editor's ${sizeBounds.min}–${sizeBounds.max} pt range and was adjusted.`, source: "" });
   }
 
   const page = layout.pages[0];
@@ -147,5 +167,5 @@ export function inferImportStyle(layout: PdfLayout, evidence: ImportDraft["evide
     style.headingCase = "none";
     style.sectionRule = false;
   }
-  return { style, notes };
+  return { style, bodySizePt, notes };
 }

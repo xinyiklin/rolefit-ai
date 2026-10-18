@@ -107,8 +107,10 @@ the direct toolbar; selecting all text is the explicit way to restyle the entire
 resume. Paragraph owns document-wide body, header, and heading alignment plus
 independent persisted entry start and end indents and the bullet indent (the
 dot's offset from the entry start; text keeps its gap after the dot). Styles owns heading case and
-rule treatment plus per-role font, size, and emphasis for headings, entry
-columns, skill labels, and contact text. Those field controls reflect manual
+rule treatment plus per-role font, size, and emphasis for the name, contact
+text, headings, entry columns, and skill labels, and font and size for body
+text (bullets, summaries, skills). Each role has its own default size; there is
+no document base size (D081). Those field controls reflect manual
 inline changes and can reapply or remove formatting across every matching
 field. The Spacing menu owns resume-wide unitless line height together with
 document-level structural gaps. Its preset and physical values remain visible
@@ -126,7 +128,8 @@ stable distance on the page. Application chrome still uses normal screen-oriente
 CSS units; this rule applies to the resume's print geometry.
 
 The toolbar offers left, center, right, and justified alignment for the selected
-paragraph. The Paragraph menu's body, header, and section-heading alignment controls
+paragraph. Changing alignment never moves a line break; justify only widens
+the spaces of each line. The Paragraph menu's body, header, and section-heading alignment controls
 remain document-wide defaults. A global option is active only while every field
 in its scope resolves to that alignment; a local override clears the active
 state, and choosing a global option clears conflicting local overrides. Entry

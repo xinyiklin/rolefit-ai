@@ -37,15 +37,20 @@ import {
   STYLE_FIELD_MARK_DEFAULTS,
   styleFieldDefaultSizePt,
   styleFieldMarkStates,
+  styleFieldValues,
   type EntryTextField,
   type StyleTextField
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import {
   canonicalInlineMarkText,
+  effectiveFieldSize,
   escapeInlineMarkText,
   joinInlineMarkText,
   paragraphSpacingFromInlineMarks,
-  stripInlineMarks
+  setFieldMark,
+  setFieldSize,
+  stripInlineMarks,
+  wholeFieldSizePt
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { historySourceFor } from "../../hooks/historyClock.ts";
@@ -57,7 +62,6 @@ import {
   type DocStyle,
   type FontFamily
 } from "@typeset/engine/lib/documentStyle.ts";
-import { fontSizesFor, nameSizePt } from "@typeset/engine/lib/documentTypography.ts";
 import { fieldKey, parseFieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import { pageGeometry } from "@typeset/engine/typeset/blocks.ts";
 import { faceFor, spaceWidth } from "@typeset/engine/typeset/measure.ts";
@@ -307,11 +311,10 @@ type TypesetEditorProps = {
   // Transient field highlight (threaded to the engine painter) plus a
   // scroll-into-view after each repaint. Not document state.
   highlightFieldKey?: string | null;
-  documentKind?: "resume" | "cover-letter";
+  documentKind?: DocumentKind;
   structureCapabilities?: {
     header: boolean;
     sections: boolean;
-    nameRemovable?: boolean;
   };
   onPageCount?: (count: number) => void;
   // Where the caret was when this editor last unmounted, so a host that swaps
@@ -349,8 +352,7 @@ const EMPTY_FORMAT_STATE: InlineFormatState = {
 
 const DEFAULT_STRUCTURE_CAPABILITIES = {
   header: true,
-  sections: true,
-  nameRemovable: false
+  sections: true
 } as const;
 
 function selectionClipboardParts(payload: string): {
@@ -411,15 +413,24 @@ function paragraphSpacingAllowedIn(src: FieldSrc): boolean {
   return src.kind === "bullet";
 }
 
-// Resolve through the shared role-size truth: the name via its display size,
-// every styleable field via styleFieldDefaultSizePt, and
-// bullets (which have no style-field role) at the body size.
-function defaultFontSizeForField(src: FieldSrc, style: DocStyle): number {
-  if (src.kind === "name") return nameSizePt(fontSizesFor(style.baseFontSizePt));
-  const field = styleFieldForSrc(src);
-  return field
-    ? styleFieldDefaultSizePt(field, style.baseFontSizePt)
-    : fontSizesFor(style.baseFontSizePt).small;
+type DocumentKind = "resume" | "cover-letter";
+
+// The engine's role default for a field with no size of its own (bullets and
+// letter paragraphs are body text).
+function defaultFontSizeForField(src: FieldSrc): number {
+  return styleFieldDefaultSizePt(styleFieldForSrc(src) ?? "body");
+}
+
+// A new empty field takes the size every existing field of its kind shares,
+// so a document whose titles were all set to 12 pt gets a 12 pt title.
+function sizeSeedForField(data: ResumeData, src: FieldSrc): number | null {
+  const field = styleFieldForSrc(src) ?? (src.kind === "bullet" ? "body" : null);
+  if (!field) return null;
+  const sizes = styleFieldValues(data, field).map((value) => wholeFieldSizePt(value) ?? effectiveFieldSize(value, -1));
+  const first = sizes[0];
+  return first !== undefined && first !== null && first > 0 && sizes.every((size) => size === first)
+    ? first
+    : null;
 }
 
 function defaultAlignmentForField(src: FieldSrc, style: DocStyle): BodyAlign {
@@ -437,6 +448,7 @@ function typingTargetFor(selection: TypesetSelection) {
 // (bold titles, italic subtitles, bold skill labels). Name and bullets have no
 // document emphasis convention.
 function styleFieldForSrc(src: FieldSrc): StyleTextField | null {
+  if (src.kind === "name") return "name";
   if (src.kind === "entry") return src.field;
   if (src.kind === "skillsRow") return "skillLabel";
   if (src.kind === "heading") return "sectionHeading";
@@ -453,8 +465,10 @@ function emphasisSeedForField(data: ResumeData, src: FieldSrc): TypingFormat | n
   const field = styleFieldForSrc(src);
   if (!field) return null;
   const states = styleFieldMarkStates(data)[field];
+  // With no instance to follow (a first name or title), use the field default.
+  const hasInstances = styleFieldValues(data, field).length > 0;
   const resolve = (mark: "bold" | "italic" | "underline") =>
-    states[mark] === null ? STYLE_FIELD_MARK_DEFAULTS[field][mark] : states[mark]!;
+    !hasInstances || states[mark] === null ? STYLE_FIELD_MARK_DEFAULTS[field][mark] : states[mark]!;
   return {
     bold: resolve("bold"),
     italic: resolve("italic"),
@@ -991,7 +1005,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             fontSizePt: uniformAcross(
               covered,
               (char) => char.fontSizePt,
-              (range) => defaultFontSizeForField(range.src, docStyle.style)
+              (range) => defaultFontSizeForField(range.src)
             ),
             alignment: uniformAcross(
               covered,
@@ -1064,13 +1078,22 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       // structural field (bold title, italic subtitle, bold skills label).
       if (selection && !hasRange && selection.map.chars.length === 0 && !typingFormatRef.current) {
         const stored = typingFormatForEmptyField(selection.map);
-        const seed = stored ?? emphasisSeedForField(dataRef.current, selection.src);
-        if (stored || (seed && (seed.bold || seed.italic || seed.underline))) {
+        const emphasis = emphasisSeedForField(dataRef.current, selection.src);
+        const sizeSeed = sizeSeedForField(dataRef.current, selection.src);
+        const seed = stored ?? (emphasis || sizeSeed !== null
+          ? {
+              ...(emphasis ?? {
+                bold: false, italic: false, underline: false, fontFamily: null, fontSizePt: null, alignment: null
+              }),
+              fontSizePt: sizeSeed
+            }
+          : null);
+        if (stored || (seed && (seed.bold || seed.italic || seed.underline || seed.fontSizePt !== null))) {
           typingFormatRef.current = seed;
           typingTargetRef.current = typingTargetFor(selection);
         }
       }
-      const fallbackSize = selection ? defaultFontSizeForField(selection.src, docStyle.style) : docStyle.style.baseFontSizePt;
+      const fallbackSize = selection ? defaultFontSizeForField(selection.src) : styleFieldDefaultSizePt("body");
       const effectiveSizes = chars.map((char) => char.fontSizePt ?? fallbackSize);
       const effectiveFamilies = chars.map((char) => char.fontFamily ?? docStyle.style.fontFamily);
       const effectiveAlignments = chars.map(
@@ -1219,12 +1242,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       (editorToolbarOwnsFocus() ? lastRangeRef.current : null);
     syncCaretOverlay(selection, {
       fontFamily: inlineFormatState.fontFamily ?? docStyle.style.fontFamily,
-      fontSizePt: inlineFormatState.fontSizePt ?? docStyle.style.baseFontSizePt,
+      fontSizePt: inlineFormatState.fontSizePt ?? styleFieldDefaultSizePt("body"),
       bold: inlineFormatState.bold,
       italic: inlineFormatState.italic
     });
   }, [
-    docStyle.style.baseFontSizePt,
     docStyle.style.fontFamily,
     docVersion,
     inlineFormatState.bold,
@@ -1588,7 +1610,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const advance = spaceWidth({
         family: char?.fontFamily ?? docStyle.style.fontFamily,
         face: "regular",
-        size: char?.fontSizePt ?? defaultFontSizeForField(range.src, docStyle.style),
+        size: char?.fontSizePt ?? defaultFontSizeForField(range.src),
         tracking: 0
       });
       return advance > 0 ? Math.max(2, Math.round(TAB_STOP_PT / advance)) : 8;
@@ -2039,7 +2061,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       dStart: range.dStart,
       dEnd: range.dEnd,
       defaultFontFamily: docStyle.style.fontFamily,
-      defaultFontSizePt: defaultFontSizeForField(range.src, docStyle.style),
+      defaultFontSizePt: defaultFontSizeForField(range.src),
       defaultAlignment: defaultAlignmentForField(range.src, docStyle.style),
       defaultLineHeight: docStyle.style.lineHeight
     }),
@@ -2428,7 +2450,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         underline: format.underline,
         fontFamily: format.fontFamily ?? docStyle.style.fontFamily,
         fontSizePt:
-          format.fontSizePt ?? defaultFontSizeForField(sel.src, docStyle.style),
+          format.fontSizePt ?? defaultFontSizeForField(sel.src),
         alignment:
           format.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
       };
@@ -2479,7 +2501,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         italic: char?.italic ?? false,
         underline: char?.underline ?? false,
         fontFamily: char?.fontFamily ?? docStyle.style.fontFamily,
-        fontSizePt: char?.fontSizePt ?? defaultFontSizeForField(sel.src, docStyle.style),
+        fontSizePt: char?.fontSizePt ?? defaultFontSizeForField(sel.src),
         alignment: char?.alignment ?? defaultAlignmentForField(sel.src, docStyle.style)
       };
       const next = { ...base, [mark]: !base[mark] };
@@ -2628,11 +2650,22 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const current = valueForField(dataRef.current, src);
       const replacement = applyPlainTextInputEdit(current, nextText);
       if (replacement.value === current) return;
+      // Text typed into an empty field takes the format typing on the page
+      // would give it: the field's default emphasis and its siblings' size.
+      let value = replacement.value;
+      if (!stripInlineMarks(current).trim()) {
+        const emphasis = emphasisSeedForField(dataRef.current, src);
+        for (const mark of ["bold", "italic", "underline"] as const) {
+          if (emphasis?.[mark]) value = setFieldMark(value, mark, true);
+        }
+        const size = sizeSeedForField(dataRef.current, src);
+        if (size !== null) value = setFieldSize(value, size);
+      }
       markPending();
       commitField(
         actions,
         src,
-        replacement.value,
+        value,
         replacement.historyIntent
           ? {
               historyIntent: replacement.historyIntent,
@@ -2687,7 +2720,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
             italic: typingFormatRef.current?.italic ?? char?.italic ?? false,
             underline: typingFormatRef.current?.underline ?? char?.underline ?? false,
             fontFamily,
-            fontSizePt: typingFormatRef.current?.fontSizePt ?? char?.fontSizePt ?? defaultFontSizeForField(selection.src, docStyle.style),
+            fontSizePt: typingFormatRef.current?.fontSizePt ?? char?.fontSizePt ?? defaultFontSizeForField(selection.src),
             alignment: typingFormatRef.current?.alignment ?? char?.alignment ?? defaultAlignmentForField(selection.src, docStyle.style)
           };
           if (commitEmptyTypingFormat(selection, next)) return;
@@ -2746,7 +2779,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
               fontSizePt:
                 typingFormatRef.current?.fontSizePt ??
                 stored?.fontSizePt ??
-                defaultFontSizeForField(selection.src, docStyle.style),
+                defaultFontSizeForField(selection.src),
               alignment
             });
           } else commitAlignment(selection, alignment);
@@ -2980,9 +3013,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
         return false;
       }
       if (selection.src.kind === "name") {
-        if (structureCapabilities.nameRemovable) headerCommands.removeName();
-        // For resume/Typeset hosts the name field is required structure; an
-        // empty name remains editable but cannot remove the header field.
+        headerCommands.removeName();
         return true;
       }
       if (selection.src.kind === "contact") {
@@ -2994,7 +3025,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       }
       return false;
     },
-    [headerCommands, structureCapabilities.nameRemovable]
+    [headerCommands]
   );
 
   const commitEmptyEntryRow = useCallback((sel: TypesetSelection): boolean => {
