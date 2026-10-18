@@ -9,6 +9,7 @@ import { documentStyleIsDirty, styleReducer } from "../useDocStyle.ts";
 import { createHistoryClock, historySourceFor } from "../historyClock.ts";
 import { DOC_STYLE_DEFAULTS } from "@typeset/engine/lib/documentStyle.ts";
 import { fieldMarkState, setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
+import { styleFieldSizeStates } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import {
   applyPlainTextInputEdit,
   buildDisplayMap
@@ -1175,6 +1176,16 @@ assert.equal(resetFormatting.header.contact[0], "a@b.com", "reset leaves unmarke
   assert.equal(resized.sections[0].items[0].bullets[0].text, `<size=12>${bullet}</size>`, "Body size replaces only its own wrapper");
   const bodyReset = reduceResumeData(resized, { type: "resetStyleFieldFormatting" });
   assert.equal(bodyReset.sections[0].items[0].bullets[0].text, bullet, "reset removes only the Body wrapper");
+  // After an edit re-spells a field as one size tag per run, Body still sets
+  // the main text and keeps the word that differs.
+  const respelled = { ...doc, sections: [{ ...doc.sections[0], items: [{ ...doc.sections[0].items[0],
+    bullets: [{ id: "b", text: "<size=13>Built </size><size=15>fast</size><size=13> things</size>" }] }] }] };
+  const respelledBody = reduceResumeData(respelled, { type: "setStyleFieldSize", field: "body", sizePt: 9 });
+  assert.equal(respelledBody.sections[0].items[0].bullets[0].text, "<size=9>Built </size><size=15>fast</size><size=9> things</size>",
+    "Body sets the size most of the text carries, however the runs are spelled");
+  assert.equal(styleFieldSizeStates(respelledBody).body, 9, "the Body row reports the size the main text paints at");
+  assert.equal(reduceResumeData(respelledBody, { type: "resetStyleFieldFormatting" }).sections[0].items[0].bullets[0].text,
+    "Built <size=15>fast</size> things", "reset returns the main text to the default and keeps the word");
   const bodyFont = reduceResumeData(doc, { type: "setStyleFieldFont", field: "body", family: "arimo" });
   assert.equal(bodyFont.sections[0].items[0].bullets[0].text, `<font=arimo>${bullet}</font>`, "Body font keeps inner fonts");
 }

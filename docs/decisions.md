@@ -168,9 +168,10 @@ later entry wins.
 - 2026-10-18 [USER+CODE+TOOL] D081 ACTIVE: **No document base size and no size
   scale.** Every text role has its own default (`TEXT_SIZES_PT`: name 25,
   section heading 12, titles 11, subtitles, contact, skill labels and body 10),
-  shared by resumes and letters; a `<size>` wrapping a field's text (the Styles
-  menu writes it) replaces the default and sets that field's spacing, and empty
-  fields never set a row's size. The Styles menu has
+  shared by resumes and letters. Text without its own size paints at its role
+  default (what the editor shows); a field's spacing follows the size most of
+  its text carries, however the tags are spelled, and empty fields never set a
+  row's size. The Styles menu has
   Name (default bold, now a removable `<b>`, painted in the display bold face)
   and Body rows (no B/I/U, so per-word emphasis survives). Resumes and letters
   share behavior and names: a letter's style keys are the resume's
@@ -191,7 +192,8 @@ later entry wins.
   old name now paints italic; an accepted Polish rewrite keeps its field's
   whole size and font but not per-word sizes inside it (Polish never sees
   them). Body's size and font change only a whole-field wrapper, keeping
-  per-word overrides.
+  per-word overrides. Saved style preferences (a letter's stored default style,
+  resume style presets) drop the retired size key and take the defaults.
 - 2026-10-18 [USER+CODE+TOOL] D082 ACTIVE: **Alignment never changes line
   breaks.** Every alignment breaks as a ragged paragraph does (unused width is
   free, interword shrink keeps its budget); justify only stretches the spaces

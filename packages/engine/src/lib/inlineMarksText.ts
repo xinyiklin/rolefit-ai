@@ -365,45 +365,76 @@ function stripWholeFieldPairs(escaped: string, overrideRe: RegExp): string {
   }
 }
 
-// The value of the innermost override pair that wraps all of the field's
-// visible text (the size or font the field is set at), or null.
-function wholeFieldPairValue(value: string, overrideRe: RegExp): string | null {
-  const stack: RegExpExecArray[] = [];
-  let found: string | null = null;
-  let foundDepth = -1;
-  for (const tag of value.matchAll(new RegExp(overrideRe.source, "gi"))) {
-    if (!tag[0].startsWith("</")) {
-      stack.push(tag as RegExpExecArray);
-      continue;
-    }
-    const open = stack.pop();
-    if (!open) continue;
-    const inner = value.slice(open.index + open[0].length, tag.index);
-    const outside = value.slice(0, open.index) + value.slice(tag.index + tag[0].length);
-    if (stack.length > foundDepth && stripInlineMarks(inner).trim() && !stripInlineMarks(outside).trim()) {
-      found = /=([^>]+)>/.exec(open[0])?.[1] ?? null;
-      foundDepth = stack.length;
-    }
+type OverrideKind = "size" | "font";
+
+function overrideOpen(kind: OverrideKind, tag: string): string | typeof INERT_OPEN_TAG | null {
+  if (kind === "size") {
+    const opened = SIZE_OPEN_RE.exec(tag);
+    if (!opened) return null;
+    const size = Number(opened[1]);
+    return isInlineFontSizePt(size) ? String(size) : INERT_OPEN_TAG;
   }
-  return found;
+  return FONT_OPEN_RE.exec(tag)?.[1].toLowerCase() ?? null;
 }
 
-export function wholeFieldSizePt(value: string): number | null {
-  const raw = wholeFieldPairValue(value, SIZE_OVERRIDE_RE);
-  const size = raw === null ? NaN : Number(raw);
-  return isInlineFontSizePt(size) ? size : null;
+const overrideClose = (kind: OverrideKind, tag: string) =>
+  kind === "size" ? /^<\/size>$/i.test(tag) : /^<\/font>$/i.test(tag);
+
+// The override value most of a field's visible characters carry (null: no
+// override), or undefined when it has no visible text. It reads meaning, not
+// tag spelling, so the runs the editor writes back after any edit count the
+// same as one wrapper. Ties go to the larger size or the earlier family.
+function dominantOverride(value: string, kind: OverrideKind): string | null | undefined {
+  const counts = new Map<string | null, number>();
+  const stack: (string | null)[] = [];
+  const top = () => (stack.length ? stack[stack.length - 1] : null);
+  const count = (chars: number) => {
+    if (chars) counts.set(top(), (counts.get(top()) ?? 0) + chars);
+  };
+  let cursor = 0;
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    count(value.slice(cursor, match.index).replace(/\s+/g, "").length);
+    cursor = match.index + match[0].length;
+    if (isInlineLiteralLessThan(match[0])) {
+      count(1);
+      continue;
+    }
+    const opened = overrideOpen(kind, match[0]);
+    if (opened === INERT_OPEN_TAG) stack.push(top());
+    else if (opened !== null) stack.push(opened);
+    else if (overrideClose(kind, match[0])) stack.pop();
+  }
+  count(value.slice(cursor).replace(/\s+/g, "").length);
+  let best: string | null | undefined;
+  let bestCount = 0;
+  for (const [key, total] of counts) {
+    const larger = kind === "size" && total === bestCount && Number(key ?? 0) > Number(best ?? 0);
+    if (total > bestCount || larger) {
+      best = key;
+      bestCount = total;
+    }
+  }
+  return best;
+}
+
+// The explicit size most of the field's text is set at, or null when most of
+// it has no size of its own (it follows the role default).
+export function fieldSizePt(value: string): number | null {
+  const size = dominantOverride(value, "size");
+  return size === null || size === undefined ? null : Number(size);
+}
+
+function fieldFontOverride(value: string): FieldFontFamily | null {
+  return (dominantOverride(value, "font") ?? null) as FieldFontFamily | null;
 }
 
 export type WholeFieldFormat = { sizePt: number | null; fontFamily: FieldFontFamily | null };
 
 export function wholeFieldFormat(value: string): WholeFieldFormat {
-  return {
-    sizePt: wholeFieldSizePt(value),
-    fontFamily: wholeFieldPairValue(value, FONT_OVERRIDE_RE) as FieldFontFamily | null
-  };
+  return { sizePt: fieldSizePt(value), fontFamily: fieldFontOverride(value) };
 }
 
-// The whole-field size and font every non-empty value agrees on.
+// The field size and font every non-empty value agrees on.
 export function sharedWholeFieldFormat(values: readonly string[]): WholeFieldFormat {
   const formats = values.filter((value) => stripInlineMarks(value).trim()).map(wholeFieldFormat);
   const agreed = <K extends keyof WholeFieldFormat>(key: K): WholeFieldFormat[K] | null =>
@@ -411,34 +442,60 @@ export function sharedWholeFieldFormat(values: readonly string[]): WholeFieldFor
   return { sizePt: agreed("sizePt"), fontFamily: agreed("fontFamily") };
 }
 
-// Give replacement text the whole-field size and font its field had, unless it
-// sets its own, so an accepted rewrite keeps the field's look.
+// Give replacement text the field size and font its field had, unless it sets
+// its own, so an accepted rewrite keeps the field's look.
 export function withWholeFieldFormat(value: string, format: WholeFieldFormat): string {
   let next = value;
-  if (format.fontFamily !== null && wholeFieldPairValue(next, FONT_OVERRIDE_RE) === null) {
-    next = setFieldOuterFont(next, format.fontFamily);
-  }
-  if (format.sizePt !== null && wholeFieldSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
+  if (format.fontFamily !== null && fieldFontOverride(next) === null) next = setFieldOuterFont(next, format.fontFamily);
+  if (format.sizePt !== null && fieldSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
   return next;
 }
 
-// Whole-field size and font that keep word-level overrides, for body text.
-export function setFieldOuterSize(value: string, sizePt: number | "default"): string {
+// Rewrite every override pair carrying `from` (an escaped field): retag it with
+// `to`, or remove it when `to` is null.
+function retagOverridePairs(escaped: string, kind: OverrideKind, from: string, to: string | null): string {
+  const edits: { at: number; length: number; text: string }[] = [];
+  const stack: { at: number; length: number; value: string | null | typeof INERT_OPEN_TAG }[] = [];
+  for (const match of escaped.matchAll(INLINE_TAG_RE)) {
+    if (isInlineLiteralLessThan(match[0])) continue;
+    const opened = overrideOpen(kind, match[0]);
+    if (opened !== null) {
+      stack.push({ at: match.index, length: match[0].length, value: opened });
+      continue;
+    }
+    if (!overrideClose(kind, match[0])) continue;
+    const open = stack.pop();
+    if (open?.value !== from) continue;
+    const tag = kind === "size" ? "size" : "font";
+    edits.push({ at: open.at, length: open.length, text: to === null ? "" : `<${tag}=${to}>` });
+    if (to === null) edits.push({ at: match.index, length: match[0].length, text: "" });
+  }
+  return edits
+    .sort((a, b) => b.at - a.at)
+    .reduce((text, edit) => text.slice(0, edit.at) + edit.text + text.slice(edit.at + edit.length), escaped);
+}
+
+// Set the size of a field's main text (the size most of it carries), keeping
+// words set to other sizes, for body text. "default" returns that text to the
+// role default.
+function setFieldMainOverride(value: string, kind: OverrideKind, next: string | null): string {
   return withInlineLiteralsProtected(value, (escaped) => {
-    const stripped = stripWholeFieldPairs(escaped, SIZE_OVERRIDE_RE);
-    if (sizePt === "default") return stripped;
-    if (!stripped.trim()) return escaped;
-    return `<size=${inlineFontSizePt(sizePt)}>${stripped}</size>`;
+    if (!stripInlineMarks(escaped).trim()) return escaped;
+    const unwrapped = stripWholeFieldPairs(escaped, kind === "size" ? SIZE_OVERRIDE_RE : FONT_OVERRIDE_RE);
+    const main = dominantOverride(unwrapped, kind);
+    if (main !== null && main !== undefined) return retagOverridePairs(unwrapped, kind, main, next);
+    if (next === null) return unwrapped;
+    const tag = kind === "size" ? "size" : "font";
+    return `<${tag}=${next}>${unwrapped}</${tag}>`;
   });
 }
 
+export function setFieldOuterSize(value: string, sizePt: number | "default"): string {
+  return setFieldMainOverride(value, "size", sizePt === "default" ? null : String(inlineFontSizePt(sizePt)));
+}
+
 export function setFieldOuterFont(value: string, family: FieldFontFamily | "default"): string {
-  return withInlineLiteralsProtected(value, (escaped) => {
-    const stripped = stripWholeFieldPairs(escaped, FONT_OVERRIDE_RE);
-    if (family === "default") return stripped;
-    if (!stripped.trim()) return escaped;
-    return `<font=${family}>${stripped}</font>`;
-  });
+  return setFieldMainOverride(value, "font", family === "default" ? null : family);
 }
 
 // Wrap the whole field in one font family (stripping any existing font tags so

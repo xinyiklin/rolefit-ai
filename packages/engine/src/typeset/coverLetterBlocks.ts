@@ -75,7 +75,8 @@ export function buildCoverLetterVerticalStream(
       },
       stripInlineMarks(value).trim().length === 0
         ? paragraphSpacing.lineHeight ?? undefined
-        : undefined
+        : undefined,
+      TEXT_SIZES_PT.body
     );
     if (lines.length) {
       lines[0].paragraphSpaceBefore = spaceBeforePt;

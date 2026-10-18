@@ -386,9 +386,12 @@ export function paragraphLines(
   keepLinesTogether = true,
   src?: FieldSrc,
   // Empty fields carry outgoing spacing explicitly because they have no glyph run.
-  emptyLineHeight?: number
+  emptyLineHeight?: number,
+  // The size text without its own size tag paints at: the role default the
+  // editor also shows. `size` (the field's size) sets only the spacing.
+  textSize = size
 ): VLine[] {
-  const lines = breakParagraph(paragraphItems(value, size, family, tracking), column, align);
+  const lines = breakParagraph(paragraphItems(value, textSize, family, tracking), column, align);
   // Defensive fallback: the breaker normally returns one runless line for an
   // empty item stream. Keep one caret-bearing row even if that contract changes.
   if (!lines.length) lines.push({ runs: [], width: 0 });
@@ -401,7 +404,7 @@ export function paragraphLines(
   };
   return lines.map((line, i) => {
     let runs = line.runs.map((r) => ({ ...r, x: r.x + indent, src }));
-    const bodyStyle: FontStyle = { family, face: "regular", size, tracking };
+    const bodyStyle: FontStyle = { family, face: "regular", size: textSize, tracking };
     if (!runs.length) {
       // Preserve every authored blank line (including repeated/trailing hard
       // breaks), not only a wholly empty paragraph. The zero-width run gives the
@@ -460,9 +463,9 @@ export function buildHeaderVerticalStream(
   if (header?.name !== null && header?.name !== undefined) {
     const nameSize = fieldRoleSizePt(header.name, sizes.name);
     const nameRuns = styledFieldRuns(
-      header.name, nameSize, false, false, 0, family, tracking, { kind: "name" }, "display"
+      header.name, sizes.name, false, false, 0, family, tracking, { kind: "name" }, "display"
     );
-    const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, nameSize, family, tracking, "display");
+    const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, sizes.name, family, tracking, "display");
     const nameAlignment = alignmentFromInlineMarks(header.name) ?? headerAlign;
     nameRows.forEach((row, index) => {
       const runs = alignRuns(row, geo.textWidth, nameAlignment);
@@ -498,9 +501,9 @@ export function buildHeaderVerticalStream(
     let x = 0;
     header.contact.forEach((piece, index) => {
       const pieceRunsAtOrigin = styledFieldRuns(
-        piece, size, false, false, 0, family, tracking, { kind: "contact", index }
+        piece, sizes.contact, false, false, 0, family, tracking, { kind: "contact", index }
       );
-      const pieceRows = wrapSingleField(piece, pieceRunsAtOrigin, geo.textWidth, size, family, tracking);
+      const pieceRows = wrapSingleField(piece, pieceRunsAtOrigin, geo.textWidth, sizes.contact, family, tracking);
       if (pieceRows.length > 1) {
         if (runs.length) rows.push(runs);
         for (const row of pieceRows) rows.push(row.map(run => linkified(run, piece)));
@@ -588,7 +591,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       const headingSize = fieldRoleSizePt(section.heading, sizes.sectionHeading);
       const headingRuns = styledFieldRuns(
         paintedHeading,
-        headingSize,
+        sizes.sectionHeading,
         false,
         false,
         0,
@@ -597,7 +600,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         { kind: "heading", sectionId: section.id },
         caseMode === "smallcaps" ? "caps" : undefined
       );
-      const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, headingSize, family, tracking,
+      const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, sizes.sectionHeading, family, tracking,
         caseMode === "smallcaps" ? "caps" : undefined);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
@@ -667,7 +670,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           family,
           tracking,
           true,
-          { kind: "skillsRow", ...ids }
+          { kind: "skillsRow", ...ids },
+          undefined,
+          sizes.body
         );
         lines.forEach(push);
         firstInSection = false;
@@ -707,7 +712,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           bulletSrc(0),
           stripInlineMarks(summaryText).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
-            : undefined
+            : undefined,
+          sizes.body
         );
         if (lines.length) {
           lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
@@ -720,11 +726,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       }
 
       // Standard entries may omit either heading row.
-      const titleLeftSize = fieldRoleSizePt(f.titleLeft, sizes.titleLeft);
-      const titleRightSize = fieldRoleSizePt(f.titleRight, sizes.titleRight);
       const titleSize = rowRoleSizePt([[f.titleLeft, sizes.titleLeft], [f.titleRight, sizes.titleRight]]);
-      const subLeftSize = fieldRoleSizePt(f.subtitleLeft, sizes.subtitleLeft);
-      const subRightSize = fieldRoleSizePt(f.subtitleRight, sizes.subtitleRight);
       const subSize = rowRoleSizePt([[f.subtitleLeft, sizes.subtitleLeft], [f.subtitleRight, sizes.subtitleRight]]);
       const hasTitle = item.titleLeft !== null;
       const hasSub = item.subtitleLeft !== null;
@@ -733,7 +735,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       if (hasTitle) {
         const titleLeft = styledFieldRuns(
           f.titleLeft,
-          titleLeftSize,
+          sizes.titleLeft,
           false,
           false,
           geo.entryIndent,
@@ -741,9 +743,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           tracking,
           entrySrc("titleLeft")
         );
-        const rawTitleRuns = headRow(titleLeft, f.titleRight, titleRightSize, false, geo, family, tracking, entrySrc("titleRight"));
+        const rawTitleRuns = headRow(titleLeft, f.titleRight, sizes.titleRight, false, geo, family, tracking, entrySrc("titleRight"));
         const titleAlignment = alignmentFromInlineMarks(f.titleLeft) ?? alignmentFromInlineMarks(f.titleRight);
-        const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, titleLeftSize, titleRightSize, family, tracking);
+        const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, sizes.titleLeft, sizes.titleRight, family, tracking);
         for (const [rowIndex, rawRuns] of titleRows.entries()) {
           const titleRuns = titleAlignment && titleAlignment !== "justify"
             ? alignRuns(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
@@ -778,7 +780,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       if (hasSub) {
         const subLeft = styledFieldRuns(
           f.subtitleLeft,
-          subLeftSize,
+          sizes.subtitleLeft,
           false,
           false,
           geo.entryIndent,
@@ -789,7 +791,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const rawSubRuns = headRow(
           subLeft,
           f.subtitleRight,
-          subRightSize,
+          sizes.subtitleRight,
           false,
           geo,
           family,
@@ -797,7 +799,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           entrySrc("subtitleRight")
         );
         const subAlignment = alignmentFromInlineMarks(f.subtitleLeft) ?? alignmentFromInlineMarks(f.subtitleRight);
-        const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, subLeftSize, subRightSize, family, tracking);
+        const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, sizes.subtitleLeft, sizes.subtitleRight, family, tracking);
         for (const [rowIndex, rawRuns] of subRows.entries()) {
           const subRuns = subAlignment && subAlignment !== "justify"
             ? alignRuns(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
@@ -865,7 +867,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           bulletSrc(bi),
           stripInlineMarks(bullet).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
-            : undefined
+            : undefined,
+          sizes.body
         );
         // First line carries the bullet marker at the bullet indent.
         // It shares the bullet's provenance so clicking it edits the bullet.

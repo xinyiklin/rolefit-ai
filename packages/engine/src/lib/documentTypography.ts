@@ -1,8 +1,7 @@
 // Default size, in points, of every text role, shared by resumes and cover
-// letters. Each is independent: a whole-field <size> tag (the Styles menu
-// writes one) replaces the role's default for that field, and nothing derives
-// one role's size from another's.
-import { effectiveFieldSize, stripInlineMarks, wholeFieldSizePt } from "./inlineMarksText.ts";
+// letters. Text without its own <size> paints at its role default; nothing
+// derives one role's size from another's.
+import { fieldSizePt, stripInlineMarks } from "./inlineMarksText.ts";
 
 export const TEXT_SIZES_PT = {
   name: 25,
@@ -16,11 +15,10 @@ export const TEXT_SIZES_PT = {
   body: 10
 } as const;
 
-// The size a field is set at: the size wrapping all of its text (words inside
-// may carry their own), else the one size every character agrees on, else the
-// role default.
+// The size a field is set at: the size most of its text carries (words may
+// carry their own), else the role default.
 export function fieldRoleSizePt(value: string, defaultSizePt: number): number {
-  return wholeFieldSizePt(value) ?? effectiveFieldSize(value, defaultSizePt) ?? defaultSizePt;
+  return fieldSizePt(value) ?? defaultSizePt;
 }
 
 // The role size of a row of fields: the largest among fields with text, so an

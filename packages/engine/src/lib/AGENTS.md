@@ -62,10 +62,12 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   the engine paints `SS`), a known one-character drift after such a glyph.
 - `styleFieldFormatting.ts` owns reusable bulk/effective formatting across the
   name, contact, headings, entry columns, skill labels, and body text, not
-  toolbar state or presentation. Body text changes only a whole-field size or
-  font wrapper (`setFieldOuterSize`/`setFieldOuterFont`) and has no whole-field
-  emphasis, so per-word formatting survives; `withWholeFieldFormat` carries a
-  field's wrapper onto Polish replacements, which arrive without it.
+  toolbar state or presentation. A field's size is the one most of its text
+  carries (`fieldSizePt`), read from meaning so editor re-spelled runs count the
+  same. Body text changes only that main size or font
+  (`setFieldOuterSize`/`setFieldOuterFont`) and has no whole-field emphasis, so
+  per-word formatting survives; `withWholeFieldFormat` carries a field's size
+  and font onto Polish replacements, which arrive without them.
 - `links.ts` owns safe link normalization, detection, and inline destination
   encoding/decoding. A bare domain is a link only when the URL parser accepts
   it (the shape test admits ports no browser does), and automatic detection

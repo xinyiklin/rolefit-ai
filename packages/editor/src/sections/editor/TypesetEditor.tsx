@@ -43,7 +43,6 @@ import {
 } from "@typeset/engine/lib/styleFieldFormatting.ts";
 import {
   canonicalInlineMarkText,
-  effectiveFieldSize,
   escapeInlineMarkText,
   inlineFontSizePt,
   joinInlineMarkText,
@@ -51,7 +50,7 @@ import {
   setFieldMark,
   setFieldSize,
   stripInlineMarks,
-  wholeFieldSizePt
+  fieldSizePt
 } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { DocStyleControls } from "../../hooks/useDocStyle";
 import { historySourceFor } from "../../hooks/historyClock.ts";
@@ -429,11 +428,9 @@ function defaultFontSizeForField(src: FieldSrc): number {
 function sizeSeedForField(data: ResumeData, src: FieldSrc): number | null {
   const field = styleFieldForSrc(src) ?? (src.kind === "bullet" ? "body" : null);
   if (!field) return null;
-  const sizes = styleFieldValues(data, field).map((value) => wholeFieldSizePt(value) ?? effectiveFieldSize(value, -1));
+  const sizes = styleFieldValues(data, field).map(fieldSizePt);
   const first = sizes[0];
-  return first !== undefined && first !== null && first > 0 && sizes.every((size) => size === first)
-    ? first
-    : null;
+  return first !== undefined && first !== null && sizes.every((size) => size === first) ? first : null;
 }
 
 function defaultAlignmentForField(src: FieldSrc, style: DocStyle): BodyAlign {

@@ -149,3 +149,26 @@ console.log("uppercase headings transform text, not tags");
   );
   console.log("empty partner fields never set a row's spacing");
 }
+
+// 6. Text without a size of its own paints at its role default (what the editor
+//    shows), whatever size another part of its row was set to.
+{
+  const skillsRow = (titleLeft, subtitleLeft) => {
+    const doc = layoutResume(toTypesetSchema(data([{ id: "k", heading: "Skills", type: "skills", items: [
+      { id: "r", titleLeft, titleRight: null, subtitleLeft, subtitleRight: null, bullets: [] }
+    ] }])), DOC_STYLE_DEFAULTS);
+    return lines(doc).find((line) => line.runs.some((run) => run.src?.kind === "skillsRow")).runs
+      .filter((run) => run.text.trim())
+      .reduce((groups, run) => {
+        const last = groups.at(-1);
+        if (last && last[1] === run.style.size && run.text.trim() !== ":" && last[0] !== ":") last[0] += ` ${run.text.trim()}`;
+        else groups.push([run.text.trim(), run.style.size]);
+        return groups;
+      }, []);
+  };
+  assert.deepEqual(skillsRow("<size=12><b>Languages</b></size>", "Python, Java"),
+    [["Languages", 12], [":", 10], ["Python, Java", 10]], "a sized label leaves unsized skills at their default");
+  assert.deepEqual(skillsRow("<b>Languages</b>", "<size=12>Python, Java</size>"),
+    [["Languages", 10], [":", 10], ["Python, Java", 12]], "sized skills leave an unsized label at its default");
+  console.log("unsized text paints at its role default beside sized text");
+}
