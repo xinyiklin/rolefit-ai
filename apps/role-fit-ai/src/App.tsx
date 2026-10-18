@@ -450,6 +450,8 @@ function App() {
     updateStage,
     changeStageProvider,
     copyStage,
+    applyPlan,
+    switchTransport,
     profileBackground,
     setProfileBackground,
     boldBulletKeywords,
@@ -3544,6 +3546,8 @@ function App() {
           onStageChange={updateStage}
           onStageProviderChange={changeStageProvider}
           onCopyStage={copyStage}
+          onApplyPlan={applyPlan}
+          onSwitchTransport={switchTransport}
           providers={providerAvailability.providers}
           availabilityStatus={providerAvailability.status}
           availabilityMessage={providerAvailability.message}

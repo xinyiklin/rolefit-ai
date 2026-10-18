@@ -29,7 +29,8 @@ export function AnswerMessage({ message, index, controller, onRefine, onEditQues
   const saving = Boolean(message.savingRevisionId);
   const saveDraft = !canUse || response?.status !== "ready";
   const modelLabel = response?.generation
-    ? modelOptionsByProvider[response.generation.provider as AiProviderValue]?.find((model) => model.value === response.generation?.model)?.label ?? "Generated answer"
+    ? modelOptionsByProvider[response.generation.provider as AiProviderValue]?.find((model) => model.value === response.generation?.model)?.label
+      ?? (response.generation.model || "Generated answer")
     : message.edited ? "Your edit" : "Saved answer";
 
   useEffect(() => {

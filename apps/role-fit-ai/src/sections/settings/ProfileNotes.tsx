@@ -445,9 +445,9 @@ export function ProfileNotes({ resume, background, onBackgroundChange, focusRequ
   return (
     <div className="profile-notes">
       <div className="profile-notes__bar">
-        <div className="profile-notes__views" role="group" aria-label="Background view">
+        <div className="settings-segment" role="group" aria-label="Background view">
           {(["entries", "text"] as const).map((option) => (
-            <button key={option} type="button" className="profile-notes__view" aria-pressed={view === option} onClick={() => setView(option)}>
+            <button key={option} type="button" className="settings-segment__option" aria-pressed={view === option} onClick={() => setView(option)}>
               {option === "entries" ? "By entry" : "Text"}
             </button>
           ))}

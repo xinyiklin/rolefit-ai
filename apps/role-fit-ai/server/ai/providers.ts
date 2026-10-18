@@ -2,7 +2,7 @@
 // model/key/reasoning-effort a request resolves to, plus the default
 // provider and the validation shared by every provider-backed route.
 
-import { cliReasoningEffortOptionsFor } from "../../shared/cliReasoning.ts";
+import { cliReasoningEffortOptionsFor, defaultCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import { UserSafeAiError } from "./errors.ts";
 import {
   getManagedApiKey,
@@ -49,10 +49,10 @@ export function getDefaultModel(): string {
 export function providerLabel(provider: string): string {
   return (
     {
-      openai: "OpenAI",
-      anthropic: "Claude",
-      "claude-cli": "Claude Code",
-      "codex-cli": "Codex CLI"
+      openai: "OpenAI · API",
+      anthropic: "Claude · API",
+      "claude-cli": "Claude · CLI",
+      "codex-cli": "OpenAI · CLI"
     }[provider] ?? "AI provider"
   );
 }
@@ -83,7 +83,9 @@ export function isCliProvider(provider: string): boolean {
 
 function normalizeCliReasoningEffort(provider: string, model: string, effort: unknown): string | null {
   let normalized = String(effort ?? "").trim().toLowerCase();
-  if (!normalized) return "";
+  // An API request without an effort takes its vendor's default, as the Claude
+  // CLI does through its own `--effort` fallback.
+  if (!normalized) return isCliProvider(provider) ? "" : defaultCliReasoningEffort(provider);
   if (provider === "codex-cli" && normalized === "light") normalized = "low";
 
   const options = cliReasoningEffortOptionsFor(provider, model);
@@ -94,11 +96,11 @@ function normalizeCliReasoningEffort(provider: string, model: string, effort: un
 function providerDefaultModel(provider: string): string {
   return (
     {
-      openai: process.env.OPENAI_MODEL ?? "gpt-5.6-terra",
+      openai: process.env.OPENAI_MODEL ?? "gpt-6.1-sol",
       anthropic: process.env.ANTHROPIC_MODEL ?? "claude-sonnet-5-5",
       "claude-cli": process.env.CLAUDE_CLI_MODEL ?? "claude-sonnet-5-5",
       "codex-cli": process.env.CODEX_CLI_MODEL ?? "gpt-6.1-sol"
-    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-5.6-terra"
+    }[provider] ?? process.env.OPENAI_MODEL ?? "gpt-6.1-sol"
   );
 }
 
@@ -138,7 +140,7 @@ function assertCompanionProviderReady(provider: RoleFitManagedProviderId): void 
 
 // Resolve provider, key, model, and reasoning effort from a request body.
 // Throws UserSafeAiError (handled by each route's catch) on a missing key, bad
-// model, or unsupported CLI effort. Shared by every provider-backed route.
+// model, or unsupported effort. Shared by every provider-backed route.
 export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProviderConfig {
   const requestedProvider = String(body.provider ?? "").trim();
   // An omitted provider keeps the headless/default path. An explicitly supplied
@@ -188,7 +190,7 @@ export function resolveProviderRequest(body: ProviderRequestBody): ResolvedProvi
     );
   }
   if (reasoningEffort === null) {
-    throw new UserSafeAiError("Unsupported reasoning effort for the selected CLI provider.", 400);
+    throw new UserSafeAiError("Unsupported reasoning effort for the selected provider.", 400);
   }
 
   return { provider, apiKey, model, reasoningEffort };

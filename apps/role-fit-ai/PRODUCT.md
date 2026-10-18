@@ -392,9 +392,11 @@ be saved/reloaded as a `.resume` file). Success = a one-page,
 interview-defensible resume exported in minutes after every AI proposal has been
 reviewed against source evidence.
 
-Provider setup is explicit: the companion offers the Claude Code and Codex CLIs
-plus OpenAI and Claude APIs, while the browser shows only providers the user
-added. A configured provider that becomes unavailable stays visible but
+Provider setup is explicit: the companion offers Claude and OpenAI, each
+over its CLI (Claude Code, Codex) or API, while the browser shows only providers
+the user added. CLI and API run the same models at the same effort scale; a Plan
+(Hybrid, Claude only, OpenAI only) and a per-vendor CLI/API switch rewrite the
+stage settings once and never switch a stage on their own. A configured provider that becomes unavailable stays visible but
 disabled with reconnect guidance; a never-added provider is absent. A CLI is
 ready only when its own status check reports it signed in. Antigravity (`agy`)
 is no longer supported: a stage saved with it returns to that stage's default
@@ -903,7 +905,7 @@ discard it.") and never starts from an import.
   the body, subtitle, contact, and skill-label fields; spacing keeps the defaults. Content
   accuracy comes before visual likeness.
 - **AI interpretation is optional and explicit.** **Interpret with ‹provider ·
-  model›** (Settings › Models › Resume import, default Claude CLI · Sonnet 5.5 ·
+  model›** (Settings › Models › Resume import, default Claude · CLI · Sonnet 5.5 ·
   low) sends the extracted text, and only after that click, every time; an
   oversized document is refused before anything is sent. The model returns
   references to the PDF's own text pieces, never text, and each field must be

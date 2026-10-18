@@ -423,14 +423,21 @@ Never show:
 
 ## AI Settings UI
 
-- Fresh stage defaults live in `src/lib/stageSettings.ts`: Claude Code CLI
-  (`claude-cli`) for most stages, Codex CLI for Resume and Cover Polish. The
-  server's no-`AI_PROVIDER` fallback is the account-backed Claude Code CLI. A non-empty,
-  unrecognized `AI_PROVIDER` fails configuration instead of silently selecting
-  OpenAI.
-- First-class provider choices: subscription CLIs (Claude Code and Codex) plus
-  the native OpenAI and Claude APIs. Do not expose an
-  adapter until its current request contract and a live smoke are verified.
+- Provider names are vendor plus transport everywhere in the UI and companion:
+  *Claude · CLI*, *Claude · API*, *OpenAI · CLI*, *OpenAI · API*. Product names
+  (Claude Code, Codex) appear only where the user installs or signs in.
+- Fresh stage defaults are the Hybrid plan in `src/lib/stageSettings.ts`
+  (`PROVIDER_PLANS`): Claude · CLI for most stages, OpenAI · CLI for Resume and
+  Cover Polish. The server's no-`AI_PROVIDER` fallback is Claude · CLI. A
+  non-empty, unrecognized `AI_PROVIDER` fails configuration instead of silently
+  selecting OpenAI.
+- Settings › Models' Plan and per-vendor transport controls are one-shot
+  rewrites of the stage rows (`src/lib/providerPlans.ts`); their pressed state
+  is derived from the rows, never stored. Do not add a persisted mode.
+- First-class provider choices: the Claude Code and Codex CLIs plus the native
+  OpenAI and Claude APIs, with the same models and effort scale per vendor. Do
+  not expose an adapter until its current request contract and a live smoke are
+  verified.
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
   of the studio tab rail. Its five pages sit in two groups — **You**: Profile
   (declared facts) and Background (notes); **AI**: Guidance (every

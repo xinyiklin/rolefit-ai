@@ -2,8 +2,9 @@ import { reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AI_STAGES, stageSettingsKeys } from "../config/aiStages.ts";
 import { clearStoredSettings, loadSettings, saveSettings, type PersistedSettings } from "../lib/settings";
-import type { AiProviderValue } from "../config/aiOptions";
-import { seedStage, seedStages, stageFieldsToPersist } from "../lib/stageSettings";
+import type { AiProviderValue, AiTransport, AiVendor } from "../config/aiOptions";
+import { seedStage, seedStages, stageFieldsToPersist, type ProviderPlanId } from "../lib/stageSettings";
+import { applyProviderPlan, preferredTransport, switchVendorTransport, type StagesChange } from "../lib/providerPlans.ts";
 import type { StageConfig, StageId } from "../lib/aiRequest";
 import type {
   AvailabilityNotice,
@@ -219,6 +220,23 @@ export function useAiSettings() {
     setStages((prev) => ({ ...prev, [to]: { ...prev[from] } }));
   }
 
+  // Plan and transport rewrite every affected stage at once and return the new
+  // rows plus how many took a nearest supported model or effort.
+  function applyPlan(plan: ProviderPlanId, addedProviders: ReadonlySet<string>): StagesChange {
+    const change = applyProviderPlan(plan, {
+      claude: preferredTransport(stages, "claude", addedProviders),
+      openai: preferredTransport(stages, "openai", addedProviders)
+    });
+    setStages(change.stages);
+    return change;
+  }
+
+  function switchTransport(vendor: AiVendor, transport: AiTransport): StagesChange {
+    const change = switchVendorTransport(stages, vendor, transport);
+    setStages(change.stages);
+    return change;
+  }
+
   function setStageCustomInstruction(stage: StageId, text: string) {
     setStageCustomInstructions((prev) => {
       // Drop an emptied override rather than storing "" — a blank override and
@@ -289,6 +307,8 @@ export function useAiSettings() {
     updateStage,
     changeStageProvider,
     copyStage,
+    applyPlan,
+    switchTransport,
     profileBackground,
     setProfileBackground,
     boldBulletKeywords,

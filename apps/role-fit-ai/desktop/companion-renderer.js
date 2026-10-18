@@ -1,28 +1,29 @@
 "use strict";
 
+// Labels match the browser's provider names; the tag names the CLI binary.
 const SUPPORTED_PROVIDERS = Object.freeze([
   Object.freeze({
     id: "claude-cli",
     kind: "cli",
-    name: "Claude Code",
+    name: "Claude · CLI",
     tag: "claude"
+  }),
+  Object.freeze({
+    id: "anthropic",
+    kind: "api",
+    name: "Claude · API",
+    tag: "API"
   }),
   Object.freeze({
     id: "codex-cli",
     kind: "cli",
-    name: "Codex CLI",
+    name: "OpenAI · CLI",
     tag: "codex"
   }),
   Object.freeze({
     id: "openai",
     kind: "api",
-    name: "OpenAI API",
-    tag: "API"
-  }),
-  Object.freeze({
-    id: "anthropic",
-    kind: "api",
-    name: "Claude API",
+    name: "OpenAI · API",
     tag: "API"
   })
 ]);

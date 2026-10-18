@@ -9,7 +9,9 @@ import type {
   DeclaredAnswer,
   EducationLevel
 } from "../lib/candidateFacts";
-import type { AiProviderValue } from "../config/aiOptions";
+import type { AiProviderValue, AiTransport, AiVendor } from "../config/aiOptions";
+import type { ProviderPlanId } from "../lib/stageSettings";
+import type { StagesChange } from "../lib/providerPlans";
 import type { StageConfig } from "../lib/aiRequest";
 import type {
   AvailableProviderConnection,
@@ -49,6 +51,8 @@ export type SettingsDialogProps = {
   onStageChange: (stage: AiStageId, patch: Partial<StageConfig>) => void;
   onStageProviderChange: (stage: AiStageId, provider: AiProviderValue) => void;
   onCopyStage: (from: AiStageId, to: AiStageId) => void;
+  onApplyPlan: (plan: ProviderPlanId, addedProviders: ReadonlySet<string>) => StagesChange;
+  onSwitchTransport: (vendor: AiVendor, transport: AiTransport) => StagesChange;
   providers: readonly AvailableProviderConnection[];
   availabilityStatus: ProviderAvailabilityStatus;
   availabilityMessage: string;

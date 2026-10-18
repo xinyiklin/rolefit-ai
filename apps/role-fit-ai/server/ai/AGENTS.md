@@ -21,8 +21,9 @@ application retain blocking technical guards.
 ## Module ownership
 
 - `providers.ts` resolves provider identity, defaults, credentials, models, and
-  reasoning effort. `shared/cliReasoning.ts` owns model-specific CLI effort
-  capabilities used by browser settings, request validation, and CLI argv.
+  reasoning effort. `shared/cliReasoning.ts` owns the per-model effort scale
+  shared by each vendor's CLI and API: browser settings, request validation,
+  CLI argv, and API request bodies.
   Catalog changes must preserve readable canonical preferences and backups;
   only known provider-setting repairs may precede strict validation.
 - `clients.ts` owns native API/CLI dispatch. `server/ai-cli/` owns subprocess

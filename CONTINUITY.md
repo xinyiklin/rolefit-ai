@@ -77,6 +77,15 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
+- [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D085; branch
+  `claude/cli-api-selection-b703c6`): API calls send the stage effort (no off
+  setting anywhere); labels are Claude/OpenAI · CLI/API; Settings > Models adds
+  Plan (Hybrid / Claude only / OpenAI only) and per-vendor CLI/API rewrites;
+  catalogs keep current models only, retired ids repair to successors. Offline
+  187/187; live Claude API smoke passed (4 models, Low and Max); Models page
+  browser-checked (desktop + 375px, Chromium pane; Firefox and the Background
+  view switch unchecked); OpenAI API live not run. Pending after the Codex limit
+  reset: OpenAI Resume import and Claude Resume Polish screens (benchmarks.md).
 - [USER+CODE+TOOL] **Letter Blank/Starter reset and title** (D084): both reset
   a customized letter style to the defaults and take the resume's title
   retargeted (`..._Cover_Letter`). Engine/RoleFit/Typeset checks passed;
