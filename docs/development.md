@@ -199,8 +199,16 @@ Locally, `npm run check --workspace packages/engine` still runs both.
 Extended runs alongside core unless every changed path is Markdown or under
 RoleFit's backend-only `server/ai/` or
 `server/ai-cli/`. Shared/configuration/unknown paths and mixed changes run
-extended; manual runs and unavailable Git comparisons run every selected job. Skipping its test steps still
-reports the extended job's selection and successful status. The existing
+extended; manual runs and unavailable Git comparisons run every selected job.
+A RoleFit version-only release prep (only Markdown,
+`apps/role-fit-ai/scripts/desktop-release-contract.test.mjs`, and
+`apps/role-fit-ai/package.json` or `package-lock.json` whose only change is the
+RoleFit workspace `version`) skips both Chromium suites and both engine jobs,
+except that engine Markdown still runs the engine job. The selector parses both
+sides of each manifest and lockfile: any other change in them (a dependency, an
+integrity, `engines`, a script) falls back to the path rules above, and a
+failed read or parse runs every job. Skipping its test steps still
+reports each job's selection and successful status. The existing
 `Chromium editor contracts` check requires both jobs to succeed, preserving its
 blocking behavior without re-running tests.
 

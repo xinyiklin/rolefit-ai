@@ -113,7 +113,8 @@ jobs:
 
   # Neither engine job depends on app or editor code, so each runs only when its
   # own inputs change (scripts/ci-coverage-selection.mjs); a skipped job still
-  # reports success.
+  # reports success. A RoleFit version-only release prep skips the engine checks
+  # and both Chromium suites.
   engine:
     name: Engine codecs, layout, and PDF
     runs-on: ubuntu-24.04
@@ -244,15 +245,21 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
+      - name: Select core browser coverage
+        id: coverage
+        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
+        if: steps.coverage.outputs.core == 'true'
       - run: npm run test:editor:browser -- --suite=core
+        if: steps.coverage.outputs.core == 'true'
       - name: Upload core browser diagnostics
-        if: always()
+        if: always() && steps.coverage.outputs.core == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: browser-core

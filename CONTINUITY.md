@@ -104,6 +104,8 @@ D-entries in `docs/decisions.md`.
   `scripts/ci-coverage-selection.mjs` skips `Engine codecs, layout, and PDF`
   unless `packages/engine/**` or a root input changed, and the ~7 min
   `fonts:check` moved to a parallel `Engine font assets` job for font paths.
+  A RoleFit version-only release prep (parsed manifest/lockfile diff) now also
+  skips the engine jobs and both Chromium suites.
 
 ## 2026-10-17
 
