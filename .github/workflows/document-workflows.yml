@@ -8,7 +8,7 @@ on:
       - "packages/**"
       - "scripts/editor-browser-contracts*"
       - "scripts/editor-browser-contracts/**"
-      - "scripts/ci-browser-selection*"
+      - "scripts/ci-coverage-selection*"
       - "scripts/check-dependency-contracts.mjs"
       - "scripts/check-package-script-paths.mjs"
       - ".node-version"
@@ -26,7 +26,7 @@ on:
       - "packages/**"
       - "scripts/editor-browser-contracts*"
       - "scripts/editor-browser-contracts/**"
-      - "scripts/ci-browser-selection*"
+      - "scripts/ci-coverage-selection*"
       - "scripts/check-dependency-contracts.mjs"
       - "scripts/check-package-script-paths.mjs"
       - ".node-version"
@@ -109,24 +109,58 @@ jobs:
       - run: npm run deps:check
       - run: npm run types:check
 
+  # Neither engine job depends on app or editor code, so each runs only when its
+  # own inputs change (scripts/ci-coverage-selection.mjs); a skipped job still
+  # reports success.
   engine:
-    name: Engine codecs, layout, PDF, and fonts
+    name: Engine codecs, layout, and PDF
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
+      - name: Select engine coverage
+        id: coverage
+        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
+        if: steps.coverage.outputs.engine == 'true'
+      - run: npm run typecheck --workspace packages/engine
+        if: steps.coverage.outputs.engine == 'true'
+      - run: npm run eval --workspace packages/engine
+        if: steps.coverage.outputs.engine == 'true'
+
+  # The font check regenerates every bundled font and its metrics (~7 minutes of
+  # CPU), so it runs beside the engine evals and only when a generator, source,
+  # or committed output changes.
+  engine-fonts:
+    name: Engine font assets
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - name: Select font coverage
+        id: coverage
+        run: node scripts/ci-coverage-selection.mjs
+      - run: npm ci
+        if: steps.coverage.outputs.engine-fonts == 'true'
       # generate_font_assets.py --check refetches every pinned upstream source
       # on a cold runner, so a slow CTAN or raw.githubusercontent response fails
       # the job on a 60s socket timeout. Every source is pinned to an immutable
       # commit or release, so the cache key only has to track the scripts that
       # name those pins.
       - name: Cache pinned upstream font sources
+        if: steps.coverage.outputs.engine-fonts == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/typeset-fonts
@@ -134,12 +168,14 @@ jobs:
             typeset-font-sources-${{ runner.os }}-${{
               hashFiles('packages/engine/scripts/generate_font_assets.py',
                         'packages/engine/scripts/requirements-fonts.txt') }}
-      - run: |
+      - if: steps.coverage.outputs.engine-fonts == 'true'
+        run: |
           python3 -m venv .font-tools
           .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
           echo "$GITHUB_WORKSPACE/.font-tools/bin" >> "$GITHUB_PATH"
           echo "SSL_CERT_FILE=$("$GITHUB_WORKSPACE/.font-tools/bin/python" -m certifi)" >> "$GITHUB_ENV"
-      - run: npm run check --workspace packages/engine
+      - run: npm run fonts:check --workspace packages/engine
+        if: steps.coverage.outputs.engine-fonts == 'true'
 
   editor:
     name: Shared editor
@@ -240,7 +276,7 @@ jobs:
           package-manager-cache: false
       - name: Select extended rendering coverage
         id: coverage
-        run: node scripts/ci-browser-selection.mjs
+        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
         if: steps.coverage.outputs.extended == 'true'
       - run: npm run test:editor:browser -- --suite=extended
