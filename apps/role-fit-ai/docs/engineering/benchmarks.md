@@ -18,6 +18,32 @@ listed under coverage gaps.
 | Cover Polish | GPT-6.1 Sol medium, existing prompt | 40 tuning applications plus 20 holdouts, sentence fact-checking and blinded Astra/Opus pairwise judging. On the 40-case same-prompt comparison, Sol beat Sonnet 25–2 and Opus 16–0 where both judges agreed. | Model judges disagreed on some comparisons. Claude-specific prompt gains did not transfer to Sol, so the shared prompt was retained. |
 | Answers | Claude Opus 5.5 high; GPT-6.1 Sol medium as OpenAI alternative | 57 synthetic cases × nine settings, 513 completed answers; 38 fresh cases and 19 regressions. Astra High and Opus High agreed the rubric before independent judging. | Opus High's fresh mean lead over Medium was only 0.67/100. Astra slightly preferred Sol Medium to Opus High; Opus preferred Opus High. One sample per case, no human calibration. |
 | Final review | Claude Sonnet 5.5 low | Retained user preference. | No comparative benchmark supporting a winner. |
+| Plans | Hybrid (the rows above); Claude only and OpenAI only per the 2026-10-18 section below | Stage evidence above plus new budget-model screens. | Single-vendor settings for Final review and some stages are untested best guesses. |
+
+### Single-vendor plans, 2026-10-18
+
+The Claude only and OpenAI only plans (D087) reuse the stage evidence above
+where a vendor already has a tested setting: Answers (Sol Medium best OpenAI),
+Resume Polish (Opus High, Sol Medium), and Cover (Sol Medium). New screens filled
+the gaps on budget models, one run per synthetic fixture, through the CLIs. API
+requests now send the same model and effort, but CLI-to-API equivalence was not
+measured.
+Haiku 5.5 was added to the benchmark checkout only for these runs.
+
+| Stage | Settings compared | Result | Plan setting |
+| --- | --- | --- | --- |
+| Prepare (42 postings, combined + standalone) | Claude Sonnet 5.5 Low · Haiku 5.5 Low | Sonnet: 0 category misses, extraction 1.00, no combined/standalone verdict drift, 5.0 s median. Haiku: 2 misses, 0.98, 3 drifts, 9.7 s, about 4x the output tokens. | Claude only: Sonnet Low |
+| Prepare (42 postings) | OpenAI GPT-6.1 Sol Low · GPT-6 Luna Low | Sol: 1 miss, 0.993, no drift, 9.6 s. Luna: 4 misses, 0.992, 3 drifts, 4.6 s. Luna Medium was cut off by the Codex usage limit and discarded. | OpenAI only: Sol Low |
+| Resume import (13 synthetic PDFs) | Claude Sonnet 5.5 Low · Haiku 5.5 Low | Both 13/13 usable; Sonnet 6.7 s median, Haiku 11.3 s with about 2.8x the output tokens. | Claude only: Sonnet Low |
+| Resume import | OpenAI GPT-6.1 Sol Low · GPT-6 Luna Low | Pending: stopped by the Codex usage limit; Sol Low is a best guess until it runs. | OpenAI only: Sol Low |
+| Cover (13 synthetic letters, Astra + Opus judges) | Claude Opus 5.5 High · Sonnet 5.5 Medium · OpenAI GPT-6.1 Sol Medium | Judge means 6.96 · 6.69 · 6.77; structural checks passed 7/13 · 1/13 · 0/13 (mostly the length check). The 40-case real-application comparison still favors Sol over both Claude models. | Claude only: Opus High |
+| Resume Polish (39 synthetic cases, Astra fact-checks) | Claude Sonnet 5.5 High · Opus 5.5 High | Pending: the Astra fact-checks need Codex, which hit its usage limit; Opus High is the earlier tested Claude setting. | Claude only: Opus High |
+
+Final application review has no comparative benchmark; each single-vendor plan
+uses its Fit setting. Limits: one sample per fixture, synthetic corpora, model
+judges with family self-preference, and Claude Code 2.1.285 ran Haiku 5.5 as an
+unrecognized model. Receipts stay in the ignored benchmark checkout's
+`workspace/` folders.
 
 The matched Prepare downstream check used ten real applications, both brief
 sources, the same Resume/Cover generators and two blinded judges. Resume

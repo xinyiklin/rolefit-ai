@@ -213,7 +213,7 @@ offers 30 bundled families; each loads only when a document uses it.
   that exact browser origin once in the companion. The extension does not
   estimate fit locally; Fit Assessment runs in Prepare against the selected resume. See
   [Browser extension](#browser-extension).
-- **Explicit four-provider setup** — the companion can add **Claude Code CLI**, **Codex CLI**, **OpenAI API**, and **Claude API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
+- **Explicit four-provider setup** — the companion can add **Claude · CLI** (Claude Code), **Claude · API**, **OpenAI · CLI** (Codex), and **OpenAI · API**. CLI paths use their provider-owned account sessions and API paths use a locally encrypted key; both run the same models at the same effort, and a Plan or per-vendor CLI/API switch rewrites the stages in one step. Settings > Models shows only providers the user explicitly added, keeps configured-but-unready providers visible with reconnect guidance, and never silently switches a stage to a paid provider.
 - **One-pass Resume Polish (optional review pass)** — one provider operation proposes grounded edits
   through flat target IDs. Skills category labels are locked; actual skill lists
   remain editable. Unknown targets and unsafe/unusable mutations are rejected;
@@ -374,7 +374,7 @@ React 19 · TypeScript · Vite · Node.js (reusable `server/runtime.ts`) ·
 Electron 43 desktop companion · shared `@typeset/engine` / `@typeset/editor`
 workspaces · custom CSS · `lucide-react` icons
 
-No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude Code CLI · Codex CLI · OpenAI API · Claude API.
+No hosted RoleFit backend, database, or account system. Supported provider integrations: Claude · CLI (Claude Code) · Claude · API · OpenAI · CLI (Codex) · OpenAI · API.
 
 ## Run
 
@@ -459,10 +459,23 @@ npm run test:rolefit:desktop:packaged
 
 ## AI setup
 
-Add providers in the Electron companion, then choose among those configured
-providers and their models in **Settings > Models**, opened from the foot of
-the studio tab rail. Every stage row stays visible together; there is no
-per-row collapse control:
+RoleFit supports two vendors, **Claude** and **OpenAI**, each over a **CLI**
+(your Claude Code or Codex account) or an **API** key: *Claude · CLI*,
+*Claude · API*, *OpenAI · CLI*, and *OpenAI · API*. Add providers in the
+Electron companion, then choose among them in **Settings > Models**, opened from
+the foot of the studio tab rail.
+
+Two controls sit above the stage rows. Each rewrites the rows once, and each
+row stays editable afterward:
+
+- **Plan** sets every stage's vendor, model, and effort: **Hybrid
+  (recommended)**, **Claude only**, or **OpenAI only**, once each vendor it
+  uses is added. It reads *Custom* once the rows match none of them.
+- **Claude** and **OpenAI** each switch that vendor's stages between **CLI**
+  and **API**, keeping each stage's model and effort. A transport is available
+  once that provider is added in the companion; mixed stages show *Mixed*.
+
+Every stage row stays visible together:
 
 - **Job analysis** — structures the captured posting into the editable job brief.
 - **Fit Assessment** — assesses the selected resume and your Profile against
@@ -475,27 +488,27 @@ per-row collapse control:
 - **Resume import** — interprets the structure of an imported PDF when you ask;
   it references the PDF's own text and never rewrites it.
 
-The Answers composer sets the Application questions model; it has no row here.
+The Answers composer sets the Application questions model; it has no row here,
+but the Plan and transport controls include it.
 
-Fresh settings and **Reset all settings** use these recommendations:
-
-| Stage | Provider | Model | Effort |
+| Stage | Hybrid (recommended) | Claude only | OpenAI only |
 | --- | --- | --- | --- |
-| Job analysis + Fit Assessment | Claude Code CLI | Sonnet 5.5 | Low |
-| Resume Polish | Codex CLI | GPT-6.1 Sol | Medium |
-| Cover letter | Codex CLI | GPT-6.1 Sol | Medium |
-| Application questions (Answers composer) | Claude Code CLI | Opus 5.5 | High |
-| Final application review | Claude Code CLI | Sonnet 5.5 | Low |
-| Resume import | Claude Code CLI | Sonnet 5.5 | Low |
+| Job analysis + Fit Assessment | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
+| Resume Polish | OpenAI GPT-6.1 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
+| Cover letter | OpenAI GPT-6.1 Sol · Medium | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
+| Application questions | Claude Opus 5.5 · High | Claude Opus 5.5 · High | OpenAI GPT-6.1 Sol · Medium |
+| Final application review | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
+| Resume import | Claude Sonnet 5.5 · Low | Claude Sonnet 5.5 · Low | OpenAI GPT-6.1 Sol · Low |
 
-Saved choices remain selected. Choosing a stage's recommended provider seeds
-its recommended model and effort; other providers use their catalog defaults,
-except that Resume Polish on Claude Code CLI seeds Opus 5.5 High, the Claude
-setting benchmarked against GPT-6.1 Sol.
-An existing workspace without Final review settings initially copies Fit once.
-Final review retains the prior user-selected setting; it has no comparative
-benchmark winner. The [Answers evaluation](docs/engineering/testing.md#application-answers)
-records the 57-case synthetic comparison, judge disagreement and its limits.
+Hybrid takes each stage's benchmark winner. The single-vendor plans take the
+best tested setting from that vendor where a benchmark exists; Final review has
+no comparative benchmark on any plan.
+
+Fresh settings and **Reset all settings** use Hybrid. Choosing a vendor for a
+row seeds that vendor's plan setting for the stage on either transport; other
+models take the vendor's default effort. An existing workspace without Final
+review settings initially copies Fit once. The
+[benchmark record](docs/engineering/benchmarks.md) lists each plan's evidence and limits.
 
 Each stage has its own provider/model/effort settings. Resume Polish, Cover
 letter, and Application questions take an optional instruction override in
@@ -532,24 +545,28 @@ Codex expose a machine-readable auth status, so the companion can show
 **Sign-in required**, **Signed in**, or **Ready** for them.
 
 Antigravity (`agy`) is no longer supported. A stage saved with Antigravity
-returns to that stage's default Claude Code or Codex setting, saved backups and
+returns to that stage's default setting, saved backups and
 preferences stay readable, and the companion drops Antigravity from its provider
 list while keeping your API keys and other providers.
 
-Settings includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol, and GPT-6 Luna for Codex
-and OpenAI API, plus Claude Fable 5.1, Opus 5.5, and Sonnet 5.5 for Claude CLI
-and API. Stage recommendations are listed above; other provider selections
-start at GPT-6.1 Sol for Codex and Sonnet 5.5 for Claude. The OpenAI API default remains
-GPT-5.6 Terra. GPT-6.1 Sol may need a newer Codex CLI (0.159 lists it), and
-Sonnet 5.5 needs Claude Code 2.1.284 or later.
+**Models.** A vendor's CLI and API offer the same current models: Claude Fable
+5.1, Opus 5.5, Sonnet 5.5, and Haiku 5.5; OpenAI GPT-6 Astra, GPT-6.1 Sol, and
+GPT-6 Luna. A saved choice of a removed model (Claude Fable 5, Opus 5 and 4.x,
+Sonnet 5 and 4.6, Haiku 4.5; OpenAI GPT-6 Sol and GPT-5.x) moves to its
+same-tier successor, keeping its effort where supported.
 
-The Codex picker omits GPT-5.5 (retired October 14, 2026), retired GPT-5.4/5.4
-Mini, and the no-longer-listed Codex Spark. Supported older Claude models remain
-available. Saved removed choices move to the same provider's
-default, and effort controls follow each model's capabilities.
+**Effort.** Both transports take the same effort, Low through Max, with no
+off setting: the CLI's `--effort` or Codex reasoning level, and on the APIs
+Claude's adaptive thinking at `output_config.effort` or OpenAI's
+`reasoning.effort`. Codex's **Ultra** is a CLI orchestration mode with no API
+equivalent; switching such a stage to the API steps it down to Max. API
+thinking shares a 32,000-token output budget with the reply, and API requests
+time out after 240 seconds like the CLIs. Higher effort costs more API tokens.
 
 Use a current provider CLI. **Claude Opus 5.5 requires Claude Code 2.1.280 or
-newer**; Fable 5.1 requires 2.1.257+. Run `claude update` to upgrade. For Codex, follow the
+newer**, Sonnet 5.5 2.1.284+, and Fable 5.1 2.1.257+; Claude Code 2.1.285 runs
+Haiku 5.5 but labels it unrecognized. GPT-6.1 Sol needs Codex 0.159+. Run
+`claude update` to upgrade Claude Code. For Codex, follow the
 [official installation/update guidance](https://learn.chatgpt.com/docs/cli).
 RoleFit does not upgrade CLIs automatically or guarantee account model access.
 

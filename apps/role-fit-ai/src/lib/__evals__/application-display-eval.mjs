@@ -60,7 +60,7 @@ const assessmentLabel = fitAssessmentRunLabel({
   promptVersion: "fit-assessment-direct-rubric-v1"
 });
 assert.match(assessmentLabel, /^Last assessed /, "assessment metadata names its completion time");
-assert.match(assessmentLabel, /Codex · CLI \(gpt-5\.6-sol\)/, "assessment metadata names its provider and model");
+assert.match(assessmentLabel, /OpenAI · CLI \(gpt-5\.6-sol\)/, "assessment metadata names its provider and model");
 assert.match(assessmentLabel, /medium reasoning/, "assessment metadata names reasoning effort");
 assert.match(assessmentLabel, /rubric v1$/, "assessment metadata names the rubric version");
 

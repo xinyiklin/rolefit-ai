@@ -5,8 +5,9 @@
 import assert from "node:assert/strict";
 
 import { AI_STAGES, AI_STAGE_IDS, stageSettingsKeys } from "../../config/aiStages.ts";
-import { seedStage, seedStages, stageFieldsToPersist } from "../stageSettings.ts";
-import { normalizeSettings } from "../settings.ts";
+import { PROVIDER_PLANS, seedStage, seedStages, stageFieldsToPersist } from "../stageSettings.ts";
+import { migrateStoredSettings, normalizeSettings } from "../settings.ts";
+import { retiredModelSuccessors } from "../../config/aiOptions.ts";
 import { parsePortableWorkspacePreferences } from "../workspaceBackupContract.ts";
 import { materializeAiSettings } from "../aiSettingsPersistence.ts";
 
@@ -99,25 +100,25 @@ assert.deepEqual(
 );
 assert.deepEqual(
   seedStage("cover-polish", { coverPolishProvider: "claude-cli" }),
-  { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" },
-  "a stage without an alternative seeds the provider's generic default"
+  PROVIDER_PLANS.claude["cover-polish"],
+  "a stage moved to another vendor seeds that vendor's plan setting"
 );
 
 const partialSettings = {
   resumePolishProvider: "openai",
-  resumePolishSelectedModel: "gpt-5.6-terra",
+  resumePolishSelectedModel: "gpt-6.1-sol",
   resumePolishCliReasoningEffort: "medium",
   jobAnalysisProvider: "anthropic",
-  jobAnalysisSelectedModel: "claude-opus-4-8",
+  jobAnalysisSelectedModel: "claude-opus-5-5",
   fitAssessmentProvider: "codex-cli",
-  fitAssessmentSelectedModel: "gpt-5.6-terra",
+  fitAssessmentSelectedModel: "gpt-6-luna",
   fitAssessmentCliReasoningEffort: "high",
 };
 const seeded = seedStages(partialSettings);
 assert.equal(seeded["resume-polish"].provider, "openai", "Resume Polish keeps its persisted provider");
 assert.equal(seeded["job-analysis"].provider, "anthropic", "Job analysis keeps its own persisted provider");
 assert.equal(seeded["fit-assessment"].provider, "codex-cli", "Fit Assessment keeps its own persisted provider");
-assert.equal(seeded["fit-assessment"].selectedModel, "gpt-5.6-terra", "Fit Assessment keeps its own model");
+assert.equal(seeded["fit-assessment"].selectedModel, "gpt-6-luna", "Fit Assessment keeps its own model");
 for (const stage of ["cover-polish", "application-answers"]) {
   assert.deepEqual(seeded[stage], fresh[stage], `${stage} uses its own default when absent`);
 }
@@ -135,11 +136,11 @@ assert.equal(
 const explicitCover = seedStages({
   ...partialSettings,
   coverPolishProvider: "anthropic",
-  coverPolishSelectedModel: "claude-opus-4-8",
+  coverPolishSelectedModel: "claude-opus-5-5",
   coverPolishCliReasoningEffort: "low"
 });
 assert.equal(explicitCover["cover-polish"].provider, "anthropic", "an explicit cover provider is preserved");
-assert.equal(explicitCover["cover-polish"].selectedModel, "claude-opus-4-8", "an explicit cover model is preserved");
+assert.equal(explicitCover["cover-polish"].selectedModel, "claude-opus-5-5", "an explicit cover model is preserved");
 assert.deepEqual(explicitCover["application-answers"], fresh["application-answers"], "Answers remains independent from Cover");
 const sparseCover = { coverPolishSelectedModel: "claude-sonnet-5-5", coverPolishCliReasoningEffort: "low" };
 assert.deepEqual(seedStage("cover-polish", sparseCover), { provider: "claude-cli", selectedModel: "claude-sonnet-5-5", cliReasoningEffort: "low" }, "a prior model-only setting retains its implied provider");
@@ -378,39 +379,39 @@ const persistedReview = stageFieldsToPersist(seeded);
 assert.deepEqual(seedStages({...persistedReview,fitAssessmentProvider:"anthropic"})["application-review"],seeded["application-review"],"persisted review does not follow later Fit changes");
 
 // Model retirement and effort repair must stay isolated to each stage.
+const VENDOR_PROVIDERS = { claude: ["claude-cli", "anthropic"], gpt: ["codex-cli", "openai"] };
 for (const stage of AI_STAGES) {
   const keys = stageSettingsKeys(stage);
-  for (const retired of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
-    const saved = { [keys.provider]: "codex-cli", [keys.model]: retired, [keys.effort]: "high" };
-    const repaired = normalizeSettings(saved);
-    assert.equal(repaired[keys.model], "gpt-6.1-sol");
-    assert.equal(repaired[keys.provider], "codex-cli");
-    assert.equal(repaired[keys.effort], "high");
-    assert.equal(saved[keys.model], retired, "normalization must not mutate its input");
-    assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
+  for (const [retired, successor] of Object.entries(retiredModelSuccessors)) {
+    for (const provider of VENDOR_PROVIDERS[retired.startsWith("claude") ? "claude" : "gpt"]) {
+      const saved = { [keys.provider]: provider, [keys.model]: retired, [keys.effort]: "high" };
+      const repaired = normalizeSettings(migrateStoredSettings(saved));
+      assert.equal(repaired[keys.model], successor, `${retired} on ${provider} repairs to ${successor}`);
+      assert.equal(repaired[keys.provider], provider);
+      assert.equal(repaired[keys.effort], "high");
+      assert.equal(saved[keys.model], retired, "migration must not mutate its input");
+      assert.deepEqual(Object.keys(repaired).sort(), Object.keys(saved).sort(), "absent stages stay absent");
+    }
   }
-  for (const model of ["gpt-5.6-sol", "gpt-6-astra", "gpt-6-sol", "gpt-6.1-sol"]) {
-    const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "high" };
-    assert.deepEqual(normalizeSettings(saved), saved, "supported explicit selections survive the refresh");
+  for (const model of ["gpt-6-astra", "gpt-6.1-sol"]) {
+    const saved = { [keys.provider]: "codex-cli", [keys.model]: model, [keys.effort]: "ultra" };
+    assert.deepEqual(normalizeSettings(saved), saved, "a saved Codex Ultra stage stays valid");
+    assert.equal(normalizeSettings({ ...saved, [keys.provider]: "openai" })[keys.effort], "medium", "the API has no Ultra; it takes the vendor default");
   }
   const luna = normalizeSettings({ [keys.provider]: "codex-cli", [keys.model]: "gpt-6-luna", [keys.effort]: "ultra" });
   assert.equal(luna[keys.effort], "medium");
-  const haiku = normalizeSettings({ [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-4-5", [keys.effort]: "high" });
-  assert.equal(haiku[keys.effort], "");
-  assert.equal(seedStage(stage.id, haiku).cliReasoningEffort, "");
-  assert.equal(seedStage(stage.id, { [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-4-5" }).cliReasoningEffort, "");
+  assert.equal(seedStage(stage.id, { [keys.provider]: "claude-cli", [keys.model]: "claude-haiku-5-5" }).cliReasoningEffort, "low");
   assert.equal(seedStage(stage.id, { [keys.provider]: "codex-cli" }).selectedModel, "gpt-6.1-sol");
-  const solUltra = { [keys.provider]: "codex-cli", [keys.model]: "gpt-6-sol", [keys.effort]: "ultra" };
-  assert.deepEqual(normalizeSettings(solUltra), solUltra, "a saved GPT-6 Sol Ultra stage stays valid");
-  const sonnet5 = { [keys.provider]: "claude-cli", [keys.model]: "claude-sonnet-5", [keys.effort]: "low" };
-  assert.deepEqual(normalizeSettings(sonnet5), sonnet5, "a saved Sonnet 5 selection is not moved to the new default");
+  // API stages saved before effort parity carry an empty effort; they take the vendor default.
+  assert.equal(normalizeSettings({ [keys.provider]: "anthropic", [keys.model]: "claude-sonnet-5-5", [keys.effort]: "" })[keys.effort], "low");
+  assert.equal(normalizeSettings({ [keys.provider]: "openai", [keys.model]: "gpt-6.1-sol", [keys.effort]: "" })[keys.effort], "medium");
 }
-const mixedStages = normalizeSettings({
+const mixedStages = normalizeSettings(migrateStoredSettings({
   resumePolishProvider: "codex-cli", resumePolishSelectedModel: "gpt-5.4", resumePolishCliReasoningEffort: "high",
   coverPolishProvider: "claude-cli", coverPolishSelectedModel: "claude-opus-5", coverPolishCliReasoningEffort: "max"
-});
+}));
 assert.equal(mixedStages.resumePolishSelectedModel, "gpt-6.1-sol");
-assert.equal(mixedStages.coverPolishSelectedModel, "claude-opus-5");
+assert.equal(mixedStages.coverPolishSelectedModel, "claude-opus-5-5");
 assert.equal(mixedStages.coverPolishCliReasoningEffort, "max");
 
 console.log("stage-settings probes passed");

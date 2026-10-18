@@ -55,7 +55,7 @@ assert.deepEqual(parsePortableWorkspacePreferences(emptyPortable), emptyPortable
 const knownSettingPortable = {
   settings: {
     resumePolishProvider: "openai",
-    resumePolishSelectedModel: "gpt-5.6-terra",
+    resumePolishSelectedModel: "gpt-6.1-sol",
     resumePolishAuto: true,
     resumePolishAutoThreshold: "REASONABLE",
     citizenshipStatus: "us-citizen",
@@ -377,6 +377,23 @@ assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a tra
 
 
 
+// API stages saved before effort parity carry an empty effort and still restore;
+// unknown API models and CLI-only efforts on an API stage still fail closed.
+for (const [provider, model, effort] of [["anthropic", "claude-sonnet-5-5", "low"], ["openai", "gpt-6.1-sol", "medium"]]) {
+  const restored = parsePortableWorkspacePreferences({
+    settings: { resumePolishProvider: provider, resumePolishSelectedModel: model, resumePolishCliReasoningEffort: "" },
+    lastBaseResume: ""
+  });
+  assert.equal(restored.settings.resumePolishCliReasoningEffort, effort, `${provider} with an empty effort restores at the vendor default`);
+}
+for (const settings of [
+  { resumePolishProvider: "openai", resumePolishSelectedModel: "gpt-made-up", resumePolishCliReasoningEffort: "medium" },
+  { resumePolishProvider: "openai", resumePolishSelectedModel: "gpt-6.1-sol", resumePolishCliReasoningEffort: "ultra" },
+  { resumePolishProvider: "anthropic", resumePolishSelectedModel: "gpt-6.1-sol", resumePolishCliReasoningEffort: "low" }
+]) {
+  assert.throws(() => parsePortableWorkspacePreferences({ settings, lastBaseResume: "" }), /unsupported or invalid/, `strict restore rejects ${JSON.stringify(settings)}`);
+}
+
 // Catalog retirement must not make the canonical file or a valid backup unreadable.
 for (const model of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"]) {
   const old = { ...validStoredPrefs, settings: {
@@ -387,7 +404,8 @@ for (const model of ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"
   const current = parseStoredWorkspacePreferences(old);
   assert.equal(current.settings.resumePolishSelectedModel, "gpt-6.1-sol");
   assert.equal(current.settings.resumePolishCliReasoningEffort, "high");
-  assert.equal(current.settings.coverPolishCliReasoningEffort, "");
+  assert.equal(current.settings.coverPolishSelectedModel, "claude-haiku-5-5", "a retired Claude model repairs to its successor");
+  assert.equal(current.settings.coverPolishCliReasoningEffort, "low");
   assert.equal(current.settings.profileBackground, old.settings.honestContext);
   assert.equal(old.settings.selectedModel, model);
   assert.deepEqual(parseStoredWorkspacePreferences(current), current, "migration is idempotent");

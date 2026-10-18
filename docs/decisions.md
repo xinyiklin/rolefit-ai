@@ -429,7 +429,7 @@ later entry wins.
 
 ### AI providers, defaults, and benchmark outcomes
 
-- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
+- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070, D087: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
   (`claude-sonnet-5-5`) are the Codex and Claude defaults for new or unset
   stages and the server fallback; saved selections are not moved; Sonnet 5.5 on
   the API sends `thinking: {type: "between_tools"}`; retired Codex ids repair to
@@ -437,7 +437,7 @@ later entry wins.
   stages. Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and
   Codex CLI 0.159.2. Receipt: `apps/role-fit-ai/docs/engineering/ai-server.md`.
   UNCONFIRMED: live provider calls.
-- 2026-09-27 [USER+CODE] D049 AMENDED by D076: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
+- 2026-09-27 [USER+CODE] D049 AMENDED by D076, D087: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
   joined the CLI/API catalogs (the user waived the Product Partner flow); Codex
   5.4, 5.4 Mini, and Spark were removed; GPT-5.5 remains until its announced
   2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
@@ -463,6 +463,31 @@ later entry wins.
   other providers; any other unknown id still fails closed. The manual
   ready-to-verify state and the space/parenthesis allowance in model names
   went with it. Historical release notes are unchanged.
+- 2026-10-18 [USER+CODE] D087 ACTIVE: **CLI and API behave the same; plans and
+  transport are one-shot rewrites** ("either both get a off option or both
+  dont ... keep the reasoning effort level the same for both cli and apis").
+  - Effort: no off setting on either transport; a vendor's API takes its CLI's
+    effort scale and defaults (Codex `ultra` stays CLI-only). Claude API sends
+    adaptive thinking with `output_config.effort`, OpenAI API `reasoning.effort`;
+    32,000 output tokens, 240 s timeout. Supersedes D048's `between_tools`.
+  - Naming: *Claude · CLI/API* and *OpenAI · CLI/API* in the browser, companion,
+    and server messages; Claude Code and Codex only for install/sign-in. Ids
+    and the `…CliReasoningEffort` keys are unchanged.
+  - Settings > Models: **Plan** (Hybrid recommended, Claude only, OpenAI only)
+    and per-vendor **CLI/API** controls rewrite every affected stage once,
+    including Application questions; their state is derived from the rows,
+    never persisted. Hybrid is the fresh/reset default.
+  - [USER+CODE] Catalog: current models only (Claude Fable 5.1, Opus 5.5,
+    Sonnet 5.5, Haiku 5.5; GPT-6 Astra, GPT-6.1 Sol, GPT-6 Luna) on both
+    transports; removed ids repair to a same-tier successor before strict
+    validation; the OpenAI API default is GPT-6.1 Sol.
+  - [USER] Single-vendor plans were to be benchmarked on budget models until
+    usage ran out, then shipped as best guesses; results are in
+    `apps/role-fit-ai/docs/engineering/benchmarks.md`.
+  - [TOOL] Live Claude API smoke passed: Fable 5.1, Opus 5.5, Sonnet 5.5, and
+    Haiku 5.5 at Low and Max through this branch's companion (one synthetic
+    Job analysis each). UNCONFIRMED: the OpenAI API body live (no credits),
+    including `xhigh`/`max` on Astra and Luna.
 
 ### Tracker, storage, and workspace
 

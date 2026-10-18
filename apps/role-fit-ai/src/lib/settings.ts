@@ -1,6 +1,6 @@
 import { cliReasoningEffortOptionsByProvider, reconcileCliReasoningEffort } from "../../shared/cliReasoning.ts";
 import type { AiProviderValue } from "../config/aiOptions.ts";
-import { modelOptionsByProvider, providerOptions } from "../config/aiOptions.ts";
+import { modelOptionsByProvider, providerOptions, retiredModelSuccessors } from "../config/aiOptions.ts";
 import { AI_STAGES, stageSettingsKeys, type AiStageId } from "../config/aiStages.ts";
 import { stageDefault } from "./stageSettings.ts";
 import { FIT_ASSESSMENT_VERDICTS } from "../../shared/fitAssessmentContract.ts";
@@ -190,15 +190,16 @@ function migrateProviderSettings(source: Record<string, unknown>): Record<string
   for (const [providerKey, modelKey, effortKey] of STAGE_FIELD_GROUPS) {
     const provider = migrated[providerKey];
     const storedModel = migrated[modelKey];
-    if (provider !== "codex-cli" && provider !== "claude-cli") continue;
+    if (typeof provider !== "string" || !validProviders.has(provider)) continue;
     if (typeof storedModel !== "string") continue;
     let model = storedModel;
-    if (provider === "codex-cli" && ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.3-codex-spark"].includes(model)) {
-      model = providerOptions.find((option) => option.value === provider)!.model;
+    const successor = retiredModelSuccessors[model];
+    if (successor && modelOptionsByProvider[provider as AiProviderValue].some((option) => option.value === successor)) {
+      model = successor;
       migrated[modelKey] = model;
     }
     const effort = migrated[effortKey];
-    if (modelOptionsByProvider[provider].some((option) => option.value === model)
+    if (modelOptionsByProvider[provider as AiProviderValue].some((option) => option.value === model)
       && typeof effort === "string"
       && (effort === "" || cliReasoningEffortOptionsByProvider[provider]?.some((option) => option.value === effort))) {
       migrated[effortKey] = reconcileCliReasoningEffort(provider, model, effort);

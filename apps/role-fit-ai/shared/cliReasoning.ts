@@ -1,53 +1,46 @@
 type EffortOption = { value: string; label: string };
 
+const EFFORT_LEVELS: readonly EffortOption[] = [
+  { value: "low", label: "Low" },
+  { value: "medium", label: "Medium" },
+  { value: "high", label: "High" },
+  { value: "xhigh", label: "Extra high" },
+  { value: "max", label: "Max" }
+];
+
+// One effort scale per vendor, shared by its CLI and API. Codex's `ultra` is a
+// CLI orchestration mode with no API equivalent, so only the CLI lists it.
 export const cliReasoningEffortOptionsByProvider: Partial<Record<string, readonly EffortOption[]>> = {
-  // CLI effort is distinct from API effort and includes Codex orchestration modes.
-  "claude-cli": [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "Extra high" },
-    { value: "max", label: "Max" }
-  ],
-  "codex-cli": [
-    { value: "low", label: "Low" },
-    { value: "medium", label: "Medium" },
-    { value: "high", label: "High" },
-    { value: "xhigh", label: "Extra high" },
-    { value: "max", label: "Max" },
-    { value: "ultra", label: "Ultra" }
-  ]
+  "claude-cli": EFFORT_LEVELS,
+  anthropic: EFFORT_LEVELS,
+  "codex-cli": [...EFFORT_LEVELS, { value: "ultra", label: "Ultra" }],
+  openai: EFFORT_LEVELS
 };
 
-// Provider-reported capabilities, verified 2026-09-27 and 2026-09-30; sources
-// live in ai-server.md.
+const OPENAI_FULL_RANGE_MODELS: ReadonlySet<string> = new Set(["gpt-6-astra", "gpt-6.1-sol"]);
+
+// Provider-reported capabilities, verified 2026-10-18 (Claude Code 2.1.285,
+// Codex catalog 0.159.2, Claude and OpenAI API docs); sources live in ai-server.md.
 export function cliReasoningEffortOptionsFor(
   provider: string,
   model: string
 ): readonly EffortOption[] | undefined {
-  if (provider === "codex-cli") {
-    const all = cliReasoningEffortOptionsByProvider["codex-cli"] ?? [];
-    if (["gpt-6-astra", "gpt-6.1-sol", "gpt-6-sol", "gpt-5.6-sol", "gpt-5.6-terra"].includes(model)) return all;
-    if (model === "gpt-6-luna" || model === "gpt-5.6-luna") {
-      return all.filter((option) => option.value !== "ultra");
+  const all = cliReasoningEffortOptionsByProvider[provider];
+  if (!all) return undefined;
+  if (provider === "codex-cli" || provider === "openai") {
+    // An unlisted OpenAI model gets the conservative range; GPT-6 Luna stops at max.
+    if (!OPENAI_FULL_RANGE_MODELS.has(model) && model !== "gpt-6-luna") {
+      return EFFORT_LEVELS.filter((option) => option.value !== "max");
     }
-    return all.filter((option) => option.value !== "max" && option.value !== "ultra");
+    if (model === "gpt-6-luna") return EFFORT_LEVELS;
   }
-  if (provider === "claude-cli") {
-    if (model === "claude-haiku-4-5" || model === "claude-haiku-4-5-20251001") return [];
-    const all = cliReasoningEffortOptionsByProvider["claude-cli"] ?? [];
-    if (model === "claude-opus-4-6" || model === "claude-sonnet-4-6") {
-      return all.filter((option) => option.value !== "xhigh");
-    }
-    return all;
-  }
-  return undefined;
+  return all;
 }
 
 // Preserve RoleFit's bounded-work defaults when a supported effort is missing.
 export function defaultCliReasoningEffort(provider: string): string {
-  if (provider === "claude-cli") return "low";
-  if (provider === "codex-cli") return "medium";
+  if (provider === "claude-cli" || provider === "anthropic") return "low";
+  if (provider === "codex-cli" || provider === "openai") return "medium";
   return "";
 }
 

@@ -10,7 +10,11 @@ import { parseAiJson } from "./json.ts";
 import { providerLabel } from "./providers.ts";
 import { readProviderUsage, recordProviderUsage, type UsageSink } from "./providerUsage.ts";
 
-const OUTPUT_TOKEN_LIMIT = 8192;
+// API thinking/reasoning tokens share this budget with the JSON reply, so it
+// leaves room for the highest effort; billing counts only what is generated.
+const OUTPUT_TOKEN_LIMIT = 32_000;
+// Matches the CLI request timeout so an effort runs as long on either transport.
+const API_TIMEOUT_MS = 240_000;
 const MAX_PROVIDER_RESPONSE_BYTES = 2_000_000;
 
 // The built prompt pair + resolved provider config dispatched to one provider.
@@ -157,7 +161,7 @@ function assertNotTruncated(provider: string, truncated: unknown): void {
 // Pure request-body seam for deterministic privacy/shape probes. OpenAI's
 // Responses API stores responses by default unless `store:false` is explicit;
 // resume and job text are sensitive, so every call opts out.
-export function buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }: ProviderCallArgs) {
+export function buildOpenAiResponsesBody({ model, reasoningEffort, systemPrompt, userPrompt }: ProviderCallArgs) {
   return {
     model,
     instructions: systemPrompt,
@@ -171,12 +175,13 @@ export function buildOpenAiResponsesBody({ model, systemPrompt, userPrompt }: Pr
     ],
     text: { format: { type: "json_object" } },
     max_output_tokens: OUTPUT_TOKEN_LIMIT,
+    ...(reasoningEffort ? { reasoning: { effort: reasoningEffort } } : {}),
     store: false
   };
 }
 
 export async function callOpenAiResponsesWithFetch(
-  { apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs,
+  { apiKey, model, reasoningEffort, systemPrompt, userPrompt, signal }: ProviderCallArgs,
   request: typeof fetchWithTimeout = fetchWithTimeout,
   sink?: UsageSink
 ): Promise<unknown> {
@@ -186,9 +191,9 @@ export async function callOpenAiResponsesWithFetch(
       "Content-Type": "application/json",
       Authorization: `Bearer ${apiKey}`
     },
-    body: JSON.stringify(buildOpenAiResponsesBody({ model, systemPrompt, userPrompt })),
+    body: JSON.stringify(buildOpenAiResponsesBody({ model, reasoningEffort, systemPrompt, userPrompt })),
     signal
-  });
+  }, API_TIMEOUT_MS);
 
   const data: any = await readProviderJson(response);
   if (!response.ok) {
@@ -200,43 +205,23 @@ export async function callOpenAiResponsesWithFetch(
   return parseAiJson(extractOutputText(data));
 }
 
-// Preserve bounded no-thinking requests for Sonnet 5 and Opus 5.
-// Fable and Opus 5.5 reject a disable; older Opus defaults thinking off.
-const EXPLICIT_NO_THINKING_MODELS: ReadonlySet<string> = new Set([
-  "claude-sonnet-5",
-  "claude-opus-5"
-]);
-// Sonnet 5.5 rejects `disabled`; `between_tools` is its lowest setting and is
-// accepted at its default high effort.
-const BETWEEN_TOOLS_THINKING_MODELS: ReadonlySet<string> = new Set(["claude-sonnet-5-5"]);
-const BOUNDED_ADAPTIVE_THINKING_MODELS: ReadonlySet<string> = new Set([
-  "claude-fable-5",
-  "claude-fable-5-1",
-  "claude-opus-5-5"
-]);
-
-export function buildAnthropicMessagesBody({ model, systemPrompt, userPrompt }: ProviderCallArgs) {
+// Adaptive thinking at the stage's effort, the same setting Claude Code's
+// `--effort` applies; every offered Claude model accepts it.
+export function buildAnthropicMessagesBody({ model, reasoningEffort, systemPrompt, userPrompt }: ProviderCallArgs) {
   return {
     model,
     max_tokens: OUTPUT_TOKEN_LIMIT,
     system: systemPrompt,
     messages: [{ role: "user", content: userPrompt }],
-    // Opus 5 permits a disable at its default high effort; xhigh/max reject it.
-    ...(EXPLICIT_NO_THINKING_MODELS.has(model) ? { thinking: { type: "disabled" } } : {}),
-    ...(BETWEEN_TOOLS_THINKING_MODELS.has(model) ? { thinking: { type: "between_tools" } } : {}),
-    // Always-on thinking shares the output budget with JSON; keep effort bounded.
-    ...(BOUNDED_ADAPTIVE_THINKING_MODELS.has(model)
-      ? { output_config: { effort: "low" } }
-      : {})
+    thinking: { type: "adaptive" },
+    ...(reasoningEffort ? { output_config: { effort: reasoningEffort } } : {})
   };
 }
 
-async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
-  // No `temperature` and no trailing assistant prefill: both return a 400 on the
-  // current Anthropic models this app offers — `temperature` is removed on Opus
-  // 4.7/4.8, and a last-assistant-turn prefill is rejected on Sonnet 4.6 and
-  // Opus 4.6+. The system + user prompts already require strict JSON, and
-  // parseAiJson extracts the object from the reply (fenced/prose-wrapped/raw).
+async function callAnthropicMessages({ apiKey, model, reasoningEffort, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
+  // No `temperature` and no trailing assistant prefill: every offered Claude
+  // model rejects both. The prompts require strict JSON, and parseAiJson
+  // extracts the object from the reply (fenced/prose-wrapped/raw).
   const response = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
     method: "POST",
     headers: {
@@ -244,9 +229,9 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, 
       "x-api-key": apiKey,
       "anthropic-version": "2023-06-01"
     },
-    body: JSON.stringify(buildAnthropicMessagesBody({ model, systemPrompt, userPrompt })),
+    body: JSON.stringify(buildAnthropicMessagesBody({ model, reasoningEffort, systemPrompt, userPrompt })),
     signal
-  });
+  }, API_TIMEOUT_MS);
 
   const data: any = await readProviderJson(response);
   if (!response.ok) {
@@ -261,8 +246,8 @@ async function callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, 
 async function dispatchProvider({ provider, model, reasoningEffort, apiKey, systemPrompt, userPrompt, signal }: ProviderCallArgs, sink?: UsageSink): Promise<unknown> {
   if (provider === "claude-cli") return parseAiJson(await callClaudeCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
   if (provider === "codex-cli") return parseAiJson(await callCodexCli({ model, reasoningEffort, systemPrompt, userPrompt, signal }, sink));
-  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, systemPrompt, userPrompt, signal }, sink);
-  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, systemPrompt, userPrompt, signal }, fetchWithTimeout, sink);
+  if (provider === "anthropic") return callAnthropicMessages({ apiKey, model, reasoningEffort, systemPrompt, userPrompt, signal }, sink);
+  if (provider === "openai") return callOpenAiResponsesWithFetch({ apiKey, model, reasoningEffort, systemPrompt, userPrompt, signal }, fetchWithTimeout, sink);
   throw new UserSafeAiError("Unsupported AI provider. Pick one of the configured CLI or API providers.", 400);
 }
 

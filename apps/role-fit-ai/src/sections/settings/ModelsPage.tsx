@@ -1,9 +1,10 @@
 import { AI_STAGES } from "../../config/aiStages";
 import { SettingsStage } from "../SettingsStage";
+import { ProviderPlanControls } from "./ProviderPlanControls";
 import type { SettingsDialogProps } from "../SettingsDialog";
 
 type ModelsPageProps = Pick<SettingsDialogProps,
-  | "stages" | "onStageChange" | "onStageProviderChange" | "onCopyStage"
+  | "stages" | "onStageChange" | "onStageProviderChange" | "onCopyStage" | "onApplyPlan" | "onSwitchTransport"
   | "providers" | "availabilityStatus" | "availabilityMessage" | "onRefreshProviders"
 >;
 
@@ -12,6 +13,8 @@ export function ModelsPage({
   onStageChange,
   onStageProviderChange,
   onCopyStage,
+  onApplyPlan,
+  onSwitchTransport,
   providers,
   availabilityStatus,
   availabilityMessage,
@@ -23,6 +26,14 @@ export function ModelsPage({
         Each stage runs on its own provider and model. Add providers in RoleFit Companion; your API
         keys never reach the browser.
       </p>
+
+      <ProviderPlanControls
+        stages={stages}
+        providers={providers}
+        availabilityStatus={availabilityStatus}
+        onApplyPlan={onApplyPlan}
+        onSwitchTransport={onSwitchTransport}
+      />
 
       <div className="settings-stages">
         {/* Column heads once, for every row's unlabelled selects. */}

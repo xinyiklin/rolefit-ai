@@ -317,46 +317,6 @@
   gap: var(--s2) var(--s3);
 }
 
-/* Two pressed-state buttons sharing one hairline, not a tab strip. */
-.profile-notes__views {
-  display: inline-flex;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--r-md);
-  overflow: hidden;
-}
-
-.profile-notes__view {
-  min-height: 26px;
-  padding: 0 var(--s3);
-  color: var(--ink-soft);
-  background: transparent;
-  border: 0;
-  font-family: var(--font-ui);
-  font-size: 0.74rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: color 140ms var(--ease), background 140ms var(--ease);
-}
-
-.profile-notes__view + .profile-notes__view {
-  border-left: 1px solid var(--hairline-strong);
-}
-
-.profile-notes__view:hover {
-  color: var(--ink);
-  background: var(--card-hover);
-}
-
-.profile-notes__view[aria-pressed="true"] {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-}
-
-.profile-notes__view:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
-}
-
 .profile-notes__coverage {
   color: var(--ink-faint);
   font-size: 0.72rem;
@@ -711,6 +671,96 @@
   margin: 0;
   color: var(--ink-soft);
   font-size: 0.76rem;
+}
+
+/* -------- Models: plan and per-vendor transport -------- */
+
+.settings-plan {
+  display: grid;
+  gap: var(--s2);
+  margin-bottom: var(--s2);
+}
+
+.settings-plan__row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2) var(--s3);
+}
+
+/* Narrow panels shrink the strip and wrap long choices inside their button
+   rather than wrapping buttons onto a second line. */
+.settings-plan__row .settings-segment {
+  min-width: 0;
+}
+
+.settings-plan__row .settings-segment__option {
+  flex: 0 1 auto;
+  min-width: 0;
+  padding-block: 3px;
+  line-height: 1.2;
+}
+
+.settings-plan__label {
+  flex: 0 0 64px;
+  color: var(--ink-strong);
+  font-size: 0.78rem;
+  font-weight: 620;
+}
+
+.settings-plan__state,
+.settings-plan__note {
+  color: var(--ink-faint);
+  font-size: 0.7rem;
+}
+
+.settings-plan__note {
+  margin: 0;
+}
+
+/* Pressed-state buttons sharing one hairline, not a tab strip (Profile notes
+   view switch, Models plan and transport). */
+.settings-segment {
+  display: inline-flex;
+  border: 1px solid var(--hairline-strong);
+  border-radius: var(--r-md);
+  overflow: hidden;
+}
+
+.settings-segment__option {
+  min-height: 26px;
+  padding: 0 var(--s3);
+  color: var(--ink-soft);
+  background: transparent;
+  border: 0;
+  font-family: var(--font-ui);
+  font-size: 0.74rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: color 140ms var(--ease), background 140ms var(--ease);
+}
+
+.settings-segment__option + .settings-segment__option {
+  border-left: 1px solid var(--hairline-strong);
+}
+
+.settings-segment__option:hover:where(:not([aria-disabled="true"])) {
+  color: var(--ink);
+  background: var(--card-hover);
+}
+
+.settings-segment__option[aria-pressed="true"] {
+  color: var(--accent-deep);
+  background: var(--accent-soft);
+}
+
+.settings-segment__option[aria-disabled="true"] {
+  color: var(--ink-faint);
+  cursor: not-allowed;
+}
+
+.settings-segment__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 
 /* -------- Models: one row per stage -------- */

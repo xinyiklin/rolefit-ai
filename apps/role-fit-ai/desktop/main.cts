@@ -605,6 +605,8 @@ function apiProviderConnection(
   });
 }
 
+const CLI_PROVIDER_NAMES = Object.freeze({ "claude-cli": "Claude · CLI", "codex-cli": "OpenAI · CLI" } as const);
+
 function cliProviderConnection(
   status: RoleFitCliProviderStatus,
   configured: boolean,
@@ -612,12 +614,14 @@ function cliProviderConnection(
 ): RoleFitProviderConnection {
   const ready = configured && managedServer && status.installed && status.authState === "signed-in";
   let guidance = status.guidance;
+  // Provider names match the browser's; the product name stays for install steps.
+  const name = CLI_PROVIDER_NAMES[status.id];
   if (!configured) {
     guidance = status.installed
-      ? `Add ${status.label} to RoleFit. Its provider-owned sign-in stays outside RoleFit.`
+      ? `Add ${name} to RoleFit. Its provider-owned sign-in stays outside RoleFit.`
       : `Install ${status.label}, then add it to RoleFit.`;
   } else if (!managedServer) {
-    guidance = `Restart RoleFit and let this companion start the local service to use ${status.label}.`;
+    guidance = `Restart RoleFit and let this companion start the local service to use ${name}.`;
   }
   return Object.freeze({
     id: status.id,

@@ -574,14 +574,32 @@ hosted API key (`getDefaultProvider()` in `server/ai/providers.ts`). Setting
 `AI_PROVIDER` supplies that headless fallback. A non-empty, unrecognized
 `AI_PROVIDER` is a fail-fast configuration error; it does not silently select
 OpenAI. When OpenAI is selected explicitly, its model comes from
-`OPENAI_MODEL` (`gpt-5.6-terra` default). The other account-backed CLI (Codex
+`OPENAI_MODEL` (`gpt-6.1-sol` default). The other account-backed CLI (Codex
 CLI) is a similar path for its vendor. Both avoid a separate metered API key in
 RoleFit, but access and usage limits remain governed by the installed CLI and
 signed-in provider account. This default is a standalone/headless request
 fallback, not permission for the browser to show or select an unconfigured
 provider.
 
-### Model catalog receipt — 2026-09-30
+### Model catalog receipt — 2026-10-18
+
+Catalogs now list only current models, the same on each vendor's CLI and API:
+Claude Fable 5.1, Opus 5.5, Sonnet 5.5, and Haiku 5.5 (new); OpenAI GPT-6
+Astra, GPT-6.1 Sol, and GPT-6 Luna. Removed: Claude Fable 5, Opus 5/4.8/4.7/4.6,
+Sonnet 5/4.6, Haiku 4.5; OpenAI GPT-6 Sol and GPT-5.6 Sol/Terra/Luna. Saved
+selections repair to the same-tier successor (`retiredModelSuccessors` in
+`src/config/aiOptions.ts`) before strict workspace/backup validation, keeping a
+supported effort. The OpenAI API default moves from GPT-5.6 Terra to GPT-6.1
+Sol.
+
+Evidence: Codex catalog 0.159.2 (`codex debug models`, 2026-10-18) lists GPT-6.1
+Sol, Astra, and Luna as current (`supported_in_api: true`) and describes GPT-6
+Sol and GPT-5.6 as previous/older generations; Luna stops at Max. Claude Code
+2.1.285 ran `claude-haiku-5-5` at Low and Max (it prints an unrecognized-model
+notice on stderr; 2.1.302 is current). The OpenAI latest-model guide documents
+GPT-6.1 Sol's Low through Max API efforts.
+
+### Model catalog receipt — 2026-09-30 (catalog and API thinking superseded 2026-10-18)
 
 GPT-6.1 Sol (`gpt-6.1-sol`) joins Codex and OpenAI API, and Claude Sonnet 5.5
 (`claude-sonnet-5-5`, released 2026-09-28) joins Claude CLI and API. They become
@@ -676,20 +694,30 @@ Per-provider rules:
   command-line limit. Its saved stage selections repair to the stage default
   before strict validation, and model names no longer accept the spaces and
   parentheses of its old display names.
-- **OpenAI API** uses the Responses API with `store:false` and native JSON mode.
-  The catalog includes GPT-6 Astra, GPT-6.1 Sol, GPT-6 Sol/Luna, and GPT-5.6
-  Sol/Terra/Luna; the balanced default remains `gpt-5.6-terra`.
-- **Claude API** uses Anthropic Messages. The call sends no `temperature` and no
-  trailing assistant prefill because current Claude models reject those patterns.
-  JSON is enforced by the strict-output prompt plus `parseAiJson`. The current
-  catalog includes Fable 5.1, Opus 5.5, and Sonnet 5.5 (the default) alongside
-  Fable 5, Opus 5, Sonnet 5, Haiku 4.5, and Opus 4.8. Sonnet 5 and Opus 5 default
-  to adaptive thinking, so this bounded JSON workflow disables it explicitly.
-  Sonnet 5.5 rejects a disable, so it sends `between_tools`, its lowest
-  setting, at the default effort. Fable 5/5.1 and Opus 5.5
-  require adaptive thinking; their requests use low effort to leave room for
-  JSON in the shared reasoning/output budget. Actual model quality and token
-  consumption require separately authorized live evaluation.
+- **API effort parity (2026-10-18).** A vendor's API offers the same models and
+  effort scale as its CLI (`shared/cliReasoning.ts`), and every API request
+  carries the stage's effort (a headless API request without one takes
+  RoleFit's vendor default, Low or Medium; a headless CLI request without one
+  leaves the CLI's own default); there is no off setting on either
+  transport. A headless `ANTHROPIC_MODEL` must accept adaptive thinking.
+  Thinking/reasoning shares a 32,000-token output budget with the JSON reply,
+  and API calls time out after 240 seconds, the CLI default. Codex `ultra` is
+  CLI-only; an unlisted OpenAI model gets Low through Extra high.
+- **OpenAI API** uses the Responses API with `store:false`, native JSON mode,
+  and `reasoning.effort`. Models: GPT-6 Astra, GPT-6.1 Sol (default), GPT-6
+  Luna. OpenAI documents Low through Max for GPT-6.1 Sol; Astra's and Luna's API
+  levels follow the Codex catalog, which marks them API-supported, and are not
+  yet confirmed by a live API call.
+- **Claude API** uses Anthropic Messages with `thinking: {type: "adaptive"}`
+  and `output_config.effort`, the request equivalent of Claude Code's
+  `--effort`. It sends no `temperature` and no trailing assistant prefill,
+  which every offered model rejects. JSON is enforced by the strict-output
+  prompt plus `parseAiJson`. Models: Fable 5.1, Opus 5.5, Sonnet 5.5 (default),
+  Haiku 5.5. Live smoke 2026-10-18 (user-authorized, this branch's companion
+  with its vault key, synthetic posting, `/api/job-analysis`): all four models
+  at Low and Max returned an AI brief on the first attempt (Low 1.4–6.9 s, Max
+  17–46 s; Opus 5.5 Max was slowest). Cost was not reported by the route. The
+  OpenAI API body was not run live (no API credits).
 - Managed browser requests accept provider/model/effort identifiers only. The
   server resolves an OpenAI/Claude key from the companion-owned in-memory
   credential snapshot immediately before dispatch; there is no browser
