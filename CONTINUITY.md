@@ -77,10 +77,12 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] **Letter Blank/Starter reset and title** (D084): both reset
-  a customized letter style to the defaults and take the resume's title
-  retargeted (`..._Cover_Letter`). Engine/RoleFit/Typeset checks passed;
-  browser QA not run.
+- [USER+CODE+TOOL] **Letter Blank/Starter reset** (D084): both reset a
+  customized letter style to the defaults. **Titles follow identity** (D085,
+  supersedes D084's title): each title tracks its own header name + company
+  until the user renames it (Starter `Your_Name_Resume`; typing a name
+  retitles). **Both Starters on a new session** (D086). RoleFit check passed;
+  browser QA passed (user and agent, worktree server).
 - [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
   D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
   default per role for both documents; Styles adds Name and Body rows; letters

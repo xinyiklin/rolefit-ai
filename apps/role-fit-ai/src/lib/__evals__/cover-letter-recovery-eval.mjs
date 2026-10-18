@@ -59,6 +59,17 @@ assert.match(
   /return \{[\s\S]{0,350}?dirty,[\s\S]{0,80}?recoveryDirty,/,
   "the editor exposes the canonical title-inclusive dirty value"
 );
+assert.match(app, /const titleCompany = titleCompanyRef\.current;/, "titles follow the prepared company only");
+assert.doesNotMatch(
+  app,
+  /titleCompanyRef\.current = \(?jobTracking/,
+  "a draft edit to the job source (re-parsed jobTracking) never retitles documents"
+);
+assert.match(
+  editorHook,
+  /if \(startup\.fileName\) \{[\s\S]{0,700}?\} else \{[\s\S]{0,300}?starterCoverLetterData\(\);\s*openDocument\(data, true\);\s*editor\.markClean\(\);\s*commitPersistenceBaseline\(/,
+  "with no saved letter a new session opens a clean Starter, as the resume does"
+);
 assert.match(
   autosaveHook,
   /recoveryDirty: boolean[\s\S]{0,650}?shouldSave: payload !== null && recoveryDirty/,
