@@ -77,12 +77,19 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] **New letters take the resume defaults** (D081): Cover
-  Blank/Starter reset to Latin Modern 10 pt, 1.18, 0.5 in margins and take the
-  resume's title retargeted (`..._Cover_Letter`). Engine and RoleFit checks
-  passed (pdf-roundtrip fixture lengthened to stay multi-page); browser QA not
-  run. Open: `isStyleDefault` key-order compare is always false (pre-existing).
-- [CODE] Whole-row/whole-document size and font fix merged as #237 (archived).
+- [USER+CODE+TOOL] **Letter Blank/Starter reset and title** (D083): both reset
+  a customized letter style to the defaults and take the resume's title
+  retargeted (`..._Cover_Letter`). Engine/RoleFit/Typeset checks passed;
+  browser QA not run.
+- [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
+  D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
+  default per role for both documents; Styles adds Name and Body rows; letters
+  share the resume's keys, defaults, header behavior, and alignment; alignment
+  never moves line breaks. Parsers convert retired keys; 398 workspace files
+  rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
+  letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+- [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
+  row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
 
 ## 2026-10-17
 
@@ -122,20 +129,6 @@ extension 1.4.0, desktop bridge API 13. Release history:
   landing fact strip to "2 CLIs + 2 APIs".
   - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
     UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
-- [USER+CODE+TOOL] **Literal tag text** (D079): `<lt>` is a literal `<`
-  written only where a raw `<` would start a tag, so typed or pasted `<b>`,
-  `<size=12>`, or `<link=…>` stays text in both apps; merges and whole-field
-  style changes keep it; screen, PDF text, copy-out, and the PDF Title decode
-  it. The Polish markup gate now rejects every grammar tag except b/i/u and
-  `<lt>`, closing a hidden-link bypass (also an older `<link=…<b>` variant).
-  - [TOOL] Engine, editor, Typeset, and RoleFit checks passed (183/183);
-    in-app browser QA in both apps (typing, Enter/Backspace, paste, Styles);
-    two mb-verifier reviews READY after three rounds. Headless Chrome
-    contracts could not start on this Windows machine (Chrome refused the CDP
-    attach; Edge failed to start); Document CI runs them.
-  - [USER] Deferred: the RoleFit proposal Edit box still edits raw grammar.
-    Limits: Final review evidence and cover-letter AI output read decoded text
-    back as grammar; PDF import excludes tag-shaped source text.
 - [USER+CODE] **0.16.0 prepared** (minor: Antigravity removed, GPT-5.5
   retired; the user asked for the preview). Since
   `rolefit-preview-v0.15.0-beta.1`: #230-#233, GPT-5.5 retirement (D076),

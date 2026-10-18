@@ -2,6 +2,7 @@
 // page fit, title/subtitle clearance under an underline, and title line height.
 import assert from "node:assert/strict";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
+import { TEXT_SIZES_PT } from "../../lib/documentTypography.ts";
 import { FONT_FAMILY_IDS } from "../../lib/fontFamilies.ts";
 import { layoutCoverLetter, layoutResume } from "../layout.ts";
 import { inkExtent, underlineRule, underlineSpans } from "../measure.ts";
@@ -49,11 +50,12 @@ console.log("page fit is independent of typed glyphs");
 
 // 2. An underlined title's rule stays clear of the subtitle's ink at the most
 //    negative title/subtitle gap, at every size the rule can take.
-for (const baseFontSizePt of [10, 12]) {
+for (const subtitleSizePt of [10, 12]) {
   for (const titleLeft of ["<u>Title</u>", "<u><size=16>Title</size></u>", "<link=https%3A%2F%2Fexample.com>Title</link>"]) {
     for (const family of FONT_FAMILY_IDS) {
-      const style = { ...DOC_STYLE_DEFAULTS, fontFamily: family, baseFontSizePt, titleSubGapPt: -6 };
-      const doc = layoutResume(resume("standard", "Experience", [entry({ titleLeft, subtitleLeft: "Subtitle Ltd" })]), style);
+      const style = { ...DOC_STYLE_DEFAULTS, fontFamily: family, titleSubGapPt: -6 };
+      const subtitleLeft = subtitleSizePt === 10 ? "Subtitle Ltd" : `<size=${subtitleSizePt}>Subtitle Ltd</size>`;
+      const doc = layoutResume(resume("standard", "Experience", [entry({ titleLeft, subtitleLeft })]), style);
       const title = fieldLine(doc, "titleLeft");
       const subtitle = fieldLine(doc, "subtitleLeft");
       const spans = underlineSpans(title.runs);
@@ -64,8 +66,8 @@ for (const baseFontSizePt of [10, 12]) {
       }));
       const subtitleInkTop = subtitle.baseline - Math.max(...subtitle.runs.map((run) => inkExtent(run.text, run.style).height));
       assert.ok(
-        subtitleInkTop - ruleBottom >= 0.3 * (baseFontSizePt / 10) - 1e-9,
-        `${family} ${baseFontSizePt}pt ${titleLeft}: subtitle ink overlaps the title rule by ${(ruleBottom - subtitleInkTop).toFixed(2)}bp`
+        subtitleInkTop - ruleBottom >= 0.3 * (subtitleSizePt / 10) - 1e-9,
+        `${family} ${subtitleSizePt}pt subtitle ${titleLeft}: subtitle ink overlaps the title rule by ${(ruleBottom - subtitleInkTop).toFixed(2)}bp`
       );
     }
   }
@@ -79,7 +81,7 @@ for (const family of FONT_FAMILY_IDS) {
   const subtitle = fieldLine(doc, "subtitleLeft");
   assert.ok(title.runs.some((run) => run.href), "fixture title carries a link");
   const ink = (runs, key) => Math.max(...runs.map((run) => inkExtent(run.text, run.style)[key]));
-  const spaced = style.baseFontSizePt * style.lineHeight + style.titleSubGapPt;
+  const spaced = TEXT_SIZES_PT.subtitleLeft * style.lineHeight + style.titleSubGapPt;
   const oldFloor = ink(title.runs, "depth") + 2.04 + ink(subtitle.runs, "height") + 0.3;
   assert.ok(
     Math.abs(subtitle.baseline - title.baseline - Math.max(spaced, oldFloor)) < 1e-9,

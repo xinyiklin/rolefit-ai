@@ -13,7 +13,10 @@ let cases = 0;
 for (const fontFamily of FONT_FAMILY_IDS) {
   for (const kind of ['resume', 'cover']) {
     for (const field of ['name', 'contact']) {
-      for (const format of [text => text, text => `<size=40>${text}</size>`, text => `Fixed <font=arimo><size=32>${text}</size></font>`]) {
+      // A name is bold by default and an empty one is painted bold, so the plain
+      // variant of a name is its default bold.
+      const plain = field === 'name' ? text => (text ? `<b>${text}</b>` : '') : text => text;
+      for (const format of [plain, text => `<size=40>${text}</size>`, text => `Fixed <font=arimo><size=32>${text}</size></font>`]) {
         let expected;
         for (const value of samples) {
           if (!value && format(value)) continue; // Empty inline marks do not retain a styled text run.

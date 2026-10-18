@@ -38,6 +38,15 @@ export function faceFor(bold: boolean, italic: boolean): FaceName {
   return "regular";
 }
 
+// A field-wide face rule: one fixed face (small-caps headings), or "display",
+// which sets the name's bold upright runs in the family's display bold.
+export type FaceOverride = FaceName | "display";
+
+export function faceForOverride(bold: boolean, italic: boolean, override?: FaceOverride): FaceName {
+  if (override === "display") return bold && !italic ? "boldDisplay" : faceFor(bold, italic);
+  return override ?? faceFor(bold, italic);
+}
+
 // Display punctuation transformations shared by measurement and painting.
 export function texLigatures(text: string): string {
   return text.replace(/---/g, "—").replace(/--/g, "–").replace(/'/g, "’");
@@ -283,7 +292,7 @@ export function paragraphItems(
   sizeBp: number,
   family: DocumentFontFamily,
   tracking: number,
-  faceOverride?: FaceName
+  faceOverride?: FaceOverride
 ): ParaItem[] {
   const items: ParaItem[] = [];
   const segments = segmentsFromInlineMarks(value);
@@ -316,7 +325,7 @@ export function paragraphItems(
   for (const seg of segments) {
     const style: FontStyle = {
       family: seg.fontFamily ?? family,
-      face: faceOverride ?? faceFor(seg.bold, seg.italic),
+      face: faceForOverride(seg.bold, seg.italic, faceOverride),
       size: seg.fontSizePt ?? sizeBp,
       tracking
     };

@@ -9,6 +9,7 @@ import { DOC_STYLE_DEFAULTS, toDocumentStyle } from "@typeset/engine/lib/documen
 import { stripInlineMarks } from "@typeset/engine/lib/inlineMarksText.ts";
 import { newBullet, newEntry, newSection, newSkillEntry, newSummaryEntry } from "@typeset/engine/lib/resumeData.ts";
 import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
+import { applyImportedBodySize } from "../../importStyle.ts";
 import { parseFieldKey } from "@typeset/engine/typeset/types.ts";
 import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutResume } from "@typeset/engine/typeset/layout.ts";
@@ -82,9 +83,9 @@ export const engineFixtures = [
   { name: "engine/starter-latin-modern", data: buildStarterResume(), style: {} },
   { name: "engine/rich-tinos-uppercase", data: richResume(), style: { fontFamily: "tinos", headingCase: "uppercase", headerAlign: "left", sectionRule: false } },
   { name: "engine/rich-carlito-normal-margins", data: richResume(), style: { fontFamily: "carlito", headingCase: "none", pageMarginLeftPt: 72, pageMarginRightPt: 72, pageMarginTopPt: 72, pageMarginBottomPt: 72 } },
-  { name: "engine/rich-arimo-11pt", data: richResume(), style: { fontFamily: "arimo", baseFontSizePt: 11, headerAlign: "right", headingCase: "uppercase" } },
+  { name: "engine/rich-arimo-11pt", data: applyImportedBodySize(richResume(), 11), bodySizePt: 11, style: { fontFamily: "arimo", headerAlign: "right", headingCase: "uppercase" } },
   { name: "engine/rich-source-serif", data: richResume(), style: { fontFamily: "source-serif", headingCase: "none", sectionRule: true } },
-  { name: "engine/rich-source-sans-9pt", data: richResume(), style: { fontFamily: "source-sans", baseFontSizePt: 9, headingCase: "smallcaps" } },
+  { name: "engine/rich-source-sans-9pt", data: applyImportedBodySize(richResume(), 9), bodySizePt: 9, style: { fontFamily: "source-sans", headingCase: "smallcaps" } },
   { name: "engine/long-two-pages", data: longResume(), style: { fontFamily: "latin-modern" } }
 ];
 

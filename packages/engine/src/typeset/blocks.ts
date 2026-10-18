@@ -9,24 +9,32 @@
 
 import { documentFontFamily, type DocumentFontFamily } from "./fontRegistry.ts";
 import type { FieldSrc, FontStyle, GlyphRun, ParagraphAlign } from "./types.ts";
-import type { FaceName } from "./metrics.gen.ts";
-import { fontSizesFor, nameSizePt } from "../lib/documentTypography.ts";
+import {
+  bulletMarkerSizePt,
+  fieldRoleSizePt,
+  rowRoleSizePt,
+  TEXT_SIZES_PT
+} from "../lib/documentTypography.ts";
 import {
   faceExtent,
   faceFor,
+  faceForOverride,
   inkExtent,
   measure,
   paragraphItems,
   segmentsFromInlineMarks,
   texLigatures,
   underlineRule,
-  underlineSpans
+  underlineSpans,
+  type FaceOverride
 } from "./measure.ts";
 import { automaticLinkHref } from "../lib/links.ts";
+import { STYLE_FIELD_MARK_DEFAULTS } from "../lib/styleFieldFormatting.ts";
 import { breakParagraph } from "./linebreak.ts";
 import { wrapHeadRow, wrapSingleField } from "./headRows.ts";
 import {
   alignmentFromInlineMarks,
+  emptyFieldCarrier,
   hasInlineMarkTags,
   paragraphIndentFromInlineMarks,
   paragraphSpacingFromInlineMarks,
@@ -102,6 +110,11 @@ const GAP_PT = {
 } as const;
 
 // ---- Geometry (bp) ----
+// Minimum distance from the top margin to a page's first baseline.
+const FIRST_BASELINE_INSET_PT = 11;
+// Distance from the bullet dot to its text.
+const BULLET_TEXT_GAP_PT = 9.47;
+
 // The page box: margins, the measure, and the first/last baseline limits. A
 // cover letter needs exactly this much geometry.
 export function pageBox(style: PageStyle) {
@@ -111,14 +124,13 @@ export function pageBox(style: PageStyle) {
     bottom: style.pageMarginBottomPt,
     left: style.pageMarginLeftPt
   };
-  const sizes = fontSizesFor(num(style.baseFontSizePt, 10));
   return {
     marginTop: margins.top,
     marginRight: margins.right,
     marginBottom: margins.bottom,
     marginLeft: margins.left,
     textWidth: PAGE_WIDTH_BP - margins.left - margins.right,
-    firstBaselineMin: margins.top + sizes.normalsize, // minimum first-line inset
+    firstBaselineMin: margins.top + FIRST_BASELINE_INSET_PT,
     lastBaselineMax: PAGE_HEIGHT_BP - margins.bottom
   };
 }
@@ -126,8 +138,6 @@ export function pageBox(style: PageStyle) {
 // The page box plus the entry insets only a resume's body uses.
 export function pageGeometry(style: DocumentStyle) {
   const box = pageBox(style);
-  const baseFontSize = num(style.baseFontSizePt, 10);
-  const sizes = fontSizesFor(baseFontSize);
   const entryIndent = num(style.entryIndentPt, DOC_STYLE_DEFAULTS.entryIndentPt);
   const entryEndIndent = num(style.entryEndIndentPt, DOC_STYLE_DEFAULTS.entryEndIndentPt);
   const bulletMarker = entryIndent + num(style.bulletIndentPt, DOC_STYLE_DEFAULTS.bulletIndentPt);
@@ -137,9 +147,7 @@ export function pageGeometry(style: DocumentStyle) {
     entryIndent,
     entryEndIndent,
     bulletMarker,
-    // Text follows the dot at the historical gap (2.2em text inset minus the
-    // default 14.73pt dot offset), so the default reproduces the LaTeX layout.
-    bulletIndent: bulletMarker + 2.2 * sizes.normalsize - DOC_STYLE_DEFAULTS.bulletIndentPt * (baseFontSize / 10),
+    bulletIndent: bulletMarker + BULLET_TEXT_GAP_PT,
     // Start indent moves only the left edge. End indent independently moves the
     // right edge, so changing one never drags the other. The inset applies to
     // the entry's right edge, so every row of the entry keeps it — head rows,
@@ -221,7 +229,8 @@ function boxOverflowOfRuns(runs: GlyphRun[], roleSize: number): { rise: number; 
   let rise = 0;
   let drop = 0;
   for (const run of runs) {
-    if (run.style.size <= roleSize) continue;
+    // An empty field's caret run has no glyphs to overflow with.
+    if (run.style.size <= roleSize || run.text === "") continue;
     const box = faceExtent(run.style);
     const role = faceExtent({ ...run.style, size: roleSize });
     rise = Math.max(rise, box.height - role.height);
@@ -260,13 +269,13 @@ function styledFieldRuns(
   family: DocumentFontFamily,
   tracking: number,
   src?: FieldSrc,
-  faceOverride?: FaceName
+  faceOverride?: FaceOverride
 ): GlyphRun[] {
   if (!hasInlineMarkTags(value)) {
     const run = styledRun(value, size, flagBold, flagItalic, x, family, tracking, src);
     run.href = automaticLinkHref(value) ?? undefined;
     if (faceOverride) {
-      run.style = { ...run.style, face: faceOverride };
+      run.style = { ...run.style, face: faceForOverride(flagBold, flagItalic, faceOverride) };
       run.width = measure(run.text, run.style);
     }
     return [run];
@@ -277,7 +286,7 @@ function styledFieldRuns(
     if (!seg.text) continue;
     const style: FontStyle = {
       family: seg.fontFamily ?? family,
-      face: faceOverride ?? faceFor(seg.bold || flagBold, seg.italic || flagItalic),
+      face: faceForOverride(seg.bold || flagBold, seg.italic || flagItalic, faceOverride),
       size: seg.fontSizePt ?? size,
       tracking
     };
@@ -296,7 +305,10 @@ function styledFieldRuns(
     });
     cursorX += width;
   }
-  return runs.length ? runs : [styledRun("", size, flagBold, flagItalic, x, family, tracking, src)];
+  if (runs.length) return runs;
+  const empty = styledRun("", size, flagBold, flagItalic, x, family, tracking, src);
+  if (faceOverride) empty.style = { ...empty.style, face: faceForOverride(flagBold, flagItalic, faceOverride) };
+  return [empty];
 }
 
 // Mark a run as a link when its source is an email address or URL-like value.
@@ -379,9 +391,12 @@ export function paragraphLines(
   keepLinesTogether = true,
   src?: FieldSrc,
   // Empty fields carry outgoing spacing explicitly because they have no glyph run.
-  emptyLineHeight?: number
+  emptyLineHeight?: number,
+  // The size text without its own size tag paints at: the role default the
+  // editor also shows. `size` (the field's size) sets only the spacing.
+  textSize = size
 ): VLine[] {
-  const lines = breakParagraph(paragraphItems(value, size, family, tracking), column, align);
+  const lines = breakParagraph(paragraphItems(value, textSize, family, tracking), column, align);
   // Defensive fallback: the breaker normally returns one runless line for an
   // empty item stream. Keep one caret-bearing row even if that contract changes.
   if (!lines.length) lines.push({ runs: [], width: 0 });
@@ -394,7 +409,7 @@ export function paragraphLines(
   };
   return lines.map((line, i) => {
     let runs = line.runs.map((r) => ({ ...r, x: r.x + indent, src }));
-    const bodyStyle: FontStyle = { family, face: "regular", size, tracking };
+    const bodyStyle: FontStyle = { family, face: "regular", size: textSize, tracking };
     if (!runs.length) {
       // Preserve every authored blank line (including repeated/trailing hard
       // breaks), not only a wholly empty paragraph. The zero-width run gives the
@@ -439,24 +454,29 @@ export function buildHeaderVerticalStream(
   style: PageStyle & HeaderStyle
 ): VLine[] {
   const geo = pageBox(style);
+  const sizes = TEXT_SIZES_PT;
   const family = documentFontFamily(style.fontFamily);
-  const baseFontSize = num(style.baseFontSizePt, 10);
-  const sizes = fontSizesFor(baseFontSize);
   // Tracking stays at the font's designed advances: the document style has no
   // letter-spacing control, so nothing widens or condenses them.
   const tracking = 0;
   const gap = (key: keyof HeaderStyle & keyof typeof GAP_PT) =>
     num(style[key], GAP_PT[key]);
   const headerAlign = style.headerAlign === "left" || style.headerAlign === "right" ? style.headerAlign : "center";
-  const nameSize = nameSizePt(sizes);
   const out: VLine[] = [];
 
   const header = schema.header;
   if (header?.name !== null && header?.name !== undefined) {
+    // An empty name's caret run shows what typing will produce: the name's
+    // default bold when it is bare, or the format its stored carrier holds.
+    const nameIsEmpty = !stripInlineMarks(header.name).trim();
+    const carrier = nameIsEmpty && hasInlineMarkTags(header.name) ? emptyFieldCarrier(header.name) : null;
+    const nameSize = carrier?.sizePt ?? fieldRoleSizePt(header.name, sizes.name);
+    const nameFamily = carrier?.fontFamily ? documentFontFamily(carrier.fontFamily) : family;
     const nameRuns = styledFieldRuns(
-      header.name, nameSize, true, false, 0, family, tracking, { kind: "name" }, "boldDisplay"
+      header.name, carrier?.sizePt ?? sizes.name, nameIsEmpty && (carrier?.bold ?? STYLE_FIELD_MARK_DEFAULTS.name.bold),
+      carrier?.italic ?? false, 0, nameFamily, tracking, { kind: "name" }, "display"
     );
-    const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, nameSize, family, tracking, "boldDisplay");
+    const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, sizes.name, family, tracking, "display");
     const nameAlignment = alignmentFromInlineMarks(header.name) ?? headerAlign;
     nameRows.forEach((row, index) => {
       const runs = alignRuns(row, geo.textWidth, nameAlignment);
@@ -475,7 +495,12 @@ export function buildHeaderVerticalStream(
     });
   }
   if (header?.contact.length) {
-    const size = sizes.small;
+    // The pieces share one row, so they share a role size when they agree on
+    // one; the divider is set at it too.
+    const filledPieces = header.contact.filter((piece) => stripInlineMarks(piece).trim());
+    const pieceSizes = (filledPieces.length ? filledPieces : header.contact)
+      .map((piece) => fieldRoleSizePt(piece, sizes.contact));
+    const size = pieceSizes.every((pieceSize) => pieceSize === pieceSizes[0]) ? pieceSizes[0] : sizes.contact;
     const divider = (style.contactDivider || "|").slice(0, 2);
     // Horizontal slot the separator is centred in. Unlike the vertical gaps this
     // one contains a glyph, so it floors at that glyph's width: 0 is the
@@ -487,9 +512,9 @@ export function buildHeaderVerticalStream(
     let x = 0;
     header.contact.forEach((piece, index) => {
       const pieceRunsAtOrigin = styledFieldRuns(
-        piece, size, false, false, 0, family, tracking, { kind: "contact", index }
+        piece, sizes.contact, false, false, 0, family, tracking, { kind: "contact", index }
       );
-      const pieceRows = wrapSingleField(piece, pieceRunsAtOrigin, geo.textWidth, size, family, tracking);
+      const pieceRows = wrapSingleField(piece, pieceRunsAtOrigin, geo.textWidth, sizes.contact, family, tracking);
       if (pieceRows.length > 1) {
         if (runs.length) rows.push(runs);
         for (const row of pieceRows) rows.push(row.map(run => linkified(run, piece)));
@@ -544,9 +569,7 @@ export function buildHeaderVerticalStream(
 export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle): VLine[] {
   const geo = pageGeometry(style);
   const family = documentFontFamily(style.fontFamily);
-  const baseFontSize = num(style.baseFontSizePt, 10);
-  const sizes = fontSizesFor(baseFontSize);
-  const fontScale = baseFontSize / 10;
+  const sizes = TEXT_SIZES_PT;
   // Tracking stays at the font's designed advances: the document style has no
   // letter-spacing control, so nothing widens or condenses them.
   const tracking = 0;
@@ -576,9 +599,10 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       // advances. That face has no bold variant; explicit inline marks remain
       // available in uppercase and plain modes.
       const paintedHeading = headingText || " ";
+      const headingSize = fieldRoleSizePt(section.heading, sizes.sectionHeading);
       const headingRuns = styledFieldRuns(
         paintedHeading,
-        sizes.large,
+        sizes.sectionHeading,
         false,
         false,
         0,
@@ -587,30 +611,30 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         { kind: "heading", sectionId: section.id },
         caseMode === "smallcaps" ? "caps" : undefined
       );
-      const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, sizes.large, family, tracking,
+      const headingRows = wrapSingleField(paintedHeading, headingRuns, geo.textWidth, sizes.sectionHeading, family, tracking,
         caseMode === "smallcaps" ? "caps" : undefined);
       // Header→first-heading depends only on headerSectionGap. The sectionGap
       // slider must not move the first heading.
       const beforeGap =
-        lineAdvance(sizes.large, style.lineHeight) +
+        lineAdvance(headingSize, style.lineHeight) +
         (prevKind === "header" ? gap("headerSectionGapPt") : gap("sectionGapPt"));
       headingRows.forEach((row, index) => {
         const runs = alignRuns(row, geo.textWidth, alignmentFromInlineMarks(section.heading) ?? headingAlign);
-        const footprint = rowFootprint(runs, sizes.large);
-        const overflow = boxOverflowOfRuns(runs, sizes.large);
+        const footprint = rowFootprint(runs, headingSize);
+        const overflow = boxOverflowOfRuns(runs, headingSize);
         push({
           runs,
           height: footprint.height,
           depth: footprint.depth,
           riseOverflow: overflow.rise,
           dropOverflow: overflow.drop,
-          dist: index ? sizes.large * runLineHeight(headingRows[index - 1], style.lineHeight) : beforeGap,
+          dist: index ? headingSize * runLineHeight(headingRows[index - 1], style.lineHeight) : beforeGap,
           keepWithPrev: index > 0,
           ...(index > 0 ? { emergencyBreakBefore: true } : {}),
           // One rule follows the final continuation at the calibrated offset.
           rule: style.sectionRule === false || index < headingRows.length - 1
             ? undefined
-            : { x: 0, width: geo.textWidth, yOffset: 4.113 * fontScale, thickness: 0.4 }
+            : { x: 0, width: geo.textWidth, yOffset: 4.113 * headingSize / sizes.sectionHeading, thickness: 0.4 }
         });
       });
     }
@@ -633,7 +657,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       const bulletSrc = (bi: number): FieldSrc =>
         ({ kind: "bullet", ...ids, bulletId: item.bulletIds[bi] });
       if (isSkills) {
-        const size = sizes.small;
+        // Label and skills form one paragraph at the larger of their sizes.
+        const size = rowRoleSizePt([[f.titleLeft, sizes.skillLabel], [f.subtitleLeft, sizes.body]]);
         let label = f.titleLeft.trimStart();
         // The backing field omits the one canonical separator space. Preserve
         // every authored space so the painter matches the editor value.
@@ -656,7 +681,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           family,
           tracking,
           true,
-          { kind: "skillsRow", ...ids }
+          { kind: "skillsRow", ...ids },
+          undefined,
+          sizes.body
         );
         lines.forEach(push);
         firstInSection = false;
@@ -665,28 +692,29 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       if (isSummary) {
         const summaryText = f.subtitleLeft || f.titleLeft || item.bullets?.[0] || "";
         const paragraphSpacing = paragraphSpacingFromInlineMarks(summaryText);
+        const summarySize = fieldRoleSizePt(summaryText, sizes.body);
         // Left indent: every line of the paragraph starts further in and its
         // measure narrows to match (see paragraphIndentFromInlineMarks).
         const summaryIndent = fitParagraphIndent(
           paragraphIndentFromInlineMarks(summaryText),
           geo.textWidth - geo.entryIndent - geo.entryEndIndent,
-          sizes.small
+          summarySize
         );
         const dist =
-          lineAdvance(sizes.small, style.lineHeight) +
+          lineAdvance(summarySize, style.lineHeight) +
           (firstInSection ? gap("sectionEntryGapPt") : gap("bulletGapPt")) +
           previousParagraphSpaceAfterPt +
           (paragraphSpacing.spaceBeforePt ?? 0);
         const lines = paragraphLines(
           summaryText,
-          sizes.small,
+          summarySize,
           geo.entryIndent + summaryIndent,
           Math.max(
-            sizes.small,
+            summarySize,
             geo.textWidth - geo.entryIndent - summaryIndent - geo.entryEndIndent
           ),
           alignmentFromInlineMarks(summaryText) ?? bodyAlign,
-          sizes.small * style.lineHeight,
+          summarySize * style.lineHeight,
           dist,
           firstInSection,
           family,
@@ -695,7 +723,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           bulletSrc(0),
           stripInlineMarks(summaryText).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
-            : undefined
+            : undefined,
+          sizes.body
         );
         if (lines.length) {
           lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
@@ -708,8 +737,8 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       }
 
       // Standard entries may omit either heading row.
-      const titleSize = sizes.normalsize;
-      const subSize = sizes.small;
+      const titleSize = rowRoleSizePt([[f.titleLeft, sizes.titleLeft], [f.titleRight, sizes.titleRight]]);
+      const subSize = rowRoleSizePt([[f.subtitleLeft, sizes.subtitleLeft], [f.subtitleRight, sizes.subtitleRight]]);
       const hasTitle = item.titleLeft !== null;
       const hasSub = item.subtitleLeft !== null;
       let titleInkDepth = 0;
@@ -717,7 +746,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       if (hasTitle) {
         const titleLeft = styledFieldRuns(
           f.titleLeft,
-          titleSize,
+          sizes.titleLeft,
           false,
           false,
           geo.entryIndent,
@@ -725,9 +754,9 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           tracking,
           entrySrc("titleLeft")
         );
-        const rawTitleRuns = headRow(titleLeft, f.titleRight, titleSize, false, geo, family, tracking, entrySrc("titleRight"));
+        const rawTitleRuns = headRow(titleLeft, f.titleRight, sizes.titleRight, false, geo, family, tracking, entrySrc("titleRight"));
         const titleAlignment = alignmentFromInlineMarks(f.titleLeft) ?? alignmentFromInlineMarks(f.titleRight);
-        const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, titleSize, family, tracking);
+        const titleRows = wrapHeadRow(rawTitleRuns, f.titleLeft, f.titleRight, geo.entryIndent, geo.headRowWidth, sizes.titleLeft, sizes.titleRight, family, tracking);
         for (const [rowIndex, rawRuns] of titleRows.entries()) {
           const titleRuns = titleAlignment && titleAlignment !== "justify"
             ? alignRuns(rawRuns, geo.headRowWidth, titleAlignment, geo.entryIndent)
@@ -762,7 +791,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       if (hasSub) {
         const subLeft = styledFieldRuns(
           f.subtitleLeft,
-          subSize,
+          sizes.subtitleLeft,
           false,
           false,
           geo.entryIndent,
@@ -773,7 +802,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
         const rawSubRuns = headRow(
           subLeft,
           f.subtitleRight,
-          subSize,
+          sizes.subtitleRight,
           false,
           geo,
           family,
@@ -781,7 +810,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           entrySrc("subtitleRight")
         );
         const subAlignment = alignmentFromInlineMarks(f.subtitleLeft) ?? alignmentFromInlineMarks(f.subtitleRight);
-        const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, subSize, family, tracking);
+        const subRows = wrapHeadRow(rawSubRuns, f.subtitleLeft, f.subtitleRight, geo.entryIndent, geo.headRowWidth, sizes.subtitleLeft, sizes.subtitleRight, family, tracking);
         for (const [rowIndex, rawRuns] of subRows.entries()) {
           const subRuns = subAlignment && subAlignment !== "justify"
             ? alignRuns(rawRuns, geo.headRowWidth, subAlignment, geo.entryIndent)
@@ -793,7 +822,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           // A tight line height, or a deep box such as an underlined link, must
           // never pull the subtitle up into the title: clamp to an ink-based floor
           // that keeps a hair of clearance regardless of the authored gap.
-          const inkFloor = titleInkDepth + inkS.height + MIN_TITLE_SUB_INK_GAP * fontScale;
+          const inkFloor = titleInkDepth + inkS.height + MIN_TITLE_SUB_INK_GAP * subSize / sizes.subtitleLeft;
           push({
             ...headRowLeading(subRuns, subSize, style.lineHeight, subRows.length > 1),
             runs: subRuns,
@@ -812,15 +841,20 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
       }
 
       let previousBulletSpaceAfterPt = 0;
+      // An empty bullet keeps its neighbour's size, so a blank line in a
+      // sized list keeps the list's rhythm.
+      let previousBulletSize: number = sizes.body;
       item.bullets.forEach((bullet, bi) => {
         const paragraphSpacing = paragraphSpacingFromInlineMarks(bullet);
+        const bulletSize = stripInlineMarks(bullet).trim() ? fieldRoleSizePt(bullet, sizes.body) : previousBulletSize;
+        previousBulletSize = bulletSize;
         const bulletIndentPt = fitParagraphIndent(
           paragraphIndentFromInlineMarks(bullet),
           geo.textWidth - geo.bulletIndent - geo.entryEndIndent,
-          sizes.small
+          bulletSize
         );
         const dist =
-          lineAdvance(sizes.small, style.lineHeight) +
+          lineAdvance(bulletSize, style.lineHeight) +
           (bi === 0
             ? hasTitle || hasSub ? gap("headBulletGapPt") : gap(firstInSection ? "sectionEntryGapPt" : "entryGapPt")
             : gap("bulletGapPt")) +
@@ -828,14 +862,14 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           (paragraphSpacing.spaceBeforePt ?? 0);
         const lines = paragraphLines(
           bullet,
-          sizes.small,
+          bulletSize,
           geo.bulletIndent + bulletIndentPt,
           Math.max(
-            sizes.small,
+            bulletSize,
             geo.textWidth - geo.bulletIndent - bulletIndentPt - geo.entryEndIndent
           ),
           alignmentFromInlineMarks(bullet) ?? bodyAlign,
-          sizes.small * style.lineHeight,
+          bulletSize * style.lineHeight,
           dist,
           hasTitle || hasSub || firstInSection,
           family,
@@ -844,9 +878,10 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           bulletSrc(bi),
           stripInlineMarks(bullet).trim().length === 0
             ? paragraphSpacing.lineHeight ?? undefined
-            : undefined
+            : undefined,
+          sizes.body
         );
-        // First line carries the bullet marker (tiny math bullet) at the bullet indent.
+        // First line carries the bullet marker at the bullet indent.
         // It shares the bullet's provenance so clicking it edits the bullet.
         if (lines.length) {
           lines[0].paragraphSpaceBefore = paragraphSpacing.spaceBeforePt ?? 0;
@@ -854,7 +889,7 @@ export function buildVerticalStream(schema: TypesetSchema, style: DocumentStyle)
           const marker = {
             ...styledRun(
               "•",
-              sizes.tiny,
+              bulletMarkerSizePt(bulletSize),
               false,
               false,
               geo.bulletMarker + bulletIndentPt,

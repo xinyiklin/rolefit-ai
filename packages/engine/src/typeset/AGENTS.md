@@ -126,6 +126,9 @@ it truthfully.
   face-derived depth. Never derive a rule from the text a renderer happens to
   hold: the DOM painter groups merged style spans and the PDF emitter walks
   single runs, so a text-dependent rule silently disagrees between them.
+- Alignment never changes where a line breaks (D082): every alignment breaks
+  as a ragged paragraph does, and justify only stretches the spaces of lines
+  already chosen. `tall-paragraphs.mjs` lays the same text out in all four.
 - The optimal breaker tries previous breaks from the latest backwards and stops
   once a line is overfull past its shrink budget, so a paragraph costs its lines
   times its words per line rather than its words squared; ties keep the latest

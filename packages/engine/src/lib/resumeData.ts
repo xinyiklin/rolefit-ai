@@ -54,8 +54,18 @@ export type ResumeData = {
   sections: ResumeSectionData[];
 };
 
+// A blank document's header: an empty, caret-bearing name and no contacts.
 export function newDocumentHeader(): DocumentHeader {
   return { visible: true, name: "", contact: [] };
+}
+
+// The starter documents' placeholder letterhead, shared by resume and letter.
+export function starterDocumentHeader(): DocumentHeader {
+  return {
+    visible: true,
+    name: "<b>Your Name</b>",
+    contact: ["you@email.com", "linkedin.com/in/yourprofile", "github.com/yourusername", "City, State"]
+  };
 }
 
 export function normalizeDocumentHeader(header: DocumentHeader | null): DocumentHeader | null {

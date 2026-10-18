@@ -157,6 +157,9 @@ const starterResponse = starterLoad.indexOf("if (!response.ok");
 const starterCommit = starterLoad.indexOf("await applyWorkspaceBaseResume(", starterResponse);
 assert.ok(starterResponse >= 0 && starterCommit > starterResponse, "starter replacement uses the central current-state guard after a successful response");
 assert.match(starterLoad, /setBaseResumeName\(""\)/, "starter remains detached from the active saved base");
+assert.match(applyWorkspace, /if \(!baseResume\.text\) return null;/, "the unsaved bundled starter (exists: false) still opens");
+assert.match(applyWorkspace, /setFileName\(baseResume\.exists \? baseResume\.fileName \?\? "default" : "default"\)/, "an unsaved document's first Save targets the default base, not starter.resume");
+assert.match(starterLoad, /setDocumentTitle\("Resume"\)/, "the starter opens as an untitled resume");
 
 const blankLoad = functionSlice("startBlankResume", "saveBaseResume");
 const blankApproval = blankLoad.indexOf("await approveCurrentReplacement()");

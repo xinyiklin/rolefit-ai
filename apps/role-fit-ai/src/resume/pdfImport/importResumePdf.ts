@@ -5,7 +5,7 @@
 import type { DocumentStyle } from "@typeset/engine/lib/documentStyle.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { auditImport, type ContentAudit } from "./importAudit.ts";
-import { inferImportStyle } from "./importStyle.ts";
+import { applyImportedBodySize, inferImportStyle } from "./importStyle.ts";
 import { layoutLines, type LayoutLines } from "./layoutLines.ts";
 import { pdfImportError } from "./importErrors.ts";
 import { readPdfLayout, type PdfJsLike, type PdfLayout } from "./pdfLayout.ts";
@@ -14,6 +14,8 @@ import { buildResumeDraft, type ImportFinding } from "./resumeFromLayout.ts";
 export type PdfImportResult = {
   data: ResumeData;
   style: DocumentStyle;
+  // The PDF's body text size, applied to the body-sized fields of `data`.
+  bodySizePt: number;
   findings: ImportFinding[];
   // The style notes alone; an AI interpretation changes structure, not style,
   // so its findings keep these.
@@ -27,10 +29,10 @@ export async function importResumePdf(bytes: Uint8Array, pdfjs: PdfJsLike): Prom
   const layout = await readPdfLayout(bytes, pdfjs);
   const lines = layoutLines(layout);
   const draft = buildResumeDraft(lines, layout.rules);
-  const { style, notes } = inferImportStyle(layout, draft.evidence);
+  const { style, bodySizePt, notes } = inferImportStyle(layout, draft.evidence);
   const styleFindings = notes.map((note, index): ImportFinding => ({ kind: "check", id: `style${index + 1}`, fieldKey: null, reason: note.reason, source: note.source }));
   const findings = [...draft.findings, ...styleFindings];
   const audit = auditImport(layout.spans, draft.data, findings, draft.consumed);
   if (!audit.ok) throw pdfImportError("unaccounted");
-  return { data: draft.data, style, findings, styleFindings, audit, layout, lines };
+  return { data: applyImportedBodySize(draft.data, bodySizePt), style, bodySizePt, findings, styleFindings, audit, layout, lines };
 }

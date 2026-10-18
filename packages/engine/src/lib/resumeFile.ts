@@ -22,6 +22,7 @@ import {
   parseJsonFile,
   serializeJsonFile
 } from "./jsonFileCodec.ts";
+import { upgradeLegacyTextSizes } from "./legacyTextSizes.ts";
 import { stripInlineMarks } from "./inlineMarksText.ts";
 
 export const RESUME_FILE_MAGIC = "typeset-resume" as const;
@@ -90,7 +91,6 @@ const ENTRY_KEYS = ["titleLeft", "titleRight", "subtitleLeft", "subtitleRight", 
 const BULLET_KEYS = ["text"] as const;
 const STYLE_KEYS = [
   "fontFamily",
-  "baseFontSizePt",
   "lineHeight",
   "entryIndentPt",
   "entryEndIndentPt",
@@ -274,7 +274,6 @@ function readDocumentStyle(style: JsonRecord): DocumentStyle {
   const fontFamilies = FONT_FAMILY_OPTIONS.map((option) => option.value);
   return {
     fontFamily: requireEnum(style.fontFamily, fontFamilies, "style.fontFamily"),
-    baseFontSizePt: requireStyleNumber(style, "baseFontSizePt"),
     lineHeight: requireStyleNumber(style, "lineHeight"),
     entryIndentPt: requireStyleNumber(style, "entryIndentPt"),
     entryEndIndentPt: requireStyleNumber(style, "entryEndIndentPt"),
@@ -306,13 +305,20 @@ function readDocumentStyle(style: JsonRecord): DocumentStyle {
   };
 }
 
-function validateStyle(value: unknown): DocumentStyle {
-  const style = requireRecord(value, "style");
+// The retired document text size (see legacyTextSizes.ts): optional on read,
+// never written.
+const LEGACY_BASE_FONT_SIZE_KEY = "baseFontSizePt";
+
+function validateStyle(value: unknown): { documentStyle: DocumentStyle; legacySizeBasePt: number | null } {
+  const { [LEGACY_BASE_FONT_SIZE_KEY]: legacySize, ...style } = requireRecord(value, "style");
+  const legacySizeBasePt = legacySize === undefined
+    ? null
+    : requireNumber(legacySize, `style.${LEGACY_BASE_FONT_SIZE_KEY}`, 8, 12);
   requireExactKeys(style, STYLE_KEYS, "style");
   if (style.spacingModel !== ABSOLUTE_SPACING) {
     invalid("style.spacingModel", `must be ${JSON.stringify(ABSOLUTE_SPACING)}`);
   }
-  return readDocumentStyle(style);
+  return { documentStyle: readDocumentStyle(style), legacySizeBasePt };
 }
 
 function toPortableDocument(data: ResumeData): PortableResumeDocumentV1 {
@@ -420,8 +426,12 @@ export function parseResumeFile(input: string | ArrayBuffer | Uint8Array): Parse
   }
   requireExactKeys(file, ["format", "schemaVersion", "document", "style"], "file");
   const document = validateDocument(file.document);
-  const documentStyle = validateStyle(file.style);
-  return { data: rehydrateDocument(document), documentStyle };
+  const { documentStyle, legacySizeBasePt } = validateStyle(file.style);
+  const data = rehydrateDocument(document);
+  return {
+    data: legacySizeBasePt === null ? data : upgradeLegacyTextSizes(data, legacySizeBasePt),
+    documentStyle
+  };
 }
 
 export async function readResumeFile(file: File): Promise<ParsedResumeFile> {

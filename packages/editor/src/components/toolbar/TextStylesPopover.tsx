@@ -16,6 +16,7 @@ import { FontFamilyControl } from "./FontFamilyControl";
 import { FontSizeControl } from "./FontSizeControl";
 import { ToolbarButton } from "./ToolbarButton";
 import {
+  STYLE_FIELD_HAS_MARKS,
   STYLE_FIELD_MARK_DEFAULTS,
   styleFieldDefaultSizePt,
   type FieldFontFamily,
@@ -39,17 +40,20 @@ export type TextStylesPopoverProps = {
   onResetStyleFormatting?: () => void;
 };
 
-// Every text element that gets a font / size / emphasis row, top to bottom:
-// section heading, the header contact line, the four entry columns, and skill
-// labels. Rendered as one group and reused for the reset-is-default check.
+// Every text element that gets a font / size / emphasis row, in document order:
+// name, contact line, section heading, the four entry columns, skill labels,
+// and body text (no emphasis; see STYLE_FIELD_HAS_MARKS). Rendered as
+// one group and reused for the reset-is-default check.
 const TEXT_STYLE_ROWS: readonly { field: StyleTextField; label: string }[] = [
-  { field: "sectionHeading", label: "Section heading" },
+  { field: "name", label: "Name" },
   { field: "contact", label: "Contact" },
+  { field: "sectionHeading", label: "Section heading" },
   { field: "titleLeft", label: "Title left" },
   { field: "titleRight", label: "Title right" },
   { field: "subtitleLeft", label: "Subtitle left" },
   { field: "subtitleRight", label: "Subtitle right" },
-  { field: "skillLabel", label: "Skill labels" }
+  { field: "skillLabel", label: "Skill labels" },
+  { field: "body", label: "Body" }
 ];
 
 const ENTRY_MARK_OPTIONS: readonly { mark: FieldMark; label: string; Icon: LucideIcon }[] = [
@@ -65,7 +69,6 @@ function FieldStyleRow({
   fontStates,
   sizeStates,
   documentFont,
-  baseFontSizePt,
   disabled = false,
   onChange,
   onFontChange,
@@ -77,7 +80,6 @@ function FieldStyleRow({
   fontStates?: StyleFieldFontStates;
   sizeStates?: StyleFieldSizeStates;
   documentFont: FieldFontFamily;
-  baseFontSizePt: number;
   disabled?: boolean;
   onChange?: (field: StyleTextField, mark: FieldMark, on: boolean) => void;
   onFontChange?: (field: StyleTextField, family: FieldFontFamily) => void;
@@ -86,7 +88,7 @@ function FieldStyleRow({
   // Truth per field: the resolved family/size, or null when instances diverge.
   // Presence-check (not ??) so null survives; a missing map falls back to the
   // document font / role default so the control still shows the current value.
-  const sizeFallback = styleFieldDefaultSizePt(field, baseFontSizePt);
+  const sizeFallback = styleFieldDefaultSizePt(field);
   const fontState: FieldFontState = fontStates ? fontStates[field] : documentFont;
   const sizeState = sizeStates ? sizeStates[field] : sizeFallback;
   return (
@@ -105,7 +107,7 @@ function FieldStyleRow({
           ariaLabel={`${label}: size`}
           onChange={(sizePt) => onSizeChange?.(field, sizePt)}
         />
-        <div className="style-popover__entry-mark-buttons" role="group" aria-label={`${label} emphasis`}>
+        {STYLE_FIELD_HAS_MARKS[field] && <div className="style-popover__entry-mark-buttons" role="group" aria-label={`${label} emphasis`}>
           {ENTRY_MARK_OPTIONS.map(({ mark, label: markLabel, Icon }) => {
             // Preserve null (mixed) with a presence check, not ?? false, so a field
             // whose instances diverge reads as mixed rather than plain "off".
@@ -125,7 +127,7 @@ function FieldStyleRow({
               </button>
             );
           })}
-        </div>
+        </div>}
       </div>
     </div>
   );
@@ -149,7 +151,7 @@ export function TextStylesPopover({
   const headingsId = `${idPrefix}-headings`;
   const entriesId = `${idPrefix}-entries`;
   const styleMarksAreDefault = styleMarkStates
-    ? TEXT_STYLE_ROWS.every(({ field }) => ENTRY_MARK_OPTIONS.every(({ mark }) =>
+    ? TEXT_STYLE_ROWS.every(({ field }) => !STYLE_FIELD_HAS_MARKS[field] || ENTRY_MARK_OPTIONS.every(({ mark }) =>
         styleMarkStates[field][mark] === STYLE_FIELD_MARK_DEFAULTS[field][mark]
       ))
     : true;
@@ -162,7 +164,7 @@ export function TextStylesPopover({
   const styleSizesAreDefault = styleSizeStates
     ? TEXT_STYLE_ROWS.every(({ field }) => {
         const size = styleSizeStates[field];
-        return size !== null && Math.abs(size - styleFieldDefaultSizePt(field, style.baseFontSizePt)) < 0.05;
+        return size !== null && Math.abs(size - styleFieldDefaultSizePt(field)) < 0.05;
       })
     : true;
   return (
@@ -233,7 +235,6 @@ export function TextStylesPopover({
                     fontStates={styleFontStates}
                     sizeStates={styleSizeStates}
                     documentFont={style.fontFamily}
-                    baseFontSizePt={style.baseFontSizePt}
                     disabled={field === "sectionHeading" && style.headingCase === "smallcaps"}
                     onChange={onStyleFieldMarkChange}
                     onFontChange={onStyleFieldFontChange}

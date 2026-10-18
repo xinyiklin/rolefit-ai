@@ -151,7 +151,7 @@ test("one run per glyph is read as text, not refused as a scan", async () => {
     draw("Built the billing service for partners", 68, 641, 10, fonts.regular);
   }), pdfjs);
   assert.ok(result.audit.ok);
-  assert.equal(result.data.header.name, "Jane Doe");
+  assert.equal(result.data.header.name, "<b>Jane Doe</b>", "a name is bold by default");
   assert.ok(plainTexts(result.data).includes("Built the billing service for partners"), JSON.stringify(plainTexts(result.data)));
   assert.equal(result.audit.sourceWords, 12, "the summary counts words, not glyph runs");
 });

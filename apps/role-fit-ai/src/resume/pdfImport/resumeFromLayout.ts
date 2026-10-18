@@ -21,6 +21,7 @@ import { markedField, plainField, renderField, splitOnSeparators, type FieldDraf
 import { joinPieces, slicePiece, type LayoutLine, type LayoutLines, type LinePiece } from "./layoutLines.ts";
 import type { PdfRule } from "./pdfLayout.ts";
 import { isDateLike } from "./rowDates.ts";
+import { setFieldMark } from "@typeset/engine/lib/inlineMarksText.ts";
 
 export type ImportCheck = { kind: "check"; id: string; fieldKey: string | null; reason: string; source: string };
 export type ImportUnplaced = { kind: "unplaced"; id: string; text: string; reason: string; page: number };
@@ -500,7 +501,8 @@ export function buildResumeDraft(source: LayoutLines, rules: readonly PdfRule[])
   const name = nameDraft ? renderField(nameDraft).text : "";
   const contactItems = contact.map((field) => renderField(field).text).filter(Boolean);
   const data: ResumeData = {
-    header: name || contactItems.length ? { visible: true, name: name || null, contact: contactItems } : null,
+    // A name is bold by default (STYLE_FIELD_MARK_DEFAULTS); plainField read none.
+    header: name || contactItems.length ? { visible: true, name: name ? setFieldMark(name, "bold", true) : null, contact: contactItems } : null,
     sections: sections.map((draft) => draft.section)
   };
   return {

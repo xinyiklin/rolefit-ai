@@ -18,6 +18,8 @@ import { serializeResumeData } from "../lib/resumeText.ts";
  */
 import { useCallback, useDeferredValue, useMemo, useState } from "react";
 import type { ResumeData, ResumeEntry } from "@typeset/engine/lib/resumeData.ts";
+import { sharedWholeFieldFormat, wholeFieldFormat, withWholeFieldFormat } from "@typeset/engine/lib/inlineMarksText.ts";
+import { stripStructuralInlineMarks } from "../../shared/resumePolishContract.ts";
 
 import {
   clearProposalDecision,
@@ -81,15 +83,28 @@ function applyRank(suggestion: ResumeProposalSuggestion): number {
   return suggestion.kind === "reorder" ? 0 : 1;
 }
 
+// Polish sees and returns text without whole-field sizes or fonts, so an
+// accepted rewrite takes its field's (a new bullet, the one its siblings share).
+function withFieldFormat(entry: ResumeEntry | null, suggestion: ResumeProposalSuggestion, value: string): string {
+  if (!entry || !value) return value;
+  if (suggestion.target.field !== "bullet") return withWholeFieldFormat(value, wholeFieldFormat(entry.subtitleLeft ?? ""));
+  const existing = entry.bullets.find((bullet) => bullet.id === suggestion.target.bulletId);
+  return withWholeFieldFormat(
+    value,
+    existing ? wholeFieldFormat(existing.text) : sharedWholeFieldFormat(entry.bullets.map((bullet) => bullet.text))
+  );
+}
+
 function applyTarget(
   resume: ResumeData,
   actions: ResumeEditorActions,
   suggestion: ResumeProposalSuggestion,
-  value: string
+  rawValue: string
 ): void {
   const { sectionId, entryId, bulletId, field } = suggestion.target;
   if (!entryId) return;
   const entry = findEntry(resume, suggestion);
+  const value = suggestion.kind === "reorder" ? rawValue : withFieldFormat(entry, suggestion, rawValue);
   if (suggestion.kind === "reorder") {
     if (entry) reorderEntryBullets(entry, value.split("\n"), (from, to) => actions.reorderBullets(sectionId, entryId, from, to, true));
     return;
@@ -252,7 +267,7 @@ export function useResumeProposalDecisions({
     const accepted = suggestions.flatMap((suggestion) => {
       const decision = decisions[suggestion.id];
       const current = currentTargetText(resume, suggestion);
-      return decision?.kind === "accepted" && current === decision.text && suggestion.kind !== "reorder"
+      return decision?.kind === "accepted" && current !== null && stripStructuralInlineMarks(current) === decision.text && suggestion.kind !== "reorder"
         ? [{ original: suggestion.currentText, current }] : [];
     });
     if (!accepted.length) return [];
@@ -263,7 +278,7 @@ export function useResumeProposalDecisions({
           && suggestion.target.sectionId === section.id && suggestion.target.entryId === entry.id
           && (() => {
             const decision = decisions[suggestion.id];
-            return currentTargetText(resume, suggestion) === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
+            return stripStructuralInlineMarks(currentTargetText(resume, suggestion) ?? "") === (decision?.kind === "accepted" ? decision.text : suggestion.proposedText);
           })());
         for (const suggestion of uncertain) {
           const prior = result?.sourceConcerns?.find((concern) => sameProposalTarget(concern.target, suggestion.target));
