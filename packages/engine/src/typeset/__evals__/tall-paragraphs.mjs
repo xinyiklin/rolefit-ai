@@ -226,3 +226,18 @@ console.log("uppercase headings transform text, not tags");
   }
   console.log("the skills separator follows the skills' first character");
 }
+
+// 10. An empty name's caret run shows what typing will produce: the default
+//     display bold when bare, its stored emphasis when tag-only.
+{
+  const nameFace = (name) => {
+    const doc = layoutResume(toTypesetSchema({ header: { visible: true, name, contact: [] }, sections: [] }), DOC_STYLE_DEFAULTS);
+    return lines(doc)[0].runs[0].style.face;
+  };
+  assert.equal(nameFace(""), "boldDisplay", "a bare empty name paints in the default display bold");
+  assert.equal(nameFace("<b></b>"), "boldDisplay", "a tag-only bold empty name paints in the display bold");
+  assert.equal(nameFace("<i></i>"), "italic", "a tag-only empty name without bold keeps its own emphasis");
+  assert.equal(nameFace("Jane"), "regular", "a typed name without <b> is regular");
+  assert.equal(nameFace("<b>Jane</b>"), "boldDisplay", "a bold typed name paints in the display bold");
+  console.log("an empty name's caret run matches what typing produces");
+}

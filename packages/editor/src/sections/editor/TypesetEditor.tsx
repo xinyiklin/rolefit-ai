@@ -1368,7 +1368,11 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       const normalized = insert.replace(/\r/g, "");
       const text = singleLine ? normalized.replace(/\s*\n+\s*/g, " ") : normalized;
       const typingFormat = dStart === dEnd ? typingFormatRef.current ?? undefined : undefined;
-      const deletedTypingFormat = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
+      const removed = text.length === 0 ? typingFormatForDeletedRange(sel.map, dStart, dEnd) : null;
+      // Emptying the name returns it to its default bold, which its bare empty
+      // placeholder shows, so the next character matches what is painted.
+      const emptiesName = sel.src.kind === "name" && dStart === 0 && dEnd >= sel.map.chars.length;
+      const deletedTypingFormat = removed && emptiesName ? { ...removed, bold: true } : removed;
       if (deletedTypingFormat) {
         typingFormatRef.current = deletedTypingFormat;
         typingTargetRef.current = `${sel.key}:${dStart}`;

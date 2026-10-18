@@ -203,7 +203,7 @@ export function styleFieldMarkStates(data: ResumeData): StyleFieldMarkStates {
     const values = styleFieldValues(data, field);
     return [field, Object.fromEntries(marks.map((mark) => {
       const states = values.map((value) => fieldMarkState(value, mark));
-      if (!states.length) return [mark, false];
+      if (!states.length) return [mark, STYLE_FIELD_MARK_DEFAULTS[field][mark]];
       const first = states[0];
       return [mark, first !== null && states.every((state) => state === first) ? first : null];
     }))];

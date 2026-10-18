@@ -303,7 +303,10 @@ function styledFieldRuns(
     });
     cursorX += width;
   }
-  return runs.length ? runs : [styledRun("", size, flagBold, flagItalic, x, family, tracking, src)];
+  if (runs.length) return runs;
+  const empty = styledRun("", size, flagBold, flagItalic, x, family, tracking, src);
+  if (faceOverride) empty.style = { ...empty.style, face: faceForOverride(flagBold, flagItalic, faceOverride) };
+  return [empty];
 }
 
 // Mark a run as a link when its source is an email address or URL-like value.
@@ -462,11 +465,13 @@ export function buildHeaderVerticalStream(
   const header = schema.header;
   if (header?.name !== null && header?.name !== undefined) {
     const nameSize = fieldRoleSizePt(header.name, sizes.name);
-    // An empty name's caret run takes the name's default emphasis (bold), so
-    // typing the first character never changes its face or baseline.
+    // An empty name's caret run shows what typing will produce: the name's
+    // default bold when it is bare, or the emphasis its stored tags carry.
     const nameIsEmpty = !stripInlineMarks(header.name).trim();
+    const emptyNameBold = nameIsEmpty && (hasInlineMarkTags(header.name) ? /<b>/i.test(header.name) : true);
+    const emptyNameItalic = nameIsEmpty && /<i>/i.test(header.name);
     const nameRuns = styledFieldRuns(
-      header.name, sizes.name, nameIsEmpty, false, 0, family, tracking, { kind: "name" }, "display"
+      header.name, sizes.name, emptyNameBold, emptyNameItalic, 0, family, tracking, { kind: "name" }, "display"
     );
     const nameRows = wrapSingleField(header.name, nameRuns, geo.textWidth, sizes.name, family, tracking, "display");
     const nameAlignment = alignmentFromInlineMarks(header.name) ?? headerAlign;
