@@ -260,9 +260,15 @@ the rest of browser storage. Workspace adoption never deletes a live sibling
 tab's draft and notifies that tab that the saved workspace changed. A document
 is named
 `Name_Company_Resume` / `Name_Company_Cover_Letter` so
-one role's materials read as one application. Selecting a saved variant changes
-the document content, not that application output name, and both editor
-sublabels show the same `Role at Company` target.
+one role's materials read as one application. Each title uses the name in its
+own document's header and the prepared company (`Company_Resume` /
+`Company_Cover_Letter` with no name). Blank and Starter always retitle (Starter
+opens as `Your_Name_Resume`), and editing the name retitles a title you have not
+renamed. Preparing a job, or editing its company in Prepare, retitles both,
+renamed or not. A new session with nothing saved opens both Starters. Selecting
+a saved variant changes the document content and keeps that application output
+name, except that an unrenamed title follows the variant's header name; both
+editor sublabels show the same `Role at Company` target.
 `.resume` and `.cover` are their separate reloadable formats. Resume Open accepts
 only `.resume`; Cover Letter Open accepts only `.cover`. Other source formats may
 be typed or pasted into a blank document, but are never treated as reloadable

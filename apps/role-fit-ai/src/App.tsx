@@ -78,12 +78,12 @@ import { useTabPresence } from "./hooks/useTabPresence";
 import { subscribeWorkspaceRestoreAdoption, type PresencePhase } from "./lib/tabPresence";
 import {
   buildDocumentTitle,
-  completeAutoDocumentTitle,
   COVER_LETTER_TITLE_PLACEHOLDERS,
+  type DocumentTitleIdentity,
   type DocumentTitleKind,
+  followDocumentIdentityTitle,
   resolveResumeApplicantName,
-  sanitizeFileBase,
-  swapDocumentTitleKind
+  sanitizeFileBase
 } from "./lib/downloads";
 import { buildStageRequestFields, type AiRequestFields, type StageId } from "./lib/aiRequest";
 import { useDraggableDock } from "./hooks/useDraggableDock";
@@ -324,6 +324,11 @@ function definedTracking(tracking: ExtractedJobTracking) {
 
 function documentTitleForJob(kind: DocumentTitleKind, tracking: ExtractedJobTracking, applicantName: string): string {
   return buildDocumentTitle(kind, applicantName, (tracking.company || "").trim());
+}
+
+// Each document is named for the name in its own header (D085).
+function documentTitleForHeader(kind: DocumentTitleKind, data: ResumeData, company: string): string {
+  return buildDocumentTitle(kind, resolveResumeApplicantName(data.header?.name, ""), company);
 }
 
 function browserTabTitle(tracking: ExtractedJobTracking): string {
@@ -719,6 +724,18 @@ function App() {
     },
     [seedResumeEditorDocument]
   );
+  // Titles name the PREPARED company, set only where a job is prepared, edited
+  // in Prepare, or restored: a draft edit to the job source clears the snapshot
+  // but must not retitle documents while the user types.
+  const titleCompanyRef = useRef("");
+  const freshResumeTitle = useCallback(
+    (data: ResumeData) => documentTitleForHeader("resume", data, titleCompanyRef.current),
+    []
+  );
+  const freshCoverLetterTitle = useCallback(
+    (data: ResumeData) => documentTitleForHeader("coverLetter", data, titleCompanyRef.current),
+    []
+  );
   const coverLetterEditorRef = useRef<TypesetEditorHandle>(null);
   const coverLetterEditor = useCoverLetterEditor({
     onOpenDocument: useCallback(() => {
@@ -726,9 +743,10 @@ function App() {
       coverLetterScrollTopRef.current = 0;
       coverLetterEditorRef.current?.focusDocumentStart();
     }, []),
-    defaultTitle: swapDocumentTitleKind(documentTitle, "coverLetter")
+    freshDocumentTitle: freshCoverLetterTitle
   });
   const setCoverLetterTitle = coverLetterEditor.setOutputDocumentTitle;
+  const followCoverLetterTitle = coverLetterEditor.followDocumentTitle;
   const [coverLetterInlineFormat, setCoverLetterInlineFormat] = useState<InlineFormatState>(EMPTY_INLINE_FORMAT);
   const [linkEditorOpen, setLinkEditorOpen] = useState(false);
   const currentResumeText = serializedResume || result?.proposalBaselineText || "";
@@ -750,6 +768,12 @@ function App() {
   }, [documentTitle]);
 
   // A queued extension run commits through the setter from its delivery render; compare with the live job.
+  // Job analysis commits from an async run, so read the names it titles with live.
+  const documentNamesRef = useRef({ resume: "", coverLetter: "" });
+  documentNamesRef.current = {
+    resume: resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText),
+    coverLetter: resolveResumeApplicantName(coverLetterEditor.data.header?.name, "")
+  };
   const importedJobRef = useRef(importedJob);
   importedJobRef.current = importedJob;
   const setImportedJobAndDocumentTitle = useCallback(
@@ -780,19 +804,13 @@ function App() {
         // A same-posting re-prepare keeps the current relationship unless its own run chose one.
         publishPreparationSession(newPreparationSession(relationship));
       }
-      const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
-      setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, applicantName));
+      titleCompanyRef.current = (snapshot.tracking.company || "").trim();
+      setDocumentTitle(documentTitleForJob("resume", snapshot.tracking, documentNamesRef.current.resume));
       // Retitle the letter for the new role too. Leaving it behind would keep the
       // previous company in the letter's name and in every file exported from it.
-      setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, applicantName));
+      setCoverLetterTitle(documentTitleForJob("coverLetter", snapshot.tracking, documentNamesRef.current.coverLetter));
     },
-    [
-      currentResumeText,
-      editedResume?.header?.name,
-      publishPreparationSession,
-      resumeText,
-      setCoverLetterTitle
-    ]
+    [publishPreparationSession, setCoverLetterTitle]
   );
   const handlePreparedJobTrackingChange = useCallback(
     (field: keyof ExtractedJobTracking, value: string | number | null) => {
@@ -825,12 +843,12 @@ function App() {
       setJobDescription(nextTailoringText);
       if (nextTailoringText !== importedJob.tailoringText) setResult(null);
       if (field === "role" || field === "title" || field === "company") {
-        const applicantName = resolveResumeApplicantName(editedResume?.header?.name, currentResumeText || resumeText);
-        setDocumentTitle(documentTitleForJob("resume", nextTracking, applicantName));
-        setCoverLetterTitle(documentTitleForJob("coverLetter", nextTracking, applicantName));
+        titleCompanyRef.current = (nextTracking.company || "").trim();
+        setDocumentTitle(documentTitleForJob("resume", nextTracking, documentNamesRef.current.resume));
+        setCoverLetterTitle(documentTitleForJob("coverLetter", nextTracking, documentNamesRef.current.coverLetter));
       }
     },
-    [currentResumeText, editedResume?.header?.name, importedJob, resumeText, setCoverLetterTitle]
+    [importedJob, setCoverLetterTitle]
   );
   const handlePreparedJobBriefChange = useCallback(
     (field: PreparedJobBriefField, value: string) => {
@@ -974,30 +992,37 @@ function App() {
     };
   }, [jobTracking.company, jobTracking.role]);
 
-  // The job and workspace resume load independently. If job intake initially
-  // produced a partial automatic title, complete it when either side of the
-  // structured identity becomes available. Only known automatic fallbacks are
-  // eligible, so a title the user edited remains untouched.
+  // Each title follows its document's identity until the user names it: typing
+  // a name or opening another document retitles an automatic title, never one
+  // the user typed. Letter titles earlier builds named for the resume's
+  // applicant also count as automatic.
+  const resumeApplicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
+  const coverLetterApplicantName = resolveResumeApplicantName(coverLetterEditor.data.header?.name, "");
+  const titleCompany = titleCompanyRef.current;
+  const resumeTitleIdentityRef = useRef<DocumentTitleIdentity>({ name: "", company: "" });
   useEffect(() => {
-    const applicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
-    const company = (jobTracking.company ?? "").trim();
-    if (!applicantName && !company) return;
+    const identity = { name: resumeApplicantName, company: titleCompany };
+    const previous = resumeTitleIdentityRef.current;
+    resumeTitleIdentityRef.current = identity;
     setDocumentTitle((current) =>
-      completeAutoDocumentTitle("resume", current, applicantName, company, [DEFAULT_DOCUMENT_TITLE])
+      followDocumentIdentityTitle("resume", current, identity, [previous], [DEFAULT_DOCUMENT_TITLE])
     );
-  }, [editedResume?.header?.name, jobTracking.company, resumeText]);
-
-  // The letter follows the same naming rule (Name_Company_Cover_Letter), so a
-  // resume and its letter for one role read as one application. Partial identity
-  // is enough here — the letter has no second automatic naming path to complete.
+  }, [resumeApplicantName, titleCompany]);
+  const coverTitleIdentityRef = useRef<DocumentTitleIdentity>({ name: "", company: "" });
   useEffect(() => {
-    const applicantName = resolveResumeApplicantName(editedResume?.header?.name, resumeText);
-    const company = (jobTracking.company ?? "").trim();
-    if (!applicantName && !company) return;
-    setCoverLetterTitle((current) =>
-      completeAutoDocumentTitle("coverLetter", current, applicantName, company, COVER_LETTER_TITLE_PLACEHOLDERS)
+    const identity = { name: coverLetterApplicantName, company: titleCompany };
+    const previous = coverTitleIdentityRef.current;
+    coverTitleIdentityRef.current = identity;
+    followCoverLetterTitle((current) =>
+      followDocumentIdentityTitle(
+        "coverLetter",
+        current,
+        identity,
+        [previous, { name: resumeApplicantName, company: titleCompany }],
+        COVER_LETTER_TITLE_PLACEHOLDERS
+      )
     );
-  }, [editedResume?.header?.name, jobTracking.company, resumeText, setCoverLetterTitle]);
+  }, [coverLetterApplicantName, followCoverLetterTitle, resumeApplicantName, titleCompany]);
 
   // Derive a short job-label for the autosave + cross-tab presence context (role
   // + company only — never the full JD body). Uses the shared `jobTracking` so
@@ -1352,6 +1377,7 @@ function App() {
     setResumeText,
     setFileName,
     setDocumentTitle,
+    freshDocumentTitle: freshResumeTitle,
     setResult,
     resetCoverWorkflow,
     setFileError,
@@ -2529,8 +2555,9 @@ function App() {
       );
       const restoredTailoringText = assemblePreparedJobTailoringText(restoredTracking, restoredBrief);
       const resumeTitle = documentTitleForJob("resume", restoredTracking, applicantName);
-      const coverTitle = documentTitleForJob("coverLetter", restoredTracking, applicantName);
-      if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitle)) {
+      const restoredCompany = (restoredTracking.company || "").trim();
+      const coverTitleFor = (data: ResumeData) => documentTitleForHeader("coverLetter", data, restoredCompany);
+      if (savedCoverSource && !coverLetterEditor.openApplicationSource(savedCoverSource, coverTitleFor)) {
         await alert({
           title: "Open failed",
           message: "The saved cover letter source could not be read."
@@ -2561,10 +2588,12 @@ function App() {
             }
           : null
       );
+      titleCompanyRef.current = restoredCompany;
       setDocumentTitle(resumeTitle);
       if (!savedCoverSource) {
+        // A Blank opened here is titled for the restored company, not the old one.
         coverLetterEditor.startBlank();
-        setCoverLetterTitle(coverTitle);
+        followCoverLetterTitle(() => buildDocumentTitle("coverLetter", "", restoredCompany));
       }
       // Restore a consistent AI-usage/raw-text pair regardless of which branch
       // below runs — a tracker-restore must not carry over the PREVIOUS working

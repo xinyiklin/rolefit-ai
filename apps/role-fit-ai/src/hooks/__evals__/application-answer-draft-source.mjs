@@ -73,6 +73,7 @@ export function renderPreparationDesk(context) {
   const clearPreparedResumeRecommendationRef = { current: () => undefined };
   const resolveResumeApplicantName = () => "", editedResume = null, currentResumeText = "", resumeText = "";
   const setDocumentTitle = () => undefined, documentTitleForJob = () => "", setCoverLetterTitle = () => undefined;
+  const documentNamesRef = { current: { resume: "", coverLetter: "" } }, titleCompanyRef = { current: "" };
   const handleLoadApplication = async () => false;
   ${sessionBlock}
   ${commitSetterBlock}

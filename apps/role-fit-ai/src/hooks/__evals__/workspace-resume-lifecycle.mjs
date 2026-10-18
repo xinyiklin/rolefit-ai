@@ -159,20 +159,20 @@ assert.ok(starterResponse >= 0 && starterCommit > starterResponse, "starter repl
 assert.match(starterLoad, /setBaseResumeName\(""\)/, "starter remains detached from the active saved base");
 assert.match(applyWorkspace, /if \(!baseResume\.text\) return null;/, "the unsaved bundled starter (exists: false) still opens");
 assert.match(applyWorkspace, /setFileName\(baseResume\.exists \? baseResume\.fileName \?\? "default" : "default"\)/, "an unsaved document's first Save targets the default base, not starter.resume");
-assert.match(starterLoad, /setDocumentTitle\("Resume"\)/, "the starter opens as an untitled resume");
+assert.match(starterLoad, /setDocumentTitle\(freshDocumentTitle\(applied\.data\)\)/, "the starter is titled for the resume it opens");
 
 const blankLoad = functionSlice("startBlankResume", "saveBaseResume");
 const blankApproval = blankLoad.indexOf("await approveCurrentReplacement()");
 const blankVersionCheck = blankLoad.indexOf("replacementGuard.currentVersion()", blankApproval);
 const blankRecovery = blankLoad.indexOf("replacementGuard.onReplacementCommitted()", blankVersionCheck);
 const blankIdentity = blankLoad.indexOf("detachBaseResumeIdentity()", blankRecovery);
-const blankSeed = blankLoad.indexOf("seedResumeData(createBlankResumeData())", blankIdentity);
+const blankSeed = blankLoad.indexOf("seedResumeData(blankData)", blankIdentity);
 assert.ok(blankApproval >= 0, "Blank uses the current dirty-document replacement guard");
 assert.ok(blankVersionCheck > blankApproval, "Blank re-checks the approved document version before commit");
 assert.ok(blankRecovery > blankVersionCheck, "Blank clears recovery only at the validated commit boundary");
 assert.ok(blankIdentity > blankRecovery, "Blank detaches saved-variant identity only inside the commit");
 assert.ok(blankSeed > blankIdentity, "Blank seeds a fresh canonical document after identity is detached");
-assert.match(blankLoad, /setDocumentTitle\("Resume"\)/, "Blank resets the visible document title");
+assert.match(blankLoad, /setDocumentTitle\(freshDocumentTitle\(blankData\)\)/, "Blank retitles the document for the blank resume it opens");
 assert.match(blankLoad, /setWorkspaceStatus\(""\)/, "Blank clears stale workspace save feedback");
 assert.match(blankLoad, /docStyle\.replaceDocumentStyle\(toDocumentStyle\(DOC_STYLE_DEFAULTS\)\)/, "Blank resets persisted document style");
 assert.match(blankLoad, /setResult\(null\)/, "Blank clears prior Resume tailoring output");

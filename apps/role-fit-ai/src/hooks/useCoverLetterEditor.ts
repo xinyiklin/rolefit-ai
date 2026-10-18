@@ -84,6 +84,16 @@ Dear [Hiring manager],
 Sincerely,
 [Your name]`;
 
+const STARTER_STATUS = "Starter opened. Complete the details beside the document before polishing.";
+
+// The Starter letter has the same sample letterhead the resume's Starter has.
+function starterCoverLetterData(): ResumeData {
+  return coverLetterResumeData(
+    coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
+    starterDocumentHeader()
+  );
+}
+
 // A blank letter has the same empty header a blank resume has.
 function blankCoverLetterData(): ResumeData {
   return coverLetterResumeData(coverLetterParagraphs(parseCoverLetterText("")), newDocumentHeader());
@@ -118,8 +128,8 @@ type UseCoverLetterEditorOptions = {
   // document. Deliberately NOT fired for a tailored result: that arrives while
   // the user is reading the review, and taking focus there would interrupt them.
   onOpenDocument?: () => void;
-  // The title Blank and Starter open with: the resume's, retargeted.
-  defaultTitle?: string;
+  // The title Blank and Starter open with, named for the letter they open.
+  freshDocumentTitle?: (data: ResumeData) => string;
 };
 
 type WorkspaceCoverLetterOpenOptions = {
@@ -137,8 +147,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   const editor = useTypesetResumeEditor(initialData);
   const onOpenDocumentRef = useRef(options.onOpenDocument);
   onOpenDocumentRef.current = options.onOpenDocument;
-  const defaultTitleRef = useRef(options.defaultTitle ?? "");
-  defaultTitleRef.current = options.defaultTitle ?? "";
+  const freshDocumentTitleRef = useRef(options.freshDocumentTitle);
+  freshDocumentTitleRef.current = options.freshDocumentTitle;
   const cancelStartupOpenRef = useRef(false);
   const workspaceReplacementOwnershipRef = useRef<
     ReturnType<typeof createCoverLetterReplacementOwnership> | null
@@ -179,6 +189,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     documentTitle,
     persistedDocumentTitle,
     setDocumentTitle: setDocumentTitleValue,
+    followDocumentTitle,
     dirty,
     recoveryDirty,
     commitPersistenceBaseline,
@@ -442,7 +453,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   // workspace variant, so later Save must ask for a destination rather than
   // overwriting whichever variant happened to be active beforehand.
   const openApplicationSource = useCallback(
-    (payload: string, title: string) => {
+    (payload: string, titleFor: (data: ResumeData) => string) => {
       try {
         const parsed = parseCoverLetterFile(payload);
         openDocument(parsed.data);
@@ -452,14 +463,15 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
           zoom: current.zoom,
           spellCheck: current.spellCheck
         }));
-        const nextTitle = title.trim() || documentTitle;
+        const title = titleFor(parsed.data).trim();
+        const nextTitle = title || documentTitle;
         commitPersistenceBaseline(
           serializeCoverLetterFile(parsed.data, parsed.style),
           nextTitle
         );
         setActiveCoverFileName("");
         saveLastCoverLetterName("");
-        if (title.trim()) setDocumentTitleValue(nextTitle);
+        if (title) setDocumentTitleValue(nextTitle);
         setStatus("Loaded the saved application cover letter.");
         return true;
       } catch {
@@ -470,8 +482,8 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     [commitPersistenceBaseline, documentTitle, editor.markClean, openDocument, setDocumentTitleValue]
   );
 
-  // Blank and Starter both open in the default style, like the resume's, and
-  // take their title from the resume's so the pair names one application.
+  // Blank and Starter both open in the default style, like the resume's, with
+  // the title the host gives the letter they open.
   const openFreshDocument = useCallback(
     (data: ResumeData, nextStatus: string) => {
       openDocument(data);
@@ -481,7 +493,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
         zoom: current.zoom,
         spellCheck: current.spellCheck
       }));
-      const title = defaultTitleRef.current.trim() || "Cover letter";
+      const title = freshDocumentTitleRef.current?.(data).trim() || "Cover letter";
       // A fresh letter has nothing to lose, so it opens clean rather than
       // "unsaved" — which warned on close and prompted to replace it.
       commitPersistenceBaseline(
@@ -501,13 +513,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
   }, [openFreshDocument]);
 
   const startStarter = useCallback(() => {
-    openFreshDocument(
-      coverLetterResumeData(
-        coverLetterParagraphs(parseCoverLetterText(COVER_LETTER_STARTER)),
-        starterDocumentHeader()
-      ),
-      "Starter opened. Complete the details beside the document before polishing."
-    );
+    openFreshDocument(starterCoverLetterData(), STARTER_STATUS);
   }, [openFreshDocument]);
 
   const openFile = useCallback(
@@ -866,6 +872,16 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
                 )
             }
           );
+        } else {
+          // With no saved letter a new session opens the Starter, as the resume
+          // does. Like any page-load letter it keeps the stored style and title.
+          const data = starterCoverLetterData();
+          openDocument(data, true);
+          editor.markClean();
+          commitPersistenceBaseline(
+            serializeCoverLetterFile(data, documentStyleToCoverLetterStyle(styleRef.current))
+          );
+          setStatus(STARTER_STATUS);
         }
       } finally {
         if (!cancelled) setIsWorkspaceBootstrapping(false);
@@ -874,7 +890,14 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     return () => {
       cancelled = true;
     };
-  }, [currentFingerprintRef, openWorkspaceCoverLetter, refreshCoverWorkspace]);
+  }, [
+    commitPersistenceBaseline,
+    currentFingerprintRef,
+    editor.markClean,
+    openDocument,
+    openWorkspaceCoverLetter,
+    refreshCoverWorkspace
+  ]);
 
   const restoreWorkspaceCoverLetter = useCallback(
     (key: string, confirmReplace?: () => Promise<boolean>): Promise<boolean> =>
@@ -996,6 +1019,7 @@ export function useCoverLetterEditor(options: UseCoverLetterEditorOptions = {}) 
     documentVersion,
     setDocumentTitle,
     setOutputDocumentTitle,
+    followDocumentTitle,
     docStyle,
     status,
     setStatus,
