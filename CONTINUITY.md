@@ -90,6 +90,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
   never moves line breaks. Parsers convert retired keys; 398 workspace files
   rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
   letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
+- [USER+CODE+TOOL] **Engine CI runs only when the engine can change**:
+  `scripts/ci-coverage-selection.mjs` skips `Engine codecs, layout, and PDF`
+  unless `packages/engine/**` or a root input changed, and the ~7 min
+  `fonts:check` moved to a parallel `Engine font assets` job for font paths.
 - [USER+CODE+TOOL] **Letter Spacing menu and menu polish** (D083; branch
   `claude/letter-resume-menu-polish`, after #239): letter gets Spacing; all
   style menus compacted. Headless-Chrome QA in both apps (behavior,
