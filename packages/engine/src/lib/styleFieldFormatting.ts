@@ -11,7 +11,7 @@ import {
   setFieldOuterSize,
   setFieldSize,
   stripInlineMarks,
-  fieldSizePt,
+  fieldMainSizePt,
   type FieldAlignment,
   type FieldFontFamily,
   type FieldFontState,
@@ -229,8 +229,8 @@ export function styleFieldSizeStates(data: ResumeData): StyleFieldSizeStates {
     const fallback = styleFieldDefaultSizePt(field);
     const values = styleFieldValues(data, field);
     if (!values.length) return [field, fallback];
-    // A field's size is the one most of its text carries; words may differ.
-    const states = values.map((value) => fieldSizePt(value) ?? fallback);
+    // A field's main size: the one most of its text carries; words may differ.
+    const states = values.map((value) => fieldMainSizePt(value) ?? fallback);
     const first = states[0];
     return [field, first !== null && states.every((state) => state === first) ? first : null];
   })) as StyleFieldSizeStates;

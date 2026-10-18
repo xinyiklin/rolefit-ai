@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import { DOC_STYLE_DEFAULTS } from "../../lib/documentStyle.ts";
 import { coverLetterResumeData } from "../../lib/coverLetter.ts";
+import { skillsRowText, wholeFieldFormat, withWholeFieldFormat } from "../../lib/inlineMarksText.ts";
 import { layoutCoverLetter, layoutResume } from "../layout.ts";
 import { toTypesetSchema } from "../schema.ts";
 
@@ -193,4 +194,30 @@ console.log("uppercase headings transform text, not tags");
     assert.deepEqual(variantGaps.slice(1), plain.slice(1), `${variant.slice(0, 40)}…: lines after the odd word keep the 12 pt spacing`);
   }
   console.log("a word sized inside a field never re-spaces it");
+}
+
+// 8. Spacing follows the first character (D081, accepted): a sized lead-in word
+//    spaces its whole paragraph, and Polish carry follows the main text.
+{
+  const leadGaps = (bullet) => {
+    const doc = layoutResume(toTypesetSchema(data([standard([bullet])])), DOC_STYLE_DEFAULTS);
+    const baselines = lines(doc).filter((line) => line.runs.some((run) => run.src?.kind === "bullet")).map((line) => line.baseline);
+    return baselines.slice(1).map((baseline, index) => Math.round((baseline - baselines[index]) * 1000) / 1000);
+  };
+  const tail = " fast services for many partners across several wrapped lines of text".repeat(3);
+  assert.equal(leadGaps(`<size=14>Built</size>${tail}`)[0], leadGaps(`<size=14>Built${tail}</size>`)[0],
+    "a 14 pt lead-in spaces its paragraph's lines as 14 pt text does");
+  const carried = withWholeFieldFormat("Rewritten bullet", wholeFieldFormat(`<size=14>Built</size><size=12>${tail}</size>`));
+  assert.equal(carried, "<size=12>Rewritten bullet</size>", "an accepted rewrite takes the main size, not the lead-in's");
+  console.log("a sized lead-in spaces its paragraph; carry follows the main text");
+}
+
+// 9. The skills separator takes the main size both columns agree on, even when
+//    one skill is set apart.
+{
+  const separator = skillsRowText("<size=12><b>Languages</b></size>", "<size=12>Python, </size><size=13>Go</size>");
+  assert.match(separator, /<size=12>(?:<b>)?: /, "the separator keeps the columns' shared main size");
+  assert.doesNotMatch(skillsRowText("<size=12><b>Languages</b></size>", "Python, Java"), /<size=12>(?:<b>)?: /,
+    "a size only the label has stays off the separator");
+  console.log("the skills separator follows the columns' main size");
 }

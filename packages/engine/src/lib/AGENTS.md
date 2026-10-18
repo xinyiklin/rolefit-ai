@@ -20,8 +20,8 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   resume defaults; `coverLetter.ts` states them as inert zeroes for the shared
   editor's sake alone.
 - `documentTypography.ts` owns the per-role default text sizes (`TEXT_SIZES_PT`)
-  that resumes and letters share, and `fieldRoleSizePt`: a field's whole-field
-  `<size>` replaces its role default. No role derives from another (D081).
+  that resumes and letters share, and `fieldRoleSizePt`, the size a field's
+  spacing follows. No role derives from another (D081).
 - `legacyTextSizes.ts` converts files saved with the retired document size
   (`baseFontSizePt`, a letter's `fontSizePt`) on read: the implied sizes and
   the name's former forced bold move onto the fields. Both codecs call it;
@@ -62,11 +62,11 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   the engine paints `SS`), a known one-character drift after such a glyph.
 - `styleFieldFormatting.ts` owns reusable bulk/effective formatting across the
   name, contact, headings, entry columns, skill labels, and body text, not
-  toolbar state or presentation. A field's size is the size its first
-  character carries (`fieldSizePt`, read from meaning so editor re-spelled runs
-  count the same); layout spacing (`fieldRoleSizePt`), the Styles state, and the
-  Body control all use it, so typing or sizing a word inside a field never moves
-  it. Body text changes that main size or font
+  toolbar state or presentation. Layout spacing and the bullet dot follow a
+  field's first character (`fieldSizePt`), which typing never moves; the Styles
+  state, Body control, Polish carry, and seeding use its main size, the one
+  most of its text carries (`fieldMainSizePt`). Both read meaning, so editor
+  re-spelled runs count the same. Body text changes that main size or font
   (`setFieldOuterSize`/`setFieldOuterFont`) and has no whole-field emphasis, so
   per-word formatting survives; `withWholeFieldFormat` carries a field's size
   and font onto Polish replacements, which arrive without them.

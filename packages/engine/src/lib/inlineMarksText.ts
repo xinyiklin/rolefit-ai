@@ -374,21 +374,60 @@ function leadingOverride(value: string, kind: OverrideKind): string | null | und
   return value.slice(cursor).trim() ? top() : undefined;
 }
 
-// A field's size: the explicit size its first character is set at, or null
-// when that character follows the role default. Words after it may differ.
+// The override most of a field's visible characters carry (null: none), ties
+// going to the first character's; undefined when it has no visible text.
+function mainOverride(value: string, kind: OverrideKind): string | null | undefined {
+  const lead = leadingOverride(value, kind);
+  if (lead === undefined) return undefined;
+  const counts = new Map<string | null, number>();
+  const stack: (string | null)[] = [];
+  const top = () => (stack.length ? stack[stack.length - 1] : null);
+  const count = (chars: number) => {
+    if (chars) counts.set(top(), (counts.get(top()) ?? 0) + chars);
+  };
+  let cursor = 0;
+  for (const match of value.matchAll(INLINE_TAG_RE)) {
+    count(value.slice(cursor, match.index).replace(/\s+/g, "").length);
+    cursor = match.index + match[0].length;
+    if (isInlineLiteralLessThan(match[0])) {
+      count(1);
+      continue;
+    }
+    const opened = overrideOpen(kind, match[0]);
+    if (opened === INERT_OPEN_TAG) stack.push(top());
+    else if (opened !== null) stack.push(opened);
+    else if (overrideClose(kind, match[0])) stack.pop();
+  }
+  count(value.slice(cursor).replace(/\s+/g, "").length);
+  let best = lead;
+  for (const [key, total] of counts) if (total > (counts.get(best) ?? 0)) best = key;
+  return best;
+}
+
+// A field's spacing size: the explicit size its first character is set at, or
+// null when that character follows the role default. Typing later in the field
+// never changes it, so layout spacing and the bullet dot use it.
 export function fieldSizePt(value: string): number | null {
   const size = leadingOverride(value, "size");
   return size === null || size === undefined ? null : Number(size);
 }
 
-function fieldFontOverride(value: string): FieldFontFamily | null {
-  return (leadingOverride(value, "font") ?? null) as FieldFontFamily | null;
+// A field's main size: the explicit size most of its text carries, or null when
+// most of it follows the role default. The Styles state, Body changes, Polish
+// carry, and new-field seeding use it (one-shot reads, never re-run per key).
+export function fieldMainSizePt(value: string): number | null {
+  const size = mainOverride(value, "size");
+  return size === null || size === undefined ? null : Number(size);
+}
+
+function fieldMainFont(value: string): FieldFontFamily | null {
+  return (mainOverride(value, "font") ?? null) as FieldFontFamily | null;
 }
 
 export type WholeFieldFormat = { sizePt: number | null; fontFamily: FieldFontFamily | null };
 
 export function wholeFieldFormat(value: string): WholeFieldFormat {
-  return { sizePt: fieldSizePt(value), fontFamily: fieldFontOverride(value) };
+  return { sizePt: fieldMainSizePt(value), fontFamily: fieldMainFont(value) };
 }
 
 // The field size and font every non-empty value agrees on.
@@ -403,8 +442,8 @@ export function sharedWholeFieldFormat(values: readonly string[]): WholeFieldFor
 // its own, so an accepted rewrite keeps the field's look.
 export function withWholeFieldFormat(value: string, format: WholeFieldFormat): string {
   let next = value;
-  if (format.fontFamily !== null && fieldFontOverride(next) === null) next = setFieldOuterFont(next, format.fontFamily);
-  if (format.sizePt !== null && fieldSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
+  if (format.fontFamily !== null && fieldMainFont(next) === null) next = setFieldOuterFont(next, format.fontFamily);
+  if (format.sizePt !== null && fieldMainSizePt(next) === null) next = setFieldOuterSize(next, format.sizePt);
   return next;
 }
 
@@ -432,14 +471,18 @@ function retagOverridePairs(escaped: string, kind: OverrideKind, from: string, t
     .reduce((text, edit) => text.slice(0, edit.at) + edit.text + text.slice(edit.at + edit.length), escaped);
 }
 
-// Set the size (or font) of a field's main text, the run its first character
-// belongs to, keeping words set to other sizes, for body text. null returns that
-// text to the role default.
+// Set the size (or font) of a field's main text, the override most of it
+// carries, keeping words set otherwise, for body text. null returns that text
+// to the role default (unwrapping nested main wrappers until none is left).
 function setFieldMainOverride(value: string, kind: OverrideKind, next: string | null): string {
   return withInlineLiteralsProtected(value, (escaped) => {
-    const main = leadingOverride(escaped, kind);
+    let main = mainOverride(escaped, kind);
     if (main === undefined) return escaped;
-    if (main !== null) return retagOverridePairs(escaped, kind, main, next);
+    if (main !== null && next !== null) return retagOverridePairs(escaped, kind, main, next);
+    for (let guard = 0; main !== null && main !== undefined && guard < 64; guard += 1) {
+      escaped = retagOverridePairs(escaped, kind, main, null);
+      main = mainOverride(escaped, kind);
+    }
     if (next === null) return escaped;
     const tag = kind === "size" ? "size" : "font";
     return `<${tag}=${next}>${escaped}</${tag}>`;
@@ -562,9 +605,13 @@ export function skillsRowText(label: string, skills: string): string {
     return isInlineFontSizePt(Number(opened[1])) ? Number(opened[1]) : INERT_OPEN_TAG;
   }, /^<\/size>$/i);
   const family = shared((tag) => FONT_OPEN_RE.exec(tag)?.[1].toLowerCase() as FieldFontFamily ?? null, /^<\/font>$/i);
+  // One skill set apart must not drop the separator to the default: fall back
+  // to the main size both columns agree on.
+  const mainSize = fieldMainSizePt(label) === fieldMainSizePt(skills) ? fieldMainSizePt(skills) : null;
+  const separatorSize = sizePt ?? mainSize ?? undefined;
   const tags = [
     alignment ? `align=${alignment}` : "",
-    sizePt ? `size=${sizePt}` : "",
+    separatorSize ? `size=${separatorSize}` : "",
     family ? `font=${family}` : "",
     ...(["bold", "italic", "underline"] as const).map((mark) => (fieldMarkState(row, mark) === true ? MARK_TAG[mark] : ""))
   ].filter(Boolean);
