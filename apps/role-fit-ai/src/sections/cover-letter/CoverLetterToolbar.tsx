@@ -329,6 +329,7 @@ export function CoverLetterToolbar({
           fontSize: {
             value: inlineFormat.fontSizePt,
             onChange: (fontSizePt) => editorRef.current?.setFontSize(fontSizePt),
+            onStep: (deltaPt) => editorRef.current?.stepFontSize(deltaPt),
             disabled: false
           },
           alignment: {

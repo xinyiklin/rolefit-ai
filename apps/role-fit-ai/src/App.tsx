@@ -3044,6 +3044,7 @@ function App() {
                     fontSize: {
                       value: inlineFormat.fontSizePt,
                       onChange: (fontSizePt) => typesetEditorRef.current?.setFontSize(fontSizePt),
+                      onStep: (deltaPt) => typesetEditorRef.current?.stepFontSize(deltaPt),
                       disabled: false
                     },
                     alignment: {

@@ -2,6 +2,7 @@
 // Pure inline editing stays in inlineTextEditing.ts; reducer dispatch stays at
 // this explicit domain boundary.
 
+import { skillsRowText } from "@typeset/engine/lib/inlineMarksText.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import { fieldKey, type FieldSrc } from "@typeset/engine/typeset/types.ts";
 import type {
@@ -60,7 +61,7 @@ export function valueForField(data: ResumeData, src: FieldSrc): string {
       // Leading whitespace is outside the printable field, but label-end and
       // skills-end whitespace are live typing state and must survive repaint.
       const label = (entry.titleLeft ?? "").trimStart();
-      return label ? `${label}: ${entry.subtitleLeft}` : entry.subtitleLeft ?? "";
+      return skillsRowText(label, entry.subtitleLeft ?? "");
     }
   }
 }
@@ -216,10 +217,12 @@ function skillsRowColumns(value: string): { label: string; skills: string } {
   const map = buildDisplayMap(value, { preserveWhitespace: true });
   const colon = map.display.indexOf(":");
   if (colon <= 0 || colon > 40) return { label: "", skills: value.trimStart() };
-  const serializedSkills = splitValueAt(map, colon + 1).after;
+  // The separator space is a display character that may sit inside the row's
+  // formatting tags; dropping it as raw text left it there to accumulate.
+  const skillsStart = map.display[colon + 1] === " " ? colon + 2 : colon + 1;
   return {
     label: splitValueAt(map, colon).before.trimStart(),
-    skills: serializedSkills.startsWith(" ") ? serializedSkills.slice(1) : serializedSkills
+    skills: splitValueAt(map, skillsStart).after
   };
 }
 

@@ -425,3 +425,36 @@ export function setFieldMark(value: string, mark: FieldMark, on: boolean): strin
     return `<${tag}>${stripped}</${tag}>`;
   });
 }
+
+// A skills row's one painted and editable value, joined from its two stored
+// columns. The ": " separator belongs to neither column, so it is written as its
+// own run carrying the alignment, size, family, and emphasis EVERY character of
+// both columns shares — what a whole-row command applied — instead of the
+// default format. It reads meaning, not tag spelling: the editor writes a row
+// back as several runs whenever one skill differs. Links never extend onto it.
+// Both columns need text: a label alone would hand its bold to skills typed
+// after the separator.
+export function skillsRowText(label: string, skills: string): string {
+  if (!label) return skills;
+  if (!stripInlineMarks(label).trim() || !stripInlineMarks(skills).trim()) return `${label}: ${skills}`;
+  const row = joinInlineMarkText(label, skills).value;
+  // `undefined` is "nothing overrides it"; null is a mix.
+  const shared = <T>(parseOpen: (tag: string) => T | typeof INERT_OPEN_TAG | null, close: RegExp) =>
+    effectiveTagValue<T | undefined>(row, undefined, parseOpen, (tag) => close.test(tag)) ?? undefined;
+  const alignment = shared((tag) => /^<align=(left|center|right|justify)>$/i.exec(tag)?.[1].toLowerCase() as FieldAlignment ?? null, /^<\/align>$/i);
+  const sizePt = shared((tag) => {
+    const opened = SIZE_OPEN_RE.exec(tag);
+    if (!opened) return null;
+    return isInlineFontSizePt(Number(opened[1])) ? Number(opened[1]) : INERT_OPEN_TAG;
+  }, /^<\/size>$/i);
+  const family = shared((tag) => FONT_OPEN_RE.exec(tag)?.[1].toLowerCase() as FieldFontFamily ?? null, /^<\/font>$/i);
+  const tags = [
+    alignment ? `align=${alignment}` : "",
+    sizePt ? `size=${sizePt}` : "",
+    family ? `font=${family}` : "",
+    ...(["bold", "italic", "underline"] as const).map((mark) => (fieldMarkState(row, mark) === true ? MARK_TAG[mark] : ""))
+  ].filter(Boolean);
+  const opens = tags.map((tag) => `<${tag}>`).join("");
+  const closes = tags.map((tag) => `</${tag.split("=")[0]}>`).reverse().join("");
+  return joinInlineMarkText(joinInlineMarkText(label, `${opens}: ${closes}`).value, skills).value;
+}

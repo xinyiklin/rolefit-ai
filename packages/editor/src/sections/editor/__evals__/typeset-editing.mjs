@@ -22,7 +22,9 @@ import {
   setParagraphSpaceAfter,
   setParagraphSpaceBefore,
   setEmptyFieldTypingFormat,
+  setFontFamily,
   setFontSize,
+  stepFontSize,
   splitValueAt,
   suppressedAutoLinkValue,
   toggleMark,
@@ -108,6 +110,70 @@ assert.equal(valueForField(storedData(), skillsSrc), "Tools: React, ");
 commitField(actions, skillsSrc, "Programming : React");
 assert.deepEqual(storedRow, { label: "Programming ", skills: "React" });
 assert.equal(valueForField(storedData(), skillsSrc), "Programming : React");
+
+// Whole-row formatting writes the row back with its separator in the same
+// format and exactly one separator space, however many times it repeats. A
+// separator left in the default format turned the row mixed after one step, and
+// a separator space kept inside the size tag grew by one per command.
+storedRow = { label: "<b>Tools</b>", skills: "Git, Docker" };
+for (const [name, format] of [
+  ["size", (map) => setFontSize(map, 0, map.chars.length, 11)],
+  ["step up", (map) => stepFontSize(map, 0, map.chars.length, 1, 10)],
+  ["step down", (map) => stepFontSize(map, 0, map.chars.length, -1, 10)],
+  ["family", (map) => setFontFamily(map, 0, map.chars.length, "tinos")],
+  ["italic", (map) => toggleMark(map, 0, map.chars.length, "italic")],
+  ["alignment", (map) => setAlignment(map, "center")]
+]) {
+  const map = buildDisplayMap(valueForField(storedData(), skillsSrc), { preserveWhitespace: true });
+  commitField(actions, skillsSrc, format(map).value);
+  const after = buildDisplayMap(valueForField(storedData(), skillsSrc), { preserveWhitespace: true });
+  assert.equal(after.display, "Tools: Git, Docker", `whole-row ${name} keeps one separator space`);
+  for (const key of ["fontSizePt", "fontFamily", "italic", "alignment"]) {
+    assert.equal(new Set(after.chars.map((char) => char[key])).size, 1, `whole-row ${name} leaves ${key} uniform`);
+  }
+}
+assert.deepEqual(storedRow, {
+  label: "<align=center><size=11><font=tinos><b><i>Tools</i></b></font></size></align>",
+  skills: "<align=center><size=11><font=tinos><i>Git, Docker</i></font></size></align>"
+});
+
+// Skills typed after a bold label inherit the plain separator, not the label.
+for (const skills of ["", "<b></b>"]) {
+  storedRow = { label: "<b>Tools</b>", skills };
+  const typing = buildDisplayMap(valueForField(storedData(), skillsSrc), { preserveWhitespace: true });
+  commitField(actions, skillsSrc, applyEdit(typing, typing.chars.length, typing.chars.length, "Git").value);
+  assert.deepEqual(storedRow, { label: "<b>Tools</b>", skills: "Git" }, `typed skills stay plain after ${JSON.stringify(skills)}`);
+}
+
+// A row with one differently formatted skill is written back as several runs;
+// the separator still follows every whole-row command, and stays put through a
+// later edit elsewhere in the row.
+storedRow = { label: "<b>Tools</b>", skills: "Git, <i>Docker</i>" };
+const rowMap = () => buildDisplayMap(valueForField(storedData(), skillsSrc), { preserveWhitespace: true });
+const separatorSizes = () => rowMap().chars.slice(5, 7).map((char) => char.fontSizePt);
+for (const delta of [1, 1, -1]) {
+  const map = rowMap();
+  commitField(actions, skillsSrc, stepFontSize(map, 0, map.chars.length, delta, 10).value);
+}
+assert.equal(rowMap().display, "Tools: Git, Docker");
+assert.equal(new Set(rowMap().chars.map((char) => char.fontSizePt)).size, 1, "an inner-italic row steps as one size");
+const boldDocker = rowMap();
+commitField(actions, skillsSrc, toggleMark(boldDocker, 12, 18, "bold").value);
+assert.deepEqual(separatorSizes(), [11, 11], "bolding one skill afterwards keeps the separator's size");
+assert.equal(rowMap().display, "Tools: Git, Docker");
+
+// Stepping a mixed selection moves every run from its OWN size, clamped to the
+// inline bounds; unsized text steps from the field's default size.
+assert.deepEqual(
+  buildDisplayMap(stepFontSize(buildDisplayMap("<size=20>A</size>b<size=200>C</size>", { preserveWhitespace: true }), 0, 3, 1, 10).value)
+    .chars.map((char) => [char.raw, char.fontSizePt]),
+  [["A", 21], ["b", 11], ["C", 200]]
+);
+assert.deepEqual(
+  buildDisplayMap(stepFontSize(buildDisplayMap("<size=1>A</size>b", { preserveWhitespace: true }), 0, 2, -1, 10).value)
+    .chars.map((char) => [char.raw, char.fontSizePt]),
+  [["A", 1], ["b", 9]]
+);
 
 // An unusable <size> keeps its stack slot in the editor exactly as in the
 // engine's segmenter, so its </size> cannot pop an outer size and the display

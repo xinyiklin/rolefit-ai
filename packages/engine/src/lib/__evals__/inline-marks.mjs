@@ -17,6 +17,7 @@ import {
   setFieldFont,
   setFieldMark,
   setFieldSize,
+  skillsRowText,
   stripInlineMarks,
   uppercaseInlineMarkedText
 } from "../inlineMarksText.ts";
@@ -192,6 +193,40 @@ for (let run = 0; run < 3000; run += 1) {
   assert.equal(joined.value, whole, `join(${JSON.stringify(left)}, ${JSON.stringify(right)})`);
   assert.equal(stripInlineMarks(joined.value.slice(0, joined.index)), source.slice(0, at), "the join index separates the halves");
 }
+
+// A skills row's ": " separator is its own run in the format every character of
+// both columns shares — by meaning, not tag spelling — so a whole-row size,
+// font, or emphasis covers it; the painted text is unchanged.
+for (const [label, skills, expected, why] of [
+  ["<b>Tools</b>", "Git", "<b>Tools</b>: Git", "formatting only one column has leaves the separator plain"],
+  ["", "Git", "Git", "a rowless label paints the skills alone"],
+  ["<size=12><b>Tools</b></size>", "<size=12>Git</size>", "<size=12><b>Tools</b></size><size=12>: </size><size=12>Git</size>", "a whole-row size covers the separator"],
+  ["<size=14><b>Tools</b></size>", "<size=14>Git, </size><size=14><b>Docker</b></size>", "<size=14><b>Tools</b></size><size=14>: </size><size=14>Git, </size><size=14><b>Docker</b></size>", "a row written as several runs still shares its size"],
+  ["<b><i>Tools</i></b>", "<i>Git</i>", "<b><i>Tools</i></b><i>: </i><i>Git</i>", "shared emphasis covers the separator; the label's own bold does not"],
+  ["<align=center><font=tinos>Tools</font></align>", "<align=center><font=tinos><u>Git</u></font></align>", "<align=center><font=tinos>Tools</font></align><align=center><font=tinos>: </font></align><align=center><font=tinos><u>Git</u></font></align>", "alignment and family are shared, a one-sided underline is not"],
+  ["<size=12>Tools</size>", "Git", "<size=12>Tools</size>: Git", "a size on one column only leaves the separator at the default"],
+  ["<b>Tools</b>", "<b></b>", "<b>Tools</b>: <b></b>", "a label alone never formats the separator, so typed skills stay plain"],
+  ["<b>Tools</b>", "", "<b>Tools</b>: ", "an empty skills column leaves the separator plain"],
+  ["<b>Tools <lt>link=x", "<b>Git</b>", "<b>Tools <lt>link=x<b>: </b><b>Git</b>", "a literal \"<\" ending the label cannot open a tag with the separator"],
+  ["<link=https://a.example>Tools</link>", "<link=https://a.example>Git</link>", "<link=https://a.example>Tools</link>: <link=https://a.example>Git</link>", "a link never extends onto the separator"],
+  ["<size=12>a<lt>b</size>", "<size=12>Git</size>", "<size=12>a<b</size><size=12>: </size><size=12>Git</size>", "a literal \"<\" is text, not a tag, in its canonical spelling"]
+]) {
+  const joined = skillsRowText(label, skills);
+  assert.equal(joined, expected, why);
+  assert.equal(stripInlineMarks(joined), label ? `${stripInlineMarks(label)}: ${stripInlineMarks(skills)}` : stripInlineMarks(skills), `${why}: painted text unchanged`);
+}
+assert.deepEqual(
+  segmentsFromInlineMarks(skillsRowText("<font=tinos><size=14><b>Tools</b></size></font>", "<font=tinos><size=14>Git</size></font>"))
+    .map((segment) => [segment.text, segment.fontFamily, segment.fontSizePt, segment.bold]),
+  [["Tools", "tinos", 14, true], [": ", "tinos", 14, false], ["Git", "tinos", 14, false]],
+  "the painted separator carries the row's family and size but not the label's bold"
+);
+
+// The shared-format walk is one pass: a crafted file of deeply nested tags stays fast.
+const nested = `${"<b>".repeat(32000)}Git${"</b>".repeat(32000)}`;
+const joinStarted = performance.now();
+assert.equal(stripInlineMarks(skillsRowText(nested, nested)), "Git: Git");
+assert.ok(performance.now() - joinStarted < 2000, "joining 32,000 nested wrappers takes well under two seconds");
 
 // Escaping is one pass: thousands of needed escapes in a long field stay fast.
 const manyTags = escapeInlineMarkText("<b>x".repeat(40000));

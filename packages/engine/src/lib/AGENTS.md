@@ -42,7 +42,15 @@ remain in `PRODUCT.md` and `DESIGN.md`.
   Never concatenate or regex-strip stored values directly: a bare literal `<`
   at a seam can complete a tag. Join with `joinInlineMarkText`, run raw
   strip/wrap transforms inside `withInlineLiteralsProtected`, and use
-  `canonicalInlineMarkText` for the stored spelling.
+  `canonicalInlineMarkText` for the stored spelling. `skillsRowText` is the
+  one join of a skills row's label and skills columns, shared by the painter
+  and the editor's field value: its `: ` separator is written as its own run in
+  the alignment, size, family, and emphasis that every non-space character of
+  BOTH columns shares (never a link), so a whole-row command covers it. Both
+  columns must have text, and a format only one column has (a label sized from
+  the Styles menu) stays off it: typed skills would inherit it. It reads
+  meaning, not tag spelling, because the editor writes a row back as several
+  runs whenever one skill differs.
   `uppercaseInlineMarkedText` is the engine's case transform: it uppercases text
   and leaves tag payloads (link destinations, family ids) alone. The editor's
   display map uppercases per display character (`ß` shows as `S` there while
