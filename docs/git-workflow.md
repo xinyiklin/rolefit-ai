@@ -15,6 +15,12 @@ Common types are `feature`, `fix`, `refactor`, and `docs`. Name the behavior
 slice, not merely the workspace: `fix/rolefit-distill-gate` is clearer than
 `fix/app`; `refactor/editor-toolbar-contract` is clearer than `refactor/shared`.
 
+A harness-created worktree branch (for example the desktop app's
+`claude/<session-name>`) is a placeholder: rename it with
+`git branch -m <type>/<short-kebab-task>` before its first push. Renaming the
+session's own unpushed branch is part of the requested push, not a branch
+switch.
+
 ## Commits
 
 Use Conventional Commit subjects:
@@ -27,6 +33,15 @@ Useful monorepo scopes include `engine`, `editor`, `typeset`, `rolefit`,
 `server`, `ai`, `extension`, `workspace`, `deps`, `docs`, and `ci`. Keep one
 coherent behavior slice per commit. A package change and the necessary consumer
 updates belong together when splitting them would leave the branch broken.
+
+Agent attribution is off: never add `Co-Authored-By: Claude …` trailers or
+"Generated with Claude Code" lines to commits or PR bodies, even when earlier
+history carries them. The tracked `.githooks/commit-msg` hook, which
+`npm install` enables through `core.hooksPath`, rejects them locally; it does
+not run for cherry-picks or rebases, so amend a carried trailer away. A squash
+merge builds its message on GitHub, outside the hook, so merge with an explicit
+subject and body (`gh pr merge --squash --subject … --body …`) instead of the
+concatenated commit messages.
 
 ## Pull requests
 
@@ -80,11 +95,11 @@ release/publish workflow, wait for successful completion, and retain the
 workflow or live-environment receipt. A versioned change is incomplete until
 that release/deploy completion is confirmed.
 
-The receipt exists only after the tag runs, so it cannot ride in the release
-PR. Report it to the user at once, then record it in `CONTINUITY.md` (including
-its "Current" release line) in the next PR, not a dedicated receipt PR. Open a
-receipt-only PR only when no other change is expected soon, because a stale
-"Current" line misleads the next session.
+GitHub is the release record: `gh release list` and `gh release view <tag>`
+show the release, publish time, and assets, and `gh run list --workflow <file>`
+shows the workflow result. Report the tag, run, and asset check to the user at
+once, and do not copy them into `CONTINUITY.md`. A release therefore needs no
+follow-up PR.
 
 ## Versioning and release suggestions
 

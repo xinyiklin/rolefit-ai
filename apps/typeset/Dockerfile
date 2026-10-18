@@ -13,6 +13,9 @@ COPY package.json package-lock.json .npmrc ./
 COPY packages/engine/package.json packages/engine/
 COPY packages/editor/package.json packages/editor/
 COPY apps/typeset/package.json apps/typeset/
+# The root `prepare` script runs under --include-workspace-root; without git in
+# the image it exits immediately.
+COPY scripts/install-git-hooks.mjs scripts/
 RUN test "$(node --version)" = "v24.18.0" \
     && test "$(npm --version)" = "11.16.0"
 RUN npm ci --workspace apps/typeset --include-workspace-root

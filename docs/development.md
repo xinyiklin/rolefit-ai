@@ -47,7 +47,7 @@ version.
 ## Common commands
 
 ```bash
-npm install
+npm install                 # also enables the tracked .githooks/ (core.hooksPath)
 
 npm run dev:typeset       # http://localhost:5186, HMR 24686
 npm run dev:rolefit       # http://localhost:5181
