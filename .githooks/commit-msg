@@ -1,0 +1,6 @@
+#!/bin/sh
+# Agent attribution is off in this repository (docs/git-workflow.md#commits).
+if grep -Eiq '^co-authored-by:.*(claude|anthropic)|generated with \[?claude code' "$1"; then
+  echo "commit-msg: remove the Claude Co-Authored-By / \"Generated with Claude Code\" line; agent attribution is off here (docs/git-workflow.md)." >&2
+  exit 1
+fi

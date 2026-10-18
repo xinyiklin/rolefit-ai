@@ -15,6 +15,12 @@ Common types are `feature`, `fix`, `refactor`, and `docs`. Name the behavior
 slice, not merely the workspace: `fix/rolefit-distill-gate` is clearer than
 `fix/app`; `refactor/editor-toolbar-contract` is clearer than `refactor/shared`.
 
+A harness-created worktree branch (for example the desktop app's
+`claude/<session-name>`) is a placeholder: rename it with
+`git branch -m <type>/<short-kebab-task>` before its first push. Renaming the
+session's own unpushed branch is part of the requested push, not a branch
+switch.
+
 ## Commits
 
 Use Conventional Commit subjects:
@@ -27,6 +33,14 @@ Useful monorepo scopes include `engine`, `editor`, `typeset`, `rolefit`,
 `server`, `ai`, `extension`, `workspace`, `deps`, `docs`, and `ci`. Keep one
 coherent behavior slice per commit. A package change and the necessary consumer
 updates belong together when splitting them would leave the branch broken.
+
+Agent attribution is off: never add `Co-Authored-By: Claude …` trailers or
+"Generated with Claude Code" lines to commits or PR bodies, even when earlier
+history carries them. The tracked `.githooks/commit-msg` hook, which
+`npm install` enables through `core.hooksPath`, rejects them locally. A squash
+merge builds its message on GitHub, outside the hook, so merge with an explicit
+subject and body (`gh pr merge --squash --subject … --body …`) instead of the
+concatenated commit messages.
 
 ## Pull requests
 
