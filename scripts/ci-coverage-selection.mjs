@@ -21,11 +21,13 @@ export function needsEngine(paths) {
   return paths.length === 0 || paths.some(path => path.startsWith('packages/engine/') || ENGINE_ROOT_INPUTS.has(path));
 }
 
-// The font generators read and write only these engine paths.
+// The font generators read and write only these engine paths; the manifest
+// defines the `fonts:check` command itself.
 export function needsEngineFonts(paths) {
   return paths.length === 0 || paths.some(path =>
     path.startsWith('packages/engine/scripts/') || path.startsWith('packages/engine/fonts/') ||
-    path === 'packages/engine/src/typeset/metrics.gen.ts' || CI_WIRING.has(path));
+    path === 'packages/engine/src/typeset/metrics.gen.ts' || path === 'packages/engine/package.json' ||
+    CI_WIRING.has(path));
 }
 
 const RUN_ALL = { extended: true, engine: true, engineFonts: true };

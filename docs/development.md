@@ -192,12 +192,14 @@ layout, and PDF` (typecheck + evals) runs only for `packages/engine/**` or a
 root input (manifest, lockfile, `.node-version`, `.npmrc`, `tsconfig.base.json`,
 this workflow, the selector), and `Engine font assets` (`fonts:check`, about
 seven minutes of regeneration) runs in parallel only for
-`packages/engine/{scripts,fonts}/**`, `metrics.gen.ts`, or the CI wiring.
+`packages/engine/{scripts,fonts}/**`, `metrics.gen.ts`, the engine manifest, or
+the CI wiring. Diff-based selection tests each push's own range, so a failed
+engine run on `main` stays red only on that run; re-run it after a fix.
 Locally, `npm run check --workspace packages/engine` still runs both.
 Extended runs alongside core unless every changed path is Markdown or under
 RoleFit's backend-only `server/ai/` or
-`server/ai-cli/`. Shared/configuration/unknown paths, mixed changes, manual runs,
-and unavailable Git comparisons run every selected job. Skipping its test steps still
+`server/ai-cli/`. Shared/configuration/unknown paths and mixed changes run
+extended; manual runs and unavailable Git comparisons run every selected job. Skipping its test steps still
 reports the extended job's selection and successful status. The existing
 `Chromium editor contracts` check requires both jobs to succeed, preserving its
 blocking behavior without re-running tests.

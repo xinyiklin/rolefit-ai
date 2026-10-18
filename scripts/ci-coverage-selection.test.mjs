@@ -57,7 +57,8 @@ test('font assets run only when their generators, sources, outputs, or CI wiring
   }
   for (const path of ['packages/engine/scripts/generate_font_assets.py', 'packages/engine/scripts/requirements-fonts.txt',
     'packages/engine/scripts/additional-fonts.json', 'packages/engine/fonts/Arimo-Bold.ttf',
-    'packages/engine/src/typeset/metrics.gen.ts', '.github/workflows/document-workflows.yml',
+    'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/package.json',
+    '.github/workflows/document-workflows.yml',
     'scripts/ci-coverage-selection.mjs']) {
     assert.equal(needsEngineFonts([path]), true, path);
   }
