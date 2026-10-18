@@ -7,17 +7,13 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: RoleFit 0.15.0 preview (`rolefit-preview-v0.15.0-beta.1` on `cd12b2c2`,
-release run 38833828940 succeeded; published 2026-10-16T01:33:48Z with 6 assets),
-extension 1.4.0, desktop bridge API 13. Release history:
-`docs/continuity/2026-10.md` and D-entries in `docs/decisions.md`.
+Current: extension 1.4.0, desktop bridge API 13. The published RoleFit release
+is the newest `rolefit-*` entry in `gh release list` (not recorded here;
+see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
+D-entries in `docs/decisions.md`.
 
 ## Next actions
 
-- After the 0.16.0 release PR merges, and only on the user's go-ahead: tag
-  `rolefit-preview-v0.16.0-beta.1` on its squash commit, confirm the
-  prerelease (macOS arm64/x64 dmg+zip, Windows x64 exe, `SHA256SUMS.txt`), then
-  record the receipt and the "Current" line in the next PR.
 - Deferred by the user: Stage 2B, the paired real-application Resume Polish
   rerun (D071, D074).
 
@@ -77,7 +73,7 @@ extension 1.4.0, desktop bridge API 13. Release history:
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D085; branch
+- [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D087; branch
   `claude/cli-api-selection-b703c6`): API calls send the stage effort (no off
   setting anywhere); labels are Claude/OpenAI · CLI/API; Settings > Models adds
   Plan (Hybrid / Claude only / OpenAI only) and per-vendor CLI/API rewrites;
@@ -86,10 +82,17 @@ extension 1.4.0, desktop bridge API 13. Release history:
   browser-checked (desktop + 375px, Chromium pane; Firefox and the Background
   view switch unchecked); OpenAI API live not run. Pending after the Codex limit
   reset: OpenAI Resume import and Claude Resume Polish screens (benchmarks.md).
-- [USER+CODE+TOOL] **Letter Blank/Starter reset and title** (D084): both reset
-  a customized letter style to the defaults and take the resume's title
-  retargeted (`..._Cover_Letter`). Engine/RoleFit/Typeset checks passed;
-  browser QA not run.
+- [USER+CODE+TOOL] **Agent attribution guard** (#242): tracked
+  `.githooks/commit-msg` rejects Claude co-author and "Generated with Claude
+  Code" lines (`npm install` sets `core.hooksPath`; run it once in the main
+  checkout); squash merges use an explicit subject/body; rename a harness
+  `claude/<name>` branch before its first push. Typeset image build verified.
+- [USER+CODE+TOOL] **Letter Blank/Starter reset** (D084): both reset a
+  customized letter style to the defaults. **Titles follow identity** (D085,
+  supersedes D084's title): each title tracks its own header name + company
+  until the user renames it (Starter `Your_Name_Resume`; typing a name
+  retitles). **Both Starters on a new session** (D086, #241). RoleFit check passed;
+  browser QA passed (user and agent, worktree server).
 - [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
   D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
   default per role for both documents; Styles adds Name and Body rows; letters
@@ -97,13 +100,10 @@ extension 1.4.0, desktop bridge API 13. Release history:
   never moves line breaks. Parsers convert retired keys; 398 workspace files
   rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
   letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
-- [USER+CODE+TOOL] **Letter Spacing menu and menu polish** (D083; branch
-  `claude/letter-resume-menu-polish`, after #239): letter gets Spacing; all
-  style menus compacted. Headless-Chrome QA in both apps (behavior,
-  375-1440px ladder) and `test:editor:browser` core and extended pass; two
-  independent reviews READY. Firefox not checked.
-- [USER+CODE+TOOL] #237: toolbar +/- step each run from its own size; a skills
-  row's `: ` is one engine join (`skillsRowText`). RoleFit browser QA not run.
+- [USER+CODE+TOOL] **Engine CI runs only when the engine can change**:
+  `scripts/ci-coverage-selection.mjs` skips `Engine codecs, layout, and PDF`
+  unless `packages/engine/**` or a root input changed, and the ~7 min
+  `fonts:check` moved to a parallel `Engine font assets` job for font paths.
 
 ## 2026-10-17
 

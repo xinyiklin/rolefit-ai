@@ -389,7 +389,7 @@ later entry wins.
   `normalizeSettings` may repair and remove but never add. [USER+CODE+TOOL] The
   masthead owns only identity and Apply; Sessions sits in the studio-rail
   utilities.
-- 2026-10-18 [USER+CODE] D084 ACTIVE: **A letter's Blank and Starter match the
+- 2026-10-18 [USER+CODE] D084 AMENDED by D085: **A letter's Blank and Starter match the
   resume's** ("blank resume/letter should same default font/style. use resume
   as the default, same for start bundler for both and the editor file name").
   Cover Blank and Starter (and restoring an application with no saved letter,
@@ -398,11 +398,38 @@ later entry wins.
   (`Name_Company_Resume` -> `Name_Company_Cover_Letter`, `Resume` ->
   `Cover Letter`). Saved `.cover` files keep their own style, and the letter
   shown on page load keeps the browser's stored style until the next Blank or
-  Starter.
+  Starter. (Title AMENDED by D085: a fresh letter is titled for its own
+  letterhead name only.)
+- 2026-10-18 [USER+CODE] D085 ACTIVE: **A document's title follows its
+  identity until the user names it** ("opening a bundle starter would
+  sometime display resume instead of your_name_resume ... typing a name doesnt
+  change resume title ... unify the behavior"). Both editors title a document
+  `Name_Company_<Kind>` from its own header name only and the PREPARED
+  company (a draft edit to the job source never retitles) ("remove that fallback": a nameless Blank letter is `Cover_Letter`,
+  never the resume's name). Blank and Starter
+  open with that title for the document they open; editing the name, opening
+  another document, or the job and resume loading in either order retitle any
+  automatic title (a placeholder, or a title pairing any current or previous
+  name, or for a letter the resume's applicant name an earlier build used, with
+  any of their companies, either part optional); a title the user typed is
+  never rewritten. An automatic
+  retitle keeps a clean letter clean. A newly prepared job is a new session and
+  still retitles both, typed titles included ([USER] confirmed); so does
+  editing the prepared job's role or company in Prepare. Accepted tradeoff: a
+  typed letter title that exactly matches the resume-applicant form is treated
+  as automatic.
+- 2026-10-18 [USER+CODE] D086 ACTIVE: **A new session opens both Starters**
+  ("new session for resume / letter should either both start on
+  template/blank"). With no saved document of its kind, each editor opens its
+  bundled Starter (the letter used to stay blank); a saved one still opens
+  instead. The letter's page-load Starter keeps the stored style and title
+  (D084). The templates already share the `Your Name` letterhead and stay as
+  they are: the resume's sample is gated by its `starter` origin, the letter's
+  by its `[bracket]` slots (`coverLetterReady` needs none).
 
 ### AI providers, defaults, and benchmark outcomes
 
-- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070, D085: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
+- 2026-09-30 [USER+CODE+TOOL] D048 AMENDED by D070, D087: GPT-6.1 Sol (`gpt-6.1-sol`) and Claude Sonnet 5.5
   (`claude-sonnet-5-5`) are the Codex and Claude defaults for new or unset
   stages and the server fallback; saved selections are not moved; Sonnet 5.5 on
   the API sends `thinking: {type: "between_tools"}`; retired Codex ids repair to
@@ -410,7 +437,7 @@ later entry wins.
   stages. Observed Claude Code 2.1.285 (Sonnet 5.5 needs 2.1.284+) and
   Codex CLI 0.159.2. Receipt: `apps/role-fit-ai/docs/engineering/ai-server.md`.
   UNCONFIRMED: live provider calls.
-- 2026-09-27 [USER+CODE] D049 AMENDED by D076, D085: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
+- 2026-09-27 [USER+CODE] D049 AMENDED by D076, D087: GPT-6 Astra/Sol/Luna and Claude Fable 5.1 / Opus 5.5
   joined the CLI/API catalogs (the user waived the Product Partner flow); Codex
   5.4, 5.4 Mini, and Spark were removed; GPT-5.5 remains until its announced
   2026-10-14 retirement. [CODE+TOOL] Retired Codex selections repair within
@@ -436,7 +463,7 @@ later entry wins.
   other providers; any other unknown id still fails closed. The manual
   ready-to-verify state and the space/parenthesis allowance in model names
   went with it. Historical release notes are unchanged.
-- 2026-10-18 [USER+CODE] D085 ACTIVE: **CLI and API behave the same; plans and
+- 2026-10-18 [USER+CODE] D087 ACTIVE: **CLI and API behave the same; plans and
   transport are one-shot rewrites** ("either both get a off option or both
   dont ... keep the reasoning effort level the same for both cli and apis").
   - Effort: no off setting on either transport; a vendor's API takes its CLI's

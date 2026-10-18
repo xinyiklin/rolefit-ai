@@ -22,7 +22,7 @@ listed under coverage gaps.
 
 ### Single-vendor plans, 2026-10-18
 
-The Claude only and OpenAI only plans (D085) reuse the stage evidence above
+The Claude only and OpenAI only plans (D087) reuse the stage evidence above
 where a vendor already has a tested setting: Answers (Sol Medium best OpenAI),
 Resume Polish (Opus High, Sol Medium), and Cover (Sol Medium). New screens filled
 the gaps on budget models, one run per synthetic fixture, through the CLIs. API

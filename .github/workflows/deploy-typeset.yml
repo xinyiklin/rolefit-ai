@@ -11,6 +11,7 @@ on:
       - "packages/**"
       - "package.json"
       - "package-lock.json"
+      - "scripts/install-git-hooks.mjs"
       - "tsconfig.base.json"
       - ".github/workflows/deploy-typeset.yml"
       # Redeploying costs a container swap, so exclude paths that cannot change
@@ -24,6 +25,7 @@ on:
       - "packages/**"
       - "package.json"
       - "package-lock.json"
+      - "scripts/install-git-hooks.mjs"
       - "tsconfig.base.json"
       - ".github/workflows/deploy-typeset.yml"
       # Redeploying costs a container swap, so exclude paths that cannot change
