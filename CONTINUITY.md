@@ -74,11 +74,11 @@ D-entries in `docs/decisions.md`.
 ## 2026-10-18
 
 - [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D087; branch
-  `claude/cli-api-selection-b703c6`): API calls send the stage effort (no off
+  `feature/rolefit-provider-plans`): API calls send the stage effort (no off
   setting anywhere); labels are Claude/OpenAI · CLI/API; Settings > Models adds
   Plan (Hybrid / Claude only / OpenAI only) and per-vendor CLI/API rewrites;
   catalogs keep current models only, retired ids repair to successors. Offline
-  187/187; live Claude API smoke passed (4 models, Low and Max); Models page
+  188/188; live Claude API smoke passed (4 models, Low and Max); Models page
   browser-checked (desktop + 375px, Chromium pane; Firefox and the Background
   view switch unchecked); OpenAI API live not run. Pending after the Codex limit
   reset: OpenAI Resume import and Claude Resume Polish screens (benchmarks.md).

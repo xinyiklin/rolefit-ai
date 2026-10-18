@@ -743,7 +743,7 @@
   border-left: 1px solid var(--hairline-strong);
 }
 
-.settings-segment__option:hover:not([aria-disabled="true"]) {
+.settings-segment__option:hover:where(:not([aria-disabled="true"])) {
   color: var(--ink);
   background: var(--card-hover);
 }
