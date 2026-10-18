@@ -37,6 +37,11 @@ const LINE_HEIGHT_OPTIONS = [
 
 const ADDED_PARAGRAPH_SPACE_PT = 8;
 
+const PARAGRAPH_SPACE_OPTIONS = [
+  { edge: "before", label: "Space before paragraph" },
+  { edge: "after", label: "Space after paragraph" }
+] as const;
+
 const bounded = (value: string, fallback: number, min: number, max: number) => {
   const parsed = Number(value);
   const finite = Number.isFinite(parsed) ? parsed : fallback;
@@ -171,6 +176,9 @@ export function LineSpacingPopover({
       && Math.abs((controls?.lineHeight ?? 0) - option.value) < 0.005
   )?.value;
 
+  // A known value that matches no preset is the custom value, shown on that row.
+  const customLineHeight = controls?.lineHeight != null && selectedLineHeight === undefined;
+
   useEffect(() => {
     if (unavailable) setCustomOpen(false);
   }, [unavailable]);
@@ -214,9 +222,33 @@ export function LineSpacingPopover({
                     onClick={() => commit(() => controls?.onLineHeightChange(option.value))}
                   >
                     <span className="line-spacing-menu__check" aria-hidden="true">
-                      {selected ? <Check size={16} /> : null}
+                      {selected ? <Check size={15} /> : null}
                     </span>
                     <span>{option.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="line-spacing-menu__section" role="group" aria-label="Paragraph spacing">
+              {PARAGRAPH_SPACE_OPTIONS.map(({ edge, label }) => {
+                const current = edge === "before" ? controls?.spaceBeforePt : controls?.spaceAfterPt;
+                const on = (current ?? 0) > 0;
+                const change = edge === "before" ? controls?.onSpaceBeforeChange : controls?.onSpaceAfterChange;
+                return (
+                  <button
+                    key={edge}
+                    type="button"
+                    className={`line-spacing-menu__option${on ? " is-selected" : ""}`}
+                    aria-pressed={on}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => commit(() => change?.(on ? 0 : ADDED_PARAGRAPH_SPACE_PT))}
+                  >
+                    <span className="line-spacing-menu__check" aria-hidden="true">
+                      {on ? <Check size={15} /> : null}
+                    </span>
+                    <span>{label}</span>
+                    {on ? <span className="line-spacing-menu__value">{Number(current)} pt</span> : null}
                   </button>
                 );
               })}
@@ -225,53 +257,19 @@ export function LineSpacingPopover({
             <div className="line-spacing-menu__section">
               <button
                 type="button"
-                className="line-spacing-menu__option"
-                aria-pressed={(controls?.spaceBeforePt ?? 0) > 0}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
-                  commit(() =>
-                    controls?.onSpaceBeforeChange(
-                      (controls.spaceBeforePt ?? 0) > 0 ? 0 : ADDED_PARAGRAPH_SPACE_PT
-                    )
-                  )
-                }
-              >
-                <span className="line-spacing-menu__check" aria-hidden="true">
-                  {(controls?.spaceBeforePt ?? 0) > 0 ? <Check size={16} /> : null}
-                </span>
-                <span>{(controls?.spaceBeforePt ?? 0) > 0 ? "Remove space before paragraph" : "Add space before paragraph"}</span>
-              </button>
-              <button
-                type="button"
-                className="line-spacing-menu__option"
-                aria-pressed={(controls?.spaceAfterPt ?? 0) > 0}
-                onMouseDown={(event) => event.preventDefault()}
-                onClick={() =>
-                  commit(() =>
-                    controls?.onSpaceAfterChange(
-                      (controls.spaceAfterPt ?? 0) > 0 ? 0 : ADDED_PARAGRAPH_SPACE_PT
-                    )
-                  )
-                }
-              >
-                <span className="line-spacing-menu__check" aria-hidden="true">
-                  {(controls?.spaceAfterPt ?? 0) > 0 ? <Check size={16} /> : null}
-                </span>
-                <span>{(controls?.spaceAfterPt ?? 0) > 0 ? "Remove space after paragraph" : "Add space after paragraph"}</span>
-              </button>
-            </div>
-
-            <div className="line-spacing-menu__section">
-              <button
-                type="button"
-                className="line-spacing-menu__option"
+                className={`line-spacing-menu__option${customLineHeight ? " is-selected" : ""}`}
                 onClick={() => {
                   close();
                   setCustomOpen(true);
                 }}
               >
-                <span className="line-spacing-menu__check" aria-hidden="true" />
-                <span>Custom spacing</span>
+                <span className="line-spacing-menu__check" aria-hidden="true">
+                  {customLineHeight ? <Check size={15} /> : null}
+                </span>
+                <span>Custom spacing…</span>
+                {customLineHeight ? (
+                  <span className="line-spacing-menu__value">{Number(controls?.lineHeight?.toFixed(2))}</span>
+                ) : null}
               </button>
             </div>
           </div>

@@ -200,15 +200,15 @@
    visible under the toolbar instead of presenting document-wide segments. */
 .line-spacing-menu {
   display: grid;
-  width: min(232px, calc(100vw - 24px));
-  padding: 6px 0;
+  width: min(240px, calc(100vw - 24px));
+  padding: 4px 0;
   background: var(--card-elev);
 }
 
 .line-spacing-menu__options,
 .line-spacing-menu__section {
   display: grid;
-  gap: 2px;
+  gap: 1px;
   padding: 4px 6px;
 }
 
@@ -218,11 +218,11 @@
 
 .line-spacing-menu__option {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr);
+  grid-template-columns: 16px minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
-  min-height: 34px;
-  padding: 6px 10px;
+  min-height: 30px;
+  padding: 4px 10px 4px 8px;
   color: var(--ink);
   background: transparent;
   border: 0;
@@ -239,6 +239,11 @@
   background: var(--accent-veil);
 }
 
+.line-spacing-menu__option.is-selected {
+  color: var(--accent-deep);
+  font-weight: 600;
+}
+
 .line-spacing-menu__check {
   display: inline-flex;
   align-items: center;
@@ -246,10 +251,15 @@
   color: var(--accent-deep);
 }
 
+.line-spacing-menu__value {
+  color: var(--ink-faint);
+  font: 500 0.6875rem/1 var(--font-mono);
+}
+
 /* Header + Add-section popovers (relocated from the page footer to the toolbar). */
 .structure-popover {
   display: grid;
-  gap: 9px;
+  gap: 10px;
   width: min(272px, calc(100vw - 24px));
   padding: 12px;
   background: var(--card-elev);
@@ -337,7 +347,7 @@
 .structure-popover__field input,
 .structure-popover__contact input {
   width: 100%;
-  height: 32px;
+  height: 30px;
   padding: 0 9px;
   color: var(--ink);
   background: var(--card);
@@ -355,7 +365,7 @@
 
 .structure-popover__contacts {
   display: grid;
-  gap: 6px;
+  gap: 5px;
 }
 
 .structure-popover__contacts-head {
@@ -395,8 +405,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   flex: 0 0 auto;
   color: var(--ink-muted);
   background: transparent;
@@ -615,7 +625,13 @@
 }
 
 .style-popover--text {
-  width: min(324px, calc(100vw - 24px));
+  width: min(304px, calc(100vw - 24px));
+}
+
+/* Styles is a table, one row per text role, so it takes the width of its four
+   columns instead of stacking each role's name over its controls. */
+.style-popover--styles {
+  width: min(452px, calc(100vw - 24px));
 }
 
 .style-popover--page {
@@ -623,7 +639,7 @@
 }
 
 .style-popover--spacing {
-  width: min(316px, calc(100vw - 24px));
+  width: min(304px, calc(100vw - 24px));
 }
 
 .style-popover__body {
@@ -635,7 +651,7 @@
 }
 
 .style-popover__section {
-  padding: 10px 0;
+  padding: 9px 0;
   border-bottom: 1px solid var(--hairline-soft);
 }
 
@@ -644,7 +660,7 @@
 }
 
 .style-popover__section-title {
-  margin-bottom: 7px;
+  margin-bottom: 6px;
   color: var(--ink-strong);
   font-size: 0.73rem;
   font-weight: 660;
@@ -963,29 +979,42 @@
 
 .style-popover__entry-marks {
   display: grid;
-  gap: 12px;
+  gap: 6px;
 }
 
-/* One style field = its name over a single control row so the family, size, and
-   emphasis controls line up in equal-height columns across every field. */
+/* One table row per text role: name, then family / size / emphasis in fixed
+   columns, so every column lines up under the heading row. The emphasis column
+   is three 30px buttons plus the group's border; the Body row has no emphasis
+   group and keeps the column empty. */
 .style-popover__field-style {
   display: grid;
-  gap: 5px;
+  grid-template-columns: 92px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
 }
 
 .style-popover__field-style-label {
+  overflow: hidden;
   color: var(--ink-muted);
   font-size: 0.72rem;
   font-weight: 590;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* The emphasis column has a fixed width (three 32px buttons plus the group's
-   border) so the Body row, which has no emphasis group, stays aligned. */
 .style-popover__field-style-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto calc(3 * 32px + 2px);
+  grid-template-columns: minmax(0, 1fr) 84px calc(3 * 30px + 2px);
   align-items: stretch;
   gap: 6px;
+}
+
+.style-popover__field-style--head {
+  color: var(--ink-faint);
+  font-size: 0.64rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .style-popover__entry-font.font-family-control {
@@ -993,27 +1022,54 @@
 }
 
 .style-popover__entry-font .font-family-control__trigger {
-  height: 30px;
+  height: 28px;
   font-size: 0.72rem;
   font-weight: 590;
 }
 
 /* The size control reuses the toolbar's FontSizeControl for identical UI/UX and
-   the common-size dropdown; pin its height to the row and its text to the same
+   the common-size dropdown; pin its box to the column and its text to the same
    size the toolbar uses (its input is `font: inherit`, which would otherwise
    pick up the popover's larger base size). */
 .style-popover__field-size.font-size-control {
-  height: 30px;
+  width: 100%;
+  height: 28px;
   font-size: 0.75rem;
+}
+
+/* A narrow window cannot fit the table, so each role's name returns above its
+   controls. */
+@media (max-width: 500px) {
+  .style-popover__field-style {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+  }
+
+  .style-popover__field-style--head {
+    display: none;
+  }
+
+  .style-popover__entry-marks {
+    gap: 10px;
+  }
+}
+
+/* Heading case and the divider rule share one line. */
+.style-popover__heading-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+.style-popover__heading-row .style-popover__segmented {
+  flex: 1 1 auto;
 }
 
 .style-popover__toggle-row {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  min-height: 30px;
-  margin-top: 8px;
+  gap: 8px;
   color: var(--ink-muted);
   font-size: 0.72rem;
   font-weight: 590;
@@ -1056,8 +1112,8 @@
 
 .style-popover__entry-mark-buttons {
   display: inline-grid;
-  grid-template-columns: repeat(3, 32px);
-  height: 30px;
+  grid-template-columns: repeat(3, 30px);
+  height: 28px;
   background: var(--card-soft);
   border: 1px solid var(--hairline);
   border-radius: var(--r-md);
@@ -1145,7 +1201,7 @@
 
 .style-popover__alignment-list {
   display: grid;
-  gap: 12px;
+  gap: 6px;
 }
 
 .style-popover__alignment-field {
@@ -1179,7 +1235,7 @@
   align-items: center;
   justify-content: center;
   min-width: 34px;
-  min-height: 30px;
+  min-height: 28px;
   padding: 0;
   color: var(--ink-muted);
   background: transparent;
@@ -1215,45 +1271,65 @@
   line-height: 1.4;
 }
 
-.style-popover__spacing-groups {
-  display: grid;
-  grid-template-columns: 1fr;
-  align-items: start;
-}
-
-.style-popover__advanced {
-  padding: 14px 0 2px;
-}
-
-.style-popover__section--spacing {
-  padding-block: 13px;
-}
-
 .style-popover__range-list {
   display: grid;
-  gap: 10px;
+  gap: 4px;
 }
 
+/* One line per value: label, slider, and a typeable value box. */
 .style-popover__range {
   display: grid;
-  gap: 5px;
+  grid-template-columns: minmax(0, 1fr) minmax(72px, 0.9fr) 72px;
+  align-items: center;
+  gap: 8px;
+  min-height: 28px;
   color: var(--ink-muted);
-  font-size: 0.69rem;
-  font-weight: 520;
+  font-size: 0.7rem;
+  font-weight: 540;
 }
 
-.style-popover__range-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
+.style-popover__range-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .style-popover__range-value {
+  display: flex;
+  align-items: center;
+  height: 26px;
+  padding-right: 7px;
+  background: var(--card);
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-sm);
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.6875rem;
-  font-weight: 500;
+  font: 500 0.6875rem/1 var(--font-mono);
+}
+
+.style-popover__range-value:hover {
+  border-color: var(--hairline-strong);
+}
+
+.style-popover__range-value:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-veil);
+}
+
+.style-popover__range-value input {
+  width: 100%;
+  min-width: 0;
+  height: 100%;
+  padding: 0 4px 0 7px;
+  color: var(--ink);
+  background: transparent;
+  border: 0;
+  outline: none;
+  font: inherit;
+  text-align: right;
+}
+
+.style-popover__range-value input:disabled {
+  color: var(--ink-faint);
 }
 
 .style-popover__range input[type="range"] {
@@ -1345,7 +1421,8 @@
 
   .style-popover--page,
   .style-popover--spacing,
-  .style-popover--text {
+  .style-popover--text,
+  .style-popover--styles {
     max-height: calc(var(--popover-space, calc(100vh - 116px)) - var(--popover-frame));
   }
 }
@@ -1358,7 +1435,8 @@
     left: 10px;
   }
 
-  .style-popover--text {
+  .style-popover--text,
+  .style-popover--styles {
     width: auto;
   }
 }
@@ -1372,13 +1450,10 @@
   }
 
   .style-popover--text,
+  .style-popover--styles,
   .style-popover--spacing,
   .style-popover--page {
     width: auto;
-  }
-
-  .style-popover__spacing-groups {
-    grid-template-columns: 1fr;
   }
 }
 
@@ -1405,7 +1480,8 @@
     height: 40px;
   }
 
-  .style-popover__range input[type="range"] {
+  .style-popover__range input[type="range"],
+  .style-popover__range-value {
     min-height: 40px;
   }
 }

@@ -286,8 +286,11 @@ conflicting local overrides when applied; any later local divergence clears
 that global active state. Entry start and end indents and the bullet indent
 live independently in Paragraph, while structural formatting values live in Styles.
 
-The Page popover stays compact at 288px on desktop (Paragraph/Styles are
-324px and Spacing 316px). Page margins offer Narrow and Normal shortcuts plus
+The Page popover stays compact at 288px on desktop (Paragraph and Spacing are
+304px). Every Spacing and Paragraph value is one line: label, slider, and a
+typeable value box. Styles is a 452px table, one row per text role under Font,
+Size, and Emphasis columns; below 500px each role's name returns above its
+controls. Page margins offer Narrow and Normal shortcuts plus
 independent Custom top, right, bottom, and left values from 0.25–3 inches.
 All four values remain visible for every preset; editing one changes the UI
 state to Custom. Only physical point values persist, so screen layout and PDF
