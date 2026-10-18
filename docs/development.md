@@ -185,32 +185,37 @@ host audits, and representative wrapping for both resume hosts and cover headers
 and header-baseline combinations. They are disjoint; the default local browser
 command runs core then extended once, clearing synthetic origin storage before
 each group. Section fixtures wait for restored styles to persist before closing.
-`scripts/ci-coverage-selection.mjs` compares the PR (or pushed range) once per
-job and skips a job's test steps, still reporting success, when no changed path
-can affect it. The engine depends on no app or editor code, so `Engine codecs,
-layout, and PDF` (typecheck + evals) runs only for `packages/engine/**` or a
-root input (manifest, lockfile, `.node-version`, `.npmrc`, `tsconfig.base.json`,
-this workflow, the selector), and `Engine font assets` (`fonts:check`, about
-seven minutes of regeneration) runs in parallel only for
-`packages/engine/{scripts,fonts}/**`, `metrics.gen.ts`, the engine manifest, or
-the CI wiring. Diff-based selection tests each push's own range, so a failed
-engine run on `main` stays red only on that run; re-run it after a fix.
-Locally, `npm run check --workspace packages/engine` still runs both.
-Extended runs alongside core unless every changed path is Markdown or under
-RoleFit's backend-only `server/ai/` or
-`server/ai-cli/`. Shared/configuration/unknown paths and mixed changes run
-extended; manual runs and unavailable Git comparisons run every selected job.
-A RoleFit version-only release prep (only Markdown,
-`apps/role-fit-ai/scripts/desktop-release-contract.test.mjs`, and
-`apps/role-fit-ai/package.json` or `package-lock.json` whose only change is the
-RoleFit workspace `version`) skips both Chromium suites and both engine jobs,
-except that engine Markdown still runs the engine job. The selector parses both
-sides of each manifest and lockfile: any other change in them (a dependency, an
-integrity, `engines`, a script) falls back to the path rules above, and a
-failed read or parse runs every job. Skipping its test steps still
-reports each job's selection and successful status. The existing
-`Chromium editor contracts` check requires both jobs to succeed, preserving its
-blocking behavior without re-running tests.
+The `Select CI coverage` job runs `scripts/ci-coverage-selection.mjs` once.
+It compares the PR (merge base) or pushed range, and each test job runs only
+when a changed path can reach it; an unselected job shows as skipped, and a
+missing selector output runs its job. `Runtime and dependency contracts` scans
+every source file's imports, so it always runs, as does the `Chromium editor
+contracts` aggregator. Reach was measured by bundling each suite's entry, plus
+the files suites read at runtime:
+
+| Changed path | Jobs selected |
+| --- | --- |
+| `packages/engine/**` | engine, editor, both apps, server, Chromium; plus `Engine font assets` for `scripts/`, `fonts/`, `metrics.gen.ts`, or the manifest |
+| `packages/editor/**` | editor, both apps, Chromium |
+| `apps/typeset/**` | Typeset; plus Chromium for `src/` and `tsconfig.json` |
+| `apps/role-fit-ai/**`, Markdown included (its rename and extension contracts read it) | RoleFit; plus server for `server.ts`, `server/`, `shared/`, `src/`, the manifest; plus Chromium for `src/`, `shared/`, `server/starter.resume`, `tsconfig.json` |
+| `scripts/editor-browser-contracts*` | Chromium |
+| any `tsconfig*.json`, `scripts/tsconfig-base-probe.ts` | TypeScript 7 native (per-workspace jobs typecheck sources on Linux) |
+| root manifest, lockfile, `.node-version`, `.npmrc`, `tsconfig.base.json` | every job except font assets |
+| this workflow, the selector, an unknown workspace or root file | every job |
+| other Markdown, other root scripts, other workflows | none |
+
+A RoleFit version-only change selects only the RoleFit job for
+`apps/role-fit-ai/package.json` and nothing for `package-lock.json`, so a
+release prep runs just RoleFit. The selector parses both sides of each file and removes
+only the RoleFit workspace `version`; any other change (a dependency, an
+integrity, `engines`, a script) keeps the rules above, and a failed read or
+parse, a manual run, or an unavailable comparison runs every job. Diff-based
+selection tests each push's own range, so a failed run on `main` stays red only
+on that run; re-run it after a fix. Locally, `npm run check --workspace
+packages/engine` still runs both engine checks. The `Chromium editor contracts`
+check requires both browser jobs to succeed when Chromium is selected. When
+skipped, the TypeScript matrix shows as one check with its unexpanded name.
 
 The browser harness sends one native right-click after target scrolling settles,
 then checks the exact enabled command and resulting model mutation. It bounds

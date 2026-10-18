@@ -48,6 +48,35 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # One comparison selects every gated job (scripts/ci-coverage-selection.mjs).
+  # A job is skipped only when its output is exactly `false`, so a missing output
+  # runs it; manual runs and unreadable comparisons run everything. The
+  # dependency contracts job scans every source file, so it always runs.
+  changes:
+    name: Select CI coverage
+    runs-on: ubuntu-24.04
+    outputs:
+      typescript: ${{ steps.coverage.outputs.typescript }}
+      engine: ${{ steps.coverage.outputs.engine }}
+      engine-fonts: ${{ steps.coverage.outputs.engine-fonts }}
+      editor: ${{ steps.coverage.outputs.editor }}
+      typeset: ${{ steps.coverage.outputs.typeset }}
+      rolefit: ${{ steps.coverage.outputs.rolefit }}
+      server: ${{ steps.coverage.outputs.server }}
+      browser: ${{ steps.coverage.outputs.browser }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24.18.0
+          package-manager-cache: false
+      - name: Select coverage
+        id: coverage
+        run: node scripts/ci-coverage-selection.mjs
+
   dependencies:
     name: Runtime and dependency contracts
     runs-on: ubuntu-24.04
@@ -70,6 +99,8 @@ jobs:
 
   typescript-native:
     name: TypeScript 7 native (${{ matrix.label }})
+    needs: changes
+    if: needs.changes.outputs.typescript != 'false'
     strategy:
       fail-fast: false
       matrix:
@@ -111,59 +142,48 @@ jobs:
       - run: npm run deps:check
       - run: npm run types:check
 
-  # Neither engine job depends on app or editor code, so each runs only when its
-  # own inputs change (scripts/ci-coverage-selection.mjs); a skipped job still
-  # reports success. A RoleFit version-only release prep skips the engine checks
-  # and both Chromium suites.
+  # Neither engine job depends on app or editor code, so each runs only for its
+  # own inputs.
   engine:
     name: Engine codecs, layout, and PDF
+    needs: changes
+    if: needs.changes.outputs.engine != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
-      - name: Select engine coverage
-        id: coverage
-        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
-        if: steps.coverage.outputs.engine == 'true'
       - run: npm run typecheck --workspace packages/engine
-        if: steps.coverage.outputs.engine == 'true'
       - run: npm run eval --workspace packages/engine
-        if: steps.coverage.outputs.engine == 'true'
 
   # The font check regenerates every bundled font and its metrics (~7 minutes of
   # CPU), so it runs beside the engine evals and only when a generator, source,
   # or committed output changes.
   engine-fonts:
     name: Engine font assets
+    needs: changes
+    if: needs.changes.outputs.engine-fonts != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
-      - name: Select font coverage
-        id: coverage
-        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
-        if: steps.coverage.outputs.engine-fonts == 'true'
       # generate_font_assets.py --check refetches every pinned upstream source
       # on a cold runner, so a slow CTAN or raw.githubusercontent response fails
       # the job on a 60s socket timeout. Every source is pinned to an immutable
       # commit or release, so the cache key only has to track the scripts that
       # name those pins.
       - name: Cache pinned upstream font sources
-        if: steps.coverage.outputs.engine-fonts == 'true'
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: /tmp/typeset-fonts
@@ -171,17 +191,17 @@ jobs:
             typeset-font-sources-${{ runner.os }}-${{
               hashFiles('packages/engine/scripts/generate_font_assets.py',
                         'packages/engine/scripts/requirements-fonts.txt') }}
-      - if: steps.coverage.outputs.engine-fonts == 'true'
-        run: |
+      - run: |
           python3 -m venv .font-tools
           .font-tools/bin/pip install --requirement packages/engine/scripts/requirements-fonts.txt
           echo "$GITHUB_WORKSPACE/.font-tools/bin" >> "$GITHUB_PATH"
           echo "SSL_CERT_FILE=$("$GITHUB_WORKSPACE/.font-tools/bin/python" -m certifi)" >> "$GITHUB_ENV"
       - run: npm run fonts:check --workspace packages/engine
-        if: steps.coverage.outputs.engine-fonts == 'true'
 
   editor:
     name: Shared editor
+    needs: changes
+    if: needs.changes.outputs.editor != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -196,6 +216,8 @@ jobs:
 
   typeset:
     name: Typeset app
+    needs: changes
+    if: needs.changes.outputs.typeset != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -210,6 +232,8 @@ jobs:
 
   rolefit:
     name: RoleFit app and landing
+    needs: changes
+    if: needs.changes.outputs.rolefit != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -224,6 +248,8 @@ jobs:
 
   server:
     name: RoleFit server transactions
+    needs: changes
+    if: needs.changes.outputs.server != 'false'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -238,6 +264,8 @@ jobs:
 
   browser-core:
     name: Chromium core editor contracts
+    needs: changes
+    if: needs.changes.outputs.browser != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -245,21 +273,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
-      - name: Select core browser coverage
-        id: coverage
-        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
-        if: steps.coverage.outputs.core == 'true'
       - run: npm run test:editor:browser -- --suite=core
-        if: steps.coverage.outputs.core == 'true'
       - name: Upload core browser diagnostics
-        if: always() && steps.coverage.outputs.core == 'true'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: browser-core
@@ -270,6 +292,8 @@ jobs:
 
   browser-extended:
     name: Chromium extended rendering
+    needs: changes
+    if: needs.changes.outputs.browser != 'false'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:
@@ -277,21 +301,15 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
-          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24.18.0
           package-manager-cache: false
-      - name: Select extended rendering coverage
-        id: coverage
-        run: node scripts/ci-coverage-selection.mjs
       - run: npm ci
-        if: steps.coverage.outputs.extended == 'true'
       - run: npm run test:editor:browser -- --suite=extended
-        if: steps.coverage.outputs.extended == 'true'
       - name: Upload extended browser diagnostics
-        if: always() && steps.coverage.outputs.extended == 'true'
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: browser-extended
@@ -302,12 +320,18 @@ jobs:
 
   browser:
     name: Chromium editor contracts
-    needs: [browser-core, browser-extended]
+    needs: [changes, browser-core, browser-extended]
     if: always()
     runs-on: ubuntu-24.04
     steps:
-      - name: Require both browser groups
+      - name: Require both browser groups when selected
         env:
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          SELECTED: ${{ needs.changes.outputs.browser }}
           CORE_RESULT: ${{ needs.browser-core.result }}
           EXTENDED_RESULT: ${{ needs.browser-extended.result }}
-        run: test "$CORE_RESULT" = success && test "$EXTENDED_RESULT" = success
+        run: |
+          test "$CHANGES_RESULT" = success
+          if [ "$SELECTED" != false ]; then
+            test "$CORE_RESULT" = success && test "$EXTENDED_RESULT" = success
+          fi

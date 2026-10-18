@@ -1,20 +1,75 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { test } from 'node:test';
-import { isReleasePrep, needsEngine, needsEngineFonts, needsExtended, selectCoverage } from './ci-coverage-selection.mjs';
+import { formatOutputs, JOBS, jobsForPath, outputName, selectCoverage, versionOnlyChanges } from './ci-coverage-selection.mjs';
 
-const coverage = ({ extended, engine, engineFonts, core }) => [extended, engine, engineFonts, core];
+const selected = selection => JOBS.filter(job => selection[job]);
+const jobs = path => [...jobsForPath(path)].sort();
+const sorted = list => [...list].sort();
+const ALL_BUT_FONTS = JOBS.filter(job => job !== 'engineFonts');
 
-test('only documentation or backend AI-only changes skip extended rendering', () => {
-  assert.equal(needsExtended(['README.md', 'apps/role-fit-ai/server/ai/prompts.ts', 'apps/role-fit-ai/server/ai-cli/codex.ts']), false);
-  for (const path of ['packages/editor/src/editor.tsx', 'packages/engine/fonts/font.ttf',
-    'apps/typeset/src/App.tsx', 'apps/role-fit-ai/src/styles/index.css',
-    'scripts/editor-browser-contracts/main.tsx', 'apps/role-fit-ai/server/starter.resume',
-    'package.json', 'package-lock.json', '.node-version', '.npmrc', 'tsconfig.base.json',
-    '.github/workflows/document-workflows.yml', 'scripts/ci-coverage-selection.mjs', 'unknown']) {
-    assert.equal(needsExtended([path]), true, path);
-    assert.equal(needsExtended(['apps/role-fit-ai/server/ai/prompts.ts', path]), true, `mixed ${path}`);
+test('each changed path selects only the jobs that can reach it', () => {
+  for (const [paths, expected] of [
+    [['packages/engine/src/typeset/layout.ts'], ['engine', 'editor', 'typeset', 'rolefit', 'server', 'browser']],
+    [['packages/engine/fonts/Arimo-Bold.ttf', 'packages/engine/scripts/generate_font_assets.py',
+      'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/package.json'],
+    ['engine', 'engineFonts', 'editor', 'typeset', 'rolefit', 'server', 'browser']],
+    [['packages/editor/src/editor.tsx'], ['editor', 'typeset', 'rolefit', 'browser']],
+    [['apps/typeset/src/App.tsx'], ['typeset', 'browser']],
+    [['apps/typeset/vite.config.ts', 'apps/typeset/public/icon.svg'], ['typeset']],
+    [['apps/role-fit-ai/src/App.tsx', 'apps/role-fit-ai/shared/contentWarnings.ts'], ['rolefit', 'server', 'browser']],
+    [['apps/role-fit-ai/server.ts', 'apps/role-fit-ai/server/ai/prompts.ts', 'apps/role-fit-ai/package.json'], ['rolefit', 'server']],
+    // The browser harness reads the starter resume as its strict fixture.
+    [['apps/role-fit-ai/server/starter.resume'], ['rolefit', 'server', 'browser']],
+    [['apps/role-fit-ai/desktop/main.ts', 'apps/role-fit-ai/landing/index.html', 'apps/role-fit-ai/extension/manifest.json',
+      'apps/role-fit-ai/scripts/desktop-release-contract.test.mjs'], ['rolefit']],
+    [['scripts/editor-browser-contracts/main.tsx', 'scripts/editor-browser-contracts-chromium.mjs'], ['browser']],
+    [['apps/typeset/tsconfig.json'], ['typescript', 'typeset', 'browser']],
+    [['apps/role-fit-ai/tsconfig.json'], ['typescript', 'rolefit', 'browser']],
+    [['apps/role-fit-ai/tsconfig.server.json'], ['typescript', 'rolefit']],
+    [['scripts/tsconfig-base-probe.ts'], ['typescript']],
+  ]) {
+    for (const path of paths) assert.deepEqual(jobs(path), sorted(expected), path);
   }
-  assert.equal(needsExtended([]), true);
+});
+
+test('Markdown, CI-only scripts, and unrelated tooling run no gated job', () => {
+  for (const path of ['README.md', 'CONTINUITY.md', 'docs/development.md', 'packages/engine/README.md',
+    'apps/typeset/AGENTS.md', 'scripts/check-dependency-contracts.mjs',
+    'scripts/check-package-script-paths.mjs', 'scripts/install-git-hooks.mjs', 'scripts/ci-coverage-selection.test.mjs',
+    '.github/dependabot.yml', '.github/workflows/deploy-typeset.yml', '.githooks/commit-msg', 'docs/images/shot.png']) {
+    assert.deepEqual(jobs(path), [], path);
+  }
+  // RoleFit's rename and extension contracts read its Markdown.
+  for (const path of ['apps/role-fit-ai/extension/README.md', 'apps/role-fit-ai/docs/releases/0.17.0-beta.1.md',
+    'apps/role-fit-ai/docs/engineering/ai-server.md']) {
+    assert.deepEqual(jobs(path), ['rolefit'], path);
+  }
+});
+
+test('root inputs and unknown workspaces or root files run every job', () => {
+  for (const path of ['package.json', 'package-lock.json', '.node-version', '.npmrc', 'tsconfig.base.json']) {
+    assert.deepEqual(jobs(path), sorted(ALL_BUT_FONTS), path);
+  }
+  for (const path of ['.github/workflows/document-workflows.yml', 'scripts/ci-coverage-selection.mjs',
+    'packages/new-package/src/index.ts', 'apps/new-app/src/main.ts', 'vite.config.ts', '.gitattributes']) {
+    assert.deepEqual(jobs(path), sorted(JOBS), path);
+  }
+});
+
+test('the selector writes exactly the outputs the workflow gates on', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/document-workflows.yml', import.meta.url), 'utf8');
+  const written = formatOutputs(Object.fromEntries(JOBS.map(job => [job, false]))).trim().split('\n').map(line => line.split('=')[0]);
+  const declared = [...workflow.matchAll(/^      ([a-z-]+): \$\{\{ steps\.coverage\.outputs\.([a-z-]+) \}\}$/gm)];
+  assert.deepEqual(declared.map(([, key, output]) => { assert.equal(key, output); return key; }).sort(), [...written].sort());
+  const gated = new Set([...workflow.matchAll(/needs\.changes\.outputs\.([a-z-]+)/g)].map(([, key]) => key));
+  assert.deepEqual([...gated].sort(), [...written].sort());
+  assert.deepEqual(written, JOBS.map(outputName));
+  assert.equal(outputName('engineFonts'), 'engine-fonts');
+  // A missing output must run its job, never skip it.
+  const gates = workflow.match(/^\s+if: .*needs\.changes\.outputs\..*$/gm);
+  for (const gate of gates) assert.match(gate, /^\s+if: needs\.changes\.outputs\.[a-z-]+ != 'false'$/, gate);
+  assert.match(workflow, /if \[ "\$SELECTED" != false \]; then/);
 });
 
 test('PR comparisons use the merge base; pushes include every commit since before', () => {
@@ -28,54 +83,23 @@ test('PR comparisons use the merge base; pushes include every commit since befor
       assert.deepEqual(args, ['diff', '--name-only', '--no-renames', '-z', `${base}${separator}${head}`, '--']);
       return 'apps/role-fit-ai/server/ai/prompt.ts\0';
     });
-    assert.deepEqual(coverage(selection), [false, false, false, true]);
+    assert.deepEqual(selected(selection), ['rolefit', 'server']);
     // A rename from a renderer to an excluded directory still includes its old path.
-    assert.equal(selectCoverage(name, event, () => 'packages/editor/deleted.ts\0apps/role-fit-ai/server/ai/moved.ts\0').extended, true);
+    assert.equal(selectCoverage(name, event, () => 'packages/editor/deleted.ts\0apps/role-fit-ai/server/ai/moved.ts\0').browser, true);
   }
-});
-
-test('the engine job runs only for its own tree and root inputs', () => {
-  for (const path of ['apps/role-fit-ai/src/App.tsx', 'apps/typeset/src/App.tsx', 'packages/editor/src/editor.tsx',
-    'docs/development.md', 'CONTINUITY.md', '.githooks/commit-msg', 'scripts/editor-browser-contracts/main.tsx',
-    '.github/workflows/deploy-typeset.yml']) {
-    assert.equal(needsEngine([path]), false, path);
-    assert.equal(needsEngineFonts([path]), false, path);
-  }
-  for (const path of ['packages/engine/src/typeset/layout.ts', 'packages/engine/README.md', 'package.json',
-    'package-lock.json', '.node-version', '.npmrc', 'tsconfig.base.json',
-    '.github/workflows/document-workflows.yml', 'scripts/ci-coverage-selection.mjs']) {
-    assert.equal(needsEngine([path]), true, path);
-    assert.equal(needsEngine(['apps/typeset/src/App.tsx', path]), true, `mixed ${path}`);
-  }
-  assert.equal(needsEngine([]), true);
-});
-
-test('font assets run only when their generators, sources, outputs, or CI wiring change', () => {
-  for (const path of ['packages/engine/src/typeset/layout.ts', 'packages/engine/src/lib/resumeData.ts',
-    'package.json', 'package-lock.json', 'tsconfig.base.json', 'apps/typeset/src/App.tsx']) {
-    assert.equal(needsEngineFonts([path]), false, path);
-  }
-  for (const path of ['packages/engine/scripts/generate_font_assets.py', 'packages/engine/scripts/requirements-fonts.txt',
-    'packages/engine/scripts/additional-fonts.json', 'packages/engine/fonts/Arimo-Bold.ttf',
-    'packages/engine/src/typeset/metrics.gen.ts', 'packages/engine/package.json',
-    '.github/workflows/document-workflows.yml',
-    'scripts/ci-coverage-selection.mjs']) {
-    assert.equal(needsEngineFonts([path]), true, path);
-  }
-  assert.equal(needsEngineFonts([]), true);
 });
 
 test('manual, unknown, malformed, empty and unavailable comparisons run all coverage', () => {
   const neverGit = () => { assert.fail('must not invoke git for an invalid comparison'); };
   for (const name of ['workflow_dispatch', 'schedule', 'push', 'pull_request']) {
-    assert.deepEqual(coverage(selectCoverage(name, {}, neverGit)), [true, true, true, true]);
+    assert.deepEqual(selected(selectCoverage(name, {}, neverGit)), JOBS);
   }
-  assert.equal(selectCoverage('push', { before: '0'.repeat(40), after: 'b'.repeat(40) }, neverGit).extended, true);
-  assert.equal(selectCoverage('push', { before: '--output=unsafe', after: 'b'.repeat(40) }, neverGit).extended, true);
+  assert.deepEqual(selected(selectCoverage('push', { before: '0'.repeat(40), after: 'b'.repeat(40) }, neverGit)), JOBS);
+  assert.deepEqual(selected(selectCoverage('push', { before: '--output=unsafe', after: 'b'.repeat(40) }, neverGit)), JOBS);
   const event = { before: 'a'.repeat(40), after: 'b'.repeat(40) };
-  assert.deepEqual(coverage(selectCoverage('push', event, () => { throw new Error('missing history'); })), [true, true, true, true]);
-  assert.deepEqual(coverage(selectCoverage('push', event, () => '')), [true, true, true, true]);
-  assert.equal(selectCoverage('push', event, () => 'packages/editor/name\nwith-newline.ts\0').extended, true);
+  assert.deepEqual(selected(selectCoverage('push', event, () => { throw new Error('missing history'); })), JOBS);
+  assert.deepEqual(selected(selectCoverage('push', event, () => '')), JOBS);
+  assert.equal(selectCoverage('push', event, () => 'packages/editor/name\nwith-newline.ts\0').browser, true);
 });
 
 const manifest = (version, extra = {}) => JSON.stringify({ name: 'role-fit-ai', version, scripts: { check: 'npm test' }, ...extra }, null, 2);
@@ -89,6 +113,7 @@ const lockfile = (version, { range = '1.0.0', installed = range, integrity = 'sh
   }, null, 2);
 const releasePaths = ['CONTINUITY.md', 'apps/role-fit-ai/docs/releases/0.17.0-beta.1.md', 'apps/role-fit-ai/package.json',
   'apps/role-fit-ai/scripts/desktop-release-contract.test.mjs', 'package-lock.json'];
+const VERSIONED = ['apps/role-fit-ai/package.json', 'package-lock.json'];
 const files = (head = {}) => ({
   base: { 'apps/role-fit-ai/package.json': manifest('0.16.0'), 'package-lock.json': lockfile('0.16.0') },
   head: { 'apps/role-fit-ai/package.json': manifest('0.17.0'), 'package-lock.json': lockfile('0.17.0'), ...head },
@@ -105,56 +130,57 @@ const releaseGit = (sides, paths = releasePaths, mergeBase = 'c'.repeat(40)) => 
   const [rev, path] = args[0].split(':');
   return reader(sides)(rev === 'b'.repeat(40) ? 'head' : 'base', path);
 };
+const prEvent = { pull_request: { base: { sha: 'a'.repeat(40) }, head: { sha: 'b'.repeat(40) } } };
+const pushEvent = { before: 'a'.repeat(40), after: 'b'.repeat(40) };
 
-test('a RoleFit version-only release skips engine and both Chromium suites', () => {
-  assert.equal(isReleasePrep(releasePaths, reader(files())), true);
-  const event = { pull_request: { base: { sha: 'a'.repeat(40) }, head: { sha: 'b'.repeat(40) } } };
+test('a RoleFit version-only release runs only the RoleFit app job', () => {
+  assert.deepEqual(sorted(versionOnlyChanges(releasePaths, reader(files()))), VERSIONED);
   const shown = [];
   const git = releaseGit(files());
-  const selection = selectCoverage('pull_request', event, (command, args, options) => {
+  assert.deepEqual(selected(selectCoverage('pull_request', prEvent, (command, args) => {
     if (args[0] === 'show') shown.push(args[1]);
-    return git(command, args, options);
-  });
-  assert.deepEqual(coverage(selection), [false, false, false, false]);
+    return git(command, args);
+  })), ['rolefit']);
   // A PR reads its base files at the merge base, matching the three-dot diff.
   assert.deepEqual(shown.filter(rev => rev.startsWith('a')), []);
   assert.ok(shown.includes(`${'c'.repeat(40)}:package-lock.json`));
   // A push compares and reads from `before` directly.
   const pushed = [];
-  assert.deepEqual(coverage(selectCoverage('push', { before: 'a'.repeat(40), after: 'b'.repeat(40) }, (command, args) => {
+  assert.deepEqual(selected(selectCoverage('push', pushEvent, (command, args) => {
     assert.notEqual(args[0], 'merge-base');
     if (args[0] === 'show') pushed.push(args[1].slice(0, 40));
     return git(command, args);
-  })), [false, false, false, false]);
+  })), ['rolefit']);
   assert.deepEqual([...new Set(pushed)].sort(), ['a'.repeat(40), 'b'.repeat(40)]);
-  // An engine document still runs the engine checks.
-  assert.equal(selectCoverage('pull_request', event,
-    releaseGit(files(), [...releasePaths, 'packages/engine/README.md'])).engine, true);
+  // Each version document alone selects its own jobs.
+  assert.deepEqual(selected(selectCoverage('push', pushEvent, releaseGit(files(), ['apps/role-fit-ai/package.json']))), ['rolefit']);
+  assert.deepEqual(selected(selectCoverage('push', pushEvent, releaseGit(files(), ['package-lock.json']))), []);
+  // Other paths in a release still select their own jobs.
+  assert.deepEqual(selected(selectCoverage('push', pushEvent, releaseGit(files(), [...releasePaths, 'apps/role-fit-ai/src/App.tsx']))),
+    ['rolefit', 'server', 'browser']);
 });
 
-test('release prep with any non-version change falls back to the path rules', () => {
+test('any non-version manifest or lockfile change keeps its root coverage', () => {
   for (const head of [
     { 'package-lock.json': lockfile('0.17.0', { range: '1.0.1' }) },
     // Changes outside the RoleFit workspace entry, which it leaves identical.
     { 'package-lock.json': lockfile('0.17.0', { installed: '1.0.1' }) },
     { 'package-lock.json': lockfile('0.17.0', { integrity: 'sha512-b' }) },
     { 'package-lock.json': lockfile('0.17.0', { root: ['apps/*'] }) },
+  ]) {
+    assert.deepEqual(sorted(versionOnlyChanges(releasePaths, reader(files(head)))), ['apps/role-fit-ai/package.json']);
+    assert.deepEqual(selected(selectCoverage('push', pushEvent, releaseGit(files(head)))), ALL_BUT_FONTS);
+  }
+  for (const head of [
     { 'apps/role-fit-ai/package.json': manifest('0.17.0', { scripts: { check: 'true' } }) },
     { 'apps/role-fit-ai/package.json': manifest('0.17.0', { engines: { node: '>=24' } }) },
   ]) {
-    assert.equal(isReleasePrep(releasePaths, reader(files(head))), false);
-    assert.deepEqual(coverage(selectCoverage('push', { before: 'a'.repeat(40), after: 'b'.repeat(40) },
-      releaseGit(files(head)))), [true, true, false, true]);
+    assert.deepEqual(sorted(versionOnlyChanges(releasePaths, reader(files(head)))), ['package-lock.json']);
+    assert.deepEqual(selected(selectCoverage('push', pushEvent, releaseGit(files(head)))), ['rolefit', 'server']);
   }
-  for (const path of ['package.json', 'apps/role-fit-ai/src/App.tsx', 'apps/role-fit-ai/scripts/desktop-release-contract.mjs']) {
-    assert.equal(isReleasePrep([...releasePaths, path], reader(files())), false, path);
-  }
-  // Markdown and the release contract test alone are not a version bump.
-  assert.equal(isReleasePrep(['CONTINUITY.md', 'apps/role-fit-ai/scripts/desktop-release-contract.test.mjs'], reader(files())), false);
 });
 
-test('malformed or unavailable release files run all coverage', () => {
-  const event = { pull_request: { base: { sha: 'a'.repeat(40) }, head: { sha: 'b'.repeat(40) } } };
+test('malformed or unavailable version documents run all coverage', () => {
   for (const git of [
     releaseGit(files({ 'package-lock.json': '{"packages":' })),
     releaseGit(files({ 'package-lock.json': JSON.stringify({ packages: {} }) })),
@@ -163,6 +189,6 @@ test('malformed or unavailable release files run all coverage', () => {
     releaseGit(files(), releasePaths, 'not-a-sha'),
     (command, args) => { if (args[0] === 'diff') return `${releasePaths.join('\0')}\0`; throw new Error('show failed'); },
   ]) {
-    assert.deepEqual(coverage(selectCoverage('pull_request', event, git)), [true, true, true, true]);
+    assert.deepEqual(selected(selectCoverage('pull_request', prEvent, git)), JOBS);
   }
 });
