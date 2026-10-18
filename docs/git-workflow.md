@@ -37,7 +37,8 @@ updates belong together when splitting them would leave the branch broken.
 Agent attribution is off: never add `Co-Authored-By: Claude …` trailers or
 "Generated with Claude Code" lines to commits or PR bodies, even when earlier
 history carries them. The tracked `.githooks/commit-msg` hook, which
-`npm install` enables through `core.hooksPath`, rejects them locally. A squash
+`npm install` enables through `core.hooksPath`, rejects them locally; it does
+not run for cherry-picks or rebases, so amend a carried trailer away. A squash
 merge builds its message on GitHub, outside the hook, so merge with an explicit
 subject and body (`gh pr merge --squash --subject … --body …`) instead of the
 concatenated commit messages.

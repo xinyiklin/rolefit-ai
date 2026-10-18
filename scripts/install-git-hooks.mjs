@@ -21,7 +21,12 @@ try {
 }
 
 if (!current) {
-  git("config", "core.hooksPath", ".githooks");
+  try {
+    git("config", "core.hooksPath", ".githooks");
+  } catch {
+    // Another worktree's git process can hold the shared config lock.
+    console.warn("install-git-hooks: could not set core.hooksPath; run `git config core.hooksPath .githooks`.");
+  }
 } else if (current !== ".githooks") {
   console.warn(`install-git-hooks: core.hooksPath is "${current}"; leaving it. Run .githooks/commit-msg from it to keep the attribution guard.`);
 }

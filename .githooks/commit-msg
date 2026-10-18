@@ -1,6 +1,9 @@
 #!/bin/sh
 # Agent attribution is off in this repository (docs/git-workflow.md#commits).
-if grep -Eiq '^co-authored-by:.*(claude|anthropic)|generated with \[?claude code' "$1"; then
-  echo "commit-msg: remove the Claude Co-Authored-By / \"Generated with Claude Code\" line; agent attribution is off here (docs/git-workflow.md)." >&2
+# Check only the message: drop `git commit -v`'s diff below the scissors line
+# and comment lines, so a diff or prose that mentions the phrase still passes.
+if sed -e '/^# -* >8 -*$/,$d' -e '/^#/d' "$1" |
+  grep -Eiq '^co-authored-by:.*@anthropic\.com|^[^[:alnum:]]*generated with \[?claude code'; then
+  echo "commit-msg: remove the Claude Co-Authored-By or Claude Code attribution line; agent attribution is off here (docs/git-workflow.md)." >&2
   exit 1
 fi
