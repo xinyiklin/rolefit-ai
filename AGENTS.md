@@ -257,6 +257,9 @@ agree, checks are reported honestly, and residual risks are explicit.
   Unlike the sibling repositories in this workspace, `CONTINUITY.md` is
   **tracked** here, so it is a legitimate staging candidate; `.claude/` is not.
 - Never bypass hooks (`--no-verify`, `--no-gpg-sign`); fix the cause instead.
+- No agent attribution in commits, PR bodies, or squash messages, and rename a
+  harness `claude/…` worktree branch before its first push; both rules live in
+  `docs/git-workflow.md`.
 
 Read `docs/git-workflow.md` before any push, PR, merge, release, or version
 bump; it owns the pre-push doc review, the continuity receipt, and release

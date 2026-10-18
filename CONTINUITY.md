@@ -73,11 +73,16 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-18
 
+- [USER+CODE+TOOL] **Agent attribution guard** (#242): tracked
+  `.githooks/commit-msg` rejects Claude co-author and "Generated with Claude
+  Code" lines (`npm install` sets `core.hooksPath`; run it once in the main
+  checkout); squash merges use an explicit subject/body; rename a harness
+  `claude/<name>` branch before its first push. Typeset image build verified.
 - [USER+CODE+TOOL] **Letter Blank/Starter reset** (D084): both reset a
   customized letter style to the defaults. **Titles follow identity** (D085,
   supersedes D084's title): each title tracks its own header name + company
   until the user renames it (Starter `Your_Name_Resume`; typing a name
-  retitles). **Both Starters on a new session** (D086). RoleFit check passed;
+  retitles). **Both Starters on a new session** (D086, #241). RoleFit check passed;
   browser QA passed (user and agent, worktree server).
 - [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
   D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
