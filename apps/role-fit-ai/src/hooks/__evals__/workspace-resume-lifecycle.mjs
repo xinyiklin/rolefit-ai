@@ -182,6 +182,58 @@ assert.doesNotMatch(blankLoad, /fetch\(|DELETE|removeBaseResume|saveBaseResume\(
 const saveCurrent = functionSlice("saveCurrentAsBaseResume", "loadBaseResumeVersion");
 assert.match(saveCurrent, /\|\| "default\.resume"/, "a detached blank document saves through the strict editable format");
 assert.match(saveCurrent, /serializeResumeFile\(editedResume, docStyle\.style\)/, "blank structure and style remain representable on save");
+const sentCaptured = saveCurrent.indexOf("version: replacementGuard.currentVersion()");
+assert.ok(
+  sentCaptured >= 0 && sentCaptured < saveCurrent.indexOf("serializeResumeFile("),
+  "Save records the document version it sends"
+);
+assert.match(saveCurrent, /ownsRecovery: replacementGuard\.ownsRecoveryNow\(\)/, "Save records whether it sent unsaved work or a restored draft");
+assert.match(appSource, /ownsRecoveryNow: \(\) =>\s*resumeReplacementStateRef\.current\.dirty \|\| restoredDraftSeedRef\.current === getResumeSeedRevision\(\)/, "a restored draft owns recovery until it is replaced");
+const restoreDraft = appSource.slice(appSource.indexOf("async function handleRestoreAutosaveDraft"), appSource.indexOf("function handleDismissAutosaveDraft"));
+assert.ok(
+  restoreDraft.indexOf("restoredDraftSeedRef.current = getResumeSeedRevision()") > restoreDraft.indexOf("seedResumeData(restored.data)"),
+  "Restore marks the restored seed, so Save of it clears its draft"
+);
+assert.match(appSource, /documentDirty: resumeReplacementGuard\.ownsRecoveryNow\(\)/, "automatic variant adoption never replaces a restored draft");
+assert.match(saveCurrent, /seedRevision: getSeedRevision\(\)/, "Save records which seeded document it sent");
+
+// Save stores the editor's document in place. Re-seeding from the returned copy
+// minted new ids, which dropped an open proposal and the cover workflow.
+const save = functionSlice("saveBaseResume", "removeBaseResume");
+for (const [pattern, label] of [
+  [/applyWorkspaceBaseResume\(/, "re-open the returned file"],
+  [/seedResumeData\(/, "re-seed the editor"],
+  [/setResult\(/, "clear the Polish proposal"],
+  [/resetCoverWorkflow\(/, "reset the cover workflow"],
+  [/setPolishStatus\(/, "clear Polish status"]
+]) {
+  assert.doesNotMatch(save, pattern, `Save does not ${label}`);
+}
+const saveValidated = save.indexOf("parseResumeFile(workspace.baseResume.text)");
+const saveReplacedCheck = save.indexOf("getSeedRevision() !== sent.seedRevision", saveValidated);
+const saveReplacedRefresh = save.indexOf("updateWorkspaceState(savedState, true)", saveReplacedCheck);
+const saveVersionCheck = save.indexOf("replacementGuard.currentVersion() === sent.version", saveReplacedRefresh);
+const saveRecovery = save.indexOf("if (unchanged && sent.ownsRecovery) replacementGuard.onReplacementCommitted()", saveVersionCheck);
+assert.ok(saveReplacedCheck > saveValidated, "Save notices a document that replaced the one it sent");
+assert.ok(saveReplacedRefresh > saveReplacedCheck, "a replaced Save refreshes the lists without renaming the editor's document");
+const saveMarked = save.indexOf("markResumeDocumentSaved(unchanged)", saveRecovery);
+const saveIdentity = save.indexOf("setFileName(", saveMarked);
+assert.ok(saveValidated >= 0, "Save validates the returned file with the strict codec");
+assert.ok(saveVersionCheck > saveValidated, "Save compares the live version with the one it sent");
+assert.ok(saveRecovery > saveVersionCheck, "Save clears recovery only for unsaved work it sent, still unchanged");
+assert.ok(saveMarked > saveRecovery, "Save marks the document clean only when unchanged since sending");
+assert.ok(saveIdentity > saveMarked, "Save commits the saved identity after validation");
+assert.match(save, /setResumeOrigin\("saved"\)/, "Save makes the document the applicant's saved base");
+
+const coverSource = readFileSync(new URL("../useCoverLetter.ts", import.meta.url), "utf8");
+const coverFingerprint = coverSource.slice(coverSource.indexOf("const proposalResumeFingerprint"), coverSource.indexOf("});", coverSource.indexOf("const proposalResumeFingerprint")));
+assert.match(coverFingerprint, /resumeText: currentResumeText \|\| resumeText/, "the cover workflow follows the resume content in use");
+assert.doesNotMatch(coverFingerprint, /^\s*resumeText,$/m, "saving the resume (a new saved baseline) does not cancel or stale the cover workflow");
+
+const editorSource = readFileSync(new URL("../useResumeEditor.ts", import.meta.url), "utf8");
+const markSaved = editorSource.slice(editorSource.indexOf("const markSaved"), editorSource.indexOf("}, [markClean]);", editorSource.indexOf("const markSaved")));
+assert.match(markSaved, /seedRevisionRef\.current \+= 1/, "a save ends what was tied to the seeded document, such as an import review");
+assert.match(markSaved, /if \(clean\) markClean\(\)/, "a save leaves edits made during it unsaved");
 
 const restore = functionSlice("restoreBaseResume", "saveCurrentAsBaseResume");
 const restoreApproval = restore.indexOf("await approveCurrentReplacement()");

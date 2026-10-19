@@ -1,49 +1,4 @@
-import { normalizeText, titleCase, unique } from "./text.ts";
-
-export const ACTION_VERBS = [
-  "accelerated",
-  "achieved",
-  "analyzed",
-  "assisted",
-  "built",
-  "collaborated",
-  "created",
-  "delivered",
-  "diagnosed",
-  "designed",
-  "developed",
-  "drove",
-  "enabled",
-  "enforced",
-  "extracted",
-  "guided",
-  "improved",
-  "implemented",
-  "launched",
-  "led",
-  "managed",
-  "optimized",
-  "owned",
-  "performed",
-  "provided",
-  "reduced",
-  "shipped",
-  "streamlined",
-  "supported",
-  // Strong action verbs the local polisher's chooseActionVerb can emit (and that
-  // recur in real bullets). Listed here so startsWithAction credits them in
-  // bulletQuality — otherwise the polisher's own "Deployed …"/"Resolved …"
-  // output, and genuine bullets led by these verbs, scored as having no action verb.
-  "automated",
-  "containerized",
-  "coordinated",
-  "deployed",
-  "engineered",
-  "integrated",
-  "resolved",
-  "strengthened",
-  "validated"
-];
+import { normalizeText, unique } from "./text.ts";
 
 export const ROLE_KEYWORDS: Array<{ keyword: string; aliases: string[] }> = [
   { keyword: "react", aliases: ["react", "react.js", "reactjs"] },
@@ -230,9 +185,6 @@ const STOP_WORDS = new Set([
   "tech"
 ]);
 
-export const startsWithAction = (text: string) =>
-  ACTION_VERBS.includes(text.trim().split(/\s+/)[0]?.toLowerCase() ?? "");
-
 function keywordAliases(keyword: string) {
   return ROLE_KEYWORDS.find((item) => item.keyword === keyword)?.aliases ?? [keyword];
 }
@@ -249,8 +201,6 @@ export function includesKeyword(source: string, keyword: string) {
     return cleaned.length > 0 && normalized.includes(` ${cleaned} `);
   });
 }
-
-export const displayKeyword = (keyword: string) => titleCase(keyword);
 
 export function extractKeywords(source: string, limit = 18) {
   const roleMatches = ROLE_KEYWORDS.filter(({ keyword }) => includesKeyword(source, keyword)).map(({ keyword }) => keyword);

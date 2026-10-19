@@ -17,7 +17,9 @@ workspace; there is no generic root `dev`, `build`, or `preview` script.
   runtime versions and the installed dependency contracts, including a
   recursive scan that resolves every import in `scripts/`, `apps/*`, and
   `packages/*` against its nearest owning `package.json`. A hoisted install can
-  otherwise satisfy an import no manifest declares. The root `allowScripts`
+  otherwise satisfy an import no manifest declares. It also fails when an
+  installed package differs from `package-lock.json` (a tree left from an older
+  lockfile), so `npm run check` never tests other versions; run `npm ci`. The root `allowScripts`
   list pins the six reviewed build/native-package lifecycle scripts, and
   `.npmrc` rejects any newly introduced install script until it is reviewed.
 - Dependency CI also runs `npm run deps:tree` and

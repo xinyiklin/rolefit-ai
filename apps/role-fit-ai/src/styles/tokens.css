@@ -103,8 +103,6 @@
   --shadow-rest: 0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px oklch(0.2 0.01 160 / 0.03);
   --shadow-lift: 0 1px 0 oklch(0.2 0.01 160 / 0.05), 0 14px 36px oklch(0.2 0.01 160 / 0.08);
   --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.6);
-  --shadow-rail: 0 -1px 0 var(--hairline), 0 -14px 32px oklch(0.2 0.01 160 / 0.03);
-  --shadow-mast: 0 1px 0 var(--hairline);
 
   /* Motion */
   --ease: cubic-bezier(0.2, 0.6, 0.2, 1);

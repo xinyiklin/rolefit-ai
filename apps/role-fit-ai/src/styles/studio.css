@@ -448,59 +448,10 @@
   border-radius: 0;
 }
 
-.studio-card__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--s3);
-  margin-bottom: 0;
-}
-
-/* Right-side cluster in a card head for compact metadata and actions. */
-.studio-card__tools {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.studio-card__head h2 {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.3rem;
-  line-height: 1.2;
-  color: var(--ink-strong);
-  letter-spacing: -0.005em;
-  margin-top: 0;
-}
-
-/* Quiet status note, not a badge: sentence case with a small leading dot. */
-.studio-card__meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--ink-soft);
-  font-size: 0.76rem;
-  white-space: nowrap;
-}
-
-.studio-card__meta::before {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-radius: var(--r-pill);
-  background: var(--warm);
-  flex: none;
-}
-
 /* -------- Page-title vocabulary -------- */
 
 /* .page-serif — serif h2 for page-level titles in the studio body.
-   Usage: <h2 className="page-serif">Resume draft</h2>
-   The studio-card__head h2 rule already applies equivalent styles; this class
-   lets page agents apply the same treatment to standalone headings. */
+   Usage: <h2 className="page-serif">Resume draft</h2> */
 .page-serif {
   font-family: var(--font-serif);
   font-weight: 600;

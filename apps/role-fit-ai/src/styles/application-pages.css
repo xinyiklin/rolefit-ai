@@ -307,12 +307,6 @@
   font-weight: 600;
 }
 
-.application-stage--applied { background: var(--cool-faint); color: var(--cool); border-color: var(--cool-line); }
-.application-stage--interviewing { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent-veil); }
-.application-stage--offer { background: var(--accent-soft); color: var(--accent-deep); border-color: var(--accent); }
-.application-stage--rejected,
-.application-stage--withdrawn { background: var(--danger-soft); color: var(--danger); border-color: var(--danger-line); }
-
 /* -------- Stage dot + plain text (table rows) -------- */
 /* No border, no pill background — dot carries the color, text is plain */
 .stage-dot {
@@ -413,9 +407,6 @@
   font-size: 0.84rem;
   font-weight: 600;
 }
-
-.figures-strip__lift--up { color: var(--accent-deep); }
-.figures-strip__lift--down { color: var(--danger); }
 
 .figures-strip__divider {
   align-self: stretch;
@@ -1067,11 +1058,6 @@ button.table-sort svg {
   z-index: 2;
 }
 
-/* Dividers already get s2 of breathing room from the grid gap on each side. */
-.pipeline-inspector .inspector-divider {
-  margin: 0;
-}
-
 .pipeline-inspector__head {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -1694,37 +1680,6 @@ button.table-sort svg {
   font-weight: 650;
 }
 
-/* Best current fit inline layout */
-.analytics-best-inline {
-  display: flex;
-  align-items: center;
-  gap: var(--s3);
-}
-
-.analytics-best-inline div {
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-}
-
-.analytics-best-inline div strong {
-  color: var(--ink-strong);
-  font-size: 0.84rem;
-}
-
-.analytics-best-inline div span,
-.analytics-best-inline div em {
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-style: normal;
-}
-
-.analytics-best-score {
-  font-size: 1.4rem;
-  min-width: 56px;
-  display: block;
-}
-
 .analytics-funnel {
   display: grid;
   gap: var(--s2);
@@ -1820,13 +1775,6 @@ button.table-sort svg {
   display: inline;
   vertical-align: -0.1em;
   margin-right: 3px;
-}
-
-/* Thin hairline rule between the read-only facts block and the editable controls */
-.inspector-divider {
-  height: 1px;
-  background: var(--hairline-soft);
-  margin: var(--s2) 0;
 }
 
 /* -------- Application detail modal -------- */
@@ -2966,38 +2914,6 @@ button.table-sort svg {
   border: 0;
   border-top: 1px solid var(--hairline);
   background: transparent;
-}
-
-.application-review__verdict {
-  color: var(--ink);
-  font-size: 0.8rem;
-}
-
-.application-review__list {
-  display: grid;
-  gap: var(--s2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.application-review__list li {
-  display: grid;
-  gap: 2px;
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--hairline-soft);
-  background: transparent;
-  font-size: 0.78rem;
-}
-
-.application-review__list li strong { color: var(--ink-strong); }
-.application-review__list li span { color: var(--ink-soft); }
-
-.application-review__edits ul {
-  margin: var(--s1) 0 0;
-  padding-left: var(--s4);
-  color: var(--ink-soft);
-  font-size: 0.78rem;
 }
 
 .application-posting-overlay__chrome {

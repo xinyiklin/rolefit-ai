@@ -58,7 +58,8 @@ and implementation or conversion language in the user experience.
    communicate exactly where the user's work lives. A completed browser
    autosave or explicit `.resume` save clears both content and print-style
    dirty state, so the leave warning guards only edits not yet stored in this
-   browser or a failed autosave.
+   browser, a failed autosave, or a draft another tab replaced (tabs share one
+   draft; the next edit here stores this tab's again).
 5. **Keep the source truthful.** One versioned structured format drives reopen,
    autosave, layout, and export without lossy conversion paths.
 

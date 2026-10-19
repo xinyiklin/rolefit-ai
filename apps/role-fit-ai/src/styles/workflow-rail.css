@@ -158,58 +158,6 @@
   display: none;
 }
 
-.resume-workflow__steps {
-  display: grid;
-  gap: var(--s2);
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.resume-workflow__steps li {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: var(--s2);
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--hairline-soft);
-  color: var(--ink);
-  font-size: 0.76rem;
-}
-
-.resume-workflow__steps small {
-  color: var(--ink-faint);
-  font-size: 0.68rem;
-  text-transform: capitalize;
-}
-
-.resume-workflow__steps .is-running small {
-  color: var(--accent-deep);
-}
-
-.resume-workflow__steps .is-failed small {
-  color: var(--warm);
-}
-
-.resume-workflow__single-step {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--s2);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--hairline-soft);
-  color: var(--ink);
-  font-size: 0.76rem;
-}
-
-.resume-workflow__single-step small {
-  color: var(--ink-faint);
-  text-transform: capitalize;
-}
-
-.resume-workflow__single-step.is-running small { color: var(--accent-deep); }
-.resume-workflow__single-step.is-failed small,
-.resume-workflow__single-step.is-stopped small,
-.resume-workflow__single-step.is-withheld small { color: var(--warm); }
-
 /* An in-flight run: dotted-leader rows saying what is being polished and for
    how long, in the ledger voice the rest of the desk uses for facts. */
 .workflow-rail__run {

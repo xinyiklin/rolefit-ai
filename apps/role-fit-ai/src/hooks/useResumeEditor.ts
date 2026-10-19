@@ -54,6 +54,13 @@ export function useResumeEditor(historyClock?: HistoryClock) {
     setUnsavedSeed(false);
     editor.markClean();
   }, [editor.markClean]);
+  // Saving stores the document in place: what was tied to its seed (an open
+  // import review) ends as on a new seed, and it turns clean only if `clean`.
+  const markSaved = useCallback((clean: boolean) => {
+    seedRevisionRef.current += 1;
+    setSeedRevision(seedRevisionRef.current);
+    if (clean) markClean();
+  }, [markClean]);
 
   const seed = useCallback(
     (text: string, sourceText?: string) => {
@@ -232,6 +239,7 @@ export function useResumeEditor(historyClock?: HistoryClock) {
     ...editor,
     dirty: editor.dirty || unsavedSeed,
     markClean,
+    markSaved,
     editedResume,
     manualEdited,
     serializedResume,

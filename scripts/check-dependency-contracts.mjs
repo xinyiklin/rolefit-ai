@@ -218,6 +218,15 @@ check(
   `RoleFit must resolve Node 24 types; found ${nodeTypesVersion ?? "(missing)"}.`,
 );
 
+// The checks above read the lockfile, so a tree installed from an older one
+// would pass them while every later check runs against other versions.
+const staleInstallations = findStaleInstallations();
+check(
+  staleInstallations.length === 0,
+  `Installed packages differ from package-lock.json; run npm ci: ${formatList(staleInstallations.slice(0, 8))}`
+    + `${staleInstallations.length > 8 ? ` and ${staleInstallations.length - 8} more` : ""}.`,
+);
+
 // react-pdf pins pdfjs-dist exactly; a drifting worker version fails at runtime
 // in the PDF preview rather than at build time, so pin and cross-check it.
 const reactPdfRequiredPdfjs = lockfileInstallations("react-pdf")
@@ -324,6 +333,24 @@ function lockfileInstallations(packageName) {
     ))
     .map(([path, metadata]) => ({ path, version: metadata.version }))
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+// Optional entries are other platforms' binaries when absent; links are workspaces.
+function findStaleInstallations() {
+  const stale = [];
+  for (const [path, metadata] of Object.entries(packageLock.packages)) {
+    if (!path.includes("node_modules/") || metadata.link || typeof metadata.version !== "string") continue;
+    let installed;
+    try {
+      installed = JSON.parse(readFileSync(join(repositoryRoot, path, "package.json"), "utf8")).version;
+    } catch (error) {
+      if (error.code !== "ENOENT") throw error;
+      if (!metadata.optional && !metadata.devOptional) stale.push(`${path} missing`);
+      continue;
+    }
+    if (installed !== metadata.version) stale.push(`${path} ${installed} (locked ${metadata.version})`);
+  }
+  return stale;
 }
 
 function checkSingleMajor(installations, packageName) {

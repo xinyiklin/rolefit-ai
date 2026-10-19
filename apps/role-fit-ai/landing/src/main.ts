@@ -106,9 +106,10 @@ function applyCatalog(catalog: ReleaseCatalog): void {
 
   const links = document.getElementById("release-links");
   if (!links) return;
+  const unsigned = preview ? "Unsigned " : "";
   const archives = [
-    { name: "Apple silicon ZIP", url: catalog.archives.macosArm64.url },
-    { name: "Intel ZIP", url: catalog.archives.macosX64.url },
+    { name: `${unsigned}Apple silicon ZIP`, url: catalog.archives.macosArm64.url },
+    { name: `${unsigned}Intel ZIP`, url: catalog.archives.macosX64.url },
     { name: "SHA-256 checksums", url: catalog.checksums.url },
   ];
   const allReleases = links.querySelector("a");

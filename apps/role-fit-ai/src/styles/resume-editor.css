@@ -14,17 +14,3 @@
   min-height: var(--toolbar-row-height);
   padding-block: 6px;
 }
-
-.resume-tab__toolbar .studio-card__tools {
-  flex: 0 0 auto;
-  flex-wrap: nowrap;
-}
-
-/* RoleFit's PDF export menu keeps its text label without the leading icon, so
-   the action bar's disclosure chevron is its only glyph. This is a document
-   action, not a formatting menu: the icon-only seam that this tab's toolbar
-   header opts into via [data-toolbar-labels="icon"] applies to the formatting
-   row's style menus, and lives in packages/editor/src/styles/toolbar.css. */
-.resume-tab__toolbar .export-menu__trigger > svg:first-child {
-  display: none;
-}

@@ -1,10 +1,3 @@
-export type ApplicationDocumentServerKind = "resume" | "cover";
-
-export const APPLICATION_DOCUMENT_SOURCE_EXTENSION = {
-  resume: "resume",
-  cover: "cover"
-} as const satisfies Record<ApplicationDocumentServerKind, string>;
-
 export type ApplicationDocumentArtifacts = {
   hasPdf: boolean;
   hasSource: boolean;

@@ -261,7 +261,8 @@ or workspace state, keep it here and expose the smallest host seam instead.
   generations. A successful adoption returns the guarded loader's committed
   document receipt, while a blocked/failed adoption clears its recommendation.
   Adoption still goes through the guarded workspace loader only while the editor
-  is clean and not application-owned; an explicit manual variant choice
+  is clean (a restored recovery draft counts as unsaved) and not
+  application-owned; an explicit manual variant choice
   synchronously preempts it; while an included variant is resolving or loading,
   preparation remains busy and Apply or another Polish action cannot start. A
   clean explicit upload is authoritative and never replaced automatically.

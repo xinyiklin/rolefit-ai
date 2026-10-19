@@ -829,6 +829,25 @@ await probe("a recognized page URL ignores its frames", async () => {
   assert(!miss.calls.some((href) => href.includes("rippling")));
 });
 
+await probe("a linked file is refused by its type instead of importing its bytes as posting text", async () => {
+  const url = "https://careers.fileco.example/postings/platform-engineer.pdf";
+  // An unrecognized page with one Lever frame: the extension fetches only the frame.
+  const extensionPage = "https://careers.fileco.example/jobs";
+  const frame = `https://jobs.lever.co/fileco/${UUID_A}`;
+  const pdfBody = `%PDF-1.7\n1 0 obj << /Type /Catalog >> endobj\n${"Platform Engineer builds reliable services and REST APIs. ".repeat(8)}`;
+  for (const type of ["application/pdf", "application/octet-stream", "image/png"]) {
+    const file = { status: 200, headers: { "content-type": type }, body: pdfBody };
+    const { deps, calls } = transport({ [url]: file, [frame]: file });
+    fails(await importUrl(url, deps), /opens a file, not a web page/);
+    assert.equal(await resolveImportedJobText(captured, extensionPage, deps, [frame]), captured, `${type}: the extension keeps its capture`);
+    assert(calls.includes(frame), `${type}: the framed file was fetched`);
+  }
+  for (const type of ["text/html; charset=utf-8", "application/xhtml+xml", "TEXT/HTML", "application/octet-stream", "binary/octet-stream"]) {
+    const { deps } = transport({ [url]: { status: 200, headers: { "content-type": type }, body: page({ body: jdHtml("Platform Engineer") }) } });
+    ok(await importUrl(url, deps), /Responsibilities/);
+  }
+});
+
 await probe("frame URL input is bounded to eight strings of at most 2,000 characters", async () => {
   assert.deepEqual(cleanFrameUrls(undefined), []);
   assert.deepEqual(cleanFrameUrls("https://a.example/"), []);

@@ -528,7 +528,14 @@ export function installCompanionIpc(options: CompanionIpcOptions): () => void {
       async (event: IpcMainInvokeEvent, ...args: RoleFitProviderConnectionsRequest) => {
         requireTrustedRequest(event, options);
         requireNoArguments(args, "Provider connections");
-        return copyProviderConnections(await options.getProviderConnections());
+        try {
+          return copyProviderConnections(await options.getProviderConnections());
+        } catch (error) {
+          if ((error as { code?: unknown } | null)?.code === "ROLEFIT_PROVIDER_VAULT_CORRUPT") {
+            throw new Error("Saved provider settings could not be read.");
+          }
+          throw error;
+        }
       }
     );
     options.ipc.handle(

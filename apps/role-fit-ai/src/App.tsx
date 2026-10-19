@@ -693,6 +693,7 @@ function App() {
     seedRevision: resumeSeedRevision,
     getSeedRevision: getResumeSeedRevision,
     markClean: markResumeClean,
+    markSaved: markResumeSaved,
     actions: resumeEditorActions
   } = useResumeEditor(resumeHistoryClock);
   const typesetEditorRef = useRef<TypesetEditorHandle>(null);
@@ -902,6 +903,9 @@ function App() {
     () => resumeDocumentVersionFor(editedResume, docStyle.style),
     [docStyle.style, editedResume]
   );
+  // The seed of a recovery draft restored into the editor: it opens clean but
+  // still owns the stored draft until it is saved or replaced.
+  const restoredDraftSeedRef = useRef<number | null>(null);
   const resumeReplacementStateRef = useRef({
     dirty: resumeDocumentDirty,
     version: resumeDocumentVersion
@@ -913,6 +917,8 @@ function App() {
   const resumeReplacementGuard = useMemo(
     () => ({
       isDirtyNow: () => resumeReplacementStateRef.current.dirty,
+      ownsRecoveryNow: () =>
+        resumeReplacementStateRef.current.dirty || restoredDraftSeedRef.current === getResumeSeedRevision(),
       currentVersion: () => resumeReplacementStateRef.current.version,
       confirmReplacement: () =>
         confirm({
@@ -921,16 +927,21 @@ function App() {
           confirmLabel: "Replace"
         }),
       onReplacementCommitted: () => {
+        restoredDraftSeedRef.current = null;
         clearAutosaveDraft();
         setPendingAutosaveDraft(null);
       }
     }),
-    [confirm]
+    [confirm, getResumeSeedRevision]
   );
   const markResumeDocumentClean = useCallback(() => {
     markResumeClean();
     docStyle.markClean();
   }, [docStyle.markClean, markResumeClean]);
+  const markResumeDocumentSaved = useCallback((clean: boolean) => {
+    markResumeSaved(clean);
+    if (clean) docStyle.markClean();
+  }, [docStyle.markClean, markResumeSaved]);
   const markResumeApplicationSaved = useCallback(() => {
     clearAutosaveDraft();
     markResumeDocumentClean();
@@ -1392,6 +1403,8 @@ function App() {
     resetExportStatuses,
     setExportStatus,
     seedResumeData,
+    markResumeDocumentSaved,
+    getSeedRevision: getResumeSeedRevision,
     setResumeOrigin,
     editedResume,
     docStyle
@@ -1452,7 +1465,8 @@ function App() {
     applicationOwned: applicationOfRecordId !== null,
     currentText: currentResumeText || resumeText,
     documentTitle,
-    documentDirty: resumeDocumentDirty,
+    // A restored recovery draft opens clean but is unsaved work all the same.
+    documentDirty: resumeReplacementGuard.ownsRecoveryNow(),
     manualSelectionInFlight: resumeManualVariantSelectionInFlightRef.current,
     savingBaseResume: isSavingBaseResume,
     candidateRevision: readBaseResumeCandidatesRevision()
@@ -2690,6 +2704,7 @@ function App() {
     detachBaseResumeIdentity();
     setFileName("");
     setResumeOrigin(draft.resumeOrigin);
+    restoredDraftSeedRef.current = getResumeSeedRevision();
     resetCoverWorkflow();
     // The autosave doesn't carry the job description/URL, so a saved
     // pipelineAiUsage/rawText only applies when the SAME job target is still

@@ -522,7 +522,11 @@ modules under `server/ai/` so no single file carries the whole pipeline:
   never use it on a public or untrusted network.
 - Preserve the loopback Host/Origin guard across the supported local spellings:
   `localhost`, `127.0.0.1`, and `[::1]`. Do not broaden it into arbitrary Host,
-  Origin, or wildcard acceptance.
+  Origin, or wildcard acceptance. Under a `HOST` override the guard
+  (`requestGuardError` in `server/runtime.ts`) still accepts only a Host naming
+  this machine (an IP literal, `localhost`, the bind name, or its own host name)
+  on the listening port, and only an Origin equal to that Host, so another
+  site's page and a DNS-rebound name stay refused.
 - Validate and coerce recognized boundary fields before use, and reject invalid
   required values. Do not claim that unknown fields are rejected unless the
   route has an explicit allowlist check and a regression test.
@@ -880,7 +884,10 @@ Keep the import pipeline split by responsibility:
   extension capture:
   - Unrecognized pages are accepted on readable text alone (≥200 chars, not
     code-shaped). A careers or cookie/navigation shell without a bound
-    JobPosting can still pass; there is no universal page classifier.
+    JobPosting can still pass; there is no universal page classifier. A
+    response typed as a file (PDF, image; anything but `text/*`, XHTML, or XML)
+    is refused as not a web page, except an octet-stream body that begins with
+    markup; an untyped one is still read.
   - A branded `gh_jid` page without Greenhouse board evidence stays a generic
     import, so a careers shell there is not detected.
   - A non-Greenhouse URL carrying `gh_jid` plus `for`/`board` fails when the

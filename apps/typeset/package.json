@@ -11,6 +11,7 @@
     "build": "tsc && vite build",
     "preview": "vite preview",
     "eval:autosave": "node --experimental-strip-types src/__evals__/resume-autosave.mjs && node --experimental-strip-types src/__evals__/document-save-baseline.mjs",
+    "test": "npm run eval:autosave",
     "check": "npm run build && npm run eval:autosave"
   },
   "dependencies": {

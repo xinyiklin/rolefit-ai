@@ -358,7 +358,9 @@ Full server-lifecycle and companion-process integration tests are explicit.
 `npm run test:server-lifecycle --workspace apps/role-fit-ai`; it binds an
 ephemeral loopback port, uses an isolated temporary workspace, checks the
 health/Host/Origin/lifecycle contract, and proves the listener can be released
-and rebound.
+and rebound. The `HOST`-override guard never binds a non-loopback address in a
+test: the offline `server/__evals__/request-guard-probes.mjs` drives
+`requestGuardError` for both bind kinds directly.
 
 ## Testing Mindset
 

@@ -437,7 +437,6 @@ p { margin-top: 0; }
 .provider-card__action--primary,
 .site-port-form button { border-color: var(--forest-deep); background: var(--forest); color: #f7fbf8; }
 .provider-card__action:hover:not(:disabled), .site-port-form button:hover:not(:disabled) { border-color: var(--forest-deep); background: var(--forest-deep); color: #fff; }
-.provider-card__action.is-cancel:hover:not(:disabled) { border-color: var(--red); background: var(--red); }
 .provider-card__action:disabled, .site-port-form button:disabled { border-color: var(--line); background: #edf0eb; color: var(--ink-faint); cursor: not-allowed; }
 
 .provider-card__text-action {

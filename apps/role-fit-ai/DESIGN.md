@@ -335,10 +335,6 @@ so its lower edge meets the sidebar and workspace without a false gap.
   and overlays only; the maximum elevation in the app.
 - **Inset** (`--shadow-inset`: inset 0 1px 0 oklch(1 0 0 / 0.6)): a top
   inner highlight on accent-filled buttons.
-- **Rail** (`--shadow-rail`): upward hairline + faint haze under the export
-  rail.
-- **Masthead** (`--shadow-mast` and the double-rule box-shadow): hairline
-  edges, zero blur.
 
 ### Named Rules
 
@@ -391,7 +387,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   surfaces only (see Elevation).
 - **Border:** always a 1px `--hairline`; sheets are framed, not floating.
 - **Internal Padding:** `--s3`/`--s4` (12/16px); heads get a serif Display
-  title plus a quiet dot-led meta note (`.studio-card__meta`), not badges.
+  title plus, when needed, a quiet dot-led meta note, not badges.
 - **Flush variant** (`.studio-card--flush`): when the content is already a
   framed surface (editor, cover-letter sheet), the wrapper drops its box
   entirely; box-in-a-box is forbidden.
@@ -781,7 +777,7 @@ register, not a CRM grid.
   `src/styles/tokens.css` plus per-surface app classes for RoleFit host chrome;
   if a value has no owning token, it does not ship.
 - **Do** state status as a small dot beside plain sentence-case text
-  (`.stage-dot`, `.nav-menu__sub`, `.studio-card__meta`).
+  (`.stage-dot`, `.nav-menu__sub`).
 - **Do** set numbers, dates, scores, and indices in JetBrains Mono with
   `tabular-nums` (The Mono Means Data Rule).
 - **Do** keep errors inline, localized, and user-safe, near the affected

@@ -290,6 +290,7 @@ function WorkspaceResumeContractApp() {
     confirm: async () => true,
     replacementGuard: {
       isDirtyNow: () => replacementStateRef.current.dirty,
+      ownsRecoveryNow: () => replacementStateRef.current.dirty,
       currentVersion: () => replacementStateRef.current.version,
       confirmReplacement: async () => {
         confirmCountRef.current += 1;
@@ -301,6 +302,7 @@ function WorkspaceResumeContractApp() {
     },
     fileName,
     setDocumentTitle: () => undefined,
+    freshDocumentTitle: () => "Resume",
     setResumeOrigin: () => undefined,
     setResumeText: () => undefined,
     setFileName,
@@ -314,6 +316,8 @@ function WorkspaceResumeContractApp() {
     seedResumeData: () => {
       appliedCountRef.current += 1;
     },
+    markResumeDocumentSaved: () => undefined,
+    getSeedRevision: () => appliedCountRef.current,
     editedResume: { header: null, sections: [] },
     docStyle
   });

@@ -20,11 +20,13 @@ import {
 import {
   buildCliProcessEnvironment,
   createCliProviderManager,
+  installedNvmNodeVersions,
   packagedCliSearchPaths,
   type CliProviderManager
 } from "./cli-providers.cjs";
 import {
   createProviderVault,
+  ProviderVaultCorruptError,
   type ProviderVault,
   type ProviderVaultConfiguredState,
   type ProviderVaultCredentialSnapshot
@@ -82,7 +84,7 @@ type DesktopMode = "development" | "production";
 
 type SmokeResult = {
   rootRendered: boolean;
-  companionReady: boolean;
+  companionStatus: string | null;
   hasRequire: boolean;
   hasProcess: boolean;
   hasBuffer: boolean;
@@ -95,7 +97,9 @@ type SmokeResult = {
   localSiteSettingsError: string | null;
   providerStatus: unknown;
   providerStatusError: string | null;
+  providerSummaryText: string;
   providerMutationError: string | null;
+  pairingMutationError: string | null;
   providerLandmarks: number;
   providerDescriptions: number;
   providerOrdinals: number;
@@ -853,7 +857,7 @@ function providerStatusesMatch(value: unknown): value is readonly RoleFitProvide
   });
 }
 
-function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnership): boolean {
+function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnership, vaultUnreadable: boolean): boolean {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const payload = value as Record<string, unknown>;
   if (payload.schemaVersion !== 1 || !Array.isArray(payload.providers) || Object.keys(payload).length !== 3) {
@@ -862,6 +866,8 @@ function providerPayloadMatches(value: unknown, ownership: RoleFitServerOwnershi
   if (ownership === "reused") {
     return payload.companionManaged === false && payload.providers.length === 0;
   }
+  // An unreadable vault keeps the owned server companion-managed with nothing.
+  if (vaultUnreadable) return payload.companionManaged === true && payload.providers.length === 0;
   if (payload.companionManaged !== true || payload.providers.length !== 1) return false;
   const provider = payload.providers[0];
   if (!provider || typeof provider !== "object" || Array.isArray(provider)) return false;
@@ -919,6 +925,10 @@ async function inspectSmokeRenderer(
   if (!mainWindow) throw new Error("Desktop smoke companion window was not created.");
   console.log(`ROLEFIT_DESKTOP_SMOKE_READY ownership=${ownership} mode=${activeMode} phase=companion`);
   const holdMs = Number(process.env.ROLEFIT_DESKTOP_SMOKE_HOLD_MS ?? 0);
+  const vaultUnreadable = process.env.ROLEFIT_DESKTOP_SMOKE_VAULT === "corrupt";
+  if (vaultUnreadable && ownership !== "owned") {
+    throw new Error("ROLEFIT_DESKTOP_SMOKE_VAULT=corrupt needs an owned server.");
+  }
   if (!Number.isFinite(holdMs) || holdMs < 0 || holdMs > 10_000) {
     throw new Error("ROLEFIT_DESKTOP_SMOKE_HOLD_MS must be between 0 and 10000.");
   }
@@ -933,6 +943,7 @@ async function inspectSmokeRenderer(
       let providerStatus = null;
       let providerStatusError = null;
       let providerMutationError = null;
+      let pairingMutationError = null;
       let workspaceOverview = null;
       let workspaceOverviewError = null;
       let connectionStatus = null;
@@ -962,6 +973,14 @@ async function inspectSmokeRenderer(
       } catch (error) {
         providerMutationError = error instanceof Error ? error.message : String(error);
       }
+      // Only a reused server can be asked: an owned one would save and relaunch.
+      if (${JSON.stringify(ownership !== "owned")}) {
+        try {
+          if (bridge) await bridge.removeExtensionOrigin('chrome-extension://${"a".repeat(32)}');
+        } catch (error) {
+          pairingMutationError = error instanceof Error ? error.message : String(error);
+        }
+      }
       try {
         providerStatus = bridge ? await bridge.getProviderConnections() : null;
       } catch (error) {
@@ -980,7 +999,7 @@ async function inspectSmokeRenderer(
       }
       resolve({
         rootRendered: Boolean(document.querySelector('[data-companion-root]')),
-        companionReady: document.querySelector('[data-companion-root]')?.getAttribute('data-status') === 'ready',
+        companionStatus: document.querySelector('[data-companion-root]')?.getAttribute('data-status') ?? null,
         hasRequire: typeof window.require !== 'undefined',
         hasProcess: typeof window.process !== 'undefined',
         hasBuffer: typeof window.Buffer !== 'undefined',
@@ -993,7 +1012,9 @@ async function inspectSmokeRenderer(
         localSiteSettingsError,
         providerStatus,
         providerStatusError,
+        providerSummaryText: document.getElementById('provider-summary')?.textContent ?? '',
         providerMutationError,
+        pairingMutationError,
         providerLandmarks: document.querySelectorAll('[data-provider-list] > [data-provider-id]').length,
         providerDescriptions: document.querySelectorAll('.provider-card__detail').length,
         providerOrdinals: document.querySelectorAll('.provider-card__ordinal').length,
@@ -1063,7 +1084,7 @@ async function inspectSmokeRenderer(
 
   const smokeChecks: ReadonlyArray<readonly [string, boolean]> = [
     ["root rendered", result.rootRendered],
-    ["companion ready", result.companionReady],
+    ["companion ready", result.companionStatus === (vaultUnreadable ? "error" : "ready")],
     ["Node require absent", !result.hasRequire],
     ["Node process absent", !result.hasProcess],
     ["Node Buffer absent", !result.hasBuffer],
@@ -1079,12 +1100,19 @@ async function inspectSmokeRenderer(
       expectedSiteSettings.localSitePort,
       expectedSiteSettings.locked
     )],
-    ["provider status request", result.providerStatusError === null],
-    ["provider mutation boundary", ownership === "owned"
+    ["provider status request", vaultUnreadable
+      ? typeof result.providerStatusError === "string" &&
+        result.providerStatusError.includes("Saved provider settings could not be read")
+      : result.providerStatusError === null],
+    ["unreadable vault named", !vaultUnreadable || result.providerSummaryText.includes("could not be read")],
+    ["provider mutation boundary", ownership === "owned" && !vaultUnreadable
       ? result.providerMutationError === null
       : typeof result.providerMutationError === "string" &&
-        result.providerMutationError.includes("let this companion start the local service")],
-    ["provider status contract", providerStatusesMatch(result.providerStatus)],
+        (vaultUnreadable || result.providerMutationError.includes("let this companion start the local service"))],
+    ["extension pairing mutation boundary", ownership === "owned" ||
+      typeof result.pairingMutationError === "string" &&
+        result.pairingMutationError.includes("before changing extension access")],
+    ["provider status contract", vaultUnreadable ? result.providerStatus === null : providerStatusesMatch(result.providerStatus)],
     ["provider landmarks", result.providerLandmarks === ROLEFIT_PROVIDER_IDS.length],
     ["provider descriptions absent", result.providerDescriptions === 0],
     ["provider ordinals absent", result.providerOrdinals === 0],
@@ -1139,12 +1167,12 @@ async function inspectSmokeRenderer(
       const body = await response.text();
       if (body.length <= 8_192) {
         providerPayload = JSON.parse(body);
-        if (providerPayloadMatches(providerPayload, ownership)) break;
+        if (providerPayloadMatches(providerPayload, ownership, vaultUnreadable)) break;
       }
     }
     await delay(50);
   }
-  if (!providerPayloadMatches(providerPayload, ownership)) {
+  if (!providerPayloadMatches(providerPayload, ownership, vaultUnreadable)) {
     throw new Error(
       "Electron companion provider snapshot did not match its owned/reused server boundary"
         + ` (${JSON.stringify(providerPayload)}).`
@@ -1548,7 +1576,18 @@ async function startDesktop(): Promise<void> {
   activeWorkspaceDir = paths.workspaceDir;
   await mkdir(paths.serverCwd, { recursive: true });
   const cliSearchPaths = app.isPackaged
-    ? packagedCliSearchPaths(process.platform, app.getPath("home"), process.env)
+    ? packagedCliSearchPaths(
+      process.platform,
+      app.getPath("home"),
+      process.env,
+      // An optional search hint: an unreadable nvm folder must not stop startup.
+      process.platform === "darwin"
+        ? await installedNvmNodeVersions(app.getPath("home")).catch((error: unknown) => {
+          console.warn(`[companion] nvm installs were not added to the CLI search path (${(error as NodeJS.ErrnoException).code ?? "unreadable"}).`);
+          return [];
+        })
+        : []
+    )
     : Object.freeze([]);
   const cliProcessEnvironment = buildCliProcessEnvironment(process.env, cliSearchPaths);
   // The owned server has its own closed allowlist, including non-secret model
@@ -1631,7 +1670,12 @@ async function startDesktop(): Promise<void> {
   cliProviderManager = createCliProviderManager({
     processEnvironment: cliProcessEnvironment
   });
-  await synchronizeProviderSnapshot();
+  // An unreadable vault must not stop the companion: the vault file is left as
+  // it is, and the owned server keeps the empty snapshot it started with.
+  await synchronizeProviderSnapshot().catch((error: unknown) => {
+    if (!(error instanceof ProviderVaultCorruptError)) throw error;
+    console.error("[companion] The saved provider settings could not be read; no provider is available until that file is replaced.");
+  });
   startProviderSnapshotRefreshLoop();
   removeSessionSecurity = installSessionSecurity(session.defaultSession);
   removeDesktopIpc = installCompanionIpc({

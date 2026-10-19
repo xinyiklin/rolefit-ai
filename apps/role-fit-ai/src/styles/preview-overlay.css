@@ -89,7 +89,7 @@
   height: 26px;
   padding: 0;
   border: 0;
-  border-radius: var(--r-xs, 4px);
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;

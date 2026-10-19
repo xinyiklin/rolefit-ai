@@ -46,4 +46,7 @@ CONTINUITY.md
 !server/starter.resume
 workspace/*
 !workspace/README.md
+# Restore stages the incoming copy and keeps the previous workspace beside it.
+/.workspace.restore-incoming-*/
+/workspace.restore-backup-*/
 job-search-workspace/

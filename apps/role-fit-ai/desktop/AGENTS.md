@@ -39,7 +39,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   versioned document beneath Electron `userData`. Encrypted API ciphertext and
   the distinct non-secret enabled-provider field share that document; saved
   keys are write-only from the renderer, with no read, reveal, export, HTTP,
-  argv, or environment path.
+  argv, or environment path. A malformed vault never blocks startup or gets
+  rewritten: the owned server keeps its empty boot snapshot, mutations fail, and
+  Providers names the problem (the smoke's corrupt-vault run). Other read errors
+  (permissions, I/O) still stop startup.
 - Desktop settings own a separate atomic, versioned, non-secret document under
   Electron `userData`. It contains the local site port plus the bounded exact
   origins the user approved for browser-extension access. Port changes validate

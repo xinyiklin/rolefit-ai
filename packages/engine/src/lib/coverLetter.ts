@@ -21,7 +21,6 @@ import {
   type ResumeData
 } from "./resumeData.ts";
 import {
-  assertJsonFileSize,
   parseJsonFile,
   serializeJsonFile
 } from "./jsonFileCodec.ts";
@@ -528,15 +527,6 @@ export function parseCoverLetterFile(
     data: legacy.legacySizeBasePt === null ? data : upgradeLegacyTextSizes(data, legacy.legacySizeBasePt),
     style: parseCoverLetterStyle(file.style)
   };
-}
-
-export async function readCoverLetterFile(file: File): Promise<ParsedCoverLetterFile> {
-  assertJsonFileSize(
-    file.size,
-    MAX_COVER_LETTER_FILE_BYTES,
-    coverLetterFileTooLarge
-  );
-  return parseCoverLetterFile(await file.arrayBuffer());
 }
 
 export function coverLetterFileName(suggestedName: string): string {

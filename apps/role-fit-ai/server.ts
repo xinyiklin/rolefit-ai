@@ -15,6 +15,7 @@ import {
   WorkspaceBackupError
 } from "./server/workspaceBackup.ts";
 import { countActiveTabs } from "./server/presence.ts";
+import { WORKSPACE_BACKUP_EXTENSION } from "./src/lib/workspaceBackupContract.ts";
 
 type UtilityMessageEvent = Readonly<{ data: unknown }>;
 type UtilityParentPort = Readonly<{
@@ -71,7 +72,7 @@ async function handleWorkspaceRequest(request: unknown): Promise<void> {
     const result = request.operation === "backup"
       ? await createWorkspaceBackup(workspaceDir).then((backup) => ({
           body: JSON.stringify(backup, null, 2),
-          fileName: `RoleFit-Workspace-${backup.createdAt.slice(0, 10)}.rolefit-backup`
+          fileName: `RoleFit-Workspace-${backup.createdAt.slice(0, 10)}${WORKSPACE_BACKUP_EXTENSION}`
         }))
       : await restoreWorkspaceBackup(
           workspaceDir,
