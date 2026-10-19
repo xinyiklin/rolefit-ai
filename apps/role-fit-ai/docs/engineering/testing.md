@@ -867,7 +867,7 @@ Good server verification covers:
   sources and PDF-only replacements, and canonical allowlisted workspace
   preferences; excludes files kept from deleted applications; keeps history
   best-effort (newest first within the limits) and leaves out history that no
-  longer validates; validates decoded sizes and SHA-256 digests; rejects
+  longer validates, on backup and on restore; validates decoded sizes and SHA-256 digests; rejects
   duplicate/traversing paths and malformed domain files; and completes backup -> restore -> backup without byte drift.
   Every restore failure must leave the active workspace unchanged,
   a successful restore retains the previous saved workspace as a sibling

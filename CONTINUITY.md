@@ -87,6 +87,8 @@ D-entries in `docs/decisions.md`.
   these backups. Verified by probes, `npm test`, the RoleFit check, and a
   byte-identical round trip of a real-workspace copy; two independent reviews,
   no blockers. Unverified: the companion UI flow itself (no packaged run).
+  Restore likewise leaves out history that fails today's validators (integrity
+  stays strict), so later validator changes cannot strand a backup.
   Follow-ups offered: skipped-history count in the companion (plus the
   always-false `includesPreferences` flag), "Recently deleted" applications,
   and a history retention cap.
