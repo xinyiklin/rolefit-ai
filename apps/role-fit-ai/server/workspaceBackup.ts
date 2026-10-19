@@ -308,6 +308,13 @@ function decodeBackupFile(file: WorkspaceBackupFile): Buffer {
   return data;
 }
 
+function invalidRestoredFileMessage(path: string): string {
+  if (path.endsWith(".pdf")) return "The backup contains an invalid saved application PDF.";
+  if (path.endsWith(".cover")) return "The backup contains an invalid saved .cover file.";
+  if (path.startsWith("applications/")) return "The backup contains an invalid saved application .resume file.";
+  return "The backup contains an invalid base-resume file.";
+}
+
 // Returns how many files were staged; history that no longer validates is left out.
 async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnvelope): Promise<number> {
   await mkdir(stageDir, { recursive: true, mode: 0o700 });
@@ -353,33 +360,13 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
     );
   }
   for (const file of envelope.files) {
-    if (isHistoryPath(file.path)) continue;
+    // The tracker was validated above; history was validated before staging.
+    if (file.path === "applications.json" || isHistoryPath(file.path)) continue;
     const data = await readFile(join(stageDir, ...file.path.split("/")));
-    if (file.path.endsWith(".pdf")) {
-      try {
-        validatePdf(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved application PDF.");
-      }
-    } else if (file.path.endsWith(".cover")) {
-      try {
-        if (file.path.startsWith("cover-letters/")) validateCoverLetterText(data);
-        else parseCoverLetterFile(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved .cover file.");
-      }
-    } else if (file.path.startsWith("applications/") && file.path.endsWith(".resume")) {
-      try {
-        parseResumeFile(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved application .resume file.");
-      }
-    } else if (file.path !== "applications.json") {
-      try {
-        validateBaseResumeText(basename(file.path), data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid base-resume file.");
-      }
+    try {
+      validateManagedData(file.path, data);
+    } catch {
+      throw new WorkspaceBackupError(invalidRestoredFileMessage(file.path));
     }
   }
   return staged;

@@ -493,6 +493,14 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "cover-letter validation failure leaves active workspace unchanged");
 
+  const retiredLiveResume = replaceEntry(withPreferences, "resumes/default.resume", JSON.stringify(retiredHistory));
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, retiredLiveResume, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid base-resume file/.test(error.message),
+    "a live base resume in a retired format still fails the restore"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "a live resume failure leaves active workspace unchanged");
+
   // History today's validators reject is left out; live documents still restore.
   const staleResumePath = "resumes/.trash/2026-07-19T12-00-00-000Z__default.resume";
   const staleCoverPath = "cover-letters/.trash/2026-10-07T04-13-57-000Z__default.cover";
