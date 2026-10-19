@@ -182,12 +182,14 @@ Restore is replace-not-merge:
    below); the route answers 409.
 2. Parse the strict envelope and verify aggregate limits.
 3. Decode each file, verify its byte count and SHA-256 digest, and write it to a
-   private sibling staging workspace with owner-only permissions. When the
+   private sibling staging workspace with owner-only permissions. A history
+   file that passes integrity but fails today's domain validator is left out
+   rather than failing the restore, as backup does. When the
    envelope carries `preferences`, stage them as a
    `source: "restore"` `workspace-preferences.json` alongside the files. Always
    stage the independent restore-generation marker.
 4. Re-run the strict `.resume`, `.cover`, tracker, and PDF domain validators against the
-   complete staged tree.
+   staged live files.
 5. Recheck live browser presence after staging and abort without replacement if
    a tab appeared while the restore was waiting or validating.
 6. Rename the active workspace to a timestamped sibling

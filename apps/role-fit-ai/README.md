@@ -845,7 +845,7 @@ files in the workspace, unsaved recovery drafts, provider
 configuration/API keys, CLI sessions, and companion port settings. Close RoleFit browser tabs
 before choosing **Restore backup** — the server refuses to restore while live
 tabs are detected. RoleFit validates the complete backup in a staging
-directory, moves the current saved workspace to a timestamped sibling safety
+directory (history that no longer opens is left out), moves the current saved workspace to a timestamped sibling safety
 directory, and installs the restored workspace; the browser adopts the
 restored preferences and clears only this tab's superseded draft plus
 confirmed-dead orphans the next time it loads. A live sibling's recovery draft
