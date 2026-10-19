@@ -73,6 +73,7 @@ npm run eval:resume-file --workspace packages/engine
 npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:layout --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
+npm run eval:glyph-fallback --workspace packages/engine
 npm run eval:pdf-export-scheduling --workspace packages/engine
 npm run eval:pdf-links --workspace packages/engine
 npm run fonts:check --workspace packages/engine

@@ -214,6 +214,23 @@ it truthfully.
   compile them into one longest-first lookup and measure glyph-boundary kerning.
   Original-family metrics retain their prior contract. Unmodeled default-on
   GSUB behavior is removed; GPOS kerning retains only modeled pure pairs.
+- A measured character a face lacks borrows from the family's `fallback` in
+  `fontRegistry.ts` (Tinos or Arimo, which cover the whole repertoire):
+  `measure.ts` measures it there, painters set `cssFontFamily` so the browser
+  falls back to that face, loaders fetch `runFamilies`, and the emitter draws
+  `faceSegments`. Borrow only what the face's fonts cannot draw (a mark the
+  generator leaves `unmeasured` stays the face's), because the browser picks a
+  font by its character map. Pairs kern only within one face. A decomposed
+  accent composes only where the face has the composed letter; elsewhere it
+  keeps its earlier measurement (500 units per mark) even where a browser would
+  compose it from the next font. Runs keep their source text, so editor offsets
+  are unchanged. The baseline
+  probe stays on the primary face alone. A fallback family loads beside the
+  pages and never withholds them (its load failure goes to the console, since
+  only a borrowed glyph's look depends on it); `LogicalFields` repositions its
+  fragments when a font finishes loading (deferred to compositionend while an
+  IME composes) and then dispatches `TEXT_REPOSITIONED_EVENT`, on which the
+  editor redraws its caret overlay.
 - Every full PDF font must be declared as `CIDFontType2` + `FontFile2`, with the
   identity CID-to-GID map used by the engine's glyph ids. Do not reintroduce the
   former Latin Modern `CIDFontType0` rewrite: its embedded program remained
@@ -230,7 +247,8 @@ Choose checks based on the changed boundary:
 - Any engine change: run the narrowest deterministic probe and
   `npm run check --workspace packages/engine`.
 - Font, metrics, measurement, or PDF emitter change: run
-  `npm run eval:pdf-font-parity --workspace packages/engine`.
+  `npm run eval:pdf-font-parity --workspace packages/engine` and
+  `npm run eval:glyph-fallback --workspace packages/engine`.
 - Font pipeline change: run `npm run fonts:check --workspace packages/engine`;
   regenerate both web/metrics assets and PDF fonts when the WOFF2 contract changes.
 - Layout or DOM paint change: inspect representative editor pages in a real

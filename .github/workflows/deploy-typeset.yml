@@ -104,6 +104,8 @@ jobs:
           test -n "$asset"
           asset_headers="$(curl -fsS -D - -o /dev/null "http://127.0.0.1:5186$asset")"
           grep -iq "^cache-control: public, max-age=31536000, immutable" <<<"$asset_headers"
+          gzip_headers="$(curl -fsS -D - -o /dev/null -H 'Accept-Encoding: gzip' "http://127.0.0.1:5186$asset")"
+          grep -iq "^content-encoding: gzip" <<<"$gzip_headers"
           missing_headers="$(curl -sS -D - -o /dev/null http://127.0.0.1:5186/assets/missing.js)"
           grep -q "^HTTP/1.1 404" <<<"$missing_headers"
           grep -iq "^cache-control: no-cache" <<<"$missing_headers"

@@ -19,6 +19,22 @@ the fixed supported Latin repertoire: upstream line boxes can exclude accented
 capitals. This keeps header placement stable without clipping accents. Original
 family metrics retain their existing values.
 
+Metrics also measure, wherever a face has the glyph, Latin-1 symbols (`£ © ® °`),
+Latin Extended-A (Central/Eastern European and Baltic letters), and `‚ „ † ‡ ‰
+‹ › ′ ″ € ™ − → ← ↑ ↓ ≤ ≥`, so the editor and PDF place them at their real
+widths. A document using only the original repertoire lays out exactly as
+before: the vertical envelope above stays on that repertoire. Where an entry
+title or subtitle uses a newly measured letter, its real ink now counts toward
+that row's spacing, as an accented Latin-1 letter's already did. The additions
+are not measured where a face classes the glyph as a mark, and the ligature-
+boundary table records one only where the font differs from the plain pair. A
+measured character a face lacks (Roboto's `→`, Latin Modern's `≥`) is measured,
+painted, and embedded from its family's fallback: Tinos for serif families,
+Arimo for sans, which cover the whole measured repertoire. A mark glyph a face
+draws but leaves unmeasured (Open Sans Italic's `´`) is listed per face and
+never borrowed. A character outside that repertoire (CJK, emoji, Cyrillic)
+keeps the engine's average-width fallback.
+
 ## Sources and licenses
 
 The original pins remain in `../scripts/generate_font_assets.py`. The additions

@@ -36,8 +36,14 @@ export type DocumentFontFamilyDefinition = Readonly<{
   // outlines, while the generator derives metric-identical quadratic outlines
   // so pdf-lib and PDF viewers agree on one CIDFontType2 contract.
   sfntExtension: "ttf";
+  // The family that draws a measured character this family's faces lack: the
+  // metric-compatible family of the same genre, whose faces cover the whole
+  // measured repertoire (`glyph-fallback` asserts that). Null for those two.
+  fallback: FallbackFamily;
   faces: Readonly<Record<FaceName, DocumentFontFaceDefinition>>;
 }>;
+
+type FallbackFamily = "tinos" | "arimo" | null;
 
 // A face as declared here: the shipped asset stem plus the CSS weight/slope the
 // DOM painter asks for. `metrics` and `assetPath` are DERIVED, never written per
@@ -60,6 +66,7 @@ function familyDefinition(
   label: string,
   cssFamily: string,
   sfntExtension: "ttf",
+  fallback: FallbackFamily,
   assets: Readonly<Record<FaceName, FaceAsset>>
 ): DocumentFontFamilyDefinition {
   const faces = {} as Record<FaceName, DocumentFontFaceDefinition>;
@@ -76,7 +83,7 @@ function familyDefinition(
       }
     };
   }
-  return { id, label, cssFamily, sfntExtension, faces };
+  return { id, label, cssFamily, sfntExtension, fallback, faces };
 }
 
 // Filename of a face's PDF-embeddable sfnt sibling, relative to the fonts
@@ -103,12 +110,13 @@ function standardFamilyDefinition(
   id: DocumentFontFamily,
   stem: string,
   italicAngleDeg: number,
-  boldItalicAngleDeg: number
+  boldItalicAngleDeg: number,
+  fallback: Exclude<FallbackFamily, null>
 ): DocumentFontFamilyDefinition {
   const label = FONT_FAMILIES.find((family) => family.id === id)!.label;
   const cssFamily = `Typeset ${label}`;
   const bold: FaceAsset = { file: `${stem}-Bold`, cssFamily: `${cssFamily} Bold`, weight: 700 };
-  return familyDefinition(id, label, cssFamily, "ttf", {
+  return familyDefinition(id, label, cssFamily, "ttf", fallback, {
     regular: { file: `${stem}-Regular`, cssFamily: `${cssFamily} Regular`, weight: 400 },
     bold,
     italic: { file: `${stem}-Italic`, cssFamily: `${cssFamily} Italic`, weight: 400, italic: true, italicAngleDeg },
@@ -121,7 +129,7 @@ function standardFamilyDefinition(
 export const DOCUMENT_FONT_FAMILIES: Readonly<
   Record<DocumentFontFamily, DocumentFontFamilyDefinition>
 > = {
-  "latin-modern": familyDefinition("latin-modern", "Latin Modern", "Typeset Latin Modern", "ttf", {
+  "latin-modern": familyDefinition("latin-modern", "Latin Modern", "Typeset Latin Modern", "ttf", "tinos", {
     regular: { file: "LMRoman10-Regular", cssFamily: "Typeset LM Roman 10 Regular", weight: 400 },
     bold: { file: "LMRoman10-Bold", cssFamily: "Typeset LM Roman 10 Bold", weight: 700 },
     italic: {
@@ -141,7 +149,7 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     boldDisplay: { file: "LMRoman12-Bold", cssFamily: "Typeset LM Roman 12 Bold Display", weight: 700 },
     caps: { file: "LMRomanCaps10-Regular", cssFamily: "Typeset LM Roman Caps 10", weight: 400 }
   }),
-  "source-serif": familyDefinition("source-serif", "Source Serif 4", "Typeset Source Serif 4", "ttf", {
+  "source-serif": familyDefinition("source-serif", "Source Serif 4", "Typeset Source Serif 4", "ttf", "tinos", {
     regular: { file: "SourceSerif4-Regular", cssFamily: "Typeset Source Serif 4 Regular", weight: 400 },
     bold: { file: "SourceSerif4-Bold", cssFamily: "Typeset Source Serif 4 Bold", weight: 700 },
     italic: {
@@ -165,7 +173,7 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     },
     caps: { file: "SourceSerif4-Caps", cssFamily: "Typeset Source Serif 4 Caps", weight: 400 }
   }),
-  "source-sans": familyDefinition("source-sans", "Source Sans 3", "Typeset Source Sans 3", "ttf", {
+  "source-sans": familyDefinition("source-sans", "Source Sans 3", "Typeset Source Sans 3", "ttf", "arimo", {
     regular: { file: "SourceSans3-Regular", cssFamily: "Typeset Source Sans 3 Regular", weight: 400 },
     bold: { file: "SourceSans3-Bold", cssFamily: "Typeset Source Sans 3 Bold", weight: 700 },
     italic: {
@@ -189,7 +197,7 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     },
     caps: { file: "SourceSans3-Caps", cssFamily: "Typeset Source Sans 3 Caps", weight: 400 }
   }),
-  tinos: familyDefinition("tinos", "Tinos", "Typeset Tinos", "ttf", {
+  tinos: familyDefinition("tinos", "Tinos", "Typeset Tinos", "ttf", null, {
     regular: { file: "Tinos-Regular", cssFamily: "Typeset Tinos Regular", weight: 400 },
     bold: TINOS_BOLD,
     italic: {
@@ -209,7 +217,7 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     boldDisplay: TINOS_BOLD,
     caps: { file: "Tinos-Caps", cssFamily: "Typeset Tinos Caps", weight: 400 }
   }),
-  arimo: familyDefinition("arimo", "Arimo", "Typeset Arimo", "ttf", {
+  arimo: familyDefinition("arimo", "Arimo", "Typeset Arimo", "ttf", null, {
     regular: { file: "Arimo-Regular", cssFamily: "Typeset Arimo Regular", weight: 400 },
     bold: ARIMO_BOLD,
     italic: {
@@ -229,7 +237,7 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     boldDisplay: ARIMO_BOLD,
     caps: { file: "Arimo-Caps", cssFamily: "Typeset Arimo Caps", weight: 400 }
   }),
-  carlito: familyDefinition("carlito", "Carlito", "Typeset Carlito", "ttf", {
+  carlito: familyDefinition("carlito", "Carlito", "Typeset Carlito", "ttf", "arimo", {
     regular: { file: "Carlito-Regular", cssFamily: "Typeset Carlito Regular", weight: 400 },
     bold: CARLITO_BOLD,
     italic: {
@@ -249,32 +257,41 @@ export const DOCUMENT_FONT_FAMILIES: Readonly<
     boldDisplay: CARLITO_BOLD,
     caps: { file: "Carlito-Caps", cssFamily: "Typeset Carlito Caps", weight: 400 }
   }),
-  "crimson-pro": standardFamilyDefinition("crimson-pro", "CrimsonPro", -12.0, -12.0),
-  "dm-sans": standardFamilyDefinition("dm-sans", "DMSans", -10.0, -10.0),
-  "fira-sans": standardFamilyDefinition("fira-sans", "FiraSans", -8.0, -8.0),
-  "ibm-plex-sans": standardFamilyDefinition("ibm-plex-sans", "IBMPlexSans", -11.31, -11.31),
-  "ibm-plex-serif": standardFamilyDefinition("ibm-plex-serif", "IBMPlexSerif", -14.0, -14.0),
-  "inter": standardFamilyDefinition("inter", "Inter", -9.3988, -9.3988),
-  "lato": standardFamilyDefinition("lato", "Lato", -7.0, -7.0),
-  "libre-baskerville": standardFamilyDefinition("libre-baskerville", "LibreBaskerville", -15.0, -15.0),
-  "libre-franklin": standardFamilyDefinition("libre-franklin", "LibreFranklin", -8.0, -8.0),
-  "lora": standardFamilyDefinition("lora", "Lora", -3.0, -3.0),
-  "merriweather": standardFamilyDefinition("merriweather", "Merriweather", -7.8, -7.8),
-  "merriweather-sans": standardFamilyDefinition("merriweather-sans", "MerriweatherSans", -7.5, -7.5),
-  "montserrat": standardFamilyDefinition("montserrat", "Montserrat", -11.3, -11.3),
-  "noto-sans": standardFamilyDefinition("noto-sans", "NotoSans", -12.0243, -12.0243),
-  "noto-serif": standardFamilyDefinition("noto-serif", "NotoSerif", -12.0, -12.0),
-  "nunito": standardFamilyDefinition("nunito", "Nunito", -9.0, -9.0),
-  "nunito-sans": standardFamilyDefinition("nunito-sans", "NunitoSans", -9.0, -9.0),
-  "open-sans": standardFamilyDefinition("open-sans", "OpenSans", -12.0, -12.0),
-  "pt-sans": standardFamilyDefinition("pt-sans", "PTSans", -12.0, -12.0),
-  "pt-serif": standardFamilyDefinition("pt-serif", "PTSerif", -12.0, -12.0),
-  "raleway": standardFamilyDefinition("raleway", "Raleway", -12.0, -12.0),
-  "roboto": standardFamilyDefinition("roboto", "Roboto", 0.0, 0.0),
-  "rubik": standardFamilyDefinition("rubik", "Rubik", -12.0, -12.0),
-  "work-sans": standardFamilyDefinition("work-sans", "WorkSans", -13.0, -13.0)
+  "crimson-pro": standardFamilyDefinition("crimson-pro", "CrimsonPro", -12.0, -12.0, "tinos"),
+  "dm-sans": standardFamilyDefinition("dm-sans", "DMSans", -10.0, -10.0, "arimo"),
+  "fira-sans": standardFamilyDefinition("fira-sans", "FiraSans", -8.0, -8.0, "arimo"),
+  "ibm-plex-sans": standardFamilyDefinition("ibm-plex-sans", "IBMPlexSans", -11.31, -11.31, "arimo"),
+  "ibm-plex-serif": standardFamilyDefinition("ibm-plex-serif", "IBMPlexSerif", -14.0, -14.0, "tinos"),
+  "inter": standardFamilyDefinition("inter", "Inter", -9.3988, -9.3988, "arimo"),
+  "lato": standardFamilyDefinition("lato", "Lato", -7.0, -7.0, "arimo"),
+  "libre-baskerville": standardFamilyDefinition("libre-baskerville", "LibreBaskerville", -15.0, -15.0, "tinos"),
+  "libre-franklin": standardFamilyDefinition("libre-franklin", "LibreFranklin", -8.0, -8.0, "arimo"),
+  "lora": standardFamilyDefinition("lora", "Lora", -3.0, -3.0, "tinos"),
+  "merriweather": standardFamilyDefinition("merriweather", "Merriweather", -7.8, -7.8, "tinos"),
+  "merriweather-sans": standardFamilyDefinition("merriweather-sans", "MerriweatherSans", -7.5, -7.5, "arimo"),
+  "montserrat": standardFamilyDefinition("montserrat", "Montserrat", -11.3, -11.3, "arimo"),
+  "noto-sans": standardFamilyDefinition("noto-sans", "NotoSans", -12.0243, -12.0243, "arimo"),
+  "noto-serif": standardFamilyDefinition("noto-serif", "NotoSerif", -12.0, -12.0, "tinos"),
+  "nunito": standardFamilyDefinition("nunito", "Nunito", -9.0, -9.0, "arimo"),
+  "nunito-sans": standardFamilyDefinition("nunito-sans", "NunitoSans", -9.0, -9.0, "arimo"),
+  "open-sans": standardFamilyDefinition("open-sans", "OpenSans", -12.0, -12.0, "arimo"),
+  "pt-sans": standardFamilyDefinition("pt-sans", "PTSans", -12.0, -12.0, "arimo"),
+  "pt-serif": standardFamilyDefinition("pt-serif", "PTSerif", -12.0, -12.0, "tinos"),
+  "raleway": standardFamilyDefinition("raleway", "Raleway", -12.0, -12.0, "arimo"),
+  "roboto": standardFamilyDefinition("roboto", "Roboto", 0.0, 0.0, "arimo"),
+  "rubik": standardFamilyDefinition("rubik", "Rubik", -12.0, -12.0, "arimo"),
+  "work-sans": standardFamilyDefinition("work-sans", "WorkSans", -13.0, -13.0, "arimo")
 };
 
 export function fontFace(family: DocumentFontFamily, face: FaceName): DocumentFontFaceDefinition {
   return DOCUMENT_FONT_FAMILIES[family].faces[face];
+}
+
+// The CSS font-family a painter sets for a run: its face, then the fallback
+// family's same face, so the browser draws a character the face lacks from the
+// face `measure()` measured it in.
+export function cssFontFamily(family: DocumentFontFamily, face: FaceName): string {
+  const own = `"${fontFace(family, face).cssFamily}"`;
+  const fallback = DOCUMENT_FONT_FAMILIES[family].fallback;
+  return fallback ? `${own}, "${fontFace(fallback, face).cssFamily}"` : own;
 }

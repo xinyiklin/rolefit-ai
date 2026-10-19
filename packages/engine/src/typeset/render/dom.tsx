@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  cssFontFamily,
   DEFAULT_DOCUMENT_FONT_FAMILY,
   DOCUMENT_FONT_FAMILIES,
   documentFontFamily,
@@ -21,7 +22,7 @@ import {
   type LayoutDocument,
   type LayoutPage
 } from "../layout.ts";
-import { underlineRule, underlineSpans } from "../measure.ts";
+import { runFamilies, underlineRule, underlineSpans } from "../measure.ts";
 import type { TypesetSchema } from "../schema.ts";
 import { groupRuns } from "./segments.ts";
 import { LogicalFields } from "./logicalFields.tsx";
@@ -205,7 +206,7 @@ function PageLines({
                 left: unit(seg.x),
                 top: unit(line.baseline - box.ascent * seg.size - lineTop),
                 width: unit(seg.end - seg.x),
-                fontFamily: `"${font.cssFamily}"`,
+                fontFamily: cssFontFamily(seg.family, seg.face),
                 fontWeight: font.weight,
                 fontStyle: font.italic ? "italic" : "normal",
                 fontSize: unit(seg.size),
@@ -324,15 +325,25 @@ export function TypesetDomPages({
     () => documentKind === "cover-letter" ? layoutCoverLetter(schema, docStyle) : layoutResume(schema, docStyle),
     [schema, docStyle, documentKind]
   );
-  const familiesKey = [...new Set([
-    family,
-    ...doc.pages.flatMap((page) => page.lines.flatMap((line) => line.runs.map((run) => run.style.family)))
-  ])].sort().join("|");
+  const runs = doc.pages.flatMap((page) => page.lines.flatMap((line) => line.runs));
+  const familiesKey = [...new Set([family, ...runs.map((run) => run.style.family)])].sort().join("|");
+  // A borrowed glyph's fallback family loads beside the pages instead: the CSS
+  // font stack paints it on arrival, and typing one must not unmount the host.
+  const fallbackKey = [...new Set(runs.flatMap((run) => runFamilies(run.text, run.style).slice(1)))].sort().join("|");
   // Only an unloaded family withholds the pages; swapping in the loading state
   // for already-loaded fonts would unmount the editable host mid-edit.
   const fontsReady = familiesKey.split("|").every((id) => loadedFamilies.has(documentFontFamily(id)));
   const [, setFontLoads] = useState(0);
   const [fontError, setFontError] = useState<{ familiesKey: string; message: string } | null>(null);
+
+  useEffect(() => {
+    const pending = fallbackKey ? fallbackKey.split("|").map(documentFontFamily).filter((id) => !loadedFamilies.has(id)) : [];
+    for (const id of pending) {
+      ensureTypesetFonts(id).catch((error: unknown) => {
+        console.error(error instanceof Error ? error.message : `The ${id} fallback font could not be loaded.`);
+      });
+    }
+  }, [fallbackKey]);
 
   useEffect(() => {
     setFontError(null);

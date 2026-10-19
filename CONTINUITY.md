@@ -19,6 +19,11 @@ D-entries in `docs/decisions.md`.
 
 ## Deferred backlog
 
+- 2026-10-18 [CODE+TOOL] `main` has no required status checks and the `ec2`
+  environment no branch policy (repository settings, the user's call).
+- 2026-10-18 [TOOL] Claude Resume Polish (Opus and Sonnet High) marked 2 Fit
+  gaps ADDRESSED on no-evidence labels, the same two cases in both arms
+  (benchmarks.md); unreviewed whether the labels or the rule are at fault.
 - 2026-10-15 [TOOL] At a 360px viewport RoleFit's 308px Cover letter toolbar
   still overflows by ~10px after ladder Stage 6. Fitting it needs 1px control
   gaps or zoom in More (a second zoom control); 360 is not a documented target.
@@ -67,83 +72,38 @@ D-entries in `docs/decisions.md`.
   preamble loses focus, the server links on a clipped scope, and an oversized
   first brief item renders its placeholder (2026-10-06); a declined typed-link
   or paste source stays "stopped" (2026-10-07).
+- 2026-10-17..18 [TOOL] Unverified from merged work: #235's packaged smoke on
+  macOS (win32 only); D087's OpenAI API live calls, its Models page in
+  Firefox, and the Background view switch.
 
 ## 2026-10-18
 
-- [USER+CODE+TOOL] **Server runtime hardening** (branch
-  `fix/rolefit-server-runtime-hardening`): no "Default AI provider/model"
-  startup log (the UI sends each stage's provider; an unknown `AI_PROVIDER`
-  still fails startup); every route dispatches through a 500-not-crash safety
-  net that logs only the error name; production CSP drops `ws:`/`wss:`; an
-  unreadable `.env` fails startup. Lifecycle probe (negative controls), offline
-  evals, desktop contracts pass; one code-reviewer pass (its Low fixed).
-  Dev-mode CSP checked by inspection only.
-- [USER+CODE+TOOL] **One Prepare intake** (#248): link over a full-height
-  posting box, one submit (typed text, else link, else capture); no
-  provider-check note. Intake browser-checked 1440/1080/720 (Chromium pane).
 - [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
-- [USER+CODE] **0.17.0 preview prepared** (minor: provider plans, effort
-  parity, model refresh, per-field sizes). Notes
-  `apps/role-fit-ai/docs/releases/0.17.0-beta.1.md`.
-- [USER+CODE+TOOL] **CLI/API parity, Plans, model refresh** (D087; branch
-  `feature/rolefit-provider-plans`): API calls send the stage effort (no off
-  setting anywhere); labels are Claude/OpenAI · CLI/API; Settings > Models adds
-  Plan (Hybrid / Claude only / OpenAI only) and per-vendor CLI/API rewrites;
-  catalogs keep current models only, retired ids repair to successors. Offline
-  188/188; live Claude API smoke passed (4 models, Low and Max); Models page
-  browser-checked (desktop + 375px, Chromium pane; Firefox and the Background
-  view switch unchecked); OpenAI API live not run. Pending after the Codex limit
-  reset: OpenAI Resume import and Claude Resume Polish screens (benchmarks.md).
-- [USER+CODE+TOOL] **Agent attribution guard** (#242): tracked
-  `.githooks/commit-msg` rejects Claude co-author and "Generated with Claude
-  Code" lines (`npm install` sets `core.hooksPath`; run it once in the main
-  checkout); squash merges use an explicit subject/body; rename a harness
-  `claude/<name>` branch before its first push. Typeset image build verified.
-- [USER+CODE+TOOL] **Letter Blank/Starter reset** (D084): both reset a
-  customized letter style to the defaults. **Titles follow identity** (D085,
-  supersedes D084's title): each title tracks its own header name + company
-  until the user renames it (Starter `Your_Name_Resume`; typing a name
-  retitles). **Both Starters on a new session** (D086, #241). RoleFit check passed;
-  browser QA passed (user and agent, worktree server).
-- [USER+CODE+TOOL] **Per-field text sizes; resume and letter unified** (D081,
-  D082; branch `feature/per-field-text-sizes`): no base size or LaTeX scale; one
-  default per role for both documents; Styles adds Name and Body rows; letters
-  share the resume's keys, defaults, header behavior, and alignment; alignment
-  never moves line breaks. Parsers convert retired keys; 398 workspace files
-  rewritten (backup under ignored `.agent-work/`), 10 pt resumes and 70/81
-  letters identical; 10.5 pt resumes shift bullet text 0.74 pt (user-accepted).
-- [USER+CODE+TOOL] **CI runs only the jobs a change can reach**: one selector
-  job gates every Document workflow job but dependency contracts by measured
-  reach (docs/development.md); a version-only RoleFit release runs only RoleFit.
-
-## 2026-10-17
-
-- [USER+CODE+TOOL] **Repository audit, round 2** (16 read-only slices; every
-  High re-checked by the coordinator; report kept local). Fixed in this batch:
-  tracker attachment overwrites and silent notes clipping (#232), quadratic
-  job-import parsing (#233), literal tag text, and the CLI argv fix (both
-  below). Still open, by severity:
-  - High: Typeset tabs overwrite one autosave key and the losing tab gets no
-    leave warning; the engine measures characters outside its metric set at
-    0.5 em (`→ ™ £ ©`, Polish/Czech letters overlap or drift in the PDF) and
-    paints a face's missing glyphs as `.notdef` with the wrong ToUnicode;
-    editor IME composition over a selection can diverge from the model (code
-    path; unverified in a browser); the companion's extension-pairing
-    ownership guard has no executing test; `AGENTS.md` requires a
-    `code-reviewer` agent that is not installed (`mb-verifier` is).
-  - Medium (selected): `HOST=0.0.0.0` drops the Origin check; restore staging
-    folders sit unignored beside `workspace/`; job import ignores
-    Content-Type; a corrupt provider vault blocks companion startup; packaged
-    macOS CLI lookup omits nvm/fnm; base-resume Save discards open proposals;
-    landing ZIP links lack "Unsigned"; `main` has no required status checks
-    and the `ec2` environment no branch policy.
-- [USER+CODE] **CLI argv delivery and Antigravity removal** (#235): Claude
-  Code reads its unchanged system
-  prompt via `--append-system-prompt-file` (an npm `claude.cmd` shim made
-  cmd.exe keep only its first line and drop `--model`/`--effort`); `runCli`
-  refuses multi-line or over-8,191-character argv through cmd.exe. Antigravity
-  (`agy`) support is removed (D080): retired stages take their own CLI default
-  and vaults drop the id, keeping API keys. The 0.16.0 release PR changes the
-  landing fact strip to "2 CLIs + 2 APIs".
-  - [TOOL] App check 183/183; packaged smoke passed on win32-x64 (macOS
-    UNCONFIRMED); two mb-verifier reviews per change, all findings fixed.
+- [USER+CODE+TOOL] **Repository review and cleanup** (branch
+  `claude/repo-review-cleanup-5d27dd`, uncommitted): dead exports removed (12
+  app/server/shared, the retired local polisher's verb list, engine
+  `readCoverLetterFile`) plus 31 unreferenced CSS classes (RoleFit, editor);
+  a `HOST` override keeps a Host/Origin guard (`requestGuardError`); restore
+  staging folders are ignored; job import refuses file-typed responses;
+  packaged macOS adds fnm/nvm CLI paths; a Typeset tab whose draft another
+  tab replaced warns on leave; the companion smoke runs the pairing ownership
+  guard; preview ZIP links say Unsigned; `deps:check` fails a stale install;
+  root `npm test` runs Typeset evals. Also fixed: base-resume Save keeps the
+  editor document, an open proposal, and the cover workflow (identity-only
+  commit; clean only if unchanged since sent); a corrupt provider vault no
+  longer blocks the companion (smoke run proves it starts and leaves the file
+  untouched); IME composition over a cross-field selection now commits like
+  typing (new real-IME Chromium contract); metrics now measure Latin-1 symbols,
+  Latin Extended-A, and `‚„†‡‰‹›′″€™−→←↑↓≤≥` where a face has them (documents
+  using only the original characters lay out identically; D088); Typeset's
+  nginx gzips text (main script 5.7 MB raw, 1.1 MB sent). The two pending Plans
+  screens ran (benchmarks.md): OpenAI import keeps Sol Low, Claude Polish keeps
+  Opus High. A measured character a face lacks now borrows from Tinos/Arimo
+  (D089; 419/419 local and starter layouts unchanged); stale shadow, landing,
+  and companion CSS removed. Browser-verified: base-resume Save keeps an open
+  proposal and Undo; Typeset's two-tab warning in both directions; IME in
+  Firefox (new opt-in `test:editor:firefox-ime`, 10/10). Unverified: Safari
+  IME (no WebDriver composition API), the packaged macOS CLI lookup. Decided
+  under the user's "your call": the HOST override stays strict (IPs and this
+  machine's name only) and the metrics cost (+420 KB gzip per uncached Typeset
+  load) stands. Commit/PR awaits the user.

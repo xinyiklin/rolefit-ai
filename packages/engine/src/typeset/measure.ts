@@ -7,8 +7,13 @@
 //      transformation happens during measurement and painting)
 //   2. f-ligatures: longest-match ff/fi/fl/ffi/ffl → single ligature advance
 //   3. pair kerning between adjacent glyphs from the committed font tables
+//
+// A measured character the run's face lacks comes from its family's fallback
+// (fontRegistry); pairs kern only within one face, as browsers and the PDF
+// shape them.
 
-import { fontFace, type DocumentFontFamily } from "./fontRegistry.ts";
+import { DOCUMENT_FONT_FAMILIES, fontFace, type DocumentFontFamily } from "./fontRegistry.ts";
+import type { FaceMetrics } from "./metrics.ts";
 import type { FaceName } from "./metrics.gen.ts";
 import type {
   BoxItem,
@@ -54,44 +59,73 @@ export function texLigatures(text: string): string {
 
 const F_LIGATURES = ["ffi", "ffl", "ff", "fi", "fl"] as const;
 
-// Advance width of an ALREADY-ligatured string in font units (1000/em).
+// Decomposed input (e + U+0301, from some PDFs and pastes) is measured and
+// drawn as its composed letter where the face has that letter, as browsers
+// compose it; otherwise it stays as the face itself draws it.
+const DECOMPOSED_CLUSTER = /\P{M}\p{M}+/gu;
+function composed(text: string, own: FaceMetrics): string {
+  if (!/\p{M}/u.test(text)) return text;
+  return text.replace(DECOMPOSED_CLUSTER, (cluster) => {
+    const letter = cluster.normalize("NFC");
+    return letter.length === 1 && own.adv[letter] !== undefined ? letter : cluster;
+  });
+}
+
+function fallbackMetrics(style: FontStyle): FaceMetrics | null {
+  const fallback = DOCUMENT_FONT_FAMILIES[style.family].fallback;
+  return fallback ? fontFace(fallback, style.face).metrics : null;
+}
+
+// Whether a character is measured and drawn in the fallback family: only one
+// the face cannot draw (a face's unmeasured mark glyph stays its own).
+function borrowed(ch: string, own: FaceMetrics, fallback: FaceMetrics | null): boolean {
+  return own.adv[ch] === undefined && !own.unmeasured.includes(ch) && fallback?.adv[ch] !== undefined;
+}
+
+// Advance width of an ALREADY-ligatured, composed string in font units (1000/em).
 function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: number } {
-  const m = fontFace(style.family, style.face).metrics;
+  const own = fontFace(style.family, style.face).metrics;
+  const fallback = fallbackMetrics(style);
   let units = 0;
   let glyphs = 0;
   let prev = "";
-  const kern = (left: string, right: string) =>
+  let prevFace: FaceMetrics | null = null;
+  const kern = (m: FaceMetrics, left: string, right: string) =>
     m.kern[`${left}|${right}`] ?? m.kern[left[left.length - 1] + right[0]] ?? 0;
   let i = 0;
   while (i < text.length) {
     let matched = "";
     for (const lig of F_LIGATURES) {
-      if (m.lig[lig] !== undefined && text.startsWith(lig, i)) {
+      if (own.lig[lig] !== undefined && text.startsWith(lig, i)) {
         matched = lig;
         break;
       }
     }
     if (matched) {
-      units += m.lig[matched];
+      units += own.lig[matched];
       glyphs += 1;
-      if (prev) units += kern(prev, matched);
+      if (prevFace === own) units += kern(own, prev, matched);
       prev = matched;
+      prevFace = own;
       i += matched.length;
       continue;
     }
     const ch = text[i];
-    const adv = m.adv[ch];
+    const face = borrowed(ch, own, fallback) ? fallback! : own;
+    const adv = face.adv[ch];
     if (adv !== undefined) {
       units += adv;
       glyphs += 1;
-      if (prev) units += kern(prev, ch);
+      if (prevFace === face) units += kern(face, prev, ch);
       prev = ch;
+      prevFace = face;
     } else {
       // Unknown glyph: fall back to the average of x-height-ish letters so a
       // stray character degrades measurement instead of crashing it.
       units += 500;
       glyphs += 1;
       prev = "";
+      prevFace = null;
     }
     i += 1;
   }
@@ -100,8 +134,42 @@ function shapeUnits(text: string, style: FontStyle): { units: number; glyphs: nu
 
 // Width in bp of a text fragment at a style. Applies display punctuation first.
 export function measure(text: string, style: FontStyle): number {
-  const shaped = shapeUnits(texLigatures(text), style);
+  const shaped = shapeUnits(composed(texLigatures(text), fontFace(style.family, style.face).metrics), style);
   return (shaped.units / 1000) * style.size + Math.max(0, shaped.glyphs - 1) * style.tracking;
+}
+
+// The families a run's text is drawn in: its own, plus the fallback when it
+// borrows a character. Font loaders fetch exactly these.
+export function runFamilies(text: string, style: FontStyle): DocumentFontFamily[] {
+  const own = fontFace(style.family, style.face).metrics;
+  const fallback = fallbackMetrics(style);
+  for (const ch of composed(texLigatures(text), own)) {
+    if (borrowed(ch, own, fallback)) return [style.family, DOCUMENT_FONT_FAMILIES[style.family].fallback!];
+  }
+  return [style.family];
+}
+
+// A run's display text in same-family pieces, each with its offset from the
+// run's start in bp, for a backend that draws each font separately. The
+// offsets come from `measure()`; no pair kerns across a piece boundary.
+export type FaceSegment = { text: string; family: DocumentFontFamily; offset: number };
+
+export function faceSegments(text: string, style: FontStyle): FaceSegment[] {
+  const own = fontFace(style.family, style.face).metrics;
+  const display = composed(texLigatures(text), own);
+  const fallback = fallbackMetrics(style);
+  const fallbackFamily = DOCUMENT_FONT_FAMILIES[style.family].fallback;
+  const segments: FaceSegment[] = [];
+  let start = 0;
+  let offset = 0;
+  for (let i = 1; i <= display.length; i += 1) {
+    if (i < display.length && borrowed(display[i], own, fallback) === borrowed(display[i - 1], own, fallback)) continue;
+    const piece = display.slice(start, i);
+    segments.push({ text: piece, family: borrowed(piece[0], own, fallback) ? fallbackFamily! : style.family, offset });
+    offset += measure(piece, style) + style.tracking;
+    start = i;
+  }
+  return segments.length ? segments : [{ text: display, family: style.family, offset: 0 }];
 }
 
 // A real interword gap has two tracking boundaries: last glyph → space and
@@ -149,11 +217,12 @@ export function faceExtent(style: FontStyle): { height: number; depth: number } 
 
 // Ink extents in bp above and below the baseline for strut-less rows.
 export function inkExtent(text: string, style: FontStyle): { height: number; depth: number } {
-  const m = fontFace(style.family, style.face).metrics;
+  const own = fontFace(style.family, style.face).metrics;
+  const fallback = fallbackMetrics(style);
   let maxY = 0;
   let minY = 0;
-  for (const ch of texLigatures(text)) {
-    const b = m.bbox[ch];
+  for (const ch of composed(texLigatures(text), own)) {
+    const b = (borrowed(ch, own, fallback) ? fallback! : own).bbox[ch];
     if (!b) continue;
     if (b[1] > maxY) maxY = b[1];
     if (b[0] < minY) minY = b[0];

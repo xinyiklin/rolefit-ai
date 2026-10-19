@@ -1,6 +1,6 @@
-import { Fragment, useLayoutEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { PAGE_HEIGHT_BP, PAGE_WIDTH_BP } from "../blocks.ts";
-import { fontFace, type DocumentFontFamily } from "../fontRegistry.ts";
+import { cssFontFamily, fontFace, type DocumentFontFamily } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
 import type { LayoutDocument } from "../layout.ts";
 import { fieldKey } from "../types.ts";
@@ -15,6 +15,10 @@ type Props = {
   faceBox: (family: DocumentFontFamily, face: FaceName) => { ascent: number; descent: number };
   highlightFieldKey?: string | null;
 };
+// Bubbles from the text layer after a font that finished loading moved its
+// fragments, so an overlay drawn over the text (the editor's caret) redraws.
+export const TEXT_REPOSITIONED_EVENT = "tsd-text-repositioned";
+
 const baselineMarker = () => {
   const marker = document.createElement("span");
   Object.assign(marker.style, { display: "inline-block", width: "0", height: "0", verticalAlign: "baseline" });
@@ -41,6 +45,36 @@ function blockAscent(element: HTMLElement): number {
 // place its fragments on the engine's physical pages without reflowing text.
 export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFieldKey }: Props) {
   const layerRef = useRef<HTMLDivElement>(null);
+  // Fragment offsets come from the browser's natural widths, so a face that
+  // arrives after positioning (a fallback family) repositions the fragments.
+  // Mid-composition the engine has not placed the uncommitted text yet, so the
+  // pass waits for compositionend, which also ends a cancelled composition.
+  const [fontLoads, setFontLoads] = useState(0);
+  const repositionedFor = useRef(0);
+  useEffect(() => {
+    let composing = false;
+    let deferred = false;
+    const reposition = () => {
+      if (composing) deferred = true;
+      else setFontLoads((count) => count + 1);
+    };
+    const compositionStarted = () => { composing = true; };
+    const compositionEnded = () => {
+      composing = false;
+      if (deferred) {
+        deferred = false;
+        setFontLoads((count) => count + 1);
+      }
+    };
+    document.fonts.addEventListener("loadingdone", reposition);
+    document.addEventListener("compositionstart", compositionStarted, true);
+    document.addEventListener("compositionend", compositionEnded, true);
+    return () => {
+      document.fonts.removeEventListener("loadingdone", reposition);
+      document.removeEventListener("compositionstart", compositionStarted, true);
+      document.removeEventListener("compositionend", compositionEnded, true);
+    };
+  }, []);
   const fields = useMemo(() => {
     const groups = new Map<string, FragmentRun[]>();
     doc.pages.forEach((page, pi) => page.lines.forEach((line, li) => {
@@ -115,7 +149,11 @@ export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFiel
       const row = rows.get(element.parentElement!.getAttribute("data-tsd-line-box")!)!;
       element.style.top = `${row.ascent - blockAscent(element)}px`;
     }
-  }, [doc, fields, variant, zoom, unit, faceBox]);
+    if (fontLoads !== repositionedFor.current) {
+      repositionedFor.current = fontLoads;
+      layer.dispatchEvent(new Event(TEXT_REPOSITIONED_EVENT, { bubbles: true }));
+    }
+  }, [doc, fields, variant, zoom, unit, faceBox, fontLoads]);
 
   return <div ref={layerRef} className="tsd-text-layer" style={{ position: "absolute", inset: 0, pointerEvents: "none" }}>
     {fields.map(field => <div key={field.key} data-tsd-field={field.key} style={{ position: "relative", height: 0, whiteSpace: "pre", fontSize: 0, lineHeight: 0 }}>
@@ -125,7 +163,7 @@ export function LogicalFields({ doc, variant, zoom, unit, faceBox, highlightFiel
         const fraction = Math.min(1, Math.max(0, (run.x - doc.geometry.marginLeft) / doc.geometry.textWidth));
         const style = {
           position: "relative", display: "inline", unicodeBidi: "isolate", verticalAlign: "baseline", pointerEvents: "auto",
-          fontFamily: `"${font.cssFamily}"`, fontWeight: font.weight, fontStyle: font.italic ? "italic" : "normal",
+          fontFamily: cssFontFamily(run.family, run.face), fontWeight: font.weight, fontStyle: font.italic ? "italic" : "normal",
           fontSize: unit(run.size), lineHeight: unit((box.ascent + box.descent) * run.size),
           whiteSpace: "pre", letterSpacing: unit(run.tracking), wordSpacing: unit(run.wordSpacing), color: "#000", textDecoration: "none",
           ...(!run.text ? { "--tsd-empty-hint-shift": `-${Math.round(fraction * 10000) / 100}%` } : {})

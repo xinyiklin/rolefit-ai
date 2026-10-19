@@ -55,9 +55,11 @@ FAMILY_ORDER = (
 FACE_ORDER = ("regular", "bold", "italic", "boldItalic", "boldDisplay", "caps")
 LIGATURES = ("ffi", "ffl", "ff", "fi", "fl")
 
-# Keep this repertoire aligned with the editor's portable text metrics. Unknown
-# characters still use the engine's explicit average-width fallback.
-METRIC_CHARACTERS = (
+# The established repertoire. It alone sets catalog faces' ascent and descent,
+# so a document using only these characters lays out as before, and only its
+# characters get a ligature-boundary entry for every pairing; a newly measured
+# character gets one only where the font differs from the plain-pair fallback.
+BASE_METRIC_CHARACTERS = (
     "0123456789"
     " !\"#$%&'()*+,-./:;<=>?@"
     "ABCDEFGHIJKLMNOPQRSTUVWXYZ[\\]^_`"
@@ -65,6 +67,15 @@ METRIC_CHARACTERS = (
     "ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏÐÑÒÓÔÕÖ×ØÙÚÛÜÝÞß"
     "àáâãäåæçèéêëìíîïðñòóôõö÷øùúûüýþÿ"
     "–—‘’“”•·…"
+)
+# Measured where a face has the glyph: Latin-1 symbols, Latin Extended-A (the
+# Central/Eastern European and Baltic letters), and common punctuation. A
+# character a face lacks is borrowed from its family's fallback (fontRegistry).
+METRIC_CHARACTERS = (
+    BASE_METRIC_CHARACTERS
+    + "¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶¸¹º»¼½¾¿"
+    + "".join(chr(codepoint) for codepoint in range(0x0100, 0x0180))
+    + "‚„†‡‰‹›′″€™−→←↑↓≤≥"
 )
 
 
@@ -1083,12 +1094,23 @@ def extract_metrics(path: Path, include_ink_bounds: bool = False, include_ligatu
     glyph_set = font.getGlyphSet()
     gpos_lookups = gpos_pair_lookups(font)
 
+    glyph_classes = {}
+    if "GDEF" in font and font["GDEF"].table.GlyphClassDef:
+        glyph_classes = font["GDEF"].table.GlyphClassDef.classDefs
+
     adv: dict[str, int] = {}
     bbox: dict[str, list[int]] = {}
     supported: list[tuple[str, str]] = []
+    unmeasured: list[str] = []
     for character in METRIC_CHARACTERS:
         glyph = cmap.get(ord(character))
         if glyph is None:
+            continue
+        # Shapers zero a mark glyph's advance (Open Sans Italic's spacing acute),
+        # so measuring its hmtx width would overstate what is painted. The face
+        # still draws it, so it is recorded and never borrowed from a fallback.
+        if character not in BASE_METRIC_CHARACTERS and glyph_classes.get(glyph) == 3:
+            unmeasured.append(character)
             continue
         supported.append((character, glyph))
         adv[character] = scaled(hmtx[glyph][0], units_per_em)
@@ -1115,8 +1137,9 @@ def extract_metrics(path: Path, include_ink_bounds: bool = False, include_ligatu
             ligature_glyphs.append((sequence, glyph))
 
     if include_ligature_kerning:
-        for left, left_glyph in supported + ligature_glyphs:
-            for right, right_glyph in supported + ligature_glyphs:
+        boundary = [entry for entry in supported if entry[0] in BASE_METRIC_CHARACTERS] + ligature_glyphs
+        for left, left_glyph in boundary:
+            for right, right_glyph in boundary:
                 if len(left) == 1 and len(right) == 1:
                     continue
                 adjustment = gpos_pair_adjustment(gpos_lookups, left_glyph, right_glyph)
@@ -1125,6 +1148,22 @@ def extract_metrics(path: Path, include_ink_bounds: bool = False, include_ligatu
                 # Zero is meaningful: a ligature may kern differently from its
                 # first/last component. The separator distinguishes f|fi, ff|i.
                 kern[f"{left}|{right}"] = scaled(adjustment, units_per_em)
+        # A newly measured character beside a ligature is stored only where the
+        # font differs from the plain pair the engine falls back to, keeping the
+        # table exact without a zero for every pairing.
+        added = [entry for entry in supported if entry[0] not in BASE_METRIC_CHARACTERS]
+        for ligature, ligature_glyph_name in ligature_glyphs:
+            for character, glyph in added:
+                for left, left_glyph, right, right_glyph in (
+                    (ligature, ligature_glyph_name, character, glyph),
+                    (character, glyph, ligature, ligature_glyph_name),
+                ):
+                    adjustment = gpos_pair_adjustment(gpos_lookups, left_glyph, right_glyph)
+                    if adjustment is None:
+                        adjustment = legacy_pair_adjustment(font, left_glyph, right_glyph)
+                    value = scaled(adjustment, units_per_em)
+                    if value != kern.get(left[-1] + right[0], 0):
+                        kern[f"{left}|{right}"] = value
 
     os2 = font["OS/2"]
     metrics = {
@@ -1136,12 +1175,14 @@ def extract_metrics(path: Path, include_ink_bounds: bool = False, include_ligatu
         "kern": kern,
         "lig": lig,
         "bbox": bbox,
+        "unmeasured": "".join(unmeasured),
     }
     if include_ink_bounds:
         # Some upstream line boxes exclude accented Latin ink. Reserve a fixed
         # repertoire envelope so typing accents cannot clip or move the header.
-        metrics["ascent"] = max(metrics["ascent"], max(bounds[1] for bounds in bbox.values()))
-        metrics["descent"] = min(metrics["descent"], min(bounds[0] for bounds in bbox.values()))
+        envelope = [bounds for character, bounds in bbox.items() if character in BASE_METRIC_CHARACTERS]
+        metrics["ascent"] = max(metrics["ascent"], max(bounds[1] for bounds in envelope))
+        metrics["descent"] = min(metrics["descent"], min(bounds[0] for bounds in envelope))
     font.close()
     return metrics
 
@@ -1176,7 +1217,7 @@ def pack_face_metrics(metrics: Mapping[str, object]) -> dict[str, object]:
     for i, l in enumerate(glyphs):
         for j, r in enumerate(glyphs):
             kern[left[i] * columns + right[j]] = pairs.get(l + r, 0)
-    return {
+    packed: dict[str, object] = {
         "ascent": metrics["ascent"],
         "descent": metrics["descent"],
         "capHeight": metrics["capHeight"],
@@ -1191,6 +1232,9 @@ def pack_face_metrics(metrics: Mapping[str, object]) -> dict[str, object]:
         "kern": kern,
         "ligatureKern": ligature_kern,
     }
+    if metrics["unmeasured"]:
+        packed["unmeasured"] = metrics["unmeasured"]
+    return packed
 
 
 def metrics_source(metrics: Mapping[str, Mapping[str, object]]) -> str:
@@ -1229,6 +1273,9 @@ export type PackedFaceMetrics = {{
   kernColumns: number;
   kern: number[];
   ligatureKern: Record<string, number>;
+  // Characters the face draws but leaves unmeasured (mark-class glyphs); they
+  // are never borrowed from a fallback family.
+  unmeasured?: string;
 }};
 
 // A face name in place of tables aliases that face's record (FACE_ALIASES).

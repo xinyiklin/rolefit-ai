@@ -36,7 +36,7 @@ import { sfntAssetFile, type DocumentFontFamily } from "../fontRegistry.ts";
 import type { FaceName } from "../metrics.gen.ts";
 import { PAGE_HEIGHT_BP as PAGE_H, PAGE_WIDTH_BP as PAGE_W } from "../blocks.ts";
 import type { LayoutDocument } from "../layout.ts";
-import { underlineRule, underlineSpans } from "../measure.ts";
+import { faceSegments, runFamilies, underlineRule, underlineSpans } from "../measure.ts";
 import { fieldKey, type GlyphRun } from "../types.ts";
 
 const faceKey = (family: DocumentFontFamily, face: FaceName) => `${family}:${face}`;
@@ -48,14 +48,17 @@ function sfntUrl(family: DocumentFontFamily, face: FaceName, base: string): stri
   return `${base.replace(/\/+$/, "")}/${sfntAssetFile(family, face)}`;
 }
 
-// Every (family, face) the document actually paints. A resume typically uses one
-// family and a handful of faces, so only those get fetched and embedded.
+// Every (family, face) the document actually paints, fallback faces included. A
+// resume typically uses one family and a handful of faces, so only those get
+// fetched and embedded.
 function usedFaces(doc: LayoutDocument): Array<{ family: DocumentFontFamily; face: FaceName }> {
   const seen = new Map<string, { family: DocumentFontFamily; face: FaceName }>();
   for (const page of doc.pages) {
     for (const line of page.lines) {
       for (const run of line.runs) {
-        seen.set(faceKey(run.style.family, run.style.face), { family: run.style.family, face: run.style.face });
+        for (const family of runFamilies(run.text, run.style)) {
+          seen.set(faceKey(family, run.style.face), { family, face: run.style.face });
+        }
       }
     }
   }
@@ -136,23 +139,25 @@ export async function emitPdf(
             page.pushOperators(setCharacterSpacing(run.style.tracking));
             currentTracking = run.style.tracking;
           }
-          const { pdfFont, shaper } = await fontFor(run.style.family, run.style.face);
-          let fontKey = fontKeys.get(pdfFont);
-          if (!fontKey) {
-            fontKey = page.node.newFontDictionary(pdfFont.name, pdfFont.ref);
-            fontKeys.set(pdfFont, fontKey);
+          for (const segment of faceSegments(run.text, run.style)) {
+            const { pdfFont, shaper } = await fontFor(segment.family, run.style.face);
+            let fontKey = fontKeys.get(pdfFont);
+            if (!fontKey) {
+              fontKey = page.node.newFontDictionary(pdfFont.name, pdfFont.ref);
+              fontKeys.set(pdfFont, fontKey);
+            }
+            // q…Q per run, as drawText wrote it: pdf.js ends a text item at a
+            // restore, so each run still extracts as its own item.
+            page.pushOperators(
+              pushGraphicsState(),
+              beginText(),
+              setFontAndSize(fontKey, run.style.size),
+              setTextMatrix(1, 0, 0, 1, run.x + segment.offset, y),
+              PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [kernedGlyphs(pdf.context, pdfFont, shaper, pdfSafeText(segment.text))]),
+              endText(),
+              popGraphicsState()
+            );
           }
-          // q…Q per run, as drawText wrote it: pdf.js ends a text item at a
-          // restore, so each run still extracts as its own item.
-          page.pushOperators(
-            pushGraphicsState(),
-            beginText(),
-            setFontAndSize(fontKey, run.style.size),
-            setTextMatrix(1, 0, 0, 1, run.x, y),
-            PDFOperator.of(PDFOperatorNames.ShowTextAdjusted, [kernedGlyphs(pdf.context, pdfFont, shaper, pdfSafeText(run.text))]),
-            endText(),
-            popGraphicsState()
-          );
         }
         if (run.href) {
           const ul = underlineRule(run.style);

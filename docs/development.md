@@ -122,6 +122,7 @@ npm run eval:inline-marks --workspace packages/engine
 npm run eval:resume-file --workspace packages/engine
 npm run eval:cover-letter-file --workspace packages/engine
 npm run eval:pdf-font-parity --workspace packages/engine
+npm run eval:glyph-fallback --workspace packages/engine
 npm run eval:pdf-links --workspace packages/engine
 npm run fonts:check --workspace packages/engine
 npm run eval:layout --workspace packages/engine
@@ -165,7 +166,7 @@ signed-distribution check.
 | --- | --- | --- |
 | Engine domain / `.resume` | engine typecheck, `eval:resume-file`, `eval:inline-marks` for the tag grammar | engine check + affected app checks |
 | Engine `.cover` / cover layout | engine typecheck, `eval:cover-letter-file` | engine check + RoleFit build + rendered editor/PDF |
-| Engine layout / font / PDF | `eval:layout`, `eval:pdf-font-parity`, `eval:pdf-links`, `fonts:check` | engine check + both app builds + rendered output |
+| Engine layout / font / PDF | `eval:layout`, `eval:pdf-font-parity`, `eval:glyph-fallback`, `eval:pdf-links`, `fonts:check` | engine check + both app builds + rendered output |
 | Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + `test:editor:browser` (+ `test:editor:firefox-ime` for IME) |
 | Typeset shell | Typeset build/check | browser/file/PDF QA proportional to change |
 | RoleFit UI | RoleFit build and focused offline eval | RoleFit check; browser QA under its scoped policy |

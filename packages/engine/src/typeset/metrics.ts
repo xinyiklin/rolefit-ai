@@ -16,6 +16,8 @@ export type FaceMetrics = {
   kern: Record<string, number>;
   lig: Record<string, number>;
   bbox: Record<string, [number, number]>;
+  // Characters the face draws but leaves unmeasured (mark-class glyphs).
+  unmeasured: string;
 };
 
 const unpacked = new Map<PackedFaceMetrics, FaceMetrics>();
@@ -53,7 +55,8 @@ export function faceMetrics(family: MetricFamilyId, face: FaceName): FaceMetrics
     adv,
     kern,
     lig: packed.lig,
-    bbox
+    bbox,
+    unmeasured: packed.unmeasured ?? ""
   };
   unpacked.set(packed, metrics);
   return metrics;
