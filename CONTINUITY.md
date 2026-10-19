@@ -79,8 +79,8 @@ D-entries in `docs/decisions.md`.
 ## 2026-10-18
 
 - [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
-- [USER+CODE+TOOL] **Repository review and cleanup** (branch
-  `claude/repo-review-cleanup-5d27dd`, uncommitted): dead exports removed (12
+- [USER+CODE+TOOL] **Repository review and cleanup** (#250, #251, #252,
+  merged 2026-10-18): dead exports removed (12
   app/server/shared, the retired local polisher's verb list, engine
   `readCoverLetterFile`) plus 31 unreferenced CSS classes (RoleFit, editor);
   a `HOST` override keeps a Host/Origin guard (`requestGuardError`); restore
@@ -106,4 +106,5 @@ D-entries in `docs/decisions.md`.
   IME (no WebDriver composition API), the packaged macOS CLI lookup. Decided
   under the user's "your call": the HOST override stays strict (IPs and this
   machine's name only) and the metrics cost (+420 KB gzip per uncached Typeset
-  load) stands. Commit/PR awaits the user.
+  load) stands. Shipped as three squash merges; `main`'s tree equals the
+  reviewed tree.
