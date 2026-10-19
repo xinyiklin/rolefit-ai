@@ -92,6 +92,8 @@ D-entries in `docs/decisions.md`.
   Follow-ups offered: skipped-history count in the companion (plus the
   always-false `includesPreferences` flag), "Recently deleted" applications,
   and a history retention cap.
+  0.18.0 preview prepared (minor: backup format); notes
+  `apps/role-fit-ai/docs/releases/0.18.0-beta.1.md`.
 
 ## 2026-10-18
 
