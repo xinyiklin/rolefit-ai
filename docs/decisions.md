@@ -523,8 +523,12 @@ later entry wins.
 - 2026-08-09..08-10 [USER+CODE+TOOL] D053 ACTIVE: Preferences live in owner-only
   `workspace-preferences.json` (localStorage is a fail-open cache); backup,
   preference, and restore-marker contracts are schema v1 only; 0.6.0 backups do
-  not restore into 0.7.0+. 2026-07-26 [CODE]: backups exclude standalone saved
-  `.cover` variants and history.
+  not restore into 0.7.0+. 2026-10-19 [USER+CODE]: backups include saved
+  `.cover` variants and their history (superseding the 2026-07-26 exclusion);
+  history is best-effort (newest first within the limits, invalid history left
+  out); files kept from deleted applications (`applications/.trash/`) stay
+  local until a real "Recently deleted" exists. Still schema v1, so these
+  backups need this build or newer.
 - 2026-09-29..09-30 [USER+CODE] D054 ACTIVE: Preference writes require `baseRevision`
   (SHA-256 of the stored bytes); a mismatch returns `409 { stale, current }` and
   the tab rebases once. Contract:

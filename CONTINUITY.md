@@ -76,6 +76,21 @@ D-entries in `docs/decisions.md`.
   macOS (win32 only); D087's OpenAI API live calls, its Models page in
   Firefox, and the Background view switch.
 
+## 2026-10-19
+
+- [USER+CODE+TOOL] **Workspace backup scope** (D053): a companion backup failed
+  on 14 July resume-history snapshots carrying the retired `letterSpacingPt`.
+  Backup now skips history that no longer validates, fits history newest-first
+  within the 5,000-file/256 MB limits, names an invalid live file, and includes
+  saved cover letters and their history; deleted-application files
+  (`applications/.trash/`) stay local. Still schema v1; older builds reject
+  these backups. Verified by probes, `npm test`, the RoleFit check, and a
+  byte-identical round trip of a real-workspace copy; two independent reviews,
+  no blockers. Unverified: the companion UI flow itself (no packaged run).
+  Follow-ups offered: skipped-history count in the companion (plus the
+  always-false `includesPreferences` flag), "Recently deleted" applications,
+  and a history retention cap.
+
 ## 2026-10-18
 
 - [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.

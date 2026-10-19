@@ -862,12 +862,13 @@ Good server verification covers:
   `tracker-revision-probes.mjs` and `applications-revision-sync.mjs`. Evals
   that read the tracker back after a write invalidate the snapshot first, so
   they still prove a strict round trip through `applications.json`
-- portable workspace backup includes only app-managed resumes/history, tracker
-  data, saved application `.resume` / `.cover` sources and PDF-only
-  replacements, and canonical allowlisted workspace preferences; validates
-  decoded sizes and SHA-256 digests; rejects duplicate/traversing paths and
-  malformed domain files; excludes standalone saved cover-letter variants and
-  their history; and completes backup -> restore -> backup without byte drift.
+- portable workspace backup includes only app-managed resumes and cover letters
+  with their history, tracker data, saved application `.resume` / `.cover`
+  sources and PDF-only replacements, and canonical allowlisted workspace
+  preferences; excludes files kept from deleted applications; keeps history
+  best-effort (newest first within the limits) and leaves out history that no
+  longer validates; validates decoded sizes and SHA-256 digests; rejects
+  duplicate/traversing paths and malformed domain files; and completes backup -> restore -> backup without byte drift.
   Every restore failure must leave the active workspace unchanged,
   a successful restore retains the previous saved workspace as a sibling
   safety copy and stages `source: "restore"` preferences, restore refuses with
