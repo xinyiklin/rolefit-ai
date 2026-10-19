@@ -50,10 +50,11 @@
     "deps:tree": "npm ls --all",
     "deps:outdated": "npm outdated --workspaces --include-workspace-root",
     "deps:audit:production": "npm audit --omit=dev",
-    "types:check": "tsc -p tsconfig.base.json --noEmit && tsc -p packages/engine/tsconfig.json --noEmit && tsc -p packages/editor/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.desktop.json --noEmit && tsc -p apps/typeset/tsconfig.json --noEmit",
+    "types:check": "tsc -p tsconfig.base.json --noEmit && tsc -p packages/engine/tsconfig.json --noEmit && tsc -p packages/editor/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.server.json --noEmit && tsc -p apps/role-fit-ai/tsconfig.desktop.json --noEmit && tsc -p apps/typeset/tsconfig.json --noEmit && tsc -p scripts/editor-browser-contracts/tsconfig.json --noEmit",
     "check:package-scripts": "node scripts/check-package-script-paths.mjs",
     "test:ci": "node --test scripts/ci-coverage-selection.test.mjs scripts/editor-browser-contracts/cdp.test.mjs scripts/editor-browser-contracts/suites.test.mjs scripts/editor-browser-contracts/failure-evidence.test.mjs",
-    "test:editor:browser": "node scripts/editor-browser-contracts.mjs",
+    "test:editor:browser": "tsc -p scripts/editor-browser-contracts/tsconfig.json --noEmit && node scripts/editor-browser-contracts.mjs",
+    "test:editor:firefox-ime": "node scripts/editor-browser-contracts-firefox-ime.mjs",
     "check": "npm run deps:check && npm run check:package-scripts && npm run test:ci && npm run check --workspaces --if-present",
     "test": "npm run test --workspaces --if-present"
   },

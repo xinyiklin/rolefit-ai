@@ -73,7 +73,15 @@ npm run test:ci              # browser transport, suite selection, CI routing
 npm run test:editor:browser  # all headless Chrome contracts, core then extended
 npm run test:editor:browser -- --suite=core
 npm run test:editor:browser -- --suite=extended
+ROLEFIT_FIREFOX_BINARY=<firefox> npm run test:editor:firefox-ime  # opt-in, local
 ```
+
+The Firefox IME contract drives trusted composition through Marionette and
+`nsITextInputProcessor`, which only Firefox exposes; CI has no Firefox, so run
+it after IME or selection-commit changes. Point it at a Firefox without a
+staged update, such as Playwright's (`npx playwright install firefox`): an
+installed Firefox applies a staged update when launched. Safari's WebDriver
+has no composition API, so Safari IME stays a manual check.
 
 For a clean machine, prepare the deterministic font tools before running the
 engine or root check:
@@ -158,7 +166,7 @@ signed-distribution check.
 | Engine domain / `.resume` | engine typecheck, `eval:resume-file`, `eval:inline-marks` for the tag grammar | engine check + affected app checks |
 | Engine `.cover` / cover layout | engine typecheck, `eval:cover-letter-file` | engine check + RoleFit build + rendered editor/PDF |
 | Engine layout / font / PDF | `eval:layout`, `eval:pdf-font-parity`, `eval:pdf-links`, `fonts:check` | engine check + both app builds + rendered output |
-| Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + `test:editor:browser` |
+| Shared editor | editor typecheck, `eval:editor` | editor check + both app builds + `test:editor:browser` (+ `test:editor:firefox-ime` for IME) |
 | Typeset shell | Typeset build/check | browser/file/PDF QA proportional to change |
 | RoleFit UI | RoleFit build and focused offline eval | RoleFit check; browser QA under its scoped policy |
 | RoleFit public landing | landing build boundary + release-catalog probe | desktop/390px browser QA, current unavailable state, mocked complete release, and request inspection |
@@ -260,7 +268,9 @@ The browser-facing root, engine, editor, RoleFit, and Typeset configs keep
 bundler resolution and their existing browser targets. RoleFit's server config
 is the Node-native syntax gate: ESNext/NodeNext, relative-import rewriting,
 erasable syntax, verbatim modules, and no emit. The desktop config separately
-emits CommonJS companion code. Run the root probe and all six child configs
+emits CommonJS companion code. The browser-contract harness has its own config,
+checked before every `test:editor:browser` run because it renders app and package
+sources directly. Run the root probe and all seven child configs
 when compiler settings or versions change.
 
 Node 24 executes the source-owned `.ts` eval paths through native type
