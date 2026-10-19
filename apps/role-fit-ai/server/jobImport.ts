@@ -37,7 +37,7 @@ import {
 } from "./jobImportContent.ts";
 
 type FetchHtml = (url: URL, headers?: Record<string, string>) => ReturnType<typeof fetchPublicHtml>;
-type Page = { status: number; ok: boolean; html: string };
+type Page = { status: number; ok: boolean; html: string; notPage?: true };
 type LoadPage = () => Promise<Page>;
 // missing: a recognized source whose selected JD is unavailable. null: not recognized.
 type Outcome = { text: string } | { missing: string } | { httpStatus: number };
@@ -47,6 +47,7 @@ const MISSING_JOB = "Could not find this job's description on its job board. " +
   "Paste it instead, or capture the page with the browser extension.";
 const MISSING_LINKEDIN = "LinkedIn did not expose this job's description. " +
   "Paste it instead, or capture the page with the browser extension.";
+const NOT_A_PAGE = "This link opens a file, not a web page. Paste the job description text instead.";
 const found = (text: string): Outcome => (text ? { text } : { missing: MISSING_JOB });
 
 // A provider answering 404/410 has no such posting; any other non-OK status
@@ -59,13 +60,24 @@ function sourceOk(response: { ok: boolean; status: number }): boolean {
   throw new SourceHttpError(`The job board returned HTTP ${response.status}.`);
 }
 
+// A PDF or other file decoded as text would read as a posting of junk. An
+// absent type stays readable, since some job pages omit it, and untyped storage
+// (an S3-style upload) may serve a page as octet-stream, so its markup counts.
+function isPageContent(value: string | null, body: string): boolean {
+  const type = (value ?? "").split(";")[0].trim().toLowerCase();
+  if (!type || type.startsWith("text/") || type === "application/xhtml+xml" || type === "application/xml") return true;
+  return (type === "application/octet-stream" || type === "binary/octet-stream") && /^\s*</.test(body);
+}
+
 function pageLoader(fetchHtml: FetchHtml, url: URL): LoadPage {
   let pending: Promise<Page> | undefined;
-  return () => (pending ??= fetchHtml(url).then(async (response) => ({
-    status: response.status,
-    ok: response.ok,
-    html: response.ok ? await response.text() : ""
-  })));
+  return () => (pending ??= fetchHtml(url).then(async (response) => {
+    if (!response.ok) return { status: response.status, ok: false, html: "" };
+    const body = await response.text();
+    return isPageContent(response.headers.get("content-type"), body)
+      ? { status: response.status, ok: true, html: body }
+      : { status: response.status, ok: true, html: "", notPage: true };
+  }));
 }
 
 // --- Greenhouse --------------------------------------------------------------
@@ -486,6 +498,7 @@ async function resolvePosting(fetchHtml: FetchHtml, jobUrl: URL): Promise<Outcom
   const outcome = await resolveKnownSource(fetchHtml, jobUrl, loadPage);
   if (outcome) return outcome;
   const page = await loadPage();
+  if (page.notPage) return { missing: NOT_A_PAGE };
   return page.ok ? genericPageOutcome(jobUrl, page.html) : { httpStatus: page.status };
 }
 

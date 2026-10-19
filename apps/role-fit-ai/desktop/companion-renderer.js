@@ -906,14 +906,17 @@ async function refreshProviders({ announceResult = true } = {}) {
     renderProviders();
     elements.companionRoot.dataset.status = "ready";
     if (announceResult) announce("Provider status updated.");
-  } catch {
+  } catch (error) {
     if (generation !== refreshGeneration) return;
     elements.companionRoot.dataset.status = "error";
     renderProviders();
-    elements.providerSummary.textContent = "Provider status could not be checked. Try again.";
-    elements.overviewProviderSummary.textContent = "Provider status unavailable";
+    const vaultUnreadable = String(error?.message ?? "").includes("Saved provider settings could not be read");
+    elements.providerSummary.textContent = vaultUnreadable
+      ? "Saved provider settings could not be read."
+      : "Provider status could not be checked. Try again.";
+    elements.overviewProviderSummary.textContent = vaultUnreadable ? "Provider settings unreadable" : "Provider status unavailable";
     setCardTone(elements.overviewProvidersCard, true);
-    if (announceResult) announce("Provider status could not be checked.");
+    if (announceResult) announce(vaultUnreadable ? "Saved provider settings could not be read." : "Provider status could not be checked.");
   } finally {
     if (generation === refreshGeneration) {
       elements.refreshProviders.disabled = false;

@@ -7,56 +7,6 @@
   gap: var(--s1);
 }
 
-/* Chevron hugs the "Export" label and reads as a quiet affordance. */
-.export-menu__trigger svg:last-child {
-  margin-left: -2px;
-  opacity: 0.65;
-}
-
-.export-menu__trigger {
-  padding-inline: var(--s2);
-}
-
-.export-menu__popover {
-  position: absolute;
-  top: calc(100% + var(--s1));
-  right: 0;
-  z-index: 30;
-  width: min(180px, calc(100vw - var(--s6)));
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s2);
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  box-shadow: var(--shadow-lift);
-}
-
-.export-menu__actions {
-  display: grid;
-  gap: var(--s1);
-}
-
-.export-menu__actions .ghost-button.is-compact {
-  justify-content: flex-start;
-  min-height: 30px;
-  padding: 0 var(--s1);
-}
-
-.export-menu__tip {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  padding-top: var(--s1);
-  border-top: 1px solid var(--hairline-soft);
-  font-size: 0.71rem;
-  line-height: 1.35;
-}
-
-.export-menu__tip {
-  color: var(--ink-faint);
-}
-
 /* Export feedback stays attached to the control that caused it. */
 .export-menu__feedback {
   position: absolute;
@@ -113,109 +63,6 @@
   outline-offset: 2px;
 }
 
-.export-menu__tip code {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-  padding: 1px 5px;
-  border-radius: var(--r-sm);
-}
-
-/* -------- Base action button overrides (ghost-button.is-compact inside menu) -------- */
-
-/*
-  "quiet ghosts": Copy, .resume, Preview
-  These inherit the base ghost-button style — transparent bg, hairline border
-  on hover. We only tweak size to match the compact rail chrome.
-*/
-.export-menu__actions .ghost-button.is-compact {
-  min-height: 26px;
-  padding: 0 var(--s1);
-  font-size: 0.74rem;
-  font-weight: 500;
-  /* Reset any overrides from old style that made disabled look enabled */
-  background: transparent;
-  border-color: transparent;
-  color: var(--ink-muted);
-}
-
-.export-menu__actions .ghost-button.is-compact:hover:not(:disabled) {
-  color: var(--ink-strong);
-  background: var(--card-soft);
-  border-color: var(--hairline);
-}
-
-/*
-  CRITICAL BUG FIX: explicit :disabled for rail ghost buttons.
-  The old rule set background/color/border on all states (even disabled),
-  making disabled buttons look identical to enabled ones.
-  Now disabled = flat neutral: ink-faint text, hairline-soft border,
-  transparent bg, no hover, not-allowed cursor.
-*/
-.export-menu__actions .ghost-button.is-compact:disabled {
-  color: var(--ink-faint);
-  background: transparent;
-  border-color: transparent;
-  cursor: not-allowed;
-  opacity: 1; /* don't double-fade; ink-faint already communicates inertness */
-}
-
-.export-menu__actions .ghost-button.is-compact:disabled svg {
-  opacity: 0.45;
-}
-
-/* -------- PDF export buttons — "destination actions" (slightly stronger) -------- */
-
-/*
-  PDF buttons sit at the destination end of the export workflow and deserve
-  more visual weight than the utility ghosts. They get a card-elev bg and a
-  hairline-strong border so they read as actionable surfaces, not just text.
-*/
-.export-menu__actions .pdf-action {
-  background: var(--card-elev);
-  border-color: var(--hairline-strong);
-  color: var(--ink-strong);
-}
-
-.export-menu__actions .pdf-action:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent-deep);
-  background: var(--accent-soft);
-}
-
-/* PDF is the canonical export — accent-deep text + accent-tinted border */
-.export-menu__actions .pdf-action--canonical {
-  color: var(--accent-deep);
-  border-color: oklch(0.46 0.085 165 / 0.35);
-  background: var(--card-elev);
-}
-
-.export-menu__actions .pdf-action--canonical:hover:not(:disabled) {
-  background: var(--accent-soft);
-  border-color: var(--accent);
-  color: var(--accent-deep);
-}
-
-/* Disabled state for pdf-action mirrors quiet ghost pattern */
-.export-menu__actions .pdf-action:disabled,
-.export-menu__actions .pdf-action--canonical:disabled {
-  color: var(--ink-faint);
-  background: transparent;
-  border-color: var(--hairline-soft);
-  cursor: not-allowed;
-}
-
-.export-menu__actions .pdf-action:disabled svg,
-.export-menu__actions .pdf-action--canonical:disabled svg {
-  opacity: 0.45;
-}
-
-.export-menu__actions .ghost-button.is-compact {
-  justify-content: flex-start;
-  min-height: 30px;
-}
-
 /* -------- Rename-at-save dialog -------- */
 
 /*
@@ -226,8 +73,8 @@
 .rename-dialog {
   position: fixed;
   inset: 0;
-  /* z-index 50: above .nav-menu__popover / .export-menu__popover (z-index 40)
-     and any other panel-level layers so stacking is deterministic. */
+  /* z-index 50: above .nav-menu__popover (z-index 40) and any other
+     panel-level layers so stacking is deterministic. */
   z-index: 50;
   display: flex;
   align-items: flex-start;
@@ -394,16 +241,6 @@
    button; without clearance it wraps straight under the ✕ on narrow cards. */
 .apply-download > .rename-dialog__hint {
   padding-right: var(--s5);
-}
-
-/* Small section eyebrow above the file-name field. */
-.apply-download__field-label {
-  margin-top: 2px;
-  font-size: 0.7rem;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
 }
 
 .apply-download__name {

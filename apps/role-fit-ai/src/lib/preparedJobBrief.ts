@@ -305,12 +305,3 @@ export function reconcilePreparedJobManualReviewFields(
   ).map(([field]) => field);
   return [...unknownFields, ...missingCanonicalFields];
 }
-
-export function preparedJobBriefGapLabel(field: PreparedJobBriefField): string | null {
-  if (field === "responsibilities") return "responsibilities";
-  if (field === "requiredQualifications") return "required qualifications";
-  if (field === "techKeywords") return "tech stack keywords";
-  if (field === "benefits") return "benefits";
-  if (field === "companyContext") return "role context";
-  return null;
-}

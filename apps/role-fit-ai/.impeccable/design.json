@@ -147,16 +147,6 @@
         "name": "shadow-inset",
         "value": "inset 0 1px 0 oklch(1 0 0 / 0.6)",
         "purpose": "Top inner highlight on accent-filled primary buttons."
-      },
-      {
-        "name": "shadow-rail",
-        "value": "0 -1px 0 var(--hairline), 0 -14px 32px oklch(0.2 0.01 160 / 0.03)",
-        "purpose": "Upward hairline plus faint haze under a docked rail."
-      },
-      {
-        "name": "shadow-mast",
-        "value": "0 1px 0 var(--hairline)",
-        "purpose": "The compact masthead's single structural lower edge."
       }
     ],
     "motion": [
@@ -314,7 +304,7 @@
     ],
     "dos": [
       "Do use package tokens/classes for shared editor behavior and src/styles/tokens.css plus per-surface app classes for RoleFit host chrome; if a value has no owning token, it does not ship.",
-      "Do state status as a small dot beside plain sentence-case text (.stage-dot, .nav-menu__sub, .studio-card__meta).",
+      "Do state status as a small dot beside plain sentence-case text (.stage-dot, .nav-menu__sub).",
       "Do set numbers, dates, scores, and indices in JetBrains Mono with tabular-nums (The Mono Means Data Rule).",
       "Do keep errors inline, localized, and user-safe, near the affected workflow; surface gaps and bracketed placeholders for human review.",
       "Do keep keyboard access first-class: APG tabs model, visible :focus-visible rings (2px accent, 2px offset), 24px minimum icon hit targets, aria-live for async status; honor prefers-reduced-motion.",

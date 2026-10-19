@@ -53,10 +53,11 @@ function ResumeHost() {
   current.current = { dirty: editor.dirty || docStyle.dirty, version: JSON.stringify([editor.editedResume, toDocumentStyle(docStyle.style)]) };
   const workspace = useWorkspaceResume({
     confirm: async () => true,
-    replacementGuard: { isDirtyNow: () => current.current.dirty, currentVersion: () => current.current.version, confirmReplacement: async () => true, onReplacementCommitted: noop },
-    fileName, setFileName, setDocumentTitle: setTitle, setResumeText: noop, setResult: noop,
+    replacementGuard: { isDirtyNow: () => current.current.dirty, ownsRecoveryNow: () => current.current.dirty, currentVersion: () => current.current.version, confirmReplacement: async () => true, onReplacementCommitted: noop },
+    fileName, setFileName, setDocumentTitle: setTitle, freshDocumentTitle: () => 'Resume', setResumeText: noop, setResult: noop,
     resetCoverWorkflow: noop, setFileError, setFileStatus: noop, setPolishStatus: noop,
     resetExportStatuses: noop, setExportStatus: noop, seedResumeData: editor.seedData,
+    markResumeDocumentSaved: editor.markSaved, getSeedRevision: editor.getSeedRevision,
     setResumeOrigin: noop, editedResume: editor.editedResume, docStyle
   });
   const decisions = useResumeProposalDecisions({ result: null, resume: editor.editedResume, actions: editor.actions });
@@ -74,7 +75,7 @@ function ResumeHost() {
   });
   return <>
     {fileError && <p role="alert">{fileError}</p>}
-    <ResumeTab documentTitle={title} onDocumentTitleChange={setTitle}
+    <ResumeTab documentTitle={title} onDocumentTitleChange={setTitle} resumePolishProviderMessage="" importReview={null}
       editedResume={editor.editedResume} actions={editor.actions} canUndo={editor.canUndo}
       canRedo={editor.canRedo} contentUndoSequence={editor.undoSequence} contentRedoSequence={editor.redoSequence}
       dirty={editor.dirty} draftAutosaveState="idle" result={null} docStyle={docStyle}
@@ -115,7 +116,7 @@ function CoverHost() {
   });
   return <CoverLetterTab editor={editor} editorRef={editorRef} initialCaret={null} onCaretExit={noop}
     initialScrollTop={0} onScrollExit={noop} inlineFormat={format} onInlineFormatStateChange={setFormat}
-    onTailor={noop} onDocumentChoice={noop}
+    onTailor={noop} onStopTailor={noop} resumeBlocker="" providerBlocker="" onDocumentChoice={noop}
     applicationSync={{ state: 'no-application', title: 'No application', description: 'Synthetic fixture', disabled: true, isSaving: false, status: '', statusIsError: false, save: async () => {} }}
     draftAutosaveState="idle" pendingAutosaveDraft={null} onRestoreAutosaveDraft={noop} onDismissAutosaveDraft={noop}
     isTailoring={false} tailorStatus="" resumeReady={false} jobReady={false} providerReady={false}

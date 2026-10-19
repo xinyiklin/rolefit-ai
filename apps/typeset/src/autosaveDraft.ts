@@ -15,6 +15,15 @@ export type AutosavedDraft =
 
 type DraftStorage = Pick<Storage, "getItem" | "setItem">;
 
+// Tabs share one draft slot. A `storage` event names another tab's write, so a
+// different draft (or a cleared store) means this tab's work is no longer kept.
+export function draftReplacedElsewhere(
+  event: Pick<StorageEvent, "key" | "newValue">,
+  lastWrittenDraft: string | null
+): boolean {
+  return event.key === null || (event.key === AUTOSAVE_KEY && event.newValue !== lastWrittenDraft);
+}
+
 // Browser drafts and disk files share one strict validation path so corrupt or
 // manually edited state never reaches the editor reducer.
 export function restoreAutosavedDraft(storage: DraftStorage): AutosavedDraft {

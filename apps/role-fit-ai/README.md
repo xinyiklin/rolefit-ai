@@ -304,7 +304,8 @@ offers 30 bundled families; each loads only when a document uses it.
   the Resume picker accepts only `.resume` (Resume's Open menu adds Import PDF)
   and Cover Letter accepts only `.cover`.
   Save updates the active copy, adds a variant, or takes a
-  `.resume`/`.cover`/`.txt`/PDF away.
+  `.resume`/`.cover`/`.txt`/PDF away. Saving the resume keeps the document and
+  any open Polish proposal in place; edits made while it saves stay unsaved.
   Resume always keeps a real editable page mounted: when no saved source exists,
   it starts as a clean blank `.resume` document, while PDF, Polish, and Apply
   remain unavailable until the document has meaningful content.
@@ -394,7 +395,8 @@ Visit `http://localhost:5181`.
 The standalone source command is a contributor path and cannot use the
 companion-managed provider vault. The server binds to loopback by default.
 `HOST=0.0.0.0` is an explicit, unauthenticated LAN-exposure override; never use
-it on a public or untrusted network.
+it on a public or untrusted network. Reach it by IP address or this machine's
+host name on the same port; other names and other sites' pages are refused.
 
 To run the supported companion development target:
 
@@ -811,8 +813,10 @@ The installed companion uses Electron's platform `userData` directory:
 Under that directory, `workspace/` contains document variants, tracker data, and saved
 application artifacts; `provider-vault/providers.json` contains only provider
 configuration plus operating-system-encrypted API-key bytes; and
-`desktop-settings/settings.json` contains the local-site port. There is no
-custom workspace-location picker. `ROLEFIT_WORKSPACE_DIR` is an
+`desktop-settings/settings.json` contains the local-site port. If Providers
+says saved provider settings could not be read, RoleFit still opens with no
+provider and leaves that file untouched; quit, move `providers.json` aside, and
+add providers again. There is no custom workspace-location picker. `ROLEFIT_WORKSPACE_DIR` is an
 explicit source-development/test override, not a supported installed-app
 setting.
 

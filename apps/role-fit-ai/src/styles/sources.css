@@ -26,7 +26,6 @@
 }
 
 .textarea:focus,
-.upload-box:focus-within,
 select:focus,
 .text-input:focus {
   border-color: var(--accent);
@@ -107,36 +106,6 @@ select,
   flex: 0 0 auto;
   width: auto;
   max-inline-size: 148px;
-}
-
-/* -------- Upload box -------- */
-
-.upload-box {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-height: 38px;
-  margin-top: var(--s2);
-  padding: 0 var(--s3);
-  border: 1px dashed var(--hairline-strong);
-  border-radius: var(--r-md);
-  background: var(--card-soft);
-  color: var(--accent-deep);
-  font-size: 0.78rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: border-color 180ms var(--ease), background 180ms var(--ease);
-}
-
-.upload-box:hover { border-color: var(--accent); background: var(--accent-soft); }
-.upload-box svg { color: var(--accent); flex-shrink: 0; }
-
-.upload-box input {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
 }
 
 .workspace-actions { display: flex; flex-wrap: wrap; gap: var(--s1); margin-top: var(--s2); }

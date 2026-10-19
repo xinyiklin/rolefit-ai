@@ -89,10 +89,6 @@ export function coverLetterUsesResolvedCorrespondence(
   return greetingCount === 1 && signoffPresent && datePresent;
 }
 
-export function stripCoverLetterTemplateText(text: string): string {
-  return analyzeCoverLetterTemplate({ text }).authoredProse;
-}
-
 function completedGreeting(text: string): boolean {
   const match = text.slice(0, 500).match(DIRECT_GREETING);
   return Boolean(match?.[1]?.trim()) && !hasUnresolvedCoverLetterTokens(match?.[0] ?? "");

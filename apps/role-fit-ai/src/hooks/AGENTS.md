@@ -212,7 +212,9 @@ browser-side effects; components render them and App composes them.
   reusable history/reducer behavior in `@typeset/editor`. Its `seedData(data,
   { unsaved: true })` seeds a document that exists only in memory (an import),
   which counts as dirty until it is saved, marked clean, or replaced; every
-  seed bumps `seedRevision`.
+  seed bumps `seedRevision`, and so does `markSaved(clean)`: base-resume Save
+  keeps the document in place (no reseed), ends what was tied to its seed (an
+  import review), and marks it clean only if it is unchanged since it was sent.
 - `useResumeImport` owns one PDF import: local reading (lazily loaded pdf.js and
   `resume/pdfImport/`), the guarded commit through `useWorkspaceResume`, the
   review session, the explicit AI interpretation (abort, stale-result and

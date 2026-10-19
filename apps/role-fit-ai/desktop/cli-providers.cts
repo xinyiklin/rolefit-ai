@@ -1,4 +1,5 @@
 import { spawn, spawnSync } from "node:child_process";
+import { readdir } from "node:fs/promises";
 import { isAbsolute, posix, win32 } from "node:path";
 import type { ChildProcess } from "node:child_process";
 import type {
@@ -172,16 +173,39 @@ export function buildCliProcessEnvironment(
   return environment;
 }
 
+const NVM_NODE_VERSION = /^v(\d+)\.(\d+)\.(\d+)$/;
+
+// nvm keeps no stable current-version directory, so a Finder-launched companion
+// lists its installs to find a CLI that nvm put on the shell PATH.
+export async function installedNvmNodeVersions(homeDirectory: string): Promise<readonly string[]> {
+  try {
+    const entries = await readdir(posix.join(homeDirectory, ".nvm", "versions", "node"), { withFileTypes: true });
+    return Object.freeze(entries.filter((entry) => entry.isDirectory() && NVM_NODE_VERSION.test(entry.name)).map((entry) => entry.name));
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException).code;
+    if (code === "ENOENT" || code === "ENOTDIR") return Object.freeze([]);
+    throw error;
+  }
+}
+
 export function packagedCliSearchPaths(
   platform: NodeJS.Platform,
   homeDirectory: string,
-  environment: NodeJS.ProcessEnv
+  environment: NodeJS.ProcessEnv,
+  nvmNodeVersions: readonly string[] = []
 ): readonly string[] {
   const platformPath = platform === "win32" ? win32 : posix;
   if (!platformPath.isAbsolute(homeDirectory)) {
     throw new Error("CLI home directory must be absolute.");
   }
   if (platform === "darwin") {
+    const versionParts = (name: string) => (name.match(NVM_NODE_VERSION) ?? []).slice(1).map(Number);
+    const newestFirst = nvmNodeVersions
+      .filter((name) => NVM_NODE_VERSION.test(name))
+      .sort((left, right) => {
+        const [a, b] = [versionParts(left), versionParts(right)];
+        return b[0] - a[0] || b[1] - a[1] || b[2] - a[2];
+      });
     return Object.freeze([
       "/opt/homebrew/bin",
       "/usr/local/bin",
@@ -190,6 +214,10 @@ export function packagedCliSearchPaths(
       posix.join(homeDirectory, ".volta", "bin"),
       posix.join(homeDirectory, ".asdf", "shims"),
       posix.join(homeDirectory, ".bun", "bin"),
+      // fnm's default alias, under both of its default data directories.
+      posix.join(homeDirectory, ".local", "share", "fnm", "aliases", "default", "bin"),
+      posix.join(homeDirectory, "Library", "Application Support", "fnm", "aliases", "default", "bin"),
+      ...newestFirst.map((version) => posix.join(homeDirectory, ".nvm", "versions", "node", version, "bin")),
       "/usr/bin",
       "/bin"
     ]);

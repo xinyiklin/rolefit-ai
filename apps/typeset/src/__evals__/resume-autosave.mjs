@@ -20,6 +20,7 @@ import {
   AUTOSAVE_KEY,
   DOCUMENT_TITLE_KEY,
   UNREADABLE_AUTOSAVE_KEY,
+  draftReplacedElsewhere,
   restoreAutosavedDraft
 } from "../autosaveDraft.ts";
 
@@ -97,4 +98,15 @@ assert.deepEqual(
   "a refused draft that storage will not keep is reported as lost, not thrown"
 );
 
-console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, and unreadable-draft keeping passed");
+// Tabs share the draft slot. Opening a second tab re-saves the draft it
+// restored byte for byte, which fires no storage event in the first tab.
+const reopened = parseResumeFile(autosave);
+assert.equal(serializeResumeFile(reopened.data, reopened.documentStyle), autosave, "a restored draft re-saves identically");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, autosave), false, "this tab's own draft is still kept");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: `${autosave} ` }, autosave), true, "another tab's draft replaced this one");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: null }, autosave), true, "a removed draft is no longer kept");
+assert.equal(draftReplacedElsewhere({ key: AUTOSAVE_KEY, newValue: autosave }, null), true, "a tab that has not autosaved yet keeps nothing in the slot");
+assert.equal(draftReplacedElsewhere({ key: null, newValue: null }, autosave), true, "a cleared store keeps nothing");
+assert.equal(draftReplacedElsewhere({ key: DOCUMENT_TITLE_KEY, newValue: "Other" }, autosave), false, "other keys do not replace the draft");
+
+console.log("Typeset resume autosave: strict round trip, 4 malformed-draft refusals, unreadable-draft keeping, and cross-tab replacement passed");

@@ -370,18 +370,6 @@
   text-decoration: underline;
 }
 
-/* An automatically detected URL has no stored link to edit, so say so. */
-.ts-link-card__badge {
-  flex: none;
-  padding: 1px 5px;
-  border-radius: 999px;
-  background: var(--accent-veil);
-  color: var(--accent-deep);
-  font-size: 0.625rem;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-}
-
 .ts-link-card__actions {
   display: flex;
   flex: none;

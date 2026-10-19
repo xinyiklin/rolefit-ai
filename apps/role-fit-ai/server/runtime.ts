@@ -3,6 +3,8 @@ import { handleResumeImport } from "./ai/resumeImport.ts";
 import { createServer } from "node:http";
 import type { IncomingMessage, Server, ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
+import { isIP } from "node:net";
+import { hostname } from "node:os";
 import { extname, join, resolve, sep } from "node:path";
 import { handleResumePolish } from "./ai/resumePolish.ts";
 import { handleJobAnalysis } from "./ai/jobAnalysis.ts";
@@ -145,6 +147,46 @@ function isLoopbackBindHost(value: string): boolean {
 function hostHeaderFor(value: string, port: number): string {
   const bare = value.replace(/^\[|\]$/g, "");
   return bare.includes(":") ? `[${bare}]:${port}` : `${bare}:${port}`;
+}
+
+function originHostOf(origin: string): string {
+  try {
+    return new URL(origin).host;
+  } catch {
+    return "";
+  }
+}
+
+// A HOST override widens who can reach the app, not what Host may name: an IP
+// literal or this machine's own name on the listening port, so a DNS-rebound
+// site name is still refused.
+function namesThisMachine(hostHeader: string, port: number, bindHost: string): boolean {
+  let parsed: URL;
+  try {
+    parsed = new URL(`http://${hostHeader}`);
+  } catch {
+    return false;
+  }
+  if (parsed.host !== hostHeader.toLowerCase() || (parsed.port || "80") !== String(port)) return false;
+  const name = parsed.hostname.replace(/^\[|\]$/g, "");
+  const machine = hostname().toLowerCase();
+  return isIP(name) !== 0
+    || ["localhost", bindHost.toLowerCase(), machine, `${machine.split(".")[0]}.local`].includes(name);
+}
+
+export function requestGuardError(
+  bindHost: string,
+  port: number,
+  hostHeader: string | undefined,
+  origin: string | undefined
+): "Forbidden host." | "Cross-origin request blocked." | null {
+  const requestHost = (hostHeader ?? "").toLowerCase();
+  const allowedHosts = isLoopbackBindHost(bindHost)
+    ? new Set([`localhost:${port}`, `127.0.0.1:${port}`, `[::1]:${port}`, hostHeaderFor(bindHost, port)])
+    : new Set(namesThisMachine(requestHost, port, bindHost) ? [requestHost] : []);
+  if (!allowedHosts.has(requestHost)) return "Forbidden host.";
+  if (origin && !allowedHosts.has(originHostOf(origin))) return "Cross-origin request blocked.";
+  return null;
 }
 
 function decodeRouteSegment(value: string): string | null {
@@ -381,33 +423,14 @@ export async function startRoleFitServer(options: RoleFitServerOptions): Promise
       return;
     }
 
-    // Same-origin/Host guard for every remaining request (any loopback bind),
-    // app files included: in development the served root holds the workspace,
-    // and a rebound host or another localhost page must read none of it. Use
-    // the resolved listening port so an isolated port:0 runtime stays protected.
-    if (isLoopbackBindHost(host)) {
-      const allowedHosts = new Set([
-        `localhost:${listeningPort}`,
-        `127.0.0.1:${listeningPort}`,
-        `[::1]:${listeningPort}`
-      ]);
-      allowedHosts.add(hostHeaderFor(host, listeningPort));
-      if (!allowedHosts.has(req.headers.host ?? "")) {
-        sendJson(res, 403, { error: "Forbidden host." });
-        return;
-      }
-      if (req.headers.origin) {
-        let requestOriginHost = "";
-        try {
-          requestOriginHost = new URL(req.headers.origin).host;
-        } catch {
-          // Keep the non-matching sentinel for a malformed Origin.
-        }
-        if (!allowedHosts.has(requestOriginHost)) {
-          sendJson(res, 403, { error: "Cross-origin request blocked." });
-          return;
-        }
-      }
+    // Same-origin/Host guard for every remaining request, app files included:
+    // in development the served root holds the workspace, and a rebound host or
+    // another site's page must read none of it. Use the resolved listening port
+    // so an isolated port:0 runtime stays protected.
+    const guardError = requestGuardError(host, listeningPort, req.headers.host, req.headers.origin);
+    if (guardError) {
+      sendJson(res, 403, { error: guardError });
+      return;
     }
 
     // In development, serve the engine-owned font assets directly. Vite's SPA

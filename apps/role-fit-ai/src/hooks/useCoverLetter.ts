@@ -179,9 +179,10 @@ export function useCoverLetter({
     resolved: preflight.resolved,
     evidenceItems: evidenceItems.filter((item) => item.source !== "resume"),
   });
+  // The resume content in use, not the saved baseline: saving the resume as it
+  // stands must not cancel a run or mark a proposal stale.
   const proposalResumeFingerprint = workflowInputFingerprint({
-    currentResumeText,
-    resumeText,
+    resumeText: currentResumeText || resumeText,
     evidenceItems: evidenceItems.filter((item) => item.source === "resume"),
   });
   const requestInputFingerprint = workflowInputFingerprint({

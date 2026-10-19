@@ -36,8 +36,6 @@ export const SETTINGS_GROUPS: { label: string; sections: { id: SettingsSection; 
   { label: "AI", sections: [{ id: "guidance", label: "Guidance" }, { id: "automation", label: "Automation" }, { id: "models", label: "Models" }] }
 ];
 
-export const SETTINGS_SECTIONS = SETTINGS_GROUPS.flatMap((group) => group.sections);
-
 export type SettingsVariantOption = { fileName: string; label: string };
 
 export type SettingsDialogProps = {

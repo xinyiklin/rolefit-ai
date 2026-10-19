@@ -151,7 +151,6 @@
   font: 600 0.7rem/1.4 var(--font-mono);
 }
 
-.cover-letter-proposal__warning,
 .cover-letter-proposal__stale,
 .cover-letter-applied p {
   margin: 0;

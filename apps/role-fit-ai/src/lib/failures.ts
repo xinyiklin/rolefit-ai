@@ -122,15 +122,3 @@ export function classifyFailure(error: unknown): ClassifiedFailure {
   // 9. Generic provider/server failure (matches the 500 fallback status).
   return classifiedFrom("api", detail);
 }
-
-// The single, uniform reason shown as the bold headline on EVERY card where an
-// AI step didn't produce a usable result — Job analysis, Resume Polish, Final
-// Check, cover letter, or application answers. A
-// config error, timeout, auth failure, and a thin/absent reply all read the
-// same here on purpose: those cards appear together in one flow, and each step
-// can hit a different sub-cause or provider, so a per-card classified reason reads as three
-// unrelated problems when it's really one "the AI isn't producing right now".
-// The specific detail, when useful, lives in the inline status line, not here.
-// (classifyFailure stays for genuinely different, non-AI-outage cases: bad
-// input/validation → "Validation blocked", a failed link fetch → "Network error", etc.)
-export const AI_UNAVAILABLE = "AI unavailable";

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { createServer as createHttpServer } from "node:http";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -427,6 +427,30 @@ try {
   assert.equal(await canBind(port), true, "owned development server should release its port");
   assert.equal(await canBind(hmrPort), true, "owned Vite HMR should release its socket");
 
+  // An unreadable provider vault opens the companion with no provider, and the
+  // file is left exactly as it was for the user to replace.
+  const corruptVaultUserData = join(tempRoot, "corrupt-vault-user-data");
+  const corruptVaultPath = join(corruptVaultUserData, "provider-vault", "providers.json");
+  const corruptVault = "{ not a provider vault";
+  await mkdir(join(corruptVaultUserData, "provider-vault"), { recursive: true });
+  await writeFile(corruptVaultPath, corruptVault, "utf8");
+  const corruptVaultRun = await runProcess(
+    electronPath,
+    [appRoot],
+    electronEnv(baseEnv, {
+      ROLEFIT_DESKTOP_USER_DATA: corruptVaultUserData,
+      ROLEFIT_DESKTOP_SMOKE_VAULT: "corrupt"
+    }),
+    "corrupt-vault Electron"
+  );
+  assertElectronSuccess(
+    corruptVaultRun,
+    "ROLEFIT_DESKTOP_SMOKE_OK ownership=owned mode=production phase=companion"
+  );
+  assert.match(corruptVaultRun.output, /saved provider settings could not be read/);
+  assert.equal(await readFile(corruptVaultPath, "utf8"), corruptVault, "a corrupt vault is never rewritten");
+  assert.equal(await canBind(port), true, "the corrupt-vault companion should release its port");
+
   const incompatibleServer = createHttpServer((_req, res) => {
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end("not RoleFit");
@@ -456,5 +480,5 @@ try {
 assert.equal(await canBind(port), true, "desktop smoke must release its HTTP port");
 assert.equal(await canBind(hmrPort), true, "desktop smoke must release Vite HMR");
 console.log(
-  "desktop Electron smoke: typed bridge + single-instance + owned/reused production/development + mismatch rejection passed"
+  "desktop Electron smoke: typed bridge + single-instance + owned/reused production/development + corrupt vault + mismatch rejection passed"
 );

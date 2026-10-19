@@ -191,39 +191,6 @@ export function nextAction(app: Application) {
   return "Review job details";
 }
 
-const SALARY_PERIOD_LABEL: Record<string, string> = { yr: "/yr", mo: "/mo", hr: "/hr" };
-
-// Compact compensation string from the stored min/max/currency/period, e.g.
-// "$160k – $200k /yr" or "USD 120,000 /yr". Returns "" when nothing is set.
-export function formatSalary(
-  comp: Pick<Application, "salaryMin" | "salaryMax" | "salaryCurrency" | "salaryPeriod">
-) {
-  const { salaryMin, salaryMax, salaryCurrency, salaryPeriod } = comp;
-  const hasMin = typeof salaryMin === "number";
-  const hasMax = typeof salaryMax === "number";
-  if (!hasMin && !hasMax) return "";
-  const currency = (salaryCurrency || "").trim().toUpperCase();
-  // Job analysis can emit non-USD currencies, so render their native symbol
-  // (falls back to an ISO-code prefix for anything unmapped).
-  const CURRENCY_SYMBOL: Record<string, string> = {
-    USD: "$", GBP: "£", EUR: "€", JPY: "¥", CAD: "C$", AUD: "A$"
-  };
-  const symbol = CURRENCY_SYMBOL[currency] ?? "";
-  const fmt = (value: number) => {
-    if (symbol) {
-      return value >= 1000 && value % 1000 === 0 ? `${symbol}${value / 1000}k` : `${symbol}${value.toLocaleString()}`;
-    }
-    return value.toLocaleString();
-  };
-  const prefix = symbol ? "" : currency ? `${currency} ` : "";
-  const range =
-    hasMin && hasMax
-      ? `${fmt(salaryMin as number)} – ${fmt(salaryMax as number)}`
-      : fmt((hasMin ? salaryMin : salaryMax) as number);
-  const period = salaryPeriod ? ` ${SALARY_PERIOD_LABEL[salaryPeriod] ?? ""}`.trimEnd() : "";
-  return `${prefix}${range}${period}`.trim();
-}
-
 export function formatCompactDate(iso: string) {
   if (!iso) return "";
   const date = parseDate(iso);

@@ -1,9 +1,13 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 import {
   buildCliProcessEnvironment,
   createCliProviderManager,
+  installedNvmNodeVersions,
   packagedCliSearchPaths,
   resolveCliProcessLaunch,
   resolveWindowsTreeKillLaunch,
@@ -147,10 +151,32 @@ assert.deepEqual(
     "/Users/provider/.volta/bin",
     "/Users/provider/.asdf/shims",
     "/Users/provider/.bun/bin",
+    "/Users/provider/.local/share/fnm/aliases/default/bin",
+    "/Users/provider/Library/Application Support/fnm/aliases/default/bin",
     "/usr/bin",
     "/bin"
   ]
 );
+assert.deepEqual(
+  packagedCliSearchPaths("darwin", "/Users/provider", {}, ["v20.11.1", "v24.18.0", "system", "v24.9.0", "../escape"])
+    .filter((entry) => entry.includes("/.nvm/")),
+  [
+    "/Users/provider/.nvm/versions/node/v24.18.0/bin",
+    "/Users/provider/.nvm/versions/node/v24.9.0/bin",
+    "/Users/provider/.nvm/versions/node/v20.11.1/bin"
+  ],
+  "packaged macOS finds nvm installs newest first and ignores anything that is not a version"
+);
+const nvmHome = await mkdtemp(join(tmpdir(), "rolefit-nvm-"));
+try {
+  assert.deepEqual(await installedNvmNodeVersions(nvmHome), [], "no nvm directory means no nvm installs");
+  await mkdir(join(nvmHome, ".nvm", "versions", "node", "v22.1.0"), { recursive: true });
+  await mkdir(join(nvmHome, ".nvm", "versions", "node", "not-a-version"), { recursive: true });
+  await writeFile(join(nvmHome, ".nvm", "versions", "node", "v23.0.0"), "a file, not an install");
+  assert.deepEqual(await installedNvmNodeVersions(nvmHome), ["v22.1.0"]);
+} finally {
+  await rm(nvmHome, { recursive: true, force: true });
+}
 assert.deepEqual(
   packagedCliSearchPaths("win32", "C:\\Users\\provider", {
     APPDATA: "C:\\Users\\provider\\AppData\\Roaming",

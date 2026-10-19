@@ -47,7 +47,7 @@ import {
   type InlineFormatState,
   type TypesetEditorHandle
 } from "@typeset/editor/sections/editor/TypesetEditor.tsx";
-import { AUTOSAVE_KEY, DOCUMENT_TITLE_KEY, restoreAutosavedDraft } from "./autosaveDraft.ts";
+import { AUTOSAVE_KEY, DOCUMENT_TITLE_KEY, draftReplacedElsewhere, restoreAutosavedDraft } from "./autosaveDraft.ts";
 import { commitDocumentSaveBaseline } from "./documentSaveBaseline.ts";
 import { DocumentFileMenus } from "./DocumentFileMenus.tsx";
 
@@ -110,6 +110,7 @@ export default function App() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const workspaceRef = useRef<HTMLElement>(null);
   const initializedRef = useRef(false);
+  const lastWrittenDraftRef = useRef<string | null>(null);
   const autoFitRef = useRef(false);
   const dragDepthRef = useRef(0);
   const noticeExitTimerRef = useRef<number | null>(null);
@@ -218,7 +219,9 @@ export default function App() {
 
     const timer = window.setTimeout(() => {
       try {
-        window.localStorage.setItem(AUTOSAVE_KEY, serializeResumeFile(resume, docStyle.style));
+        const draft = serializeResumeFile(resume, docStyle.style);
+        window.localStorage.setItem(AUTOSAVE_KEY, draft);
+        lastWrittenDraftRef.current = draft;
         window.localStorage.setItem(DOCUMENT_TITLE_KEY, documentTitle.trim() || UNTITLED_RESUME_TITLE);
         commitDocumentSaveBaseline(editor.markClean, docStyle.markClean);
         setSaveStatus("saved");
@@ -233,6 +236,17 @@ export default function App() {
   useEffect(() => {
     document.title = `${documentTitle.trim() || UNTITLED_RESUME_TITLE} — Typeset`;
   }, [documentTitle]);
+
+  // The next autosave here stores this tab's work again and clears the error.
+  useEffect(() => {
+    const onStorage = (event: StorageEvent) => {
+      if (draftReplacedElsewhere(event, lastWrittenDraftRef.current)) {
+        setSaveStatus({ state: "error", label: "Replaced by another tab" });
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {

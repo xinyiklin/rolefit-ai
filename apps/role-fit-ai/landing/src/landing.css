@@ -60,12 +60,10 @@
   --warm: #8a611e;
   --warm-soft: #f4ead4;
   --brick: #a2412c;
-  --brick-soft: #f6e3dc;
   /* On the dark local-first band (background: --accent-deep): text tones from
      strong to faint, then the white-alpha hairlines and fills. */
   --on-deep-strong: #f7faf7;
   --on-deep: #eaf2ed;
-  --on-deep-soft: #dbe7e1;
   --on-deep-muted: #c4d4cd;
   --on-deep-faint: #9fc8b9;
   --on-deep-hairline: rgb(255 255 255 / 0.12);

@@ -1,4 +1,3 @@
-export const ANSWER_CONVERSATION_MAX_REVISIONS = 60;
 // Saved revisions are checked against these limits on load, so they are part of
 // the stored tracker format: tightening one needs a migration.
 export const ANSWER_QUESTION_MAX_CHARS = 12_000;

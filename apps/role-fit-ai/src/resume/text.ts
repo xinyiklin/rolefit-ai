@@ -5,8 +5,6 @@
 // server parsers); the re-exports below keep existing importers unchanged.
 import { BULLET_GLYPHS, isTopLevelSectionHeader, normalize } from "./sections.ts";
 
-export const hasMetric = (text: string) =>
-  /(\$\s?\d+|\d+(?:\.\d+)?\s*%|\d+(?:\.\d+)?\s*(?:percent|x|k|m|tb|gb|mb)\b|\d+\+|\d+(?:\.\d+)?\s+(?:\w+\s+){0,2}(?:users?|requests?|records?|models?|endpoints?|apps?|patients?|facilities?|hours?|days?|weeks?|months?|ms|milliseconds?|seconds?|minutes?)\b)/i.test(text);
 // Bullet detection uses the shared glyph set (./sections.ts). The trailing \s+ is
 // required, so a glyph inside text or a "2020-2023" date span is never a bullet.
 const BULLET_RE = new RegExp(`^\\s*[${BULLET_GLYPHS}]\\s+`);
@@ -33,21 +31,4 @@ export function normalizeText(text: string) {
     .trim();
 }
 
-export const titleCase = (text: string) =>
-  text
-    .split(" ")
-    .filter(Boolean)
-    .map((word) => {
-      if (["api", "apis", "css", "html", "sql"].includes(word)) return word.toUpperCase();
-      if (word === "javascript") return "JavaScript";
-      if (word === "node.js") return "Node.js";
-      if (word === "postgresql") return "PostgreSQL";
-      if (word === "react") return "React";
-      if (word === "rest") return "REST";
-      if (word === "typescript") return "TypeScript";
-      return word.charAt(0).toUpperCase() + word.slice(1);
-    })
-    .join(" ");
-
 export const unique = (items: string[]) => Array.from(new Set(items));
-export const sentenceCase = (text: string) => text.charAt(0).toUpperCase() + text.slice(1);

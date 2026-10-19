@@ -1,4 +1,4 @@
-// Base64 <-> Buffer helpers shared by workspace base-resume storage and the
+// Base64 decoding shared by workspace base-resume storage and the
 // application-tracker PDF artifact save. Kept dependency-free.
 
 export function base64ToBuffer(value: unknown, label = "File"): Buffer {
@@ -16,8 +16,4 @@ export function base64ToBuffer(value: unknown, label = "File"): Buffer {
     throw new Error(`${label} file is too large.`);
   }
   return buffer;
-}
-
-export function bufferToBase64(buffer: Uint8Array): string {
-  return Buffer.from(buffer).toString("base64");
 }
