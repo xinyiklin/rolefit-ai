@@ -68,6 +68,7 @@ import { faceFor, spaceWidth } from "@typeset/engine/typeset/measure.ts";
 import { documentFontFamily } from "@typeset/engine/typeset/fontRegistry.ts";
 import type { LayoutDocument } from "@typeset/engine/typeset/layout.ts";
 import { browserFontFaceLoaded, ensureTypesetFonts, TypesetDomPages } from "@typeset/engine/typeset/render/dom.tsx";
+import { TEXT_REPOSITIONED_EVENT } from "@typeset/engine/typeset/render/logicalFields.tsx";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { anchorsFromDoc, type BlockAnchor, type TypesetAnchors } from "./typesetStructure.ts";
 import { TypesetStructureOverlay } from "./TypesetStructureOverlay.tsx";
@@ -1223,6 +1224,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     window.addEventListener("blur", cancelPointerSelection);
     document.addEventListener("selectionchange", sync);
     document.addEventListener("focusin", sync);
+    // A late font (a borrowed glyph's fallback) moves the text under the caret.
+    document.addEventListener(TEXT_REPOSITIONED_EVENT, sync);
     sync();
     return () => {
       syncSelectionRef.current = null;
@@ -1231,6 +1234,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
       window.removeEventListener("blur", cancelPointerSelection);
       document.removeEventListener("selectionchange", sync);
       document.removeEventListener("focusin", sync);
+      document.removeEventListener(TEXT_REPOSITIONED_EVENT, sync);
       pointerSelectionRef.current = false;
       if (host) clearSelectionHighlights(host);
     };

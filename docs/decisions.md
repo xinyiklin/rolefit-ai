@@ -210,6 +210,32 @@ later entry wins.
   header gaps); built-in presets apply only those keys and saved presets stay
   resume-only. Header gaps leave the Header menu in both documents. Spacing and
   Paragraph values are one line each with a typeable value; Styles is a table.
+- 2026-10-18 [CODE+TOOL] D088 AMENDED by D089: **Metrics measure Latin-1 symbols, Latin
+  Extended-A, and common punctuation (`‚„†‡‰‹›′″€™−→←↑↓≤≥`) wherever a face
+  has the glyph**, so the editor and PDF place them at real widths. The original
+  repertoire alone sets catalog faces' vertical envelope, so a document using
+  only it lays out exactly as before; a new letter in an entry title or subtitle
+  adds its real ink to that row's spacing. Ligature-boundary entries for new
+  characters are kept only where the font differs from the plain pair; a new
+  character whose glyph a face classes as a mark stays unmeasured. A character a
+  face lacks keeps the 500-unit fallback. Cost: metrics 3.3 → 5.45 MB raw, +215 KB
+  brotli.
+- 2026-10-18 [CODE+TOOL] D089 ACTIVE: **A measured character a face lacks is
+  measured, painted, and embedded from the family's fallback**: Tinos for serif
+  families, Arimo for sans (both bundled; each covers the whole measured
+  repertoire). Only a character the face's fonts cannot draw is borrowed; a mark
+  glyph the face draws but leaves unmeasured stays its own. Pairs kern only
+  within one face. A decomposed accent composes where the face has the composed
+  letter; elsewhere it keeps its earlier 500-unit-per-mark measurement (and
+  `.notdef` in the PDF where the face lacks the mark), as on `main`. The editor
+  loads a fallback family beside the pages, never withholding them. A document
+  of composed text that borrows nothing lays out and exports exactly as before
+  (419/419 local and starter layouts identical, all 148,756 runs drawn
+  unchanged); one that does embeds only the borrowed fallback faces. Characters
+  outside the measured repertoire (CJK, emoji, Cyrillic) keep the 500-unit
+  fallback, and the PDF draws the face's own glyph or `.notdef`, while the
+  editor's font stack may draw one from Tinos or Arimo; covering them needs new
+  font assets.
 
 ### RoleFit product behavior and trust decisions
 

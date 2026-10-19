@@ -289,8 +289,9 @@ docker run --rm -p 127.0.0.1:5186:8080 typeset
 The multi-stage image builds with Node 24.18.0 and serves only the compiled
 assets from unprivileged Nginx, with the server config in `nginx.conf`: a
 Content Security Policy that allows only the app's own origin (plus `blob:` and
-`data:` where the editor needs them), `nosniff`, frame denial, no referrer, and
-immutable caching for hashed assets only. Both bases are pinned by
+`data:` where the editor needs them), `nosniff`, frame denial, no referrer,
+immutable caching for hashed assets only, and gzip for text (the main script is
+about 5.8 MB raw, 1.2 MB compressed). Both bases are pinned by
 multi-architecture digest and updated through dependency PRs. It has no runtime
 environment variables or application API. Put the loopback-bound container
 behind an HTTPS reverse proxy when exposing it publicly.

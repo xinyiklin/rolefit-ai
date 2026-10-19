@@ -20,6 +20,7 @@ import { buildStarterResume } from "@typeset/engine/sampleResume.ts";
 import { toTypesetSchema } from "@typeset/engine/typeset/schema.ts";
 import { DOCUMENT_FONT_FAMILIES, sfntAssetFile } from "@typeset/engine/typeset/fontRegistry.ts";
 import { layoutCoverLetter, layoutResume } from "@typeset/engine/typeset/layout.ts";
+import { faceSegments } from "@typeset/engine/typeset/measure.ts";
 import { emitPdf } from "@typeset/engine/typeset/pdf/emit.ts";
 import { PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 
@@ -303,6 +304,36 @@ for (const family of Object.keys(DOCUMENT_FONT_FAMILIES)) {
   }
 }
 
+// A measured character a face lacks is drawn from the family's fallback at the
+// engine's offset, and extracts as itself rather than as `.notdef`.
+let borrowedChecked = 0;
+for (const [family, text] of [["roboto", "800ms → 120ms"], ["latin-modern", "≥ 5 years"], ["pt-serif", "Ŵales"]]) {
+  const borrowedLayout = layoutResume({
+    header: { name: "Probe", contact: [] },
+    sections: [{ id: "s", type: "standard", heading: "Experience", items: [{
+      id: "i", titleLeft: "Title", titleRight: null, subtitleLeft: null, subtitleRight: null, bullets: [text], bulletIds: ["b"]
+    }] }]
+  }, { ...DOC_STYLE_DEFAULTS, fontFamily: family });
+  const borrowedBytes = await emitPdf(borrowedLayout, fonts);
+  retainAuditPdf(`borrowed-glyph-${family}.pdf`, borrowedBytes);
+  const pdf = await pdfjs.getDocument({ data: borrowedBytes.slice(), useWorkerFetch: false, isEvalSupported: false }).promise;
+  const items = (await (await pdf.getPage(1)).getTextContent()).items;
+  const fallback = DOCUMENT_FONT_FAMILIES[family].fallback;
+  for (const line of borrowedLayout.pages[0].lines) for (const run of line.runs.filter((run) => run.text.trim())) {
+    for (const segment of faceSegments(run.text, run.style).filter((segment) => segment.family === fallback)) {
+      borrowedChecked += 1;
+      assert(items.some((item) => item.str.startsWith(segment.text) &&
+        Math.abs(item.transform[4] - (run.x + segment.offset)) < 0.2 &&
+        Math.abs(792 - item.transform[5] - line.baseline) < 0.2),
+      `${family}: borrowed ${JSON.stringify(segment.text)} extracts at (${run.x + segment.offset}, ${line.baseline})`);
+    }
+  }
+}
+if (borrowedChecked < 3) {
+  console.error(`borrowed glyphs: only ${borrowedChecked} checked`);
+  failures += 1;
+}
+
 if (failures) {
   console.error(`pdf-roundtrip: ${failures} failures (${checked} runs checked)`);
   process.exit(1);
@@ -310,5 +341,5 @@ if (failures) {
 console.log(
   `pdf-roundtrip: ${checked} runs at exact positions, ${annots} link annotations, text layer searchable; ` +
     `all ${Object.keys(DOCUMENT_FONT_FAMILIES).length} families × 6 faces embed and re-extract; ` +
-    `${coverDoc.numPages}-page cover letter stays searchable`
+    `${coverDoc.numPages}-page cover letter stays searchable; ${borrowedChecked} borrowed glyphs extract in place`
 );

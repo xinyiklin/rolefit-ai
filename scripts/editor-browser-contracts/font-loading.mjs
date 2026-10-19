@@ -52,9 +52,34 @@ export async function runFontLoadingContracts({ makeWindow, waitFor, baseUrl }) 
     assert.equal(await page.evaluate('window.__rowContract.style.fontFamily'), initial);
     await evaluate(() => { window.__fontGate.hold = ''; window.__fontGate.held.splice(0).forEach(resolve => resolve()); });
     await waitFor(page, paints('Noto Sans'), `${host} inline family paints after readiness`);
+    // A borrowed glyph's fallback family (Roboto's → from Arimo) loads beside
+    // the pages: while our loader's request is held the editable host stays,
+    // the run's font stack already names it, and the browser's own load of it
+    // repositions the mounted text layer.
+    await evaluate(() => {
+      const data = structuredClone(window.__rowContract.data);
+      data.header.name = '<font=roboto>Name</font>';
+      window.__rowContract.reset(data);
+    });
+    await waitFor(page, paints('Roboto'), `${host} own family paints first`);
+    await evaluate(() => {
+      window.__fontGate.hold = 'Typeset Arimo';
+      window.__textRepositioned = 0;
+      document.addEventListener('tsd-text-repositioned', () => { window.__textRepositioned += 1; });
+      const data = structuredClone(window.__rowContract.data);
+      data.header.name = '<font=roboto>Name 800ms → 120ms</font>';
+      window.__rowContract.reset(data);
+    });
+    await waitFor(page, `window.__fontGate.held.length > 0 && ${paints('Roboto')}`, `${host} fallback load starts beside painted pages`);
+    assert.equal(await page.evaluate(`Boolean(document.querySelector('[role=status]')?.textContent.includes('Typesetting'))`), false, `${host} a pending fallback never withholds the pages`);
+    assert(await page.evaluate(paints('Typeset Arimo')), `${host} the run's font stack falls back to Arimo`);
+    await waitFor(page, `window.__textRepositioned > 0 && [...document.fonts].some(face => face.family.includes('Arimo') && face.status === 'loaded')`, `${host} text layer repositions once the fallback arrives`);
+    await evaluate(() => { window.__fontGate.hold = ''; window.__fontGate.held.splice(0).forEach(resolve => resolve()); });
+    await page.evaluate('new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))');
+    assert(await page.evaluate(paints('Roboto')), `${host} pages stay painted after the fallback arrives`);
     await page.destroy();
   }
-  console.log('Font loading: document-only requests, held loads, late completion, visible failures/recovery and inline family readiness passed in both hosts.');
+  console.log('Font loading: document-only requests, held loads, late completion, visible failures/recovery, inline family readiness, and background fallback loads passed in both hosts.');
 }
 
 export async function runLoadedInlineFontContracts({ makeWindow, waitFor, baseUrl }) {

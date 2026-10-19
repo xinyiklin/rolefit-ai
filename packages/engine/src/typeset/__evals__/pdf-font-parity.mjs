@@ -88,6 +88,15 @@ for (const a of ACCENTS) for (const b of COMMON) { PAIRS.push(a + b); PAIRS.push
 // accent×accent pairs: Source Serif's ccmp swapped `ïï` to a narrow-dieresis
 // variant — a class of divergence only same-accent adjacency exposes.
 for (const a of ACCENTS) for (const b of ACCENTS) PAIRS.push(a + b);
+// Measured only where a face has the glyph (Latin-1 symbols, Latin Extended-A,
+// common punctuation); elsewhere they borrow from the family's fallback, which
+// glyph-fallback checks.
+const EXTENDED = [
+  ..."¡¢£¤¥¦§¨©ª«¬®¯°±²³´µ¶¸¹º»¼½¾¿",
+  ...Array.from({ length: 0x80 }, (_, index) => String.fromCharCode(0x100 + index)),
+  ..."‚„†‡‰‹›′″€™−→←↑↓≤≥"
+];
+const EXTENDED_CORPUS = ["Łódź, Kraków — Škoda Žilina, Ölçek İş", "£50 → €60, ©2026 Foo™, ½ ≥ 5"];
 const TRIPLES = ASCII.map((c) => "ff" + c);
 const LIGATURE_BOUNDARIES = [];
 for (const ligature of ["ff", "fi", "fl", "ffi", "ffl"]) {
@@ -147,6 +156,17 @@ for (const [family, def] of Object.entries(DOCUMENT_FONT_FAMILIES)) {
     };
     for (const raw of CORPUS) check(raw);
     for (const pair of PAIRS) check(pair);
+    const advances = def.faces[face].metrics.adv;
+    const measured = EXTENDED.filter((character) => advances[character] !== undefined);
+    for (const character of measured) {
+      for (const neighbour of COMMON) { check(character + neighbour); check(neighbour + character); }
+    }
+    for (const raw of EXTENDED_CORPUS) if ([...raw].every((character) => advances[character] !== undefined)) check(raw);
+    if (hasGlyphBoundaryMetrics) {
+      for (const ligature of ["ff", "fi", "fl", "ffi", "ffl"]) {
+        for (const character of measured) { check(character + ligature); check(ligature + character); }
+      }
+    }
     for (const triple of TRIPLES) check(triple);
     // The expanded catalog carries glyph-boundary kerning. Legacy families
     // retain their existing metrics and established corpus/pair/triple gate.
