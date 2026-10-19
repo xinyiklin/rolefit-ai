@@ -194,6 +194,16 @@ function validatePdf(data: Buffer): void {
   }
 }
 
+// Throws when the bytes are not a valid file of the kind their path names.
+function validateManagedData(path: string, data: Buffer): void {
+  if (path === "applications.json") parseStoredApplications(data.toString("utf8"));
+  else if (path.endsWith(".pdf")) validatePdf(data);
+  else if (path.startsWith("cover-letters/")) validateCoverLetterText(data);
+  else if (path.endsWith(".cover")) parseCoverLetterFile(data);
+  else if (path.startsWith("applications/") && path.endsWith(".resume")) parseResumeFile(data);
+  else validateBaseResumeText(basename(path), data);
+}
+
 async function readManagedFile(
   workspaceDir: string,
   path: string,
@@ -224,12 +234,7 @@ async function readManagedFile(
   }
   try {
     // Validate the exact bytes being packaged, not the server's cached tracker.
-    if (path === "applications.json") parseStoredApplications(data.toString("utf8"));
-    else if (path.endsWith(".pdf")) validatePdf(data);
-    else if (path.startsWith("cover-letters/")) validateCoverLetterText(data);
-    else if (path.endsWith(".cover")) parseCoverLetterFile(data);
-    else if (path.startsWith("applications/") && path.endsWith(".resume")) parseResumeFile(data);
-    else validateBaseResumeText(basename(path), data);
+    validateManagedData(path, data);
   } catch {
     // A history snapshot that no longer validates (retired format, corrupt, or
     // oversized) cannot be restored anyway, so it must not block live documents.
@@ -303,13 +308,32 @@ function decodeBackupFile(file: WorkspaceBackupFile): Buffer {
   return data;
 }
 
-async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnvelope): Promise<void> {
+function invalidRestoredFileMessage(path: string): string {
+  if (path.endsWith(".pdf")) return "The backup contains an invalid saved application PDF.";
+  if (path.endsWith(".cover")) return "The backup contains an invalid saved .cover file.";
+  if (path.startsWith("applications/")) return "The backup contains an invalid saved application .resume file.";
+  return "The backup contains an invalid base-resume file.";
+}
+
+// Returns how many files were staged; history that no longer validates is left out.
+async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnvelope): Promise<number> {
   await mkdir(stageDir, { recursive: true, mode: 0o700 });
+  let staged = 0;
   for (const file of envelope.files) {
     const data = decodeBackupFile(file);
+    if (isHistoryPath(file.path)) {
+      // Integrity stays strict, but history today's validators reject could
+      // not be opened anyway, so it must not block restoring live documents.
+      try {
+        validateManagedData(file.path, data);
+      } catch {
+        continue;
+      }
+    }
     const destination = join(stageDir, ...file.path.split("/"));
     await mkdir(dirname(destination), { recursive: true, mode: 0o700 });
     await writeFile(destination, data, { mode: 0o600, flag: "wx" });
+    staged += 1;
   }
 
   // Re-run domain validators against the complete staged tree. Nothing in the
@@ -336,34 +360,16 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
     );
   }
   for (const file of envelope.files) {
+    // The tracker was validated above; history was validated before staging.
+    if (file.path === "applications.json" || isHistoryPath(file.path)) continue;
     const data = await readFile(join(stageDir, ...file.path.split("/")));
-    if (file.path.endsWith(".pdf")) {
-      try {
-        validatePdf(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved application PDF.");
-      }
-    } else if (file.path.endsWith(".cover")) {
-      try {
-        if (file.path.startsWith("cover-letters/")) validateCoverLetterText(data);
-        else parseCoverLetterFile(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved .cover file.");
-      }
-    } else if (file.path.startsWith("applications/") && file.path.endsWith(".resume")) {
-      try {
-        parseResumeFile(data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved application .resume file.");
-      }
-    } else if (file.path !== "applications.json") {
-      try {
-        validateBaseResumeText(basename(file.path), data);
-      } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid base-resume file.");
-      }
+    try {
+      validateManagedData(file.path, data);
+    } catch {
+      throw new WorkspaceBackupError(invalidRestoredFileMessage(file.path));
     }
   }
+  return staged;
 }
 
 export async function restoreWorkspaceBackup(
@@ -404,7 +410,7 @@ export async function restoreWorkspaceBackup(
     const previousDir = join(parent, `${leaf}.restore-backup-${backupStamp(now)}-${nonce.slice(0, 8)}`);
     let previousWorkspaceKept = false;
     try {
-      await writeStagedBackup(stageDir, envelope);
+      const restoredFiles = await writeStagedBackup(stageDir, envelope);
       // Every restore gets a generation marker, even when the backup has no
       // optional workspace preferences. The browser uses it to clear recovery
       // drafts from the pre-restore workspace without inventing preferences.
@@ -483,7 +489,7 @@ export async function restoreWorkspaceBackup(
           409
         );
       }
-      return { restoredFiles: envelope.files.length, previousWorkspaceKept };
+      return { restoredFiles, previousWorkspaceKept };
     } catch (error) {
       if (error instanceof WorkspaceBackupError) throw error;
       throw new WorkspaceBackupError("The workspace could not be restored safely. The current workspace was kept.", 500);

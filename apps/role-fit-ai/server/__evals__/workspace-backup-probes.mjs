@@ -493,17 +493,44 @@ try {
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "cover-letter validation failure leaves active workspace unchanged");
 
-  const invalidCoverHistory = replaceEntry(
-    withPreferences,
-    "cover-letters/.trash/2026-10-07T04-13-57-000Z__default.cover",
-    "{}"
-  );
+  const retiredLiveResume = replaceEntry(withPreferences, "resumes/default.resume", JSON.stringify(retiredHistory));
   await assert.rejects(
-    () => restoreWorkspaceBackup(targetDir, invalidCoverHistory, fixedDate),
-    (error) => error instanceof WorkspaceBackupError && /invalid saved .cover file/.test(error.message),
-    "a backup carrying invalid cover-letter history is rejected"
+    () => restoreWorkspaceBackup(targetDir, retiredLiveResume, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid base-resume file/.test(error.message),
+    "a live base resume in a retired format still fails the restore"
   );
-  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "history validation failure leaves active workspace unchanged");
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "a live resume failure leaves active workspace unchanged");
+
+  // History today's validators reject is left out; live documents still restore.
+  const staleResumePath = "resumes/.trash/2026-07-19T12-00-00-000Z__default.resume";
+  const staleCoverPath = "cover-letters/.trash/2026-10-07T04-13-57-000Z__default.cover";
+  const staleHistory = replaceEntry(
+    replaceEntry(withPreferences, staleCoverPath, "{}"),
+    staleResumePath,
+    JSON.stringify(retiredHistory)
+  );
+  const staleHistoryTarget = join(isolatedRoot, "stale-history-target");
+  await mkdir(join(staleHistoryTarget, "resumes"), { recursive: true });
+  const staleRestore = await restoreWorkspaceBackup(staleHistoryTarget, staleHistory, fixedDate);
+  assert.equal(staleRestore.restoredFiles, staleHistory.files.length - 2, "only the history that still validates is restored");
+  for (const path of [staleResumePath, staleCoverPath]) {
+    await assert.rejects(readFile(join(staleHistoryTarget, ...path.split("/"))), { code: "ENOENT" }, `${path} is left out`);
+  }
+  assert.equal(
+    await readFile(join(staleHistoryTarget, "cover-letters", "default.cover"), "utf8"),
+    portableCoverText,
+    "live documents restore beside skipped history"
+  );
+  const tamperedHistory = {
+    ...withPreferences,
+    files: withPreferences.files.map((file) => file.path === staleCoverPath ? { ...file, data: "{}" } : file)
+  };
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, tamperedHistory, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /integrity check/.test(error.message),
+    "history still fails the restore when its bytes do not match the backup's checksum"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "a history integrity failure leaves active workspace unchanged");
 
 
   await assert.rejects(
