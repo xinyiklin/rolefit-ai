@@ -89,9 +89,7 @@ D-entries in `docs/decisions.md`.
   no blockers. Unverified: the companion UI flow itself (no packaged run).
   Follow-ups offered: skipped-history count in the companion (plus the
   always-false `includesPreferences` flag), "Recently deleted" applications,
-  and a history retention cap. Restore still rejects a backup whose history
-  fails today's validators; unaddressed (old backups are already
-  unrestorable for earlier format changes, e.g. D058's `bulletIndentPt`).
+  and a history retention cap.
   0.18.0 preview prepared (minor: backup format); notes
   `apps/role-fit-ai/docs/releases/0.18.0-beta.1.md`.
 
