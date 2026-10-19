@@ -33,7 +33,10 @@ traversing paths, encoding mismatches, invalid sizes/checksums, more than 5,000
 files, any one file over 48 MB, and more than 256 MB of decoded workspace data.
 The companion refuses backup files over 384 MB before reading or transferring
 them, leaving room for base64 and JSON overhead. These limits are sized to carry
-a tracker at its 2,000-application limit with its saved PDFs.
+a tracker at its 2,000-application limit with its saved PDFs. Live files always
+claim the limits first; history is best-effort and fills what remains, newest
+first, so old history that does not fit is left out rather than failing the
+backup.
 
 The bundle is intentionally plain, inspectable JSON and is **not encrypted**.
 Treat it like the resumes and application records it contains.
@@ -129,20 +132,23 @@ Only files owned and validated by RoleFit enter the bundle:
 - validated `applications.json` tracker data;
 - current-schema application document sources or PDFs and PDF attachments under
   tracked `applications/<id>/` directories;
+- saved cover letters under `cover-letters/` and their history under
+  `cover-letters/.trash/`;
 - the canonical allowlisted workspace preferences described above.
 
 Generated cover letters, application answers (with the facts the user added to
 each saved revision), job targets, and tailored resume snapshots already stored
 on tracker records travel inside `applications.json`. A backup holding saved
 answer facts restores only into a build that understands them.
-Candidate-authored `cover-letters/*.cover` files and their local `.trash`
-history remain standalone editable documents outside the portable workspace
-contract. Download those `.cover` variants separately when moving devices.
+History snapshots (resume and cover letter) that no longer validate (retired format, corrupt, or oversized) stay on disk but are
+left out, since they could not be restored.
 
 The single live schema above carries the tracked application's one active
 Resume/Cover letter representation (`resume.resume` or `resume.pdf`,
 `cover.cover` or `cover.pdf`) plus validated PDF files under `attachments/`.
 Application paths whose ids are absent from `applications.json` are excluded.
+Any other managed file that fails validation stops the backup with an error
+naming its workspace path.
 Creation and restore also require an exact match between tracker
 artifact/attachment metadata and bundled bytes, so a portable restore cannot
 claim a document exists when its file is missing or install an untracked file.
@@ -156,7 +162,9 @@ The portable contract never includes:
 - `.env`, companion settings, local-site port, or Electron IPC state;
 - per-tab presence/session identifiers or autosave recovery drafts;
 - document/view preferences owned by shared Typeset storage;
-- saved standalone cover-letter variants and their local history;
+- files kept from deleted applications under `applications/.trash/`, which
+  have no tracker record and no in-app restore; they stay local, and after a
+  restore remain only in the previous-workspace safety copy;
 - arbitrary files, symlinks, temporary files, or previous restore safety copies.
 
 On another device, the user adds providers again.
@@ -164,8 +172,8 @@ On another device, the user adds providers again.
 ## Snapshot and restore behavior
 
 Backup obtains the base-workspace and application locks together. Tracker reads
-and mutations, PDF reads/writes, extension duplicate checks, base-resume
-mutations, backup, and restore therefore cannot observe overlapping saved-state
+and mutations, PDF reads/writes, extension duplicate checks, base-resume and
+cover-letter mutations, backup, and restore therefore cannot observe overlapping saved-state
 transitions.
 
 Restore is replace-not-merge:
@@ -178,7 +186,7 @@ Restore is replace-not-merge:
    envelope carries `preferences`, stage them as a
    `source: "restore"` `workspace-preferences.json` alongside the files. Always
    stage the independent restore-generation marker.
-4. Re-run the strict `.resume`, tracker, and PDF domain validators against the
+4. Re-run the strict `.resume`, `.cover`, tracker, and PDF domain validators against the
    complete staged tree.
 5. Recheck live browser presence after staging and abort without replacement if
    a tab appeared while the restore was waiting or validating.
@@ -224,7 +232,8 @@ companion restart before enabling transfer.
 
 The auto-discovered
 `server/__evals__/workspace-backup-probes.mjs` covers managed-file discovery,
-symlink/arbitrary-file exclusion, preference-mirror inclusion and corrupt-file
+symlink/arbitrary-file exclusion, unrestorable-history skipping, path-named
+invalid-file failures, preference-mirror inclusion and corrupt-file
 tolerance, pre-allocation capacity bounds, checksum-preserved round trips,
 retained previous workspaces, marker-only restores, both live-tab restore
 gates, restore-generation rejection of stale queued writes, and

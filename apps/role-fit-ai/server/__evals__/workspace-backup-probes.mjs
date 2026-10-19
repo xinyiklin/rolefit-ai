@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,6 +25,7 @@ import {
 import {
   WORKSPACE_PREFERENCES_FILE_NAME,
   MAX_WORKSPACE_BACKUP_BYTES,
+  MAX_WORKSPACE_BACKUP_FILE_BYTES,
   MAX_WORKSPACE_BACKUP_FILES,
   WORKSPACE_BACKUP_TOO_LARGE_MESSAGE,
   WORKSPACE_RESTORE_MARKER_FILE_NAME,
@@ -84,6 +85,13 @@ try {
     starterText,
     "utf8"
   );
+  const retiredHistory = JSON.parse(starterText);
+  retiredHistory.style.letterSpacingPt = 0;
+  await writeFile(
+    join(sourceDir, "resumes", ".trash", "2026-07-14T04-43-02-000Z__default.resume"),
+    JSON.stringify(retiredHistory, null, 2),
+    "utf8"
+  );
   await writeApplications(sourceDir, [{
     id: "application-1",
     title: "Portable role",
@@ -126,6 +134,23 @@ try {
     "%PDF-1.7\nattachment",
     "utf8"
   );
+  await mkdir(join(sourceDir, "cover-letters", ".trash"), { recursive: true });
+  await writeFile(join(sourceDir, "cover-letters", "default.cover"), portableCoverText, "utf8");
+  await writeFile(join(sourceDir, "cover-letters", "notes.txt"), "not app-managed", "utf8");
+  await writeFile(
+    join(sourceDir, "cover-letters", ".trash", "2026-10-07T04-13-57-000Z__default.cover"),
+    portableCoverText,
+    "utf8"
+  );
+  await writeFile(join(sourceDir, "cover-letters", ".trash", "2026-07-20T00-00-00-000Z__default.cover"), "{}", "utf8");
+  const archivedApplication = join(
+    sourceDir,
+    "applications",
+    ".trash",
+    "application-0-2026-10-09T03-57-34-284Z-b9f56447-7fcf-4ca6-aa18-8d4ea1e91c7d"
+  );
+  await mkdir(archivedApplication, { recursive: true });
+  await writeFile(join(archivedApplication, "resume.pdf"), "%PDF-1.7\narchived", "utf8");
   await writeFile(join(sourceDir, "notes-private.txt"), "not app-managed", "utf8");
   try {
     await symlink(
@@ -149,10 +174,16 @@ try {
       "applications/application-1/attachments/writing sample.pdf",
       "applications/application-1/cover.cover",
       "applications/application-1/resume.resume",
+      "cover-letters/.trash/2026-10-07T04-13-57-000Z__default.cover",
+      "cover-letters/default.cover",
       "resumes/.trash/2026-07-19T12-00-00-000Z__default.resume",
       "resumes/default.resume"
     ],
-    "export contains every app-managed file and excludes arbitrary files and symlinks"
+    "export contains every app-managed file and excludes arbitrary files, symlinks, deleted applications, and unrestorable history"
+  );
+  assert.ok(
+    (await readdir(join(sourceDir, "resumes", ".trash"))).includes("2026-07-14T04-43-02-000Z__default.resume"),
+    "a skipped history snapshot stays on disk"
   );
   assert.equal(backup.files.find((file) => file.path.endsWith("resume.resume"))?.encoding, "utf8");
   assert.equal(backup.files.find((file) => file.path.endsWith("cover.cover"))?.encoding, "utf8");
@@ -194,7 +225,14 @@ try {
   await writeFile(join(targetDir, "keep-me.txt"), "previous unknown workspace file", "utf8");
 
   const result = await restoreWorkspaceBackup(targetDir, withPreferences, fixedDate);
-  assert.equal(result.restoredFiles, 6);
+  assert.equal(result.restoredFiles, 8);
+  assert.equal(await readFile(join(targetDir, "cover-letters", "default.cover"), "utf8"), portableCoverText, "saved cover letters restore");
+  assert.equal(
+    await readFile(join(targetDir, "cover-letters", ".trash", "2026-10-07T04-13-57-000Z__default.cover"), "utf8"),
+    portableCoverText,
+    "cover-letter history restores"
+  );
+
   assert.equal(result.previousWorkspaceKept, true);
   assert.equal(JSON.parse(await readFile(join(targetDir, "resumes", "default.resume"), "utf8")).document.header.name, "Portable Candidate");
   assert.equal(await readFile(join(targetDir, "applications", "application-1", "resume.resume"), "utf8"), portableResumeText);
@@ -450,10 +488,23 @@ try {
   const invalidCover = replaceEntry(withPreferences, "applications/application-1/cover.cover", "{\"format\":\"wrong\"}");
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, invalidCover, fixedDate),
-    (error) => error instanceof WorkspaceBackupError && /invalid saved application .cover file/.test(error.message),
+    (error) => error instanceof WorkspaceBackupError && /invalid saved .cover file/.test(error.message),
     "invalid strict cover-letter source is rejected"
   );
   assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "cover-letter validation failure leaves active workspace unchanged");
+
+  const invalidCoverHistory = replaceEntry(
+    withPreferences,
+    "cover-letters/.trash/2026-10-07T04-13-57-000Z__default.cover",
+    "{}"
+  );
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, invalidCoverHistory, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid saved .cover file/.test(error.message),
+    "a backup carrying invalid cover-letter history is rejected"
+  );
+  assert.deepEqual(await snapshot(targetDir), beforeFailedRestore, "history validation failure leaves active workspace unchanged");
+
 
   await assert.rejects(
     () => restoreWorkspaceBackup(targetDir, { ...withPreferences, files: [...withPreferences.files, withPreferences.files[0]] }, fixedDate),
@@ -467,6 +518,20 @@ try {
     }, fixedDate),
     /unsupported file path/,
     "path traversal is rejected"
+  );
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, {
+      ...withPreferences,
+      files: [{ ...withPreferences.files[0], path: "applications/.trash/app-1-2026-10-09T03-57-34-284Z/resume.pdf" }]
+    }, fixedDate),
+    /unsupported file path/,
+    "files kept from deleted applications cannot be installed by a backup"
+  );
+  const oversizedCover = replaceEntry(withPreferences, "cover-letters/default.cover", portableCoverText + " ".repeat(200_000));
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, oversizedCover, fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /invalid saved .cover file/.test(error.message),
+    "a saved cover letter larger than the app can open is rejected"
   );
 
   // --- Workspace preferences <-> backup envelope ---
@@ -502,6 +567,80 @@ try {
   const corruptPreferences = await createWorkspaceBackup(prefsDir, fixedDate);
   assert.equal(corruptPreferences.preferences, undefined, "corrupt preferences are skipped and do not block the backup");
   assert.equal(corruptPreferences.files.length, withStoredPreferences.files.length, "resume files still back up with corrupt preferences present");
+
+  // --- Invalid live files fail the backup and name the offending path ---
+  const namesInvalidFile = (path) => (error) =>
+    error instanceof WorkspaceBackupError && error.status === 500 &&
+    error.message.startsWith(`${path} is unreadable or invalid`);
+  const invalidLiveDir = join(isolatedRoot, "invalid-live-workspace");
+  await mkdir(join(invalidLiveDir, "resumes"), { recursive: true });
+  await writeFile(join(invalidLiveDir, "resumes", "default.resume"), JSON.stringify(retiredHistory), "utf8");
+  await assert.rejects(
+    () => createWorkspaceBackup(invalidLiveDir, fixedDate),
+    namesInvalidFile("resumes/default.resume"),
+    "an invalid live base resume blocks the backup by name"
+  );
+  await writeFile(join(invalidLiveDir, "resumes", "default.resume"), portableResumeText, "utf8");
+  await writeFile(join(invalidLiveDir, "applications.json"), "{ not valid json", "utf8");
+  await assert.rejects(
+    () => createWorkspaceBackup(invalidLiveDir, fixedDate),
+    namesInvalidFile("applications.json"),
+    "an invalid tracker blocks the backup by name"
+  );
+  await rm(join(invalidLiveDir, "applications.json"));
+  await cp(join(sourceDir, "applications.json"), join(invalidLiveDir, "applications.json"));
+  await cp(join(sourceDir, "applications"), join(invalidLiveDir, "applications"), { recursive: true });
+  await writeFile(
+    join(invalidLiveDir, "applications", "application-1", "attachments", "writing sample.pdf"),
+    "not a pdf",
+    "utf8"
+  );
+  await assert.rejects(
+    () => createWorkspaceBackup(invalidLiveDir, fixedDate),
+    namesInvalidFile("applications/application-1/attachments/writing sample.pdf"),
+    "an invalid application PDF blocks the backup by name"
+  );
+  await cp(
+    join(sourceDir, "applications", "application-1", "attachments", "writing sample.pdf"),
+    join(invalidLiveDir, "applications", "application-1", "attachments", "writing sample.pdf")
+  );
+  await writeFile(join(invalidLiveDir, "applications", "application-1", "cover.cover"), "{\"format\":\"wrong\"}", "utf8");
+  await assert.rejects(
+    () => createWorkspaceBackup(invalidLiveDir, fixedDate),
+    namesInvalidFile("applications/application-1/cover.cover"),
+    "an invalid application cover letter blocks the backup by name"
+  );
+  await cp(join(sourceDir, "applications", "application-1", "cover.cover"), join(invalidLiveDir, "applications", "application-1", "cover.cover"));
+  await mkdir(join(invalidLiveDir, "cover-letters"), { recursive: true });
+  await writeFile(join(invalidLiveDir, "cover-letters", "default.cover"), "{}", "utf8");
+  await assert.rejects(
+    () => createWorkspaceBackup(invalidLiveDir, fixedDate),
+    namesInvalidFile("cover-letters/default.cover"),
+    "an invalid saved cover letter blocks the backup by name"
+  );
+
+  // --- History is best-effort within the backup limits ---
+  const historyBudgetDir = join(isolatedRoot, "history-budget-workspace");
+  await mkdir(join(historyBudgetDir, "resumes"), { recursive: true });
+  await writeFile(join(historyBudgetDir, "resumes", "default.resume"), portableResumeText, "utf8");
+  await mkdir(join(historyBudgetDir, "cover-letters", ".trash"), { recursive: true });
+  const coverHistoryPath = (index) =>
+    `cover-letters/.trash/${new Date(Date.UTC(2026, 0, 1) + index * 1000).toISOString().replace(/[:.]/g, "-")}__default.cover`;
+  for (let first = 0; first < MAX_WORKSPACE_BACKUP_FILES; first += 500) {
+    await Promise.all(Array.from({ length: 500 }, (_, offset) =>
+      writeFile(join(historyBudgetDir, ...coverHistoryPath(first + offset).split("/")), portableCoverText, "utf8")
+    ));
+  }
+  const oversized = Buffer.alloc(MAX_WORKSPACE_BACKUP_FILE_BYTES + 1, 0x20);
+  await writeFile(join(historyBudgetDir, ...coverHistoryPath(MAX_WORKSPACE_BACKUP_FILES).split("/")), oversized);
+  const budgeted = await createWorkspaceBackup(historyBudgetDir, fixedDate);
+  const budgetedPaths = new Set(budgeted.files.map((file) => file.path));
+  assert.equal(budgeted.files.length, MAX_WORKSPACE_BACKUP_FILES, "history fills the file limit instead of failing the backup");
+  assert.ok(budgetedPaths.has("resumes/default.resume"), "live files always claim the limits first");
+  assert.ok(!budgetedPaths.has(coverHistoryPath(MAX_WORKSPACE_BACKUP_FILES)), "an oversized history file is skipped");
+  assert.ok(budgetedPaths.has(coverHistoryPath(MAX_WORKSPACE_BACKUP_FILES - 1)), "the newest history is kept");
+  assert.ok(budgetedPaths.has(coverHistoryPath(1)), "history is kept newest first until the limit");
+  assert.ok(!budgetedPaths.has(coverHistoryPath(0)), "the oldest history is what falls outside the limit");
 
   // Capacity checks are explicit pre-allocation boundaries, not a final parser
   // pass after all file bodies have already accumulated in memory.

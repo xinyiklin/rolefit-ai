@@ -371,7 +371,16 @@ assert.equal(
   true,
   "a validated PDF attachment is managed in the current schema"
 );
-assert.equal(isManagedWorkspaceBackupPath("cover-letters/default.cover"), false, "editable cover letters stay outside portable backups");
+assert.equal(isManagedWorkspaceBackupPath("cover-letters/default.cover"), true, "a saved cover letter is managed");
+assert.equal(
+  isManagedWorkspaceBackupPath("cover-letters/.trash/2026-10-07T04-13-57-000Z__applied-ai.cover"),
+  true,
+  "cover-letter history is managed"
+);
+assert.equal(isManagedWorkspaceBackupPath("cover-letters/notes.txt"), false, "only .cover files are managed cover letters");
+const archivedApplication = "applications/.trash/acme-swe-2026-10-09T03-57-34-284Z-b9f56447-7fcf-4ca6-aa18-8d4ea1e91c7d";
+assert.equal(isManagedWorkspaceBackupPath(`${archivedApplication}/resume.pdf`), false, "a deleted application's archived files stay local");
+assert.equal(isManagedWorkspaceBackupPath(`${archivedApplication}/attachments/sample.pdf`), false, "archived attachments stay local");
 assert.equal(isManagedWorkspaceBackupPath("secrets.env"), false, "an arbitrary file is not managed");
 assert.equal(isManagedWorkspaceBackupPath("../applications.json"), false, "a traversal path is never managed");
 

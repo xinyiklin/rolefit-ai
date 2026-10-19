@@ -14,7 +14,8 @@ export const WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION = 1 as const;
 export const WORKSPACE_RESTORE_MARKER_FILE_NAME = "workspace-restore.json";
 
 // Sized to carry a tracker at its 2,000-application limit (server/applications/
-// schema.ts) with its saved PDFs; the JSON cap leaves room for base64 overhead.
+// schema.ts) with its saved PDFs; history fills what remains, newest first. The
+// JSON cap leaves room for base64 overhead.
 export const MAX_WORKSPACE_BACKUP_FILES = 5_000;
 export const MAX_WORKSPACE_BACKUP_FILE_BYTES = 48_000_000;
 export const MAX_WORKSPACE_BACKUP_BYTES = 256_000_000;
@@ -47,6 +48,8 @@ const RESUME_RE = /^resumes\/[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const RESUME_HISTORY_RE = /^resumes\/\.trash\/[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const BASE_RESUME_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.resume$/;
 const BASE_RESUME_TEXT_FILE_NAME_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:txt|md|csv)$/;
+const COVER_LETTER_RE = /^cover-letters\/[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
+const COVER_LETTER_HISTORY_RE = /^cover-letters\/\.trash\/[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.cover$/;
 const APPLICATION_DOCUMENT_RE =
   /^applications\/[A-Za-z0-9_-]{1,80}\/(?:resume\.(?:pdf|resume)|cover\.(?:pdf|cover))$/;
 const APPLICATION_ATTACHMENT_RE =
@@ -68,7 +71,9 @@ export function isManagedWorkspaceBackupPath(path: string): boolean {
     || RESUME_RE.test(path)
     || RESUME_HISTORY_RE.test(path)
     || APPLICATION_DOCUMENT_RE.test(path)
-    || APPLICATION_ATTACHMENT_RE.test(path);
+    || APPLICATION_ATTACHMENT_RE.test(path)
+    || COVER_LETTER_RE.test(path)
+    || COVER_LETTER_HISTORY_RE.test(path);
 }
 
 export function workspaceBackupEncodingForPath(path: string): "utf8" | "base64" {

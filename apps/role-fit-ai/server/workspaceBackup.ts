@@ -23,6 +23,7 @@ import {
 } from "./applications/storage.ts";
 import { ApplicationsStorageError } from "./applications/schema.ts";
 import { ensureJobWorkspace, validateBaseResumeText, withWorkspaceLock } from "./workspace.ts";
+import { validateCoverLetterText } from "./coverLetterWorkspace.ts";
 import {
   beginWorkspaceRestore,
   endWorkspaceRestore,
@@ -40,6 +41,12 @@ import { safeAttachmentFileName } from "./applications/documents.ts";
 
 const RESUME_FILE_RE = /^[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
 const HISTORY_FILE_RE = /^[A-Za-z0-9T+-]+Z?__[A-Za-z0-9][A-Za-z0-9_-]*\.(?:resume|txt|md|csv)$/;
+const RESUME_HISTORY_PREFIX = "resumes/.trash/";
+const HISTORY_PREFIXES = [RESUME_HISTORY_PREFIX, "cover-letters/.trash/"];
+const isHistoryPath = (path: string): boolean => HISTORY_PREFIXES.some((prefix) => path.startsWith(prefix));
+// History names start with an ISO-like stamp (`2026-10-09T03-57-34-284Z__`), so
+// they sort by age.
+const historyStamp = (path: string): string => path.slice(path.lastIndexOf("/") + 1).split("__")[0];
 const APPLICATION_ID_RE = /^[A-Za-z0-9_-]{1,80}$/;
 const APPLICATION_DOCUMENT_NAMES = new Set([
   "resume.pdf",
@@ -111,9 +118,21 @@ function expectedApplicationPaths(
   return paths;
 }
 
+// The companion drops workspace errors over 240 characters, so keep the
+// fixed text short enough for an 80-character application id.
+function invalidManagedFile(path: string): WorkspaceBackupError {
+  return new WorkspaceBackupError(`${path} is unreadable or invalid; repair or replace it.`, 500);
+}
+
 async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
   const paths: string[] = [];
-  const applications = await readApplications(workspaceDir);
+  let applications: Awaited<ReturnType<typeof readApplications>>;
+  try {
+    applications = await readApplications(workspaceDir);
+  } catch (error) {
+    if (error instanceof ApplicationsStorageError) throw invalidManagedFile("applications.json");
+    throw error;
+  }
   const trackedApplicationIds = new Set(applications.map((application) => application.id));
   const expectedPaths = expectedApplicationPaths(applications);
   for (const entry of await safeEntries(workspaceDir)) {
@@ -126,7 +145,13 @@ async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
     if (entry.isFile() && RESUME_FILE_RE.test(entry.name)) paths.push(`resumes/${entry.name}`);
   }
   for (const entry of await safeEntries(join(workspaceDir, "resumes", ".trash"))) {
-    if (entry.isFile() && HISTORY_FILE_RE.test(entry.name)) paths.push(`resumes/.trash/${entry.name}`);
+    if (entry.isFile() && HISTORY_FILE_RE.test(entry.name)) paths.push(`${RESUME_HISTORY_PREFIX}${entry.name}`);
+  }
+  for (const directory of ["cover-letters", "cover-letters/.trash"]) {
+    for (const entry of await safeEntries(join(workspaceDir, ...directory.split("/")))) {
+      const path = `${directory}/${entry.name}`;
+      if (entry.isFile() && isManagedWorkspaceBackupPath(path)) paths.push(path);
+    }
   }
   for (const application of await safeEntries(join(workspaceDir, "applications"))) {
     if (
@@ -173,49 +198,42 @@ async function readManagedFile(
   workspaceDir: string,
   path: string,
   remainingBytes: number
-): Promise<WorkspaceBackupFile> {
+): Promise<WorkspaceBackupFile | null> {
   if (!isManagedWorkspaceBackupPath(path)) throw new WorkspaceBackupError("The workspace contains an unsupported managed path.", 500);
   const filePath = join(workspaceDir, ...path.split("/"));
-  const details = await stat(filePath);
+  const history = isHistoryPath(path);
+  const skipOrFail = (): null => {
+    if (history) return null;
+    throw invalidManagedFile(path);
+  };
+  const details = await stat(filePath).catch(skipOrFail);
+  if (!details) return null;
   if (!details.isFile() || details.size > MAX_WORKSPACE_BACKUP_FILE_BYTES) {
+    if (history) return null;
     throw new WorkspaceBackupError(`The managed workspace file ${path} is too large to back up safely.`, 413);
   }
   if (details.size > remainingBytes) {
+    if (history) return null;
     throw new WorkspaceBackupError(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE, 413);
   }
-  const data = await readFile(filePath);
+  const data = await readFile(filePath).catch(skipOrFail);
+  if (!data) return null;
   if (data.byteLength > MAX_WORKSPACE_BACKUP_FILE_BYTES || data.byteLength > remainingBytes) {
+    if (history) return null;
     throw new WorkspaceBackupError(WORKSPACE_BACKUP_TOO_LARGE_MESSAGE, 413);
   }
-  if (path === "applications.json") {
+  try {
     // Validate the exact bytes being packaged, not the server's cached tracker.
-    try {
-      parseStoredApplications(data.toString("utf8"));
-    } catch {
-      throw new ApplicationsStorageError();
-    }
-  } else if (path.endsWith(".pdf")) {
-    validatePdf(data);
-  } else if (path.endsWith(".cover")) {
-    try {
-      parseCoverLetterFile(data);
-    } catch {
-      throw new WorkspaceBackupError(
-        "A saved application .cover file is invalid. Repair or remove it before backing up.",
-        500
-      );
-    }
-  } else if (path.startsWith("applications/") && path.endsWith(".resume")) {
-    try {
-      parseResumeFile(data);
-    } catch {
-      throw new WorkspaceBackupError(
-        "A saved application .resume file is invalid. Repair or remove it before backing up.",
-        500
-      );
-    }
-  } else {
-    validateBaseResumeText(basename(path), data);
+    if (path === "applications.json") parseStoredApplications(data.toString("utf8"));
+    else if (path.endsWith(".pdf")) validatePdf(data);
+    else if (path.startsWith("cover-letters/")) validateCoverLetterText(data);
+    else if (path.endsWith(".cover")) parseCoverLetterFile(data);
+    else if (path.startsWith("applications/") && path.endsWith(".resume")) parseResumeFile(data);
+    else validateBaseResumeText(basename(path), data);
+  } catch {
+    // A history snapshot that no longer validates (retired format, corrupt, or
+    // oversized) cannot be restored anyway, so it must not block live documents.
+    return skipOrFail();
   }
   const encoding = workspaceBackupEncodingForPath(path);
   return {
@@ -231,15 +249,24 @@ export async function createWorkspaceBackup(workspaceDir: string, now = new Date
   return withWorkspaceLock(() => withApplicationsLock(async () => {
     await ensureJobWorkspace(workspaceDir);
     const paths = await managedWorkspacePaths(workspaceDir);
-    assertWorkspaceBackupCapacity(paths.length, 0);
+    const livePaths = paths.filter((path) => !isHistoryPath(path));
+    // History is best-effort and never pruned: live files claim the limits
+    // first, then the newest history that still fits.
+    const historyPaths = paths
+      .filter(isHistoryPath)
+      .sort((a, b) => historyStamp(b).localeCompare(historyStamp(a)) || a.localeCompare(b));
+    assertWorkspaceBackupCapacity(livePaths.length, 0);
     const files: WorkspaceBackupFile[] = [];
     let totalBytes = 0;
-    for (const path of paths) {
+    for (const path of [...livePaths, ...historyPaths]) {
+      if (files.length >= MAX_WORKSPACE_BACKUP_FILES) break;
       const file = await readManagedFile(workspaceDir, path, MAX_WORKSPACE_BACKUP_BYTES - totalBytes);
+      if (!file) continue;
       totalBytes += file.byteLength;
       assertWorkspaceBackupCapacity(files.length + 1, totalBytes);
       files.push(file);
     }
+    files.sort((a, b) => a.path.localeCompare(b.path));
     const envelope: WorkspaceBackupEnvelope = {
       format: WORKSPACE_BACKUP_FORMAT,
       schemaVersion: WORKSPACE_BACKUP_SCHEMA_VERSION,
@@ -318,9 +345,10 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
       }
     } else if (file.path.endsWith(".cover")) {
       try {
-        parseCoverLetterFile(data);
+        if (file.path.startsWith("cover-letters/")) validateCoverLetterText(data);
+        else parseCoverLetterFile(data);
       } catch {
-        throw new WorkspaceBackupError("The backup contains an invalid saved application .cover file.");
+        throw new WorkspaceBackupError("The backup contains an invalid saved .cover file.");
       }
     } else if (file.path.startsWith("applications/") && file.path.endsWith(".resume")) {
       try {
