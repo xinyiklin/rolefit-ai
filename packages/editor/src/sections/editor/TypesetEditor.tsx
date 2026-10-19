@@ -1980,8 +1980,8 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
   // Returns false when there is no such selection, so every caller can fall
   // through to its single-field path unchanged.
   const commitCrossFieldIntent = useCallback(
-    (intent: QueuedIntent): boolean => {
-      const ranges = readRanges();
+    (intent: QueuedIntent, recorded?: FieldRange[]): boolean => {
+      const ranges = recorded ?? readRanges();
       if (!ranges) return false;
       switch (intent.kind) {
         case "insert":
@@ -3482,6 +3482,7 @@ export const TypesetEditor = forwardRef<TypesetEditorHandle, TypesetEditorProps>
     commitMergeBullet,
     commitToggleMark: applyMark,
     commitCrossFieldIntent,
+    readCrossFieldRanges: readRanges,
     selectionClipboardHtml,
     crossFieldClipboard,
     commitClearFormatting,

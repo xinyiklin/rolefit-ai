@@ -35,6 +35,7 @@ import {
   TYPESET_SELECTION_CLIPBOARD_MIME
 } from "./clipboardPrivateCodec.ts";
 import { clipboardBlocks } from "./documentPasteMapping.ts";
+import type { FieldRange } from "./multiFieldSelection.ts";
 
 import { isWrappedEntryField, textStep } from "./wrappedFieldNavigation.ts";
 
@@ -122,8 +123,10 @@ type TypesetInputEventsArgs = {
   breakTextHistoryGroup: () => void;
   // A selection crossing field boundaries (Select All, a drag across
   // paragraphs) has no single mapped field. The host applies these as one
-  // batched edit and returns true when it consumed the intent.
-  commitCrossFieldIntent: (intent: QueuedIntent) => boolean;
+  // batched edit and returns true when it consumed the intent; `ranges` are
+  // ones read earlier, for when the DOM selection no longer holds them.
+  commitCrossFieldIntent: (intent: QueuedIntent, ranges?: FieldRange[]) => boolean;
+  readCrossFieldRanges: () => FieldRange[] | null;
   // Clipboard flavors are derived from logical model ranges. The painted DOM
   // is split into visual lines and must never define external paragraph breaks.
   selectionClipboardHtml: (selection: TypesetSelection) => string;
@@ -159,6 +162,7 @@ export function useTypesetInputEvents({
   commitHistory,
   breakTextHistoryGroup,
   commitCrossFieldIntent,
+  readCrossFieldRanges,
   selectionClipboardHtml,
   crossFieldClipboard,
   onZoomShortcut,
@@ -168,6 +172,9 @@ export function useTypesetInputEvents({
   const composingRef = useRef(false);
   const rowShortcutModifiedRef = useRef(false);
   const compositionSelectionRef = useRef<TypesetSelection | null>(null);
+  // By compositionend the browser has already replaced a selection spanning
+  // fields in the DOM, so its model ranges are read when composition starts.
+  const compositionRangesRef = useRef<FieldRange[] | null>(null);
 
   useLayoutEffect(() => {
     const host = hostRef.current;
@@ -887,12 +894,15 @@ export function useTypesetInputEvents({
       composingRef.current = true;
       host.classList.add("is-composing");
       compositionSelectionRef.current = readSelection();
+      compositionRangesRef.current = compositionSelectionRef.current ? null : readCrossFieldRanges();
     };
     const onCompositionEnd = (event: CompositionEvent) => {
       composingRef.current = false;
       host.classList.remove("is-composing");
       const selection = compositionSelectionRef.current;
+      const ranges = compositionRangesRef.current;
       compositionSelectionRef.current = null;
+      compositionRangesRef.current = null;
       setNonce((current) => current + 1);
       if (commitPendingRef.current) {
         if (event.data) queueIntent({ kind: "insert", text: event.data });
@@ -906,6 +916,8 @@ export function useTypesetInputEvents({
             ? "insert"
             : undefined
         );
+      } else if (ranges) {
+        commitCrossFieldIntent({ kind: "insert", text: event.data ?? "" }, ranges);
       }
     };
 
@@ -945,6 +957,7 @@ export function useTypesetInputEvents({
     breakTextHistoryGroup,
     commitClearFormatting,
     commitCrossFieldIntent,
+    readCrossFieldRanges,
     commitRichPaste,
     commitHistory,
     commitEmptyHeaderField,

@@ -91,8 +91,12 @@ typesetting guide when a change affects painted output or layout provenance.
   browser still parks a caret in the page's top-left corner. IME composition is
   the deliberate exception: while the browser owns its uncommitted DOM value,
   `.is-composing` restores the native caret and hides the stale overlay until
-  `compositionend` commits the value. A range selection paints no edge caret;
-  the selection band is its own feedback.
+  `compositionend` commits the value. A composition over a selection commits
+  exactly what typing would: the selection, or the field ranges of one that
+  spans fields, is read at `compositionstart`, because by `compositionend` the
+  browser has already replaced it in the DOM (`wrapped-row-ime.mjs` drives
+  Chrome's real IME; the opt-in `test:editor:firefox-ime` drives Firefox's). A range selection paints no edge caret; the selection
+  band is its own feedback.
 - An empty field's hint (currently only the blank structural name) is ghost text
   of what will be typed, not UI chrome: it inherits the run's own font so it
   agrees with the caret, which is drawn at the field's display size. A zero-width

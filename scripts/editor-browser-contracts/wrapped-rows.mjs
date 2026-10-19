@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { runWrappedSelectionContracts, runWrappedInputContracts } from './wrapped-row-input.mjs';
+import { runNativeCompositionContracts } from './wrapped-row-ime.mjs';
 import { runWrappedNavigationContracts } from './wrapped-row-navigation.mjs';
 import { runWrappedNativeContracts, observeWrappedNativeBoundaries } from './wrapped-row-native.mjs';
 
@@ -52,6 +53,7 @@ export async function runWrappedRowContracts({ makeWindow, waitFor, baseUrl, sui
       if (evidence) await captureWrappedEvidence(h, evidence, host, 'both-long');
       await runWrappedSelectionContracts(h);
       await runWrappedInputContracts(h);
+      await runNativeCompositionContracts(h);
       await runWrappedNavigationContracts(h);
       await runWrappedNativeContracts(h, host, evidence);
       await observeWrappedNativeBoundaries(h, host, evidence);
