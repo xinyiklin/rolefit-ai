@@ -1049,9 +1049,14 @@ Good frontend verification covers:
   rewrite, and a stage change on a submitted record needs a new matching stage
   entry. `src/lib/__evals__/application-stage-history-eval.mjs` runs the
   client's history helpers (per-entry save and removal, the interview stage
-  move, merge limits, timeline order, rounds, scheduled interviews, local-day
-  dates) through the real server sanitizer and reconciler, and pins each write
-  path that records a stage change.
+  move, the recovered Skip date of a pre-history record, the 60-entry limit
+  including stage entries, merge limits, timeline order, rounds, scheduled
+  interviews) through the real server sanitizer and reconciler, and pins each
+  write path that records or refuses a stage change.
+  `src/lib/__evals__/date-input-eval.mjs` reassigns `process.env.TZ` across
+  six zones from UTC−10 to UTC+14 (and asserts the offsets really differ) to
+  prove a picked or logged day keeps its local calendar day, and that malformed
+  or five-digit-year input is refused instead of throwing.
   `src/lib/__evals__/prepared-source-replacement.mjs`
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or

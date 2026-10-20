@@ -6,13 +6,13 @@ import {
   deriveTimeline,
   interviewLabel,
   newStageEntryId,
+  stageHistoryFits,
   type TimelineRow
 } from "../../lib/applicationStageHistory";
 import { toDateInput, toIso, todayIso } from "../../lib/dateInput";
 import {
   INTERVIEW_KINDS,
   INTERVIEW_KIND_LABEL,
-  STAGE_HISTORY_MAX_ENTRIES,
   STAGE_HISTORY_NOTE_MAX_LENGTH,
   type InterviewKind,
   type StageHistoryEntry
@@ -39,6 +39,8 @@ type ApplicationTimelinePopoverProps = {
   onUnsavedChange: (unsaved: boolean) => void;
   // Asks before an unsaved entry is discarded; resolves true to discard.
   confirmDiscard: () => Promise<boolean>;
+  // The window is busy or the record changed elsewhere: drafts stay, saves wait.
+  locked: boolean;
 };
 
 const PENDING_STAGE_ID = "pending-stage";
@@ -79,14 +81,25 @@ export function ApplicationTimelinePopover({
   onSaveEntry,
   onRemoveEntry,
   onUnsavedChange,
-  confirmDiscard
+  confirmDiscard,
+  locked
 }: ApplicationTimelinePopoverProps) {
   const logRef = useRef<HTMLButtonElement>(null);
+  const logGroupRef = useRef<HTMLDivElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const full = stageHistory.length >= STAGE_HISTORY_MAX_ENTRIES;
+  // Where focus goes once the draft row has committed or unmounted. An effect,
+  // not a frame callback, so it lands before the modal's focus trap looks.
+  const [refocus, setRefocus] = useState<"log" | "save" | null>(null);
+  // Room for one more entry, and for an interview that also records its stage move.
+  const savedFacts = { status: savedStatus, appliedAt, notApplyingAt, stageHistory };
+  const placeholder: StageHistoryEntry = { id: "room-check", type: "followup", at: todayIso() };
+  const canLogEntry = stageHistoryFits(savedFacts, savedStatus, [placeholder]);
+  const canLogInterview = stageHistoryFits(savedFacts, savedStatus === "applied" ? "interviewing" : savedStatus, [placeholder]);
 
   // The open draft shows in place of its saved entry, or after them when new.
   const shown = draft
@@ -107,6 +120,15 @@ export function ApplicationTimelinePopover({
   const draftChanged = draft ? draft.isNew || JSON.stringify(savedEntry) !== JSON.stringify(draft.entry) : false;
 
   useEffect(() => onUnsavedChange(draftChanged), [draftChanged, onUnsavedChange]);
+
+  // An entry removed elsewhere (another tab, a conflict refresh) ends its edit.
+  useEffect(() => {
+    if (draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id)) {
+      setDraft(null);
+      setConfirmRemove(false);
+      setError("That entry was removed elsewhere, so your edit to it was not saved.");
+    }
+  }, [draft, stageHistory]);
 
   // The host may close the popover itself (after confirming); start clean next time.
   useEffect(() => {
@@ -153,23 +175,45 @@ export function ApplicationTimelinePopover({
   }
 
   function changeDate(value: string) {
-    // A cleared date input keeps the last day; every entry needs one.
-    if (value) editDraft((entry) => ({ ...entry, at: toIso(value) }));
+    // A cleared or half-typed date keeps the last valid day; every entry needs one.
+    const at = toIso(value);
+    if (at) editDraft((entry) => ({ ...entry, at }));
   }
 
-  // The draft's controls unmount with it, so focus returns to the Log buttons.
+  // The draft's controls unmount with it, so focus returns to the first
+  // available Log button, or Done when the timeline is full or locked.
   function finishDraft() {
     openDraft(null);
-    window.requestAnimationFrame(() => logRef.current?.focus());
+    setRefocus("log");
   }
 
+  useEffect(() => {
+    if (refocus === "log" && !draft) {
+      const panel = logGroupRef.current?.closest(".application-popover") ?? document.getElementById("application-timeline");
+      const target = Array.from(logGroupRef.current?.querySelectorAll<HTMLButtonElement>("button") ?? []).find((button) => !button.disabled)
+        ?? panel?.querySelector<HTMLButtonElement>(".application-popover__actions button");
+      target?.focus();
+      setRefocus(null);
+    } else if (refocus === "save" && !busy) {
+      (saveRef.current && !saveRef.current.disabled ? saveRef : cancelRef).current?.focus();
+      setRefocus(null);
+    }
+  }, [busy, draft, refocus]);
+
+  // Save stays focusable while busy (aria-disabled), so the modal focus trap
+  // never pulls focus out of the popover mid-save; a failure keeps focus here.
   async function run(action: () => Promise<boolean>, failure: string) {
+    if (busy) return;
     setBusy(true);
     setError("");
     const saved = await action().catch(() => false);
     setBusy(false);
-    if (saved) finishDraft();
-    else setError(failure);
+    if (saved) {
+      finishDraft();
+      return;
+    }
+    setError(failure);
+    setRefocus("save");
   }
 
   function save() {
@@ -180,7 +224,7 @@ export function ApplicationTimelinePopover({
     if (draft) void run(() => onRemoveEntry(draft.entry.id), "This entry could not be removed. Try again.");
   }
 
-  const logDisabled = full || Boolean(draft) || busy;
+  const logBlocked = Boolean(draft) || busy || locked;
 
   return (
     <AnchoredPopover
@@ -190,7 +234,7 @@ export function ApplicationTimelinePopover({
       triggerRef={triggerRef}
       anchorRef={anchorRef}
       placement="right"
-      initialFocusRef={submitted ? logRef : undefined}
+      initialFocusRef={submitted && canLogInterview && !locked ? logRef : undefined}
       className="application-timeline"
       onClose={(restoreFocus, dismissed) => void close(restoreFocus, dismissed)}
     >
@@ -227,7 +271,7 @@ export function ApplicationTimelinePopover({
                   type="button"
                   className="application-timeline__summary"
                   aria-expanded={editing}
-                  aria-label={`Edit ${title}, ${formatCompactDate(row.at)}`}
+                  aria-label={`Edit ${title}${row.kind === "interview" && row.scheduled ? ", scheduled" : ""}, ${formatCompactDate(row.at)}`}
                   disabled={busy || (Boolean(draft) && !editing)}
                   onClick={() => openDraft(editing ? null : { entry, isNew: false })}
                 >
@@ -253,6 +297,7 @@ export function ApplicationTimelinePopover({
                       className="text-input is-data"
                       type="date"
                       aria-label="Date"
+                      max="9999-12-31"
                       value={toDateInput(draft.entry.at)}
                       autoFocus={draft.entry.type !== "interview"}
                       disabled={busy}
@@ -272,11 +317,14 @@ export function ApplicationTimelinePopover({
                     {draft.isNew && draft.entry.type === "interview" && savedStatus === "applied" ? (
                       <p className="application-timeline__hint">Saving also moves the stage to Interviewing.</p>
                     ) : null}
+                    {locked ? (
+                      <p className="application-timeline__hint">This application changed elsewhere. Choose Use latest version, then save this entry.</p>
+                    ) : null}
                     {error ? <p className="application-timeline__error" role="alert">{error}</p> : null}
                     <div className="application-timeline__entry-actions">
                       {!draft.isNew ? (
                         confirmRemove ? (
-                          <button type="button" className="secondary-button is-compact danger-button" disabled={busy} onClick={remove}>
+                          <button type="button" className="secondary-button is-compact danger-button" disabled={locked} aria-disabled={busy} onClick={remove}>
                             <Trash2 size={13} aria-hidden="true" /> Confirm remove
                           </button>
                         ) : (
@@ -285,10 +333,10 @@ export function ApplicationTimelinePopover({
                           </button>
                         )
                       ) : null}
-                      <button type="button" className="secondary-button is-compact" disabled={busy} onClick={finishDraft}>
+                      <button ref={cancelRef} type="button" className="secondary-button is-compact" disabled={busy} onClick={finishDraft}>
                         Cancel
                       </button>
-                      <button type="button" className="primary-button is-compact" disabled={busy || !draftChanged} onClick={save}>
+                      <button ref={saveRef} type="button" className="primary-button is-compact" disabled={locked || !draftChanged} aria-disabled={busy} onClick={save}>
                         {busy ? "Saving…" : "Save"}
                       </button>
                     </div>
@@ -300,19 +348,24 @@ export function ApplicationTimelinePopover({
         </ol>
       ) : null}
 
-      {full ? (
-        <p className="application-muted">This application holds the most history entries one record can keep. Remove one to log more.</p>
+      {!draft && error ? <p className="application-timeline__error" role="alert">{error}</p> : null}
+      {submitted && !canLogInterview ? (
+        <p className="application-muted">
+          {canLogEntry
+            ? "Logging an interview here also records its stage move, which needs one more free entry. Remove an entry to log one."
+            : "This application holds the most history entries one record can keep. Remove one to log more."}
+        </p>
       ) : null}
 
       {submitted ? (
-        <div className="application-timeline__log">
-          <button ref={logRef} type="button" className="secondary-button is-compact" disabled={logDisabled} onClick={() => add("interview")}>
+        <div className="application-timeline__log" ref={logGroupRef}>
+          <button ref={logRef} type="button" className="secondary-button is-compact" aria-label="Log interview" disabled={logBlocked || !canLogInterview} onClick={() => add("interview")}>
             <Plus size={13} aria-hidden="true" /> Interview
           </button>
-          <button type="button" className="secondary-button is-compact" disabled={logDisabled} onClick={() => add("response")}>
+          <button type="button" className="secondary-button is-compact" aria-label="Log employer response" disabled={logBlocked || !canLogEntry} onClick={() => add("response")}>
             <Plus size={13} aria-hidden="true" /> Response
           </button>
-          <button type="button" className="secondary-button is-compact" disabled={logDisabled} onClick={() => add("followup")}>
+          <button type="button" className="secondary-button is-compact" aria-label="Log follow-up sent" disabled={logBlocked || !canLogEntry} onClick={() => add("followup")}>
             <Plus size={13} aria-hidden="true" /> Follow-up
           </button>
         </div>

@@ -6,7 +6,10 @@ import {
 } from "../../shared/applicationStageHistoryContract.ts";
 import { todayIso } from "./dateInput.ts";
 
-type HistoryFacts = Pick<Application, "status" | "appliedAt" | "stageHistory">;
+type HistoryFacts = Pick<Application, "status" | "appliedAt" | "notApplyingAt" | "stageHistory">;
+
+export const STAGE_HISTORY_FULL_MESSAGE =
+  "This application's timeline is full. Remove a timeline entry, then try again.";
 
 export function newStageEntryId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
@@ -14,7 +17,9 @@ export function newStageEntryId(): string {
 
 // History starts at submission: a stage change on a record with an application
 // date appends one stage entry (the server refuses the save without it). The
-// submission itself, from Draft or a job-only Skip, is its `appliedAt`.
+// submission itself, from Draft or a job-only Skip, is its `appliedAt`. A
+// record skipped before history existed first gains its Skip entry, because
+// leaving Skipped clears `notApplyingAt`.
 export function withStageChange(
   saved: HistoryFacts,
   nextStatus: ApplicationStatus,
@@ -22,7 +27,28 @@ export function withStageChange(
   at = todayIso()
 ): StageHistoryEntry[] | undefined {
   if (!saved.appliedAt || saved.status === nextStatus || nextStatus === "draft") return stageHistory;
-  return [...(stageHistory ?? []), { id: newStageEntryId(), type: "stage", status: nextStatus, at }];
+  const history = [...(stageHistory ?? [])];
+  if (
+    saved.status === "not_applying"
+    && saved.notApplyingAt
+    && !history.some((entry) => entry.type === "stage" && entry.status === "not_applying")
+  ) {
+    history.push({ id: newStageEntryId(), type: "stage", status: "not_applying", at: saved.notApplyingAt });
+  }
+  history.push({ id: newStageEntryId(), type: "stage", status: nextStatus, at });
+  return history;
+}
+
+// Whether moving to `nextStatus` after adding `added` still fits the stored
+// limit, stage entries included. Callers refuse up front with a clear message
+// instead of letting the server reject the whole save.
+export function stageHistoryFits(
+  saved: HistoryFacts,
+  nextStatus: ApplicationStatus,
+  added: StageHistoryEntry[] = []
+): boolean {
+  const next = withStageChange(saved, nextStatus, [...(saved.stageHistory ?? []), ...added]);
+  return (next?.length ?? 0) <= STAGE_HISTORY_MAX_ENTRIES;
 }
 
 type SavedHistory = { status: ApplicationStatus; stageHistory: StageHistoryEntry[] | undefined };

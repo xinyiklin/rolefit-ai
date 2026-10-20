@@ -105,12 +105,17 @@ assert.match(modal, /onRemoveEntry=\{\(id\) => saveTimeline\(\(saved\) => withEn
 assert.doesNotMatch(timelinePopover, /onChange\(/, "the timeline popover never edits the application form");
 assert.match(timelinePopover, /Saving also moves the stage to Interviewing\./);
 assert.match(timelinePopover, /Confirm remove/, "removing a saved entry asks first");
+assert.match(modal, /if \(!controlsLocked\) return;\s*setSkipDecisionOpen\(false\);\s*if \(!timelineUnsavedRef\.current\) setTimelineOpen\(false\);/, "a lock keeps an unsaved timeline entry instead of dropping it");
+assert.ok(modal.includes("locked={controlsLocked}"));
+assert.ok(timelinePopover.includes("disabled={locked || !draftChanged} aria-disabled={busy}"), "Save waits out a lock and stays focusable while saving");
+assert.match(modal, /void selectTab\(order\[next\]\)\.then\(\(switched\) => \{\s*if \(switched\)/, "keyboard tab focus moves only after a tab switch is confirmed");
+for (const label of ["Log interview", "Log employer response", "Log follow-up sent"]) assert.ok(timelinePopover.includes(`aria-label="${label}"`));
 // An unsaved entry survives stray clicks and asks before any close or navigation drops it.
 assert.match(timelinePopover, /if \(draftChanged && \(dismissed \|\| !\(await confirmDiscard\(\)\)\)\) return;/);
 for (const [label, pattern] of [
   ["closing the window", /const requestClose = async \(\) => \{\s*if \(isBusy \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
   ["saving the form", /if \(controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
-  ["switching tabs", /async function selectTab\(nextTab: ModalTab\) \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["switching tabs", /async function selectTab\(nextTab: ModalTab\): Promise<boolean> \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return false;/],
   ["opening the posting", /const openPosting = useCallback\(async \(\) => \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
   ["editing the preparation", /if \(!onLoad \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
   ["opening a related record", /if \(!onOpenRelated \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/]

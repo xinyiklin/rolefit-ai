@@ -370,7 +370,11 @@ starts at submission; Drafts and job-only Skipped decisions have none. Dates are
 day-granular. The current stage remains the record's own field; history records
 what happened and is never replayed to derive it. The server refuses a stage
 change on a submitted record unless it adds a matching stage entry, whichever
-surface made the change. The inspector shows the latest and next interview, and
+surface made the change. A record skipped before history existed records its
+Skip date as an entry when it leaves Skipped, so that date is not lost. History
+holds at most 60 entries; a stage move or log that would exceed it is refused
+up front with a message to remove an entry. Dates keep their local calendar day
+in every time zone. The inspector shows the latest and next interview, and
 the calendar shows interviews. No-response and follow-up judgments are not
 derived from history yet.
 Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
@@ -758,9 +762,10 @@ disappears into the task. Quiet competence, not salesmanship.
     interview, response, or follow-up opens an unsaved draft row with Save and
     Cancel, so a misclick changes nothing. Saving a new interview on an Applied
     record also moves it to Interviewing, and the draft says so first. Stray
-    clicks keep a draft open; closing it, saving the form, switching tabs, or
-    leaving the window asks before discarding it, and removing a saved entry asks
-    first. A stage chosen with the Stage control still saves with Save changes
+    clicks keep a draft open; closing the popover, saving the form, switching
+    tabs, or closing Application Detail asks before discarding it, a lock from
+    an outside edit keeps it until the latest version is adopted, and removing
+    a saved entry asks first. A stage chosen with the Stage control still saves with Save changes
     and shows as an Unsaved timeline row until then. Application
     Detail adopts newer tracker facts when its form is clean and pauses with an
     explicit reload choice when local and external field edits conflict.

@@ -1,14 +1,27 @@
-// Tracker dates are day-granular. A yyyy-mm-dd from a date input anchors at
-// local noon so it never slips a day across time zones.
-export function toDateInput(iso?: string) {
-  return iso ? iso.slice(0, 10) : "";
+// Tracker dates are day-granular. A yyyy-mm-dd from a date input is stored at
+// local noon and read back as the local calendar day, so it keeps its day in
+// every time zone (UTC+13/+14 included).
+const DATE_INPUT = /^\d{4}-\d{2}-\d{2}$/;
+
+function localDay(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+export function toDateInput(iso?: string) {
+  if (!iso) return "";
+  if (DATE_INPUT.test(iso)) return iso;
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? "" : localDay(date);
+}
+
+// "" for anything that is not a real four-digit-year date: a date input can
+// emit a five-digit year mid-typing, and toISOString would throw on it.
 export function toIso(dateInput: string) {
-  return dateInput ? new Date(`${dateInput}T12:00:00`).toISOString() : "";
+  if (!DATE_INPUT.test(dateInput)) return "";
+  const date = new Date(`${dateInput}T12:00:00`);
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString();
 }
 
 export function todayIso(now = new Date()) {
-  const day = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-  return toIso(day);
+  return toIso(localDay(now));
 }

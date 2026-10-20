@@ -33,8 +33,10 @@ type PopoverPosition = {
   width: number;
 };
 
-// A non-modal panel that edits the host form in place. Below 760px it docks to
-// the bottom as a sheet, so scroll and resize only dismiss it on wider screens.
+// A non-modal panel anchored to a control in the host modal (the Skipped
+// decision edits the host form; the timeline saves on its own). Below 760px it
+// docks to the bottom as a sheet, so scroll and resize only dismiss it on wider
+// screens.
 export function AnchoredPopover({
   open,
   id,

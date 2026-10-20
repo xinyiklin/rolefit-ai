@@ -2200,7 +2200,9 @@ button.table-sort svg {
   display: grid;
   gap: var(--s3);
   width: var(--popover-width);
-  max-height: calc(100vh - 32px);
+  /* Measured from its own top, so a draft or error that grows the panel after
+     it is placed scrolls inside it instead of running off the screen. */
+  max-height: calc(100vh - var(--popover-top) - 16px);
   overflow-y: auto;
   padding: var(--s4);
   border: 1px solid var(--hairline-strong);

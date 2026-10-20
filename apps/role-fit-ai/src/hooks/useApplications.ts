@@ -18,7 +18,12 @@ import {
 } from "../lib/applicationRelationships.ts";
 import type { NotApplyingReason } from "../lib/notApplying.ts";
 import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract.ts";
-import { mergeStageHistories, withStageChange } from "../lib/applicationStageHistory.ts";
+import {
+  STAGE_HISTORY_FULL_MESSAGE,
+  mergeStageHistories,
+  stageHistoryFits,
+  withStageChange
+} from "../lib/applicationStageHistory.ts";
 import {
   APPLICATION_STATUSES,
   applicationStatusTransitionAllowed,
@@ -616,6 +621,10 @@ export function useApplications() {
       if (!existing) return;
       if (!applicationStatusTransitionAllowed(existing.status, status)) {
         setError("That stage change would rewrite application history. Nothing was saved.");
+        return;
+      }
+      if (!stageHistoryFits(existing, status)) {
+        setError(STAGE_HISTORY_FULL_MESSAGE);
         return;
       }
       const now = nextApplicationRevision(existing.updatedAt);

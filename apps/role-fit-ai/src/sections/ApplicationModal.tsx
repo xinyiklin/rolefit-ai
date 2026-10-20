@@ -51,7 +51,13 @@ import {
   splitFitWarnings
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
-import { withEntryRemoved, withEntrySaved, withStageChange } from "../lib/applicationStageHistory";
+import {
+  STAGE_HISTORY_FULL_MESSAGE,
+  stageHistoryFits,
+  withEntryRemoved,
+  withEntrySaved,
+  withStageChange
+} from "../lib/applicationStageHistory";
 import { toDateInput, toIso } from "../lib/dateInput";
 import { formatNotApplyingReasons, normalizeNotApplyingReasons } from "../lib/notApplying";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
@@ -356,23 +362,29 @@ export function ApplicationModal({
     if (confirmingTimelineDiscard.current) return false;
     confirmingTimelineDiscard.current = true;
     try {
-      return await confirm({
+      const discard = await confirm({
         title: "Discard this timeline entry?",
         message: "The entry you are editing has not been saved.",
         confirmLabel: "Discard entry",
         tone: "danger"
       });
+      if (discard) {
+        timelineUnsavedRef.current = false;
+        setTimelineOpen(false);
+      }
+      return discard;
     } finally {
       confirmingTimelineDiscard.current = false;
     }
   }, [confirm]);
 
-  async function selectTab(nextTab: ModalTab) {
-    if (!(await confirmDiscardTimelineEntry())) return;
+  async function selectTab(nextTab: ModalTab): Promise<boolean> {
+    if (!(await confirmDiscardTimelineEntry())) return false;
     closeSkipDecision(false);
     closeTimeline(false);
     setRelatedMenu(null);
     setTab(nextTab);
+    return true;
   }
 
   const openPosting = useCallback(async () => {
@@ -389,7 +401,7 @@ export function ApplicationModal({
   useEffect(() => {
     if (!controlsLocked) return;
     setSkipDecisionOpen(false);
-    setTimelineOpen(false);
+    if (!timelineUnsavedRef.current) setTimelineOpen(false);
     setRelatedMenu(null);
   }, [controlsLocked]);
 
@@ -596,6 +608,10 @@ export function ApplicationModal({
 
   async function save(statusOverride: ApplicationStatus = form.status) {
     if (controlsLocked || !(await confirmDiscardTimelineEntry())) return;
+    if (activeApplication && !stageHistoryFits(activeApplication, statusOverride)) {
+      setSaveError(STAGE_HISTORY_FULL_MESSAGE);
+      return;
+    }
     setIsSaving(true);
     setSaveError("");
     let saved = false;
@@ -794,8 +810,9 @@ export function ApplicationModal({
     if (next < 0) return;
     event.preventDefault();
     event.stopPropagation();
-    void selectTab(order[next]);
-    tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+    void selectTab(order[next]).then((switched) => {
+      if (switched) tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+    });
   }
 
   // The saved record's own line — stage, its governing date, and how many other
@@ -1263,6 +1280,7 @@ export function ApplicationModal({
           onRemoveEntry={(id) => saveTimeline((saved) => withEntryRemoved(saved, id))}
           onUnsavedChange={handleTimelineUnsaved}
           confirmDiscard={confirmDiscardTimelineEntry}
+          locked={controlsLocked}
         />
 
         <footer className="application-modal__foot">

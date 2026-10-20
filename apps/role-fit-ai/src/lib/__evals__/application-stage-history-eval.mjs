@@ -9,6 +9,7 @@ import {
   newStageEntryId,
   withEntryRemoved,
   withEntrySaved,
+  stageHistoryFits,
   withStageChange
 } from "../applicationStageHistory.ts";
 import { toDateInput, toIso, todayIso } from "../dateInput.ts";
@@ -101,6 +102,45 @@ assert.equal(
   "the server accepts an interview saved with its stage move"
 );
 
+// --- Legacy Skip date and the stored limit ----------------------------------
+// A record skipped before history existed keeps its Skip date when it leaves
+// Skipped (which clears notApplyingAt), and the server accepts the result.
+const legacySkip = sanitizeApplications([record({ status: "not_applying", notApplyingAt: rev1 })]);
+const unskipped = withStageChange(legacySkip[0], "interviewing", undefined, rev2);
+assert.deepEqual(
+  unskipped.map((entry) => [entry.status, entry.at]),
+  [["not_applying", rev1], ["interviewing", rev2]],
+  "leaving a legacy Skipped record records its Skip date first"
+);
+assert.equal(
+  reconcileApplicationMutations(legacySkip, sanitizeApplications([{ ...legacySkip[0], status: "interviewing", notApplyingAt: undefined, stageHistory: unskipped, updatedAt: rev2 }]), [
+    { id: legacySkip[0].id, operation: "upsert", baseUpdatedAt: rev1 }
+  ])[0].stageHistory.length,
+  2,
+  "the server accepts the recovered Skip entry with the move"
+);
+const recordedSkip = withStageChange(
+  { ...legacySkip[0], stageHistory: [{ id: "s0", type: "stage", status: "not_applying", at: rev1 }] },
+  "applied", [{ id: "s0", type: "stage", status: "not_applying", at: rev1 }], rev2
+);
+assert.equal(recordedSkip.length, 2, "a Skip already in history is not recorded twice");
+
+const atLimit = Array.from({ length: STAGE_HISTORY_MAX_ENTRIES }, (_, index) => ({ id: `l${index}`, type: "followup", at: rev1 }));
+const oneBelow = atLimit.slice(1);
+assert.equal(stageHistoryFits(record({ stageHistory: atLimit }), "applied"), true, "no stage move needs no room");
+assert.equal(stageHistoryFits(record({ stageHistory: atLimit }), "rejected"), false, "a full timeline cannot take a stage move");
+assert.equal(stageHistoryFits(record({ stageHistory: oneBelow }), "rejected"), true, "one free entry fits a stage move");
+assert.equal(
+  stageHistoryFits(record({ stageHistory: oneBelow }), "interviewing", [interview]),
+  false,
+  "an interview on an Applied record needs room for itself and its stage move"
+);
+assert.equal(
+  sanitizeApplications([{ ...record({ stageHistory: oneBelow }), ...withEntrySaved(record({ stageHistory: oneBelow }), interview), updatedAt: rev2 }]).length,
+  0,
+  "what stageHistoryFits refuses is exactly what the server would refuse"
+);
+
 // --- mergeStageHistories ----------------------------------------------------
 const a = [{ id: "a1", type: "followup", at: rev1 }];
 const b = [{ id: "b1", type: "response", at: rev2 }, { id: "a1", type: "followup", at: rev2 }];
@@ -181,6 +221,12 @@ const hook = source("../../hooks/useApplications.ts");
 assert.match(hook, /status,\s*updatedAt: now,\s*stageHistory: withStageChange\(a, status, a\.stageHistory\)/, "row-menu stage moves record the change");
 assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, "duplicate merge unions history");
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");
+assert.match(hook, /if \(!stageHistoryFits\(existing, status\)\) \{\s*setError\(STAGE_HISTORY_FULL_MESSAGE\);/, "a row-menu move on a full timeline is refused with a clear message");
+assert.match(
+  source("../../sections/ApplicationModal.tsx"),
+  /if \(activeApplication && !stageHistoryFits\(activeApplication, statusOverride\)\) \{\s*setSaveError\(STAGE_HISTORY_FULL_MESSAGE\);/,
+  "Detail refuses a stage move that would overflow the timeline"
+);
 assert.match(
   source("../../sections/ApplicationModal.tsx"),
   /stageHistory: statusOverride === "draft"\s*\? undefined\s*: withStageChange\(base, statusOverride, base\.stageHistory\)/,
