@@ -76,6 +76,27 @@ D-entries in `docs/decisions.md`.
   macOS (win32 only); D087's OpenAI API live calls, its Models page in
   Firefox, and the Background view switch.
 
+## 2026-10-20
+
+- [USER+CODE+TOOL] **Application stage history** (D091): submitted applications
+  keep a dated `stageHistory` (stage changes after submission, interviews with
+  kind and derived round, employer responses, follow-ups sent; day-granular).
+  Application Detail's Timeline button opens a popover beside the status card;
+  each entry saves on its own, only saving a new interview on an Applied record
+  moves the stage, and every exit asks before discarding an unsaved entry. The
+  server refuses an unrecorded stage change on a submitted record; older builds
+  reject trackers and backups with history (user-accepted). Verified by
+  `stage-history-probes.mjs`, `application-stage-history-eval.mjs`,
+  `date-input-eval.mjs` (six zones), the RoleFit check (192/192), and browser QA
+  on a synthetic workspace (1280/820/720/375 px). The first independent review
+  failed the UTC+13/+14 date round trip (an older helper bug, also in Detail's
+  Key dates); that and its other findings are fixed in `361ed62`, and the exact
+  pushed head is re-reviewed before merge. Known gaps: the Timeline count
+  includes automatic stage entries; no time of day; confirm and focus flows are
+  pinned by source evals and browser QA, not DOM tests. Next: the Analytics
+  redesign (derived no-response flag, follow-up reminders, metrics) starts after
+  this merges; suggest 0.19.0 then. On `feature/rolefit-stage-history`.
+
 ## 2026-10-19
 
 - [USER+CODE+TOOL] **Workspace backup scope** (D053): a companion backup failed
