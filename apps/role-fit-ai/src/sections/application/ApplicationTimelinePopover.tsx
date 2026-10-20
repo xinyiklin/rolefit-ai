@@ -101,13 +101,17 @@ export function ApplicationTimelinePopover({
   const canLogEntry = stageHistoryFits(savedFacts, savedStatus, [placeholder]);
   const canLogInterview = stageHistoryFits(savedFacts, savedStatus === "applied" ? "interviewing" : savedStatus, [placeholder]);
 
-  // The open draft shows in place of its saved entry, or after them when new
-  // or mid-removal (kept so its focused controls do not unmount mid-save).
+  // A removal drops its entry optimistically; the list as it was stays on
+  // screen until the save settles, so the row neither moves nor unmounts and
+  // its focused controls keep focus.
+  const [heldHistory, setHeldHistory] = useState<StageHistoryEntry[] | null>(null);
+  const listed = heldHistory ?? stageHistory;
+  // The open draft shows in place of its saved entry, or after them when new.
   const shown = draft
-    ? draft.isNew || !stageHistory.some((entry) => entry.id === draft.entry.id)
-      ? [...stageHistory, draft.entry]
-      : stageHistory.map((entry) => (entry.id === draft.entry.id ? draft.entry : entry))
-    : stageHistory;
+    ? draft.isNew
+      ? [...listed, draft.entry]
+      : listed.map((entry) => (entry.id === draft.entry.id ? draft.entry : entry))
+    : listed;
   const pendingEntry: StageHistoryEntry | null = pendingStage && pendingStage !== "draft"
     ? { id: PENDING_STAGE_ID, type: "stage", status: pendingStage, at: todayIso() }
     : null;
@@ -211,6 +215,7 @@ export function ApplicationTimelinePopover({
     setError("");
     const saved = await action().catch(() => false);
     setBusy(false);
+    setHeldHistory(null);
     if (saved) {
       finishDraft();
       return;
@@ -224,7 +229,9 @@ export function ApplicationTimelinePopover({
   }
 
   function remove() {
-    if (draft) void run(() => onRemoveEntry(draft.entry.id), "This entry could not be removed. Try again.");
+    if (!draft || busy) return;
+    setHeldHistory(stageHistory);
+    void run(() => onRemoveEntry(draft.entry.id), "This entry could not be removed. Try again.");
   }
 
   const logBlocked = Boolean(draft) || busy || locked;

@@ -111,10 +111,13 @@ assert.ok(
   timelinePopover.includes("if (!busy && draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id))"),
   "the popover's own optimistic Remove is not reported as a removal elsewhere"
 );
-assert.ok(
-  timelinePopover.includes("draft.isNew || !stageHistory.some((entry) => entry.id === draft.entry.id)"),
-  "a row being removed stays mounted, so its focused controls survive the save"
+assert.match(
+  timelinePopover,
+  /setHeldHistory\(stageHistory\);\s*void run\(\(\) => onRemoveEntry/,
+  "a removal holds the list as it was, so its row neither moves nor unmounts mid-save"
 );
+assert.match(timelinePopover, /const listed = heldHistory \?\? stageHistory;/);
+assert.match(timelinePopover, /setBusy\(false\);\s*setHeldHistory\(null\);/, "the held list is released when the save settles");
 assert.equal((modal.match(/type="date" max="9999-12-31"/g) ?? []).length, 4, "every Key dates input caps the year at four digits");
 assert.ok(timelinePopover.includes("disabled={locked || !draftChanged} aria-disabled={busy}"), "Save waits out a lock and stays focusable while saving");
 assert.match(modal, /void selectTab\(order\[next\]\)\.then\(\(switched\) => \{\s*if \(switched\)/, "keyboard tab focus moves only after a tab switch is confirmed");
