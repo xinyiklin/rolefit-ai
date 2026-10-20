@@ -1,12 +1,6 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-  type RefObject
-} from "react";
+import { useRef, type RefObject } from "react";
 import type { NotApplyingReason } from "../../lib/notApplying";
+import { AnchoredPopover } from "./AnchoredPopover";
 import { SkipReasonChecklist } from "./SkipReasonChecklist";
 
 type SkippedDecisionPopoverProps = {
@@ -20,12 +14,6 @@ type SkippedDecisionPopoverProps = {
   onClose: (restoreFocus?: boolean) => void;
 };
 
-type PopoverPosition = {
-  top: number;
-  left: number;
-  width: number;
-};
-
 export function SkippedDecisionPopover({
   open,
   triggerRef,
@@ -36,78 +24,16 @@ export function SkippedDecisionPopover({
   onNoteChange,
   onClose
 }: SkippedDecisionPopoverProps) {
-  const panelRef = useRef<HTMLDivElement>(null);
   const reasonRef = useRef<HTMLInputElement>(null);
-  const [position, setPosition] = useState<PopoverPosition>({ top: 0, left: 0, width: 420 });
-
-  useLayoutEffect(() => {
-    if (!open || !triggerRef.current || !panelRef.current) return;
-    const anchor = triggerRef.current.getBoundingClientRect();
-    const panel = panelRef.current.getBoundingClientRect();
-    const margin = 16;
-    const gap = 8;
-    const width = Math.min(420, window.innerWidth - margin * 2);
-    const left = Math.min(
-      Math.max(margin, anchor.left),
-      Math.max(margin, window.innerWidth - width - margin)
-    );
-    const below = anchor.bottom + gap;
-    const top = below + panel.height <= window.innerHeight - margin
-      ? below
-      : Math.max(margin, anchor.top - panel.height - gap);
-    setPosition({ top, left, width });
-    const focusFrame = window.requestAnimationFrame(() => reasonRef.current?.focus());
-    return () => window.cancelAnimationFrame(focusFrame);
-  }, [open, triggerRef]);
-
-  useEffect(() => {
-    if (!open) return;
-    function handlePointerDown(event: MouseEvent) {
-      const target = event.target as Node;
-      if (panelRef.current?.contains(target) || triggerRef.current?.contains(target)) return;
-      onClose();
-    }
-    function handleScroll(event: Event) {
-      if (window.innerWidth <= 760) return;
-      if (event.target instanceof Node && panelRef.current?.contains(event.target)) return;
-      onClose(true);
-    }
-    function handleResize() {
-      if (window.innerWidth <= 760) return;
-      onClose(true);
-    }
-    document.addEventListener("mousedown", handlePointerDown);
-    window.addEventListener("resize", handleResize);
-    window.addEventListener("scroll", handleScroll, true);
-    return () => {
-      document.removeEventListener("mousedown", handlePointerDown);
-      window.removeEventListener("resize", handleResize);
-      window.removeEventListener("scroll", handleScroll, true);
-    };
-  }, [onClose, open, triggerRef]);
-
-  if (!open) return null;
-
-  const style = {
-    "--skip-popover-top": `${position.top}px`,
-    "--skip-popover-left": `${position.left}px`,
-    "--skip-popover-width": `${position.width}px`
-  } as CSSProperties;
 
   return (
-    <div
-      ref={panelRef}
+    <AnchoredPopover
+      open={open}
       id="application-skipped-decision"
-      className="application-skip-popover"
-      role="dialog"
-      aria-label="Skipped decision"
-      style={style}
-      onKeyDown={(event) => {
-        if (event.key !== "Escape") return;
-        event.preventDefault();
-        event.stopPropagation();
-        onClose(true);
-      }}
+      label="Skipped decision"
+      triggerRef={triggerRef}
+      initialFocusRef={reasonRef}
+      onClose={onClose}
     >
       <div className="application-skip-popover__fields">
         <SkipReasonChecklist
@@ -129,12 +55,6 @@ export function SkippedDecisionPopover({
           />
         </label>
       </div>
-
-      <div className="application-skip-popover__actions">
-        <button type="button" className="secondary-button is-compact" onClick={() => onClose(true)}>
-          Done
-        </button>
-      </div>
-    </div>
+    </AnchoredPopover>
   );
 }

@@ -83,8 +83,13 @@ and `docs/engineering/ui-principles.md`.
 - Keep components declarative. Network, storage, cross-tab, and pipeline state
   belong in hooks; components receive values and callbacks.
 - `ApplicationModal` remains the cohesive controller for one saved record's
-  draft, save, and navigation lifecycle. Fit, document, posting-preview, and
-  Skipped-decision surfaces stay extracted; do not split the form sections if
+  draft, save, and navigation lifecycle. Fit, document, posting-preview,
+  Skipped-decision, and timeline surfaces stay extracted. Both Application
+  status popovers share `application/AnchoredPopover`; its fallback focus is
+  Done because the modal focus trap rejects non-tabbable targets. Timeline
+  entries save through `saveTimeline` against the saved record, never through
+  the form, and the modal asks before any exit discards an unsaved entry. Do
+  not split the form sections if
   doing so would only thread that shared draft state and its refs through more
   props. Clean drafts rebase to fresh tracker data; concurrent remote and local
   field edits lock until the user adopts the latest version. Document work

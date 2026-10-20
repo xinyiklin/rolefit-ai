@@ -20,6 +20,7 @@ import {
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
 import { copyAiUsage } from "../../lib/aiUsage";
+import { interviewLabel, interviewMilestones } from "../../lib/applicationStageHistory";
 import { ApplicationFitSummary } from "../application/ApplicationFitSummary";
 
 const AI_USAGE_STAGES: { key: string; label: string }[] = [
@@ -79,6 +80,7 @@ export function TrackerInspector({
   const hasResume = Boolean(selected.resumeArtifacts?.hasPdf || selected.resumeArtifacts?.hasSource);
   const hasCoverLetter = Boolean(selected.coverLetterArtifacts?.hasPdf || selected.coverLetterArtifacts?.hasSource);
   const additionalDocumentCount = selected.attachments?.length ?? 0;
+  const interviews = interviewMilestones(selected);
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -120,6 +122,20 @@ export function TrackerInspector({
           <span className="ledger-row__leader" aria-hidden="true" />
           <dd className={statusDate ? undefined : "is-empty"}>{statusDate ? formatCompactDate(statusDate) : "Not recorded"}</dd>
         </div>
+        {interviews.latest ? (
+          <div className="ledger-row">
+            <dt>Latest interview</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd className="is-prose">{interviewLabel(interviews.latest)} · {formatCompactDate(interviews.latest.at)}</dd>
+          </div>
+        ) : null}
+        {interviews.next ? (
+          <div className="ledger-row">
+            <dt>Next interview</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd className="is-prose">{interviewLabel(interviews.next)} · {formatCompactDate(interviews.next.at)}</dd>
+          </div>
+        ) : null}
         <div className="ledger-row">
           <dt>Deadline</dt>
           <span className="ledger-row__leader" aria-hidden="true" />

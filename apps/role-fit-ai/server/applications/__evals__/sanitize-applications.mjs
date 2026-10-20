@@ -633,6 +633,7 @@ try {
     status: "not_applying",
     appliedAt: revisionA,
     notApplyingAt: revisionBNext,
+    stageHistory: [{ id: "skipped", type: "stage", status: "not_applying", at: revisionBNext }],
     updatedAt: revisionBNext
   }]);
   let skippedApplicationAccepted = false;

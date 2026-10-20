@@ -9,6 +9,7 @@ import {
   type ApplicationActivityFilter,
   parseDate
 } from "../../lib/applicationDisplay";
+import { deriveTimeline, interviewLabel } from "../../lib/applicationStageHistory";
 import { TrackerCalendarRail } from "./TrackerCalendarRail";
 
 // Exported so TrackerCalendarRail can import it for its prop type.
@@ -53,6 +54,13 @@ function applicationEvents(applications: Application[]): CalendarEvent[] {
         label: "Application submitted",
         type: "applied"
       });
+    }
+    for (const row of deriveTimeline(app)) {
+      if (row.kind !== "interview") continue;
+      const date = parseDate(row.at);
+      if (date && !Number.isNaN(date.getTime())) {
+        events.push({ id: `${app.id}-${row.key}`, app, date, label: interviewLabel(row), type: "interview" });
+      }
     }
     if (followup && !Number.isNaN(followup.getTime())) {
       events.push({

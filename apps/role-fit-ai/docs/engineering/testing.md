@@ -1042,6 +1042,21 @@ Good frontend verification covers:
   ordinary `upsert` write APIs.
   `src/lib/__evals__/application-status-transitions.mjs` pins the forward-only
   status graph and the ban on rewriting submitted or terminal history.
+  `server/applications/__evals__/stage-history-probes.mjs` pins the stage
+  history contract: every entry type round-trips through `applications.json`,
+  each malformed, oversized, or misplaced (Draft, job-only Skipped) history
+  refuses the whole record, invalid stored history fails closed without a
+  rewrite, and a stage change on a submitted record needs a new matching stage
+  entry. `src/lib/__evals__/application-stage-history-eval.mjs` runs the
+  client's history helpers (per-entry save and removal, the interview stage
+  move, the recovered Skip date of a pre-history record, the 60-entry limit
+  including stage entries, merge limits, timeline order, rounds, scheduled
+  interviews) through the real server sanitizer and reconciler, and pins each
+  write path that records or refuses a stage change.
+  `src/lib/__evals__/date-input-eval.mjs` reassigns `process.env.TZ` across
+  six zones from UTC−10 to UTC+14 (and asserts the offsets really differ) to
+  prove a picked or logged day keeps its local calendar day, and that malformed
+  or five-digit-year input is refused instead of throwing.
   `src/lib/__evals__/prepared-source-replacement.mjs`
   exercises same-posting corrections, reused generic URLs, conflicting posting
   ids, and the update-mode guard order/copy that runs before duplicate review or

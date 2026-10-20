@@ -83,10 +83,57 @@ assert.ok(applicationStyles.includes("@container fit-card"), "Fit adapts to its 
 assert.ok(modal.includes('aria-haspopup="dialog"'));
 assert.ok(modal.includes("<SkippedDecisionPopover"));
 assert.ok(!modal.includes("application-details-decision"));
-assert.ok(skippedDecisionPopover.includes('role="dialog"'));
-assert.ok(skippedDecisionPopover.includes('aria-label="Skipped decision"'));
-assert.ok(skippedDecisionPopover.includes('event.key !== "Escape"'));
-assert.ok(skippedDecisionPopover.includes("onClose(true)"));
+// Both Application status popovers share one anchored, non-modal shell.
+const anchoredPopover = read("../application/AnchoredPopover.tsx");
+const timelinePopover = read("../application/ApplicationTimelinePopover.tsx");
+assert.ok(anchoredPopover.includes('role="dialog"'));
+assert.ok(anchoredPopover.includes('event.key !== "Escape"'));
+assert.ok(anchoredPopover.includes("onClose(true)"));
+assert.ok(skippedDecisionPopover.includes("<AnchoredPopover") && skippedDecisionPopover.includes('label="Skipped decision"'));
+assert.ok(timelinePopover.includes("<AnchoredPopover") && timelinePopover.includes('label="Timeline"'));
+assert.ok(modal.includes("<ApplicationTimelinePopover"), "the timeline opens from Application status");
+assert.match(
+  modal,
+  /aria-controls="application-timeline"[\s\S]{0,500}?if \(timelineOpen\) \{\s*void confirmDiscardTimelineEntry\(\)\.then\(\(discard\) => discard && closeTimeline\(false\)\);[\s\S]{0,200}?setTimelineOpen\(true\);/,
+  "the corner trigger opens the timeline and closes it only after an unsaved entry is confirmed"
+);
+assert.ok(modal.includes("timelineTriggerRef.current?.focus()"), "closing the timeline returns focus to its trigger");
+assert.doesNotMatch(modal, /id: "timeline"/, "the timeline is not a modal tab");
+// Each timeline entry is its own save; an unsaved draft never touches the form or the stage.
+assert.match(modal, /onSaveEntry=\{\(entry\) => saveTimeline\(\(saved\) => withEntrySaved\(saved, entry\)\)\}/);
+assert.match(modal, /onRemoveEntry=\{\(id\) => saveTimeline\(\(saved\) => withEntryRemoved\(saved, id\)\)\}/);
+assert.doesNotMatch(timelinePopover, /onChange\(/, "the timeline popover never edits the application form");
+assert.match(timelinePopover, /Saving also moves the stage to Interviewing\./);
+assert.match(timelinePopover, /Confirm remove/, "removing a saved entry asks first");
+assert.match(modal, /if \(!controlsLocked\) return;\s*setSkipDecisionOpen\(false\);\s*if \(!timelineUnsavedRef\.current\) setTimelineOpen\(false\);/, "a lock keeps an unsaved timeline entry instead of dropping it");
+assert.ok(modal.includes("locked={controlsLocked}"));
+assert.ok(
+  timelinePopover.includes("if (!busy && draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id))"),
+  "the popover's own optimistic Remove is not reported as a removal elsewhere"
+);
+assert.match(
+  timelinePopover,
+  /setHeldHistory\(stageHistory\);\s*void run\(\(\) => onRemoveEntry/,
+  "a removal holds the list as it was, so its row neither moves nor unmounts mid-save"
+);
+assert.match(timelinePopover, /const listed = heldHistory \?\? stageHistory;/);
+assert.match(timelinePopover, /setBusy\(false\);\s*setHeldHistory\(null\);/, "the held list is released when the save settles");
+assert.equal((modal.match(/type="date" max="9999-12-31"/g) ?? []).length, 4, "every Key dates input caps the year at four digits");
+assert.ok(timelinePopover.includes("disabled={locked || !draftChanged} aria-disabled={busy}"), "Save waits out a lock and stays focusable while saving");
+assert.match(modal, /void selectTab\(order\[next\]\)\.then\(\(switched\) => \{\s*if \(switched\)/, "keyboard tab focus moves only after a tab switch is confirmed");
+for (const label of ["Log interview", "Log employer response", "Log follow-up sent"]) assert.ok(timelinePopover.includes(`aria-label="${label}"`));
+// An unsaved entry survives stray clicks and asks before any close or navigation drops it.
+assert.match(timelinePopover, /if \(draftChanged && \(dismissed \|\| !\(await confirmDiscard\(\)\)\)\) return;/);
+for (const [label, pattern] of [
+  ["closing the window", /const requestClose = async \(\) => \{\s*if \(isBusy \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["saving the form", /if \(controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["switching tabs", /async function selectTab\(nextTab: ModalTab\): Promise<boolean> \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return false;/],
+  ["opening the posting", /const openPosting = useCallback\(async \(\) => \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["editing the preparation", /if \(!onLoad \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["opening a related record", /if \(!onOpenRelated \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/]
+]) {
+  assert.match(modal, pattern, `${label} asks before discarding an unsaved timeline entry`);
+}
 assert.ok(modal.includes("primaryInputRef.current?.focus()"));
 assert.ok(skippedDecisionPopover.includes("maxLength={2_000}"));
 
@@ -140,7 +187,7 @@ assert.match(
   /function selectTab[\s\S]{0,300}?closeSkipDecision\(false\)[\s\S]{0,300}?setRelatedMenu\(null\)[\s\S]{0,300}?setTab\(nextTab\)/,
   "changing tabs closes surfaces anchored in the previous tab"
 );
-assert.ok(modal.includes("onClick={() => selectTab(id)}"));
+assert.ok(modal.includes("onClick={() => void selectTab(id)}"));
 
 assert.ok(modal.includes("Mark as unrelated"));
 assert.match(modal, /Merge accidental duplicate\?[\s\S]{0,700}?tone: "danger"/);

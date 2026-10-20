@@ -17,6 +17,13 @@ import {
   planPostingRecordUnlink
 } from "../lib/applicationRelationships.ts";
 import type { NotApplyingReason } from "../lib/notApplying.ts";
+import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract.ts";
+import {
+  STAGE_HISTORY_FULL_MESSAGE,
+  mergeStageHistories,
+  stageHistoryFits,
+  withStageChange
+} from "../lib/applicationStageHistory.ts";
 import {
   APPLICATION_STATUSES,
   applicationStatusTransitionAllowed,
@@ -106,6 +113,7 @@ export type Application = {
   notApplyingReasons?: NotApplyingReason[];
   notApplyingNote?: string;
   updatedAt: string;
+  stageHistory?: StageHistoryEntry[];
   followupAt?: string;
   // Application deadline (ISO date) — distinct from followupAt (next personal step).
   deadline?: string;
@@ -615,6 +623,10 @@ export function useApplications() {
         setError("That stage change would rewrite application history. Nothing was saved.");
         return;
       }
+      if (!stageHistoryFits(existing, status)) {
+        setError(STAGE_HISTORY_FULL_MESSAGE);
+        return;
+      }
       const now = nextApplicationRevision(existing.updatedAt);
       const next = current.map((a) =>
         a.id === id
@@ -622,6 +634,7 @@ export function useApplications() {
               ...a,
               status,
               updatedAt: now,
+              stageHistory: withStageChange(a, status, a.stageHistory),
               appliedAt: status === "draft" ? undefined : status !== "not_applying" && !a.appliedAt ? now : a.appliedAt,
               notApplyingAt: status === "not_applying" ? now : undefined,
               notApplyingReasons: status === "not_applying" ? a.notApplyingReasons : undefined,
@@ -727,6 +740,15 @@ export function useApplications() {
       if (!canonical || members.length < 2) return false;
       const now = new Date().toISOString();
       const others = members.filter((a) => a.id !== canonicalId);
+      // Like the rest of a merge, history follows the canonical record: only a
+      // submitted one can hold the members' entries.
+      const stageHistory = canonical.appliedAt
+        ? mergeStageHistories(canonical.stageHistory, others.map((member) => member.stageHistory))
+        : canonical.stageHistory;
+      if (stageHistory === null) {
+        setError("These records together hold more stage history than one application can keep. Nothing was merged.");
+        return false;
+      }
 
       // Union sourceUrls: every member's sourceUrls + every non-canonical
       // member's primary jobUrl. Dedup/primary-exclusion/cap/earliest-addedAt
@@ -783,6 +805,7 @@ export function useApplications() {
         sourceUrls,
         rawJobDescription: canonical.rawJobDescription || others.find((m) => m.rawJobDescription)?.rawJobDescription,
         aiUsage: canonical.aiUsage ?? others.find((m) => m.aiUsage)?.aiUsage,
+        stageHistory,
         duplicateDismissedIds: inheritedDismissals.length ? inheritedDismissals : undefined,
         jobPostingGroupId: retainedPostingGroupId,
         createdAt: earliestCreatedAt,
