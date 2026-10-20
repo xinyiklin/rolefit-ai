@@ -56,6 +56,11 @@ for provider, prompt, sanitizer, and review work.
   application answers:
   every document and attachment mutation must pass the shared
   `routeSupport.ts` guard before any file I/O.
+  Stage history (`shared/applicationStageHistoryContract.ts`) validates
+  strictly and refuses the whole record on any bad entry; Drafts and job-only
+  Skipped records carry none. `reconcile.ts` refuses a stage change on a record
+  with `appliedAt` unless the upsert adds a new stage entry naming the new
+  stage, so every write path keeps history honest.
   Draft has no `appliedAt` and remains outside submitted metrics. Explicit answer
   saves create or update one revision-checked Draft; Apply/Skip promote that same
   ID. Enriched Q+A revisions use `shared/applicationAnswerStorage.ts` across

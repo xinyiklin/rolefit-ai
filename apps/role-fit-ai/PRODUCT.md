@@ -361,6 +361,18 @@ submitted counts, submitted-month history, or calendar submission events; an
 application later marked Skipped keeps its original submission in all three,
 because a later decision does not erase a sent application. No Skipped record
 counts toward follow-up hygiene.
+Each submitted application keeps a dated stage history: every stage change
+after submission, interviews with a kind (Recruiter screen, Hiring manager,
+Technical, Assessment, Panel / onsite, Final, Other) whose round numbers follow
+their dates, employer responses, and follow-ups the user sent, each with an
+optional short note. The submission stays the application date, so history
+starts at submission; Drafts and job-only Skipped decisions have none. Dates are
+day-granular. The current stage remains the record's own field; history records
+what happened and is never replayed to derive it. The server refuses a stage
+change on a submitted record unless it adds a matching stage entry, whichever
+surface made the change. The inspector shows the latest and next interview, and
+the calendar shows interviews. No-response and follow-up judgments are not
+derived from history yet.
 Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
 work. It saves the posting as **Skipped**, with any number of optional reasons
 from a grouped list (Eligibility, Logistics, Fit, Status, Personal) and a short
@@ -740,6 +752,16 @@ disappears into the task. Quiet competence, not salesmanship.
     names, then `+N`) in a headerless
     non-modal decision popover;
     general application notes remain independent data in Prep. Application
+    status also carries a Timeline button (history icon, label, entry count)
+    that opens a non-modal popover beside the card. Each timeline entry is its
+    own save against the saved record, apart from Save changes: logging an
+    interview, response, or follow-up opens an unsaved draft row with Save and
+    Cancel, so a misclick changes nothing. Saving a new interview on an Applied
+    record also moves it to Interviewing, and the draft says so first. Stray
+    clicks keep a draft open; closing it, saving the form, switching tabs, or
+    leaving the window asks before discarding it, and removing a saved entry asks
+    first. A stage chosen with the Stage control still saves with Save changes
+    and shows as an Unsaved timeline row until then. Application
     Detail adopts newer tracker facts when its form is clean and pauses with an
     explicit reload choice when local and external field edits conflict.
     Update mode names the exact saved record persistently;

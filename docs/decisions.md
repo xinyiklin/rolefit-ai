@@ -548,6 +548,17 @@ later entry wins.
   Fit summary leaf is normalized for comparison; the tracker key `initialFit`
   stays a storage-boundary name. [USER+CODE] Legacy tracker-schema compatibility
   was left to a one-user preview migration.
+- 2026-10-20 [USER+CODE+TOOL] D091 ACTIVE: **Submitted applications keep a dated
+  stage history** (`stageHistory`): stage changes after submission, interviews
+  with a kind and a derived round, employer responses, and follow-ups sent.
+  Dates are day-granular (time of day declined by the user for now). The stored
+  stage stays the source of truth; the server refuses a stage change on a
+  submitted record without a new matching stage entry. Each timeline entry
+  saves on its own, apart from Application Detail's Save changes, and only
+  saving a new interview on an Applied record moves the stage. Older builds
+  reject a tracker or backup that holds history (user-accepted). A no-response
+  ("ghosted") state will be derived, never stored; the Analytics redesign is a
+  separate PR after this one merges.
 
 ### Extension
 

@@ -539,7 +539,13 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   one-option select or a second card. The trigger reads `Skipped · reasons` on one
   line (at most two short names, then `+N`) and opens an accessibly labelled, visually headerless, focus-managed non-modal popover over the
   sheet for the bounded decision fields; at narrow widths that surface becomes
-  a viewport-safe bottom sheet. Skip reasons, there and in the Skip dialog, are
+  a viewport-safe bottom sheet. Application status carries a quiet Timeline
+  button in its corner (history icon, visible label, entry count) that opens
+  the same anchored popover shell beside the card, falling back below it and to
+  the bottom sheet: a titled list of hairline rows (marker, label, optional
+  note, date), one row editing in place with its own Save and Cancel, and
+  bordered Log buttons. Both popovers carry a `--hairline-strong` border over
+  Lift so they separate from the near-white cards beneath. Skip reasons, there and in the Skip dialog, are
   native checkboxes in labelled groups, not chips; a suggested reason carries a
   quiet `· suggested` note and its basis is listed in a soft well below. The decision date remains in Key dates, while
   general application notes remain independent data in Prep. Prep

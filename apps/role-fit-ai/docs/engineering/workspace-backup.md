@@ -139,7 +139,8 @@ Only files owned and validated by RoleFit enter the bundle:
 Generated cover letters, application answers (with the facts the user added to
 each saved revision), job targets, and tailored resume snapshots already stored
 on tracker records travel inside `applications.json`. A backup holding saved
-answer facts restores only into a build that understands them.
+answer facts or application stage history restores only into a build that
+understands them.
 History snapshots (resume and cover letter) that no longer validate (retired format, corrupt, or oversized) stay on disk but are
 left out, since they could not be restored.
 
