@@ -107,6 +107,15 @@ assert.match(timelinePopover, /Saving also moves the stage to Interviewing\./);
 assert.match(timelinePopover, /Confirm remove/, "removing a saved entry asks first");
 assert.match(modal, /if \(!controlsLocked\) return;\s*setSkipDecisionOpen\(false\);\s*if \(!timelineUnsavedRef\.current\) setTimelineOpen\(false\);/, "a lock keeps an unsaved timeline entry instead of dropping it");
 assert.ok(modal.includes("locked={controlsLocked}"));
+assert.ok(
+  timelinePopover.includes("if (!busy && draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id))"),
+  "the popover's own optimistic Remove is not reported as a removal elsewhere"
+);
+assert.ok(
+  timelinePopover.includes("draft.isNew || !stageHistory.some((entry) => entry.id === draft.entry.id)"),
+  "a row being removed stays mounted, so its focused controls survive the save"
+);
+assert.equal((modal.match(/type="date" max="9999-12-31"/g) ?? []).length, 4, "every Key dates input caps the year at four digits");
 assert.ok(timelinePopover.includes("disabled={locked || !draftChanged} aria-disabled={busy}"), "Save waits out a lock and stays focusable while saving");
 assert.match(modal, /void selectTab\(order\[next\]\)\.then\(\(switched\) => \{\s*if \(switched\)/, "keyboard tab focus moves only after a tab switch is confirmed");
 for (const label of ["Log interview", "Log employer response", "Log follow-up sent"]) assert.ok(timelinePopover.includes(`aria-label="${label}"`));

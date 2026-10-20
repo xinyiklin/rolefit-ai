@@ -1019,23 +1019,23 @@ export function ApplicationModal({
                       {form.status === "not_applying" ? (
                         <label className="field">
                           <span>Decision date</span>
-                          <input className="text-input is-data" type="date" value={form.notApplyingAt} onChange={(e) => update("notApplyingAt", e.target.value)} />
+                          <input className="text-input is-data" type="date" max="9999-12-31" value={form.notApplyingAt} onChange={(e) => update("notApplyingAt", e.target.value)} />
                         </label>
                       ) : form.status === "draft" ? (
                         <p className="application-muted">Draft — no submission date.</p>
                       ) : (
                         <label className="field">
                           <span>Application date</span>
-                          <input className="text-input is-data" type="date" value={form.appliedAt} onChange={(e) => update("appliedAt", e.target.value)} />
+                          <input className="text-input is-data" type="date" max="9999-12-31" value={form.appliedAt} onChange={(e) => update("appliedAt", e.target.value)} />
                         </label>
                       )}
                       <label className="field">
                         <span>Deadline</span>
-                        <input className="text-input is-data" type="date" value={form.deadline} onChange={(e) => update("deadline", e.target.value)} />
+                        <input className="text-input is-data" type="date" max="9999-12-31" value={form.deadline} onChange={(e) => update("deadline", e.target.value)} />
                       </label>
                       <label className="field">
                         <span>Next step date</span>
-                        <input className="text-input is-data" type="date" value={form.followupAt} onChange={(e) => update("followupAt", e.target.value)} />
+                        <input className="text-input is-data" type="date" max="9999-12-31" value={form.followupAt} onChange={(e) => update("followupAt", e.target.value)} />
                       </label>
                     </div>
                   </section>

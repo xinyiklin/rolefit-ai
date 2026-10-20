@@ -101,9 +101,10 @@ export function ApplicationTimelinePopover({
   const canLogEntry = stageHistoryFits(savedFacts, savedStatus, [placeholder]);
   const canLogInterview = stageHistoryFits(savedFacts, savedStatus === "applied" ? "interviewing" : savedStatus, [placeholder]);
 
-  // The open draft shows in place of its saved entry, or after them when new.
+  // The open draft shows in place of its saved entry, or after them when new
+  // or mid-removal (kept so its focused controls do not unmount mid-save).
   const shown = draft
-    ? draft.isNew
+    ? draft.isNew || !stageHistory.some((entry) => entry.id === draft.entry.id)
       ? [...stageHistory, draft.entry]
       : stageHistory.map((entry) => (entry.id === draft.entry.id ? draft.entry : entry))
     : stageHistory;
@@ -122,13 +123,15 @@ export function ApplicationTimelinePopover({
   useEffect(() => onUnsavedChange(draftChanged), [draftChanged, onUnsavedChange]);
 
   // An entry removed elsewhere (another tab, a conflict refresh) ends its edit.
+  // Not while busy: this popover's own Remove drops the entry optimistically,
+  // and a failed one restores it, so only a settled absence means "elsewhere".
   useEffect(() => {
-    if (draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id)) {
+    if (!busy && draft && !draft.isNew && !stageHistory.some((entry) => entry.id === draft.entry.id)) {
       setDraft(null);
       setConfirmRemove(false);
       setError("That entry was removed elsewhere, so your edit to it was not saved.");
     }
-  }, [draft, stageHistory]);
+  }, [busy, draft, stageHistory]);
 
   // The host may close the popover itself (after confirming); start clean next time.
   useEffect(() => {
