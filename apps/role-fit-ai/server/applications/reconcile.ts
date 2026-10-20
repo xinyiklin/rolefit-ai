@@ -116,6 +116,25 @@ export function reconcileApplicationMutations(
         400
       );
     }
+    // History starts at submission: every later stage change, from any write
+    // path, must add a stage entry naming the new stage.
+    if (
+      mutation.operation === "upsert" &&
+      current?.appliedAt &&
+      requested &&
+      current.status !== requested.status
+    ) {
+      const savedEntryIds = new Set((current.stageHistory ?? []).map((entry) => entry.id));
+      const recorded = (requested.stageHistory ?? []).some(
+        (entry) => !savedEntryIds.has(entry.id) && entry.type === "stage" && entry.status === requested.status
+      );
+      if (!recorded) {
+        throw new ApplicationsStorageError(
+          "A stage change must be recorded in the application's stage history. No tracker changes were saved.",
+          400
+        );
+      }
+    }
     if (mutation.operation === "upsert" && current && requested) {
       const savedVersions = new Map((current.applicationAnswers ?? []).flatMap((answer) => answer.id ? [[answer.id, answer] as const] : []));
       if ((requested.applicationAnswers ?? []).some((answer) => answer.id && savedVersions.has(answer.id) && !isDeepStrictEqual(savedVersions.get(answer.id), answer))) {

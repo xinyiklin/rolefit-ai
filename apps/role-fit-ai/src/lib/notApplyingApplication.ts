@@ -23,6 +23,7 @@ function mergeDefinedApplication(
 
 const SUBMISSION_FIELDS = [
   "appliedAt",
+  "stageHistory",
   "resumeUsed",
   "resumeArtifacts",
   "coverLetterArtifacts",

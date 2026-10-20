@@ -50,6 +50,8 @@ import {
   splitFitWarnings
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
+import { withStageChange } from "../lib/applicationStageHistory";
+import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract";
 import { formatNotApplyingReasons, normalizeNotApplyingReasons } from "../lib/notApplying";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
 import { useDialog } from "../hooks/useDialog";
@@ -121,6 +123,7 @@ type FormState = {
   notes: string;
   contacts: ApplicationContact[];
   answers: ApplicationAnswer[];
+  stageHistory: StageHistoryEntry[];
 };
 
 function toDateInput(iso?: string) {
@@ -186,7 +189,8 @@ function formFromApplication(application: Application | null): FormState {
       interviewTips: "",
       notes: "",
       contacts: [],
-      answers: []
+      answers: [],
+      stageHistory: []
     };
   }
   return {
@@ -211,7 +215,8 @@ function formFromApplication(application: Application | null): FormState {
     interviewTips: application.interviewTips ?? "",
     notes: application.notes ?? "",
     contacts: application.contacts?.length ? application.contacts.map((c) => ({ ...c })) : [],
-    answers: application.applicationAnswers?.length ? application.applicationAnswers.map((a) => ({ ...a })) : []
+    answers: application.applicationAnswers?.length ? application.applicationAnswers.map((a) => ({ ...a })) : [],
+    stageHistory: application.stageHistory?.map((entry) => ({ ...entry })) ?? []
   };
 }
 
@@ -508,6 +513,7 @@ export function ApplicationModal({
       notes: form.notes.trim(),
       contacts: cleanContacts.length ? cleanContacts : undefined,
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
+      stageHistory: withStageChange(base, statusOverride, form.stageHistory.length ? form.stageHistory : undefined, now),
       updatedAt: now
     };
     const persisted = isJobOnlySkippedApplication(next)

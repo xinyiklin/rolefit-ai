@@ -9,6 +9,7 @@ import {
   safeAttachmentFileName
 } from "./documents.ts";
 import { sanitizeFitAssessment } from "../../shared/fitAssessmentContract.ts";
+import { parseStageHistory } from "../../shared/applicationStageHistoryContract.ts";
 import { APPLICATION_STATUSES } from "../../src/lib/applicationStatusTransitions.ts";
 import { JOB_POSTING_GROUP_ID_RE } from "../../src/lib/applicationRelationships.ts";
 import { normalizeNotApplyingReasons } from "../../src/lib/notApplying.ts";
@@ -360,6 +361,9 @@ function sanitizeApplication(raw: unknown) {
   const notes = typeof r.notes === "string" ? r.notes : "";
   const interviewTips = typeof r.interviewTips === "string" ? r.interviewTips : "";
   if (notes.length > APPLICATION_NOTES_MAX_LENGTH || interviewTips.length > APPLICATION_NOTES_MAX_LENGTH) return null;
+  // History starts at submission, so a Draft or job-only Skipped decision has none.
+  const stageHistory = parseStageHistory(r.stageHistory);
+  if (stageHistory === null || (stageHistory && jobOnlySkipped)) return null;
 
   return {
     id,
@@ -383,6 +387,7 @@ function sanitizeApplication(raw: unknown) {
         ? r.notApplyingNote.slice(0, 2_000)
         : undefined,
     updatedAt,
+    stageHistory,
     followupAt: typeof r.followupAt === "string" ? r.followupAt : "",
     location: typeof r.location === "string" ? r.location.slice(0, 200) : "",
     jobType: typeof r.jobType === "string" ? r.jobType.slice(0, 60) : "",
