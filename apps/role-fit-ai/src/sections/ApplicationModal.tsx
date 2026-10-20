@@ -38,6 +38,7 @@ import { ApplicationFitSummary } from "./application/ApplicationFitSummary";
 import { ApplicationJobSnapshot } from "./application/ApplicationJobSnapshot";
 import { ApplicationPostingOverlay } from "./application/ApplicationPostingOverlay";
 import { SkippedDecisionPopover } from "./application/SkippedDecisionPopover";
+import { ApplicationTimelinePopover } from "./application/ApplicationTimelinePopover";
 import { TrackerRowMenu, type RowMenuItem } from "./tracker/TrackerRowMenu";
 import {
   STATUS_LABEL,
@@ -50,8 +51,8 @@ import {
   splitFitWarnings
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
-import { withStageChange } from "../lib/applicationStageHistory";
-import type { StageHistoryEntry } from "../../shared/applicationStageHistoryContract";
+import { withEntryRemoved, withEntrySaved, withStageChange } from "../lib/applicationStageHistory";
+import { toDateInput, toIso } from "../lib/dateInput";
 import { formatNotApplyingReasons, normalizeNotApplyingReasons } from "../lib/notApplying";
 import { withoutSubmittedApplicationArtifacts } from "../lib/notApplyingApplication";
 import { useDialog } from "../hooks/useDialog";
@@ -123,17 +124,7 @@ type FormState = {
   notes: string;
   contacts: ApplicationContact[];
   answers: ApplicationAnswer[];
-  stageHistory: StageHistoryEntry[];
 };
-
-function toDateInput(iso?: string) {
-  return iso ? iso.slice(0, 10) : "";
-}
-
-function toIso(dateInput: string) {
-  // Anchor at noon so a yyyy-mm-dd never slips a day across time zones.
-  return dateInput ? new Date(`${dateInput}T12:00:00`).toISOString() : "";
-}
 
 function formatDetailDate(iso?: string) {
   if (!iso || !Number.isFinite(Date.parse(iso))) return "Date not recorded";
@@ -189,8 +180,7 @@ function formFromApplication(application: Application | null): FormState {
       interviewTips: "",
       notes: "",
       contacts: [],
-      answers: [],
-      stageHistory: []
+      answers: []
     };
   }
   return {
@@ -215,8 +205,7 @@ function formFromApplication(application: Application | null): FormState {
     interviewTips: application.interviewTips ?? "",
     notes: application.notes ?? "",
     contacts: application.contacts?.length ? application.contacts.map((c) => ({ ...c })) : [],
-    answers: application.applicationAnswers?.length ? application.applicationAnswers.map((a) => ({ ...a })) : [],
-    stageHistory: application.stageHistory?.map((entry) => ({ ...entry })) ?? []
+    answers: application.applicationAnswers?.length ? application.applicationAnswers.map((a) => ({ ...a })) : []
   };
 }
 
@@ -262,11 +251,14 @@ export function ApplicationModal({
   const [documentsBusy, setDocumentsBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [skipDecisionOpen, setSkipDecisionOpen] = useState(false);
+  const [timelineOpen, setTimelineOpen] = useState(false);
   const [postingOverlayOpen, setPostingOverlayOpen] = useState(false);
   const [relatedMenu, setRelatedMenu] = useState<{ related: Application; x: number; y: number } | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const tablistRef = useRef<HTMLDivElement>(null);
   const primaryInputRef = useRef<HTMLElement>(null);
+  const timelineTriggerRef = useRef<HTMLButtonElement>(null);
+  const statusSectionRef = useRef<HTMLElement>(null);
   const lastSeededId = useRef<string | null>(seedApplication?.id ?? null);
 
   const replaceForm = useCallback((next: FormState) => {
@@ -321,6 +313,7 @@ export function ApplicationModal({
       setIsSaving(false);
       setIsOpeningPreparation(false);
       setSkipDecisionOpen(false);
+      setTimelineOpen(false);
       setPostingOverlayOpen(false);
       setRelatedMenu(null);
       return;
@@ -346,16 +339,48 @@ export function ApplicationModal({
     if (restoreFocus) window.requestAnimationFrame(() => primaryInputRef.current?.focus());
   }, []);
 
-  function selectTab(nextTab: ModalTab) {
+  const closeTimeline = useCallback((restoreFocus = false) => {
+    setTimelineOpen(false);
+    if (restoreFocus) window.requestAnimationFrame(() => timelineTriggerRef.current?.focus());
+  }, []);
+
+  // An unsaved timeline entry lives only in the popover, so every way out of
+  // it (close, save, navigation) asks first. One prompt at a time.
+  const timelineUnsavedRef = useRef(false);
+  const confirmingTimelineDiscard = useRef(false);
+  const handleTimelineUnsaved = useCallback((unsaved: boolean) => {
+    timelineUnsavedRef.current = unsaved;
+  }, []);
+  const confirmDiscardTimelineEntry = useCallback(async () => {
+    if (!timelineUnsavedRef.current) return true;
+    if (confirmingTimelineDiscard.current) return false;
+    confirmingTimelineDiscard.current = true;
+    try {
+      return await confirm({
+        title: "Discard this timeline entry?",
+        message: "The entry you are editing has not been saved.",
+        confirmLabel: "Discard entry",
+        tone: "danger"
+      });
+    } finally {
+      confirmingTimelineDiscard.current = false;
+    }
+  }, [confirm]);
+
+  async function selectTab(nextTab: ModalTab) {
+    if (!(await confirmDiscardTimelineEntry())) return;
     closeSkipDecision(false);
+    closeTimeline(false);
     setRelatedMenu(null);
     setTab(nextTab);
   }
 
-  const openPosting = useCallback(() => {
+  const openPosting = useCallback(async () => {
+    if (!(await confirmDiscardTimelineEntry())) return;
     setSkipDecisionOpen(false);
+    setTimelineOpen(false);
     setPostingOverlayOpen(true);
-  }, []);
+  }, [confirmDiscardTimelineEntry]);
 
   const isBusy = isSaving || isOpeningPreparation || documentsBusy;
   const controlsLocked = isBusy || hasConcurrentEdit;
@@ -364,11 +389,12 @@ export function ApplicationModal({
   useEffect(() => {
     if (!controlsLocked) return;
     setSkipDecisionOpen(false);
+    setTimelineOpen(false);
     setRelatedMenu(null);
   }, [controlsLocked]);
 
-  const requestClose = () => {
-    if (isBusy) return;
+  const requestClose = async () => {
+    if (isBusy || !(await confirmDiscardTimelineEntry())) return;
     if (!formHasUnsavedChanges) {
       onClose();
       return;
@@ -387,7 +413,7 @@ export function ApplicationModal({
     active: open,
     containerRef: panelRef,
     initialFocusRef: primaryInputRef,
-    onClose: requestClose
+    onClose: () => void requestClose()
   });
 
   if (!open || !activeApplication) return null;
@@ -513,7 +539,9 @@ export function ApplicationModal({
       notes: form.notes.trim(),
       contacts: cleanContacts.length ? cleanContacts : undefined,
       applicationAnswers: cleanAnswers.length ? cleanAnswers : undefined,
-      stageHistory: withStageChange(base, statusOverride, form.stageHistory.length ? form.stageHistory : undefined, now),
+      stageHistory: statusOverride === "draft"
+        ? undefined
+        : withStageChange(base, statusOverride, base.stageHistory),
       updatedAt: now
     };
     const persisted = isJobOnlySkippedApplication(next)
@@ -525,6 +553,29 @@ export function ApplicationModal({
       delete persisted.attachments;
     }
     return persisted;
+  }
+
+  // A timeline entry saves on its own against the saved record, leaving other
+  // unsaved form edits alone. When an interview moves the stage, the form's
+  // baseline moves first so the saved record does not read as a conflict.
+  async function saveTimeline(
+    update: (saved: Application) => Pick<Application, "status" | "stageHistory">
+  ): Promise<boolean> {
+    const saved = application;
+    if (!saved?.appliedAt || controlsLocked) return false;
+    const next: Application = { ...saved, ...update(saved) };
+    const previousBaseline = formBaselineRef.current;
+    const moved = next.status !== saved.status;
+    if (moved) {
+      formBaselineRef.current = { ...previousBaseline, status: next.status };
+      changeForm((current) => (current.status === previousBaseline.status ? { ...current, status: next.status } : current));
+    }
+    const ok = await onSave(next).catch(() => false);
+    if (!ok && moved) {
+      formBaselineRef.current = previousBaseline;
+      changeForm((current) => (current.status === next.status ? { ...current, status: previousBaseline.status } : current));
+    }
+    return ok;
   }
 
   async function persistForm(applicationToSave: Application): Promise<boolean> {
@@ -544,7 +595,7 @@ export function ApplicationModal({
   }
 
   async function save(statusOverride: ApplicationStatus = form.status) {
-    if (controlsLocked) return;
+    if (controlsLocked || !(await confirmDiscardTimelineEntry())) return;
     setIsSaving(true);
     setSaveError("");
     let saved = false;
@@ -564,7 +615,7 @@ export function ApplicationModal({
   }
 
   async function openPreparation() {
-    if (!onLoad || controlsLocked) return;
+    if (!onLoad || controlsLocked || !(await confirmDiscardTimelineEntry())) return;
     const mustPersistFirst = formHasUnsavedChanges || recordWasRemoved;
     if (mustPersistFirst && !canSave) {
       setSaveError(
@@ -598,7 +649,7 @@ export function ApplicationModal({
   }
 
   async function openRelatedApplication(related: Application) {
-    if (!onOpenRelated || controlsLocked) return;
+    if (!onOpenRelated || controlsLocked || !(await confirmDiscardTimelineEntry())) return;
     if (!formHasUnsavedChanges) {
       onOpenRelated(related);
       return;
@@ -743,7 +794,7 @@ export function ApplicationModal({
     if (next < 0) return;
     event.preventDefault();
     event.stopPropagation();
-    selectTab(order[next]);
+    void selectTab(order[next]);
     tablistRef.current?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
   }
 
@@ -761,6 +812,7 @@ export function ApplicationModal({
   // Derived from the saved posting text and links, so it follows the record the
   // same way headerMeta does.
   const headerPosting = postingIdentity(activeApplication);
+  const historyCount = activeApplication.stageHistory?.length ?? 0;
 
   return (
     <div
@@ -850,7 +902,7 @@ export function ApplicationModal({
               aria-selected={tab === id}
               aria-controls="application-tabpanel"
               tabIndex={tab === id ? 0 : -1}
-              onClick={() => selectTab(id)}
+              onClick={() => void selectTab(id)}
             >
               {Icon ? <Icon size={14} aria-hidden="true" /> : null}{label}
             </button>
@@ -868,8 +920,35 @@ export function ApplicationModal({
             <>
               <section className="application-details-pane application-modal__main">
                 <div className="application-workflow-grid">
-                  <section className="application-details-section application-details-section--status" aria-labelledby="application-status-title">
+                  <section ref={statusSectionRef} className="application-details-section application-details-section--status" aria-labelledby="application-status-title">
                     <h3 id="application-status-title"><ClipboardCheck size={16} aria-hidden="true" />Application status</h3>
+                    <button
+                      ref={timelineTriggerRef}
+                      type="button"
+                      className={`ghost-button is-compact application-timeline-trigger${timelineOpen ? " is-open" : ""}`}
+                      aria-label={
+                        historyCount
+                          ? `Timeline, ${historyCount} ${historyCount === 1 ? "entry" : "entries"}`
+                          : "Timeline"
+                      }
+                      aria-haspopup="dialog"
+                      aria-expanded={timelineOpen}
+                      aria-controls="application-timeline"
+                      onClick={() => {
+                        if (timelineOpen) {
+                          void confirmDiscardTimelineEntry().then((discard) => discard && closeTimeline(false));
+                          return;
+                        }
+                        setSkipDecisionOpen(false);
+                        setTimelineOpen(true);
+                      }}
+                    >
+                      <History size={14} aria-hidden="true" />
+                      <span aria-hidden="true">Timeline</span>
+                      {historyCount ? (
+                        <span className="application-timeline-trigger__count" aria-hidden="true">{historyCount}</span>
+                      ) : null}
+                    </button>
                     <div className="application-stage-control field">
                       <span id="application-stage-label">Stage</span>
                       {form.status === "not_applying" ? (
@@ -881,7 +960,13 @@ export function ApplicationModal({
                           aria-haspopup="dialog"
                           aria-expanded={skipDecisionOpen}
                           aria-controls="application-skipped-decision"
-                          onClick={() => setSkipDecisionOpen((current) => !current)}
+                          onClick={() => {
+                            void confirmDiscardTimelineEntry().then((discard) => {
+                              if (!discard) return;
+                              setTimelineOpen(false);
+                              setSkipDecisionOpen((current) => !current);
+                            });
+                          }}
                         >
                           <span className="stage-dot stage-dot--not_applying" aria-hidden="true" />
                           <span className="application-skipped-trigger__copy">
@@ -1158,6 +1243,27 @@ export function ApplicationModal({
             onClose={closeSkipDecision}
           />
         ) : null}
+
+        <ApplicationTimelinePopover
+          open={timelineOpen}
+          triggerRef={timelineTriggerRef}
+          anchorRef={statusSectionRef}
+          onClose={closeTimeline}
+          savedStatus={activeApplication.status}
+          appliedAt={activeApplication.appliedAt}
+          notApplyingAt={activeApplication.notApplyingAt}
+          stageHistory={activeApplication.stageHistory ?? []}
+          submitted={Boolean(application?.appliedAt)}
+          pendingStage={
+            activeApplication.appliedAt && activeApplication.status !== form.status && form.status !== "draft"
+              ? form.status
+              : null
+          }
+          onSaveEntry={(entry) => saveTimeline((saved) => withEntrySaved(saved, entry))}
+          onRemoveEntry={(id) => saveTimeline((saved) => withEntryRemoved(saved, id))}
+          onUnsavedChange={handleTimelineUnsaved}
+          confirmDiscard={confirmDiscardTimelineEntry}
+        />
 
         <footer className="application-modal__foot">
           {onDelete && !recordWasRemoved ? (

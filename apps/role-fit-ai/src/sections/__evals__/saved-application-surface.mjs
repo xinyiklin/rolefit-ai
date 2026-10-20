@@ -83,10 +83,40 @@ assert.ok(applicationStyles.includes("@container fit-card"), "Fit adapts to its 
 assert.ok(modal.includes('aria-haspopup="dialog"'));
 assert.ok(modal.includes("<SkippedDecisionPopover"));
 assert.ok(!modal.includes("application-details-decision"));
-assert.ok(skippedDecisionPopover.includes('role="dialog"'));
-assert.ok(skippedDecisionPopover.includes('aria-label="Skipped decision"'));
-assert.ok(skippedDecisionPopover.includes('event.key !== "Escape"'));
-assert.ok(skippedDecisionPopover.includes("onClose(true)"));
+// Both Application status popovers share one anchored, non-modal shell.
+const anchoredPopover = read("../application/AnchoredPopover.tsx");
+const timelinePopover = read("../application/ApplicationTimelinePopover.tsx");
+assert.ok(anchoredPopover.includes('role="dialog"'));
+assert.ok(anchoredPopover.includes('event.key !== "Escape"'));
+assert.ok(anchoredPopover.includes("onClose(true)"));
+assert.ok(skippedDecisionPopover.includes("<AnchoredPopover") && skippedDecisionPopover.includes('label="Skipped decision"'));
+assert.ok(timelinePopover.includes("<AnchoredPopover") && timelinePopover.includes('label="Timeline"'));
+assert.ok(modal.includes("<ApplicationTimelinePopover"), "the timeline opens from Application status");
+assert.match(
+  modal,
+  /aria-controls="application-timeline"[\s\S]{0,500}?if \(timelineOpen\) \{\s*void confirmDiscardTimelineEntry\(\)\.then\(\(discard\) => discard && closeTimeline\(false\)\);[\s\S]{0,200}?setTimelineOpen\(true\);/,
+  "the corner trigger opens the timeline and closes it only after an unsaved entry is confirmed"
+);
+assert.ok(modal.includes("timelineTriggerRef.current?.focus()"), "closing the timeline returns focus to its trigger");
+assert.doesNotMatch(modal, /id: "timeline"/, "the timeline is not a modal tab");
+// Each timeline entry is its own save; an unsaved draft never touches the form or the stage.
+assert.match(modal, /onSaveEntry=\{\(entry\) => saveTimeline\(\(saved\) => withEntrySaved\(saved, entry\)\)\}/);
+assert.match(modal, /onRemoveEntry=\{\(id\) => saveTimeline\(\(saved\) => withEntryRemoved\(saved, id\)\)\}/);
+assert.doesNotMatch(timelinePopover, /onChange\(/, "the timeline popover never edits the application form");
+assert.match(timelinePopover, /Saving also moves the stage to Interviewing\./);
+assert.match(timelinePopover, /Confirm remove/, "removing a saved entry asks first");
+// An unsaved entry survives stray clicks and asks before any close or navigation drops it.
+assert.match(timelinePopover, /if \(draftChanged && \(dismissed \|\| !\(await confirmDiscard\(\)\)\)\) return;/);
+for (const [label, pattern] of [
+  ["closing the window", /const requestClose = async \(\) => \{\s*if \(isBusy \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["saving the form", /if \(controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["switching tabs", /async function selectTab\(nextTab: ModalTab\) \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["opening the posting", /const openPosting = useCallback\(async \(\) => \{\s*if \(!\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["editing the preparation", /if \(!onLoad \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/],
+  ["opening a related record", /if \(!onOpenRelated \|\| controlsLocked \|\| !\(await confirmDiscardTimelineEntry\(\)\)\) return;/]
+]) {
+  assert.match(modal, pattern, `${label} asks before discarding an unsaved timeline entry`);
+}
 assert.ok(modal.includes("primaryInputRef.current?.focus()"));
 assert.ok(skippedDecisionPopover.includes("maxLength={2_000}"));
 
@@ -140,7 +170,7 @@ assert.match(
   /function selectTab[\s\S]{0,300}?closeSkipDecision\(false\)[\s\S]{0,300}?setRelatedMenu\(null\)[\s\S]{0,300}?setTab\(nextTab\)/,
   "changing tabs closes surfaces anchored in the previous tab"
 );
-assert.ok(modal.includes("onClick={() => selectTab(id)}"));
+assert.ok(modal.includes("onClick={() => void selectTab(id)}"));
 
 assert.ok(modal.includes("Mark as unrelated"));
 assert.match(modal, /Merge accidental duplicate\?[\s\S]{0,700}?tone: "danger"/);

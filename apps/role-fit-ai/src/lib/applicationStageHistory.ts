@@ -1,8 +1,10 @@
 import type { Application, ApplicationStatus } from "../hooks/useApplications.ts";
 import {
+  INTERVIEW_KIND_LABEL,
   STAGE_HISTORY_MAX_ENTRIES,
   type StageHistoryEntry
 } from "../../shared/applicationStageHistoryContract.ts";
+import { todayIso } from "./dateInput.ts";
 
 type HistoryFacts = Pick<Application, "status" | "appliedAt" | "stageHistory">;
 
@@ -17,22 +19,30 @@ export function withStageChange(
   saved: HistoryFacts,
   nextStatus: ApplicationStatus,
   stageHistory: StageHistoryEntry[] | undefined,
-  at = new Date().toISOString()
+  at = todayIso()
 ): StageHistoryEntry[] | undefined {
   if (!saved.appliedAt || saved.status === nextStatus || nextStatus === "draft") return stageHistory;
   return [...(stageHistory ?? []), { id: newStageEntryId(), type: "stage", status: nextStatus, at }];
 }
 
-// Logging an interview on an Applied record also moves it to Interviewing;
-// the stage entry itself is added at save time by withStageChange.
-export function withInterviewLogged(
-  current: Pick<Application, "status" | "stageHistory">,
-  interview: Extract<StageHistoryEntry, { type: "interview" }>
-): Pick<Application, "status" | "stageHistory"> {
-  return {
-    status: current.status === "applied" ? "interviewing" : current.status,
-    stageHistory: [...(current.stageHistory ?? []), interview]
-  };
+type SavedHistory = { status: ApplicationStatus; stageHistory: StageHistoryEntry[] | undefined };
+
+// Each entry is saved on its own, against the saved record: replaced in place
+// or appended. Saving a new interview on an Applied record also moves it to
+// Interviewing and records that move, so an unsaved Log changes nothing.
+export function withEntrySaved(saved: HistoryFacts, entry: StageHistoryEntry): SavedHistory {
+  const history = saved.stageHistory ?? [];
+  const exists = history.some((current) => current.id === entry.id);
+  const stageHistory = exists
+    ? history.map((current) => (current.id === entry.id ? entry : current))
+    : [...history, entry];
+  const status = !exists && entry.type === "interview" && saved.status === "applied" ? "interviewing" : saved.status;
+  return { status, stageHistory: withStageChange(saved, status, stageHistory) };
+}
+
+export function withEntryRemoved(saved: HistoryFacts, id: string): SavedHistory {
+  const stageHistory = (saved.stageHistory ?? []).filter((entry) => entry.id !== id);
+  return { status: saved.status, stageHistory: stageHistory.length ? stageHistory : undefined };
 }
 
 // Duplicate merge keeps the canonical record's history plus every other
@@ -112,4 +122,23 @@ export function deriveTimeline(
     .map((row, order) => ({ row, at: row.at, order }))
     .sort(byDate)
     .map(({ row }) => row);
+}
+
+type InterviewRow = Extract<TimelineRow, { kind: "interview" }>;
+
+export function interviewLabel(row: InterviewRow): string {
+  return `Round ${row.round} · ${INTERVIEW_KIND_LABEL[row.entry.kind]}`;
+}
+
+// The most recent interview that has happened and the soonest one scheduled.
+export function interviewMilestones(
+  application: Pick<Application, "status" | "appliedAt" | "notApplyingAt" | "stageHistory">,
+  today = new Date()
+): { latest?: InterviewRow; next?: InterviewRow } {
+  const interviews = deriveTimeline(application, today).filter((row): row is InterviewRow => row.kind === "interview");
+  const held = interviews.filter((row) => !row.scheduled);
+  return {
+    latest: held[held.length - 1],
+    next: interviews.find((row) => row.scheduled)
+  };
 }

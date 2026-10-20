@@ -3,11 +3,15 @@ import { readFileSync } from "node:fs";
 
 import {
   deriveTimeline,
+  interviewLabel,
+  interviewMilestones,
   mergeStageHistories,
   newStageEntryId,
-  withInterviewLogged,
+  withEntryRemoved,
+  withEntrySaved,
   withStageChange
 } from "../applicationStageHistory.ts";
+import { toDateInput, toIso, todayIso } from "../dateInput.ts";
 import { skipApplicationForSession } from "../notApplyingApplication.ts";
 import { sanitizeApplications } from "../../../server/applications/schema.ts";
 import { reconcileApplicationMutations } from "../../../server/applications/reconcile.ts";
@@ -65,27 +69,36 @@ for (const status of ["interviewing", "offer", "rejected", "withdrawn", "not_app
   );
 }
 
-// --- withInterviewLogged ----------------------------------------------------
+// --- withEntrySaved / withEntryRemoved -------------------------------------
+// Entries save on their own against the saved record; only saving a new
+// interview on an Applied record moves the stage, and that move is recorded.
 const interview = { id: "i1", type: "interview", kind: "technical", at: rev2 };
+const savedInterview = withEntrySaved(saved[0], interview);
+assert.equal(savedInterview.status, "interviewing", "saving a new interview on an Applied record moves it to Interviewing");
 assert.deepEqual(
-  withInterviewLogged({ status: "applied" }, interview),
-  { status: "interviewing", stageHistory: [interview] },
-  "logging an interview on an Applied record moves it to Interviewing"
+  savedInterview.stageHistory.map((entry) => entry.type === "stage" ? "stage:" + entry.status : entry.id),
+  ["r1", "i1", "stage:interviewing"],
+  "the interview and its stage move are saved together"
 );
 for (const status of ["interviewing", "offer", "rejected"]) {
-  assert.equal(withInterviewLogged({ status, stageHistory: existing }, interview).status, status, `${status} is not moved by an interview`);
+  const result = withEntrySaved({ ...saved[0], status }, interview);
+  assert.equal(result.status, status, status + " is not moved by an interview");
+  assert.equal(result.stageHistory.length, 2, status + " gains only the interview");
 }
-const logged = withInterviewLogged(saved[0], interview);
-const loggedRecord = sanitizeApplications([{
-  ...saved[0],
-  ...logged,
-  stageHistory: withStageChange(saved[0], logged.status, logged.stageHistory, rev2),
-  updatedAt: rev2
-}]);
+const followup = { id: "f1", type: "followup", at: rev2 };
+assert.deepEqual(withEntrySaved(saved[0], followup), { status: "applied", stageHistory: [existing[0], followup] }, "other entries never move the stage");
+const withInterview = { ...saved[0], status: "interviewing", stageHistory: [existing[0], interview] };
+const edited = withEntrySaved(withInterview, { ...interview, kind: "final" });
+assert.deepEqual(edited.stageHistory, [existing[0], { ...interview, kind: "final" }], "an edit replaces the entry in place");
+assert.equal(edited.status, "interviewing", "editing an interview does not move the stage");
+assert.deepEqual(withEntryRemoved(withInterview, "i1"), { status: "interviewing", stageHistory: [existing[0]] }, "removal drops only that entry");
+assert.equal(withEntryRemoved({ ...saved[0], stageHistory: [followup] }, "f1").stageHistory, undefined, "removing the last entry leaves no history");
+
+const savedRecord = sanitizeApplications([{ ...saved[0], ...savedInterview, updatedAt: rev2 }]);
 assert.equal(
-  reconcileApplicationMutations(saved, loggedRecord, [{ id: saved[0].id, operation: "upsert", baseUpdatedAt: rev1 }])[0].stageHistory.length,
+  reconcileApplicationMutations(saved, savedRecord, [{ id: saved[0].id, operation: "upsert", baseUpdatedAt: rev1 }])[0].stageHistory.length,
   3,
-  "an interview plus its auto-move saves as one recorded change"
+  "the server accepts an interview saved with its stage move"
 );
 
 // --- mergeStageHistories ----------------------------------------------------
@@ -133,6 +146,24 @@ assert.deepEqual(
 );
 assert.deepEqual(deriveTimeline(record({ status: "draft", appliedAt: undefined })), [], "a Draft has no timeline");
 
+// --- interviewMilestones ----------------------------------------------------
+const milestones = interviewMilestones(record({
+  status: "interviewing",
+  stageHistory: [
+    { id: "i1", type: "interview", kind: "recruiter_screen", at: "2026-09-06T12:00:00.000Z" },
+    { id: "i3", type: "interview", kind: "final", at: "2026-09-30T12:00:00.000Z" },
+    { id: "i2", type: "interview", kind: "technical", at: "2026-09-12T12:00:00.000Z" },
+    { id: "i4", type: "interview", kind: "panel_onsite", at: "2026-09-20T12:00:00.000Z" }
+  ]
+}), today);
+assert.equal(interviewLabel(milestones.latest), "Round 2 · Technical", "the latest held interview is the most recent past one");
+assert.equal(interviewLabel(milestones.next), "Round 3 · Panel / onsite", "the next interview is the soonest scheduled one");
+assert.deepEqual(interviewMilestones(record(), today), { latest: undefined, next: undefined }, "no interviews, no milestones");
+
+// --- Date helpers keep a picked day stable ----------------------------------
+assert.equal(toDateInput(toIso("2026-03-08")), "2026-03-08", "a picked date round-trips through storage");
+assert.equal(toDateInput(todayIso(new Date(2026, 9, 20, 23, 30))), "2026-10-20", "late-evening entries keep the local day");
+
 // --- Skip keeps submitted history; job-only decisions keep none ------------
 const skipped = skipApplicationForSession({
   session: { mode: "new" },
@@ -152,7 +183,7 @@ assert.match(hook, /mergeStageHistories\(canonical\.stageHistory, others\.map/, 
 assert.match(hook, /if \(stageHistory === null\) \{[\s\S]*?return false;/, "an over-limit merge is refused");
 assert.match(
   source("../../sections/ApplicationModal.tsx"),
-  /stageHistory: withStageChange\(base, statusOverride, form\.stageHistory\.length \? form\.stageHistory : undefined, now\)/,
+  /stageHistory: statusOverride === "draft"\s*\? undefined\s*: withStageChange\(base, statusOverride, base\.stageHistory\)/,
   "Application Detail records a stage change on save"
 );
 
