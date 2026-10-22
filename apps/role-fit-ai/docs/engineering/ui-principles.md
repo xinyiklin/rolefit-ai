@@ -26,12 +26,16 @@ marketing landing page, a SaaS dashboard, or a native desktop installer.
 
 ## Workflow Shape
 
-Preserve the compact masthead + full-width studio workflow (document file
+Preserve the full-height studio rail + full-width workspace (document file
 actions moved into their editor bars on 2026-07-25; job intake moved from the
-masthead into the first/default Prepare page on 2026-07-29):
+masthead into the first/default Prepare page on 2026-07-29; the top bar folded
+into the rail head and Apply into a floating pill on 2026-10-22):
 
-- masthead (navbar): RoleFit identity plus the global Apply action. No Inputs
-  group or intake control lives here
+- masthead (rail head): the RoleFit brand, which is also the rail's collapse
+  toggle. No Inputs group or intake control lives here
+- floating Apply action (workspace bottom-right): prepared role and company,
+  readiness in words, and the global Apply action; pages keep
+  `--apply-clearance` free beneath it
 - studio utilities (bottom rail): read-only Sessions provides ambient awareness
   immediately above Settings, outside `OUTPUT_TABS` and the APG tablist. Expanded
   rails show Sessions + count; collapsed rails show an icon + compact
@@ -90,7 +94,7 @@ then the named-variant selector and actions in matching DOM and visual order. It
 shows at most one note underneath: the blocker while its action is unavailable,
 its live status otherwise. Resume starts included and Cover Letter starts
 excluded. Do not add “optional” labels, badges, or card-specific visual
-hierarchy. The Prepare and masthead Apply buttons invoke one handler and one
+hierarchy. The Prepare and floating Apply buttons invoke one handler and one
 readiness model: the current job must match a completed preparation, the tracker
 must finish its authoritative load, and only included materials must be ready
 while their preparation is idle. Either or both cards may be excluded. A later
@@ -440,13 +444,13 @@ Never show:
   not expose an adapter until its current request contract and a live smoke are
   verified.
 - Every preference lives in ONE place: the Settings dialog, opened from the foot
-  of the studio tab rail. Its five pages sit in two groups — **You**: Profile
+  of the studio tab rail. Its six pages sit in three groups — **You**: Profile
   (declared facts) and Background (notes); **AI**: Guidance (every
   instruction), Automation (what runs after Prepare), and Models (each stage's
-  provider) — with Reset pinned at the foot of the rail. The card keeps one
+  provider); **App**: Appearance (light, dark, or the system theme) — with Reset pinned at the foot of the rail. The card keeps one
   size on every page. The studio gear reopens the last page used in the tab
   (Background first); a targeted entry point opens its own page. The
-  masthead keeps only the RoleFit identity and Apply. Read-only Sessions
+  masthead keeps only the RoleFit brand; Apply floats over the workspace. Read-only Sessions
   belongs immediately above Settings in the bottom studio-rail utilities group,
   outside the output tablist. Do not add a second control for a setting
   Settings already owns.
@@ -574,8 +578,9 @@ Never show:
 - Desktop is the primary surface. Long resume text, job descriptions,
   and status messages must remain readable without layout overlap.
 - Wrap or adjust layout rather than clipping important content.
-- Keep the studio navigation vertical. At narrower supported widths it becomes
-  a 52px icon rail with accessible tab names; it does not become another top
+- Keep the studio navigation vertical. The user may resize it or collapse it
+  to a 52px icon rail (brand click or drag); at 1080px and below it is always
+  that icon rail with accessible tab names. It does not become another top
   navigation row.
 - Editor header and formatting rows keep fixed type and a 48px resting height.
   RoleFit's formatting row shares its container with a full document action bar,
@@ -602,10 +607,9 @@ Never show:
 - The expanded Sessions utility uses its label plus total count; the collapsed
   rail uses a familiar, evenly spaced icon plus a compact count/working state.
   It remains immediately above Settings and outside output-tab navigation. The
-  RoleFit wordmark and Apply icon-and-label button remain visible throughout
-  the supported range. The masthead stays 57px tall across disclosure states
-  and meets the studio/sidebar through one structural hairline; it never wraps
-  or paints a false gap below itself. At 720px and below, only the Resume tab's
+  expanded rail shows the RoleFit wordmark; the collapsed rail keeps the brand
+  tile, which expands it again. The floating Apply action keeps its label at
+  every width (icon-only only when no job is prepared). There is no top bar: the workspace starts at the top of the window. At 720px and below, only the Resume tab's
   precise authoring surface is replaced by the non-dismissible width notice.
   Prepare, masthead/navigation, the simpler Cover letter page, Answers,
   Applications, and Analytics remain usable, including when browser zoom makes

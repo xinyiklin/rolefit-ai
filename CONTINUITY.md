@@ -76,6 +76,22 @@ D-entries in `docs/decisions.md`.
   macOS (win32 only); D087's OpenAI API live calls, its Models page in
   Firefox, and the Background view switch.
 
+## 2026-10-22
+
+- [USER+CODE+TOOL] **Workspace redesign** (D093): calm native light/dark look
+  replacing the green-paper visuals across RoleFit host CSS, plus Settings ›
+  App › Appearance. The top bar is gone: a full-height rail headed by the
+  brand, which toggles it, with drag resize/collapse, and a floating Apply
+  pill at the bottom-right; every page head is one compact 48px row. The
+  landing page wears the same tokens; its app captures and the README shots
+  were retaken. Verified: tsc, the RoleFit check (197/197 evals, landing and
+  desktop builds), contrast math, and headless-Edge captures of a synthetic
+  workspace in light and dark; the Chromium host audit now expects light pages
+  and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
+  print UNCONFIRMED. Open with the user: white vs gray workspace plane,
+  stacked state labels. Next: the companion restyle (its own branch, with the
+  landing's companion shot), then the extension popup restyle.
+
 ## 2026-10-20
 
 - [USER+CODE+TOOL] **Application stage history** (D091): submitted applications

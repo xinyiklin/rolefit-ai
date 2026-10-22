@@ -153,7 +153,7 @@ export function ActivityCard({
             {plural(totals.sent, "application")} sent · <b>{replyShare}</b> replied · <b>{totals.interviewed}</b> reached interview
           </p>
         </div>
-        <label className="an-field an-field--compact">
+        <label className="an-field">
           <span className="sr-only">Group by</span>
           <select
             value={unit ?? "month"}

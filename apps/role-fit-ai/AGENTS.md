@@ -11,7 +11,7 @@ own a second resume model, editor, layout engine, or PDF implementation.
 - `README.md` — product setup, providers, extension, workspace, and app layout.
 - `PRODUCT.md` — RoleFit behavior, workflow, and trust contract; its
   `#fit-assessment-user-contract` section owns verdict and eligibility behavior.
-- `DESIGN.md` — Drafting Desk visual system, assessment-layer separation, and
+- `DESIGN.md` — workspace visual system (light/dark tokens), assessment-layer separation, and
   host/shared styling boundary.
 - `docs/engineering/ui-principles.md` — host UI and responsive behavior.
 - `docs/engineering/ai-server.md` — broad AI/server request and trust boundaries.
@@ -161,7 +161,7 @@ RoleFit owns:
 - `server.ts` and `server/`: local HTTP/Vite composition, provider calls, safe
   job preparation, workspace/application persistence, and extension routes;
 - `src/hooks/`: RoleFit workflow state and effects;
-- `src/sections/`: primary-action masthead, read-only Sessions/Settings studio-rail
+- `src/sections/`: the brand masthead and floating Apply action, read-only Sessions/Settings studio-rail
   utilities, first/default Prepare intake, studio navigation and tabs, tracker,
   materials, proposal rails, reusable AI workflow progress,
   dialogs, and host
@@ -212,7 +212,7 @@ or workspace state, keep it here and expose the smallest host seam instead.
   defaults included and Cover Letter defaults excluded; starting Polish for a
   document, manually or through its enabled automatic proposal, turns on only
   that document's Include toggle. Do not label either card optional.
-- Masthead and Prepare primary controls share one handler, readiness model, and
+- The floating Apply action and Prepare primary controls share one handler, readiness model, and
   action descriptor. Fresh sessions say Apply; an explicitly restored submitted
   record says Update application, and a restored Skipped decision says Save job
   updates. Fresh Apply creates; restored work updates only the session's exact

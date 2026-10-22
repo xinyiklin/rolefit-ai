@@ -15,8 +15,7 @@
   margin: 0;
   color: var(--accent-deep);
   font: 600 0.68rem/1 var(--font-ui);
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 /* Tone, not state: the shared workflow contract owns ten states, and the rail
@@ -65,7 +64,7 @@
   inset-inline-start: 1px;
   width: 7px;
   height: 7px;
-  border: 1px solid var(--hairline-strong);
+  border: 1.5px solid var(--hairline-strong);
   border-radius: 50%;
   content: "";
 }
@@ -145,7 +144,9 @@
   flex-wrap: wrap;
   gap: var(--s2);
   margin: auto calc(-1 * var(--s4)) calc(-1 * var(--s4));
-  padding: var(--s3) var(--s4);
+  /* Flush with the rail bottom; its own bottom padding is the strip the
+     floating Apply action sits over. */
+  padding: var(--s3) var(--s4) calc(var(--s3) + var(--apply-clearance));
   border-top: 1px solid var(--hairline);
   background: var(--card);
 }
@@ -158,8 +159,8 @@
   display: none;
 }
 
-/* An in-flight run: dotted-leader rows saying what is being polished and for
-   how long, in the ledger voice the rest of the desk uses for facts. */
+/* An in-flight run: ledger rows saying what is being polished and for how
+   long, in the voice the rest of the desk uses for facts. */
 .workflow-rail__run {
   padding-block: var(--s2);
   border-block: 1px solid var(--hairline-soft);

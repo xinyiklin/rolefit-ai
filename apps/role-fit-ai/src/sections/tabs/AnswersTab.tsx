@@ -73,9 +73,9 @@ export function AnswersTab({
   return (
     <section className={`answers-page${empty ? " is-empty" : ""}`} aria-label="Application answers">
       <header className="answers-header">
-        <div>
+        <div className="workspace-page__title-row">
           <h2 className="page-serif">Answers</h2>
-          <p>{targetLine || "Your application questions, one at a time."}</p>
+          <p className="workspace-page__detail">{targetLine || "Your application questions, one at a time."}</p>
         </div>
         <div className="answers-header__controls">
           <NavMenu icon={<FileText size={14} aria-hidden="true" />} label="Context" ariaLabel="Answer context" className="answers-context">

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const dock = readFileSync(new URL("../ActionStatus.tsx", import.meta.url), "utf8");
-const masthead = readFileSync(new URL("../Masthead.tsx", import.meta.url), "utf8");
+const applyAction = readFileSync(new URL("../ApplyAction.tsx", import.meta.url), "utf8");
 const app = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
 const applyFlow = readFileSync(new URL("../../hooks/useApplyFlow.ts", import.meta.url), "utf8");
 const skipFlow = readFileSync(new URL("../../hooks/useSkipFlow.ts", import.meta.url), "utf8");
@@ -65,9 +65,9 @@ assert.match(
   "the receipt hit-tests as a dock card while the dock stays click-through"
 );
 assert.doesNotMatch(
-  masthead,
+  applyAction,
   /applicationActionStatus|masthead-feedback/,
-  "the masthead no longer anchors a receipt over the inspector record Apply opens"
+  "the Apply action does not anchor a receipt over the inspector record it opens"
 );
 
 // Only an idle, clean success expires. Hover and focus stay independent so one

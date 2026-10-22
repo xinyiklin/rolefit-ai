@@ -60,6 +60,7 @@ function setReleaseChannelCopy(preview: boolean): void {
   if (channelLabel) {
     channelLabel.replaceChildren();
     const dot = document.createElement("span");
+    dot.className = preview ? "is-preview" : "is-signed";
     dot.setAttribute("aria-hidden", "true");
     channelLabel.append(
       dot,

@@ -6,11 +6,10 @@
 .prepare-page__eyebrow {
   margin: 0;
   color: var(--ink-faint);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.07em;
+  letter-spacing: 0;
   line-height: 1.3;
-  text-transform: uppercase;
 }
 
 .prepare-page__state {
@@ -86,22 +85,14 @@
   display: grid;
   gap: var(--s3);
   min-width: 0;
-  padding: var(--s3) var(--s4) var(--s4);
-  border: 1px solid var(--hairline);
+  padding: var(--s4) var(--s5) var(--s5);
   border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: var(--shadow-rest);
 }
 
-/* A collapsed source is its own head and nothing else; it should read as a bar,
-   not as a panel with an empty body under a divider. */
+/* A collapsed source is its own head and nothing else: an even bar. */
 .prepare-panel:has(> .prepare-panel__head:last-child) {
-  padding-bottom: var(--s3);
-}
-
-.prepare-panel__head:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
+  padding-bottom: var(--s4);
 }
 
 /* One line: title, quiet meta, actions pushed to the trailing edge. */
@@ -110,15 +101,13 @@
   align-items: center;
   gap: var(--s3);
   min-height: 28px;
-  padding-bottom: var(--s2);
-  border-bottom: 1px solid var(--hairline-soft);
 }
 
 .prepare-panel__head h3 {
   flex: none;
   margin: 0;
   color: var(--ink-strong);
-  font-size: 0.82rem;
+  font-size: 0.92rem;
   font-weight: 650;
   line-height: 1.2;
 }
@@ -201,7 +190,7 @@
   margin: 0;
   padding: var(--s3);
   overflow: auto;
-  border: 1px solid var(--hairline-soft);
+  border: 0;
   border-radius: var(--r-md);
   background: var(--card-soft);
   color: var(--ink-muted);
@@ -268,10 +257,9 @@
   grid-column: 1 / -1;
   padding: 0 var(--s2) 0 0;
   color: var(--ink-faint);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .prepare-role-context {
@@ -310,7 +298,7 @@
 .prepare-brief-tabs {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 2px;
   min-width: 0;
 }
 
@@ -319,7 +307,7 @@
   align-items: center;
   gap: 5px;
   min-height: 24px;
-  padding: 0 8px;
+  padding: 0 7px;
   border: 1px solid transparent;
   border-radius: var(--r-pill);
   background: transparent;
@@ -341,9 +329,8 @@
 }
 
 .prepare-brief-tab[aria-selected="true"] {
-  border-color: var(--accent-veil);
-  background: var(--accent-soft);
-  color: var(--accent-deep);
+  background: var(--control);
+  color: var(--ink-strong);
 }
 
 .prepare-brief-tab:focus-visible {
@@ -360,7 +347,7 @@
 }
 
 .prepare-brief-tab[aria-selected="true"] em {
-  color: var(--accent-deep);
+  color: var(--ink-soft);
 }
 
 .prepare-brief-panel {
@@ -404,9 +391,21 @@
   background: var(--ink-faint);
 }
 
+/* Brief items read as lines of text and turn into fields on hover/focus. */
 .prepare-brief-row .text-input {
   width: 100%;
-  min-height: 28px;
+  min-height: 30px;
+  background: transparent;
+}
+
+.prepare-brief-row .text-input:hover {
+  border-color: transparent;
+  background: var(--card-soft);
+}
+
+.prepare-brief-row .text-input:focus {
+  border-color: var(--accent);
+  background: var(--card);
 }
 
 .prepare-brief-row__remove {
@@ -583,36 +582,33 @@
 
 .prepare-include-toggle__track {
   position: relative;
-  width: 32px;
-  height: 18px;
-  border: 1px solid var(--hairline-strong);
+  width: 34px;
+  height: 20px;
+  border: 0;
   border-radius: var(--r-pill);
-  background: var(--card-soft);
-  transition:
-    border-color 160ms var(--ease),
-    background-color 160ms var(--ease);
+  background: var(--control-hover);
+  transition: background-color 160ms var(--ease);
 }
 
 .prepare-include-toggle__track > span {
   position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 10px;
-  height: 10px;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
-  background: var(--ink-faint);
+  background: oklch(1 0 0);
+  box-shadow: 0 1px 2px oklch(0 0 0 / 0.2);
   transition:
     transform 160ms var(--ease),
     background-color 160ms var(--ease);
 }
 
 .prepare-include-toggle input:checked + .prepare-include-toggle__track {
-  border-color: var(--accent);
-  background: var(--accent-soft);
+  background: var(--accent);
 }
 
 .prepare-include-toggle input:checked + .prepare-include-toggle__track > span {
-  background: var(--accent-deep);
   transform: translateX(14px);
 }
 
@@ -628,12 +624,8 @@
 
 .prepare-include-toggle input:disabled + .prepare-include-toggle__track,
 .prepare-include-toggle input:checked:disabled + .prepare-include-toggle__track {
-  border-color: var(--hairline);
-  background: var(--card-soft);
-}
-
-.prepare-include-toggle input:checked:disabled + .prepare-include-toggle__track > span {
-  background: var(--ink-faint);
+  background: var(--control);
+  opacity: 0.7;
 }
 
 /* -------- Application rail -------- */
@@ -955,6 +947,15 @@
     scrollbar-gutter: stable;
   }
 
+  /* Each pane scrolls its own end clear of the floating Apply action. The main
+     pane gets a spacer (Firefox drops a grid scroller's bottom padding); the
+     rail's single panel, which fills the scrollport, carries it as padding. */
+  .prepare-layout.is-prepared > .prepare-main::after {
+    display: block;
+    height: var(--apply-clearance);
+    content: "";
+  }
+
   /* Sticky solved the old problem (a rail shorter than the page); an own
      scroller solves it better and sticky inside one is meaningless. */
   .prepare-layout.is-prepared > .prepare-rail {
@@ -966,6 +967,7 @@
   .prepare-layout.is-prepared > .prepare-rail > .prepare-application {
     align-self: start;
     min-height: 100%;
+    padding-bottom: calc(var(--s5) + var(--apply-clearance));
   }
 }
 

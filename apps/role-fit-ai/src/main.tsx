@@ -1,6 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
+import { applyAppearance, readAppearance } from "./hooks/useAppearance";
 import { DialogProvider } from "./hooks/useDialog";
 import {
   adoptWorkspacePreferences,
@@ -51,6 +52,9 @@ class AppErrorBoundary extends React.Component<
     return this.props.children;
   }
 }
+
+// Before React renders, so the app never mounts in the OS theme first.
+applyAppearance(readAppearance());
 
 // Adopt canonical workspace preferences before the app's own state (which
 // reads the browser cache on mount) ever renders. Bound

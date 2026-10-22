@@ -101,8 +101,8 @@ browser-side effects; components render them and App composes them.
   configured/readiness state and must not silently select a paid replacement.
 - `useWorkspaceResume`, `useApplyFlow`, `useApplications`, and
   `useApplicationFiles` own their local server/storage lifecycles.
-  `useApplyFlow` consumes the shared readiness result used by both masthead and
-  Prepare controls; it requires the prepared job and readiness only for
+  `useApplyFlow` consumes the shared readiness result used by both the floating
+  Apply action and Prepare controls; it requires the prepared job and readiness only for
   included materials. It captures the Resume/Cover Letter Include selection
   before duplicate or download dialogs, permits either or both to be excluded,
   and leaves a previously saved excluded artifact untouched on a later update. Apply

@@ -30,6 +30,8 @@ type TrackerTableViewProps = {
   postingGroupSizes: Map<string, number>;
   // Derived no-response flags by application id (see TrackerTab).
   noResponse: ReadonlyMap<string, NoResponseCandidate>;
+  // The empty tracker's one way forward: Prepare (also in the studio rail).
+  onPrepareApplication: () => void;
 };
 
 // Column definitions in render order. `key` marks a sortable column.
@@ -178,7 +180,8 @@ export function TrackerTableView({
   onRowContextMenu,
   duplicateIds,
   postingGroupSizes,
-  noResponse
+  noResponse,
+  onPrepareApplication
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
   const tableRef = useRef<HTMLDivElement>(null);
@@ -306,6 +309,11 @@ export function TrackerTableView({
                 ? "Clear search or filters to widen the list."
                 : "Add a role or apply after polishing a resume."}
             </span>
+            {allCount ? null : (
+              <button type="button" className="secondary-button is-compact" onClick={onPrepareApplication}>
+                Go to Prepare
+              </button>
+            )}
           </div>
         )}
       </div>

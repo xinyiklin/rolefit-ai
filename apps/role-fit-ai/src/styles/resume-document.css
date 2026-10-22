@@ -31,9 +31,9 @@
   align-items: center;
   min-height: 24px;
   padding: 0 var(--s2);
-  color: var(--ink-soft);
-  background: var(--card-elev);
-  border: 1px solid var(--hairline-strong);
+  color: var(--ink-muted);
+  background: var(--control);
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
   font-family: var(--font-ui);
   font-size: 0.68rem;
@@ -49,10 +49,16 @@
 .ts-chip.is-on {
   color: var(--on-accent);
   background: var(--accent);
-  border-color: var(--accent-deep);
 }
 
 .ts-chip:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
+}
+
+/* The page floats on the workspace plane by shadow alone (tokens.css keeps it
+   paper in dark mode). */
+.tsd-doc--screen .tsd-page {
+  border-color: transparent;
+  box-shadow: 0 0 0 1px oklch(0.2 0.01 265 / 0.08), 0 2px 10px oklch(0 0 0 / 0.12);
 }

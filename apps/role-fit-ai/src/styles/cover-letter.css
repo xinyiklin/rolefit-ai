@@ -13,10 +13,6 @@
   flex: 0 0 auto;
 }
 
-/* The document action bar uses the shared --card fill from .top-toolbar. It was
-   overridden to --card-elev here, which made the Cover letter header read a
-   shade lighter than the Resume header on the same desk. */
-
 .cover-letter-tab__toolbar .top-toolbar__file-actions {
   min-width: 0;
 }
@@ -29,10 +25,6 @@
 
 .document-workbench__editor--cover-letter .typeset-editor {
   min-height: 100%;
-}
-
-.document-workbench__editor--cover-letter .tsd-page {
-  box-shadow: var(--shadow-lift);
 }
 
 .cover-letter-review__fields {
@@ -64,9 +56,9 @@
   box-sizing: border-box;
   width: 100%;
   min-width: 0;
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-elev);
+  background: var(--card-soft);
   color: var(--ink);
   font: 400 0.76rem/1.4 var(--font-ui);
 }
@@ -168,7 +160,7 @@
 
 .cover-letter-proposal__document {
   padding: var(--s3);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card-elev);
 }
@@ -235,4 +227,5 @@
 .cover-letter-applied p:first-child {
   color: var(--ink);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }

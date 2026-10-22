@@ -266,12 +266,12 @@ const railSource = readFileSync(
   new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
   "utf8"
 );
-const mastheadSource = readFileSync(new URL("../../sections/Masthead.tsx", import.meta.url), "utf8");
+const applyActionSource = readFileSync(new URL("../../sections/ApplyAction.tsx", import.meta.url), "utf8");
 const dialogSource = readFileSync(new URL("../../sections/SkipJobDialog.tsx", import.meta.url), "utf8");
 const skipFlowSource = readFileSync(new URL("../../hooks/useSkipFlow.ts", import.meta.url), "utf8");
 
 assert.match(railSource, /"Skip & save job"/, "the quiet action lives in the Prepare rail");
-assert.doesNotMatch(mastheadSource, /Skip & save job/, "the masthead does not expose the skip action");
+assert.doesNotMatch(applyActionSource, /Skip & save job/, "the floating Apply action does not expose the skip action");
 assert.match(dialogSource, /No application is recorded\./);
 assert.match(dialogSource, /"Save as skipped"/);
 assert.match(skipFlowSource, /"Saved as skipped"/);

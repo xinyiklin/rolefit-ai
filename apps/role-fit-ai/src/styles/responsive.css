@@ -1,194 +1,142 @@
 /* -------- Responsive -------- */
 
-@media (max-width: 1080px) {
-  .studio-pane {
-    grid-template-columns: 52px minmax(0, 1fr);
-  }
-
-  /* Keep the navigation axis stable. The desktop rail collapses to an icon
-     strip instead of becoming a second top navbar. */
-  .studio-sidebar {
-    border-right: 1px solid var(--hairline);
-  }
-
-  .studio-tabs {
-    align-items: center;
-    padding: var(--s3) var(--s2);
-  }
-
-  .studio-sidebar__utilities {
-    align-items: center;
-    gap: var(--s1);
-    padding: var(--s2);
-  }
-
-  .studio-sidebar__utilities .nav-menu,
-  .studio-sidebar__utilities .nav-menu__trigger,
-  .studio-settings-trigger {
-    width: 36px;
-    min-width: 36px;
-  }
-
-  .studio-sidebar__utilities .nav-menu__trigger,
-  .studio-settings-trigger {
-    position: relative;
-    justify-content: center;
-    height: 36px;
-    min-height: 36px;
-    margin-inline: auto;
-    padding: 0;
-  }
-
-  .studio-sidebar__utilities .nav-menu__label,
-  .studio-sidebar__utilities .nav-menu__caret,
-  .studio-settings-trigger__label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  /* Keep the count visible at the trigger's top-right corner. The ready dot is
-     only a visual supplement; React's accessible label names the work state. */
-  .studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary {
-    position: absolute;
-    top: -4px;
-    right: -4px;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    min-width: 14px;
-    height: 14px;
-    max-width: none;
-    padding-inline: 3px;
-    border: 1px solid var(--hairline);
-    border-radius: var(--r-pill);
-    background: var(--card-elev);
-    color: var(--ink-soft);
-    font-size: 0.55rem;
-    line-height: 1;
-    overflow: visible;
-  }
-
-  .studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary.is-ready::before {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    display: block;
-    width: 5px;
-    height: 5px;
-    border-color: var(--accent);
-    background: var(--accent);
-  }
-
-  .studio-tabs__group-label {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-  }
-
-  .studio-tab {
-    position: relative;
-    justify-content: center;
-    width: 36px;
-    min-width: 36px;
-    min-height: 36px;
-    padding: 0;
-  }
-
-  .studio-tab__label {
-    position: absolute;
-    left: 100%;
-    opacity: 0;
-    transform: translateX(-6px);
-    pointer-events: none;
-  }
-
-  .studio-tab em {
-    position: absolute;
-    top: -3px;
-    right: -3px;
-    min-width: 14px;
-    height: 14px;
-    padding-inline: 3px;
-    font-size: 0.55rem;
-  }
+/* -------- Collapsed rail --------
+   StudioPane sets data-rail="collapsed" when the user collapses the rail and
+   always at 1080px and below (useStudioRail). */
+.studio-pane[data-rail="collapsed"] {
+  grid-template-columns: var(--studio-rail-collapsed) minmax(0, 1fr);
 }
 
-@media (max-width: 1080px) {
-  /* Tighten the masthead alongside the rail collapse, but keep the visible
-     wordmark until the much narrower action breakpoint. */
+/* Keep the navigation axis stable. The desktop rail collapses to an icon
+   strip instead of becoming a top navbar. */
+.studio-pane[data-rail="collapsed"] .studio-tabs {
+  align-items: center;
+  padding: var(--s3) var(--s2);
+}
 
-  .masthead {
-    gap: var(--s3);
-    padding-inline: var(--s4);
-  }
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities {
+  align-items: center;
+  gap: var(--s1);
+  padding: var(--s2);
+}
 
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .nav-menu,
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .nav-menu__trigger,
+.studio-pane[data-rail="collapsed"] .studio-settings-trigger {
+  width: 36px;
+  min-width: 36px;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .nav-menu__trigger,
+.studio-pane[data-rail="collapsed"] .studio-settings-trigger {
+  position: relative;
+  justify-content: center;
+  height: 36px;
+  min-height: 36px;
+  margin-inline: auto;
+  padding: 0;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .nav-menu__label,
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .nav-menu__caret,
+.studio-pane[data-rail="collapsed"] .studio-settings-trigger__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Keep the count visible at the trigger's top-right corner. The ready dot is
+   only a visual supplement; React's accessible label names the work state. */
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 14px;
+  height: 14px;
+  max-width: none;
+  padding-inline: 3px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--r-pill);
+  background: var(--card-elev);
+  color: var(--ink-soft);
+  font-size: 0.55rem;
+  line-height: 1;
+  overflow: visible;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-sidebar__utilities .sessions-menu .nav-menu__sub.sessions-menu__summary.is-ready::before {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.studio-pane[data-rail="collapsed"] .studio-tabs__group-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-tab {
+  position: relative;
+  justify-content: center;
+  width: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 0;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-tab__label {
+  position: absolute;
+  left: 100%;
+  opacity: 0;
+  transform: translateX(-6px);
+  pointer-events: none;
+}
+
+.studio-pane[data-rail="collapsed"] .studio-tab em {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding-inline: 3px;
+  font-size: 0.55rem;
+}
+
+/* The collapsed head is the brand tile alone, still the expand toggle. */
+.studio-pane[data-rail="collapsed"] .masthead {
+  justify-content: center;
+  padding: var(--s3) var(--s2) var(--s1);
+}
+
+.studio-pane[data-rail="collapsed"] .masthead__brand {
+  padding: 7px;
+}
+
+.studio-pane[data-rail="collapsed"] .masthead__wordmark {
+  display: none;
 }
 
 @media (max-width: 760px) {
-  .masthead {
-    gap: 4px;
-    padding-inline: 5px;
-  }
-
-  .masthead__brand {
-    flex: 0 0 auto;
-    gap: 0;
-    margin-right: auto;
-  }
-
-  .masthead__mark {
-    display: none;
-  }
-
-  .masthead__brand h1 {
-    font-size: 0.9rem;
-    white-space: nowrap;
-  }
-
-  .masthead__actions {
-    flex: 0 0 auto;
-    gap: 3px;
-    padding-left: 0;
-  }
-
-  .masthead__actions .masthead__apply.masthead__apply {
-    width: auto;
-    height: 30px;
-    gap: 4px;
-    padding-inline: 5px;
-    font-size: 0.7rem;
-  }
-
   .studio-body { padding-left: var(--s4); padding-right: var(--s4); }
-}
-
-@media (max-width: 360px) {
-  .masthead {
-    gap: 2px;
-    padding-inline: 3px;
-  }
-
-  .masthead__brand h1 {
-    font-size: 0.78rem;
-  }
-
-  .masthead__actions .masthead__apply.masthead__apply {
-    height: 28px;
-    gap: 2px;
-    padding-inline: 3px;
-    font-size: 0.64rem;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {

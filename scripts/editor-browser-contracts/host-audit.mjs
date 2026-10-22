@@ -43,6 +43,8 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
     for (const width of widths) {
       await call('Emulation.setDeviceMetricsOverride', { width, height: 1000, deviceScaleFactor: 1, mobile: false });
       await settle();
+      // Crossing RoleFit's rail breakpoint animates the studio grid; measure the settled column.
+      await waitFor(page, `!document.getAnimations().some(animation => animation instanceof CSSTransition && animation.playState === 'running')`, `${host}/${width} layout transitions settle`);
       for (const preference of ['light', 'dark']) {
         await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: preference }] });
         await settle();
@@ -55,10 +57,14 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
             const r = span.getBoundingClientRect(), p = page.getBoundingClientRect();
             return r.left < p.left - 1 || r.right > p.right + 1 || r.top < p.top - 1 || r.bottom > p.bottom + 1 ? [{ key: span.dataset.tsdf, left: r.left-p.left, right: r.right-p.right, bottom: r.bottom-p.bottom }] : [];
           });
-          return { width: innerWidth, editor: !!editor, notice: document.querySelector('.viewport-gate')?.textContent, outside, colorScheme: getComputedStyle(document.documentElement).colorScheme, pageCount: editor?.querySelectorAll('.tsd-page').length ?? 0, horizontalDocumentOverflow: document.documentElement.scrollWidth - innerWidth };
+          const paper = editor?.querySelector('.tsd-page');
+          return { width: innerWidth, editor: !!editor, notice: document.querySelector('.viewport-gate')?.textContent, outside, colorScheme: getComputedStyle(document.documentElement).colorScheme, paperScheme: paper ? getComputedStyle(paper).colorScheme : null, pageCount: editor?.querySelectorAll('.tsd-page').length ?? 0, horizontalDocumentOverflow: document.documentElement.scrollWidth - innerWidth };
         });
         assert.equal(result.width, width);
-        assert.equal(result.colorScheme, 'light', `${host} supported light palette remains explicit under ${preference} OS preference`);
+        if (result.paperScheme !== null) assert.equal(result.paperScheme, 'light', `${host} document pages stay light under ${preference} OS preference`);
+        // RoleFit's chrome follows the OS (D093). This harness loads RoleFit's
+        // tokens on every route, so the Typeset route's root is not its own.
+        if (host !== 'typeset') assert.equal(result.colorScheme, 'light dark', `${host} chrome follows the ${preference} OS preference`);
         if (host === 'resume' && width <= 720) {
           assert.equal(result.editor, false);
           assert.match(result.notice, /Resume authoring needs more room/);
@@ -196,5 +202,5 @@ export async function runHostAuditContracts({ makeWindow, waitFor, baseUrl, host
     await page.destroy();
   }
   if (evidence) await writeFile(join(evidence, 'host-audit.json'), JSON.stringify(receipt, null, 2));
-  console.log(`Host audit (${hosts.join(', ')}): exact widths, light palette under both OS preferences, keyboard Open/focus, malformed/wrong-kind UI preservation passed`);
+  console.log(`Host audit (${hosts.join(', ')}): exact widths, light pages and OS-following RoleFit chrome under both OS preferences, keyboard Open/focus, malformed/wrong-kind UI preservation passed`);
 }
