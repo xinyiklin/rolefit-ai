@@ -185,14 +185,17 @@ export function NoResponseSection({
               <span>Mark automatically</span>
             </label>
           </div>
-          {autoMarkedCount > 0 ? (
-            <p className="an-callout__note" role="status">
-              <span>{autoMarkedCount} marked Ghosted automatically</span>
-              <button type="button" aria-label="Dismiss" onClick={onDismissAutoMarked}>
-                <X size={12} aria-hidden="true" />
-              </button>
-            </p>
-          ) : null}
+          {/* Mounted while empty, so screen readers announce the note when it fills. */}
+          <div className="an-callout__note-region" role="status">
+            {autoMarkedCount > 0 ? (
+              <p className="an-callout__note">
+                <span>{autoMarkedCount} marked Ghosted automatically</span>
+                <button type="button" aria-label="Dismiss" onClick={onDismissAutoMarked}>
+                  <X size={12} aria-hidden="true" />
+                </button>
+              </p>
+            ) : null}
+          </div>
         </div>
       </section>
 

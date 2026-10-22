@@ -700,6 +700,9 @@
   font-size: 0.76rem;
 }
 
+/* Empty, the live region gives back the body's gap. */
+.an-callout__note-region:empty { margin-top: calc(-1 * var(--s1)); }
+
 .an-callout__note {
   display: flex;
   align-items: center;

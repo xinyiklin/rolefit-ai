@@ -94,7 +94,8 @@ function compareBy(
     case "applied":
       return appliedKey(a).localeCompare(appliedKey(b));
     case "nextAction":
-      return nextAction(a, noResponse.get(a.id)).localeCompare(nextAction(b, noResponse.get(b.id)));
+      // Numeric, so "No response · 100d" sorts after "· 34d".
+      return nextAction(a, noResponse.get(a.id)).localeCompare(nextAction(b, noResponse.get(b.id)), undefined, { numeric: true });
     case "fit": {
       // Unknown fit sorts to the bottom of a descending list (the useful default).
       return fitAssessmentRank(a) - fitAssessmentRank(b);

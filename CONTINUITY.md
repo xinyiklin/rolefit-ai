@@ -94,8 +94,8 @@ D-entries in `docs/decisions.md`.
   pushed head is re-reviewed before merge. Known gaps: the Timeline count
   includes automatic stage entries; no time of day; confirm and focus flows are
   pinned by source evals and browser QA, not DOM tests. Merged as #257.
-- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, uncommitted on
-  `claude/switch-to-main-b08a2c`): derived No response (default 21 days,
+- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, branch
+  `feature/rolefit-analytics-ghosted`, PR pending): derived No response (default 21 days,
   7-180; a planned follow-up holds it) and a stored inactive Ghosted stage,
   marked per row, in bulk from Analytics, or automatically (opt-in, off by
   default). Analytics now follows the user's second mockup (DESIGN.md
@@ -106,7 +106,7 @@ D-entries in `docs/decisions.md`.
   your attention table with next step and row menu, and a dated Coming up,
   in a muted validated stage palette. A Fit-verdict breakdown was dropped
   (Fit has no analytics role). Older builds reject trackers and backups
-  carrying the new stage (preferences: UNCONFIRMED). Verified: evals, the
+  carrying the new stage, and every user's preferences file (code reading). Verified: evals, the
   RoleFit check, npm test, layout measurements at 5 widths and a 35-step
   interaction script on synthetic data (Chromium; Firefox UNCONFIRMED).
   The threshold reads "Mark as Ghosted after" in Settings and on Analytics

@@ -21,7 +21,17 @@ export function AnalyticsHeadControls({
   const [open, setOpen] = useState(false);
   const panelId = useId();
   const wrap = useRef<HTMLDivElement>(null);
-  const options = [...new Set([...THRESHOLD_OPTIONS, ghostedAfterDays])].sort((a, b) => a - b);
+  // Firefox fires change on every arrow key in a closed select. With automatic
+  // marking on, a passing 14 must not mark anything: keyboard steps save on
+  // Enter or blur, a pointer pick at once.
+  const [draft, setDraft] = useState(ghostedAfterDays);
+  const stepping = useRef(false);
+  useEffect(() => setDraft(ghostedAfterDays), [ghostedAfterDays]);
+  const commit = (days: number) => {
+    stepping.current = false;
+    if (days !== ghostedAfterDays) onGhostedAfterDaysChange(days);
+  };
+  const options = [...new Set([...THRESHOLD_OPTIONS, ghostedAfterDays, draft])].sort((a, b) => a - b);
 
   useEffect(() => {
     if (!open) return;
@@ -43,7 +53,20 @@ export function AnalyticsHeadControls({
       <div className="an-head-controls__threshold">
         <label className="an-field">
           <span>Mark as Ghosted after</span>
-          <select value={ghostedAfterDays} onChange={(event) => onGhostedAfterDaysChange(Number(event.target.value))}>
+          <select
+            value={draft}
+            onPointerDown={() => { stepping.current = false; }}
+            onKeyDown={(event) => {
+              if (/^(Arrow|Page|Home|End)/.test(event.key)) stepping.current = true;
+              else if (event.key === "Enter") commit(draft);
+            }}
+            onChange={(event) => {
+              const days = Number(event.target.value);
+              setDraft(days);
+              if (!stepping.current) commit(days);
+            }}
+            onBlur={() => commit(draft)}
+          >
             {options.map((days) => <option key={days} value={days}>{days} days</option>)}
           </select>
         </label>

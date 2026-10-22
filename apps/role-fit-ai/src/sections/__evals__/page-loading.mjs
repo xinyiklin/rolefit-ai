@@ -300,7 +300,8 @@ assert.doesNotMatch(longThreshold, /Review applications/, "and nothing to review
 assert.ok(autoOf(longThreshold), "automatic marking stays available");
 
 const autoMarked = report("", [application], { autoMarkedCount: 3 });
-assert.match(autoMarked, /<p class="an-callout__note" role="status"><span>3 marked Ghosted automatically<\/span>/);
+assert.match(autoMarked, /<div class="an-callout__note-region" role="status"><p class="an-callout__note"><span>3 marked Ghosted automatically<\/span>/);
+assert.match(populated, /<div class="an-callout__note-region" role="status"><\/div>/, "the note's live region is mounted while empty, so its text is announced");
 assert.ok(buttons(autoMarked).some((button) => button["aria-label"] === "Dismiss"), "the automatic note can be dismissed");
 assert.doesNotMatch(populated, /marked Ghosted automatically/, "no count, no line");
 assert.match(

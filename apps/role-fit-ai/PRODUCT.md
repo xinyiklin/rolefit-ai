@@ -388,7 +388,9 @@ rows also offer a direct Mark as Ghosted) or the stage control, mark flagged one
 Analytics' one-write bulk action (dated today), or opt in to **Mark as Ghosted
 automatically** (off by default, in Settings > Automation and Analytics), which
 dates each mark the day the threshold passed, never moves the application open
-in Application Detail, and never retries a record in the same session. The day
+in Application Detail in the same tab (another tab's open record can be marked;
+saving there then reports the change instead of overwriting it), and never
+retries a record in the same session. The day
 threshold saves only a settled whole value. A late reply moves a Ghosted
 application on like any other stage change; logging an interview reopens it as
 Interviewing, and moving it back to Applied restarts its count.

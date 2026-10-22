@@ -570,14 +570,16 @@ later entry wins.
   (`autoMarkGhosted`, default off; the user chose both over manual-only): each
   automatic mark is dated the day the threshold passed, runs after a fresh
   re-read under a same-origin tab lock (rechecking the shared settings cache),
-  skips the record open in Application Detail, re-runs at local midnight, and
-  tries a record at most once per session; tabs on different origins are not
-  coordinated. Ghosted can return to Applied, Interviewing, Offer, Rejected, or
-  Withdrawn; a move back, or a newly logged interview (which reopens it as
+  skips the record open in Application Detail in its own tab (open records are
+  not shared across tabs: a mark under another tab's open record makes that
+  tab's save report a conflict, never overwrite), re-runs at local midnight,
+  and tries a record at most once per session; tabs on different origins are
+  not coordinated. Ghosted can return to Applied, Interviewing, Offer,
+  Rejected, or Withdrawn, or be Skipped like any record; a move back, or a newly logged interview (which reopens it as
   Interviewing), records a dated entry that restarts the count. Older
-  builds (0.18.x included) reject a tracker or backup carrying `ghosted`; that
-  they also reject preferences carrying the new settings keys is from code
-  reading, UNCONFIRMED against a 0.18 build.
+  builds (0.18.x included) reject a tracker or backup carrying `ghosted`, and
+  reject the workspace preferences file for every user of this build, since it
+  always writes the two new keys (confirmed by reading 0.18's code, not run).
 
 ### Extension
 
