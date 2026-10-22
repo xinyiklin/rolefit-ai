@@ -18,7 +18,7 @@
   gap: var(--s2);
   width: min(340px, calc(100vw - var(--s5) * 2));
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card);
   box-shadow: var(--shadow-lift);
@@ -68,7 +68,7 @@
 /*
   Fires when a file-saving export (PDF / .resume) is requested: the system
   pre-fills the name, the user can edit it, then confirm. Centered modal over
-  a dimmed backdrop, matching the preview overlay's chrome.
+  the shared scrim.
 */
 .rename-dialog {
   position: fixed;
@@ -93,9 +93,7 @@
 .rename-dialog__backdrop {
   position: fixed;
   inset: 0;
-  background: oklch(0.2 0.01 160 / 0.45);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .rename-dialog__card {
@@ -106,7 +104,7 @@
   gap: var(--s3);
   padding: var(--s4);
   background: var(--card);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-lift);
   margin-block: auto;
@@ -144,8 +142,8 @@
   align-items: center;
   gap: 2px;
   padding: 0 var(--s2);
-  background: var(--card-elev);
-  border: 1px solid var(--hairline-strong);
+  background: var(--card-soft);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
 }
 
@@ -163,6 +161,7 @@
   font-size: 0.82rem;
   color: var(--ink-strong);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .rename-dialog__input:focus {
@@ -173,6 +172,7 @@
   flex-shrink: 0;
   font-size: 0.82rem;
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--ink-faint);
 }
 
@@ -243,10 +243,6 @@
   padding-right: var(--s5);
 }
 
-.apply-download__name {
-  margin-top: 2px;
-}
-
 .apply-download__name-hint {
   margin-top: 2px;
 }
@@ -314,7 +310,7 @@
 }
 
 /* Full-width second line: the flex basis forces the wrap. The shared
-   input-wrap supplies the border and the .pdf suffix. */
+   input-wrap supplies the fill and the .pdf suffix. */
 .apply-download__pick-name {
   flex: 1 0 100%;
   min-width: 0;

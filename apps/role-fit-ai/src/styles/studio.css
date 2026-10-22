@@ -2,25 +2,65 @@
 
 .studio-pane {
   display: grid;
-  grid-template-columns: calc(clamp(148px, 11.5vw, 176px) - 25px) minmax(0, 1fr);
+  grid-template-columns: var(--studio-rail-width, 200px) minmax(0, 1fr);
   min-height: 0;
-  background: var(--paper);
+  background: var(--chrome);
+  transition: grid-template-columns 200ms var(--ease);
+}
+
+/* A drag follows the pointer frame by frame, and never selects page text. */
+.studio-pane[data-resizing] {
+  transition: none;
+  user-select: none;
+  cursor: col-resize;
 }
 
 /* Left rail column: the stable tab axis plus bottom workspace utilities. */
 .studio-sidebar {
+  position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   min-height: 0;
-  border-right: 1px solid var(--hairline);
-  background: var(--card-soft);
+  background: var(--chrome);
   overflow: hidden;
 }
 
-/* Sessions and Settings share one utility group below the APG tablist. Keep the
-   rail's generous flex gap above this group, but make the two controls a tight
-   pair with one shared hairline. */
+/* The rail's resize edge, inside the rail (it clips overflow). */
+.studio-sidebar__resize {
+  position: absolute;
+  z-index: 31;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 6px;
+  cursor: col-resize;
+  /* Without this a touch drag scrolls the rail instead of resizing it. */
+  touch-action: none;
+}
+
+.studio-sidebar__resize::after {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-end: 0;
+  width: 2px;
+  background: transparent;
+  content: "";
+  transition: background 120ms ease;
+}
+
+.studio-sidebar__resize:hover::after,
+.studio-pane[data-resizing] .studio-sidebar__resize::after,
+.studio-sidebar__resize:focus-visible::after {
+  background: var(--accent);
+}
+
+.studio-sidebar__resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* Sessions and Settings share one utility group below the APG tablist, pinned
+   to the rail's foot as a tight pair. */
 .studio-sidebar__utilities {
   display: flex;
   flex: 0 0 auto;
@@ -29,7 +69,6 @@
   min-width: 0;
   margin-top: auto;
   padding: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
 }
 
 .studio-sidebar__utilities .nav-menu {
@@ -59,8 +98,8 @@
   overflow: visible;
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.68rem;
   font-variant-numeric: tabular-nums;
+  font-size: 0.68rem;
   white-space: nowrap;
 }
 
@@ -89,22 +128,18 @@
   padding: 0 var(--s1);
 }
 
-/* Mono small-caps eyebrow, matching the tab-group labels above. */
+/* Quiet label, matching the tab-group labels above. */
 .sessions-rail__eyebrow {
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-variant: small-caps;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 .sessions-rail__count {
   color: var(--ink-faint);
   font-family: var(--font-mono);
-  font-size: 0.6rem;
   font-variant-numeric: tabular-nums;
+  font-size: 0.6rem;
   white-space: nowrap;
 }
 
@@ -118,8 +153,6 @@
   /* Cap the height so many concurrent tabs scroll instead of shoving the rail. */
   max-height: min(44vh, 360px);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
 }
 
 .sessions-rail__item {
@@ -206,7 +239,7 @@
 
 /* -------- Tab rail -------- */
 
-/* Icon-led entries grouped by DRAFT / TRACK under small-caps mono eyebrows. */
+/* Icon-led entries: Prepare, then the Draft and Track groups. */
 .studio-tabs {
   display: flex;
   flex: 1 1 auto;
@@ -215,10 +248,10 @@
   gap: 0;
   min-width: 0;
   min-height: 0;
+  /* The collapsed rail parks hidden labels past its edge; never scroll to them. */
+  overflow-x: hidden;
   overflow-y: auto;
-  padding: var(--s4) var(--s3);
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
+  padding: var(--s2) var(--s3) var(--s4);
 }
 
 .studio-tabs::-webkit-scrollbar { width: 8px; }
@@ -227,19 +260,14 @@
   border-radius: var(--r-pill);
 }
 
-/* Group eyebrow — mono small-caps label above each entry group, hairline above. */
+/* Group label above each entry group; space, not a rule, separates groups. */
 .studio-tabs__group {
   width: 100%;
-  margin-top: var(--s3);
-  padding-top: var(--s3);
-  border-top: 1px solid var(--hairline-soft);
+  margin-top: var(--s4);
 }
 
-/* First group has no top rule. */
 .studio-tabs__group:first-child {
   margin-top: 0;
-  padding-top: 0;
-  border-top: 0;
 }
 
 .studio-tabs__group-label {
@@ -247,12 +275,8 @@
   margin-bottom: var(--s1);
   padding: 0 var(--s2);
   color: var(--ink-faint);
-  font-family: var(--font-mono);
-  font-size: 0.62rem;
-  font-variant: small-caps;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  font-weight: 500;
+  font-size: 0.7rem;
+  font-weight: 600;
 }
 
 /* Each tab row: [icon] [label] (+ badge). */
@@ -260,12 +284,12 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  min-height: 34px;
+  min-height: 32px;
   padding: 0 var(--s2);
   border: 0;
   border-radius: var(--r-md);
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--ink-muted);
   font-family: var(--font-ui);
   font-size: 0.82rem;
   font-weight: 500;
@@ -303,8 +327,8 @@
 }
 
 .studio-tab:hover {
-  color: var(--ink);
-  background: var(--card-hover);
+  color: var(--ink-strong);
+  background: var(--control);
 }
 
 .studio-tab:hover .studio-tab__icon {
@@ -318,25 +342,24 @@
   height: 16px;
   padding: 0 5px;
   border-radius: var(--r-pill);
-  background: var(--paper-deep);
+  background: var(--control);
   color: var(--ink-soft);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.64rem;
   font-style: normal;
   font-weight: 500;
 }
 
-/* Active: an accent-washed row — the rail's one committed moment. The icon
-   turns to the deep accent; a veil ring keeps the fill crisp. */
+/* Active: a filled row, like a native sidebar selection. */
 .studio-tab[aria-selected="true"] {
   color: var(--ink-strong);
   font-weight: 600;
-  background: var(--accent-soft);
-  box-shadow: 0 0 0 1px var(--accent-veil);
+  background: var(--control);
 }
 
 .studio-tab[aria-selected="true"] .studio-tab__icon {
-  color: var(--accent-deep);
+  color: var(--accent);
 }
 
 .studio-tab[aria-selected="true"] em {
@@ -352,16 +375,15 @@
   align-content: start;
   min-height: 0;
   overflow: auto;
-  padding: var(--s4) var(--s5);
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
+  padding: var(--s5) var(--s6);
+  background: var(--paper);
 }
 
 .studio-body::-webkit-scrollbar { width: 8px; }
 .studio-body::-webkit-scrollbar-thumb { background: var(--hairline-strong); border-radius: var(--r-pill); }
 
-/* Scrollable workspace tabs: deeper paper tone so content reads as sheets on a
-   desk. Matches the paper-warm palette; document tabs keep their own override. */
+/* Scrollable workspace tabs sit on the workspace plane; document tabs keep
+   their own override. */
 .studio-body[data-tab="prepare"],
 .studio-body[data-tab="applications"],
 .studio-body[data-tab="analytics"],
@@ -379,13 +401,19 @@
 .studio-body[data-tab="materials"]::after {
   content: "";
   /* The grid gap (s3) already sits above this spacer, so s1 here nets ~16px of
-     bottom space — matching the original padding-bottom intent. */
+     bottom space. */
   height: var(--s1);
 }
 
-/* Resume tab: no page scroll — the editor canvas fills edge-to-edge from
-   toolbar to export rail, like the Google Docs workspace. Deep desk tone so
-   the white sheets (editor page, preview pages) read as paper on the desk. */
+/* Prepare ends with actions (Skip & save job) the floating Apply action would
+   cover when the whole page scrolls as one column, so its end keeps clear. */
+.studio-body[data-tab="prepare"]::after {
+  height: calc(var(--s1) + var(--apply-clearance));
+}
+
+/* Resume tab: no page scroll — the editor canvas fills edge-to-edge below the
+   toolbar, like the Google Docs workspace. The plane tone lets
+   the white pages read as paper. */
 .studio-body[data-tab="resume"],
 .studio-body[data-tab="cover"] {
   /* `clip`, not `hidden`: `hidden` still makes this a scroll container, and
@@ -421,50 +449,23 @@
   }
 }
 
-/* -------- Studio card -------- */
-
-.studio-card {
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s3) var(--s4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--card);
-  box-shadow: var(--shadow-rest);
-}
-
-/* Resume + Cover letter tabs: the textarea is already a fully styled
-   container, so flatten the wrapping card to avoid a box-in-a-box look —
-   the heading sits on the pane background and the textarea is the only frame. */
-.studio-card--flush {
-  padding: 0;
-  border: 0;
-  background: transparent;
-  box-shadow: none;
-  /* A flush card paints no border, fill, or shadow, so the inherited radius can
-     only ever clip its own content. It did: the Cover letter page clips its
-     overflow, which rounded the top corners of its square editor
-     header while the Resume page (no clipping ancestor) stayed flat. */
-  border-radius: 0;
-}
-
 /* -------- Page-title vocabulary -------- */
 
-/* .page-serif — serif h2 for page-level titles in the studio body.
-   Usage: <h2 className="page-serif">Resume draft</h2> */
+/* .page-serif — the page-level title in the studio body (historical name; the
+   face is the display sans). */
 .page-serif {
-  font-family: var(--font-serif);
-  font-weight: 600;
-  font-size: 1.45rem;
-  line-height: 1.2;
-  letter-spacing: -0.005em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.75rem;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
   color: var(--ink-strong);
   margin-top: 0;
 }
 
 /* -------- Ledger row vocabulary -------- */
 
-/* .ledger-rows — container for a set of label/value pairs in print-ledger style.
+/* .ledger-rows — container for a set of label/value pairs, settings-row style.
    Usage:
      <dl className="ledger-rows">
        <div className="ledger-row">
@@ -474,8 +475,8 @@
      </dl>
    .ledger-row — flex row with:
      - label (dt): ink-soft, 0.78rem
-     - dotted leader (auto-generated via flex: 1 + border-bottom): fills the gap
-     - value (dd): mono, tabular-nums, ink-strong
+     - invisible leader (flex: 1): pushes the value to the trailing edge
+     - value (dd): tabular figures, ink-strong
    Compact vertical rhythm; min-height 26px. */
 
 .ledger-rows {
@@ -502,32 +503,28 @@
   white-space: nowrap;
 }
 
-/* Dotted leader — flex fill between label and value. */
+/* Leader — an invisible flex fill that pushes the value to the trailing edge. */
 .ledger-row__leader {
   flex: 1;
   min-width: var(--s3);
-  border-bottom: 1px dotted var(--hairline-strong);
-  /* Nudge upward from the baseline so the dots sit mid-gap visually. */
-  margin-bottom: 0.32em;
-  align-self: flex-end;
 }
 
-/* Value — right side, mono, tabular-nums, ink-strong. */
+/* Value — right side, tabular figures, ink-strong. */
 .ledger-row dd {
   flex: none;
   margin: 0;
   font-family: var(--font-mono);
-  font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
-  font-weight: 600;
+  font-size: 0.78rem;
+  font-weight: 550;
   color: var(--ink-strong);
   line-height: 1.3;
   white-space: nowrap;
 }
 
-/* Prose ledger values ("Awaiting response") stay sans; mono is for data only. */
+/* Prose ledger values ("Awaiting response") keep proportional figures. */
 .ledger-row dd.is-prose {
-  font-family: var(--font-ui);
+  font-variant-numeric: normal;
   font-size: 0.76rem;
   font-weight: 500;
 }
@@ -535,7 +532,7 @@
 /* An unrecorded value recedes behind real data. */
 .ledger-row dd.is-empty {
   color: var(--ink-faint);
-  font-family: var(--font-ui);
+  font-variant-numeric: normal;
   font-size: 0.76rem;
   font-weight: 400;
 }
@@ -558,7 +555,6 @@
   padding: var(--s1) var(--s3);
   border-radius: var(--r-md);
   background: var(--accent-soft);
-  border: 1px solid var(--accent-veil);
   box-shadow: var(--shadow-lift);
   font-size: 0.78rem;
   color: var(--accent-deep);
@@ -586,4 +582,27 @@
   line-height: 1;
   color: var(--ink-soft);
   padding: 0 var(--s1);
+}
+
+/* -------- Compact page head --------
+   Every page opens with the same 48px head row as the document editors: a
+   compact title with its details inline, actions on the trailing edge. */
+.studio-body:is([data-tab="prepare"], [data-tab="applications"], [data-tab="analytics"]) {
+  padding-top: 0;
+}
+
+.workspace-page__head,
+.answers-header {
+  min-height: 48px;
+}
+
+/* The same voice as the document editors' name field (the shared toolbar's
+   title input), so every page head reads alike. */
+.workspace-page__head .page-serif,
+.answers-header .page-serif {
+  font-family: var(--font-ui);
+  font-size: 0.86rem;
+  font-weight: 570;
+  line-height: 1.3;
+  letter-spacing: normal;
 }

@@ -66,4 +66,22 @@ for (const asset of textAssets) {
   }
 }
 
+// landing.css imports the app's tokens.css, so a font or asset reference added
+// there would otherwise reach the public page unnoticed.
+const cssFiles = (await readdir(join(outputRoot, "assets"), { withFileTypes: true }))
+  .filter((entry) => entry.isFile() && entry.name.endsWith(".css"))
+  .map((entry) => join(outputRoot, "assets", entry.name));
+if (cssFiles.length === 0) fail("the landing stylesheet is missing");
+for (const path of cssFiles) {
+  const source = await readFile(path, "utf8");
+  for (const [label, pattern] of [
+    ["@font-face rule", /@font-face/i],
+    ["url() reference", /url\(/i],
+    ["@import rule", /@import/i],
+    ["image-set() reference", /image-set\(/i],
+  ]) {
+    if (pattern.test(source)) fail(`the landing stylesheet contains a forbidden ${label} in ${path}`);
+  }
+}
+
 console.log("RoleFit public landing build boundary: passed");

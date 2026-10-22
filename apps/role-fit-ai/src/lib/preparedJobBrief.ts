@@ -198,6 +198,14 @@ export function preparedJobBriefFieldToText(value: PreparedJobBrief[PreparedJobB
   return Array.isArray(value) ? value.join("\n") : value;
 }
 
+// How every surface names a prepared posting when extraction left a gap.
+export function preparedJobName(tracking: Partial<ExtractedJobTracking>): { role: string; company: string } {
+  return {
+    role: tracking.role || tracking.title || "Role not identified",
+    company: tracking.company || "Company not identified"
+  };
+}
+
 export function preparedJobRoleContext(tracking: ExtractedJobTracking, brief: PreparedJobBrief): string {
   return [brief.companyContext, tracking.roleDescription]
     .map((value) =>

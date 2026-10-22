@@ -29,12 +29,13 @@
 .pipeline-filters {
   display: flex;
   align-items: stretch;
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--card-elev);
+  gap: 2px;
+  padding: 2px;
+  border: 0;
+  border-radius: var(--r-md);
+  background: var(--control);
   overflow: visible;
   flex-wrap: nowrap;
-  /* Hairline dividers between chips via gap-free sibling borders */
 }
 
 .pipeline-filter {
@@ -44,10 +45,9 @@
   height: 30px;
   padding: 0 var(--s3);
   border: 0;
-  border-right: 1px solid var(--hairline);
-  border-radius: 0;
+  border-radius: var(--r-sm);
   background: transparent;
-  color: var(--ink-soft);
+  color: var(--ink-muted);
   font-family: var(--font-ui);
   font-size: 0.75rem;
   font-weight: 500;
@@ -55,21 +55,8 @@
   transition: background 140ms var(--ease), color 140ms var(--ease);
 }
 
-.pipeline-filters > .pipeline-filter:first-child {
-  border-radius: var(--r-lg) 0 0 var(--r-lg);
-}
-
-.pipeline-filter-menu-wrap > .pipeline-filter {
-  border-right: 1px solid var(--hairline);
-}
-
-.pipeline-filter-menu-wrap:last-child > .pipeline-filter {
-  border-right: 0;
-  border-radius: 0 var(--r-lg) var(--r-lg) 0;
-}
-
 .pipeline-filter:hover:not(.is-active) {
-  background: var(--card-soft);
+  background: transparent;
   color: var(--ink-strong);
 }
 
@@ -79,8 +66,9 @@
 }
 
 .pipeline-filter.is-active {
-  background: var(--accent-soft);
-  color: var(--accent-deep);
+  background: var(--thumb);
+  color: var(--ink-strong);
+  box-shadow: var(--shadow-thumb);
   font-weight: 600;
 }
 
@@ -103,7 +91,7 @@
 }
 
 .pipeline-filter--menu.is-active .pipeline-filter__chevron {
-  color: var(--accent);
+  color: var(--ink-soft);
 }
 
 .pipeline-filter__label {

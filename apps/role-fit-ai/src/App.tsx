@@ -117,12 +117,14 @@ import { useApplyFlow } from "./hooks/useApplyFlow";
 import { useSkipFlow } from "./hooks/useSkipFlow";
 import { useApplicationDocumentSync } from "./hooks/useApplicationDocumentSync";
 import { useApplicationFiles } from "./hooks/useApplicationFiles";
+import { AI_STAGE_COPY } from "./lib/aiWorkflow";
 import { getPreparationReadiness } from "./lib/preparationReadiness";
 import {
   assemblePreparedJobApplicationText,
   assemblePreparedJobTailoringText,
   buildPreparedJobBrief,
   preparedJobBriefFieldFromText,
+  preparedJobName,
   reconcilePreparedJobManualReviewFields,
   removePreparedJobRoleSummary,
   type PreparedJobBriefField
@@ -130,6 +132,7 @@ import {
 import { currentResumeSelection, resumeOriginAfterEdit } from "./lib/preparedResume";
 import { usePreparedResume, type PreparedResumeResolverState } from "./hooks/usePreparedResume";
 import type { ResumeDocumentSnapshot, ResumeOrigin } from "./hooks/useWorkspaceResume";
+import { useAppearance } from "./hooks/useAppearance";
 import {
   automaticPolishActionDecision,
   fitAssessmentMeetsThreshold
@@ -163,6 +166,8 @@ import {
 import type { ApplicationActionStatus } from "./lib/applicationActionStatus.ts";
 
 import { Masthead } from "./sections/Masthead";
+import { ApplyAction } from "./sections/ApplyAction";
+import { useStudioRail } from "./hooks/useStudioRail";
 import { ActionStatus } from "./sections/ActionStatus";
 import { TaskProgress } from "./sections/AiWorkflowProgress";
 import { SessionsMenu } from "./sections/SessionsRail";
@@ -659,6 +664,8 @@ function App() {
   // this tab; targeted entry points (provider setup, add evidence) pick theirs.
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<SettingsSection>("background");
+  const [appearance, setAppearance] = useAppearance();
+  const sidebar = useStudioRail();
   const [profileNoteFocus, setProfileNoteFocus] = useState<ProfileNoteFocus | null>(null);
   // Ref for the Profile Background textarea inside Settings — focused after the
   // dialog is opened by handleAddProfileEvidence so the user can type immediately.
@@ -2437,6 +2444,15 @@ function App() {
   const primaryActionDisabledHint = applicationActionsBusy
     ? "Wait for the current application action to finish."
     : primaryActionBlocker;
+  // Work the Apply pill reports while it runs (Apply's own busy label wins).
+  const applyActivity = jobPreparationActive
+    ? "Preparing job…"
+    : isPolishing
+      ? `${AI_STAGE_COPY["resume-polish"].running}…`
+      : coverProgress.status === "running"
+        ? `${AI_STAGE_COPY["cover-polish"].running}…`
+        : null;
+  const preparedJob = jobPrepared && importedJob ? preparedJobName(importedJob.tracking) : null;
   const handlePrimaryPreparationAction = async (): Promise<void> => {
     if (answerController.isSavePending()) return;
     if (primaryPreparationAction.kind === "update-job") {
@@ -2864,15 +2880,6 @@ function App() {
 
   return (
     <div className="app-shell">
-      <Masthead
-        onApply={handlePrimaryPreparationAction}
-        primaryAction={primaryPreparationAction}
-        busy={primaryActionBusy}
-        applyDisabled={!primaryActionReady || applicationActionsBusy}
-        applyHint={primaryActionBusy ? primaryPreparationAction.busyLabel : primaryActionDisabledHint}
-        actionRef={primaryActionRef}
-      />
-
       {progressDockVisible ? (
         <div
           ref={dock.ref}
@@ -2937,6 +2944,21 @@ function App() {
           setActiveOutputTab={setActiveOutputTab}
           outputTabs={OUTPUT_TABS}
           onPrefetchOutputTab={prefetchOutputTab}
+          railCollapsed={sidebar.collapsed}
+          railWidth={sidebar.width}
+          onRailResize={sidebar.canToggle
+            ? (width, collapsed) => {
+                sidebar.setWidth(width);
+                sidebar.setCollapsed(collapsed);
+              }
+            : undefined}
+          sidebarHeader={
+            <Masthead
+              railCollapsed={sidebar.collapsed}
+              canToggleRail={sidebar.canToggle}
+              onToggleRail={sidebar.toggle}
+            />
+          }
           sidebarUtilities={
             <>
               <SessionsMenu self={{ jobLabel: _autosaveJobLabel, phase: _myPhase }} others={otherSessions} />
@@ -3620,6 +3642,18 @@ function App() {
         </StudioPane>
       </div>
 
+      {/* After the workspace in focus order, matching its bottom-right place. */}
+      <ApplyAction
+        onApply={handlePrimaryPreparationAction}
+        primaryAction={primaryPreparationAction}
+        busy={primaryActionBusy}
+        applyDisabled={!primaryActionReady || applicationActionsBusy}
+        applyHint={primaryActionBusy ? primaryPreparationAction.busyLabel : primaryActionDisabledHint}
+        actionRef={primaryActionRef}
+        job={preparedJob}
+        activity={applyActivity}
+      />
+
       {settingsOpen ? (
         <SettingsDialog
           section={settingsSection}
@@ -3691,6 +3725,8 @@ function App() {
           onCustomInstructionsChange={setCustomInstructions}
           stageCustomInstructions={stageCustomInstructions}
           onStageCustomInstructionChange={setStageCustomInstruction}
+          appearance={appearance}
+          onAppearanceChange={setAppearance}
           onReset={handleResetSettings}
         />
       ) : null}

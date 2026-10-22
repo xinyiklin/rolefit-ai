@@ -904,7 +904,7 @@ Good frontend verification covers:
 - Prepare is the first/default tab in the PREPARE group and the only production
   job-intake surface: URL fetch and pasted text appear there, no `JobMenu` or
   masthead `jobControl` remains, and the masthead contains only the RoleFit
-  identity plus the shared Apply command. Read-only Sessions sits immediately
+  identity; the shared Apply command is the floating Apply action. Read-only Sessions sits immediately
   above Settings in the bottom studio-rail utilities group, outside
   `OUTPUT_TABS` and the APG tablist
 - extension receipt and delivery select Prepare before updating visible intake
@@ -1028,7 +1028,7 @@ Good frontend verification covers:
   decisions while a later-skipped application keeps its date, documents, and
   document AI receipts on re-skip and Save job updates; exact
   dialog/receipt copy; and that the quiet action remains in Prepare rather than
-  the masthead. The storage probes additionally verify decision metadata
+  the floating Apply action. The storage probes additionally verify decision metadata
   roundtrips while `appliedAt` and sent document fields are omitted.
   `src/lib/__evals__/skip-reason-suggestions-eval.mjs` pins the local suggestion
   rules (prior decision wins, submitted-link and Blocked pre-checks, weak marks,
@@ -1101,7 +1101,7 @@ Good frontend verification covers:
 - Resume and Cover Letter render the same material-card structure with separate
   variant selectors and Include toggles, neither is labeled optional, and a
   fresh prepared job starts with Resume included and Cover Letter excluded
-- masthead and Prepare primary actions invoke the same handler, action copy, and readiness model:
+- the floating Apply action and Prepare primary actions invoke the same handler, action copy, and readiness model:
   a matching completed preparation is required, each included material must be
   ready while its work is idle, neither material is required, and non-empty
   source alone remains blocked. Applying with both excluded records the job;
@@ -1192,10 +1192,12 @@ npm run test:landing --workspace apps/role-fit-ai
 
 The build must emit only `apps/role-fit-ai/dist-landing/`. Its guard requires
 the public marker and one landing manifest entry and rejects known loopback
-origins and product API paths. The offline release probe covers valid complete
-signed and unsigned-preview releases, signed-release precedence, and malformed
-tags, mismatched draft/prerelease state, wrong origins, zero-sized, missing,
-duplicate, and unexpected assets.
+origins and product API paths, plus any `@font-face`, `@import`, `url()`, or
+`image-set()` in the emitted CSS (the page imports the app's `tokens.css`).
+The offline release probe covers valid complete signed and unsigned-preview
+releases, signed-release precedence, and malformed tags, mismatched
+draft/prerelease state, wrong origins, zero-sized, missing, duplicate, and
+unexpected assets.
 
 Real-browser QA must cover desktop and 390px widths, a clean console, keyboard
 focus, and both release states: the live empty/unavailable response links every

@@ -1,71 +1,73 @@
 ---
 name: RoleFit AI
-description: Editorial print-desk design system for a local-first resume-tailoring studio
+description: Calm native workspace design system for a local-first resume-tailoring studio
 colors:
-  paper: "oklch(0.956 0.006 150)"
-  paper-deep: "oklch(0.934 0.008 150)"
-  card: "oklch(0.992 0.002 150)"
-  card-soft: "oklch(0.963 0.005 150)"
-  card-elev: "oklch(0.997 0.001 150)"
-  card-hover: "oklch(0.976 0.004 150)"
-  ink: "oklch(0.25 0.012 160)"
-  ink-strong: "oklch(0.18 0.014 160)"
-  ink-muted: "oklch(0.41 0.014 160)"
-  ink-soft: "oklch(0.5 0.014 160)"
-  ink-faint: "oklch(0.51 0.012 160)"
-  hairline: "oklch(0.885 0.008 150)"
-  hairline-soft: "oklch(0.925 0.006 150)"
-  hairline-strong: "oklch(0.81 0.01 150)"
-  accent: "oklch(0.46 0.085 165)"
-  accent-deep: "oklch(0.36 0.075 168)"
-  accent-soft: "oklch(0.945 0.024 162)"
-  accent-veil: "oklch(0.46 0.085 165 / 0.12)"
-  accent-glow: "oklch(0.46 0.085 165 / 0.2)"
-  on-accent: "oklch(0.975 0.008 150)"
-  warm: "oklch(0.52 0.1 75)"
-  warm-soft: "oklch(0.92 0.05 85)"
-  cool: "oklch(0.45 0.06 250)"
-  danger: "oklch(0.45 0.12 30)"
-  danger-soft: "oklch(0.92 0.04 25)"
+  # Every value is a light-dark() pair in src/styles/tokens.css; light shown first.
+  chrome: "oklch(0.962 0.004 265) / oklch(0.215 0.005 265)"
+  paper: "oklch(0.978 0.003 265) / oklch(0.185 0.004 265)"
+  card: "oklch(1 0 0) / oklch(0.235 0.005 265)"
+  card-soft: "oklch(0.962 0.004 265) / oklch(0.27 0.006 265)"
+  card-elev: "oklch(1 0 0) / oklch(0.26 0.006 265)"
+  card-hover: "oklch(0.952 0.005 265) / oklch(0.29 0.007 265)"
+  control: "oklch(0.935 0.005 265) / oklch(0.31 0.007 265)"
+  control-hover: "oklch(0.905 0.006 265) / oklch(0.35 0.008 265)"
+  thumb: "oklch(1 0 0) / oklch(0.43 0.008 265)"
+  ink: "oklch(0.25 0.01 265) / oklch(0.92 0.004 265)"
+  ink-strong: "oklch(0.18 0.01 265) / oklch(0.97 0.003 265)"
+  ink-muted: "oklch(0.42 0.01 265) / oklch(0.8 0.006 265)"
+  ink-soft: "oklch(0.5 0.01 265) / oklch(0.72 0.008 265)"
+  ink-faint: "oklch(0.53 0.01 265) / oklch(0.68 0.008 265)"
+  hairline: "oklch(0.905 0.005 265) / oklch(0.32 0.006 265)"
+  hairline-soft: "oklch(0.94 0.004 265) / oklch(0.28 0.006 265)"
+  hairline-strong: "oklch(0.86 0.006 265) / oklch(0.4 0.008 265)"
+  accent: "oklch(0.53 0.2 258) / oklch(0.72 0.14 253)"
+  accent-deep: "oklch(0.47 0.19 260) / oklch(0.8 0.11 252)"
+  accent-hover: "oklch(0.48 0.2 259) / oklch(0.77 0.12 253)"
+  accent-soft: "oklch(0.95 0.03 255) / oklch(0.31 0.07 258)"
+  on-accent: "oklch(0.995 0.002 260) / oklch(0.17 0.02 260)"
+  warm: "oklch(0.55 0.13 62) / oklch(0.8 0.13 75)"
+  cool: "oklch(0.52 0.09 235) / oklch(0.76 0.09 235)"
+  positive: "oklch(0.49 0.11 160) / oklch(0.76 0.12 160)"
+  gold: "oklch(0.51 0.11 75) / oklch(0.82 0.11 85)"
+  danger: "oklch(0.54 0.2 27) / oklch(0.72 0.16 25)"
 typography:
   display:
-    fontFamily: "Charter, Bitstream Charter, Iowan Old Style, Georgia, Cambria, Times New Roman, serif"
-    fontSize: "1.45rem"
-    fontWeight: 600
-    lineHeight: 1.2
-    letterSpacing: "-0.005em"
-  title:
-    fontFamily: "Geist, -apple-system, BlinkMacSystemFont, Helvetica Neue, Segoe UI, sans-serif"
-    fontSize: "0.9rem"
-    fontWeight: 600
-    letterSpacing: "-0.002em"
-  body:
-    fontFamily: "Geist, -apple-system, BlinkMacSystemFont, Helvetica Neue, Segoe UI, sans-serif"
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Display, Segoe UI, system-ui, sans-serif"
     fontSize: "0.86rem"
+    fontWeight: 570
+    lineHeight: 1.3
+    letterSpacing: "normal"
+  title:
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "0.92rem"
+    fontWeight: 650
+  body:
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "0.82rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "Geist, -apple-system, BlinkMacSystemFont, Helvetica Neue, Segoe UI, sans-serif"
-    fontSize: "0.68rem"
+    fontFamily: "-apple-system, BlinkMacSystemFont, Segoe UI Variable Text, Segoe UI, system-ui, sans-serif"
+    fontSize: "0.72rem"
     fontWeight: 600
-    letterSpacing: "0.18em"
+    letterSpacing: "0"
   data:
-    fontFamily: "JetBrains Mono, SFMono-Regular, Consolas, Liberation Mono, Menlo, monospace"
+    fontFamily: "the UI stack (--font-mono aliases --font-ui)"
     fontSize: "0.78rem"
-    fontWeight: 600
+    fontWeight: 550
     fontFeature: "tnum"
 rounded:
-  sm: "4px"
-  md: "6px"
-  lg: "10px"
-  xl: "14px"
+  sm: "6px"
+  md: "8px"
+  lg: "12px"
+  xl: "16px"
   pill: "999px"
 spacing:
   s1: "4px"
   s2: "8px"
   s3: "12px"
   s4: "16px"
-  s5: "22px"
+  s5: "24px"
   s6: "32px"
   s7: "48px"
 components:
@@ -76,39 +78,38 @@ components:
     height: "38px"
     padding: "0 16px"
   button-primary-hover:
-    backgroundColor: "{colors.accent-deep}"
+    backgroundColor: "{colors.accent-hover}"
   button-primary-disabled:
-    backgroundColor: "{colors.card-soft}"
+    backgroundColor: "{colors.control}"
     textColor: "{colors.ink-faint}"
   button-secondary:
-    backgroundColor: "{colors.card-elev}"
+    backgroundColor: "{colors.control}"
     textColor: "{colors.ink-strong}"
     rounded: "{rounded.md}"
     height: "32px"
     padding: "0 12px"
   button-secondary-hover:
-    backgroundColor: "{colors.accent-soft}"
-    textColor: "{colors.accent-deep}"
+    backgroundColor: "{colors.control-hover}"
   input:
-    backgroundColor: "{colors.card-elev}"
+    backgroundColor: "{colors.card-soft}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
     height: "32px"
     padding: "0 8px"
-  chip:
-    backgroundColor: "{colors.card-elev}"
-    textColor: "{colors.ink-muted}"
-    rounded: "{rounded.pill}"
-    height: "26px"
-    padding: "0 12px"
+  segmented:
+    backgroundColor: "{colors.control}"
+    selectedBackground: "{colors.thumb}"
+    rounded: "{rounded.md}"
+    padding: "2px"
   studio-card:
     backgroundColor: "{colors.card}"
     rounded: "{rounded.lg}"
-    padding: "12px 16px"
-  nav-trigger:
-    textColor: "{colors.ink-soft}"
-    rounded: "{rounded.sm}"
-    height: "30px"
+    padding: "16px 24px"
+  nav-row:
+    textColor: "{colors.ink-muted}"
+    selectedBackground: "{colors.control}"
+    rounded: "{rounded.md}"
+    height: "32px"
     padding: "0 8px"
 ---
 
@@ -116,24 +117,28 @@ components:
 
 ## 1. Overview
 
-**Creative North Star: "The Drafting Desk"**
+**Creative North Star: "A calm native workspace"**
 
-RoleFit AI is a drafting desk, not a dashboard. Content surfaces read as
-paper sheets laid on a deeper desk tone; the chrome around them borrows from
-print production: a newspaper masthead joined to the workspace by one crisp
-hairline, an icon-led
-tab rail grouped like a table of contents, dotted-leader ledger rows, mono
-indices and tabular figures. The serif voice appears only in identity chrome (wordmark,
-page titles), the way a paper's nameplate differs from its body type. The tool
-is calm, dense, and trustworthy; it disappears into the task of tailoring a
-resume.
+RoleFit AI should feel like a well-made desktop app, in the lineage of Apple's
+own apps and Things 3: hierarchy comes from type, space, and alignment, not
+from containers. A full-height, collapsible soft gray sidebar headed by the
+brand sits beside a slightly lighter workspace plane that runs to the top of
+the window; there is no top bar. The global Apply action floats as a pill at
+the workspace's bottom-right. Content sits in borderless white groups; inputs are quiet
+filled fields; buttons are filled shapes without outlines; selection is a
+filled row. The tool is calm, dense, and trustworthy; it disappears into the
+task of tailoring a resume. (Chosen by the user 2026-10-22 over the earlier
+green-paper "Drafting Desk": modern, not AI-feeling, not bulky or boxy; no
+liquid glass, because Firefox lacks backdrop refraction.) Product and engineering docs still call the browser app
+the Drafting Desk; the name now names the surface, not its look.
 
-Inside the Drafting Desk, the system explicitly rejects marketing landing-page
-patterns and oversized in-app heroes, gradient-heavy surfaces, SaaS dashboard clichés
-(hero metrics, identical card grids), sales-style copy, fake loading states,
-shimmer, decorative motion, and nested card-in-card containers. Status is
-stated quietly (a small dot beside a word), never shouted (filled pills,
-banners, badges everywhere).
+Inside the workspace, the system rejects marketing landing-page patterns and
+oversized in-app heroes, gradient-heavy surfaces, glass and blur as
+decoration, SaaS dashboard clichés (hero metrics, identical card grids),
+sales-style copy, fake loading states, shimmer, decorative motion, nested
+card-in-card containers, tracked uppercase eyebrows, and serif or monospace
+costume. Status is stated quietly (a small dot beside a word), never shouted
+(filled pills, banners, badges everywhere).
 
 Applications and Analytics use layout-shaped placeholders during real initial
 page-code or saved-data loading. A restrained opacity pulse communicates that
@@ -147,9 +152,9 @@ the real table's column grid and compact-column rules. Its side rail retains
 the full inspector frame, identity block, facts, Fit, documents, and action
 regions, including the desktop height and stacked layout.
 
-Layout is structural and predictable: a masthead with the brand plus the global
-Apply action, a full-width studio whose rail moves through PREPARE, DRAFT, and
-TRACK, a bottom utility group with read-only Sessions immediately above Settings
+Layout is structural and predictable: a full-height, resizable and collapsible
+studio rail headed by the brand that moves through Prepare, Draft, and Track
+beside a full-width workspace, a floating Apply pill, a bottom utility group with read-only Sessions immediately above Settings
 outside `OUTPUT_TABS` and the APG tablist, matched
 resume and cover-letter document chrome with rail-owned primary actions, and document-specific review
 rails. Breakpoints (1280/1180/1080/900/820/760
@@ -158,59 +163,66 @@ the primary canvas; content wraps rather than clips below it.
 
 **Key Characteristics:**
 
-- Paper-on-desk depth: tonal layers and hairlines, not shadows.
-- Three type voices with strict jobs: sans chrome, serif identity, mono data.
-- One committed accent (Forest Ink) reserved for action and selection.
-- Dot-plus-word status vocabulary; ledger rows for label/value facts.
-- Density with calm: compact spacing, short labels, restrained contrast.
+- Tone, not lines: chrome, plane, and white groups separate by value; borders
+  are reserved for row separators inside a group.
+- One type family: the platform UI face for everything, with tabular figures
+  for data instead of a monospace face.
+- One clear blue accent for action, selection state, and focus.
+- Light and dark themes from one token set; the resume page stays paper.
+- Dot-plus-word status vocabulary; label/value rows for facts.
+- Density with calm: compact spacing, short labels, generous group padding.
 
 ### Public product/download page
 
 `landing/` is a separate public composition, not a route or mode of the
 Drafting Desk. It shares the compact creator-level masthead, screenshot-led
 product framing, and clear project boundary used across Xinyi Lin's portfolio,
-including Careflow, while retaining RoleFit's paper, forest, hairline,
-mono-label, and truthful-copy vocabulary. It may use a larger serif hero and
-shows real product captures, the local runtime boundary, and explicit macOS
-Apple silicon, macOS Intel, and Windows x64 download rows. Unlike the Drafting Desk, which rejects decorative
-motion, the landing carries the restrained entrance motion shared across the
-portfolio: a one-shot fade-and-lift as sections scroll into view (never
-looping), plus a one-shot proof-mark draw on the hero slip — a progressive enhancement that
-collapses under `prefers-reduced-motion` and never leaves content hidden when
-scripting is unavailable. It must not imitate
-the working app shell, use gradients or template-style feature cards, imply
-hosted execution, guess the user's architecture, or attempt native-install
-detection. At a missing or invalid release, it keeps the platform choices
-visible and states that no complete verified installer set is available instead
-of rendering a broken primary action.
+including Careflow, and wears the workspace's calm native look: it imports
+`src/styles/tokens.css` (the one token source), follows the OS light/dark
+preference with no override control, sets everything in the system UI face,
+and separates regions by tone rather than rules. It may use a larger display
+hero and shows real product captures, the local runtime boundary, and explicit
+macOS Apple silicon, macOS Intel, and Windows x64 download rows. Unlike the
+Drafting Desk, which rejects decorative motion, the landing carries the
+restrained entrance motion shared across the portfolio: a one-shot
+fade-and-lift as sections scroll into view (never looping), plus a one-shot
+mark draw on the hero's edit card — a progressive enhancement that collapses
+under `prefers-reduced-motion` and never leaves content hidden when scripting
+is unavailable. It must not imitate the working app shell, use gradients,
+glass or blur, or template-style feature cards, imply hosted execution, guess
+the user's architecture, or attempt native-install detection. At a missing or
+invalid release, it keeps the platform choices visible and states that no
+complete verified installer set is available instead of rendering a broken
+primary action.
 
-**Landing north star: "The galley proof."** The page borrows print
-production rather than SaaS marketing: the hero sets the real resume-editor
-capture as a sheet with crop marks and a figure slug, overlapped by a proof
-slip that shows one proposed edit in proofreader's marks (struck word, inserted
-word, reason, Accept · Edit · Discard). The slip is a labeled illustration on a
+**Composition.** The hero sets the real resume-editor capture as a borderless,
+softly ringed shot with a one-line caption, overlapped by an edit card: one
+proposed edit on a floating `--card-elev` layer in the app's diff vocabulary
+(removed words faint with a warm strike, inserted words on the accent wash,
+reason, Accept · Edit · Discard). The card is a labeled illustration on a
 synthetic resume line, never a mock of the app shell, and it never shows an
-invented figure. The workflow reads as flat editorial spreads ruled by
-hairlines (01 prepare → 04 track), not feature cards. The Forest Ink band
-carries the local runtime boundary with the companion capture and the runtime
-diagram; downloads are ledger rows with dotted leaders. Because the page's CSP
-is `font-src 'self'`, its type is bundled from `@typeset/engine`: Source Serif 4
-(as "RoleFit Serif") for display and figure slugs, Source Sans 3 (as "RoleFit
-Sans") for body and controls, and the system mono stack for labels and data.
+invented figure. The workflow reads as spreads separated by space
+(01 Prepare → 04 Track), not feature cards. A deep neutral band (a raised tone
+in dark mode) carries the local runtime boundary with the companion capture and
+the runtime diagram; downloads are ledger rows in one borderless group with an
+invisible leader. Blue appears only on actions, focus, and the brand tile;
+status is a dot beside a word (green for a signed release, amber for an
+unsigned preview). The CSP stays `font-src 'self'`; the page loads no fonts.
 
-**Shared maker house** (kept in step with CareFlow's landing): creator tag in
-the masthead, a one-line spec strip under the hero, section heads with the
-heading left and lede right, an inverse boundary band in the product's deepest
-color with a node-and-wire runtime diagram, action ledger rows, and a colophon
-footer listing the real stack and the sibling projects. Mono labels share one
-voice across both pages (0.6875rem, 0.08em tracking, uppercase).
+**Shared maker house** (kept in step with CareFlow's landing in structure):
+creator tag in the masthead, a one-line spec strip under the hero, section heads
+with the heading left and lede right, an inverse boundary band with a
+node-and-wire runtime diagram, action ledger rows, and a colophon footer listing
+the real stack and the sibling projects. Labels are sentence case without
+tracking, as in the app; CareFlow's landing still uses the earlier uppercase
+mono label voice.
 
 ### Shared editor boundary
 
 The resume and cover-letter pages, document/formatting primitives, fonts,
 direct-edit behavior, measurement, pagination, and PDF path come from
 `@typeset/editor` over `@typeset/engine`. RoleFit frames those surfaces with
-Drafting Desk host chrome. The resume injects its section-scope/review overlay;
+its own host chrome. The resume injects its section-scope/review overlay;
 the cover letter selects the plain-paragraph layout, keeps header structure
 controls, and disables resume section/entry/bullet controls. It uses the same two-row document/formatting toolbar, replacing only
 the resume style-menu group with a focused line-height control and the shared
@@ -226,181 +238,199 @@ integration contract, not permission to duplicate the shared component.
 
 ## 2. Colors
 
-Green-tinted paper neutrals around one committed forest accent, with three
-quiet semantic signals; nothing is ever pure white or pure black.
+Near-neutral cool grays (hue 265, chroma ≤ 0.01) around one clear blue
+accent, with quiet semantic signals. Every token is a `light-dark()` pair in
+`src/styles/tokens.css`; `:root` declares `color-scheme: light dark`, and
+Settings › App › Appearance can pin `data-theme="light"` or `"dark"` on the
+root (a per-browser view preference, like zoom; it never enters workspace
+preferences or document files).
 
 ### Primary
 
-- **Forest Ink** (`--accent`, oklch(0.46 0.085 165)): the working ink of the
-  desk. Primary actions (Polish, Apply), current selection, ready-state dots,
-  focus rings, the active tab index. Hover deepens to **Forest Ink Deep**
-  (`--accent-deep`, oklch(0.36 0.075 168)); **Forest Ink Wash**
-  (`--accent-soft`, oklch(0.945 0.024 162)) tints selected rows and hover fills;
-  `--accent-veil` (12% alpha) and `--accent-glow` (20% alpha) carry selection
-  highlights and the 3px focus ring. Text on the accent uses `--on-accent`,
-  a paper tone, never white.
+- **Blue** (`--accent`): primary actions (Polish, Apply, Open details),
+  focus rings, switches that are on, selected rows' tint (`--accent-soft`),
+  and accent icons in selected rail rows. Hover uses `--accent-hover`;
+  `--accent-deep` is the accent as text on `--accent-soft`. In dark mode the
+  accent lifts and `--on-accent` inverts to a near-black label so both the
+  fill and accent text clear AA.
 
 ### Neutral
 
-- **Paper** (`--paper`, oklch(0.956 0.006 150)) and **Desk**
-  (`--paper-deep`, oklch(0.934 0.008 150)): the app background and the deeper
-  canvas behind tracker tabs, so content cards read as sheets on a desk.
-- **Sheet family** (`--card` 0.992, `--card-soft` 0.963, `--card-elev` 0.997,
-  `--card-hover` 0.976): content surfaces, quiet wells, raised inputs and
-  popovers, row hover. All hue 150, chroma ≤ 0.005.
-- **Ink family** (`--ink-strong` 0.18 → `--ink` 0.25 → `--ink-muted` 0.41 →
-  `--ink-soft` 0.5 → `--ink-faint` 0.51, hue 160): the only text colors.
-  Hierarchy comes from stepping down this ramp, not from new hues.
-  `--ink-faint` is the floor; it was darkened to pass WCAG AA and must not be
-  lightened.
-- **Hairline family** (`--hairline` 0.885, `--hairline-soft` 0.925,
-  `--hairline-strong` 0.81): all structure. Rules, dividers, borders, dotted
-  leaders.
+- **Chrome** (`--chrome`): the full-height studio rail (masthead included) and
+  the body behind it.
+- **Plane** (`--paper`, `--paper-deep` aliases it): the workspace behind
+  content, from the top of the window to the bottom. The Resume and Cover letter header and formatting rows sit on it
+  too (no white band, no rules), so the paper page is the only sheet there.
+- **Groups** (`--card` white / raised gray in dark): borderless content groups,
+  tables, inspector panels, and dialog cards (on `--card` their filled fields
+  keep their step in dark mode). `--card-elev` is the floating layer
+  (popovers, menus, toasts, the Apply pill). `--card-soft` is the filled-field and quiet-well tone;
+  `--card-hover` is row hover.
+- **Control** (`--control`, `--control-hover`): secondary buttons, segmented
+  tracks, the selected rail/settings row, neutral avatars and counts.
+- **Ink** (`--ink-strong` → `--ink` → `--ink-muted` → `--ink-soft` →
+  `--ink-faint`): the only text colors. `--ink-faint` clears AA (≥ 4.5:1) on
+  every surface in both themes except the filled `--control` tones, where text
+  starts at `--ink-soft`; it must not be lightened.
+- **Hairlines** (`--hairline-soft`, `--hairline`, `--hairline-strong`): row
+  separators inside a group, scrollbars, and unchecked rings. Never a frame
+  around a group.
 
 ### Signal
 
-- **Warm amber** (`--warm`, oklch(0.52 0.1 75)): attention without alarm;
-  empty-input dots and stretch-fit marks.
-- **Archival blue** (`--cool`, oklch(0.45 0.06 250)): the "applied" stage and
-  quiet archival marks; filed, not active.
-- **Brick** (`--danger`, oklch(0.45 0.12 30)): errors, rejected stage,
-  weak-fit scores. Soft tints (`--warm-soft`, `--danger-soft`) back inline
-  notices only.
+- **Steel blue** (`--cool`): the Applied stage — filed, not active.
+- **Green** (`--positive`): the Interviewing stage.
+- **Gold** (`--gold`): the Offer stage.
+- **Amber** (`--warm`, `--warm-soft`, `--warm-veil`, `--warm-line`): attention
+  without alarm — blocked rows, warnings, the No response callout.
+- **Red** (`--danger`, `--danger-soft`, `--danger-hover`): errors, Rejected,
+  destructive actions.
+- `--scrim` dims the app behind modal dialogs.
+
+Analytics keeps its own validated categorical stage fills (`--an-*` in
+`analytics.css`), also as light/dark pairs; their hues match the tracker's
+stage dots.
 
 ### Named Rules
 
-**The One Ink Rule.** Forest Ink touches at most ~10% of any screen: primary
-actions, selection, ready states, focus. It is never decoration, never a
-section background, never a heading color.
+**The Tone-Not-Lines Rule.** Regions separate by surface value (chrome → plane
+→ group → floating layer). A 1px border never frames a group, card, input,
+button, or menu; borders survive only as separators between rows inside a
+group, the ring of an unchecked radio/check marker, the warm edge of a
+warning note, the hairline a text field shows on hover, and the outlines restored under `prefers-contrast: more`.
 
-**The Tinted Neutral Rule.** Pure `#fff` and `#000` are forbidden. Every
-neutral carries the paper hue (150) or ink hue (160) at chroma 0.001–0.014.
+**The One Accent Rule.** The blue touches at most ~10% of a screen: primary
+actions, focus, on-states, and selection tint. Never decoration, a section
+background, or a heading color. A selected navigation row is a neutral filled
+row with an accent icon, not a blue wash.
 
-**The Dot-Plus-Word Rule.** Stage and readiness are a 5–7px dot
-beside plain text. Color never carries meaning alone, and filled pill badges
-are not the default status vocabulary.
+**The Paper Rule.** The resume and cover-letter pages are paper in both themes:
+`.tsd-page`, the editor marks drawn on it (`.ts-grip`, `.ts-drag-source`,
+`.ts-drop-indicator`, RoleFit's `.ts-chrome` chips), and `.resume-print-layer`
+pin `color-scheme: light` and re-declare the tokens, because the build lowers
+`light-dark()` into variables that resolve where a token is declared. The
+editor's context menu, link card, and paste dialogs keep the app theme.
+
+**The Dot-Plus-Word Rule.** Stage and readiness are a 5–7px dot beside plain
+text. Color never carries meaning alone, and filled pill badges are not the
+default status vocabulary.
 
 ## 3. Typography
 
-**Display Font:** Charter (system serif stack: Bitstream Charter, Iowan Old
-Style, Georgia, Cambria, Times New Roman)
-**Body/UI Font:** Geist (with -apple-system, BlinkMacSystemFont, Helvetica
-Neue, Segoe UI fallbacks)
-**Data Font:** JetBrains Mono (with SFMono-Regular, Consolas, Menlo fallbacks)
-
-**Character:** A print shop's three voices. The serif is the nameplate and
-page titles only; the sans is every working control; the mono is anything
-that is a number, index, or identifier. No webfont theatrics; all three
-stacks resolve to system fonts.
+**One family:** the platform UI face — SF on macOS, Segoe UI Variable on
+Windows (`--font-ui`, with `--font-display` selecting the Display optical
+size where the platform has one). No webfonts, no serif, no monospace in
+chrome. `--font-mono` remains as a name for data styling but aliases the UI
+face; numbers get `font-variant-numeric: tabular-nums`.
 
 ### Hierarchy
 
-- **Display** (serif, 600, 1.45rem, lh 1.2, ls -0.005em): page titles
-  (`.page-serif`, studio card h2), set on a baseline hairline rule in the
-  page head. The wordmark is the same voice at 1.1rem/700; page titles may
-  be the largest type on a page, the nameplate stays the most distinctive.
-- **Title** (sans, 600, 0.9rem): panel headings and secondary card heads
-  (`.studio-card__subhead`); these stay sans so the serif keeps rank.
-- **Body** (sans, 400–500, 0.82–0.88rem, lh 1.45–1.5): controls, prose,
-  table text. Prose stays under 75ch; tables and ledger rows may run denser.
-- **Label / Eyebrow** (sans, 600, 0.62–0.72rem, uppercase, tracked
-  0.06–0.18em): `.eyebrow`, `.table-eyebrow`, field labels. The widest
-  tracking (0.18em) belongs to the masthead eyebrow only.
-- **Data** (mono, 500–600, 0.64–0.92rem, tabular-nums): ledger values,
-  register figures, dates, fit scores, model identifiers. Only the figure is
-  mono: "Replied in **7 d**", "since **Jul 25**".
+- **Page title** (`.page-serif`, a historical class name; in a page head it is
+  the UI face at 570, 0.86rem, lh 1.3, the shared document name's style; the class alone, used by a few dialogs, stays
+  700, 1.75rem). Every page head is one 48px row, like the document editors'
+  name row: the title at the 32px inset with its details (path, lede, job
+  target) inline after it, actions on the trailing edge. The document name
+  starts on the same inset. The wordmark is 650 at 0.98rem.
+- **Group title** (650, 0.92rem): panel and section heads.
+- **Body** (400–500, 0.8–0.86rem, lh 1.45–1.5): controls, prose, table text.
+  Prose stays under 75ch.
+- **Label** (550–650, 0.72–0.75rem, sentence case, no tracking): field labels,
+  rail group labels (Draft / Track), table column heads, section
+  labels. Uppercase tracked eyebrows are retired; the one exception is the
+  three-letter month above a date in Analytics' Coming up list.
+- **Data** (500–600, tabular figures, same family): dates, counts, scores,
+  ledger values.
 
 ### Named Rules
 
-**The Serif Is Chrome Rule.** Charter appears only in identity chrome:
-wordmark and page-level titles. Never in buttons, labels, body copy, inputs,
-or data.
+**The One Family Rule.** Hierarchy comes from size and weight steps within the
+UI face. No serif, no separate display family, no monospace costume.
 
-**The Mono Means Data Rule.** If it is a number, count, date, score, index,
-or identifier, it is mono with `tabular-nums`. If it is a sentence, it is
-never mono.
+**The Sentence Case Rule.** Labels, headings, and table heads are sentence
+case; letter-spacing stays at 0 except negative tracking on large titles.
 
 ## 4. Elevation
 
-The system is hairline-structured and near-flat. Depth is conveyed by tonal
-paper layers (desk `--paper-deep` → sheet `--card` → raised `--card-elev`)
-and 1px hairlines; shadows exist only as whispers at 3–8% alpha to settle
-sheets onto the desk. The fixed-height masthead uses one 1px structural rule
-so its lower edge meets the sidebar and workspace without a false gap.
-
-### Shadow Vocabulary
-
-- **Rest** (`--shadow-rest`: 0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px
-  oklch(0.2 0.01 160 / 0.03)): default studio card sit.
-- **Lift** (`--shadow-lift`: 0 1px 0 / 0.05, 0 14px 36px / 0.08): popovers
-  and overlays only; the maximum elevation in the app.
-- **Inset** (`--shadow-inset`: inset 0 1px 0 oklch(1 0 0 / 0.6)): a top
-  inner highlight on accent-filled buttons.
+Groups sit flat on the plane (`--shadow-rest` is `none`). Only floating layers
+cast a shadow: `--shadow-lift` combines a 1px ring with two soft drops, tuned
+separately for light and dark, so popovers, menus, dialogs, and the progress
+dock need no border. Raised segment thumbs use `--shadow-thumb`, a 1px 2px drop. The paper page
+in the document editor floats on its own soft shadow and ring.
 
 ### Named Rules
 
-**The Whisper Shadow Rule.** No shadow exceeds ~8% alpha. If a surface needs
-more separation, change its paper tone or add a hairline; never darken the
-shadow.
+**The Floating-Only Shadow Rule.** If it does not float above other content,
+it has no shadow. Declare elevation once: a shadow or a tone change, never a
+border plus a shadow.
 
 ## 5. Components
 
-Component character: refined and restrained; quiet ink-on-paper controls
-framed by hairlines, with one accent-filled primary action per view. Every
-interactive control shares the same focus treatment: 2px Forest Ink outline,
-2px offset (or a 3px `--accent-glow` ring on text fields).
+Component character: calm and native; filled controls without outlines,
+borderless groups, and one accent-filled primary action per view. Every
+interactive control shares the same focus treatment: 2px accent outline,
+2px offset (or a 3px `--accent-veil` ring plus accent border on text fields).
 
 ### Buttons
 
-- **Shape:** gently rounded (6px); compact heights (38px primary, 32px
-  secondary, 28px ghost), 120–160ms transitions, 1px translateY on press.
-- **Primary:** Forest Ink fill, paper text, `--accent-deep` border, inset
-  highlight plus a faint accent glow; hover deepens to `--accent-deep`. One
-  per document view (Polish beside the workflow rail's disclosure control, in the
-  header while open and on the document's edge while collapsed; compact
-  `.is-compact` variant in rail actions). While a run is in flight that same
-  button is its Stop: a quiet raised "Polishing…" that turns warm "Stop" on
-  hover or keyboard focus (always Stop without hover), armed after 600ms so a
-  double-click never stops the run it started. The rail then shows no footer
-  Stop and no earlier status line, only a dotted-leader run ledger (resume:
-  sections; both: elapsed time).
-- **Secondary:** raised sheet (`--card-elev`) with `--hairline-strong`
-  border; hover tints toward the accent (`--accent-soft` fill,
-  `--accent-deep` text).
-- **Ghost:** transparent, borderless, for tertiary row actions.
-- **Disabled:** flat neutral (`--card-soft` fill, `--ink-faint` text, no
-  shadow), never a washed-out tint of the enabled state, so "inert" and
-  "ready" cannot be confused.
+- **Shape:** 8px radius; compact heights (38px primary, 32px secondary, 28px
+  ghost), 120–160ms transitions, 1px translateY on press. The floating Apply
+  button is a pill and is accent-filled only when ready.
+- **Primary:** accent fill, `--on-accent` label, no border or glow; hover
+  `--accent-hover`. One per document view (Polish beside the workflow rail's
+  disclosure control, in the header while open and on the document's edge
+  while collapsed; compact `.is-compact` variant in rail actions). While a run
+  is in flight that same button is its Stop: a quiet raised "Polishing…" that
+  turns warm "Stop" on hover or keyboard focus (always Stop without hover),
+  armed after 600ms so a double-click never stops the run it started. The rail
+  then shows no footer Stop and no earlier status line, only a run ledger
+  (resume: sections; both: elapsed time).
+- **Secondary:** `--control` fill, no border; hover `--control-hover`.
+- **Ghost:** transparent; hover fills with `--card-hover`. Tertiary row
+  actions.
+- **Danger:** `.primary-button--danger` fills `--danger`; `.danger-button`
+  is red text that gains `--danger-soft` on hover.
+- **Disabled:** flat neutral (`--control` fill, `--ink-faint` text), never a
+  washed-out tint of the enabled state, so "inert" and "ready" cannot be
+  confused.
+
+### Segmented controls and switches
+
+- **Segmented** (`.settings-segment`, the tracker's view switch and lifecycle
+  filter, Answers' mode): a `--control` track with 2px padding; the chosen
+  option is a raised `--thumb` (lighter than the track in both themes) with
+  ink-strong text. No dividers.
+- **Switch** (Prepare's Include): 34×20 track, white 16px knob with a soft
+  drop; on is the accent fill.
 
 ### Chips
 
-- **Style:** pill (999px), raised sheet background, `--hairline-strong`
-  border, mono 0.74rem in `--ink-muted`; used for keyword lists.
-- **Counts/badges in the tab rail:** 16px mono pills on `--paper-deep`,
-  accent-washed when the tab is active.
+- **Style:** pill (999px), `--control` fill, no border, sans 0.72–0.74rem in
+  `--ink-muted`; used for keyword lists, refinement chips, and starter
+  questions.
+- **Counts in the tab rail:** 16px tabular-figure pills on `--control`.
 
 ### Cards / Containers
 
-- **Corner Style:** 10px (`--r-lg`); popovers 14px (`--r-xl`).
-- **Background:** `--card` sheets on the desk; `--card-soft` for quiet wells
-  (recovery strip, pipeline columns); `--card-elev` for popovers.
-- **Shadow Strategy:** `--shadow-rest` at rest; `--shadow-lift` for floating
-  surfaces only (see Elevation).
-- **Border:** always a 1px `--hairline`; sheets are framed, not floating.
-- **Internal Padding:** `--s3`/`--s4` (12/16px); heads get a serif Display
-  title plus, when needed, a quiet dot-led meta note, not badges.
+- **Corner Style:** 12px (`--r-lg`) for groups; 16px (`--r-xl`) for popovers,
+  dialogs, and the workspace corner.
+- **Background:** `--card` groups on the plane; `--card-soft` for quiet wells;
+  `--card-elev` for floating layers.
+- **Border:** none. Separation is tone (see The Tone-Not-Lines Rule).
+- **Internal Padding:** `--s4`/`--s5` (16/24px); heads carry a group title
+  plus, when needed, a quiet meta note, not badges.
 - **Flush variant** (`.studio-card--flush`): when the content is already a
   framed surface (editor, cover-letter sheet), the wrapper drops its box
   entirely; box-in-a-box is forbidden.
 
 ### Inputs / Fields
 
-- **Style:** raised sheet (`--card-elev`), 1px `--hairline-strong` border,
-  6px radius, 32px min height, 0.82rem sans; field labels are small
-  semibold eyebrows.
-- **Focus:** border flips to Forest Ink plus a 3px `--accent-glow` ring.
-- **Upload box:** dashed `--hairline-strong` border on `--card-soft`,
-  accent-tinted on hover.
+- **Style:** filled `--card-soft`, transparent 1px border (a hairline appears
+  on hover), 8px radius, 32px min height, 0.82rem; labels are 0.75rem
+  sentence-case medium weight.
+- **Focus:** the field turns `--card`, its border the accent, plus a 3px
+  `--accent-veil` ring.
+- **Inline list fields** (Prepare's brief rows): transparent at rest so the
+  list reads as text, filled on hover, a field on focus.
 - **Native appearance** is stripped from text fields only; checkboxes and
   radios keep native controls. Editor font-family choices use the shared custom
   dropdown so the toolbar and Styles matrix have the same visual and keyboard
@@ -427,7 +457,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   collapses into its head (captured size and origin), the editable Job brief
   leads the main column, and one Application rail combines Resume and Cover
   Letter choices, readiness, the saved-application summary, and Apply. Panels
-  keep a hairline-separated head — title, quiet meta, trailing actions — over
+  keep a head — title, quiet meta, trailing actions — over
   plain content; nothing on the page is a card inside a card, and no status
   earns a tinted box or icon tile of its own. Keep explicit View, Replace, and
   Prepare again paths. Keep View and Prepare again bound to the immutable
@@ -487,7 +517,7 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   start either automatic action; reassessment, retry, resume-change assessment,
   and restored history stay advisory. Manual Polish remains available in every
   state.
-- **Apply:** the page and masthead invoke the same Apply command and show the
+- **Apply:** the page and the floating Apply action invoke the same Apply command and show the
   same readiness blockers. The current job must be prepared; each included
   material must be ready; and preparation for selected work must be idle.
   Either or both materials may be excluded, so a prepared tracker-only
@@ -500,11 +530,29 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 
 ### Navigation
 
-- **Masthead:** newspaper-style: a 26px Forest-Ink seal tile with the serif
-  initial beside the serif wordmark (the one place the accent is identity,
-  not action), then the global Apply action separated by a hairline. Apply
-  carries the shared readiness state; no job input or Inputs group lives in
-  this bar. Its outcome is not reported here: Apply, Update application, and
+- **Masthead:** the head of the full-height studio rail: a 22px accent app
+  tile with the initial beside the sans wordmark (the one place the accent is
+  identity, not action). The brand is the rail's collapse toggle (a button
+  named Collapse/Expand sidebar, `aria-expanded`); on hover or keyboard focus
+  its tile shows the sidebar icon. The `<h1>RoleFit AI</h1>` is visually
+  hidden beside it. No job input or Inputs group lives in the masthead.
+- **Floating Apply action** (`ApplyAction`): a `--card-elev` pill with
+  `--shadow-lift`, fixed at the workspace's bottom-right on every tab. With a
+  prepared job it names the role and company on one line, a dot-plus-word
+  status line below (Ready in green, the blocker sentence in amber, the busy
+  label in blue), and the Apply pill. The status line is the visible
+  readiness reason and Apply's `aria-describedby`; there is no hover hint (only the icon-only
+  state below carries a native tooltip).
+  With no prepared job it shrinks to a round icon-only Apply, which stays
+  mounted as the focus-return target. While work runs (Preparing job…, Polishing
+  resume…, Polishing cover letter…, or Apply's own busy label, which wins) the
+  pill expands even without a job: the button's icon becomes a spinner and the
+  status dot pulses in blue; both stop under reduced motion. Pages keep `--apply-clearance` (72px)
+  free beneath it where it would cover controls: the end of a one-column
+  Prepare page, Prepare's two pane scrollers, the
+  document rail's content (or its sticky footer's own bottom padding), and
+  the Applications inspector. Apply carries the shared
+  readiness state. Its outcome is not reported here: Apply, Update application, and
   Skip share one receipt that leads the top-center task dock, in the eye's
   return path from the action and initially clear of the right inspector where
   the committed record opens. Outcome-first headline, secondary detail line
@@ -517,11 +565,13 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   count; the collapsed rail shows an icon plus a compact count/working state.
   Its 14px-radius raised popover opens rightward, clamps to the viewport, and
   enters with a 150ms 6px slide-fade.
-- **Applications:** its new-work action returns to Prepare. The application
+- **Applications:** it has no new-work button in its head (Prepare is one
+  click away in the rail); only the empty tracker offers a quiet Go to Prepare.
+  **Answers** centers its empty intro and composer in the space below the head. The application
   detail modal edits committed tracker records and never becomes a second job
   intake surface. The broad viewport-bounded panel remains the outer working
   sheet, while Overview uses a small
-  number of compact outlined groups to make application controls and saved job
+  number of compact groups to make application controls and saved job
   facts scannable without recreating an intake form. Its head
   carries the prominent sans record name over one dot-led identity line (saved stage, the
   date that stage governs, an available posting ID with its source label, and the
@@ -545,8 +595,8 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   the same anchored popover shell beside the card, falling back below it and to
   the bottom sheet: a titled list of hairline rows (marker, label, optional
   note, date), one row editing in place with its own Save and Cancel, and
-  bordered Log buttons. Both popovers carry a `--hairline-strong` border over
-  Lift so they separate from the near-white cards beneath. Skip reasons, there and in the Skip dialog, are
+  filled Log buttons. Both popovers rely on `--shadow-lift`, whose ring
+  separates them from the white groups beneath without a border. Skip reasons, there and in the Skip dialog, are
   native checkboxes in labelled groups, not chips; a suggested reason carries a
   quiet `· suggested` note and its basis is listed in a soft well below. The decision date remains in Key dates, while
   general application notes remain independent data in Prep. Prep
@@ -559,9 +609,9 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   decision. Job posting and saved-PDF previews
   use the same 50–200% zoom strip and Ctrl/Cmd +/-/0 keyboard contract.
   The vertical divider supplies enough context, so neither pane repeats a pane
-  header. The card borders stay hairline-light, use the restrained large-radius token,
-  and group facts rather than decorate empty space. Dates and numeric values use
-  the mono data treatment. Prepared data is one full-width, permanently expanded
+  header. The cards are borderless groups on the large-radius token, and group
+  facts rather than decorate empty space. Dates and numeric values use tabular
+  figures. Prepared data is one full-width, permanently expanded
   `Job snapshot` card after the compact facts. Its header carries no item or
   section count. It uses the saved
   brief's existing deterministic structure: Overview; Responsibilities;
@@ -603,13 +653,20 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   checked current stage is
   disabled. A later-Skipped application retains its historical materials, while
   a Skipped record without an application date remains job-only.
-- **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
-  small-caps mono group eyebrows (PREPARE / DRAFT / TRACK) above
-  hairline-separated groups. Prepare is first and selected by default. The
-  active entry is the rail's one committed moment: an
-  `--accent-soft` washed row with a `--accent-veil` ring, deep-accent icon,
-  ink-strong label. Below 1080px it collapses in place to a 52px icon rail; it
-  never changes axis into a top navbar. APG tabs keyboard model is mandatory.
+- **Tab rail:** icon-led entries ([icon] [label]) on the chrome tone, under
+  sentence-case group labels (Draft / Track) separated by space, not rules.
+  Prepare is first and selected by default; its group shows no label, since
+  a label over a lone tab of the same name only repeats it. The active entry is a
+  native sidebar selection: a `--control` filled row, accent icon,
+  ink-strong semibold label. The rail's edge is a resize separator (168–200px,
+  default 200; arrow keys step 16px, double-click resets). A drag follows the
+  pointer down to icon width, one write per frame. Release snaps toward the
+  state the drag left: from the expanded rail, 24px below the minimum
+  collapses it to the 52px icon rail; from the icon rail, a 24px pull opens
+  it. Anything else settles into range or back where it started.
+  Width and collapse are per-browser view preferences (`rolefit:sidebar-width`,
+  `rolefit:sidebar`). At 1080px and below the rail is always the icon rail,
+  with no toggle or resize. It never changes axis into a top navbar. APG tabs keyboard model is mandatory.
 - **Narrow authoring:** at 720px and below, only the Resume tab's precise editor
   becomes the width notice. Prepare, the simpler Cover letter page, masthead,
   tab rail, Answers, Applications, and Analytics remain part of the working
@@ -617,13 +674,14 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
 
 ### Ledger Rows (signature)
 
-Label/value facts render as print-ledger lines: `--ink-soft` sans label, a
-dotted `--hairline-strong` leader filling the gap, mono tabular-nums
-`--ink-strong` value; 26px line rhythm. Used for analytics lists and
+Label/value facts render as settings-style rows: `--ink-soft` label on the
+left, `--ink-strong` value with tabular figures on the right, an empty
+(invisible) leader between them; 26px line rhythm. Used for analytics lists and
 side-panel facts. This, not stat cards, is the default way to show a list of
 named numbers. A value that is not recorded ("Not recorded", "Not saved") drops to
 `--ink-faint` sans so it never outweighs real data, and prose values (a source
-name, "Saved") stay sans; only numbers, dates, and identifiers are mono.
+name, "Saved") keep proportional figures; numbers, dates, and identifiers use
+tabular figures.
 
 ### Analytics Insights (signature)
 
@@ -637,9 +695,10 @@ grouped KPI row, then one grid of bands so the columns end together. From a
 3. Needs your attention (three fifths) beside Coming up.
 
 Narrower pages stack the cards in that reading order. Cards use the
-tracker's frame; card titles take the page serif at 1.08rem.
+tracker's frame; card titles take the display face at 0.92rem, the group
+title size.
 
-- **Head.** The serif title over a one-line lede. On the right, "Mark as
+- **Head.** The page title over a one-line lede. On the right, "Mark as
   Ghosted after [N days]" (common thresholds plus the saved value), an info
   button that opens How it works, and the period select with a calendar icon
   (Last 8, 12, or 26 weeks, or All time).
@@ -661,7 +720,7 @@ tracker's frame; card titles take the page serif at 1.08rem.
   goes with it.
 - **Current stage distribution.** The same cohort as the KPI row, as a pill
   segmented bar with share labels under segments of 4% or more (8% on narrow
-  cards), the total beside it, and a key of stage dots with mono counts.
+  cards), the total beside it, and a key of stage dots with tabular counts.
   Selecting a stage shows an accent selection bar in a live region with a link
   that opens Applications filtered to that stage.
 - **No response callout.** A warm cream card with a bell badge, "N
@@ -684,7 +743,8 @@ tracker's frame; card titles take the page serif at 1.08rem.
   day (overdue in warm). View all opens Applications; a footer counts open
   records without a follow-up date. Rows carry no time of day.
 
-Stage fills are muted inks at the chroma floor so they sit on the sage paper,
+Stage fills are muted inks at the chroma floor so they sit on the neutral
+plane, each a light/dark pair (light values below),
 validated together in this order (dataviz validator, every adjacent check
 passing; ochre, sand, and sea sit under 3:1, relieved by the legend, share
 labels, tooltip, and table):
@@ -692,7 +752,7 @@ labels, tooltip, and table):
 | Stage | Fill |
 |---|---|
 | Applied | slate `oklch(0.66 0.102 240)` |
-| Interviewing | forest `oklch(0.55 0.102 165)` |
+| Interviewing | green `oklch(0.55 0.102 165)` |
 | Offer | ochre `oklch(0.77 0.11 90)` |
 | Ghosted | mauve `oklch(0.66 0.102 310)` |
 | Rejected | terracotta `oklch(0.57 0.12 33)` |
@@ -732,7 +792,7 @@ The row menu remains the compact exception for quick stage changes.
 
 ### Page Anatomy: Sheets Center, Rail Right
 
-Working pages share one skeleton: content as paper sheets in the main
+Working pages share one skeleton: content as white groups in the main
 column, one control surface docked right. Prepare intentionally begins as one
 centered Source task, then becomes collapsed source + brief beside one
 Application rail containing materials, readiness, and Apply; Resume = one engine-painted
@@ -806,11 +866,11 @@ the progress dock omits the Answers card while that thread is in view.
 Questions and answer revisions stay visually distinct;
 counts, warnings and Copy/Save controls sit outside the answer body. New question
 clears the refinement target explicitly. The conversation owns its scroll; the
-composer remains reachable at narrow widths. Reuse Drafting Desk typography,
-hairlines, paper tones and Forest Ink without a permanent plan
+composer remains reachable at narrow widths. Reuse the workspace type, tones,
+and accent without a permanent plan
 rail. Applications = view surface + inspector. The rail is a single sheet
-(`--card`, hairline, rest shadow);
-the main column sits directly on the desk. Resume and Cover letter use the same
+(`--card`, borderless);
+the main column sits directly on the plane. Resume and Cover letter use the same
 rail width, divider, labelled header, readiness order, failure placement, and
 sticky action footer while retaining document-specific content. Each document remembers its own disclosure preference; collapsing hides
 content without unmounting it or resetting inputs, and new results do not force
@@ -855,22 +915,24 @@ register, not a CRM grid.
   if a value has no owning token, it does not ship.
 - **Do** state status as a small dot beside plain sentence-case text
   (`.stage-dot`, `.nav-menu__sub`).
-- **Do** set numbers, dates, scores, and indices in JetBrains Mono with
-  `tabular-nums` (The Mono Means Data Rule).
+- **Do** set numbers, dates, scores, and indices with `tabular-nums` in the
+  UI face (The One Family Rule).
 - **Do** keep errors inline, localized, and user-safe, near the affected
   workflow; surface gaps and bracketed placeholders for human review.
 - **Do** keep keyboard access first-class: APG tabs model, visible
   `:focus-visible` rings (2px accent, 2px offset), 24px minimum icon hit
   targets, `aria-live` for async status; honor `prefers-reduced-motion`.
 - **Do** keep motion 120–250ms with the house ease
-  (`cubic-bezier(0.2, 0.6, 0.2, 1)`), state-driven only.
+  (`cubic-bezier(0.2, 0.8, 0.2, 1)`), state-driven only.
 - **Do** make disabled controls flat and neutral, never a faded tint of the
   enabled state.
+- **Do** check every new surface in light and dark; colors come only from
+  `light-dark()` tokens.
 
 ### Don't:
 
 - **Don't** put marketing landing-page patterns, oversized heroes, or
-  gradient-heavy surfaces inside the Drafting Desk. The isolated public page
+  gradient-heavy surfaces inside the workspace. The isolated public page
   follows the scoped contract above.
 - **Don't** reach for SaaS dashboard clichés: hero metrics and identical
   card grids are banned; use ledger rows. Analytics' grouped KPI row is the
@@ -881,19 +943,22 @@ register, not a CRM grid.
 - **Don't** nest cards inside cards; use the flush card variant or drop the
   wrapper.
 - **Don't** use `border-left`/`border-right` thicker than 1px as a colored
-  accent stripe, gradient text, or glassmorphism.
-- **Don't** reshape the compact masthead + tabbed-studio workflow; changes
-  refine it, never restructure it.
-- **Don't** introduce global toast/banner/loading frameworks, new fonts, new
-  hues, or pure black/white.
-- **Don't** put the serif in controls or body copy, or mono in sentences.
+  accent stripe, gradient text, or glass/blur surfaces.
+- **Don't** frame a group, card, input, button, or menu with a border, or
+  stack a border under a shadow (The Tone-Not-Lines Rule).
+- **Don't** bring back a top bar; the full-height rail + tabbed workspace +
+  floating Apply is the shell (2026-10-22).
+- **Don't** introduce global toast/banner/loading frameworks, webfonts, or
+  new hues outside the token set.
+- **Don't** bring back serif, monospace, or tracked uppercase eyebrows in
+  chrome.
 - **Don't** print raw provider errors, stack traces, or resume text in
   chrome.
 - **Don't** lighten `--ink-faint` or lower text contrast below WCAG AA.
 
 One-sentence audit test: if a screen would look at home in a SaaS template
-gallery (filled pills, stat cards, banner CTAs), it has left the drafting
-desk; rebuild it from hairlines, paper tones, and ledger vocabulary.
+gallery (filled pills, stat cards, banner CTAs) or a bordered form builder,
+it has left the workspace; rebuild it from tone, space, and type.
 
 ### Content warnings
 

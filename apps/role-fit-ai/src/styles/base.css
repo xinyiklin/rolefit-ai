@@ -9,8 +9,9 @@ html, body {
 
 body {
   min-height: 100vh;
-  background: var(--paper);
+  background: var(--chrome);
   color: var(--ink);
+  accent-color: var(--accent);
 }
 
 button, input, select, textarea {
@@ -73,4 +74,10 @@ ul {
 .app-error__reload.app-error__reload {
   margin-top: var(--s2);
 }
-::selection { background: var(--accent-veil); color: var(--accent-deep); }
+::selection { background: var(--accent-glow); color: inherit; }
+
+/* Overlay-style thin scrollbars everywhere, tinted from the hairline ramp. */
+:where(*) {
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline-strong) transparent;
+}

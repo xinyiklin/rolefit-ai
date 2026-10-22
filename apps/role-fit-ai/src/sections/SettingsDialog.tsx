@@ -20,20 +20,23 @@ import type {
 import type { WorkspacePreferencesStatus } from "../lib/workspacePreferencesSync.ts";
 import type { ResumeData } from "@typeset/engine/lib/resumeData.ts";
 import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
+import type { Appearance } from "../hooks/useAppearance.ts";
 import type { VariantExclusions, VariantKind } from "../lib/variantPool.ts";
 import type { ProfileNoteFocus } from "./settings/ProfileNotes.tsx";
+import { AppearancePage } from "./settings/AppearancePage.tsx";
 import { AutomationPage } from "./settings/AutomationPage.tsx";
 import { BackgroundPage } from "./settings/BackgroundPage.tsx";
 import { GuidancePage } from "./settings/GuidancePage.tsx";
 import { ModelsPage } from "./settings/ModelsPage.tsx";
 import { ProfilePage } from "./settings/ProfilePage.tsx";
 
-export type SettingsSection = "profile" | "background" | "guidance" | "automation" | "models";
+export type SettingsSection = "profile" | "background" | "guidance" | "automation" | "models" | "appearance";
 
-// Your own facts and notes first, then how the AI runs.
+// Your own facts and notes first, then how the AI runs, then how RoleFit looks.
 export const SETTINGS_GROUPS: { label: string; sections: { id: SettingsSection; label: string }[] }[] = [
   { label: "You", sections: [{ id: "profile", label: "Profile" }, { id: "background", label: "Background" }] },
-  { label: "AI", sections: [{ id: "guidance", label: "Guidance" }, { id: "automation", label: "Automation" }, { id: "models", label: "Models" }] }
+  { label: "AI", sections: [{ id: "guidance", label: "Guidance" }, { id: "automation", label: "Automation" }, { id: "models", label: "Models" }] },
+  { label: "App", sections: [{ id: "appearance", label: "Appearance" }] }
 ];
 
 export type SettingsVariantOption = { fileName: string; label: string };
@@ -114,6 +117,10 @@ export type SettingsDialogProps = {
   onCustomInstructionsChange: (value: string) => void;
   stageCustomInstructions: Partial<Record<AiStageId, string>>;
   onStageCustomInstructionChange: (stage: AiStageId, value: string) => void;
+
+  // ----- Appearance (this browser only; untouched by Reset) -----
+  appearance: Appearance;
+  onAppearanceChange: (value: Appearance) => void;
 
   // ----- Reset -----
   onReset: () => void | Promise<void>;
@@ -208,6 +215,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
             {section === "guidance" ? <GuidancePage {...props} /> : null}
             {section === "automation" ? <AutomationPage {...props} /> : null}
             {section === "models" ? <ModelsPage {...props} /> : null}
+            {section === "appearance" ? <AppearancePage {...props} /> : null}
             {/* Deliberately no runtime diagnostics page (server address,
                 workspace path, provider counts): those describe the machine the
                 companion runs and belong in RoleFit Companion. */}

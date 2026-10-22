@@ -1044,7 +1044,7 @@ async function inspectSmokeRenderer(
         workspaceOverviewError,
         connectionStatus,
         connectionStatusError,
-        fullWorkspaceAbsent: !document.querySelector('header[aria-label="Workspace header"], main[aria-label="Output workspace"]'),
+        fullWorkspaceAbsent: !document.querySelector('main[aria-label="Output workspace"]'),
         correctTitle: document.title === 'RoleFit AI'
       });
     }, 900))

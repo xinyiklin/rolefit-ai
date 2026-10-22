@@ -1,87 +1,25 @@
-@font-face {
-  font-family: "RoleFit Sans";
-  src: url("@typeset/engine/fonts/SourceSans3-Regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
+/* RoleFit's public page wears the app's calm native look: the workspace
+   tokens (one source of truth, light and dark from the OS), system type, tone
+   instead of lines, one blue accent for action. See DESIGN.md § Public
+   product/download page. */
+@import "../../src/styles/tokens.css";
 
-@font-face {
-  font-family: "RoleFit Sans";
-  src: url("@typeset/engine/fonts/SourceSans3-Bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "RoleFit Serif";
-  src: url("@typeset/engine/fonts/SourceSerif4-Regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "RoleFit Serif";
-  src: url("@typeset/engine/fonts/SourceSerif4-Italic.woff2") format("woff2");
-  font-style: italic;
-  font-weight: 400;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "RoleFit Serif";
-  src: url("@typeset/engine/fonts/SourceSerif4-Bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
-
-/* The galley proof: RoleFit's public page borrows print production (sheets,
-   crop marks, proof marks, ledger rows) over the Drafting Desk palette. See
-   DESIGN.md § Public product/download page. */
 :root {
-  color-scheme: light;
-  --paper: #f2f3ee;
-  --paper-deep: #e6e9e3;
-  --card: #fbfcf9;
-  --card-soft: #f6f8f4;
-  --ink-strong: #17201c;
-  --ink: #26312c;
-  --ink-muted: #5c6862;
-  --ink-faint: #647169;
-  --hairline: #d7dcd6;
-  --hairline-strong: #bdc6bf;
-  --accent: #206b55;
-  --accent-deep: #174e40;
-  --accent-soft: #dcefe7;
-  --on-accent: #f7fbf8;
-  --warm: #8a611e;
-  --warm-soft: #f4ead4;
-  --brick: #a2412c;
-  /* On the dark local-first band (background: --accent-deep): text tones from
-     strong to faint, then the white-alpha hairlines and fills. */
-  --on-deep-strong: #f7faf7;
-  --on-deep: #eaf2ed;
-  --on-deep-muted: #c4d4cd;
-  --on-deep-faint: #9fc8b9;
-  --on-deep-hairline: rgb(255 255 255 / 0.12);
-  --on-deep-border: rgb(255 255 255 / 0.18);
-  --on-deep-connector: rgb(255 255 255 / 0.32);
-  --on-deep-fill: rgb(255 255 255 / 0.055);
-  --serif: "RoleFit Serif", Charter, "Bitstream Charter", Georgia, serif;
-  --sans: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  /* The local-first band: deep in light, a raised tone in dark. Its text tones
+     are fixed light values because the band is dark in both themes. */
+  --band: light-dark(oklch(0.245 0.008 265), oklch(0.235 0.005 265));
+  --on-band-strong: oklch(0.97 0.003 265);
+  --on-band: oklch(0.9 0.004 265);
+  --on-band-muted: oklch(0.79 0.006 265);
+  --on-band-faint: oklch(0.72 0.008 265);
+  --on-band-line: oklch(1 0 0 / 0.1);
+  --on-band-fill: oklch(1 0 0 / 0.06);
+  /* Product captures: a hairline ring for their edge plus one soft drop. */
+  --shot-shadow:
+    0 0 0 1px light-dark(oklch(0.2 0.01 265 / 0.07), oklch(1 0 0 / 0.08)),
+    0 1px 2px light-dark(oklch(0.2 0.01 265 / 0.05), oklch(0 0 0 / 0.3)),
+    0 24px 48px -28px light-dark(oklch(0.2 0.01 265 / 0.28), oklch(0 0 0 / 0.6));
   --page: min(1180px, calc(100vw - 48px));
-  --radius-control: 6px;
-  --radius-card: 10px;
-  --radius-shell: 14px;
-  --shadow-panel: 0 1px 2px rgb(23 32 28 / 0.05);
-  --shadow-sheet: 0 1px 0 rgb(23 32 28 / 0.04), 0 22px 44px -30px rgb(23 32 28 / 0.38);
-  --shadow-slip: 0 1px 0 rgb(23 32 28 / 0.05), 0 18px 34px -18px rgb(23 32 28 / 0.32);
-  /* House easing for entrances and reveals, shared with CareFlow's landing. */
-  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ── Base + layout ───────────────────────────────────────────────────────── */
@@ -99,11 +37,9 @@ body {
   overflow-x: hidden;
   background: var(--paper);
   color: var(--ink);
-  font-family: var(--sans);
+  font-family: var(--font-ui);
   font-size: 16px;
   line-height: 1.5;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
 }
 
 button,
@@ -125,8 +61,8 @@ img {
 }
 
 code {
-  font-family: var(--mono);
-  font-size: 0.9em;
+  font-family: inherit;
+  font-size: inherit;
 }
 
 ::selection {
@@ -136,7 +72,7 @@ code {
 
 :focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
 }
 
 main:focus-visible {
@@ -144,7 +80,7 @@ main:focus-visible {
 }
 
 section[id] {
-  scroll-margin-top: 84px;
+  scroll-margin-top: 76px;
 }
 
 .section-shell {
@@ -164,26 +100,19 @@ section[id] {
   border: 0;
 }
 
-/* The shared mono label voice (CareFlow's landing uses the same values). */
+/* The shared label voice: sentence case, no tracking. */
 .status-line,
 .eyebrow,
-.proof-strip span,
+.spec-strip span,
 .spread__index,
 .boundary__lists h3,
 .runtime__label,
-.galley__slug span,
-.boundary__shot figcaption span,
-.proof-slip__head,
-.proof-slip__reason span,
-.proof-slip__foot,
 .download-row__platform span,
 .colophon__col h2 {
-  font-family: var(--mono);
-  font-size: 0.6875rem;
-  font-weight: 400;
-  letter-spacing: 0.08em;
+  font-size: 0.8rem;
+  font-weight: 600;
+  letter-spacing: 0;
   line-height: 1.4;
-  text-transform: uppercase;
 }
 
 .skip-link,
@@ -203,12 +132,13 @@ section[id] {
   top: 12px;
   left: 12px;
   padding: 9px 13px;
-  border: 1px solid var(--accent-deep);
-  border-radius: var(--radius-control);
-  background: var(--card);
+  border-radius: var(--r-md);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
   color: var(--accent-deep);
-  font-weight: 700;
-  transform: translateY(-160%);
+  font-weight: 650;
+  /* Far enough up that its lift shadow never shows while it is hidden. */
+  transform: translateY(calc(-100% - 64px));
 }
 
 .skip-link:focus {
@@ -216,13 +146,12 @@ section[id] {
 }
 
 /* ── Header ──────────────────────────────────────────────────────────────── */
+/* A solid chrome-tone bar; it separates from the plane by value, not a rule. */
 .site-header {
   position: sticky;
   z-index: 30;
   top: 0;
-  border-bottom: 1px solid rgb(189 198 191 / 0.82);
-  background: rgb(242 243 238 / 0.9);
-  backdrop-filter: blur(14px);
+  background: var(--chrome);
 }
 
 .site-header__inner {
@@ -230,7 +159,7 @@ section[id] {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   width: var(--page);
-  min-height: 64px;
+  min-height: 60px;
   margin-inline: auto;
 }
 
@@ -262,52 +191,51 @@ section[id] {
   display: inline-flex;
   align-items: center;
   justify-self: start;
-  gap: 10px;
+  gap: 9px;
   min-height: 40px;
   padding: 0;
   color: var(--ink-strong);
-  font-family: var(--serif);
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1rem;
+  font-weight: 650;
   text-align: left;
   text-decoration: none;
 }
 
+/* The app tile: the one place the accent is identity rather than action. */
 .wordmark__mark {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 26px;
+  height: 26px;
   place-items: center;
-  border: 1px solid var(--accent-deep);
-  border-radius: 5px;
+  border-radius: 7px;
   background: var(--accent);
   color: var(--on-accent);
-  font-family: var(--serif);
-  font-size: 1.15rem;
+  font-size: 0.92rem;
+  font-weight: 700;
   line-height: 1;
 }
 
 .site-nav {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
 }
 
 .site-nav button,
 .header-actions > a {
-  min-height: 38px;
-  padding: 0 11px;
-  border: 0;
-  border-radius: var(--radius-control);
+  min-height: 34px;
+  padding: 0 12px;
+  border-radius: var(--r-md);
   background: transparent;
   color: var(--ink-muted);
   font-size: 0.88rem;
+  font-weight: 500;
   text-decoration: none;
 }
 
 .site-nav button:hover,
 .header-actions > a:hover {
-  background: var(--card-soft);
+  background: var(--control);
   color: var(--ink-strong);
 }
 
@@ -324,20 +252,19 @@ section[id] {
 }
 
 .header-download {
-  min-height: 36px;
+  min-height: 34px;
   padding: 0 14px;
-  border: 1px solid var(--accent-deep);
-  border-radius: var(--radius-control);
+  border-radius: var(--r-md);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .header-download:hover,
 .button--primary:hover,
 .download-row__action.is-direct:hover {
-  background: var(--accent-deep);
+  background: var(--accent-hover);
 }
 
 .header-download:active,
@@ -352,43 +279,53 @@ section[id] {
   grid-template-columns: minmax(320px, 5fr) minmax(520px, 7fr);
   gap: clamp(40px, 5vw, 72px);
   align-items: center;
-  padding-block: 76px 72px;
+  padding-block: 80px 56px;
 }
 
+/* Dot plus word; the script colors the dot for a signed release or a preview. */
 .status-line {
   display: flex;
   align-items: center;
-  gap: 9px;
-  margin: 0 0 22px;
+  gap: 8px;
+  margin: 0 0 20px;
   color: var(--ink-muted);
 }
 
 .status-line span {
   width: 7px;
   height: 7px;
+  flex: 0 0 auto;
   border-radius: 50%;
+  background: var(--ink-faint);
+}
+
+.status-line span.is-signed {
+  background: var(--positive);
+}
+
+.status-line span.is-preview {
   background: var(--warm);
-  box-shadow: 0 0 0 4px var(--warm-soft);
 }
 
 .hero h1,
 .section-heading h2 {
   margin: 0;
   color: var(--ink-strong);
-  font-family: var(--serif);
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-weight: 700;
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
 
 .hero h1 {
-  font-size: clamp(2.7rem, 4.45vw, 4.35rem);
-  line-height: 1.03;
+  font-size: clamp(2.6rem, 4.3vw, 4.1rem);
+  line-height: 1.04;
 }
 
+/* The second line steps down in tone, never into the accent. */
 .hero h1 em {
-  color: var(--accent-deep);
-  font-style: italic;
+  color: var(--ink-soft);
+  font-style: normal;
 }
 
 .hero__lede {
@@ -396,7 +333,7 @@ section[id] {
   margin: 24px 0 0;
   color: var(--ink-muted);
   font-size: 1.08rem;
-  line-height: 1.68;
+  line-height: 1.6;
 }
 
 .hero__actions {
@@ -408,264 +345,195 @@ section[id] {
 
 .button {
   display: inline-flex;
-  min-height: 45px;
+  min-height: 44px;
   align-items: center;
   justify-content: center;
-  padding: 0 18px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control);
-  font-size: 0.92rem;
-  font-weight: 700;
+  padding: 0 20px;
+  border-radius: var(--r-md);
+  font-size: 0.94rem;
+  font-weight: 600;
   text-decoration: none;
 }
 
 .button--primary {
-  border-color: var(--accent-deep);
   background: var(--accent);
   color: var(--on-accent);
 }
 
 .button--secondary {
-  background: var(--card);
+  background: var(--control);
   color: var(--ink-strong);
 }
 
 .button--secondary:hover {
-  border-color: var(--accent);
-  color: var(--accent-deep);
+  background: var(--control-hover);
 }
 
 .hero__note {
   margin: 22px 0 0;
   color: var(--ink-faint);
-  font-size: 0.82rem;
+  font-size: 0.84rem;
 }
 
-/* ── Galley: the sheet, its crop marks, and the proof slip ──────────────── */
-.galley {
+/* ── Hero capture and the edit card ─────────────────────────────────────── */
+.hero__visual {
   position: relative;
   min-width: 0;
-  padding: 18px 18px 0;
 }
 
-.galley__sheet {
+.hero__shot {
   margin: 0;
 }
 
-.galley__plate {
-  position: relative;
-}
-
-.galley__plate img {
+.hero__shot img {
   width: 100%;
   height: auto;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 4px;
+  border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: var(--shadow-sheet);
+  box-shadow: var(--shot-shadow);
 }
 
-/* Printer's crop marks: short rules extending each trim edge past the corner,
-   with a small gap, the way a press sheet marks where to cut. */
-.crop {
-  position: absolute;
-  width: 0;
-  height: 0;
-}
-
-.crop::before,
-.crop::after {
-  position: absolute;
-  background: var(--ink-faint);
-  content: "";
-  opacity: 0.6;
-}
-
-.crop::before {
-  top: 0;
-  width: 18px;
-  height: 1px;
-}
-
-.crop::after {
-  left: 0;
-  width: 1px;
-  height: 18px;
-}
-
-.crop--tl { top: 0; left: 0; }
-.crop--tr { top: 0; right: 0; }
-.crop--bl { bottom: 0; left: 0; }
-.crop--br { right: 0; bottom: 0; }
-
-.crop--tl::before,
-.crop--bl::before { right: 8px; }
-.crop--tr::before,
-.crop--br::before { left: 8px; }
-.crop--tl::after,
-.crop--tr::after { bottom: 8px; }
-.crop--bl::after,
-.crop--br::after { top: 8px; }
-
-.galley__slug {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-end;
-  gap: 10px;
+.hero__caption {
   min-height: 40px;
   padding-top: 14px;
-  color: var(--ink-muted);
-  font-family: var(--serif);
-  font-size: 0.92rem;
-  font-style: italic;
+  color: var(--ink-soft);
+  font-size: 0.86rem;
+  text-align: right;
 }
 
-.galley__slug span,
-.boundary__shot figcaption span {
-  color: var(--ink-faint);
-  font-style: normal;
-}
-
-.proof-slip {
+/* One proposed edit, drawn as a floating card in the app's diff vocabulary. */
+.edit-card {
   position: absolute;
-  bottom: -40px;
-  left: -56px;
-  width: min(352px, 62%);
+  bottom: -28px;
+  left: -48px;
+  width: min(344px, 62%);
   padding: 16px 18px 14px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 3px;
-  background: var(--card);
-  box-shadow: var(--shadow-slip);
-  transform: rotate(-1.2deg);
+  border-radius: var(--r-xl);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
 }
 
-.proof-slip p {
+.edit-card p {
   margin: 0;
 }
 
-.proof-slip__head {
+.edit-card__head {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px dashed var(--hairline-strong);
-  color: var(--ink-faint);
+  color: var(--ink-soft);
+  font-size: 0.78rem;
 }
 
-.proof-slip__head span:first-child {
-  color: var(--accent);
-}
-
-.proof-slip__line {
-  padding-top: 12px;
+.edit-card__head span:first-child {
   color: var(--ink-strong);
-  font-family: var(--serif);
-  font-size: 1rem;
-  line-height: 1.6;
+  font-size: 0.88rem;
+  font-weight: 650;
 }
 
-/* Proofreader's marks: a struck deletion in brick, an inserted word in forest
-   ink on its wash, each drawn once on load (see Motion). */
-.proof-slip del,
-.proof-slip ins {
+.edit-card__line {
+  padding-top: 10px;
+  color: var(--ink-strong);
+  font-size: 0.94rem;
+  line-height: 1.55;
+}
+
+/* Removed words fade and take a warm strike; inserted words take the accent
+   wash, as in the app's proposal rows. Each is drawn once on load. */
+.edit-card del,
+.edit-card ins {
   padding: 0 2px;
-  border-radius: 2px;
+  border-radius: var(--r-sm);
   text-decoration: none;
 }
 
-.proof-slip del {
-  background-image: linear-gradient(var(--brick), var(--brick));
+.edit-card del {
+  background-image: linear-gradient(var(--warm), var(--warm));
   background-position: 0 58%;
   background-repeat: no-repeat;
   background-size: 100% 1.5px;
-  color: var(--brick);
+  color: var(--ink-faint);
 }
 
-.proof-slip ins {
+.edit-card ins {
   background: var(--accent-soft);
-  box-shadow: inset 0 -1.5px 0 var(--accent);
   color: var(--accent-deep);
 }
 
-.proof-slip__reason {
+.edit-card__reason {
   padding-top: 10px;
   color: var(--ink-muted);
   font-size: 0.84rem;
   line-height: 1.45;
 }
 
-.proof-slip__reason span {
+.edit-card__reason span {
   margin-right: 6px;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
+  font-weight: 600;
 }
 
-.proof-slip__actions {
+.edit-card__actions {
   display: flex;
   gap: 6px;
-  padding-top: 12px;
+  padding-top: 14px;
 }
 
-.proof-slip__actions span {
-  padding: 3px 9px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 4px;
-  color: var(--ink-muted);
+.edit-card__actions span {
+  padding: 4px 10px;
+  border-radius: var(--r-md);
+  background: var(--control);
+  color: var(--ink-strong);
   font-size: 0.78rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
-.proof-slip__actions .is-primary {
-  border-color: var(--accent-deep);
+.edit-card__actions .is-primary {
   background: var(--accent);
   color: var(--on-accent);
 }
 
-.proof-slip__foot {
+.edit-card__foot {
   padding-top: 12px;
   color: var(--ink-faint);
-  font-size: 0.625rem;
+  font-size: 0.72rem;
 }
 
 /* ── Spec strip ──────────────────────────────────────────────────────────── */
-.proof-strip {
+.spec-strip {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  margin-top: 28px;
-  margin-bottom: 112px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-card);
+  margin-top: 40px;
+  margin-bottom: 120px;
+  border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
 }
 
-.proof-strip > div {
+.spec-strip > div {
   min-width: 0;
-  padding: 16px 20px;
-  border-right: 1px solid var(--hairline);
+  padding: 18px 22px;
 }
 
-.proof-strip > div:last-child {
-  border-right: 0;
-}
-
-.proof-strip span {
+.spec-strip span {
   display: block;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
 }
 
-.proof-strip strong {
+.spec-strip strong {
   display: block;
-  margin-top: 5px;
+  margin-top: 4px;
   overflow: hidden;
   color: var(--ink-strong);
-  font-size: 0.95rem;
+  font-size: 0.98rem;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .eyebrow {
   margin: 0 0 12px;
-  color: var(--accent);
+  color: var(--ink-soft);
 }
 
 /* Shared maker section head: the claim left, the lede right, bottoms aligned. */
@@ -678,7 +546,7 @@ section[id] {
 
 .section-heading h2 {
   max-width: 17ch;
-  font-size: clamp(2.15rem, 3.5vw, 3.25rem);
+  font-size: clamp(2.05rem, 3.4vw, 3.1rem);
   line-height: 1.08;
 }
 
@@ -688,25 +556,25 @@ section[id] {
   margin: 0;
   color: var(--ink-muted);
   font-size: 1.02rem;
-  line-height: 1.7;
+  line-height: 1.65;
 }
 
 /* ── Workflow spreads ────────────────────────────────────────────────────── */
 .product {
-  padding-bottom: 120px;
+  padding-bottom: 128px;
 }
 
 .product > .section-heading {
-  margin-bottom: 56px;
+  margin-bottom: 40px;
 }
 
+/* Spreads separate by space; there are no rules between them. */
 .spread {
   display: grid;
   grid-template-columns: minmax(240px, 4fr) minmax(0, 8fr);
   gap: 48px;
   align-items: start;
-  padding-block: 40px;
-  border-top: 1px solid var(--hairline-strong);
+  padding-block: 48px;
 }
 
 .spread--pair {
@@ -722,24 +590,25 @@ section[id] {
 .spread__index {
   display: flex;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   margin: 0;
-  color: var(--ink-faint);
+  color: var(--ink-muted);
 }
 
 .spread__index span {
-  color: var(--accent);
+  color: var(--ink-faint);
+  font-variant-numeric: tabular-nums;
 }
 
 .spread__copy h3 {
   max-width: 14ch;
-  margin: 14px 0 0;
+  margin: 12px 0 0;
   color: var(--ink-strong);
-  font-family: var(--serif);
-  font-size: clamp(1.75rem, 2.6vw, 2.35rem);
-  font-weight: 400;
+  font-family: var(--font-display);
+  font-size: clamp(1.6rem, 2.4vw, 2.15rem);
+  font-weight: 700;
   letter-spacing: -0.02em;
-  line-height: 1.1;
+  line-height: 1.12;
   text-wrap: balance;
 }
 
@@ -752,17 +621,16 @@ section[id] {
   margin: 16px 0 0;
   color: var(--ink-muted);
   font-size: 0.98rem;
-  line-height: 1.68;
+  line-height: 1.65;
 }
 
 .app-frame {
   margin: 0;
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 8px;
+  border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
+  box-shadow: var(--shot-shadow);
 }
 
 .app-frame img {
@@ -770,8 +638,8 @@ section[id] {
   height: auto;
 }
 
-/* A print-style enlargement: the hero already shows the whole resume sheet, so
-   step 02 sets the same capture at 1.75x, framed on the workflow rail. */
+/* An enlargement: the hero already shows the whole resume page, so step 02
+   sets the same capture at 1.75x, framed on the workflow rail. */
 .app-frame--detail {
   position: relative;
   aspect-ratio: 16 / 10;
@@ -785,24 +653,21 @@ section[id] {
 
 .app-frame--detail figcaption {
   position: absolute;
-  top: 10px;
-  left: 10px;
-  padding: 3px 8px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: 4px;
-  background: var(--card);
+  top: 12px;
+  left: 12px;
+  padding: 4px 10px;
+  border-radius: var(--r-pill);
+  background: var(--card-elev);
+  box-shadow: var(--shadow-lift);
   color: var(--ink-muted);
-  font-family: var(--mono);
-  font-size: 0.6875rem;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 0.75rem;
+  font-weight: 600;
 }
 
-/* ── Local-first band (dark; see --on-deep-* tokens) ─────────────────────── */
+/* ── Local-first band (see --band and --on-band-*) ───────────────────────── */
 .local-first {
-  border-block: 1px solid var(--accent-deep);
-  background: var(--accent-deep);
-  color: var(--on-deep);
+  background: var(--band);
+  color: var(--on-band);
 }
 
 .local-first__inner {
@@ -810,15 +675,11 @@ section[id] {
 }
 
 .section-heading--inverse h2 {
-  color: var(--on-deep-strong);
-}
-
-.section-heading--inverse .eyebrow {
-  color: var(--on-deep-faint);
+  color: var(--on-band-strong);
 }
 
 .section-heading--inverse > p {
-  color: var(--on-deep-muted);
+  color: var(--on-band-muted);
 }
 
 .boundary {
@@ -836,21 +697,25 @@ section[id] {
 
 .boundary__lists h3 {
   margin: 0;
-  color: var(--on-deep-faint);
+  color: var(--on-band-faint);
 }
 
 .boundary__lists ul {
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   padding: 0;
   list-style: none;
 }
 
+/* Row separators inside one list, never a frame. */
 .boundary__lists li {
   padding: 12px 0;
-  border-top: 1px solid var(--on-deep-hairline);
-  color: var(--on-deep);
+  color: var(--on-band);
   font-size: 0.98rem;
   line-height: 1.5;
+}
+
+.boundary__lists li + li {
+  border-top: 1px solid var(--on-band-line);
 }
 
 .boundary__shot {
@@ -860,51 +725,41 @@ section[id] {
 .boundary__shot img {
   width: 100%;
   height: auto;
-  border: 1px solid var(--on-deep-border);
-  border-radius: var(--radius-shell);
-  box-shadow: 0 30px 60px -36px rgb(8 26 19 / 0.55);
+  border-radius: var(--r-lg);
+  box-shadow:
+    0 0 0 1px var(--on-band-line),
+    0 30px 60px -36px oklch(0 0 0 / 0.6);
 }
 
 .boundary__shot figcaption {
-  display: flex;
-  gap: 10px;
   margin-top: 14px;
-  color: var(--on-deep-muted);
-  font-family: var(--serif);
-  font-size: 0.92rem;
-  font-style: italic;
-}
-
-.boundary__shot figcaption span {
-  color: var(--on-deep-faint);
+  color: var(--on-band-muted);
+  font-size: 0.86rem;
 }
 
 /* Node-and-wire runtime diagram (CareFlow's wiring diagram shares the grammar). */
 .runtime {
-  margin: 64px 0 0;
-  padding-top: 32px;
-  border-top: 1px solid var(--on-deep-hairline);
+  margin: 72px 0 0;
 }
 
 .runtime__label {
-  color: var(--on-deep-faint);
+  color: var(--on-band-faint);
 }
 
 .runtime__flow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 56px;
-  margin: 22px 0 0;
+  margin: 16px 0 0;
   padding: 0;
   list-style: none;
 }
 
 .runtime__flow li {
   position: relative;
-  padding: 13px 16px;
-  border: 1px solid var(--on-deep-border);
-  border-radius: var(--radius-control);
-  background: var(--on-deep-fill);
+  padding: 14px 16px;
+  border-radius: var(--r-lg);
+  background: var(--on-band-fill);
 }
 
 .runtime__flow li:not(:last-child)::after {
@@ -913,8 +768,9 @@ section[id] {
   left: calc(100% + 8px);
   width: 40px;
   height: 1px;
-  background: var(--on-deep-connector);
+  background: var(--on-band-faint);
   content: "";
+  opacity: 0.6;
 }
 
 .runtime__flow li:not(:last-child)::before {
@@ -923,22 +779,21 @@ section[id] {
   left: calc(100% + 42px);
   border-top: 4px solid transparent;
   border-bottom: 4px solid transparent;
-  border-left: 6px solid var(--on-deep-faint);
+  border-left: 6px solid var(--on-band-faint);
   content: "";
 }
 
 .runtime__flow strong {
   display: block;
-  color: var(--on-deep-strong);
-  font-family: var(--mono);
-  font-size: 0.82rem;
-  font-weight: 400;
+  color: var(--on-band-strong);
+  font-size: 0.9rem;
+  font-weight: 650;
 }
 
 .runtime__flow span {
   display: block;
   margin-top: 2px;
-  color: var(--on-deep-muted);
+  color: var(--on-band-muted);
   font-size: 0.86rem;
 }
 
@@ -958,26 +813,23 @@ section[id] {
 
 .release-status {
   margin: 0;
-  padding: 13px 15px;
-  border: 1px solid var(--hairline);
-  border-radius: var(--radius-control);
+  padding: 12px 14px;
+  border-radius: var(--r-md);
   background: var(--card-soft);
   color: var(--ink-muted);
-  font-size: 0.85rem;
+  font-size: 0.86rem;
   line-height: 1.5;
 }
 
 .release-status--available {
   display: flex;
   align-items: center;
-  gap: 9px;
-  color: var(--accent-deep);
+  gap: 8px;
+  color: var(--ink);
 }
 
 .release-status--preview {
-  border-color: #ddc99f;
-  background: #f7f0e1;
-  color: #795317;
+  background: var(--warm-veil);
 }
 
 .release-status__dot {
@@ -985,49 +837,46 @@ section[id] {
   height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--positive);
 }
 
 .release-status--preview .release-status__dot {
   background: var(--warm);
 }
 
-/* Ledger rows: platform, detail, a dotted leader, format, then the action. */
+/* Ledger rows in one borderless group: platform, detail, an invisible leader,
+   format, then the action. */
 .download-list {
   margin-top: 48px;
   overflow: hidden;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-card);
+  border-radius: var(--r-lg);
   background: var(--card);
-  box-shadow: var(--shadow-panel);
 }
 
 .download-row {
   display: grid;
-  grid-template-columns: minmax(170px, 0.9fr) auto minmax(40px, 1fr) auto auto;
+  grid-template-columns: minmax(170px, 0.9fr) 9rem minmax(40px, 1fr) auto auto;
   gap: 20px;
   align-items: center;
-  min-height: 88px;
-  padding: 18px 20px 18px 24px;
-  border-bottom: 1px solid var(--hairline);
+  min-height: 84px;
+  padding: 16px 20px 16px 24px;
 }
 
-.download-row:last-child {
-  border-bottom: 0;
+.download-row + .download-row {
+  border-top: 1px solid var(--hairline-soft);
 }
 
 .download-row__platform span {
   display: block;
-  color: var(--accent);
+  color: var(--ink-soft);
 }
 
 .download-row__platform strong {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   color: var(--ink-strong);
-  font-family: var(--serif);
-  font-size: 1.2rem;
-  font-weight: 400;
+  font-size: 1.08rem;
+  font-weight: 650;
 }
 
 .download-row > p {
@@ -1036,44 +885,33 @@ section[id] {
   font-size: 0.88rem;
 }
 
-.download-row__leader {
-  align-self: center;
-  height: 1px;
-  border-bottom: 1px dotted var(--hairline-strong);
-  transform: translateY(5px);
-}
-
-/* Same specificity as `.download-row > p`; source order lets the mono size win. */
+/* Same specificity as `.download-row > p`; source order lets this win. */
 p.download-row__format {
   color: var(--ink);
-  font-family: var(--mono);
-  font-size: 0.75rem;
-  letter-spacing: 0.03em;
+  font-size: 0.84rem;
+  font-variant-numeric: tabular-nums;
 }
 
 .download-row__action {
   display: inline-flex;
-  min-width: 136px;
-  min-height: 40px;
+  min-width: 132px;
+  min-height: 38px;
   align-items: center;
   justify-content: center;
-  padding: 0 14px;
-  border: 1px solid var(--hairline-strong);
-  border-radius: var(--radius-control);
-  background: var(--card-soft);
+  padding: 0 16px;
+  border-radius: var(--r-md);
+  background: var(--control);
   color: var(--ink-strong);
   font-size: 0.86rem;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
 .download-row__action:hover {
-  border-color: var(--accent);
-  color: var(--accent-deep);
+  background: var(--control-hover);
 }
 
 .download-row__action.is-direct {
-  border-color: var(--accent-deep);
   background: var(--accent);
   color: var(--on-accent);
 }
@@ -1089,7 +927,7 @@ p.download-row__format {
   max-width: 700px;
   margin: 0;
   color: var(--ink-muted);
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   line-height: 1.55;
 }
 
@@ -1102,8 +940,8 @@ p.download-row__format {
 
 .downloads__footer a {
   color: var(--ink-strong);
-  font-size: 0.84rem;
-  font-weight: 700;
+  font-size: 0.86rem;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -1116,8 +954,7 @@ p.download-row__format {
 
 /* ── Colophon footer (shared maker close) ────────────────────────────────── */
 .site-footer {
-  border-top: 1px solid var(--hairline-strong);
-  background: var(--card-soft);
+  background: var(--chrome);
 }
 
 .site-footer__inner {
@@ -1126,7 +963,7 @@ p.download-row__format {
   gap: 40px;
   width: var(--page);
   margin-inline: auto;
-  padding-block: 56px;
+  padding-block: 56px 32px;
 }
 
 .colophon__brand p,
@@ -1147,7 +984,7 @@ p.download-row__format {
 
 .colophon__col h2 {
   margin: 10px 0 0;
-  color: var(--ink-faint);
+  color: var(--ink-soft);
 }
 
 .colophon__siblings {
@@ -1162,22 +999,22 @@ p.download-row__format {
   justify-content: space-between;
   gap: 16px;
   padding: 10px 0;
-  border-bottom: 1px solid var(--hairline);
   color: var(--ink-muted);
   font-size: 0.9rem;
   text-decoration: none;
 }
 
+.colophon__siblings li + li a {
+  border-top: 1px solid var(--hairline);
+}
+
 .colophon__siblings strong {
   color: var(--ink-strong);
+  font-weight: 600;
 }
 
 .colophon__siblings a:hover span {
   color: var(--accent-deep);
-}
-
-.site-footer__base {
-  border-top: 1px solid var(--hairline);
 }
 
 .site-footer__base-inner {
@@ -1187,7 +1024,7 @@ p.download-row__format {
   gap: 20px;
   width: var(--page);
   margin-inline: auto;
-  padding-block: 20px;
+  padding-block: 20px 28px;
 }
 
 .site-footer__base p {
@@ -1204,7 +1041,7 @@ p.download-row__format {
 .site-footer__base a {
   color: var(--ink-muted);
   font-size: 0.82rem;
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 
@@ -1213,10 +1050,10 @@ p.download-row__format {
    on the house ease, one-shot. Every rule here lives inside `no-preference` so
    reduced motion — and, for the reveals, a missing `.reveal-ready` when JS is
    absent — leaves content fully visible and unmoved. The one authored moment
-   is the proof slip: it settles onto the sheet, then its marks are drawn. */
+   is the edit card: it settles over the capture, then its marks are drawn. */
 @media (prefers-reduced-motion: no-preference) {
   .hero__copy > *,
-  .galley__sheet {
+  .hero__shot {
     animation: enter 0.32s var(--ease) backwards;
   }
 
@@ -1224,25 +1061,25 @@ p.download-row__format {
   .hero__copy > :nth-child(3) { animation-delay: 0.12s; }
   .hero__copy > :nth-child(4) { animation-delay: 0.18s; }
   .hero__copy > :nth-child(5) { animation-delay: 0.24s; }
-  .galley__sheet { animation-delay: 0.1s; }
+  .hero__shot { animation-delay: 0.1s; }
 
-  .proof-slip {
-    animation: slip 0.5s var(--ease) 0.45s backwards;
+  .edit-card {
+    animation: settle 0.42s var(--ease) 0.45s backwards;
   }
 
-  .proof-slip del {
+  .edit-card del {
     animation: strike 0.36s var(--ease) 0.95s backwards;
   }
 
-  .proof-slip del + ins {
+  .edit-card del + ins {
     animation: insert 0.3s var(--ease) 1.2s backwards;
   }
 
-  .proof-slip del ~ del {
+  .edit-card del ~ del {
     animation-delay: 1.35s;
   }
 
-  .proof-slip del ~ del + ins {
+  .edit-card del ~ del + ins {
     animation-delay: 1.6s;
   }
 
@@ -1272,13 +1109,18 @@ p.download-row__format {
     transition: none;
   }
 
-  .download-row {
-    transition: background-color 150ms ease;
+  .site-nav button,
+  .header-actions > a,
+  .header-download,
+  .button,
+  .download-row,
+  .download-row__action {
+    transition: background-color 140ms var(--ease);
   }
+}
 
-  .download-row:hover {
-    background: var(--card-soft);
-  }
+.download-row:hover {
+  background: var(--card-hover);
 }
 
 @keyframes enter {
@@ -1288,10 +1130,10 @@ p.download-row__format {
   }
 }
 
-@keyframes slip {
+@keyframes settle {
   from {
     opacity: 0;
-    transform: translate(-6px, 18px) rotate(-3deg);
+    transform: translateY(14px);
   }
 }
 
@@ -1314,16 +1156,41 @@ p.download-row__format {
   }
 }
 
+/* Windows High Contrast and similar: tone separation disappears, so restore
+   outlines on the groups and controls that rely on it. */
+@media (forced-colors: active) {
+  .spec-strip,
+  .download-list,
+  .edit-card,
+  .release-status,
+  .runtime__flow li,
+  .button,
+  .header-download,
+  .download-row__action,
+  .edit-card__actions span {
+    border: 1px solid CanvasText;
+  }
+
+  /* The strike and wash are backgrounds, which forced colors drop. */
+  .edit-card del {
+    text-decoration: line-through;
+  }
+
+  .edit-card ins {
+    text-decoration: underline;
+  }
+}
+
 /* ── Responsive ──────────────────────────────────────────────────────────── */
-/* Below 1240px the overlapping slip would cover the figure slug and much of
-   the capture, so it drops into the flow under the sheet. */
+/* Below 1240px the overlapping card would cover the caption and much of the
+   capture, so it drops into the flow under the shot. */
 @media (max-width: 1240px) {
-  .proof-slip {
+  .edit-card {
     position: relative;
     bottom: auto;
     left: auto;
-    width: min(380px, 92%);
-    margin: 10px 0 0 6px;
+    width: min(380px, 100%);
+    margin-top: 4px;
   }
 }
 
@@ -1349,20 +1216,8 @@ p.download-row__format {
     max-width: 700px;
   }
 
-  .galley {
-    padding: 14px 14px 0;
-  }
-
-  .proof-strip {
+  .spec-strip {
     grid-template-columns: repeat(2, 1fr);
-  }
-
-  .proof-strip > div:nth-child(2) {
-    border-right: 0;
-  }
-
-  .proof-strip > div:nth-child(-n + 2) {
-    border-bottom: 1px solid var(--hairline);
   }
 
   .section-heading {
@@ -1408,7 +1263,7 @@ p.download-row__format {
   .runtime__flow li:not(:last-child)::before {
     top: calc(100% + 18px);
     left: 18px;
-    border-top: 6px solid var(--on-deep-faint);
+    border-top: 6px solid var(--on-band-faint);
     border-right: 4px solid transparent;
     border-bottom: 0;
     border-left: 4px solid transparent;
@@ -1429,7 +1284,7 @@ p.download-row__format {
   }
 
   .site-header__inner {
-    min-height: 58px;
+    min-height: 56px;
   }
 
   .masthead-id__rule,
@@ -1439,15 +1294,15 @@ p.download-row__format {
   }
 
   .header-download {
-    padding-inline: 11px;
+    padding-inline: 12px;
   }
 
   .hero {
-    padding-block: 44px 40px;
+    padding-block: 44px 32px;
   }
 
   .hero h1 {
-    font-size: clamp(2.45rem, 12.2vw, 3.4rem);
+    font-size: clamp(2.35rem, 11.6vw, 3.3rem);
   }
 
   .hero__lede {
@@ -1466,21 +1321,16 @@ p.download-row__format {
     line-height: 1.55;
   }
 
-  .galley {
-    padding: 12px 10px 0;
+  .hero__caption {
+    text-align: left;
   }
 
-  .galley__slug {
-    justify-content: flex-start;
-    font-size: 0.86rem;
-  }
-
-  .proof-strip {
+  .spec-strip {
     margin-bottom: 80px;
   }
 
-  .proof-strip > div {
-    padding: 14px;
+  .spec-strip > div {
+    padding: 14px 16px;
   }
 
   .spread {
@@ -1502,7 +1352,7 @@ p.download-row__format {
   .download-row {
     grid-template-columns: 1fr auto;
     gap: 6px 16px;
-    padding: 17px 15px;
+    padding: 16px;
   }
 
   .download-row > p:first-of-type,
@@ -1517,7 +1367,7 @@ p.download-row__format {
   .download-row__action {
     grid-row: 1 / span 2;
     grid-column: 2;
-    min-width: 118px;
+    min-width: 116px;
   }
 
   .downloads__footer,
@@ -1532,6 +1382,6 @@ p.download-row__format {
   .site-footer__inner {
     grid-template-columns: 1fr;
     gap: 28px;
-    padding-block: 44px;
+    padding-block: 44px 24px;
   }
 }

@@ -677,8 +677,11 @@ disappears into the task. Quiet competence, not salesmanship.
 1. Honesty is the product: never imply the AI can safely supply missing facts;
    ground proposals in provided evidence and surface gaps or placeholders for
    human review instead of hiding them.
-2. Preserve the compact masthead + full-width studio workflow: the masthead
-   carries the brand plus the global Apply action. Read-only Sessions is
+2. Preserve the full-height studio rail + full-width workspace: the rail opens
+   with the brand, which also collapses the rail; the rail can be resized or
+   dragged shut. The global Apply action floats at the workspace's
+   bottom-right, naming the prepared posting and its readiness in words
+   (there is no top bar; user decisions 2026-10-22). Read-only Sessions is
    ambient awareness immediately above Settings in the bottom studio-rail
    utilities group, outside `OUTPUT_TABS` and the APG tablist. Expanded it
    reads Sessions + count; collapsed it becomes an icon + compact count/working
@@ -731,7 +734,7 @@ disappears into the task. Quiet competence, not salesmanship.
    staging workspace before replacement, and keeps the previous saved
    workspace as a local safety copy; every browser attached to that workspace
    adopts restored preferences on its next load.
-10. Keep application readiness singular: the masthead and Prepare page expose
+10. Keep application readiness singular: the floating Apply action and Prepare page expose
     the same session-derived command and blocker model: Apply for fresh work,
     Update application for an explicitly restored submitted
     record, and Save job updates for an explicitly restored Skipped
@@ -745,7 +748,8 @@ disappears into the task. Quiet competence, not salesmanship.
     includes that document and leaves the other Include choice unchanged. A
     later update must preserve any previously saved artifact for an excluded
     slot.
-    Skip & save job is a separate quiet rail action, never a masthead action. It
+    Skip & save job is a separate quiet rail action, never part of the floating
+    Apply action. It
     requires only a completed prepared job and loaded tracker state; material,
     Fit, provider, and Apply blockers do not control that explicit decision.
     Fit Assessment follows the [user contract](#fit-assessment-user-contract): one
