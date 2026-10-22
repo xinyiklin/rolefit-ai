@@ -406,7 +406,7 @@ later entry wins.
 - 2026-09-08 [USER+CODE] D046 ACTIVE: Paragraph-cited cover evidence, bounded Resume targets
   with advisory suggestions, and an optional session-only final review of
   included materials; legacy Fit/date representations stay readable.
-- 2026-07-25..08-01 [USER] D047 ACTIVE: One Settings dialog, opened from the studio rail's
+- 2026-07-25..08-01 [USER] D047 AMENDED by D093: One Settings dialog, opened from the studio rail's
   foot, holds every preference and shows no runtime diagnostics (those belong to
   RoleFit Companion); Reset sits at the foot of the section rail; rows are
   frameless, never card-in-card. [CODE+USER] Custom instructions are per stage
@@ -414,7 +414,8 @@ later entry wins.
   deleted. [CODE] `src/config/aiStages.ts` is the single stage declaration;
   `normalizeSettings` may repair and remove but never add. [USER+CODE+TOOL] The
   masthead owns only identity and Apply; Sessions sits in the studio-rail
-  utilities.
+  utilities. (D093: the masthead is now the rail head with the brand only;
+  Apply floats over the workspace.)
 - 2026-10-18 [USER+CODE] D084 AMENDED by D085: **A letter's Blank and Starter match the
   resume's** ("blank resume/letter should same default font/style. use resume
   as the default, same for start bundler for both and the editor file name").
@@ -452,6 +453,29 @@ later entry wins.
   (D084). The templates already share the `Your Name` letterhead and stay as
   they are: the resume's sample is gated by its `starter` origin, the letter's
   by its `[bracket]` slots (`coverLetterReady` needs none).
+
+- 2026-10-22 [USER+CODE+TOOL] D093 ACTIVE: **RoleFit's look is a calm native
+  workspace, in light and dark.** The user replaced the green-paper "Drafting
+  Desk" visuals (serif titles, tracked mono eyebrows, hairline-framed cards)
+  with an Apple-apps / Things 3 direction: neutral cool grays, one blue accent,
+  borderless groups separated by tone, filled inputs and controls, system UI
+  type with tabular figures. Liquid glass was considered and dropped because
+  Firefox lacks backdrop refraction. Every color is a `light-dark()` token; the
+  OS decides unless Settings › App › Appearance pins Light or Dark, a
+  per-browser view preference (`rolefit:appearance`) that never enters
+  workspace preferences or documents and is untouched by Reset all settings.
+  Document pages stay paper (`color-scheme: light`). Scope is RoleFit host
+  chrome only: `packages/editor` re-themes through RoleFit tokens unchanged,
+  and the extension popup and desktop companion keep their own styles. (AMENDED
+  2026-10-22 [USER]: the public landing page follows the same system, importing
+  `src/styles/tokens.css` and the OS theme with no override; its structure and
+  claims stay, and its app screenshots were retaken; the companion shot
+  changes with the companion restyle.) The top bar is gone: a full-height
+  studio rail is headed by the brand (which collapses the rail; the rail also
+  resizes and drags shut, a per-browser preference), and the global Apply
+  action floats at the workspace's bottom-right, naming the prepared posting
+  and its readiness in words. This supersedes the "compact masthead" shell
+  wording. `apps/role-fit-ai/DESIGN.md` owns the system.
 
 ### AI providers, defaults, and benchmark outcomes
 

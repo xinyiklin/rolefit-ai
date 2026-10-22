@@ -9,11 +9,9 @@
 
 .workspace-page__head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--s4);
-  padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--hairline);
 }
 
 /* Page titles carry .page-serif (studio.css); keep only color here as a fallback. */
@@ -21,24 +19,36 @@
   color: var(--ink-strong);
 }
 
-/* Title row: h2 + optional mono path detail on the same baseline */
+/* Title row: h2 + optional detail on the same baseline */
 .workspace-page__title-row {
   display: flex;
   align-items: baseline;
-  gap: var(--s3);
+  gap: 0 var(--s3);
   flex-wrap: wrap;
+  min-width: 0;
 }
 
-.workspace-page__path {
+/* Refresh sits with the title it reloads, centered on the head line. The
+   negative block margin keeps its 30px hit area from making the title row
+   taller than the other pages' heads. */
+.workspace-page__refresh {
+  align-self: center;
+  margin-block: -6px;
+}
+
+/* The quiet detail beside a page title: a workspace path, a lede, a target. */
+.workspace-page__detail {
+  margin: 0;
   color: var(--ink-faint);
-  font-family: var(--font-mono);
   font-size: 0.66rem;
-  font-feature-settings: "tnum";
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
 }
 
 .workspace-page__saving {
   color: var(--accent-deep);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
   font-weight: 700;
 }
@@ -125,7 +135,7 @@
   align-items: center;
   gap: var(--s2);
   min-height: 34px;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card-elev);
   color: var(--ink-soft);
@@ -167,7 +177,7 @@
   gap: 1px;
   min-width: 190px;
   padding: var(--s1);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card-elev);
   box-shadow: var(--shadow-lift);
@@ -225,8 +235,8 @@
 .activity-filter-menu__count {
   color: var(--ink-faint);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.66rem;
-  font-feature-settings: "tnum";
 }
 
 /* -------- Shared application atoms -------- */
@@ -246,14 +256,14 @@
   width: 26px;
   min-width: 26px;
   height: 26px;
-  border-radius: var(--r-md);
-  background: var(--cool-veil);
-  border: 1px solid var(--cool-line);
-  color: var(--cool);
+  border-radius: 50%;
+  background: var(--control);
+  border: 0;
+  color: var(--ink-muted);
   font-style: normal;
   font-size: 0.64rem;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 650;
+  letter-spacing: 0;
   overflow: hidden;
 }
 
@@ -285,26 +295,13 @@
   align-items: center;
   gap: 2px;
   min-height: 18px;
-  padding: 0 5px;
-  border: 1px solid var(--hairline);
+  padding: 0 6px;
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
+  background: var(--control);
   color: var(--ink-soft);
-  font-size: 0.62rem;
+  font-size: 0.66rem;
   font-weight: 700;
-}
-
-/* application-stage still used in ApplicationModal documents tab — keep as a slim badge there */
-.application-stage {
-  display: inline-flex;
-  align-items: center;
-  min-height: 18px;
-  padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-pill);
-  background: var(--card-soft);
-  color: var(--ink-soft);
-  font-size: 0.67rem;
-  font-weight: 600;
 }
 
 /* -------- Stage dot + plain text (table rows) -------- */
@@ -321,8 +318,8 @@
 }
 
 .stage-dot--applied { background: var(--cool); }
-.stage-dot--interviewing { background: var(--accent); }
-.stage-dot--offer { background: var(--accent-deep); }
+.stage-dot--interviewing { background: var(--positive); }
+.stage-dot--offer { background: var(--gold); }
 .stage-dot--rejected { background: var(--danger); }
 .stage-dot--ghosted { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
 .stage-dot--withdrawn { background: var(--ink-faint); }
@@ -349,7 +346,6 @@
 .table-date {
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
 }
 
 /* Fit verdicts are words, so they stay in the UI font and align like text. */
@@ -466,9 +462,9 @@
   width: 148px;
   min-height: 30px;
   padding: 2px;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-soft);
+  background: var(--control);
   color: var(--ink-soft);
   font-family: var(--font-ui);
   font-size: 0.7rem;
@@ -486,13 +482,10 @@
   left: 2px;
   width: calc(50% - 3px);
   border-radius: var(--r-sm);
-  background: var(--accent-soft);
+  background: var(--thumb);
+  box-shadow: var(--shadow-thumb);
   content: "";
   transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.view-switch:hover {
-  border-color: var(--hairline-strong);
 }
 
 .view-switch[data-view="calendar"]::before {
@@ -525,8 +518,8 @@
   width: 100%;
   min-width: 0;
   border-radius: var(--r-sm);
-  color: var(--ink-faint);
-  transition: background 150ms var(--ease), color 150ms var(--ease);
+  color: var(--ink-soft);
+  transition: color 150ms var(--ease);
 }
 
 .view-switch__label > svg {
@@ -536,17 +529,16 @@
 }
 
 .view-switch__option.is-active .view-switch__label > svg {
-  color: var(--accent);
+  color: var(--ink-strong);
 }
 
 .view-switch__option.is-active .view-switch__label {
-  color: var(--accent-deep);
+  color: var(--ink-strong);
   font-weight: 600;
 }
 
 .view-switch__option:not(.is-active):hover .view-switch__label {
-  background: var(--card-hover);
-  color: var(--ink-soft);
+  color: var(--ink);
 }
 
 .view-switch__option:not(.is-active):hover .view-switch__label > svg {
@@ -561,7 +553,7 @@
 
 /* -------- Applications table -------- */
 
-/* The bordered box is the frame, not the scroller: it clips, the head sits in
+/* The card is the frame, not the scroller: it clips, the head sits in
    its own row, and only the body scrolls. A sticky head inside one scroller was
    simpler, but a scrollbar always spans its whole container, so the thumb ran up
    alongside the column labels. Splitting them is what puts the scrollbar
@@ -575,9 +567,9 @@
   container-type: inline-size;
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
-  background: var(--card-elev);
+  background: var(--card);
   box-shadow: var(--shadow-rest);
 }
 
@@ -588,8 +580,8 @@
 .applications-table__head {
   overflow: hidden;
   padding-right: var(--applications-scrollbar-width, 0px);
-  background: var(--card-soft);
-  box-shadow: inset 0 -1px 0 var(--hairline);
+  background: var(--card);
+  box-shadow: inset 0 -1px 0 var(--hairline-soft);
 }
 
 .applications-table__body {
@@ -607,7 +599,7 @@
   background: linear-gradient(
     to bottom,
     var(--paper-deep) 0 var(--applications-month-divider-height),
-    var(--card-elev) var(--applications-month-divider-height) 100%
+    var(--card) var(--applications-month-divider-height) 100%
   );
 }
 
@@ -664,16 +656,14 @@ button.applications-table__row {
    reader loses when a long month scrolls the header away. */
 .applications-table__row--head {
   min-height: 36px;
-  background: var(--card-soft);
 }
 
-/* Eyebrow: small uppercase, faint, tracked — shared by table headers, column heads, weekday row */
+/* Column label: small and faint — shared by table headers, column heads, weekday row */
 .table-eyebrow {
   color: var(--ink-faint);
-  font-size: 0.65rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .applications-table__row:not(.applications-table__row--head):hover {
@@ -741,7 +731,7 @@ button.table-sort svg {
   gap: 1px;
   min-width: 184px;
   padding: var(--s1);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card-elev);
   box-shadow: var(--shadow-lift);
@@ -812,8 +802,7 @@ button.table-sort svg {
   color: var(--ink-faint);
   font-size: 0.6rem;
   font-weight: 600;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .row-menu__item:hover {
@@ -857,7 +846,7 @@ button.table-sort svg {
 }
 
 /* -------- Pagination -------- */
-/* A quiet bar under the table: count on the left, rows-per-page + a bordered
+/* A quiet bar under the table: count on the left, rows-per-page + a filled
    segmented pager on the right. */
 
 .applications-pagination {
@@ -878,7 +867,6 @@ button.table-sort svg {
   color: var(--ink-strong);
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
 }
 
 .applications-pagination__controls {
@@ -893,18 +881,17 @@ button.table-sort svg {
   align-items: center;
   gap: var(--s2);
   color: var(--ink-faint);
-  font-size: 0.64rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .applications-pagination__size select {
   height: 28px;
   padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-elev);
+  background: var(--control);
   color: var(--ink);
   font-family: var(--font-ui);
   font-size: 0.78rem;
@@ -918,14 +905,14 @@ button.table-sort svg {
   outline-offset: 1px;
 }
 
-/* Bordered segmented pager: chevron steps flanking the page indicator. */
+/* Filled segmented pager: chevron steps flanking the page indicator. */
 .applications-pagination__pager {
   display: inline-flex;
   align-items: stretch;
   height: 28px;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-elev);
+  background: var(--control);
   overflow: hidden;
 }
 
@@ -966,7 +953,6 @@ button.table-sort svg {
   color: var(--ink-muted);
   font-size: 0.74rem;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
   white-space: nowrap;
 }
 
@@ -993,9 +979,9 @@ button.table-sort svg {
 .calendar-side {
   display: grid;
   gap: var(--s3);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
-  background: var(--card-elev);
+  background: var(--card);
   box-shadow: var(--shadow-rest);
 }
 
@@ -1083,10 +1069,9 @@ button.table-sort svg {
   gap: 5px;
   margin: 0;
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.03em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .side-section__value {
@@ -1183,7 +1168,7 @@ button.table-sort svg {
 .application-chip-list span {
   padding: 3px 7px;
   border-radius: var(--r-pill);
-  background: var(--paper-deep);
+  background: var(--control);
   color: var(--ink-soft);
   font-size: 0.66rem;
 }
@@ -1191,7 +1176,7 @@ button.table-sort svg {
 .application-chip-list a {
   padding: 2px 6px;
   border-radius: var(--r-pill);
-  background: var(--paper-deep);
+  background: var(--control);
   color: var(--accent-deep);
   text-decoration: none;
 }
@@ -1222,9 +1207,9 @@ button.table-sort svg {
   display: inline-flex;
   align-items: center;
   min-height: 34px;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-elev);
+  background: var(--control);
   overflow: hidden;
 }
 
@@ -1232,7 +1217,7 @@ button.table-sort svg {
   padding: 0 var(--s2);
   min-width: 9.5ch;
   color: var(--ink-strong);
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 0.94rem;
   font-weight: 600;
   letter-spacing: 0.01em;
@@ -1243,7 +1228,7 @@ button.table-sort svg {
   min-width: 0;
   max-width: 100%;
   overflow-x: auto;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--hairline-soft);
   box-shadow: var(--shadow-rest);
@@ -1273,8 +1258,8 @@ button.table-sort svg {
   min-height: 30px;
   background: var(--card-soft);
   color: var(--ink-faint);
-  font-size: 0.65rem;
-  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  letter-spacing: 0;
   /* Eyebrow styling is applied via .table-eyebrow class in TSX */
 }
 
@@ -1321,7 +1306,6 @@ button.table-sort svg {
   font-size: 0.72rem;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
 }
 
 /* Today disc: only accent-strength element in the cell */
@@ -1362,10 +1346,10 @@ button.table-sort svg {
   white-space: nowrap;
 }
 
-.calendar-event--interview { background: var(--accent-soft); color: var(--accent-deep); }
+.calendar-event--interview { background: color-mix(in oklab, var(--positive) 10%, transparent); color: var(--positive); }
 .calendar-event--followup { background: var(--warm-veil); color: var(--warm); }
 .calendar-event--applied { background: var(--cool-faint); color: var(--cool); }
-.calendar-event--offer { background: var(--accent-soft); color: var(--accent-deep); }
+.calendar-event--offer { background: color-mix(in oklab, var(--gold) 10%, transparent); color: var(--gold); }
 
 /* "+N more" overflow note under the chips */
 .calendar-cell div small {
@@ -1422,7 +1406,7 @@ button.table-sort svg {
   flex-wrap: wrap;
   margin: 0 calc(var(--s3) * -1);
   padding: var(--s2) var(--s3);
-  background: var(--card-elev);
+  background: var(--card);
   border-bottom: 1px solid var(--hairline-soft);
 }
 
@@ -1467,10 +1451,9 @@ button.table-sort svg {
   gap: var(--s1);
   margin: 0;
   color: var(--ink-faint);
-  font-size: 0.67rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 /* Hairline rule between calendar side sections */
@@ -1487,7 +1470,7 @@ button.table-sort svg {
   /* Reserve the top-right corner for the pinned open icon. */
   padding: var(--s3);
   padding-right: var(--s5);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card);
   box-shadow: var(--shadow-rest);
@@ -1552,14 +1535,13 @@ button.table-sort svg {
   transition: background 120ms var(--ease);
 }
 
-/* Calmer mono date for the upcoming list — keeps accent weight on the agenda card */
+/* Calmer tabular date for the upcoming list — keeps accent weight on the agenda card */
 .calendar-upcoming span {
   color: var(--ink-muted);
   font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
   font-size: 0.64rem;
   font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  font-feature-settings: "tnum";
 }
 
 .calendar-upcoming:hover {
@@ -1594,7 +1576,7 @@ button.table-sort svg {
 .application-modal__scrim {
   position: absolute;
   inset: 0;
-  background: oklch(0.2 0.012 160 / 0.42);
+  background: var(--scrim);
   cursor: default;
 }
 
@@ -1608,7 +1590,7 @@ button.table-sort svg {
      user switches tabs/content; the body scrolls within it. */
   height: min(840px, calc(100vh - 40px));
   padding: var(--s4);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-xl);
   background: var(--card-elev);
   box-shadow: var(--shadow-lift);
@@ -1652,9 +1634,9 @@ button.table-sort svg {
 .application-detail-modal .application-modal__head h2 {
   font-family: var(--font-display);
   font-size: clamp(1.35rem, 2vw, 1.7rem);
-  font-weight: 500;
+  font-weight: 650;
   line-height: 1.15;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
   overflow-wrap: anywhere;
 }
 
@@ -1885,7 +1867,7 @@ button.table-sort svg {
   gap: var(--s2);
   min-width: 0;
   padding: var(--s4);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card);
 }
@@ -1949,9 +1931,9 @@ button.table-sort svg {
   width: 100%;
   min-height: 32px;
   padding: 0 var(--s2);
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
-  background: var(--card-elev);
+  background: var(--control);
   color: var(--ink);
   font: inherit;
   text-align: left;
@@ -2015,7 +1997,7 @@ button.table-sort svg {
   max-height: calc(100vh - var(--popover-top) - 16px);
   overflow-y: auto;
   padding: var(--s4);
-  border: 1px solid var(--hairline-strong);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card-elev);
   box-shadow: var(--shadow-lift);
@@ -2072,7 +2054,7 @@ button.table-sort svg {
 .application-job-card {
   min-width: 0;
   padding: var(--s4);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card);
 }
@@ -2195,10 +2177,9 @@ button.table-sort svg {
   padding: 0;
   color: var(--ink-soft);
   font-family: var(--font-ui);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 /* The grid lives on an inner row, never on the fieldset: a <legend> is not a
@@ -2248,7 +2229,7 @@ button.table-sort svg {
   gap: 5px;
   padding: 1px 6px;
   border-radius: var(--r-pill);
-  background: var(--paper-deep);
+  background: var(--control);
   font-size: 0.68rem;
 }
 
@@ -2450,7 +2431,7 @@ button.table-sort svg {
   gap: var(--s3);
   width: 100%;
   padding: var(--s4);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card);
   text-align: left;
@@ -2473,6 +2454,16 @@ button.table-sort svg {
   font-weight: 650;
 }
 
+.application-side-card > h3 {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  margin: 0;
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 650;
+}
+
 .application-fit-summary {
   --fit-divider: var(--accent-veil);
 
@@ -2482,15 +2473,15 @@ button.table-sort svg {
   gap: 0;
   width: 100%;
   padding: var(--s4);
-  border: 1px solid var(--accent-veil);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--accent-soft);
 }
 
 .application-fit-summary--stretch {
-  --fit-divider: oklch(0.52 0.1 75 / 0.22);
+  --fit-divider: var(--warm-line);
 
-  border-color: oklch(0.52 0.1 75 / 0.22);
+  border-color: var(--warm-line);
   background: var(--warm-veil);
 }
 
@@ -2504,7 +2495,7 @@ button.table-sort svg {
 .application-fit-summary--neutral {
   --fit-divider: var(--hairline);
 
-  border-color: var(--hairline);
+  border-color: transparent;
   background: var(--card-soft);
 }
 
@@ -2822,7 +2813,7 @@ button.table-sort svg {
 .application-timeline__tag {
   padding: 1px 7px;
   border-radius: var(--r-pill);
-  background: var(--paper-deep);
+  background: var(--control);
   color: var(--ink-muted);
   font-size: 0.66rem;
 }
@@ -2923,9 +2914,9 @@ button.table-sort svg {
   gap: var(--s1);
   min-height: 28px;
   padding-inline: var(--s2);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  background: var(--card-elev);
+  background: var(--control);
   color: var(--ink-soft);
   font-size: 0.72rem;
   font-weight: 600;
@@ -2952,8 +2943,6 @@ button.table-sort svg {
   height: 100%;
   padding: var(--s5) var(--s4);
   overflow: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
 }
 
 .application-posting-overlay__document {
@@ -3152,7 +3141,7 @@ button.table-sort svg {
   align-items: flex-start;
   gap: var(--s3);
   padding: var(--s2) var(--s3);
-  border: 1px solid var(--hairline-soft);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--card);
 }
@@ -3242,6 +3231,7 @@ button.table-sort svg {
     align-content: start;
     height: 100%;
     min-height: 0;
+    padding-bottom: calc(var(--s4) + var(--apply-clearance));
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-gutter: stable;

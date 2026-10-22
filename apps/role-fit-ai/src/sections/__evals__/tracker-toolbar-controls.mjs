@@ -70,18 +70,17 @@ assert.match(
   "the existing selection indicator follows the selected radio option"
 );
 const viewSelectionRule = applicationStyles.match(/\.view-switch::before\s*\{([^}]*)\}/)?.[1] ?? "";
-assert.match(viewSelectionRule, /background:\s*var\(--accent-soft\)/, "the selected view uses a quiet accent tint");
+assert.match(viewSelectionRule, /background:\s*var\(--thumb\)/, "the selected view is the raised thumb of a native segmented control");
 assert.doesNotMatch(viewSelectionRule, /border:/, "the selected view does not nest another border inside the control");
-assert.doesNotMatch(viewSelectionRule, /box-shadow:/, "the selected view stays flat instead of becoming a raised button");
 const tableHeadRule = applicationStyles.match(/\.applications-table__head\s*\{([^}]*)\}/)?.[1] ?? "";
 assert.match(
   tableHeadRule,
-  /background:\s*var\(--card-soft\)/,
+  /background:\s*var\(--card\)/,
   "the table head paints through its measured scrollbar gutter"
 );
 assert.match(
   tableHeadRule,
-  /box-shadow:\s*inset 0 -1px 0 var\(--hairline\)/,
+  /box-shadow:\s*inset 0 -1px 0 var\(--hairline-soft\)/,
   "the table head rule spans its measured scrollbar gutter"
 );
 const tableHeadRowRule = applicationStyles.match(/\.applications-table__row--head\s*\{([^}]*)\}/)?.[1] ?? "";

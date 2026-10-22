@@ -26,7 +26,7 @@
 .resume-import__original {
   max-height: 22rem;
   overflow: auto;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
   background: var(--paper-deep);
 }
@@ -117,9 +117,9 @@
   height: 30px;
   box-sizing: border-box;
   padding: 0 var(--s2);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-sm);
-  background: var(--card-elev);
+  background: var(--card-soft);
   color: var(--ink);
   font: 500 0.74rem/1 var(--font-ui);
   outline: none;

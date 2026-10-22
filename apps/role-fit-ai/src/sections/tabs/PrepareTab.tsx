@@ -7,7 +7,7 @@ import type { ImportedJobSnapshot } from "../../hooks/useJobIntake";
 import type { CoverLetterOption } from "../../lib/coverLetterWorkspaceRepository";
 import type { AiStageState, PolishProgressState } from "../../lib/aiWorkflow";
 import type { ExtractedJobTracking } from "../../lib/jobExtract";
-import { preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
+import { preparedJobName, preparedJobRoleContext, type PreparedJobBriefField } from "../../lib/preparedJobBrief";
 import type { PreparationReadiness } from "../../lib/preparationReadiness";
 import type { PreparationPrimaryAction } from "../../lib/preparationSession";
 import type { VariantRecommendation } from "../../lib/variantRecommendation";
@@ -236,8 +236,7 @@ export function PrepareTab({
   const hasPreparedPreview = Boolean(jobPrepared || (isPreparing && localPreparedPreview));
   const tracking = displayedJob?.tracking ?? {};
   const brief = displayedJob?.brief;
-  const role = tracking.role || tracking.title || "Role not identified";
-  const company = tracking.company || "Company not identified";
+  const { role, company } = preparedJobName(tracking);
   const manualReviewFields = hasPreparedPreview ? (displayedJob?.manualReviewFields ?? []) : [];
   const sourceLength = (jobRawText || jobDescription).trim().length;
   const isReceiving = extensionImportPhase === "receiving";

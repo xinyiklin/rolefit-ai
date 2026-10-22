@@ -52,13 +52,13 @@
 
 /* One decided-state vocabulary for both documents. */
 .proposal-chip {
-  padding: 1px 6px;
-  border: 1px solid var(--hairline);
+  padding: 1px 7px;
+  border: 1px solid transparent;
   border-radius: var(--r-pill);
+  background: var(--control);
   color: var(--ink-soft);
-  font: 600 0.64rem/1.6 var(--font-ui);
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
+  font: 600 0.7rem/1.6 var(--font-ui);
+  letter-spacing: 0;
   white-space: nowrap;
 }
 
@@ -95,7 +95,7 @@
   display: inline-flex;
   gap: 2px;
   padding: 2px;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   background: var(--card-soft);
 }
@@ -260,10 +260,9 @@
 
 .resume-proposal__label {
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .resume-proposal__original,

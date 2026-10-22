@@ -135,12 +135,14 @@ V3 client of the local RoleFit server.
   the app's Settings switches. Claim-token routing and Firefox
   container preservation remain part of the handoff. This holds for the
   keyboard command exactly as it does for the popup button.
-- Visual contract: the popup is the Drafting Desk at 344px, not a second visual
-  world. Hairlines and paper tones carry structure, ledger rows with dotted
-  leaders carry facts, status is a dot beside a word, and the forest accent is
-  reserved for the one primary action. No filled status banners, no icon-plus-
-  heading cards, no glyph or emoji icons (icons are inline stroke SVG), and no
-  motion beyond the masthead working rule. Popup type runs below the DESIGN.md
+- Visual contract: the popup still wears the earlier green-paper look (D093
+  restyled the RoleFit workspace and landing page, not the popup). Hairlines
+  and paper tones carry structure, ledger rows with dotted leaders carry facts,
+  status is a dot beside a word, and the forest accent is reserved for the one
+  primary action. No filled status banners, no icon-plus-heading cards, no
+  glyph or emoji icons (icons are inline stroke SVG), and no motion beyond the
+  working rule under the popup's masthead and short (140ms) view and hover
+  transitions. Popup type runs below the DESIGN.md
   ramp on purpose — 344px chrome cannot carry the 1440px desk's sizes.
 - Keep popup copy aligned with `extension/README.md` and server route shapes.
   Copy is one short line: an error names the problem and its recovery.

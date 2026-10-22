@@ -50,9 +50,9 @@ type AnalyticsTabProps = {
 function PageHead({ children }: { children?: ReactNode }) {
   return (
     <header className="workspace-page__head an-head">
-      <div>
+      <div className="workspace-page__title-row">
         <h2 className="page-serif">Analytics</h2>
-        <p className="an-head__lede">Track your search and find your next best move.</p>
+        <p className="workspace-page__detail">Track your search and find your next best move.</p>
       </div>
       {children}
     </header>

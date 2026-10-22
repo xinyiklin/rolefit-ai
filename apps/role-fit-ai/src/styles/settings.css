@@ -7,7 +7,7 @@
    counts). Those describe the machine the companion runs, not a browser
    preference, and belong in RoleFit Companion.
 
-   The shell mirrors .rename-dialog (fixed overlay + blurred backdrop + card) but
+   The shell mirrors .rename-dialog (fixed overlay + dimmed backdrop + card) but
    needs a much larger card with its own two-column body, so it is a sibling
    pattern rather than a modifier on a 420px confirm card.
 
@@ -39,9 +39,7 @@
 .settings-dialog__backdrop {
   position: absolute;
   inset: 0;
-  background: oklch(0.2 0.01 160 / 0.45);
-  -webkit-backdrop-filter: blur(3px);
-  backdrop-filter: blur(3px);
+  background: var(--scrim);
 }
 
 .settings-dialog__card {
@@ -54,7 +52,7 @@
   height: min(760px, calc(100vh - var(--s6)));
   overflow: hidden;
   background: var(--card);
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-xl);
   box-shadow: var(--shadow-lift);
 }
@@ -84,7 +82,7 @@
 .settings-dialog__head h2 {
   margin: 0;
   color: var(--ink-strong);
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 1.08rem;
   font-weight: 600;
   letter-spacing: -0.005em;
@@ -149,10 +147,9 @@
 .settings-nav__group-label {
   padding: 0 var(--s2) 2px;
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .settings-nav__item {
@@ -176,8 +173,8 @@
 }
 
 .settings-nav__item.is-active {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
+  color: var(--ink-strong);
+  background: var(--control);
   font-weight: 600;
 }
 
@@ -196,8 +193,6 @@
   min-height: 0;
   padding: var(--s4);
   overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: var(--hairline-strong) transparent;
 }
 
 .settings-panel__intro {
@@ -377,8 +372,8 @@
 }
 
 .profile-notes__item[aria-current="true"] {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
+  color: var(--ink-strong);
+  background: var(--control);
   font-weight: 600;
 }
 
@@ -430,7 +425,7 @@
 .profile-notes__detail-head h3 {
   margin: 0;
   color: var(--ink-strong);
-  font-family: var(--font-serif);
+  font-family: var(--font-display);
   font-size: 1rem;
   font-weight: 600;
 }
@@ -458,10 +453,9 @@
 
 .profile-notes__field > span {
   color: var(--ink-faint);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .profile-notes__field .select--compact {
@@ -756,21 +750,24 @@
   margin: 0;
 }
 
-/* Pressed-state buttons sharing one hairline, not a tab strip (Profile notes
-   view switch, Models plan and transport). */
+/* Native segmented control: a filled track with the chosen option raised
+   (Profile notes view switch, Models plan and transport, Appearance). */
 .settings-segment {
   display: inline-flex;
-  border: 1px solid var(--hairline-strong);
+  gap: 2px;
+  padding: 2px;
+  border: 0;
   border-radius: var(--r-md);
-  overflow: hidden;
+  background: var(--control);
 }
 
 .settings-segment__option {
-  min-height: 26px;
+  min-height: 24px;
   padding: 0 var(--s3);
-  color: var(--ink-soft);
+  color: var(--ink-muted);
   background: transparent;
   border: 0;
+  border-radius: var(--r-sm);
   font-family: var(--font-ui);
   font-size: 0.74rem;
   font-weight: 600;
@@ -778,18 +775,14 @@
   transition: color 140ms var(--ease), background 140ms var(--ease);
 }
 
-.settings-segment__option + .settings-segment__option {
-  border-left: 1px solid var(--hairline-strong);
-}
-
 .settings-segment__option:hover:where(:not([aria-disabled="true"])) {
-  color: var(--ink);
-  background: var(--card-hover);
+  color: var(--ink-strong);
 }
 
 .settings-segment__option[aria-pressed="true"] {
-  color: var(--accent-deep);
-  background: var(--accent-soft);
+  color: var(--ink-strong);
+  background: var(--thumb);
+  box-shadow: var(--shadow-thumb);
 }
 
 .settings-segment__option[aria-disabled="true"] {
@@ -824,10 +817,9 @@
   padding-bottom: var(--s1);
   border-bottom: 1px solid var(--hairline);
   color: var(--ink-faint);
-  font-size: 0.66rem;
+  font-size: 0.72rem;
   font-weight: 650;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0;
 }
 
 .settings-stage {
@@ -885,8 +877,7 @@
 
 .settings-stage__copy:hover {
   color: var(--ink);
-  background: var(--card-elev);
-  border-color: var(--hairline);
+  background: var(--card-hover);
 }
 
 .settings-stage__blocked {
@@ -1001,7 +992,8 @@
   margin: 0;
   width: 100%;
   padding: 5px var(--s2);
-  border-left: 2px solid var(--accent-veil);
+  border-radius: var(--r-sm);
+  background: var(--card-soft);
   color: var(--ink-muted);
   font-size: 0.7rem;
   line-height: 1.4;
@@ -1152,4 +1144,17 @@
   .settings-dialog {
     animation-duration: 0.01ms;
   }
+}
+
+/* -------- Appearance -------- */
+
+.settings-appearance {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) 0;
+  color: var(--ink-strong);
+  font-size: 0.82rem;
+  font-weight: 550;
 }

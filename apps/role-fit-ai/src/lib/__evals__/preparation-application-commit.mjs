@@ -99,7 +99,7 @@ assert.equal(
 );
 
 const appSource = readFileSync(new URL("../../App.tsx", import.meta.url), "utf8");
-const mastheadSource = readFileSync(new URL("../../sections/Masthead.tsx", import.meta.url), "utf8");
+const applyActionSource = readFileSync(new URL("../../sections/ApplyAction.tsx", import.meta.url), "utf8");
 const railSource = readFileSync(
   new URL("../../sections/tabs/prepare/PrepareApplicationRail.tsx", import.meta.url),
   "utf8"
@@ -120,9 +120,9 @@ assert.equal(
   "App passes one shared action descriptor to both primary action surfaces"
 );
 assert.match(
-  mastheadSource,
+  applyActionSource,
   /busy \? primaryAction\.busyLabel : primaryAction\.label/,
-  "the masthead uses shared idle and busy action copy"
+  "the floating Apply action uses shared idle and busy action copy"
 );
 assert.match(
   railSource,

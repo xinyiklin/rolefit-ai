@@ -33,19 +33,25 @@ root and RoleFit app guides first.
 
 ## Design and verification
 
-- Use RoleFit's calm editorial palette and typography without copying the
-  dense Drafting Desk shell. Product claims must stay short, concrete, and
-  consistent with the local-first trust boundary.
+- Wear the workspace's look without copying the Drafting Desk shell:
+  `landing.css` imports `../../src/styles/tokens.css` (CSS only, never app
+  code), so token changes reach this page; landing-only values (the band, the
+  capture shadow, page width) stay in `landing.css`. Light and dark follow the
+  OS with no override; no webfonts, glass, or blur. Product claims must stay
+  short, concrete, and consistent with the local-first trust boundary.
 - Preserve semantic landmarks, keyboard focus, WCAG AA contrast, useful image
   alternatives, and reduced-motion behavior at desktop and narrow widths.
-- The section scroll-reveal and the hero proof-slip draw are progressive enhancements,
+- The section scroll-reveal and the hero edit-card draw are progressive enhancements,
   not required layout. Keep them one-shot, collapse them fully under
   `prefers-reduced-motion`, and never let a `[data-reveal]` block stay hidden
   without JavaScript: the hidden state is gated behind the script-added
   `.reveal-ready` class, so absent that class every block must render visible.
 - Product screenshots in `public/assets/` (and their `docs/` twins) come from a
   copy of the synthetic workspace test pack served through
-  `ROLEFIT_WORKSPACE_DIR` on a spare port, never from a real workspace.
+  `ROLEFIT_WORKSPACE_DIR` on a spare port, never from a real workspace. The
+  Prepare and Applications shots show a saved synthetic application whose
+  record carries a synthetic Fit Assessment snapshot (no provider or model
+  attribution), restored through Edit preparation; captures are light theme.
 - **Capture at device scale factor 2.** The cards scale a 1440-wide shot down to
   roughly 550-750 CSS px, so a 1x file lands under one device pixel per CSS
   pixel on an ordinary HiDPI screen and reads blurry; the companion shot was the

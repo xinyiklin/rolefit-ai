@@ -26,7 +26,7 @@
 .page-loading__calendar {
   min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-lg);
   background: var(--card-elev);
 }
@@ -103,7 +103,6 @@
 }
 
 .page-loading__day > span { width: 30%; }
-
 
 .page-loading__columns {
   display: flex;

@@ -17,8 +17,8 @@ and `docs/engineering/ui-principles.md`.
   625px panel. Disclose optional per-item detail instead of stacking always-open
   textareas, and keep a set-but-collapsed value previewed so nothing that is
   actually being sent is invisible.
-- Settings is five pages in two rail groups: **You** — Profile, Background;
-  **AI** — Guidance, Automation, Models. `SettingsDialog` is only the shell
+- Settings is six pages in three rail groups: **You** — Profile, Background;
+  **AI** — Guidance, Automation, Models; **App** — Appearance. `SettingsDialog` is only the shell
   (rail, autosave status, focus trap, Reset); each page in `settings/` renders
   from the `SettingsDialogProps` it picks. The card has one size for every
   page. App keeps the open state apart from the page, so the gear reopens the
@@ -177,7 +177,15 @@ and `docs/engineering/ui-principles.md`.
 - A material's state line names the real reason it is not ready. A saved base
   letter is a template holding real prose and unresolved `[slots]`; reporting
   that as "No draft" contradicts the variant the selector is showing.
-- The masthead contains the RoleFit identity and shared Apply command only. Its
+- The masthead heads the studio rail (`StudioPane`'s `sidebarHeader` slot) and
+  contains only the RoleFit brand, which toggles the rail. Rail width and
+  collapse live in `useStudioRail`; `RailResizeHandle` previews a drag on
+  the pane and commits once on release. `DocumentWorkbench` has the other
+  pointer/keyboard separator; a third resizable edge should share one rather
+  than add another. The shared Apply command is
+  `ApplyAction`, a floating pill naming the prepared role, the readiness status
+  that describes Apply, and the button, which stays mounted with no job (it is
+  the focus-return target). Its
   outcome is reported by `ActionStatus`, which leads the shared `.progress-dock`
   column, not by a card anchored under the action: Apply opens the record it
   just wrote in the right inspector, and the receipt starts clear of it. Keep
@@ -297,8 +305,9 @@ and `docs/engineering/ui-principles.md`.
 
 ## UX rules
 
-- Preserve the Apply-only masthead plus Sessions/Settings studio-rail utilities
-  + vertical PREPARE / DRAFT / TRACK navigation + tabbed workspace. Prepare is
+- Preserve the brand-only masthead at the head of the full-height, collapsible
+  rail, the floating Apply action, Sessions/Settings studio-rail utilities
+  + vertical Prepare / Draft / Track navigation + tabbed workspace. Prepare is
   first and selected by default.
 - Use app tokens/classes for host chrome and package styles for shared editor
   behavior. Document intentional overrides.

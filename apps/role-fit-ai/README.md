@@ -138,8 +138,11 @@ offers 30 bundled families; each loads only when a document uses it.
   Starter, as the resume does (D086). Its Paragraph menu sets header
   and body alignment, and any bundled family is a menu away.
 - **One Prepare workspace** — Prepare is the first/default studio page and the
-  only place a job enters the current session. It leads PREPARE / DRAFT / TRACK
-  navigation while the masthead carries only the RoleFit identity and Apply.
+  only place a job enters the current session. It leads Prepare / Draft / Track
+  navigation in a full-height, collapsible rail headed by the RoleFit brand;
+  the global Apply action floats at the workspace's bottom-right. The workspace
+  follows the system's light or dark theme unless Settings > App > Appearance
+  pins one; that choice stays in the browser, never in the workspace.
   The bottom studio rail places read-only Sessions immediately above Settings,
   outside the output tablist; its label/count condenses to an icon plus compact
   count/working state when the rail collapses, and its popover opens rightward
@@ -362,8 +365,8 @@ offers 30 bundled families; each loads only when a document uses it.
   materials included for that action; excluding a document on a later update
   leaves any previously saved artifact intact rather than deleting or
   replacing it. Applying with both material cards excluded still records the
-  prepared job. The Applications page's new-work action also returns to
-  Prepare; its detail modal edits committed records instead of duplicating job
+  prepared job. An empty Applications page links back to Prepare (the rail
+  always does); its detail modal edits committed records instead of duplicating job
   intake. A Skipped record reopens in job-update-only mode; Save job updates
   preserves its decision metadata, while reconsidering the role creates a
   separate linked attempt. Generated application answers stay session-local

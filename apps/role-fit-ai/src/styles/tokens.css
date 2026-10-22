@@ -1,112 +1,122 @@
 /* =============================================================
-   RoleFit AI — Drafting desk
-   Single-pane studio: navbar-input menus + tabbed canvas + export rail.
-   Palette: paper-warm neutrals tinted toward the forest brand hue (OKLCH),
-   one committed accent for actions and selection, quiet semantic states.
+   RoleFit AI — Workspace tokens
+   Calm native workspace: a soft gray chrome frame (masthead + rail), a lighter
+   workspace plane, borderless white groups, one clear blue accent. Every color
+   pairs a light and a dark value through light-dark().
    ============================================================= */
 
-@font-face {
-  font-family: "RoleFit Sans";
-  src: url("/fonts/SourceSans3-Regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 300 600;
-  font-display: swap;
-}
+/* The tokens are declared again on document pages, the editor marks drawn
+   over them (grip, drag source, drop indicator, RoleFit chips), and the print
+   layer, which pin `color-scheme: light`. The build lowers light-dark() into
+   variables that resolve where a token is declared, so a token inherited from
+   :root would stay dark on paper. Menus and dialogs keep the app theme. */
+:root,
+.tsd-page,
+.ts-grip,
+.ts-drag-source,
+.ts-drop-indicator,
+.ts-chrome,
+.resume-print-layer {
 
-@font-face {
-  font-family: "RoleFit Sans";
-  src: url("/fonts/SourceSans3-Bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
+  /* System UI type: SF on macOS, Segoe UI Variable on Windows. Figures use
+     tabular numerals in the same family instead of a monospace face. */
+  --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+  --font-display: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  --font-mono: var(--font-ui);
+  /* Read only by the shared editor's style previews, never by RoleFit chrome. */
+  --font-serif: Charter, "Bitstream Charter", "Iowan Old Style", Georgia, serif;
 
-@font-face {
-  font-family: "RoleFit Serif";
-  src: url("/fonts/SourceSerif4-Regular.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 300 600;
-  font-display: swap;
-}
+  /* Surfaces */
+  --chrome: light-dark(oklch(0.962 0.004 265), oklch(0.215 0.005 265));
+  --paper: light-dark(oklch(0.978 0.003 265), oklch(0.185 0.004 265));
+  --paper-deep: var(--paper);
+  --card: light-dark(oklch(1 0 0), oklch(0.235 0.005 265));
+  --card-soft: light-dark(oklch(0.962 0.004 265), oklch(0.27 0.006 265));
+  --card-elev: light-dark(oklch(1 0 0), oklch(0.26 0.006 265));
+  --card-hover: light-dark(oklch(0.952 0.005 265), oklch(0.29 0.007 265));
+  /* Filled control (secondary buttons, segmented tracks). */
+  --control: light-dark(oklch(0.935 0.005 265), oklch(0.31 0.007 265));
+  --control-hover: light-dark(oklch(0.905 0.006 265), oklch(0.35 0.008 265));
+  /* The raised thumb of a segmented control: lighter than its track in both themes. */
+  --thumb: light-dark(oklch(1 0 0), oklch(0.43 0.008 265));
 
-@font-face {
-  font-family: "RoleFit Serif";
-  src: url("/fonts/SourceSerif4-Bold.woff2") format("woff2");
-  font-style: normal;
-  font-weight: 700;
-  font-display: swap;
-}
+  /* Ink — the only text colors. --ink-faint clears AA on every surface except
+     the filled --control tones, where text starts at --ink-soft. */
+  --ink: light-dark(oklch(0.25 0.01 265), oklch(0.92 0.004 265));
+  --ink-strong: light-dark(oklch(0.18 0.01 265), oklch(0.97 0.003 265));
+  --ink-muted: light-dark(oklch(0.42 0.01 265), oklch(0.8 0.006 265));
+  --ink-soft: light-dark(oklch(0.5 0.01 265), oklch(0.72 0.008 265));
+  --ink-faint: light-dark(oklch(0.53 0.01 265), oklch(0.68 0.008 265));
 
-:root {
-  /* Type stacks — single sans family for tool chrome */
-  --font-display: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-ui: "RoleFit Sans", -apple-system, BlinkMacSystemFont, "Helvetica Neue", "Segoe UI", sans-serif;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
-  --font-serif: "RoleFit Serif", "Charter", "Bitstream Charter", "Iowan Old Style", "Georgia", "Cambria", "Times New Roman", serif;
+  --hairline: light-dark(oklch(0.905 0.005 265), oklch(0.32 0.006 265));
+  --hairline-soft: light-dark(oklch(0.94 0.004 265), oklch(0.28 0.006 265));
+  --hairline-strong: light-dark(oklch(0.86 0.006 265), oklch(0.4 0.008 265));
 
-  /* Surface — green-tinted paper neutrals (never pure white/black) */
-  --paper: oklch(0.956 0.006 150);
-  --paper-deep: oklch(0.925 0.009 150);
-  --card: oklch(0.992 0.002 150);
-  --card-soft: oklch(0.963 0.005 150);
-  --card-elev: oklch(0.997 0.001 150);
-  --card-hover: oklch(0.976 0.004 150);
-
-  --ink: oklch(0.25 0.012 160);
-  --ink-strong: oklch(0.18 0.014 160);
-  --ink-muted: oklch(0.41 0.014 160);
-  --ink-soft: oklch(0.5 0.014 160);
-  /* Lightest text token still clears 4.5:1 on every owned paper/card surface. */
-  --ink-faint: oklch(0.51 0.012 160);
-
-  --hairline: oklch(0.885 0.008 150);
-  --hairline-soft: oklch(0.925 0.006 150);
-  --hairline-strong: oklch(0.81 0.01 150);
-
-  /* Brand accent — forest ink */
-  --accent: oklch(0.46 0.085 165);
-  --accent-deep: oklch(0.36 0.075 168);
-  --accent-soft: oklch(0.945 0.024 162);
-  --accent-veil: oklch(0.46 0.085 165 / 0.12);
-  --accent-glow: oklch(0.46 0.085 165 / 0.2);
-  --on-accent: oklch(0.975 0.008 150);
+  /* Accent — one clear blue for action, selection, and focus. Dark mode lifts it
+     and inverts its label so both fill and text uses clear AA. */
+  --accent: light-dark(oklch(0.53 0.2 258), oklch(0.72 0.14 253));
+  --accent-deep: light-dark(oklch(0.47 0.19 260), oklch(0.8 0.11 252));
+  --accent-hover: light-dark(oklch(0.48 0.2 259), oklch(0.77 0.12 253));
+  --accent-soft: light-dark(oklch(0.95 0.03 255), oklch(0.31 0.07 258));
+  --accent-veil: light-dark(oklch(0.53 0.2 258 / 0.12), oklch(0.72 0.14 253 / 0.18));
+  --accent-glow: light-dark(oklch(0.53 0.2 258 / 0.22), oklch(0.72 0.14 253 / 0.3));
+  --on-accent: light-dark(oklch(0.995 0.002 260), oklch(0.17 0.02 260));
 
   /* Signal colors */
-  --warm: oklch(0.52 0.1 75);
-  --warm-soft: oklch(0.92 0.05 85);
-  --warm-veil: oklch(0.965 0.025 85);
-  --cool: oklch(0.45 0.06 250);
-  --cool-veil: oklch(0.45 0.06 250 / 0.1);
-  --cool-line: oklch(0.45 0.06 250 / 0.25);
-  --cool-faint: oklch(0.45 0.06 250 / 0.06);
-  --danger: oklch(0.45 0.12 30);
-  --danger-soft: oklch(0.92 0.04 25);
-  --danger-line: oklch(0.45 0.12 30 / 0.3);
+  --warm: light-dark(oklch(0.55 0.13 62), oklch(0.8 0.13 75));
+  --warm-soft: light-dark(oklch(0.93 0.06 80), oklch(0.33 0.06 75));
+  --warm-veil: light-dark(oklch(0.97 0.03 80), oklch(0.27 0.04 75));
+  --warm-line: light-dark(oklch(0.55 0.13 62 / 0.28), oklch(0.8 0.13 75 / 0.3));
+  /* Filed, not active: the Applied stage. Steel blue, quieter than the accent. */
+  --cool: light-dark(oklch(0.52 0.09 235), oklch(0.76 0.09 235));
+  --cool-faint: light-dark(oklch(0.52 0.09 235 / 0.06), oklch(0.76 0.09 235 / 0.1));
+  /* In progress: the Interviewing stage. */
+  --positive: light-dark(oklch(0.49 0.11 160), oklch(0.76 0.12 160));
+  /* Reached: the Offer stage. */
+  --gold: light-dark(oklch(0.51 0.11 75), oklch(0.82 0.11 85));
+  --danger: light-dark(oklch(0.54 0.2 27), oklch(0.72 0.16 25));
+  --danger-hover: light-dark(oklch(0.48 0.19 27), oklch(0.78 0.14 25));
+  --danger-soft: light-dark(oklch(0.96 0.025 25), oklch(0.29 0.06 25));
+  --danger-line: light-dark(oklch(0.54 0.2 27 / 0.3), oklch(0.72 0.16 25 / 0.35));
+  --scrim: light-dark(oklch(0.2 0.01 265 / 0.32), oklch(0.05 0.005 265 / 0.6));
 
   /* Spacing scale */
   --s1: 4px;
   --s2: 8px;
   --s3: 12px;
   --s4: 16px;
-  --s5: 22px;
+  --s5: 24px;
   --s6: 32px;
   --s7: 48px;
 
-  /* Radii */
-  --r-sm: 4px;
-  --r-md: 6px;
-  --r-lg: 10px;
-  --r-xl: 14px;
+  /* Radii — controls 8px, groups 12px, sheets 16px. */
+  --r-sm: 6px;
+  --r-md: 8px;
+  --r-lg: 12px;
+  --r-xl: 16px;
   --r-pill: 999px;
 
-  /* Shadows — neutral tint */
-  --shadow-rest: 0 1px 0 oklch(0.2 0.01 160 / 0.04), 0 6px 20px oklch(0.2 0.01 160 / 0.03);
-  --shadow-lift: 0 1px 0 oklch(0.2 0.01 160 / 0.05), 0 14px 36px oklch(0.2 0.01 160 / 0.08);
-  --shadow-inset: inset 0 1px 0 oklch(1 0 0 / 0.6);
+  /* Elevation — groups sit flat on the plane; only floating layers cast shadows. */
+  --shadow-rest: none;
+  --shadow-lift:
+    0 0 0 1px light-dark(oklch(0.2 0.01 265 / 0.06), oklch(1 0 0 / 0.08)),
+    0 2px 6px light-dark(oklch(0.2 0.01 265 / 0.06), oklch(0 0 0 / 0.3)),
+    0 12px 32px light-dark(oklch(0.2 0.01 265 / 0.1), oklch(0 0 0 / 0.4));
+  /* The one resting shadow: the raised thumb of a segmented control. */
+  --shadow-thumb: 0 1px 2px oklch(0 0 0 / 0.12), 0 0 0 0.5px oklch(0 0 0 / 0.04);
+
+  /* Layout: the icon rail's width (STUDIO_RAIL_BOUNDS.collapsed in useStudioRail),
+     and the room kept free under the floating Apply pill so it never covers
+     content or controls (scroll ends, rail footers, the inspector). */
+  --studio-rail-collapsed: 52px;
+  --apply-clearance: 72px;
 
   /* Motion */
-  --ease: cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
 
+:root {
+  color-scheme: light dark;
   color: var(--ink);
   background: var(--paper);
   font-family: var(--font-ui);
@@ -114,4 +124,19 @@
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Manual Appearance override (Settings). Absent, the OS preference applies. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
+/* Document pages, and the marks drawn on them, are paper in every theme. */
+.tsd-page,
+.ts-grip,
+.ts-drag-source,
+.ts-drop-indicator,
+.ts-chrome,
+.resume-print-layer {
+  color-scheme: light;
+  color: var(--ink);
 }

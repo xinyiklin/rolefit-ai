@@ -7,7 +7,9 @@
       name="description"
       content="RoleFit AI is a local-first workspace for preparing a job, polishing a resume and cover letter, exporting the final files, and tracking the application."
     />
-    <meta name="theme-color" content="#f2f3ee" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#f1f2f5" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#18191c" />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content="RoleFit AI · Prepare and track job applications locally" />
@@ -86,29 +88,21 @@
           <p class="hero__note">No RoleFit account · Local workspace · Your choice of supported provider</p>
         </div>
 
-        <div class="galley">
-          <figure class="galley__sheet">
-            <div class="galley__plate">
-              <span class="crop crop--tl" aria-hidden="true"></span>
-              <span class="crop crop--tr" aria-hidden="true"></span>
-              <span class="crop crop--bl" aria-hidden="true"></span>
-              <span class="crop crop--br" aria-hidden="true"></span>
-              <img
-                src="/assets/screenshot.png"
-                alt="RoleFit AI resume editor: the one-page export layout of a synthetic resume, with formatting controls and the resume workflow rail"
-                width="2880"
-                height="1800"
-                fetchpriority="high"
-              />
-            </div>
-            <figcaption class="galley__slug">
-              <span>Fig. 1</span> The page you edit is the page that exports.
-            </figcaption>
+        <div class="hero__visual">
+          <figure class="hero__shot">
+            <img
+              src="/assets/screenshot.png"
+              alt="RoleFit AI resume editor: the one-page export layout of a synthetic resume, with formatting controls and the resume workflow rail"
+              width="2880"
+              height="1800"
+              fetchpriority="high"
+            />
+            <figcaption class="hero__caption">The page you edit is the page that exports.</figcaption>
           </figure>
 
-          <aside class="proof-slip" aria-label="Illustration of one proposed resume edit">
-            <p class="proof-slip__head"><span>Proposed edit</span><span>Experience</span></p>
-            <p class="proof-slip__line">
+          <aside class="edit-card" aria-label="Illustration of one proposed resume edit">
+            <p class="edit-card__head"><span>Proposed edit</span><span>Experience</span></p>
+            <p class="edit-card__line">
               <del><span class="visually-hidden">removed: </span>Reduced</del>
               <ins><span class="visually-hidden">inserted: </span>Cut</ins>
               interaction latency in a 20,000-row planning view by 46%
@@ -116,22 +110,22 @@
               <ins><span class="visually-hidden">inserted: </span>with</ins>
               profiling, memoization, and virtualized rendering.
             </p>
-            <p class="proof-slip__reason">
+            <p class="edit-card__reason">
               <span>Reason</span> A tighter verb. Figures unchanged.
             </p>
-            <p class="proof-slip__actions" aria-hidden="true">
+            <p class="edit-card__actions" aria-hidden="true">
               <span class="is-primary">Accept</span><span>Edit</span><span>Discard</span>
             </p>
-            <p class="proof-slip__foot">Illustration · synthetic resume</p>
+            <p class="edit-card__foot">Illustration · synthetic resume</p>
           </aside>
         </div>
       </section>
 
-      <section class="proof-strip section-shell" aria-label="RoleFit product facts">
-        <div><span>workspace</span><strong>Device-local</strong></div>
-        <div><span>providers</span><strong>2 CLIs + 2 APIs</strong></div>
-        <div><span>documents</span><strong><code>.resume</code> + <code>.cover</code></strong></div>
-        <div><span>workspace backup</span><strong><code>.rolefit-backup</code></strong></div>
+      <section class="spec-strip section-shell" aria-label="RoleFit product facts">
+        <div><span>Workspace</span><strong>Device-local</strong></div>
+        <div><span>Providers</span><strong>2 CLIs + 2 APIs</strong></div>
+        <div><span>Documents</span><strong><code>.resume</code> + <code>.cover</code></strong></div>
+        <div><span>Workspace backup</span><strong><code>.rolefit-backup</code></strong></div>
       </section>
 
       <section class="product section-shell" id="product" aria-labelledby="product-title">
@@ -276,7 +270,7 @@
                 height="1176"
                 loading="lazy"
               />
-              <figcaption><span>Fig. 2</span> The companion: providers, backups, extension pairing, and the browser launch.</figcaption>
+              <figcaption>The companion: providers, backups, extension pairing, and the browser launch.</figcaption>
             </figure>
           </div>
 
@@ -366,7 +360,7 @@
           <p>
             React, TypeScript, and Vite in the browser; a loopback Node server and
             an Electron companion on your machine; documents on the shared Typeset
-            engine. Set in Source Serif 4 and Source Sans 3.
+            engine. Set in your system's own typeface.
           </p>
         </div>
         <div class="colophon__col">

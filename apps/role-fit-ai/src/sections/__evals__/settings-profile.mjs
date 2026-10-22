@@ -101,8 +101,8 @@ const { render, SETTINGS_GROUPS } = module.exports;
 
 assert.deepEqual(
   SETTINGS_GROUPS.map((group) => [group.label, group.sections.map((section) => section.label)]),
-  [["You", ["Profile", "Background"]], ["AI", ["Guidance", "Automation", "Models"]]],
-  "Settings groups five pages under You and AI"
+  [["You", ["Profile", "Background"]], ["AI", ["Guidance", "Automation", "Models"]], ["App", ["Appearance"]]],
+  "Settings groups six pages under You, AI, and App"
 );
 
 const profile = render("profile", "Stored Background text.");

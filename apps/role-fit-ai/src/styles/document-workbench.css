@@ -52,8 +52,6 @@
   min-height: 0;
   overflow: auto;
   padding: var(--s4) var(--s5);
-  scrollbar-color: var(--hairline-strong) transparent;
-  scrollbar-width: thin;
   container-type: inline-size;
   /* Same clock as the rail's track. Without it the padding is a step change —
      it lands at full width while the track is still open, throwing the page
@@ -169,11 +167,10 @@
   overflow: hidden;
   margin-inline-end: auto;
   color: var(--ink-soft);
-  font-size: 0.68rem;
+  font-size: 0.72rem;
   font-weight: 600;
-  letter-spacing: 0.05em;
+  letter-spacing: 0;
   text-overflow: ellipsis;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 
@@ -187,7 +184,7 @@
   height: 30px;
   flex: 0 0 30px;
   place-items: center;
-  border: 1px solid var(--hairline);
+  border: 1px solid transparent;
   border-radius: var(--r-md);
   padding: 0;
   background: var(--card);
@@ -210,14 +207,18 @@
   outline-offset: 2px;
 }
 
+/* Without a sticky footer, the content's end keeps clear of the floating Apply
+   action; with one, the footer carries that clearance itself (workflow-rail.css). */
+.document-workbench__rail-content:not(:has(.workflow-rail__footer)) {
+  padding-bottom: calc(var(--s4) + var(--apply-clearance));
+}
+
 .document-workbench__rail-content {
   width: calc(var(--document-rail-width) - 1px);
   min-height: 0;
   flex: 1 1 auto;
   overflow-y: auto;
   padding: var(--s4);
-  scrollbar-color: var(--hairline-strong) transparent;
-  scrollbar-width: thin;
 }
 
 /* Collapsed, the action and the reopen tab stand side by side on the document's
@@ -275,8 +276,6 @@
   .document-workbench__layout {
     overflow-x: hidden;
     overflow-y: auto;
-    scrollbar-color: var(--hairline-strong) transparent;
-    scrollbar-width: thin;
   }
 
   .document-workbench__layout::-webkit-scrollbar {
@@ -346,5 +345,34 @@
   .document-workbench__rail-content {
     max-height: none;
     overflow: visible;
+  }
+}
+
+/* The document header rows sit on the workspace plane like every other page's
+   head: no white band and no rules, so the paper page is the only sheet. The
+   name and formatting row start on the same inset as other pages' titles, less
+   the name field's 3px and the first tool button's 6px inner padding. */
+:is(.resume-tab__toolbar, .cover-letter-tab__toolbar).top-toolbar {
+  border-bottom-color: transparent;
+  background: var(--paper);
+}
+
+:is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__primary-row {
+  padding-inline: calc(var(--s6) - 3px) var(--s6);
+  border-bottom-color: transparent;
+}
+
+:is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__secondary-row {
+  padding-inline: calc(var(--s6) - 6px) var(--s6);
+  background: transparent;
+}
+
+@media (max-width: 760px) {
+  :is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__primary-row {
+    padding-inline: calc(var(--s4) - 3px) var(--s4);
+  }
+
+  :is(.resume-tab__toolbar, .cover-letter-tab__toolbar) .top-toolbar__secondary-row {
+    padding-inline: calc(var(--s4) - 6px) var(--s4);
   }
 }

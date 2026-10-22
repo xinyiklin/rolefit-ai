@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
-import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, Plus, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
+import { AlertCircle, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, Link, RefreshCw, Search, Sparkles, SquareArrowOutUpRight, Table2, Trash2 } from "lucide-react";
 import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
   ACTIVITY_STATUS_GROUPS,
@@ -583,18 +583,16 @@ export function TrackerTab({
         <div className="workspace-page__title-row">
           <h2 className="page-serif">Applications</h2>
           {applicationsPath ? (
-            <span className="workspace-page__path">{applicationsPath}</span>
+            <span className="workspace-page__detail">{applicationsPath}</span>
           ) : null}
           {pendingApplicationWrites > 0 ? (
             <span className="workspace-page__saving" role="status" aria-live="polite">
               Saving {pendingApplicationWrites > 1 ? `${pendingApplicationWrites} changes` : "change"}…
             </span>
           ) : null}
-        </div>
-        <div className="workspace-page__actions">
           <button
             type="button"
-            className="ghost-button is-compact is-icon"
+            className="ghost-button is-compact is-icon workspace-page__refresh"
             onClick={async () => { setIsRefreshing(true); try { await onRefresh(); } finally { setIsRefreshing(false); } }}
             disabled={isRefreshing}
             title="Refresh applications"
@@ -602,6 +600,8 @@ export function TrackerTab({
           >
             <RefreshCw size={14} className={isRefreshing ? "spin" : ""} aria-hidden="true" />
           </button>
+        </div>
+        <div className="workspace-page__actions">
           {/* The scan runs after first paint, so this slot reports the pass
               rather than delaying the table behind it. */}
           {isScanningDuplicates ? (
@@ -619,10 +619,6 @@ export function TrackerTab({
               Review duplicates · {duplicateGroups.length}
             </button>
           ) : null}
-          <button type="button" className="primary-button is-compact" onClick={onPrepareApplication}>
-            <Plus size={14} aria-hidden="true" />
-            Prepare application
-          </button>
         </div>
       </header>
 
@@ -704,6 +700,7 @@ export function TrackerTab({
               duplicateIds={duplicateIds}
               postingGroupSizes={postingGroupSizes}
               noResponse={noResponseById}
+              onPrepareApplication={onPrepareApplication}
             />
 
             <div className="applications-pagination" role="group" aria-label="Pagination">
