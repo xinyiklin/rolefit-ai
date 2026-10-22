@@ -86,7 +86,8 @@ D-entries in `docs/decisions.md`.
   landing page wears the same tokens; its app captures and the README shots
   were retaken. Verified: tsc, the RoleFit check (197/197 evals, landing and
   desktop builds), contrast math, and headless-Edge captures of a synthetic
-  workspace in light and dark; independent reviews passed. Firefox/Safari and
+  workspace in light and dark; the Chromium host audit now expects light pages
+  and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
   print UNCONFIRMED. Open with the user: white vs gray workspace plane,
   stacked state labels. Next: the companion restyle (its own branch, with the
   landing's companion shot), then the extension popup restyle.

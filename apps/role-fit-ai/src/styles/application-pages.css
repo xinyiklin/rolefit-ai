@@ -1592,7 +1592,7 @@ button.table-sort svg {
   padding: var(--s4);
   border: 1px solid transparent;
   border-radius: var(--r-xl);
-  background: var(--card-elev);
+  background: var(--card);
   box-shadow: var(--shadow-lift);
 }
 

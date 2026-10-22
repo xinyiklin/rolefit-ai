@@ -9,6 +9,7 @@ import { useWorkspaceResume } from '../../apps/role-fit-ai/src/hooks/useWorkspac
 import { useResumeProposalDecisions } from '../../apps/role-fit-ai/src/hooks/useResumeProposalDecisions.ts';
 import { useCoverLetterEditor } from '../../apps/role-fit-ai/src/hooks/useCoverLetterEditor.ts';
 import { DialogProvider } from '../../apps/role-fit-ai/src/hooks/useDialog.tsx';
+import { useStudioRail } from '../../apps/role-fit-ai/src/hooks/useStudioRail.ts';
 import { ResumeTab } from '../../apps/role-fit-ai/src/sections/tabs/ResumeTab.tsx';
 import { CoverLetterTab } from '../../apps/role-fit-ai/src/sections/tabs/CoverLetterTab.tsx';
 import { buildCoverLetterPreflight } from '../../apps/role-fit-ai/src/lib/coverLetterPreflight.ts';
@@ -127,14 +128,15 @@ function CoverHost() {
 
 export function HostAuditContract({ kind }: { kind: 'resume' | 'cover' }) {
   const [ready, setReady] = useState(false);
+  const rail = useStudioRail();
   useEffect(() => {
     // main.tsx also serves the standalone fixture; its app-only CSS must not leak into RoleFit.
     document.querySelectorAll('style[data-vite-dev-id$="/apps/typeset/src/styles/app.css"]').forEach(style => style.remove());
     void import('../../apps/role-fit-ai/src/styles/index.css').then(() => setReady(true));
   }, []);
   if (!ready) return <p>Loading host styles</p>;
-  // RoleFit's real studio grid, so the rail narrows the editor column exactly as in the app (52px at <=1080px).
-  return <DialogProvider><main className="studio-pane" style={{ height: '100vh' }}>
+  // RoleFit's real studio grid and rail state, so the rail narrows the editor column exactly as in the app (52px at <=1080px).
+  return <DialogProvider><main className="studio-pane" data-rail={rail.collapsed ? 'collapsed' : 'expanded'} style={{ height: '100vh' }}>
     <nav className="studio-sidebar" aria-label="Synthetic studio rail" />
     <section className="studio-main"><div className="studio-body" data-tab={kind}>
       {kind === 'resume' ? <ResumeHost /> : <CoverHost />}
