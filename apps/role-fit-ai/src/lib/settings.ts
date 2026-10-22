@@ -20,6 +20,7 @@ import {
 } from "./candidateFacts.ts";
 import { migrateExperienceEvidence } from "./experienceEvidenceMigration.ts";
 import { normalizeVariantExclusions, type VariantExclusions } from "./variantPool.ts";
+import { normalizeGhostedAfterDays } from "./ghostedThreshold.ts";
 
 // Allowlisted workspace preferences. localStorage is a fail-open browser cache;
 // workspacePreferencesSync.ts makes the owner-only workspace file canonical.
@@ -67,6 +68,10 @@ export type PersistedSettings = {
   // Saved variants Prepare must not pick automatically; absent means all eligible.
   excludedResumeVariants?: VariantExclusions;
   excludedCoverLetterVariants?: VariantExclusions;
+  // Days of silence before an Applied or Interviewing record is flagged No
+  // response, and the opt-in automatic Ghosted mark for flagged records.
+  ghostedAfterDays?: number;
+  autoMarkGhosted?: boolean;
   citizenshipStatus?: CitizenshipStatus;
   legallyAuthorizedToWork?: DeclaredAnswer;
   requiresSponsorship?: DeclaredAnswer;
@@ -108,6 +113,8 @@ const PERSISTED_SETTING_KEYS = [
   "coverPolishAutoThreshold",
   "excludedResumeVariants",
   "excludedCoverLetterVariants",
+  "ghostedAfterDays",
+  "autoMarkGhosted",
   "citizenshipStatus",
   "legallyAuthorizedToWork",
   "requiresSponsorship",
@@ -259,12 +266,15 @@ export function normalizeSettings(value: unknown): PersistedSettings {
     if (bag[providerKey] === "") delete bag[providerKey];
     if (bag[modelKey] === "") delete bag[modelKey];
   }
-  for (const key of ["boldBulletKeywords", "resumePolishReview", "fitAssessmentAuto", "resumePolishAuto", "coverPolishAuto"] as const) {
+  for (const key of ["boldBulletKeywords", "resumePolishReview", "fitAssessmentAuto", "resumePolishAuto", "coverPolishAuto", "autoMarkGhosted"] as const) {
     if (settings[key] !== undefined && typeof settings[key] !== "boolean") delete settings[key];
   }
   const validAutoPolishThresholds = new Set<string>(FIT_ASSESSMENT_VERDICTS);
   for (const key of ["resumePolishAutoThreshold", "coverPolishAutoThreshold"] as const) {
     if (settings[key] !== undefined && !validAutoPolishThresholds.has(settings[key] as string)) delete settings[key];
+  }
+  if (settings.ghostedAfterDays !== undefined && normalizeGhostedAfterDays(settings.ghostedAfterDays) === null) {
+    delete settings.ghostedAfterDays;
   }
   for (const [key, kind] of [["excludedResumeVariants", "resume"], ["excludedCoverLetterVariants", "cover-letter"]] as const) {
     if (settings[key] === undefined) continue;

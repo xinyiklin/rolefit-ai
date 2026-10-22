@@ -5,6 +5,7 @@ export const APPLICATION_STATUSES = [
   "interviewing",
   "offer",
   "rejected",
+  "ghosted",
   "withdrawn"
 ] as const;
 
@@ -13,10 +14,12 @@ export type ApplicationStatus = (typeof APPLICATION_STATUSES)[number];
 const STATUS_TRANSITIONS: Record<ApplicationStatus, readonly ApplicationStatus[]> = {
   draft: ["draft", "applied", "not_applying"],
   not_applying: ["not_applying"],
-  applied: ["applied", "interviewing", "offer", "rejected", "withdrawn"],
-  interviewing: ["interviewing", "offer", "rejected", "withdrawn"],
+  applied: ["applied", "interviewing", "offer", "rejected", "ghosted", "withdrawn"],
+  interviewing: ["interviewing", "offer", "rejected", "ghosted", "withdrawn"],
   offer: ["offer", "rejected", "withdrawn"],
   rejected: ["rejected"],
+  // A late reply reopens a Ghosted record; Applied undoes a premature mark.
+  ghosted: ["ghosted", "applied", "interviewing", "offer", "rejected", "withdrawn"],
   withdrawn: ["withdrawn"]
 };
 

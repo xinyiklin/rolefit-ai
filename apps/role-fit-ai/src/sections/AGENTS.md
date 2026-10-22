@@ -75,6 +75,11 @@ and `docs/engineering/ui-principles.md`.
   saved variant in two independent lists, Resumes and Cover letters (checked =
   eligible), one short line, and an empty or loading line per list. It lists
   only existing variants and never explains counts or zero-eligible states.
+  Its **Applications** group holds the Mark as Ghosted after days (7-180, committed on
+  blur or Enter only; an invalid entry reverts) and the off-by-default Mark as
+  Ghosted automatically checkbox; Analytics edits the same two settings inline
+  (a "Mark as Ghosted after" select of whole-day options, which saves on change, and
+  the callout's checkbox).
 - Provider selectors show only explicitly configured providers. Keep an
   unavailable configured selection visible but disabled with reconnect/setup
   guidance; never render an API-key field or silently choose a paid provider.

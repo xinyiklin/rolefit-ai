@@ -54,7 +54,7 @@ export function stageHistoryFits(
 type SavedHistory = { status: ApplicationStatus; stageHistory: StageHistoryEntry[] | undefined };
 
 // Each entry is saved on its own, against the saved record: replaced in place
-// or appended. Saving a new interview on an Applied record also moves it to
+// or appended. Saving a new interview on an Applied or Ghosted record moves it to
 // Interviewing and records that move, so an unsaved Log changes nothing.
 export function withEntrySaved(saved: HistoryFacts, entry: StageHistoryEntry): SavedHistory {
   const history = saved.stageHistory ?? [];
@@ -62,7 +62,9 @@ export function withEntrySaved(saved: HistoryFacts, entry: StageHistoryEntry): S
   const stageHistory = exists
     ? history.map((current) => (current.id === entry.id ? entry : current))
     : [...history, entry];
-  const status = !exists && entry.type === "interview" && saved.status === "applied" ? "interviewing" : saved.status;
+  // A late interview on a Ghosted record is the reply that reopens it.
+  const reopens = saved.status === "applied" || saved.status === "ghosted";
+  const status = !exists && entry.type === "interview" && reopens ? "interviewing" : saved.status;
   return { status, stageHistory: withStageChange(saved, status, stageHistory) };
 }
 

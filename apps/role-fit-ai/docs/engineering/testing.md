@@ -1064,8 +1064,23 @@ Good frontend verification covers:
   `src/lib/__evals__/application-analytics-eval.mjs` keeps Skipped visible as
   reviewed history dated by its decision, counts only explicit `appliedAt`
   submissions (so an application later marked Skipped keeps its original
-  submission in the shared submitted-metric denominator and monthly
-  submissions), and excludes Skipped from missing-follow-up hygiene. The preparation/session relationship eval
+  submission in the shared submitted-metric denominator and the register),
+  and excludes Skipped and Ghosted from missing-follow-up hygiene. It also pins
+  the week register: Monday-first calendar weeks across time zones and DST,
+  newest-first rows with empty weeks kept, row sums equal to the totals line,
+  All time by month, the rate's three-sent floor, response/interview/offer
+  nesting (a bare Rejected, Withdrawn, or Ghosted move is not a response),
+  median time to first response, exclusive outcomes with derived No response
+  (a planned follow-up keeps a record fresh), the previous window and stage
+  counts behind the KPI row, monthly rows for a windowed period, silence bins,
+  and upcoming items. `page-loading.mjs` renders the skeleton and the blank,
+  error, and populated page (head controls, KPI figures and their changes,
+  activity columns and table view, stage shares and key, No response callout,
+  the attention list with its next step and row menu, and Coming up).
+  `no-response-eval.mjs`, `ghosted-marks-eval.mjs`,
+  `applications-mark-ghosted.mjs`, and `auto-ghosting-hook.mjs` pin the No
+  response threshold boundaries, the atomic Ghosted write against the real
+  server reconcile, and the one-attempt-per-session automatic pass. The preparation/session relationship eval
   pins independent multi-record groups, group counts, and two-versus-many unlink
   plans; the saved-surface probe pins linked-history presentation plus confirmed
   destructive merge controls.

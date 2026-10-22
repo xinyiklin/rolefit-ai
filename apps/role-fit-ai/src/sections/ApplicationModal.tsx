@@ -46,11 +46,13 @@ import {
   applicationActivityDate,
   fitAssessmentRunLabel,
   isJobOnlySkippedApplication,
+  noResponseLabel,
   postingIdentity,
   safeExternalUrl,
   splitFitWarnings
 } from "../lib/applicationDisplay";
 import { applicationStatusOptions } from "../lib/applicationStatusTransitions";
+import { noResponseCandidate } from "../lib/noResponse";
 import {
   STAGE_HISTORY_FULL_MESSAGE,
   stageHistoryFits,
@@ -71,6 +73,8 @@ type ApplicationModalProps = {
   application: Application | null;
   retainedApplication?: Application | null;
   stackedViewerOpen?: boolean;
+  // Days of silence after which an Applied or Interviewing record reads "No response".
+  ghostedAfterDays: number;
   onClose: () => void;
   onSave: (application: Application) => Promise<boolean>;
   onDelete?: (id: string, title: string) => void;
@@ -238,7 +242,8 @@ export function ApplicationModal({
   onRemoveDocument,
   onSaveAttachment,
   onRemoveAttachment,
-  onDocumentsBusyChange
+  onDocumentsBusyChange,
+  ghostedAfterDays
 }: ApplicationModalProps) {
   const { confirm } = useDialog();
   const seedApplication = application ?? retainedApplication;
@@ -754,6 +759,10 @@ export function ApplicationModal({
   const canSave =
     form.company.trim().length > 1 || form.role.trim().length > 1 || form.jobUrl.trim().length > 6;
   const editableStatuses = applicationStatusOptions(activeApplication.status);
+  // Derived from the saved record; a pending stage choice makes the hint moot.
+  const noResponse = form.status === activeApplication.status
+    ? noResponseCandidate(activeApplication, ghostedAfterDays)
+    : null;
   const openPreparationBlocked = (formHasUnsavedChanges || recordWasRemoved) && !canSave;
   const fitAssessment = activeApplication.fitAssessment;
   const fitAssessmentMeta = fitAssessment ? fitAssessmentRunLabel(fitAssessment) : "";
@@ -1011,6 +1020,7 @@ export function ApplicationModal({
                         </span>
                       )}
                     </div>
+                    {noResponse ? <p className="application-stage-hint">{noResponseLabel(noResponse)}</p> : null}
                   </section>
 
                   <section className="application-details-section" aria-labelledby="application-timing-title">

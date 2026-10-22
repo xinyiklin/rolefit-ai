@@ -71,6 +71,11 @@ export type SettingsDialogProps = {
   excludedResumeVariants: VariantExclusions;
   excludedCoverLetterVariants: VariantExclusions;
   onVariantEligibilityChange: (kind: VariantKind, fileName: string, eligible: boolean) => void;
+  // Applications group: silence threshold and the opt-in Ghosted mark.
+  ghostedAfterDays: number;
+  onGhostedAfterDaysChange: (days: number) => void;
+  autoMarkGhosted: boolean;
+  onAutoMarkGhostedChange: (enabled: boolean) => void;
 
   // ----- Profile -----
   citizenshipStatus: CitizenshipStatus;

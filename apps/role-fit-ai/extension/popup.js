@@ -349,6 +349,7 @@ function trackerStatus(app) {
       const on = formatDate(app.appliedAt);
       return { tone: "closed", label: on ? `Not selected · ${on}` : "Not selected" };
     }
+    case "ghosted": return { tone: "idle", label: "Ghosted" };
     case "withdrawn": return { tone: "idle", label: "Withdrawn" };
     default: return { tone: "watch", label: String(app.status || "Tracked") };
   }

@@ -29,6 +29,7 @@ import {
   applicationStatusTransitionAllowed,
   type ApplicationStatus
 } from "../lib/applicationStatusTransitions.ts";
+import { ghostedTimelineFullMessage, planGhostedMarks, type GhostedMark } from "../lib/ghostedMarks.ts";
 
 export type { NotApplyingReason } from "../lib/notApplying.ts";
 
@@ -649,6 +650,25 @@ export function useApplications() {
     [persist]
   );
 
+  // Bulk Ghosted marks are one atomic revision-checked write: every record
+  // moves with its stage entry or none does. Records no longer Applied or
+  // Interviewing are skipped. Resolves to how many were marked (0 when nothing
+  // was left to mark), or null when the write was refused or failed.
+  const markGhosted = useCallback(
+    (marks: GhostedMark[]) => {
+      const plan = planGhostedMarks(applicationsRef.current, marks, nextApplicationRevision);
+      if (plan.kind === "history-full") {
+        setError(ghostedTimelineFullMessage(plan.application));
+        return Promise.resolve(null);
+      }
+      if (!plan.mutations.length) return Promise.resolve(0);
+      applicationsRef.current = plan.next;
+      setApplications(plan.next);
+      return persist(plan.next, plan.mutations).then((saved) => (saved ? plan.mutations.length : null));
+    },
+    [persist]
+  );
+
   const remove = useCallback(
     (id: string) => {
       const current = applicationsRef.current;
@@ -1004,6 +1024,7 @@ export function useApplications() {
     saveApplication,
     saveApplicationAnswer,
     updateStatus,
+    markGhosted,
     remove,
     getApplication,
     findDuplicatesForTarget,

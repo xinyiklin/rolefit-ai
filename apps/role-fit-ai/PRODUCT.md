@@ -357,7 +357,7 @@ bounds. Merge accidental duplicate
 keeps the current record only after a destructive confirmation. A Skipped
 record uses its decision date for tracker chronology and appears in All,
 Inactive, and Skipped filters. A job-only Skipped decision never contributes to
-submitted counts, submitted-month history, or calendar submission events; an
+submitted counts, the Analytics register, or calendar submission events; an
 application later marked Skipped keeps its original submission in all three,
 because a later decision does not erase a sent application. No Skipped record
 counts toward follow-up hygiene.
@@ -375,8 +375,23 @@ Skip date as an entry when it leaves Skipped, so that date is not lost. History
 holds at most 60 entries; a stage move or log that would exceed it is refused
 up front with a message to remove an entry. Dates keep their local calendar day
 in every time zone. The inspector shows the latest and next interview, and
-the calendar shows interviews. No-response and follow-up judgments are not
-derived from history yet.
+the calendar shows interviews.
+An Applied or Interviewing application with no activity for the user's
+**Mark as Ghosted after** days (in Settings and on Analytics; default 21,
+7-180; the submission or any timeline
+entry, a sent follow-up included, counts as activity; a scheduled interview or
+a follow-up planned for today or later keeps it fresh) is flagged **No
+response** in the tracker, Application Detail, and Analytics. The flag is
+derived and never stored. **Ghosted** is a stored inactive stage: the user can
+move any Applied or Interviewing application there from the row menu (flagged
+rows also offer a direct Mark as Ghosted) or the stage control, mark flagged ones with
+Analytics' one-write bulk action (dated today), or opt in to **Mark as Ghosted
+automatically** (off by default, in Settings > Automation and Analytics), which
+dates each mark the day the threshold passed, never moves the application open
+in Application Detail, and never retries a record in the same session. The day
+threshold saves only a settled whole value. A late reply moves a Ghosted
+application on like any other stage change; logging an interview reopens it as
+Interviewing, and moving it back to Applied restarts its count.
 Prepare also offers a quiet **Skip & save job** action beneath Apply for fresh
 work. It saves the posting as **Skipped**, with any number of optional reasons
 from a grouped list (Eligibility, Logistics, Fit, Status, Personal) and a short
@@ -761,7 +776,7 @@ disappears into the task. Quiet competence, not salesmanship.
     own save against the saved record, apart from Save changes: logging an
     interview, response, or follow-up opens an unsaved draft row with Save and
     Cancel, so a misclick changes nothing. Saving a new interview on an Applied
-    record also moves it to Interviewing, and the draft says so first. Stray
+    or Ghosted record also moves it to Interviewing, and the draft says so first. Stray
     clicks keep a draft open; closing the popover, saving the form, switching
     tabs, or closing Application Detail asks before discarding it, a lock from
     an outside edit keeps it until the latest version is adopted, and removing
@@ -773,8 +788,9 @@ disappears into the task. Quiet competence, not salesmanship.
     a candidate source that appears materially different pauses before provider
     analysis and can proceed only as a new preparation. The Applications row
     menu groups Applied, Interviewing, and Offer as Active, and Skipped,
-    Rejected, and Withdrawn as Inactive; users may move the same record between
-    any of those stages. Moving an applied record to Skipped preserves its
+    Rejected, Ghosted, and Withdrawn as Inactive; users may move the same record
+    between any of those stages, except that Ghosted is offered only from
+    Applied or Interviewing. Moving an applied record to Skipped preserves its
     application date and saved materials. A Skipped record without an
     application date remains job-only and gains one only when moved to an
     active stage; stage changes never invent documents.

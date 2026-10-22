@@ -556,9 +556,28 @@ later entry wins.
   submitted record without a new matching stage entry. Each timeline entry
   saves on its own, apart from Application Detail's Save changes, and only
   saving a new interview on an Applied record moves the stage. Older builds
-  reject a tracker or backup that holds history (user-accepted). A no-response
-  ("ghosted") state will be derived, never stored; the Analytics redesign is a
-  separate PR after this one merges.
+  reject a tracker or backup that holds history (user-accepted). Its
+  "derived, never stored" ghosted sentence is AMENDED by D092.
+- 2026-10-20 [USER+CODE] D092 ACTIVE: **No response is derived; Ghosted is a
+  stored stage.** An Applied or Interviewing application whose latest activity
+  (the submission or any timeline entry, a sent follow-up included; a
+  future-dated interview or a follow-up planned for today or later keeps it
+  fresh) is at least `ghostedAfterDays` local days old (default 21, whole days
+  7-180, committed only when settled, never mid-typing) is flagged No
+  response, never stored.
+  The user marks flagged records **Ghosted**, an inactive stage, one at a time
+  or in one atomic bulk write dated today, and may opt in to automatic marking
+  (`autoMarkGhosted`, default off; the user chose both over manual-only): each
+  automatic mark is dated the day the threshold passed, runs after a fresh
+  re-read under a same-origin tab lock (rechecking the shared settings cache),
+  skips the record open in Application Detail, re-runs at local midnight, and
+  tries a record at most once per session; tabs on different origins are not
+  coordinated. Ghosted can return to Applied, Interviewing, Offer, Rejected, or
+  Withdrawn; a move back, or a newly logged interview (which reopens it as
+  Interviewing), records a dated entry that restarts the count. Older
+  builds (0.18.x included) reject a tracker or backup carrying `ghosted`; that
+  they also reject preferences carrying the new settings keys is from code
+  reading, UNCONFIRMED against a 0.18 build.
 
 ### Extension
 

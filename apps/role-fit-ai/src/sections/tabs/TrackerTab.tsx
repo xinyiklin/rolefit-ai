@@ -10,6 +10,7 @@ import {
   applicationSearchRank,
   activityGroupForFilter,
   activityCount,
+  dateKey,
   displayCompany,
   displayRole,
   fitAssessmentRank,
@@ -27,7 +28,11 @@ import { TrackerInspector } from "../tracker/TrackerInspector";
 import { TrackerRowMenu, type RowMenuItem } from "../tracker/TrackerRowMenu";
 import { DuplicateReviewModal } from "../tracker/DuplicateReviewModal";
 import { postingGroupSizeByApplicationId } from "../../lib/applicationRelationships";
-import { applicationStatusTransitionAllowed } from "../../lib/applicationStatusTransitions";
+import {
+  applicationStatusOptions,
+  applicationStatusTransitionAllowed
+} from "../../lib/applicationStatusTransitions";
+import { noResponseCandidates, type NoResponseCandidate } from "../../lib/noResponse";
 
 export type TrackerView = "table" | "calendar";
 
@@ -73,7 +78,12 @@ function appliedKey(app: Application): string {
 
 // Ascending comparator for a single column; direction + tie-break are applied by
 // the caller so this stays a pure "which is smaller" decision.
-function compareBy(key: SortKey, a: Application, b: Application): number {
+function compareBy(
+  key: SortKey,
+  a: Application,
+  b: Application,
+  noResponse: ReadonlyMap<string, NoResponseCandidate>
+): number {
   switch (key) {
     case "company":
       return displayCompany(a).localeCompare(displayCompany(b));
@@ -84,7 +94,7 @@ function compareBy(key: SortKey, a: Application, b: Application): number {
     case "applied":
       return appliedKey(a).localeCompare(appliedKey(b));
     case "nextAction":
-      return nextAction(a).localeCompare(nextAction(b));
+      return nextAction(a, noResponse.get(a.id)).localeCompare(nextAction(b, noResponse.get(b.id)));
     case "fit": {
       // Unknown fit sorts to the bottom of a descending list (the useful default).
       return fitAssessmentRank(a) - fitAssessmentRank(b);
@@ -99,6 +109,8 @@ type TrackerTabProps = {
   pendingApplicationWrites: number;
   statusFilter: ApplicationActivityFilter;
   setStatusFilter: (v: ApplicationActivityFilter) => void;
+  // Days of silence after which an Applied or Interviewing record reads "No response".
+  ghostedAfterDays: number;
   expandedApplicationId: string | null;
   setExpandedApplicationId: (id: string | null) => void;
   trackerView: TrackerView;
@@ -331,6 +343,7 @@ export function TrackerTab({
   pendingApplicationWrites,
   statusFilter,
   setStatusFilter,
+  ghostedAfterDays,
   expandedApplicationId,
   setExpandedApplicationId,
   trackerView,
@@ -370,6 +383,14 @@ export function TrackerTab({
 
   const postingIds = useMemo(() => postingIdIndex(applications), [applications]);
 
+  // Derived, never stored. The day key re-derives the flags when the date rolls
+  // over with the tab still open.
+  const today = dateKey(new Date());
+  const noResponseById = useMemo(
+    () => new Map(noResponseCandidates(applications, ghostedAfterDays).map((candidate) => [candidate.application.id, candidate])),
+    [applications, ghostedAfterDays, today]
+  );
+
   // Filtered + sorted list used by the Table view (Calendar filters internally).
   const sorted = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -390,12 +411,12 @@ export function TrackerTab({
           const relevance = (relevanceRanks.get(b.id) ?? 0) - (relevanceRanks.get(a.id) ?? 0);
           if (relevance !== 0) return relevance;
         }
-        const primary = compareBy(sort.key, a, b) * dirMul;
+        const primary = compareBy(sort.key, a, b, noResponseById) * dirMul;
         if (primary !== 0) return primary;
         // Stable tie-break: newest application first, regardless of column.
         return appliedKey(b).localeCompare(appliedKey(a));
       });
-  }, [applications, postingIds, statusFilter, query, sort]);
+  }, [applications, noResponseById, postingIds, statusFilter, query, sort]);
 
   // Reset to the first page whenever the result set or its ordering changes, so
   // the user is never stranded on a now-empty trailing page.
@@ -485,7 +506,7 @@ export function TrackerTab({
 
   // Context-menu actions for the right-clicked row. Open + Delete are the core;
   // preparation, Preview (when a PDF was saved), and the job posting (when a URL
-  // exists) round it out.
+  // exists) round it out. A flagged row also gets Mark as Ghosted up front.
   const rowMenuItems: RowMenuItem[] = rowMenu
     ? (() => {
         const app = rowMenu.app;
@@ -512,6 +533,14 @@ export function TrackerTab({
             onSelect: () => window.open(jobUrl, "_blank", "noopener,noreferrer")
           });
         }
+        if (noResponseById.has(app.id)) {
+          items.push({
+            kind: "action",
+            label: `Mark as ${STATUS_LABEL.ghosted}`,
+            dotClass: "stage-dot stage-dot--ghosted",
+            onSelect: () => onUpdateStatus(app.id, "ghosted")
+          });
+        }
         items.push({ kind: "separator" });
         for (const group of TRACKER_STAGE_MENU_GROUPS) {
           items.push({ kind: "header", label: group.label });
@@ -521,7 +550,12 @@ export function TrackerTab({
               label: STATUS_LABEL[status],
               dotClass: `stage-dot stage-dot--${status}`,
               active: app.status === status,
-              disabled: app.status === status || !applicationStatusTransitionAllowed(app.status, status),
+              // Ghosted means silence after applying, so only a record that can
+              // be waiting on a reply (or is already Ghosted) offers it.
+              disabled:
+                app.status === status
+                || !applicationStatusTransitionAllowed(app.status, status)
+                || (status === "ghosted" && !applicationStatusOptions(app.status).includes(status)),
               onSelect: () => onUpdateStatus(app.id, status)
             });
           }
@@ -668,6 +702,7 @@ export function TrackerTab({
               onRowContextMenu={handleRowContextMenu}
               duplicateIds={duplicateIds}
               postingGroupSizes={postingGroupSizes}
+              noResponse={noResponseById}
             />
 
             <div className="applications-pagination" role="group" aria-label="Pagination">
@@ -729,6 +764,7 @@ export function TrackerTab({
               duplicateGroup={selectedDuplicateGroup}
               relatedApplications={selectedRelatedApplications}
               onReviewDuplicates={() => setIsDuplicateModalOpen(true)}
+              noResponse={selected ? noResponseById.get(selected.id) ?? null : null}
             />
           </aside>
         </div>

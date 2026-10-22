@@ -72,7 +72,8 @@ for (const status of ["interviewing", "offer", "rejected", "withdrawn", "not_app
 
 // --- withEntrySaved / withEntryRemoved -------------------------------------
 // Entries save on their own against the saved record; only saving a new
-// interview on an Applied record moves the stage, and that move is recorded.
+// interview on an Applied or Ghosted record moves the stage, and that move is
+// recorded.
 const interview = { id: "i1", type: "interview", kind: "technical", at: rev2 };
 const savedInterview = withEntrySaved(saved[0], interview);
 assert.equal(savedInterview.status, "interviewing", "saving a new interview on an Applied record moves it to Interviewing");
@@ -81,6 +82,9 @@ assert.deepEqual(
   ["r1", "i1", "stage:interviewing"],
   "the interview and its stage move are saved together"
 );
+const reopened = withEntrySaved({ ...saved[0], status: "ghosted" }, interview);
+assert.equal(reopened.status, "interviewing", "a late interview on a Ghosted record reopens it as Interviewing");
+assert.equal(reopened.stageHistory.at(-1).status, "interviewing", "and records that move");
 for (const status of ["interviewing", "offer", "rejected"]) {
   const result = withEntrySaved({ ...saved[0], status }, interview);
   assert.equal(result.status, status, status + " is not moved by an interview");

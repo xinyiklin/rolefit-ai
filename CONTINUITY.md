@@ -93,9 +93,26 @@ D-entries in `docs/decisions.md`.
   Key dates); that and its other findings are fixed in `361ed62`, and the exact
   pushed head is re-reviewed before merge. Known gaps: the Timeline count
   includes automatic stage entries; no time of day; confirm and focus flows are
-  pinned by source evals and browser QA, not DOM tests. Next: the Analytics
-  redesign (derived no-response flag, follow-up reminders, metrics) starts after
-  this merges; suggest 0.19.0 then. On `feature/rolefit-stage-history`.
+  pinned by source evals and browser QA, not DOM tests. Merged as #257.
+- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, uncommitted on
+  `claude/switch-to-main-b08a2c`): derived No response (default 21 days,
+  7-180; a planned follow-up holds it) and a stored inactive Ghosted stage,
+  marked per row, in bulk from Analytics, or automatically (opt-in, off by
+  default). Analytics now follows the user's second mockup (DESIGN.md
+  "Analytics Insights"): a grouped KPI row (Total vs the same span one
+  period earlier; stages as shares, since cross-cohort stage changes mislead),
+  activity stacked by stage (weekly/monthly), the No response callout,
+  silence bars, a stage distribution with shares and a stage filter, a Needs
+  your attention table with next step and row menu, and a dated Coming up,
+  in a muted validated stage palette. A Fit-verdict breakdown was dropped
+  (Fit has no analytics role). Older builds reject trackers and backups
+  carrying the new stage (preferences: UNCONFIRMED). Verified: evals, the
+  RoleFit check, npm test, layout measurements at 5 widths and a 35-step
+  interaction script on synthetic data (Chromium; Firefox UNCONFIRMED).
+  The threshold reads "Mark as Ghosted after" in Settings and on Analytics
+  (user, 2026-10-22). Open user questions: a bare Rejected move
+  is not a reply; Ghosted to Applied skips back past Interviewing. Suggest
+  0.19.0 once merged.
 
 ## 2026-10-19
 
@@ -119,32 +136,3 @@ D-entries in `docs/decisions.md`.
 ## 2026-10-18
 
 - [TOOL] `draft/document-chat` is local-only at `../role-fit-ai-document-chat-draft`.
-- [USER+CODE+TOOL] **Repository review and cleanup** (#250, #251, #252,
-  merged 2026-10-18): dead exports removed (12
-  app/server/shared, the retired local polisher's verb list, engine
-  `readCoverLetterFile`) plus 31 unreferenced CSS classes (RoleFit, editor);
-  a `HOST` override keeps a Host/Origin guard (`requestGuardError`); restore
-  staging folders are ignored; job import refuses file-typed responses;
-  packaged macOS adds fnm/nvm CLI paths; a Typeset tab whose draft another
-  tab replaced warns on leave; the companion smoke runs the pairing ownership
-  guard; preview ZIP links say Unsigned; `deps:check` fails a stale install;
-  root `npm test` runs Typeset evals. Also fixed: base-resume Save keeps the
-  editor document, an open proposal, and the cover workflow (identity-only
-  commit; clean only if unchanged since sent); a corrupt provider vault no
-  longer blocks the companion (smoke run proves it starts and leaves the file
-  untouched); IME composition over a cross-field selection now commits like
-  typing (new real-IME Chromium contract); metrics now measure Latin-1 symbols,
-  Latin Extended-A, and `‚„†‡‰‹›′″€™−→←↑↓≤≥` where a face has them (documents
-  using only the original characters lay out identically; D088); Typeset's
-  nginx gzips text (main script 5.7 MB raw, 1.1 MB sent). The two pending Plans
-  screens ran (benchmarks.md): OpenAI import keeps Sol Low, Claude Polish keeps
-  Opus High. A measured character a face lacks now borrows from Tinos/Arimo
-  (D089; 419/419 local and starter layouts unchanged); stale shadow, landing,
-  and companion CSS removed. Browser-verified: base-resume Save keeps an open
-  proposal and Undo; Typeset's two-tab warning in both directions; IME in
-  Firefox (new opt-in `test:editor:firefox-ime`, 10/10). Unverified: Safari
-  IME (no WebDriver composition API), the packaged macOS CLI lookup. Decided
-  under the user's "your call": the HOST override stays strict (IPs and this
-  machine's name only) and the metrics cost (+420 KB gzip per uncached Typeset
-  load) stands. Shipped as three squash merges; `main`'s tree equals the
-  reviewed tree.

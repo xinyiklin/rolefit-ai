@@ -324,6 +324,7 @@
 .stage-dot--interviewing { background: var(--accent); }
 .stage-dot--offer { background: var(--accent-deep); }
 .stage-dot--rejected { background: var(--danger); }
+.stage-dot--ghosted { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-faint); }
 .stage-dot--withdrawn { background: var(--ink-faint); }
 .stage-dot--not_applying { background: var(--ink-faint); }
 
@@ -335,6 +336,13 @@
 /* -------- Default next-action muting -------- */
 .next-action-default {
   color: var(--ink-faint);
+}
+
+/* A flagged record's wait is the one next action worth a hue: warm, like a
+   follow-up. The text carries the meaning, so colour is not the only cue. */
+.next-action-no-response,
+.ledger-row dd.next-action-no-response {
+  color: var(--warm);
 }
 
 /* -------- Date cells: tabular numerals -------- */
@@ -362,57 +370,6 @@
 /* -------- Shared placeholder tone -------- */
 .text-placeholder {
   color: var(--ink-faint);
-}
-
-/* -------- Figures strip (replaces hero-metric card grids) -------- */
-/* Pattern: inline label+value pairs separated by hairline dividers. */
-/* Reused for compact analytics summaries. */
-.figures-strip {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 0;
-  padding: var(--s2) 0;
-  border-top: 1px solid var(--hairline-soft);
-  border-bottom: 1px solid var(--hairline-soft);
-}
-
-.figures-strip__item {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: var(--s1) var(--s4);
-  min-width: 0;
-}
-
-.figures-strip__item em {
-  font-style: normal;
-  color: var(--ink-faint);
-  font-size: 0.67rem;
-  font-weight: 500;
-  letter-spacing: 0.02em;
-}
-
-.figures-strip__item strong {
-  color: var(--ink-strong);
-  font-family: var(--font-mono);
-  font-size: 0.92rem;
-  font-feature-settings: "tnum";
-  line-height: 1.1;
-}
-
-/* Prose figure values ("Strong match") stay sans; mono is for numbers only. */
-.figures-strip__item strong.is-prose {
-  font-family: var(--font-ui);
-  font-size: 0.84rem;
-  font-weight: 600;
-}
-
-.figures-strip__divider {
-  align-self: stretch;
-  width: 1px;
-  background: var(--hairline);
-  flex: none;
 }
 
 /* -------- Table month-group divider -------- */
@@ -1176,8 +1133,7 @@ button.table-sort svg {
 }
 
 .application-side-empty,
-.calendar-empty-note,
-.analytics-empty {
+.calendar-empty-note {
   color: var(--ink-soft);
   font-size: 0.74rem;
   line-height: 1.4;
@@ -1610,159 +1566,6 @@ button.table-sort svg {
   background: var(--card-hover);
 }
 
-/* -------- Analytics -------- */
-
-.analytics-grid {
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  gap: var(--s3);
-}
-
-/* Bounded chart panels */
-.analytics-panel {
-  grid-column: span 4;
-  display: grid;
-  gap: var(--s3);
-  min-height: 190px;
-  padding: var(--s4);
-  border: 1px solid var(--hairline);
-  border-radius: var(--r-lg);
-  background: var(--card-elev);
-  box-shadow: var(--shadow-rest);
-  align-content: start;
-}
-
-/* Flat zones (no border/shadow, hairline-separated) for list sections */
-.analytics-panel--flat {
-  grid-column: span 6;
-  display: grid;
-  gap: var(--s2);
-  padding: var(--s3) var(--s2);
-  border-top: 1px solid var(--hairline-soft);
-  border-bottom: 1px solid var(--hairline-soft);
-  margin-top: var(--s1);
-  align-content: start;
-}
-
-.analytics-panel--half {
-  grid-column: span 6;
-}
-
-.analytics-panel header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--s2);
-}
-
-.analytics-panel header h3 {
-  color: var(--ink-strong);
-  font-size: 0.84rem;
-  font-weight: 650;
-}
-
-.analytics-panel__eyebrow {
-  color: var(--ink-faint);
-  font-size: 0.67rem;
-  font-weight: 500;
-  font-style: normal;
-  letter-spacing: 0.02em;
-}
-
-/* Flat zone heading line */
-.analytics-flat__head {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  margin: 0 0 var(--s1);
-  color: var(--ink-strong);
-  font-size: 0.78rem;
-  font-weight: 650;
-}
-
-.analytics-funnel {
-  display: grid;
-  gap: var(--s2);
-}
-
-.analytics-funnel__row {
-  display: grid;
-  grid-template-columns: 86px minmax(0, 1fr);
-  align-items: center;
-  gap: var(--s2);
-  min-height: 20px;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-}
-
-/* The count rides the end of its bar; a zero stage draws no bar. */
-.analytics-funnel__track {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-}
-
-.analytics-funnel__track i {
-  display: block;
-  flex: none;
-  min-width: 4px;
-  height: 8px;
-  border-radius: var(--r-pill);
-  background: var(--ink-faint);
-}
-
-.analytics-funnel__track strong {
-  color: var(--ink-strong);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-variant-numeric: tabular-nums;
-}
-
-.analytics-funnel__track:not(:has(i)) strong {
-  color: var(--ink-faint);
-  font-weight: 500;
-}
-
-/* Bars take the stage-dot hue so the chart reads with the register. */
-.analytics-funnel__row--applied i { background: var(--cool); }
-.analytics-funnel__row--interviewing i { background: var(--accent); }
-.analytics-funnel__row--offer i { background: var(--accent-deep); }
-.analytics-funnel__row--rejected i { background: var(--danger); }
-
-.analytics-timeline {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(36px, 1fr));
-  align-items: end;
-  gap: var(--s2);
-  min-height: 100px;
-}
-
-.analytics-tick {
-  display: grid;
-  grid-template-rows: 1fr auto auto;
-  justify-items: center;
-  gap: 4px;
-  min-height: 100px;
-  height: 138px;
-  color: var(--ink-faint);
-  font-size: 0.62rem;
-}
-
-.analytics-tick span {
-  align-self: end;
-  width: 32px;
-  min-height: 12px;
-  border-radius: var(--r-sm) var(--r-sm) 0 0;
-  background: var(--accent);
-}
-
-.analytics-tick strong {
-  color: var(--ink-strong);
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-}
-
 /* -------- Inspector / side-panel fact ledger -------- */
 /* Read-only fact pairs in the pipeline inspector and applications side panel.
    Sits flush on the panel sheet; no extra padding beyond the ledger row itself. */
@@ -2129,6 +1932,13 @@ button.table-sort svg {
 
 .application-stage-control {
   min-width: 0;
+}
+
+.application-stage-hint {
+  margin: 0;
+  color: var(--warm);
+  font-size: 0.76rem;
+  line-height: 1.4;
 }
 
 .application-skipped-trigger {
@@ -3438,10 +3248,6 @@ button.table-sort svg {
   }
 }
 
-@media (max-width: 1280px) {
-  .analytics-panel { grid-column: span 6; }
-}
-
 @media (max-width: 1080px) {
   .workspace-toolbar--tracker,
   .tracker-layout,
@@ -3566,22 +3372,6 @@ button.table-sort svg {
     width: 100%;
     flex-wrap: wrap;
   }
-
-  .figures-strip {
-    flex-wrap: wrap;
-  }
-
-  .figures-strip__item {
-    padding: var(--s1) var(--s3);
-  }
-
-  .analytics-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .analytics-panel,
-  .analytics-panel--flat,
-  .analytics-panel--half { grid-column: 1 / -1; }
 
   .application-fieldset__row--2,
   .application-details-grid--timing,

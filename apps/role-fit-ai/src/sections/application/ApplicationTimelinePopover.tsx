@@ -99,7 +99,8 @@ export function ApplicationTimelinePopover({
   const savedFacts = { status: savedStatus, appliedAt, notApplyingAt, stageHistory };
   const placeholder: StageHistoryEntry = { id: "room-check", type: "followup", at: todayIso() };
   const canLogEntry = stageHistoryFits(savedFacts, savedStatus, [placeholder]);
-  const canLogInterview = stageHistoryFits(savedFacts, savedStatus === "applied" ? "interviewing" : savedStatus, [placeholder]);
+  const interviewReopens = savedStatus === "applied" || savedStatus === "ghosted";
+  const canLogInterview = stageHistoryFits(savedFacts, interviewReopens ? "interviewing" : savedStatus, [placeholder]);
 
   // A removal drops its entry optimistically; the list as it was stays on
   // screen until the save settles, so the row neither moves nor unmounts and
@@ -324,7 +325,7 @@ export function ApplicationTimelinePopover({
                         onChange={(event) => changeNote(event.target.value)}
                       />
                     ) : null}
-                    {draft.isNew && draft.entry.type === "interview" && savedStatus === "applied" ? (
+                    {draft.isNew && draft.entry.type === "interview" && interviewReopens ? (
                       <p className="application-timeline__hint">Saving also moves the stage to Interviewing.</p>
                     ) : null}
                     {locked ? (

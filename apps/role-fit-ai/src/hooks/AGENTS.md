@@ -153,6 +153,19 @@ browser-side effects; components render them and App composes them.
   operation. Concurrent refresh callers share one transaction and result; it
   drains the stable same-tab write tail and retries if a write starts during
   its read. Conflict snapshots remain fresh authoritative objects.
+  `markGhosted` is one atomic multi-row write over `planGhostedMarks`
+  (`lib/ghostedMarks.ts`): still-Applied/Interviewing records only, and a full
+  timeline refuses the whole batch.
+- `useAutoGhosting` owns opt-in automatic Ghosted marks (D092). A pass waits
+  for a loaded tracker, no pending write, no visible tracker error, and 1.5 s of
+  settled inputs, then takes the `rolefit:auto-ghosting` Web Lock, refreshes,
+  re-derives each candidate, and sends one `markGhosted` dated each
+  threshold's day. Under the lock it also rechecks the shared settings cache
+  (a stale tab cannot write after another turned automation off), skips the
+  record open in Application Detail, and re-runs at local midnight. An id sent
+  once is never resent that session, so a failure or 409 cannot loop. Without
+  `navigator.locks` it relies on the refresh alone; separate origins are not
+  coordinated. `markGhosted` resolves to the count marked, or null on failure.
 - `useApplyFlow` persists the latest completed Fit Assessment as an application
   receipt independently of material inclusion. A stale snapshot is still the
   latest completed assessment and must be saved; when the session has none,

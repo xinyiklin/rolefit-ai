@@ -1,149 +1,199 @@
-import type { Application } from "../../hooks/useApplications";
+import { useMemo, useState, type ReactNode } from "react";
+import type { Application, ApplicationStatus } from "../../hooks/useApplications";
 import {
-  BOARD_STATUSES,
-  STATUS_LABEL,
-  statusCount
-} from "../../lib/applicationDisplay";
-import {
-  monthlyApplicationsSent,
-  topTrackedCompanies,
-  trackingHygiene
+  ANALYTICS_PERIODS,
+  cohortStageCounts,
+  dayNumber,
+  outcomeBreakdown,
+  periodMetrics,
+  previousApplications,
+  registerRows,
+  sentApplications,
+  silenceBins,
+  trackingHygiene,
+  upcomingItems,
+  type CohortStage
 } from "../../lib/applicationAnalytics";
+import { ActivityCard, type ActivityUnit } from "../analytics/ActivityCard";
+import { AnalyticsHeadControls } from "../analytics/AnalyticsHeadControls";
+import { KpiRow } from "../analytics/KpiRow";
+import { NoResponseSection } from "../analytics/NoResponseSection";
+import { SilenceCard } from "../analytics/SilenceCard";
+import { StageDistribution } from "../analytics/StageDistribution";
+import { UpcomingSection } from "../analytics/UpcomingSection";
+import { useAnalyticsPeriod } from "../analytics/useAnalyticsPeriod";
 
 type AnalyticsTabProps = {
   applications: Application[];
   loadError: string;
+  // >0 while tracker writes are in flight.
+  pendingWrites: number;
+  // The tracker's current write error, "" when none. Distinct from loadError,
+  // which is only the failure to load at all.
+  trackerError: string;
+  ghostedAfterDays: number;
+  onGhostedAfterDaysChange: (days: number) => void;
+  autoMarkGhosted: boolean;
+  onAutoMarkGhostedChange: (enabled: boolean) => void;
+  // One atomic bulk write resolving to how many were marked; null means it
+  // failed and trackerError says why.
+  onMarkGhosted: (ids: string[]) => Promise<number | null>;
+  // Records auto-marked Ghosted this session; 0 shows nothing.
+  autoMarkedCount: number;
+  onDismissAutoMarked: () => void;
+  onOpenApplication: (id: string) => void;
   onOpenApplications: () => void;
+  // Opens Applications filtered to one stage.
+  onViewStage: (status: ApplicationStatus) => void;
 };
 
-export function AnalyticsTab({ applications, loadError, onOpenApplications }: AnalyticsTabProps) {
-  if (loadError) {
+function PageHead({ children }: { children?: ReactNode }) {
+  return (
+    <header className="workspace-page__head an-head">
+      <div>
+        <h2 className="page-serif">Analytics</h2>
+        <p className="an-head__lede">Track your search and find your next best move.</p>
+      </div>
+      {children}
+    </header>
+  );
+}
+
+const withTotal = (counts: Record<CohortStage, number>, total: number) => ({ ...counts, total });
+
+function AnalyticsReport({
+  applications,
+  pendingWrites,
+  ghostedAfterDays,
+  onGhostedAfterDaysChange,
+  onOpenApplication,
+  onOpenApplications,
+  onViewStage,
+  ...noResponse
+}: Omit<AnalyticsTabProps, "loadError">) {
+  const [period, setPeriod] = useAnalyticsPeriod();
+  const [traceId, setTraceId] = useState<string | null>(null);
+  const [stage, setStage] = useState<ApplicationStatus | null>(null);
+  const [unit, setUnit] = useState<ActivityUnit>("week");
+  // Re-read the date on each render, but hand the memos a new Date only when
+  // the day changes.
+  const todayKey = dayNumber(new Date());
+  const today = useMemo(() => new Date(), [todayKey]);
+
+  const report = useMemo(() => {
+    const cohort = sentApplications(applications, period, today);
+    const previous = previousApplications(applications, period, today);
+    const windowed = ANALYTICS_PERIODS.find((option) => option.id === period)?.weeks != null;
+    const rows = registerRows(applications, period, ghostedAfterDays, today, windowed ? unit : "month");
+    const oldest = rows[rows.length - 1];
+    const counts = cohortStageCounts(cohort);
+    return {
+      rows,
+      windowed,
+      counts,
+      total: cohort.length,
+      previous: previous ? previous.length : null,
+      window: ANALYTICS_PERIODS.find((option) => option.id === period)?.label ?? "",
+      totals: periodMetrics(applications, period, today),
+      outcomes: outcomeBreakdown(cohort, ghostedAfterDays, today),
+      periodStart: oldest?.from ?? null,
+      anySent: sentApplications(applications, "all", today).length > 0
+    };
+  }, [applications, period, unit, ghostedAfterDays, today]);
+  const live = useMemo(() => ({
+    ...upcomingItems(applications, today),
+    silence: silenceBins(applications, ghostedAfterDays, today),
+    missingFollowup: trackingHygiene(applications).missingFollowup
+  }), [applications, ghostedAfterDays, today]);
+  // A selected stage that emptied (its records moved, or the period changed)
+  // lets go for good.
+  if (stage && !report.counts[stage as CohortStage]) setStage(null);
+
+  if (!report.anySent) {
     return (
       <section className="workspace-page analytics-page">
-        <header className="workspace-page__head">
-          <h2 className="page-serif">Analytics</h2>
-        </header>
-        <p className="pipeline-alert" role="status">Could not load applications: {loadError}</p>
-        <div className="workspace-page__actions">
+        <PageHead>
+          <AnalyticsHeadControls ghostedAfterDays={ghostedAfterDays} onGhostedAfterDaysChange={onGhostedAfterDaysChange} />
+        </PageHead>
+        <div className="an-card analytics-blank">
+          <p><strong>Nothing sent yet.</strong> Each application you send shows up here by week.</p>
           <button type="button" className="secondary-button is-compact" onClick={onOpenApplications}>
-            Open Applications to retry
+            Open Applications
           </button>
         </div>
       </section>
     );
   }
 
-  const total = applications.length;
-  const interviews = statusCount(applications, "interviewing");
-  const offers = statusCount(applications, "offer");
-  const months = monthlyApplicationsSent(applications);
-  const maxMonthly = Math.max(1, ...months.map(([, row]) => row.applications));
-  const companies = topTrackedCompanies(applications);
-  const { missingFollowup, closed, submitted } = trackingHygiene(applications);
-
   return (
     <section className="workspace-page analytics-page">
-      <header className="workspace-page__head">
-        <h2 className="page-serif">Analytics</h2>
-      </header>
+      <PageHead>
+        <AnalyticsHeadControls
+          ghostedAfterDays={ghostedAfterDays}
+          onGhostedAfterDaysChange={onGhostedAfterDaysChange}
+          period={period}
+          onPeriodChange={setPeriod}
+        />
+      </PageHead>
 
-      <div className="figures-strip" aria-label="Analytics summary">
-        <span className="figures-strip__item">
-          <em>Tracked</em>
-          <strong>{total}</strong>
-        </span>
-        <span className="figures-strip__divider" aria-hidden="true" />
-        <span className="figures-strip__item">
-          <em>Submitted</em>
-          <strong>{submitted}</strong>
-        </span>
-        <span className="figures-strip__divider" aria-hidden="true" />
-        <span className="figures-strip__item">
-          <em>Interviewing</em>
-          <strong>{interviews}</strong>
-        </span>
-        <span className="figures-strip__divider" aria-hidden="true" />
-        <span className="figures-strip__item">
-          <em>Offers</em>
-          <strong>{offers}</strong>
-        </span>
-      </div>
+      <KpiRow counts={withTotal(report.counts, report.total)} previous={report.previous} window={report.window} />
 
-      <div className="analytics-grid">
-        <section className="analytics-panel analytics-panel--funnel analytics-panel--half">
-          <header>
-            <h3>Current pipeline</h3>
-            <span className="analytics-panel__eyebrow">Current stage counts</span>
-          </header>
-          <div className="analytics-funnel">
-            {BOARD_STATUSES.filter((status) => status !== "withdrawn").map((status) => {
-              const count = statusCount(applications, status);
-              return (
-                <div className={`analytics-funnel__row analytics-funnel__row--${status}`} key={status}>
-                  <span>{STATUS_LABEL[status]}</span>
-                  <span className="analytics-funnel__track">
-                    {count ? <i style={{ width: `calc((100% - 2.5rem) * ${count / Math.max(total, 1)})` }} /> : null}
-                    <strong>{count}</strong>
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        <section className="analytics-panel analytics-panel--half">
-          <header>
-            <h3>Applications sent</h3>
-            <span className="analytics-panel__eyebrow">Last 6 active months</span>
-          </header>
-          <div className="analytics-timeline" aria-label="Monthly applications sent">
-            {months.length ? (
-              months.map(([month, row]) => (
-                <div className="analytics-tick" key={month}>
-                  <span style={{ height: `${Math.max(8, Math.round((row.applications / maxMonthly) * 100))}%` }} />
-                  <strong>{row.applications}</strong>
-                  <em>{row.label}</em>
-                </div>
-              ))
-            ) : (
-              <p className="analytics-empty">No submitted applications yet.</p>
-            )}
-          </div>
-        </section>
-
-        <section className="analytics-panel--flat analytics-panel--half">
-          <p className="analytics-flat__head">Top companies <button type="button" className="ghost-button is-compact" onClick={onOpenApplications}>View all</button></p>
-          {companies.length ? (
-            <dl className="ledger-rows">
-              {companies.map(([company, count]) => (
-                <div className="ledger-row" key={company}>
-                  <dt>{company}</dt>
-                  <span className="ledger-row__leader" aria-hidden="true" />
-                  <dd>{count}</dd>
-                </div>
-              ))}
-            </dl>
-          ) : (
-            <p className="analytics-empty">Prepare and apply to roles to see company patterns.</p>
-          )}
-        </section>
-
-        <section className="analytics-panel--flat analytics-panel--half">
-          <p className="analytics-flat__head">Tracking hygiene</p>
-          <dl className="ledger-rows">
-            <div className="ledger-row">
-              <dt>Open roles without follow-up dates</dt>
-              <span className="ledger-row__leader" aria-hidden="true" />
-              <dd>{missingFollowup}</dd>
-            </div>
-            <div className="ledger-row">
-              <dt>Closed roles</dt>
-              <span className="ledger-row__leader" aria-hidden="true" />
-              <dd>{closed}</dd>
-            </div>
-          </dl>
-        </section>
+      {/* One grid of bands so the columns end together: activity beside the
+          callout and silence bars; the stage bar across; the attention list
+          beside what is coming up. DOM order is the reading order. */}
+      <div className="an-grid">
+        <ActivityCard
+          key={`${period}-${unit}`}
+          rows={report.rows}
+          unit={report.windowed ? unit : null}
+          onUnitChange={setUnit}
+          totals={report.totals}
+          outcomes={report.outcomes}
+          today={today}
+          traceId={traceId}
+          onOpenApplication={onOpenApplication}
+        />
+        <NoResponseSection
+          {...noResponse}
+          applications={applications}
+          today={today}
+          pendingWrites={pendingWrites}
+          ghostedAfterDays={ghostedAfterDays}
+          periodStart={report.periodStart}
+          onOpenApplication={onOpenApplication}
+          onTrace={setTraceId}
+          middle={
+            <>
+              <SilenceCard bins={live.silence.bins} open={live.silence.open} />
+              <StageDistribution counts={report.counts} total={report.total} selected={stage} onSelect={setStage} onViewStage={onViewStage} />
+            </>
+          }
+        />
+        <UpcomingSection
+          interviews={live.interviews}
+          followups={live.followups}
+          missingFollowup={live.missingFollowup}
+          onOpenApplication={onOpenApplication}
+          onOpenApplications={onOpenApplications}
+        />
       </div>
     </section>
   );
+}
+
+export function AnalyticsTab({ loadError, ...report }: AnalyticsTabProps) {
+  if (loadError) {
+    return (
+      <section className="workspace-page analytics-page">
+        <PageHead />
+        <p className="pipeline-alert" role="status">Could not load applications: {loadError}</p>
+        <div className="workspace-page__actions">
+          <button type="button" className="secondary-button is-compact" onClick={report.onOpenApplications}>
+            Open Applications to retry
+          </button>
+        </div>
+      </section>
+    );
+  }
+  return <AnalyticsReport {...report} />;
 }

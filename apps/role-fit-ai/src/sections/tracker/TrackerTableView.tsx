@@ -10,8 +10,10 @@ import {
   displayRole,
   appFitVerdict,
   formatCompactDate,
-  nextAction
+  nextAction,
+  noResponseLabel
 } from "../../lib/applicationDisplay";
+import type { NoResponseCandidate } from "../../lib/noResponse";
 
 type TrackerTableViewProps = {
   visible: Application[];
@@ -26,6 +28,8 @@ type TrackerTableViewProps = {
   // Ids that appear in any duplicate group (see TrackerTab's duplicateGroups memo).
   duplicateIds: Set<string>;
   postingGroupSizes: Map<string, number>;
+  // Derived no-response flags by application id (see TrackerTab).
+  noResponse: ReadonlyMap<string, NoResponseCandidate>;
 };
 
 // Column definitions in render order. `key` marks a sortable column.
@@ -69,6 +73,7 @@ function ApplicationRow({
   isSelected,
   isDuplicate,
   postingGroupSize,
+  noResponse,
   onSelect,
   onDoubleClick,
   onRowContextMenu
@@ -77,6 +82,7 @@ function ApplicationRow({
   isSelected: boolean;
   isDuplicate: boolean;
   postingGroupSize: number;
+  noResponse: NoResponseCandidate | null;
   onSelect: (id: string) => void;
   onDoubleClick: (app: Application) => void;
   onRowContextMenu: (app: Application, event: { clientX: number; clientY: number }) => void;
@@ -84,6 +90,8 @@ function ApplicationRow({
   const verdict = appFitVerdict(app);
   const activityDate = applicationActivityDate(app);
   const activityLabel = activityDate ? formatCompactDate(activityDate) : "date not set";
+  const action = nextAction(app, noResponse);
+  const isNoResponse = noResponse !== null && action === noResponseLabel(noResponse);
   // The row carries an aria-label, so badges rendered inside it are invisible to
   // assistive tech unless their meaning is spelled out here.
   const rowLabel = [
@@ -91,7 +99,7 @@ function ApplicationRow({
     displayRole(app),
     `stage ${STATUS_LABEL[app.status]}`,
     `date ${activityLabel}`,
-    nextAction(app),
+    isNoResponse ? `no response for ${noResponse.silentDays} days` : action,
     verdict ? `fit ${verdict.label}` : "fit not scored",
     postingGroupSize > 1 ? `${postingGroupSize} records linked to this posting` : "",
     isDuplicate ? "possible duplicate" : ""
@@ -143,10 +151,10 @@ function ApplicationRow({
       </span>
       <span
         className={`applications-table__cell--next-action${
-          nextAction(app) === "Awaiting response" ? " next-action-default" : ""
-        }`}
+          action === "Awaiting response" ? " next-action-default" : ""
+        }${isNoResponse ? " next-action-no-response" : ""}`}
       >
-        {nextAction(app)}
+        {action}
       </span>
       <span>
         <span className={`application-fit application-fit--${verdict?.tone ?? "neutral"}`}>
@@ -169,7 +177,8 @@ export function TrackerTableView({
   onDoubleClick,
   onRowContextMenu,
   duplicateIds,
-  postingGroupSizes
+  postingGroupSizes,
+  noResponse
 }: TrackerTableViewProps) {
   const groups = grouped ? groupByMonth(visible) : [];
   const tableRef = useRef<HTMLDivElement>(null);
@@ -263,6 +272,7 @@ export function TrackerTableView({
                     isSelected={selectedId === app.id}
                     isDuplicate={duplicateIds.has(app.id)}
                     postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
+                    noResponse={noResponse.get(app.id) ?? null}
                     onSelect={onSelect}
                     onDoubleClick={onDoubleClick}
                     onRowContextMenu={onRowContextMenu}
@@ -279,6 +289,7 @@ export function TrackerTableView({
                   isSelected={selectedId === app.id}
                   isDuplicate={duplicateIds.has(app.id)}
                   postingGroupSize={postingGroupSizes.get(app.id) ?? 0}
+                  noResponse={noResponse.get(app.id) ?? null}
                   onSelect={onSelect}
                   onDoubleClick={onDoubleClick}
                   onRowContextMenu={onRowContextMenu}
