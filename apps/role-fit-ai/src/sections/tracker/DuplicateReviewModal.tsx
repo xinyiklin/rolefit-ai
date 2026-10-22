@@ -26,6 +26,7 @@ type DuplicateReviewModalProps = {
 // the least useful canonical, even though it's a terminal pipeline stage.
 const STATUS_RANK: Record<ApplicationStatus, number> = {
   rejected: 0,
+  ghosted: 0,
   withdrawn: 0,
   draft: 0,
   not_applying: 0,

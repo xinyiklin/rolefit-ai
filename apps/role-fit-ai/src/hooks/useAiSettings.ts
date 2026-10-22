@@ -15,6 +15,7 @@ import type {
 import type { AutoPolishThreshold } from "../lib/autoPolishPolicy.ts";
 import { materializeAiSettings } from "../lib/aiSettingsPersistence.ts";
 import type { VariantExclusions, VariantKind } from "../lib/variantPool.ts";
+import { DEFAULT_GHOSTED_AFTER_DAYS, normalizeGhostedAfterDays } from "../lib/ghostedThreshold.ts";
 import {
   WORKSPACE_PREFERENCES_APPLIED_EVENT,
   WORKSPACE_PREFERENCES_STATUS_EVENT,
@@ -58,6 +59,8 @@ export function useAiSettings() {
   const [excludedCoverLetterVariants, setExcludedCoverLetterVariants] = useState<VariantExclusions>(
     saved.excludedCoverLetterVariants ?? {}
   );
+  const [ghostedAfterDays, setStoredGhostedAfterDays] = useState(saved.ghostedAfterDays ?? DEFAULT_GHOSTED_AFTER_DAYS);
+  const [autoMarkGhosted, setAutoMarkGhosted] = useState(saved.autoMarkGhosted ?? false);
   const [citizenshipStatus, setCitizenshipStatus] = useState<CitizenshipStatus>(saved.citizenshipStatus ?? "unspecified");
   const [legallyAuthorizedToWork, setLegallyAuthorizedToWork] = useState<DeclaredAnswer>(
     saved.legallyAuthorizedToWork ?? "unspecified"
@@ -100,6 +103,8 @@ export function useAiSettings() {
       setCoverPolishAutoThreshold(next.coverPolishAutoThreshold ?? "STRONG");
       setExcludedResumeVariants(next.excludedResumeVariants ?? {});
       setExcludedCoverLetterVariants(next.excludedCoverLetterVariants ?? {});
+      setStoredGhostedAfterDays(next.ghostedAfterDays ?? DEFAULT_GHOSTED_AFTER_DAYS);
+      setAutoMarkGhosted(next.autoMarkGhosted ?? false);
       setCitizenshipStatus(next.citizenshipStatus ?? "unspecified");
       setLegallyAuthorizedToWork(next.legallyAuthorizedToWork ?? "unspecified");
       setRequiresSponsorship(next.requiresSponsorship ?? "unspecified");
@@ -152,6 +157,8 @@ export function useAiSettings() {
       coverPolishAutoThreshold,
       excludedResumeVariants,
       excludedCoverLetterVariants,
+      ghostedAfterDays,
+      autoMarkGhosted,
       citizenshipStatus,
       legallyAuthorizedToWork,
       requiresSponsorship,
@@ -186,6 +193,8 @@ export function useAiSettings() {
     coverPolishAutoThreshold,
     excludedResumeVariants,
     excludedCoverLetterVariants,
+    ghostedAfterDays,
+    autoMarkGhosted,
     citizenshipStatus,
     legallyAuthorizedToWork,
     requiresSponsorship,
@@ -252,6 +261,13 @@ export function useAiSettings() {
     });
   }
 
+  // Only a whole number of days inside the supported range is ever held; any
+  // other value is ignored rather than stored and dropped on the next load.
+  function setGhostedAfterDays(value: number) {
+    const days = normalizeGhostedAfterDays(value);
+    if (days !== null) setStoredGhostedAfterDays(days);
+  }
+
   function setVariantEligibility(kind: VariantKind, fileName: string, eligible: boolean) {
     const update = (prev: VariantExclusions): VariantExclusions => {
       const excluded = Object.prototype.hasOwnProperty.call(prev, fileName);
@@ -292,6 +308,8 @@ export function useAiSettings() {
     setCoverPolishAutoThreshold("STRONG");
     setExcludedResumeVariants({});
     setExcludedCoverLetterVariants({});
+    setStoredGhostedAfterDays(DEFAULT_GHOSTED_AFTER_DAYS);
+    setAutoMarkGhosted(false);
     setCitizenshipStatus("unspecified");
     setLegallyAuthorizedToWork("unspecified");
     setRequiresSponsorship("unspecified");
@@ -328,6 +346,10 @@ export function useAiSettings() {
     excludedResumeVariants,
     excludedCoverLetterVariants,
     setVariantEligibility,
+    ghostedAfterDays,
+    setGhostedAfterDays,
+    autoMarkGhosted,
+    setAutoMarkGhosted,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,

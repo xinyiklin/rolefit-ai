@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { AUTO_POLISH_THRESHOLD_OPTIONS, type AutoPolishThreshold } from "../../lib/autoPolishPolicy.ts";
+import { MAX_GHOSTED_AFTER_DAYS, MIN_GHOSTED_AFTER_DAYS, normalizeGhostedAfterDays } from "../../lib/ghostedThreshold.ts";
 import type { VariantExclusions } from "../../lib/variantPool.ts";
 import type { SettingsDialogProps, SettingsVariantOption } from "../SettingsDialog";
 
@@ -10,6 +12,8 @@ type AutomationPageProps = Pick<SettingsDialogProps,
   | "coverPolishAutoThreshold" | "onCoverPolishAutoThresholdChange"
   | "resumeVariants" | "coverLetterVariants"
   | "excludedResumeVariants" | "excludedCoverLetterVariants" | "onVariantEligibilityChange"
+  | "ghostedAfterDays" | "onGhostedAfterDaysChange"
+  | "autoMarkGhosted" | "onAutoMarkGhostedChange"
 >;
 
 type DocumentRowProps = {
@@ -48,6 +52,53 @@ function DocumentRow({ label, enabled, checked, onCheckedChange, threshold, onTh
         </select>
       </label>
     </div>
+  );
+}
+
+type GhostedAfterFieldProps = {
+  days: number;
+  onDaysChange: (days: number) => void;
+};
+
+// Typing "30" passes through "3", so nothing commits while typing: blur or
+// Enter saves a whole number in range, and anything else reverts.
+function GhostedAfterField({ days, onDaysChange }: GhostedAfterFieldProps) {
+  const [draft, setDraft] = useState(String(days));
+
+  // Adopt an outside change (Reset all settings) without clobbering what is
+  // being typed: the draft already reads as the stored value then.
+  useEffect(() => {
+    setDraft((current) => (Number(current) === days ? current : String(days)));
+  }, [days]);
+
+  return (
+    <label className="field field--inline settings-automation__days">
+      <span>Mark as Ghosted after</span>
+      <input
+        className="text-input text-input--narrow"
+        type="number"
+        inputMode="numeric"
+        min={MIN_GHOSTED_AFTER_DAYS}
+        max={MAX_GHOSTED_AFTER_DAYS}
+        step={1}
+        value={draft}
+        // Commit only a settled whole value: a half-typed "7" on the way to
+        // "75" must never become the threshold automatic marking acts on.
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        onBlur={() => {
+          const next = normalizeGhostedAfterDays(Number(draft));
+          if (draft.trim() === "" || next === null) {
+            setDraft(String(days));
+            return;
+          }
+          if (next !== days) onDaysChange(next);
+        }}
+      />
+      <span>days</span>
+    </label>
   );
 }
 
@@ -99,7 +150,11 @@ export function AutomationPage({
   coverLetterVariants,
   excludedResumeVariants,
   excludedCoverLetterVariants,
-  onVariantEligibilityChange
+  onVariantEligibilityChange,
+  ghostedAfterDays,
+  onGhostedAfterDaysChange,
+  autoMarkGhosted,
+  onAutoMarkGhostedChange
 }: AutomationPageProps) {
   return (
     <>
@@ -156,6 +211,24 @@ export function AutomationPage({
             onEligibleChange={(fileName, eligible) => onVariantEligibilityChange("cover-letter", fileName, eligible)}
           />
         </div>
+      </section>
+
+      <section className="settings-automation settings-automation__applications" aria-labelledby="settings-applications-title">
+        <div className="menu-subhead">
+          <span className="menu-subhead__title" id="settings-applications-title">Applications</span>
+        </div>
+        <GhostedAfterField days={ghostedAfterDays} onDaysChange={onGhostedAfterDaysChange} />
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={autoMarkGhosted}
+            onChange={(event) => onAutoMarkGhostedChange(event.target.checked)}
+          />
+          <span>
+            <strong>Mark as Ghosted automatically</strong>
+            <small>Silent Applied and Interviewing records move to Ghosted.</small>
+          </span>
+        </label>
       </section>
 
       <p className="settings-automation__note">

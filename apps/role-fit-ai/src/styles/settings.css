@@ -621,6 +621,45 @@
   line-height: 1.4;
 }
 
+/* "Mark as Ghosted after [21] days": label, number, and unit on one line. The stepper
+   stays off like the GPA field's; arrow keys still step the value. */
+.settings-automation__days {
+  margin: 0;
+}
+
+.settings-automation__days > span:first-child {
+  color: var(--ink-strong);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.settings-automation__days > span:last-child {
+  color: var(--ink-soft);
+  font-size: 0.76rem;
+}
+
+.settings-automation__days > .text-input {
+  inline-size: 60px;
+  min-inline-size: 0;
+  min-height: 28px;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.settings-automation__days > .text-input::-webkit-inner-spin-button,
+.settings-automation__days > .text-input::-webkit-outer-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+/* The Applications group sits under a hairline, like "Prepare picks from". */
+.settings-automation__applications {
+  padding-top: var(--s3);
+  border-top: 1px solid var(--hairline);
+}
+
 /* "Prepare picks from": two independent checkbox lists under one hairline,
    side by side when the panel is wide enough and stacked otherwise. */
 .settings-automation__pool {

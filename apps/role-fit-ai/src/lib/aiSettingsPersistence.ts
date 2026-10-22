@@ -1,5 +1,6 @@
 import { normalizeSettings, type PersistedSettings } from "./settings.ts";
 import { seedStages, stageFieldsToPersist } from "./stageSettings.ts";
+import { DEFAULT_GHOSTED_AFTER_DAYS, normalizeGhostedAfterDays } from "./ghostedThreshold.ts";
 
 // Materialize the sparse stored shape into the exact normalized snapshot the
 // live settings hook owns. Focus adoption uses this fingerprint so an unchanged
@@ -20,6 +21,8 @@ export function materializeAiSettings(settings: PersistedSettings): PersistedSet
     coverPolishAutoThreshold: settings.coverPolishAutoThreshold ?? "STRONG",
     excludedResumeVariants: settings.excludedResumeVariants ?? {},
     excludedCoverLetterVariants: settings.excludedCoverLetterVariants ?? {},
+    ghostedAfterDays: normalizeGhostedAfterDays(settings.ghostedAfterDays) ?? DEFAULT_GHOSTED_AFTER_DAYS,
+    autoMarkGhosted: settings.autoMarkGhosted ?? false,
     citizenshipStatus: settings.citizenshipStatus ?? "unspecified",
     legallyAuthorizedToWork: settings.legallyAuthorizedToWork ?? "unspecified",
     requiresSponsorship: settings.requiresSponsorship ?? "unspecified",

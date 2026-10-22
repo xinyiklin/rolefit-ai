@@ -74,6 +74,10 @@ const bundled = await build({
             excludedResumeVariants={{}}
             excludedCoverLetterVariants={{}}
             onVariantEligibilityChange={noop}
+            ghostedAfterDays={21}
+            onGhostedAfterDaysChange={noop}
+            autoMarkGhosted={false}
+            onAutoMarkGhostedChange={noop}
             {...pool}
             onReset={noop}
           />
@@ -160,6 +164,27 @@ assert.doesNotMatch(automation, /settings-stage"/, "Automation holds no provider
 assert.match(automation, /Prepare picks from[\s\S]*Unchecked variants still open by hand\./, "the pool has one heading and one line");
 assert.match(automation, /<legend>Resumes<\/legend><p class="settings-automation__empty">No saved resumes\.<\/p>/);
 assert.match(automation, /<legend>Cover letters<\/legend><p class="settings-automation__empty">No saved cover letters\.<\/p>/);
+
+// The Applications group: the silence threshold is a bounded whole-number box,
+// and automatic Ghosted marking is an opt-in checkbox that starts off.
+assert.match(automation, /id="settings-applications-title">Applications</, "Automation has an Applications group");
+assert.match(
+  automation,
+  /<span>Mark as Ghosted after<\/span><input[^>]*type="number"[^>]*min="7"[^>]*max="180"[^>]*step="1"[^>]*value="21"[^>]*\/><span>days<\/span>/,
+  "the threshold is a 7..180 day box showing the stored value"
+);
+assert.match(
+  automation,
+  /<input type="checkbox"\/><span><strong>Mark as Ghosted automatically<\/strong>/,
+  "automatic marking is an unchecked checkbox by default"
+);
+const autoGhosted = render("automation", "", null, { autoMarkGhosted: true, ghostedAfterDays: 45 });
+assert.match(autoGhosted, /value="45"/, "the threshold follows the stored setting");
+assert.match(
+  autoGhosted,
+  /<input type="checkbox" checked=""\/><span><strong>Mark as Ghosted automatically/,
+  "opting in shows the checkbox checked"
+);
 
 const loading = render("automation", "", null, { resumeVariants: null });
 assert.match(loading, /<legend>Resumes<\/legend><p class="settings-automation__empty">Loading…<\/p>/, "a loading workspace is not reported as empty");

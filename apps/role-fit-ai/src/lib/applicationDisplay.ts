@@ -8,6 +8,7 @@ import { describeProviderModel } from "../config/aiOptions.ts";
 import { displayCompany, parseDate } from "./applicationFacts.ts";
 import { APPLICATION_STATUSES } from "./applicationStatusTransitions.ts";
 import { ATS_LABELS, atsPostingKey, postingIdentityFromText } from "./jobIdentity.ts";
+import type { NoResponseCandidate } from "./noResponse.ts";
 
 export { displayCompany, parseDate };
 
@@ -19,6 +20,7 @@ export const STATUS_LABEL: Record<ApplicationStatus, string> = {
   interviewing: "Interviewing",
   offer: "Offer",
   rejected: "Rejected",
+  ghosted: "Ghosted",
   withdrawn: "Withdrawn"
 };
 
@@ -31,7 +33,7 @@ export const ACTIVITY_STATUS_GROUPS: Record<
   readonly ApplicationStatus[]
 > = {
   active: ["draft", "applied", "interviewing", "offer"],
-  inactive: ["not_applying", "rejected", "withdrawn"]
+  inactive: ["not_applying", "rejected", "ghosted", "withdrawn"]
 };
 
 export const TRACKER_STAGE_MENU_GROUPS: readonly {
@@ -57,7 +59,7 @@ export function activityGroupForFilter(
 }
 
 export function isInactiveApplication(app: Pick<Application, "status">): boolean {
-  return app.status === "not_applying" || app.status === "rejected" || app.status === "withdrawn";
+  return ACTIVITY_STATUS_GROUPS.inactive.includes(app.status);
 }
 
 // Skipped is both the job-only decision made before applying and a later
@@ -180,14 +182,25 @@ export function splitFitWarnings(result: FitAssessmentResult | undefined) {
   return { general, matches, gaps, eligibility };
 }
 
-export function nextAction(app: Application) {
+// The derived no-reply flag, never stored: "No response · 34d".
+export function noResponseLabel(noResponse: Pick<NoResponseCandidate, "silentDays">): string {
+  return `No response · ${noResponse.silentDays}d`;
+}
+
+// A follow-up date is the user's own plan, so it outranks the derived
+// no-response flag; the flag replaces only the generic waiting actions.
+export function nextAction(
+  app: Application,
+  noResponse: Pick<NoResponseCandidate, "silentDays"> | null = null
+) {
   if (app.status === "draft") return "Finish application";
   if (app.status === "not_applying") return "No action";
   if (app.followupAt) return `Follow up ${formatCompactDate(app.followupAt)}`;
+  if (noResponse) return noResponseLabel(noResponse);
   if (app.status === "interviewing") return "Prepare interview";
   if (app.status === "offer") return "Review offer";
   if (app.status === "applied") return "Awaiting response";
-  if (app.status === "rejected" || app.status === "withdrawn") return "No action";
+  if (isInactiveApplication(app)) return "No action";
   return "Review job details";
 }
 

@@ -54,6 +54,8 @@ import { useAiSettings } from "./hooks/useAiSettings";
 import { useAvailableProviders } from "./hooks/useAvailableProviders";
 import { useApplicationAnswers } from "./hooks/useApplicationAnswers";
 import { useApplications, type Application, type SaveApplicationAnswerTarget } from "./hooks/useApplications";
+import { useAutoGhosting } from "./hooks/useAutoGhosting";
+import { todayIso } from "./lib/dateInput";
 import { useResumeEditor, type SeedOptions } from "./hooks/useResumeEditor";
 import { useResumeImport } from "./hooks/useResumeImport";
 import { useResumeExport } from "./hooks/useResumeExport";
@@ -476,6 +478,10 @@ function App() {
     excludedResumeVariants,
     excludedCoverLetterVariants,
     setVariantEligibility,
+    ghostedAfterDays,
+    setGhostedAfterDays,
+    autoMarkGhosted,
+    setAutoMarkGhosted,
     citizenshipStatus,
     setCitizenshipStatus,
     legallyAuthorizedToWork,
@@ -1085,6 +1091,7 @@ function App() {
     saveApplication,
     saveApplicationAnswer,
     updateStatus: updateApplicationStatus,
+    markGhosted,
     remove: removeApplication,
     getApplication,
     storagePath: applicationsPath,
@@ -1096,6 +1103,18 @@ function App() {
     dismissDuplicateGroup,
     refresh: refreshApplications
   } = useApplications();
+  const autoGhosting = useAutoGhosting({
+    enabled: autoMarkGhosted,
+    afterDays: ghostedAfterDays,
+    applications,
+    hasLoadedApplications,
+    pendingWrites: pendingApplicationWrites,
+    trackerError: applicationsError,
+    openApplicationId: isApplicationModalOpen ? modalApplicationId : null,
+    refresh: refreshApplications,
+    getApplication,
+    markGhosted
+  });
   const preparationApplication = preparationSession.applicationId
     ? applications.find((application) => application.id === preparationSession.applicationId) ?? null
     : null;
@@ -2768,6 +2787,17 @@ function App() {
     setIsApplicationModalOpen(true);
   }
 
+  function handleOpenApplicationDetailById(id: string) {
+    const application = getApplication(id);
+    if (application) handleOpenApplicationDetail(application);
+  }
+
+  // A manual bulk mark is dated the day the user made it.
+  function handleMarkGhosted(ids: string[]) {
+    const at = todayIso();
+    return markGhosted(ids.map((id) => ({ id, at })));
+  }
+
   // Source-only `.resume`/`.cover` documents are rendered on demand so the
   // workspace does not need duplicate PDF bytes. Stored PDFs are fetched first
   // as well, so a missing file surfaces through the same recoverable dialog.
@@ -3525,6 +3555,7 @@ function App() {
                   onRefresh={refreshApplications}
                   onMergeApplications={mergeApplications}
                   onDismissDuplicateGroup={dismissDuplicateGroup}
+                  ghostedAfterDays={ghostedAfterDays}
                 />
               )}
             </Suspense>
@@ -3567,7 +3598,21 @@ function App() {
                 <AnalyticsTab
                   applications={applications}
                   loadError={!hasLoadedApplications ? applicationsError : ""}
+                  trackerError={hasLoadedApplications ? applicationsError : ""}
+                  pendingWrites={pendingApplicationWrites}
+                  ghostedAfterDays={ghostedAfterDays}
+                  onGhostedAfterDaysChange={setGhostedAfterDays}
+                  autoMarkGhosted={autoMarkGhosted}
+                  onAutoMarkGhostedChange={setAutoMarkGhosted}
+                  onMarkGhosted={handleMarkGhosted}
+                  autoMarkedCount={autoGhosting.autoMarkedCount}
+                  onDismissAutoMarked={autoGhosting.dismissAutoMarked}
+                  onOpenApplication={handleOpenApplicationDetailById}
                   onOpenApplications={() => setActiveOutputTab("applications")}
+                  onViewStage={(status) => {
+                    setStatusFilter(status);
+                    setActiveOutputTab("applications");
+                  }}
                 />
               )}
             </Suspense>
@@ -3607,6 +3652,10 @@ function App() {
           onCoverPolishAutoChange={setCoverPolishAuto}
           coverPolishAutoThreshold={coverPolishAutoThreshold}
           onCoverPolishAutoThresholdChange={setCoverPolishAutoThreshold}
+          ghostedAfterDays={ghostedAfterDays}
+          onGhostedAfterDaysChange={setGhostedAfterDays}
+          autoMarkGhosted={autoMarkGhosted}
+          onAutoMarkGhostedChange={setAutoMarkGhosted}
           resumeVariants={isWorkspaceBootstrapping ? null : baseResumeOptions}
           coverLetterVariants={coverLetterEditor.isWorkspaceBootstrapping ? null : coverLetterEditor.coverLetterOptions}
           excludedResumeVariants={excludedResumeVariants}
@@ -3686,6 +3735,7 @@ function App() {
             onSaveAttachment={applicationFiles.saveAttachment}
             onRemoveAttachment={applicationFiles.removeAttachment}
             onDocumentsBusyChange={setApplicationDocumentActionBusy}
+            ghostedAfterDays={ghostedAfterDays}
           />
         </Suspense>
       ) : null}

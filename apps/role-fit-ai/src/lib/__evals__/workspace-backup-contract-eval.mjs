@@ -80,6 +80,30 @@ assert.throws(
   () => parsePortableWorkspacePreferences({ settings: { resumePolishReview: "yes" }, lastBaseResume: "" }),
   "a wrong-typed review preference is rejected"
 );
+for (const settings of [
+  { ghostedAfterDays: 7, autoMarkGhosted: false },
+  { ghostedAfterDays: 180, autoMarkGhosted: true },
+  { ghostedAfterDays: 21 }
+]) {
+  assert.deepEqual(
+    parsePortableWorkspacePreferences({ settings, lastBaseResume: "" }).settings,
+    settings,
+    `the No response settings ${JSON.stringify(settings)} round-trip through a backup`
+  );
+}
+for (const settings of [
+  { ghostedAfterDays: 6 },
+  { ghostedAfterDays: 181 },
+  { ghostedAfterDays: 14.5 },
+  { ghostedAfterDays: "21" },
+  { autoMarkGhosted: "on" }
+]) {
+  assert.throws(
+    () => parsePortableWorkspacePreferences({ settings, lastBaseResume: "" }),
+    /unsupported or invalid/,
+    `a backup holding ${JSON.stringify(settings)} is rejected, not silently reset`
+  );
+}
 const legacyRows = [{
   category: "professional",
   years: 2.5,

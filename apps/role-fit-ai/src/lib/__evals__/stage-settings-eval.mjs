@@ -372,6 +372,22 @@ assert.equal(materializeAiSettings({ resumePolishReview: true }).resumePolishRev
 assert.deepEqual(normalizeSettings({ resumePolishReview: true }), { resumePolishReview: true }, "the review preference is allowlisted for persistence");
 assert.deepEqual(normalizeSettings({ resumePolishReview: "yes" }), {}, "a non-boolean review preference fails closed");
 
+// No response: the threshold defaults to 21 days and automatic Ghosted marks
+// default off; only a whole number of days from 7 to 180 is ever kept.
+assert.equal(materializeAiSettings({}).ghostedAfterDays, 21, "an unset threshold defaults to 21 days");
+assert.equal(materializeAiSettings({}).autoMarkGhosted, false, "automatic marking defaults off");
+assert.equal(materializeAiSettings({ ghostedAfterDays: 45, autoMarkGhosted: true }).ghostedAfterDays, 45);
+assert.equal(materializeAiSettings({ ghostedAfterDays: 45, autoMarkGhosted: true }).autoMarkGhosted, true);
+for (const days of [7, 21, 180]) {
+  assert.deepEqual(normalizeSettings({ ghostedAfterDays: days }), { ghostedAfterDays: days }, `${days} days is kept`);
+}
+for (const days of [6, 181, 21.5, "21", null, Number.NaN]) {
+  assert.deepEqual(normalizeSettings({ ghostedAfterDays: days }), {}, `${String(days)} is dropped from storage`);
+}
+assert.equal(materializeAiSettings({ ghostedAfterDays: 400 }).ghostedAfterDays, 21, "an out-of-range stored threshold reads as the default");
+assert.deepEqual(normalizeSettings({ autoMarkGhosted: true }), { autoMarkGhosted: true });
+assert.deepEqual(normalizeSettings({ autoMarkGhosted: "yes" }), {}, "a non-boolean automatic-marking preference fails closed");
+
 
 
 assert.deepEqual(seeded["application-review"], seeded["fit-assessment"], "new review stage copies Fit once");

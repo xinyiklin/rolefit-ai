@@ -14,11 +14,13 @@ import {
   formatCompactDate,
   hostLabel,
   nextAction,
+  noResponseLabel,
   postingIdentity,
   safeExternalUrls,
   splitFitWarnings
 } from "../../lib/applicationDisplay";
 import { describeProviderModel } from "../../config/aiOptions";
+import type { NoResponseCandidate } from "../../lib/noResponse";
 import { copyAiUsage } from "../../lib/aiUsage";
 import { interviewLabel, interviewMilestones } from "../../lib/applicationStageHistory";
 import { ApplicationFitSummary } from "../application/ApplicationFitSummary";
@@ -40,6 +42,8 @@ type TrackerInspectorProps = {
   duplicateGroup?: DuplicateGroup<Application>;
   relatedApplications?: Application[];
   onReviewDuplicates?: () => void;
+  // The derived no-response flag for `selected`, if any (see TrackerTab).
+  noResponse?: NoResponseCandidate | null;
 };
 
 export function TrackerInspector({
@@ -50,7 +54,8 @@ export function TrackerInspector({
   onDelete,
   duplicateGroup,
   relatedApplications = [],
-  onReviewDuplicates
+  onReviewDuplicates,
+  noResponse = null
 }: TrackerInspectorProps) {
   if (!selected) {
     return (
@@ -81,6 +86,8 @@ export function TrackerInspector({
   const hasCoverLetter = Boolean(selected.coverLetterArtifacts?.hasPdf || selected.coverLetterArtifacts?.hasSource);
   const additionalDocumentCount = selected.attachments?.length ?? 0;
   const interviews = interviewMilestones(selected);
+  const action = nextAction(selected, noResponse);
+  const actionIsNoResponse = noResponse !== null && action === noResponseLabel(noResponse);
 
   // Other members of the selected app's duplicate group, each paired with the
   // edge (evidence) that connects it to the selected app.
@@ -115,8 +122,16 @@ export function TrackerInspector({
         <div className="ledger-row">
           <dt><CalendarClock size={11} aria-hidden="true" /> Next action</dt>
           <span className="ledger-row__leader" aria-hidden="true" />
-          <dd className="is-prose">{nextAction(selected)}</dd>
+          <dd className={`is-prose${actionIsNoResponse ? " next-action-no-response" : ""}`}>{action}</dd>
         </div>
+        {/* A scheduled follow-up outranks the flag in Next action; keep the silence visible. */}
+        {noResponse && !actionIsNoResponse ? (
+          <div className="ledger-row">
+            <dt>No response</dt>
+            <span className="ledger-row__leader" aria-hidden="true" />
+            <dd className="next-action-no-response">{noResponse.silentDays} days</dd>
+          </div>
+        ) : null}
         <div className="ledger-row">
           <dt>{statusDateLabel}</dt>
           <span className="ledger-row__leader" aria-hidden="true" />

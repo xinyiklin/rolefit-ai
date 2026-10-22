@@ -104,9 +104,20 @@
 
 .page-loading__day > span { width: 30%; }
 
-.page-loading__figure { width: 6rem; }
-.page-loading__number { width: 45%; height: 1.75rem; }
-.page-loading__report { gap: var(--s5); }
+
+.page-loading__columns {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s4);
+  height: 168px;
+  padding-left: 1.6rem;
+}
+
+.page-loading__columns .page-loading__column {
+  flex: 1 1 0;
+  max-width: 56px;
+  border-radius: 4px 4px 0 0;
+}
 
 .page-loading__pulse {
   animation: page-loading-pulse 1.8s ease-in-out infinite;
@@ -123,4 +134,11 @@
 
 @media (prefers-reduced-motion: reduce) {
   .page-loading__pulse { animation: none; }
+}
+
+/* The Analytics skeleton draws only the report's first band. */
+@container page (min-width: 900px) {
+  .page-loading .an-grid {
+    grid-template-rows: auto 1fr;
+  }
 }

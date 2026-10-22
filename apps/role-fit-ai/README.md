@@ -53,7 +53,16 @@ variants, proposal review, and final export page together:
 The on-disk **application tracker** includes a sortable, paginated table,
 right-click actions, and a calendar for submissions, interviews, and follow-ups.
 Each submitted application keeps a dated timeline of stage changes, interviews,
-employer responses, and follow-ups sent. Search
+employer responses, and follow-ups sent. Applications quiet past a chosen
+number of days (21 by default) are flagged **No response** and can be marked
+**Ghosted** one at a time, in bulk from Analytics, or automatically (opt-in).
+**Analytics** opens with the period's applications by stage, each against the
+previous period, then application activity (weekly or monthly columns stacked
+by stage, click one to list it) beside how many applications may be ghosted and
+how long open ones have been quiet; the stage distribution (select a stage to
+open those applications); and a Needs your attention list (bulk or per-row Mark
+as Ghosted) beside upcoming interviews and follow-ups. Periods are 8, 12, or 26
+weeks, or all time by month. Search
 uses company, role/title, and posting ID with relevance-first results while
 excluding descriptions and notes. Applications and Analytics show structured
 loading placeholders while opening, respect reduced motion, and keep existing

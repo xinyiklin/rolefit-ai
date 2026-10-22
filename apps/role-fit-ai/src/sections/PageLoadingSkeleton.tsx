@@ -1,7 +1,7 @@
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
-function Shape({ className = "" }: { className?: string }) {
-  return <span className={`page-loading__shape ${className}`} />;
+function Shape({ className = "", style }: { className?: string; style?: CSSProperties }) {
+  return <span className={`page-loading__shape ${className}`} style={style} />;
 }
 
 function LoadingPage({
@@ -128,27 +128,42 @@ export function ApplicationsLoadingSkeleton({ view }: { view: "table" | "calenda
   );
 }
 
+// Shaped like the report's top: the KPI row, then the activity chart beside
+// the No response callout and the silence bars.
 export function AnalyticsLoadingSkeleton() {
   return (
     <LoadingPage title="Analytics" className="analytics-page">
-      <div className="figures-strip page-loading__pulse" aria-hidden="true" aria-busy="true">
-        {Array.from({ length: 4 }, (_, figure) => (
-          <div className="figures-strip__item page-loading__figure" key={figure}>
-            <Shape />
-            <Shape className="page-loading__number" />
+      <div className="an-kpis page-loading__pulse" aria-hidden="true">
+        {[1, 3, 1, 1, 2].map((size, group) => (
+          <div className={`an-kpi-group${size === 1 ? " is-single" : ""}`} key={group} style={{ flexGrow: size, "--n": size } as CSSProperties}>
+            {Array.from({ length: size }, (_, figure) => (
+              <div className="an-kpi" key={figure}>
+                <Shape className="page-loading__line--short" />
+                <Shape className="page-loading__line--short" />
+              </div>
+            ))}
           </div>
         ))}
       </div>
-      <div className="analytics-grid page-loading__pulse" aria-hidden="true" aria-busy="true">
-        {Array.from({ length: 4 }, (_, panel) => (
-          <div
-            className={`${panel < 2 ? "analytics-panel" : "analytics-panel--flat"} analytics-panel--half page-loading__report`}
-            key={panel}
-          >
-            <PlaceholderLines />
-            <PlaceholderLines />
+      <div className="an-grid page-loading__pulse" aria-hidden="true" aria-busy="true">
+        <div className="an-card an-activity">
+          <Shape className="page-loading__line--short" />
+          <PlaceholderLines />
+          <div className="page-loading__columns">
+            {[30, 45, 20, 60, 75, 40, 55, 90, 65, 35, 80, 25].map((height, column) => (
+              <Shape className="page-loading__column" key={column} style={{ height: `${height}%` }} />
+            ))}
           </div>
-        ))}
+        </div>
+        <div className="an-card an-callout is-clear">
+          <Shape className="page-loading__line--short" />
+          <PlaceholderLines />
+        </div>
+        <div className="an-card an-silence">
+          <Shape className="page-loading__line--short" />
+          <PlaceholderLines />
+          <PlaceholderLines />
+        </div>
       </div>
     </LoadingPage>
   );

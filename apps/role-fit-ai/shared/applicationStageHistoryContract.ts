@@ -27,7 +27,7 @@ export const INTERVIEW_KIND_LABEL: Record<InterviewKind, string> = {
 export const STAGE_HISTORY_MAX_ENTRIES = 60;
 export const STAGE_HISTORY_NOTE_MAX_LENGTH = 500;
 
-const STAGE_ENTRY_STATUSES = ["not_applying", "applied", "interviewing", "offer", "rejected", "withdrawn"] as const;
+const STAGE_ENTRY_STATUSES = ["not_applying", "applied", "interviewing", "offer", "rejected", "ghosted", "withdrawn"] as const;
 
 export type StageHistoryEntry =
   | { id: string; type: "stage"; status: Exclude<ApplicationStatus, "draft">; at: string }

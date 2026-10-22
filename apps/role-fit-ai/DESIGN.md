@@ -307,7 +307,8 @@ stacks resolve to system fonts.
   0.06–0.18em): `.eyebrow`, `.table-eyebrow`, field labels. The widest
   tracking (0.18em) belongs to the masthead eyebrow only.
 - **Data** (mono, 500–600, 0.64–0.92rem, tabular-nums): ledger values,
-  figures-strip numbers, dates, fit scores, model identifiers.
+  register figures, dates, fit scores, model identifiers. Only the figure is
+  mono: "Replied in **7 d**", "since **Jul 25**".
 
 ### Named Rules
 
@@ -595,8 +596,11 @@ interactive control shares the same focus treatment: 2px Forest Ink outline,
   are too close to tell apart in the Stage column. "Passed" is reserved: beside
   Interviewing and Offer it reads as passing a round. The stored status key
   remains `not_applying`. The row context menu separates Active
-  (Applied, Interviewing, Offer) from Inactive (Skipped, Rejected, Withdrawn),
-  and allows movement in either direction. The checked current stage is
+  (Applied, Interviewing, Offer) from Inactive (Skipped, Rejected, Ghosted,
+  Withdrawn), and allows movement in either direction; Ghosted is offered only
+  from Applied or Interviewing, and a flagged No response row also offers a
+  direct Mark as Ghosted. Ghosted's stage dot is a hollow faint ring. The
+  checked current stage is
   disabled. A later-Skipped application retains its historical materials, while
   a Skipped record without an application date remains job-only.
 - **Tab rail:** icon-led entries ([icon] [label]) on `--card-soft`, under
@@ -621,15 +625,82 @@ named numbers. A value that is not recorded ("Not recorded", "Not saved") drops 
 `--ink-faint` sans so it never outweighs real data, and prose values (a source
 name, "Saved") stay sans; only numbers, dates, and identifiers are mono.
 
-### Figures Strip (signature)
+### Analytics Insights (signature)
 
-Inline summary figures sit in one hairline-bounded strip: tiny faint label
-over a mono 0.92rem value, items separated by 1px dividers. This replaces
-hero-metric card grids everywhere. It belongs to Analytics: tracking
-surfaces lead with search, lifecycle filters, and the working register, never
-a second row of summary numbers. Below it, the Current pipeline panel draws each
-stage as a thin rule in that stage's dot hue with its count at the bar's end; a
-zero stage draws no bar.
+Analytics is the one chart-led surface. It follows the user's own mockup: a
+grouped KPI row, then one grid of bands so the columns end together. From a
+900px page width the bands sit on a 15-column track:
+
+1. Activity (two thirds) beside the No response callout above the silence
+   bars. Both columns stretch to the same height.
+2. The stage distribution across the full width.
+3. Needs your attention (three fifths) beside Coming up.
+
+Narrower pages stack the cards in that reading order. Cards use the
+tracker's frame; card titles take the page serif at 1.08rem.
+
+- **Head.** The serif title over a one-line lede. On the right, "Mark as
+  Ghosted after [N days]" (common thresholds plus the saved value), an info
+  button that opens How it works, and the period select with a calendar icon
+  (Last 8, 12, or 26 weeks, or All time).
+- **KPI row.** The period's applications by current stage, in grouped cards:
+  Total; Applied, Interviewing, Offer; Ghosted (tinted in its own hue);
+  Rejected; Withdrawn, Skipped. Each figure is set in its stage's text-strength
+  hue. Only Total carries a change, against the same elapsed span one period
+  earlier (accent up, danger down; New or a dash when the earlier span had
+  none; nothing for All time). Stage figures show their share of the period
+  instead: an older cohort has had longer to be answered, so stage counts
+  compared across periods would show a trend that is not there. Groups wrap
+  rather than squeeze; on narrow pages the single figures share the first
+  row.
+- **Application activity.** A sub-line with sent, reply rate (a fraction under
+  three sent), and reached interview; a Weekly/Monthly select (All time is
+  always monthly); a stage legend; columns stacked by current stage (up to
+  30px, 2px surface gaps, a 6px rounded top, hairline gridlines). Hover or
+  focus shows a tooltip; clicking a column lists it. A screen-reader table
+  goes with it.
+- **Current stage distribution.** The same cohort as the KPI row, as a pill
+  segmented bar with share labels under segments of 4% or more (8% on narrow
+  cards), the total beside it, and a key of stage dots with mono counts.
+  Selecting a stage shows an accent selection bar in a live region with a link
+  that opens Applications filtered to that stage.
+- **No response callout.** A warm cream card with a bell badge, "N
+  applications may be ghosted", a plain explanation, Review applications
+  (moves focus to the attention list), and the Mark automatically
+  `.check-row`. It turns neutral with a check badge when nothing is waiting.
+- **Time without a response.** Pill bars (0-7, 8-14, 15-30, 31-59, 60+ days,
+  with the threshold always inserted as an edge) spread over the card's
+  height; bins at or past the threshold take the full accent. An info hint
+  explains the measure.
+- **Needs your attention.** A table-like list: select, company with its
+  initials mark, role, applied, days quiet, an inferred "No response" pill, a
+  next step (Send a follow-up, or Consider Ghosted after an unanswered
+  follow-up), and a row menu (Open details, Mark as Ghosted) on the app's
+  row-menu primitive. Up to 8 rows show; View all reveals the rest. Mark N as
+  Ghosted sits in the header beside the selection it acts on. Narrow cards
+  fold the role under the company, then drop next step, applied, and status.
+- **Coming up.** Interviews and follow-ups as one dated list: a month/day
+  block, the initials mark, company and role, and the event with its relative
+  day (overdue in warm). View all opens Applications; a footer counts open
+  records without a follow-up date. Rows carry no time of day.
+
+Stage fills are muted inks at the chroma floor so they sit on the sage paper,
+validated together in this order (dataviz validator, every adjacent check
+passing; ochre, sand, and sea sit under 3:1, relieved by the legend, share
+labels, tooltip, and table):
+
+| Stage | Fill |
+|---|---|
+| Applied | slate `oklch(0.66 0.102 240)` |
+| Interviewing | forest `oklch(0.55 0.102 165)` |
+| Offer | ochre `oklch(0.77 0.11 90)` |
+| Ghosted | mauve `oklch(0.66 0.102 310)` |
+| Rejected | terracotta `oklch(0.57 0.12 33)` |
+| Withdrawn | sand `oklch(0.76 0.105 65)` |
+| Skipped | sea `oklch(0.7 0.102 205)` |
+
+Chart text always uses ink tokens; KPI figures use darker steps of the same
+hues (all above 4.5:1). Fit verdicts never appear as an analytics dimension.
 
 ### Tracker Control Bar (signature)
 
@@ -802,7 +873,8 @@ register, not a CRM grid.
   gradient-heavy surfaces inside the Drafting Desk. The isolated public page
   follows the scoped contract above.
 - **Don't** reach for SaaS dashboard clichés: hero metrics and identical
-  card grids are banned; use the figures strip and ledger rows.
+  card grids are banned; use ledger rows. Analytics' grouped KPI row is the
+  one exception, set by the user's own mockup.
 - **Don't** write sales-style or hype copy, in-product manuals, or
   multi-sentence help essays; labels and hints stay short.
 - **Don't** ship fake loading states, shimmer, or decorative motion.

@@ -76,7 +76,7 @@ try {
     "unknown type": [{ id: "x1", type: "offer_call", at: rev1 }],
     "unknown interview kind": [{ ...fullHistory[1], kind: "coffee_chat" }],
     "draft stage": [{ ...fullHistory[0], status: "draft" }],
-    "unknown stage": [{ ...fullHistory[0], status: "ghosted" }],
+    "unknown stage": [{ ...fullHistory[0], status: "no_response" }],
     "non-canonical date": [{ ...fullHistory[0], at: "2026-09-05" }],
     "unparseable date": [{ ...fullHistory[0], at: "soon" }],
     "extra key": [{ ...fullHistory[3], recruiter: "Pat" }],
@@ -175,6 +175,61 @@ assert.equal(
   save({ status: "applied", appliedAt: rev2, notApplyingAt: undefined }, jobOnly)[0].status,
   "applied",
   "applying after a job-only Skip decision is the submission and needs no stage entry"
+);
+
+// --- Ghosted: a stored stage, marked in bulk -----------------------------------
+
+const ghostedEntry = (id, at = rev2) => ({ id, type: "stage", status: "ghosted", at });
+const pair = sanitizeApplications([
+  record({ id: "quiet-a", status: "applied" }),
+  record({ id: "quiet-b", status: "interviewing", stageHistory: [fullHistory[0]] })
+]);
+const bulk = (overridesById) => reconcileApplicationMutations(
+  pair,
+  sanitizeApplications(pair.map((application) => ({ ...application, updatedAt: rev2, ...overridesById[application.id] }))),
+  pair.map((application) => ({ id: application.id, operation: "upsert", baseUpdatedAt: application.updatedAt }))
+);
+const marked = bulk({
+  "quiet-a": { status: "ghosted", stageHistory: [ghostedEntry("g-a", "2026-09-23T16:00:00.000Z")] },
+  "quiet-b": { status: "ghosted", stageHistory: [fullHistory[0], ghostedEntry("g-b")] }
+});
+assert.deepEqual(marked.map(({ status }) => status), ["ghosted", "ghosted"], "a bulk mark with an entry per record is accepted");
+assert.equal(marked[0].stageHistory[0].at, "2026-09-23T16:00:00.000Z", "an automatic mark keeps the past day the threshold passed");
+assert.throws(
+  () => bulk({
+    "quiet-a": { status: "ghosted", stageHistory: [ghostedEntry("g-a")] },
+    "quiet-b": { status: "ghosted" }
+  }),
+  (error) => error instanceof ApplicationsStorageError && error.status === 400 && /stage change must be recorded/.test(error.message),
+  "one unrecorded mark refuses the whole batch"
+);
+
+const ghostedWorkspace = await mkdtemp(join(tmpdir(), "rolefit-ghosted-"));
+try {
+  await writeApplications(ghostedWorkspace, marked);
+  assert.deepEqual(
+    (await readApplications(ghostedWorkspace)).map(({ id, status, stageHistory }) => ({ id, status, stageHistory })),
+    marked.map(({ id, status, stageHistory }) => ({ id, status, stageHistory })),
+    "a Ghosted record survives the strict on-disk round trip"
+  );
+} finally {
+  await rm(ghostedWorkspace, { recursive: true, force: true });
+}
+
+const reopened = reconcileApplicationMutations(
+  [marked[0]],
+  sanitizeApplications([{
+    ...marked[0],
+    updatedAt: "2026-09-12T00:00:00.000Z",
+    status: "applied",
+    stageHistory: [...marked[0].stageHistory, { id: "back", type: "stage", status: "applied", at: "2026-09-12T00:00:00.000Z" }]
+  }]),
+  [{ id: marked[0].id, operation: "upsert", baseUpdatedAt: marked[0].updatedAt }]
+);
+assert.equal(reopened[0].status, "applied", "moving a Ghosted record back to Applied is a recorded stage change");
+assert.ok(
+  !accepted({ status: "draft", appliedAt: undefined, stageHistory: [ghostedEntry("g-draft")] }),
+  "a Draft cannot carry a Ghosted entry"
 );
 
 console.log("stage-history probes passed");
