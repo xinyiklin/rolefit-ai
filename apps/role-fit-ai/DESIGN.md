@@ -224,6 +224,46 @@ a RoleFit-only tweak; add a narrow host seam and verify affected consumers.
 and host-specific integration overrides. The cascade between them is a public
 integration contract, not permission to duplicate the shared component.
 
+### Desktop companion
+
+The Electron companion (`desktop/companion.{html,css}`) speaks the same calm
+native language at its fixed 760×480 size, sized so every section but the
+open extension install guide fits without scrolling: one unified shell. There is no
+native title strip; the window is `--chrome`, the sidebar runs to the top edge
+with the brand once in its head, and the pages sit on a `--paper` sheet whose
+left corners round 16px against the chrome while it stays flush with the top,
+right, and bottom edges. The brand row sits on the 48px title band (on macOS
+just below the traffic lights). Nav rows are icon-led like the browser rail (16px stroke icons in
+`--ink-faint`, accent on the selected row) with filled neutral selection, the accent **Open RoleFit**
+as its one global action, and an empty sticky 48px band at the top of each
+page that is the draggable title bar. Pages show no visible title, since the
+selected sidebar row names them; each keeps a visually hidden `h1` (its
+sidebar label) for screen readers and `aria-labelledby`. A page's status line
+and actions (Providers' counts and Check again, Workspace's transfer state)
+sit in one quiet row at the top of the content, never beside the window
+controls; pages whose status the content already shows have none. The
+extension port is copied from Settings, not repeated on the extension page. Native window
+controls overlay the band's trailing edge in theme-matched colors; on macOS
+the sidebar drops below the traffic lights, using the window-controls-overlay
+`titlebar-area-x`. Borderless `--card` groups on the
+`--paper` plane with hairline row separators (Providers is one grouped list),
+filled `--control` secondary buttons, `--card-soft` fields with the accent
+focus ring, a `--control`/`--thumb` segmented browser switch, and
+dot-plus-word statuses in sentence case. Its strict local-file CSP loads no
+webfonts, so it uses the system stack only. `companion.css` mirrors the token
+values of `src/styles/tokens.css` and never imports the browser app's CSS;
+change both together. It follows the OS theme through `color-scheme: light
+dark` (it has no Appearance override), and the window's pre-paint background
+picks the matching `--chrome` tone from `nativeTheme`.
+
+The brand mark outside the page (the companion's `.ico`/`.icns`, the browser
+app's `public/favicon.svg`, the landing page's `landing/public/assets/favicon.svg`,
+and the extension's `icons/icon.svg`) is the
+light `--accent` tile with an Inter Bold "R" in `--on-accent`, drawn as a path.
+`desktop/assets/generate_icons.py` writes all of them from that one glyph
+(Pillow + fontTools); rerun it instead of editing an asset by hand. The three
+SVG favicons/icons are byte-identical outputs.
+
 ## 2. Colors
 
 Green-tinted paper neutrals around one committed forest accent, with three

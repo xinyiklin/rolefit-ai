@@ -27,7 +27,10 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   reuse or another port because Node cannot deliver an equivalent graceful
   signal to an arbitrary process.
 - `companion.html` owns the local-file CSP; `security.cts` owns permissions,
-  navigation, external-window, and webview policy.
+  navigation, external-window, and webview policy. `companion.css` mirrors the
+  browser app's `src/styles/tokens.css` values (never imports app CSS) and
+  follows the OS light/dark theme; DESIGN.md's Desktop companion section owns
+  its visual contract.
 - `ipc-contract.cts` owns the fixed serializable companion methods, including
   desktop API 13's `copyExtensionSetupValue` target IDs (`directory`, `chrome`,
   `edge`, `firefox`, and `port`); `ipc.cts` validates the exact companion main frame
@@ -49,7 +52,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   availability; port and pairing changes restart through the normal Electron
   quit lifecycle. `ROLEFIT_DESKTOP_PORT` is an explicit locked per-launch
   override; settings never contain secrets or workspace paths.
-- The companion window is a fixed 900x620 sidebar shell (Overview / Providers /
+- The companion window is a fixed 760x480 sidebar shell with a hidden native
+  title bar: main owns the theme-matched `titleBarOverlay` controls, and the
+  sidebar and the sticky page heads drag the window (Overview / Providers /
   Workspace / Browser extension / Settings). The selected section survives a
   renderer refresh for the current window session. The app version appears
   only in Settings, never in the sidebar shell or Overview, so the landing
@@ -83,8 +88,11 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
   against that source. Companion copy is state-first: statuses report state in
   one short line, caveats live in `title` tooltips or native dialogs, and no
   panel carries an explainer paragraph. The exceptions are one-line caveats
-  that block or complete a step: the extension port hint, Firefox's
-  temporary-add-on line, and the Restore-blocked note.
+  that block or complete a step: Firefox's temporary-add-on line and the
+  Restore-blocked note. Page heads are an empty title band (the page `h1` is
+  visually hidden); the Providers and
+  Workspace status lines sit at the top of their content, and the extension
+  port copy field lives once, in Settings.
 - The Browser extension section leads with an inline **Access** card:
   - Pending requests come first, each with **Approve & restart**; paired
     origins follow, with a two-step **Remove** → **Confirm removal** that
@@ -103,9 +111,9 @@ Applies to `apps/role-fit-ai/desktop/` and `tsconfig.desktop.json`.
     shows a check on success. Their accessible name is "Copy" plus the visible
     value. Step-control feedback sits beside the control so it never covers
     the instruction text.
-- The sidebar service line and Overview heading derive from the last
+- The sidebar service line (and its tooltip sentence) derives from the last
   connection-status probe (startup, window re-show, and Settings' poll), never
-  a fixed "ready".
+  a fixed "ready". Each page's hidden `h1` is the page's sidebar label.
 - `runtime-paths.cts` owns the source-versus-package application, server, and
   writable-workspace resolution. `build-package.mjs` owns the minimal staged
   runtime; `forge.config.cjs` owns ASAR, native makers, signing/notarization,

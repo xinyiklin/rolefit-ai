@@ -26,7 +26,7 @@ import { createLocalSiteOrigin, loadExtensionSettings, saveShortcutNotice } from
 const IMPORT_COMMAND = "import-job";
 const BADGE_WORKING = "···";
 const BADGE_FAILED = "!";
-const BADGE_INK = "#23664f";
+const BADGE_INK = "#0064dc";
 const BADGE_ALERT = "#8a3324";
 
 const action = globalThis.chrome?.action ?? globalThis.browser?.action;

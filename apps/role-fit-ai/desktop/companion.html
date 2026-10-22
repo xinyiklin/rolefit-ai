@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="light" />
+    <meta name="color-scheme" content="light dark" />
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'none'; base-uri 'none'; form-action 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'"
@@ -11,7 +11,7 @@
     <title>RoleFit AI</title>
     <link
       rel="icon"
-      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='8' fill='%23206b55'/%3E%3Cpath d='M16 17h18c9 0 14 5 14 13 0 6-3 10-9 12l10 13H38L29 43h-3v12H16V17zm10 8v10h7c3 0 5-2 5-5s-2-5-5-5h-7z' fill='%23f7fbf8'/%3E%3C/svg%3E"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%230064dc'/%3E%3Cpath fill='%23fdfdff' d='M18.47 49.28V14.72H31.94Q35.89 14.72 38.65 16.11Q41.41 17.5 42.86 20.03Q44.3 22.56 44.3 25.97Q44.3 29.38 42.83 31.85Q41.36 34.32 38.56 35.63Q35.77 36.94 31.78 36.94H22.64V31.21H30.64Q32.82 31.21 34.22 30.62Q35.61 30.03 36.3 28.86Q37 27.69 37 25.97Q37 24.21 36.3 23.01Q35.61 21.82 34.2 21.19Q32.8 20.57 30.62 20.57H25.54V49.28ZM37.69 49.28 29.27 33.55H36.95L45.53 49.28Z'/%3E%3C/svg%3E"
     />
     <link rel="stylesheet" href="./companion.css" />
     <script src="./companion-renderer.js" defer></script>
@@ -21,15 +21,15 @@
       <aside class="companion-sidebar" aria-label="RoleFit desktop navigation">
         <div class="brand" aria-label="RoleFit AI desktop app">
           <span class="brand__mark" aria-hidden="true">R</span>
-          <span class="brand__copy">RoleFit AI</span>
+          <span>RoleFit AI</span>
         </div>
 
         <nav class="companion-nav" aria-label="RoleFit sections">
-          <button class="companion-nav__item is-active" type="button" data-companion-tab="overview" aria-current="page">Overview</button>
-          <button class="companion-nav__item" type="button" data-companion-tab="providers">Providers<span class="companion-nav__dot" id="nav-providers-attention" hidden><span class="visually-hidden">, needs attention</span></span></button>
-          <button class="companion-nav__item" type="button" data-companion-tab="workspace">Workspace</button>
-          <button class="companion-nav__item" type="button" data-companion-tab="extension">Browser extension<span class="companion-nav__badge" id="nav-extension-badge" hidden></span></button>
-          <button class="companion-nav__item" type="button" data-companion-tab="settings">Settings</button>
+          <button class="companion-nav__item is-active" type="button" data-companion-tab="overview" aria-current="page"><svg class="companion-nav__icon" aria-hidden="true" viewBox="0 0 16 16"><rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1.2" /><rect x="9" y="2.5" width="4.5" height="4.5" rx="1.2" /><rect x="2.5" y="9" width="4.5" height="4.5" rx="1.2" /><rect x="9" y="9" width="4.5" height="4.5" rx="1.2" /></svg>Overview</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="providers"><svg class="companion-nav__icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M6 2.5v3M10 2.5v3M4.5 5.5h7V8a3.5 3.5 0 0 1-7 0zM8 11.5v2" /></svg>Providers<span class="companion-nav__dot" id="nav-providers-attention" hidden><span class="visually-hidden">, needs attention</span></span></button>
+          <button class="companion-nav__item" type="button" data-companion-tab="workspace"><svg class="companion-nav__icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M2.5 4.5a1 1 0 0 1 1-1h3L8 5h4.5a1 1 0 0 1 1 1v5.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" /></svg>Workspace</button>
+          <button class="companion-nav__item" type="button" data-companion-tab="extension"><svg class="companion-nav__icon" aria-hidden="true" viewBox="0 0 16 16"><rect x="2.5" y="3" width="11" height="10" rx="1.5" /><path d="M2.5 6h11M4.75 4.5h.01M6.5 4.5h.01" /></svg>Browser extension<span class="companion-nav__badge" id="nav-extension-badge" hidden></span></button>
+          <button class="companion-nav__item" type="button" data-companion-tab="settings"><svg class="companion-nav__icon" aria-hidden="true" viewBox="0 0 16 16"><path d="M3 4.5h6M12 4.5h1M3 11.5h1M7 11.5h6" /><circle cx="10.5" cy="4.5" r="1.5" /><circle cx="5.5" cy="11.5" r="1.5" /></svg>Settings</button>
         </nav>
 
         <div class="companion-sidebar__footer">
@@ -48,14 +48,13 @@
       <div class="companion-workspace">
         <main id="main-content">
           <section class="companion-panel is-active" data-companion-panel="overview" aria-labelledby="overview-title">
-            <div class="panel-intro">
-              <h1 id="overview-title">Checking your workbench&#8230;</h1>
-              <p>Set up providers and extensions here. Your work stays on this device.</p>
-            </div>
+            <header class="panel-heading">
+              <h1 id="overview-title">Overview</h1>
+            </header>
 
             <div class="overview-grid">
-              <article class="overview-card overview-card--service" id="overview-card-service">
-                <span class="overview-card__label">Browser workspace</span>
+              <article class="overview-card" id="overview-card-service">
+                <span class="overview-card__label">Browser app</span>
                 <strong id="overview-site-origin">localhost:5181</strong>
                 <p>Open the tracker and resume workspace in your browser.</p>
                 <button class="text-button" id="overview-open-rolefit" type="button">Open RoleFit <span aria-hidden="true">&#8599;</span></button>
@@ -73,7 +72,7 @@
                 <button class="text-button" type="button" data-tab-target="workspace">Manage workspace <span aria-hidden="true">&#8594;</span></button>
               </article>
               <article class="overview-card" id="overview-card-extension">
-                <span class="overview-card__label">Extension</span>
+                <span class="overview-card__label">Browser extension</span>
                 <strong id="overview-extension-summary">Checking extension access</strong>
                 <p>Import job posts from your browser.</p>
                 <button class="text-button" type="button" data-tab-target="extension"><span id="overview-extension-action">Set up extension</span> <span aria-hidden="true">&#8594;</span></button>
@@ -84,27 +83,28 @@
 
           <section class="companion-panel" data-companion-panel="providers" aria-labelledby="providers-title" hidden>
             <header class="panel-heading">
-              <div>
-                <h1 id="providers-title">Providers</h1>
-                <p id="provider-summary">Checking your provider connections.</p>
-              </div>
+              <h1 id="providers-title">Providers</h1>
+            </header>
+
+            <div class="panel-actions">
+              <p class="panel-actions__status" id="provider-summary">Checking your provider connections.</p>
               <button class="refresh-button" id="refresh-providers" type="button">
                 <span class="refresh-button__icon" aria-hidden="true">&#8635;</span>
                 <span>Check again</span>
               </button>
-            </header>
-
+            </div>
             <ol class="provider-list" id="provider-list" data-provider-list aria-busy="true"></ol>
             <p class="provider-announcement visually-hidden" id="provider-announcement" aria-live="polite"></p>
           </section>
 
           <section class="companion-panel" data-companion-panel="workspace" aria-labelledby="workspace-title" hidden>
             <header class="panel-heading">
-              <div>
-                <h1 id="workspace-title">Workspace</h1>
-                <p id="workspace-summary">Checking your local workspace.</p>
-              </div>
+              <h1 id="workspace-title">Workspace</h1>
             </header>
+
+            <div class="panel-actions">
+              <p class="panel-actions__status" id="workspace-summary">Checking your local workspace.</p>
+            </div>
 
             <div class="workspace-card">
               <div class="workspace-row">
@@ -149,10 +149,7 @@
 
           <section class="companion-panel" data-companion-panel="extension" aria-labelledby="extension-title" hidden>
             <header class="panel-heading">
-              <div>
-                <h1 id="extension-title">Browser extension</h1>
-                <p id="extension-summary">Checking extension access.</p>
-              </div>
+              <h1 id="extension-title">Browser extension</h1>
             </header>
 
             <div class="extension-layout">
@@ -161,11 +158,6 @@
                 <ul class="extension-origin-list extension-origin-list--requests" id="extension-request-list" aria-label="Access requests"></ul>
                 <ul class="extension-origin-list" id="extension-pairing-list" aria-label="Paired extensions"></ul>
                 <p class="extension-access__status" id="extension-pairing-status" role="status" aria-live="polite">Loading extension access&#8230;</p>
-                <div class="extension-access__port">
-                  <span class="extension-access__port-label">Port</span>
-                  <button class="extension-install__copy copy-field" type="button" data-extension-copy-target="port" data-copy-feedback="Copy port"><span class="visually-hidden">Copy port </span><code class="copy-field__value" id="extension-site-origin">localhost:5181</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button>
-                  <span class="extension-access__port-hint">Must match the port in the extension's Settings.</span>
-                </div>
               </section>
 
               <details class="extension-install" id="extension-install" open>
@@ -216,10 +208,7 @@
 
           <section class="companion-panel" data-companion-panel="settings" aria-labelledby="settings-title" hidden>
             <header class="panel-heading">
-              <div>
-                <h1 id="settings-title">Settings</h1>
-                <p id="connection-summary">Checking the local service.</p>
-              </div>
+              <h1 id="settings-title">Settings</h1>
             </header>
 
             <div class="connection-state-block" role="status" aria-live="polite">
@@ -251,8 +240,14 @@
             </form>
 
             <dl class="settings-about">
-              <dt>Version</dt>
-              <dd id="runtime-version">Checking&#8230;</dd>
+              <div class="settings-about__row">
+                <dt>Extension port</dt>
+                <dd><button class="extension-install__copy copy-field" type="button" data-extension-copy-target="port" data-copy-feedback="Copy port"><span class="visually-hidden">Copy port </span><code class="copy-field__value" id="extension-site-origin">localhost:5181</code><span class="copy-field__icon" aria-hidden="true"><svg class="copy-icon copy-icon--idle" viewBox="0 0 16 16"><rect x="3.5" y="3" width="9" height="11.5" rx="1.5" /><rect x="5.75" y="1.5" width="4.5" height="3" rx="1" /></svg><svg class="copy-icon copy-icon--done" viewBox="0 0 16 16"><path d="m4 8.5 2.75 2.75L12 5.5" /></svg></span></button></dd>
+              </div>
+              <div class="settings-about__row">
+                <dt>Version</dt>
+                <dd id="runtime-version">Checking&#8230;</dd>
+              </div>
             </dl>
           </section>
         </main>

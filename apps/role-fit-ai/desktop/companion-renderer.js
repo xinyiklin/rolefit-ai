@@ -100,7 +100,6 @@ const elements = Object.freeze({
   workspaceStatus: document.getElementById("workspace-status"),
   statBaseResume: document.getElementById("stat-base-resume"),
   statApplications: document.getElementById("stat-applications"),
-  connectionSummary: document.getElementById("connection-summary"),
   connectionState: document.getElementById("connection-state"),
   connectionStateText: document.getElementById("connection-state-text"),
   connectionBrowserTabs: document.getElementById("connection-browser-tabs"),
@@ -108,7 +107,6 @@ const elements = Object.freeze({
   sitePortInput: document.getElementById("local-site-port"),
   sitePortApply: document.getElementById("apply-local-site-port"),
   sitePortStatus: document.getElementById("local-site-port-status"),
-  extensionSummary: document.getElementById("extension-summary"),
   extensionRequestList: document.getElementById("extension-request-list"),
   extensionPairingList: document.getElementById("extension-pairing-list"),
   extensionPairingStatus: document.getElementById("extension-pairing-status"),
@@ -122,7 +120,6 @@ const elements = Object.freeze({
   extensionBrowserPanels: [...document.querySelectorAll("[data-extension-browser-panel]")],
   extensionCopyButtons: [...document.querySelectorAll("button[data-extension-copy-target]")],
   extensionSetupStatus: document.getElementById("extension-setup-status"),
-  overviewTitle: document.getElementById("overview-title"),
   overviewSiteOrigin: document.getElementById("overview-site-origin"),
   overviewProviderSummary: document.getElementById("overview-provider-summary"),
   overviewExtensionSummary: document.getElementById("overview-extension-summary"),
@@ -599,15 +596,6 @@ function renderExtensionSummary(pairedCount, pendingCount) {
   const failed = extensionPairingLoadState === "error";
   const loading = extensionPairingLoadState === "loading";
   const plural = (count, word) => `${count} ${word}${count === 1 ? "" : "s"}`;
-  elements.extensionSummary.textContent = failed
-    ? "Extension access unavailable."
-    : loading
-      ? "Checking extension access."
-      : pendingCount > 0
-        ? `${plural(pendingCount, "request")} waiting for approval.`
-        : pairedCount > 0
-          ? `Paired with ${plural(pairedCount, "extension")}.`
-          : "No extension paired yet.";
   elements.overviewExtensionSummary.textContent = failed
     ? "Extension pairing unavailable"
     : loading
@@ -1112,7 +1100,7 @@ function renderServiceIndicators(status) {
   }
   elements.sidebarRuntimeStatus.dataset.state = state;
   elements.sidebarRuntimeStatus.textContent = text;
-  elements.overviewTitle.textContent = title;
+  elements.sidebarRuntimeStatus.title = title;
   setCardTone(elements.overviewServiceCard, state === "error");
 }
 
@@ -1124,35 +1112,35 @@ function renderConnectionStatus() {
     elements.connectionState.dataset.state = connectionStatusLoaded ? "error" : "unknown";
     elements.connectionStateText.textContent = connectionStatusLoaded ? "Status unavailable" : "Checking…";
     elements.connectionBrowserTabs.textContent = "—";
-    elements.connectionSummary.textContent = connectionStatusLoaded
+    elements.connectionState.title = connectionStatusLoaded
       ? "Local service status unavailable."
       : "Checking the local service.";
     return;
   }
   let state = "unknown";
   let text = "Starting…";
-  let summary = "Starting the local service.";
+  let detail = "Starting the local service.";
   if (status.serverState === "owned") {
     state = "ok";
     text = `Serving ${status.siteUrl} — managed by this companion`;
-    summary = "Managed local service running.";
+    detail = "Managed local service running.";
   } else if (status.serverState === "reused-standalone") {
     state = "warn";
     text = `Port ${status.port} — development server`;
-    summary = "Using a standalone RoleFit development server.";
+    detail = "Using a standalone RoleFit development server.";
   } else if (status.serverState === "reused-companion") {
     state = "warn";
     text = `Port ${status.port} — another companion session`;
-    summary = "Using a service this companion did not start.";
+    detail = "Using a service this companion did not start.";
   } else if (status.serverState === "unreachable") {
     state = "error";
     text = `Port ${status.port} — not responding`;
-    summary = "Local service not responding.";
+    detail = "Local service not responding.";
   }
   elements.connectionState.dataset.state = state;
+  elements.connectionState.title = detail;
   renderActiveExtensionPort();
   elements.connectionStateText.textContent = text;
-  elements.connectionSummary.textContent = summary;
   const tabs = typeof status.activeBrowserTabs === "number" &&
     Number.isInteger(status.activeBrowserTabs) && status.activeBrowserTabs >= 0
     ? status.activeBrowserTabs
