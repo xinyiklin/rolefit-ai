@@ -7,7 +7,7 @@ operational detail belongs in the affected app documentation.
 
 ## Current state
 
-Current: extension 1.4.0, desktop bridge API 13. The published RoleFit release
+Current: extension 1.4.1, desktop bridge API 13. The published RoleFit release
 is the newest `rolefit-*` entry in `gh release list` (not recorded here;
 see `docs/git-workflow.md`). Release history: `docs/continuity/2026-10.md` and
 D-entries in `docs/decisions.md`.
@@ -94,8 +94,8 @@ D-entries in `docs/decisions.md`.
   pushed head is re-reviewed before merge. Known gaps: the Timeline count
   includes automatic stage entries; no time of day; confirm and focus flows are
   pinned by source evals and browser QA, not DOM tests. Merged as #257.
-- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, branch
-  `feature/rolefit-analytics-ghosted`, PR pending): derived No response (default 21 days,
+- [USER+CODE+TOOL] **Analytics redesign + Ghosted** (D092, merged as
+  #258): derived No response (default 21 days,
   7-180; a planned follow-up holds it) and a stored inactive Ghosted stage,
   marked per row, in bulk from Analytics, or automatically (opt-in, off by
   default). Analytics now follows the user's second mockup (DESIGN.md
@@ -111,8 +111,10 @@ D-entries in `docs/decisions.md`.
   interaction script on synthetic data (Chromium; Firefox UNCONFIRMED).
   The threshold reads "Mark as Ghosted after" in Settings and on Analytics
   (user, 2026-10-22). Open user questions: a bare Rejected move
-  is not a reply; Ghosted to Applied skips back past Interviewing. Suggest
-  0.19.0 once merged.
+  is not a reply; Ghosted to Applied skips back past Interviewing.
+  0.19.0 preview prepared (minor: tracker and preferences format; extension
+  1.4.1 for the Ghosted popup label); notes
+  `apps/role-fit-ai/docs/releases/0.19.0-beta.1.md`.
 
 ## 2026-10-19
 
