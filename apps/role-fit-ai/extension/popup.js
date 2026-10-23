@@ -344,13 +344,13 @@ function trackerStatus(app) {
       return { tone: "filed", label: on ? `Applied · ${on}` : "Applied" };
     }
     case "interviewing": return { tone: "active", label: "Interviewing" };
-    case "offer": return { tone: "active", label: "Offer" };
+    case "offer": return { tone: "offer", label: "Offer" };
     case "rejected": {
       const on = formatDate(app.appliedAt);
       return { tone: "closed", label: on ? `Not selected · ${on}` : "Not selected" };
     }
     case "ghosted": return { tone: "idle", label: "Ghosted" };
-    case "withdrawn": return { tone: "idle", label: "Withdrawn" };
+    case "withdrawn": return { tone: "ended", label: "Withdrawn" };
     default: return { tone: "watch", label: String(app.status || "Tracked") };
   }
 }

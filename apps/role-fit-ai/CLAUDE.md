@@ -18,7 +18,7 @@ scoped work.
 
 Default to the app's flag-first policy. When a change has real layout,
 responsive, editor, or theming risk, flag it for the user before browser work.
-If authorized, inspect `http://localhost:5181` in the normal masthead + studio
+If authorized, inspect `http://localhost:5181` in the normal rail + studio
 workflow, including keyboard behavior and console state.
 
 ## Sensitive data

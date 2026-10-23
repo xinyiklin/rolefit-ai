@@ -666,7 +666,8 @@ disappears into the task. Quiet competence, not salesmanship.
 
 - Marketing landing-page patterns inside the Drafting Desk, oversized in-app
   heroes, and gradient-heavy working surfaces. The separate public product page
-  follows its own calm editorial contract.
+  shares the workspace tokens but keeps its own composition and motion contract
+  (DESIGN.md, Public product/download page).
 - SaaS dashboard clichés (hero metrics, identical card grids).
 - Sales-style or hype copy; in-product manuals and multi-sentence help essays.
 - Fake loading states, shimmer, decorative motion.

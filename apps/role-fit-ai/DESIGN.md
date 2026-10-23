@@ -262,9 +262,10 @@ the sidebar drops below the traffic lights, using the window-controls-overlay
 filled `--control` secondary buttons, `--card-soft` fields with the accent
 focus ring, a `--control`/`--thumb` segmented browser switch, and
 dot-plus-word statuses in sentence case. Its strict local-file CSP loads no
-webfonts, so it uses the system stack only. `companion.css` mirrors the token
-values of `src/styles/tokens.css` and never imports the browser app's CSS;
-change both together. It follows the OS theme through `color-scheme: light
+webfonts, so it uses the system stack only; the one monospace is the system
+`ui-monospace` stack for an inline `code` file name in the extension install
+guide. `companion.css` mirrors the token values of `src/styles/tokens.css`
+and never imports the browser app's CSS; change both together. It follows the OS theme through `color-scheme: light
 dark` (it has no Appearance override), and the window's pre-paint background
 picks the matching `--chrome` tone from `nativeTheme`.
 
@@ -275,6 +276,20 @@ light `--accent` tile with an Inter Bold "R" in `--on-accent`, drawn as a path.
 `desktop/assets/generate_icons.py` writes all of them from that one glyph
 (Pillow + fontTools); rerun it instead of editing an asset by hand. The three
 SVG favicons/icons are byte-identical outputs.
+
+### Extension popup
+
+The browser extension's popup (`extension/popup.{html,css}`) is the same calm
+native workspace at 344px: a `--chrome` masthead over a `--card` body,
+label/value ledger rows, dot-plus-word statuses whose colors match the
+tracker's stage dots for Applied through Withdrawn, and the accent filling
+only its one primary action.
+`popup.css` mirrors the token values of `src/styles/tokens.css` (it never
+imports app CSS), follows the OS theme with no Appearance override, and keeps
+its own compact px type scale. Its toolbar badge colors in
+`extension/background.js` are the light `--accent` and `--danger` values. Change
+these mirrors with `tokens.css`. `extension/AGENTS.md` owns the popup's
+detailed visual contract.
 
 ## 2. Colors
 
@@ -360,8 +375,9 @@ default status vocabulary.
 **One family:** the platform UI face — SF on macOS, Segoe UI Variable on
 Windows (`--font-ui`, with `--font-display` selecting the Display optical
 size where the platform has one). No webfonts, no serif, no monospace in
-chrome. `--font-mono` remains as a name for data styling but aliases the UI
-face; numbers get `font-variant-numeric: tabular-nums`.
+chrome (the companion's one inline file name is the exception).
+`--font-mono` remains as a name for data styling but aliases the UI face;
+numbers get `font-variant-numeric: tabular-nums`.
 
 ### Hierarchy
 

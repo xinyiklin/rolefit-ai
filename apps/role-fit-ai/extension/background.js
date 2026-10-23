@@ -26,8 +26,10 @@ import { createLocalSiteOrigin, loadExtensionSettings, saveShortcutNotice } from
 const IMPORT_COMMAND = "import-job";
 const BADGE_WORKING = "···";
 const BADGE_FAILED = "!";
+// The badge cannot read CSS: these are the light --accent and --danger values
+// of src/styles/tokens.css. Change them together.
 const BADGE_INK = "#0064dc";
-const BADGE_ALERT = "#8a3324";
+const BADGE_ALERT = "#c92324";
 
 const action = globalThis.chrome?.action ?? globalThis.browser?.action;
 const commands = globalThis.chrome?.commands ?? globalThis.browser?.commands;
