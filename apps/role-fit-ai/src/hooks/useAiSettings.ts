@@ -117,7 +117,7 @@ export function useAiSettings() {
     window.addEventListener(WORKSPACE_PREFERENCES_APPLIED_EVENT, adopt);
     const updateStatus = (event: Event) => {
       const status = (event as CustomEvent<WorkspacePreferencesStatus>).detail;
-      if (["idle", "saving", "saved", "error"].includes(status)) setWorkspacePreferencesStatus(status);
+      if (["idle", "saving", "saved", "error", "newer"].includes(status)) setWorkspacePreferencesStatus(status);
     };
     window.addEventListener(WORKSPACE_PREFERENCES_STATUS_EVENT, updateStatus);
     return () => {

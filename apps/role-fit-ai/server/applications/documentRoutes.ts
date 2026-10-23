@@ -26,7 +26,7 @@ import {
 } from "./documentService.ts";
 import {
   applicationDocumentDir,
-  restoreConflictHandled
+  workspaceGateHandled
 } from "./routeSupport.ts";
 
 // Persist one document that went out with this application. A slot contains
@@ -114,7 +114,7 @@ export async function handleSaveApplicationDocument(
       applications: result.applications
     });
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationDocumentError) {
       sendJson(res, error.status, { error: error.message });
       return;
@@ -178,7 +178,7 @@ export async function handleApplicationDocumentFile(
     });
     res.end(data);
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationsStorageError) {
       sendJson(res, error.status, { error: error.message });
       return;

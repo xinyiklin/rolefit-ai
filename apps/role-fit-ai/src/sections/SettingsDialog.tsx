@@ -155,7 +155,7 @@ export function SettingsDialog(props: SettingsDialogProps) {
           {/* Settings has no Save button because it autosaves. Say so once, here,
               rather than leaving a dialog with no obvious commit. */}
           <span
-            className={`settings-dialog__autosave${workspacePreferencesStatus === "error" ? " is-error" : ""}`}
+            className={`settings-dialog__autosave${workspacePreferencesStatus === "error" || workspacePreferencesStatus === "newer" ? " is-error" : ""}`}
             role="status"
             aria-live="polite"
           >
@@ -163,7 +163,9 @@ export function SettingsDialog(props: SettingsDialogProps) {
               ? "Saving to this workspace…"
               : workspacePreferencesStatus === "error"
                 ? "Workspace save failed; reconnect the companion to retry."
-                : "Changes save to this workspace."}
+                : workspacePreferencesStatus === "newer"
+                  ? "Saved by a newer RoleFit; changes stay in this browser until you update."
+                  : "Changes save to this workspace."}
           </span>
           <button
             ref={closeRef}

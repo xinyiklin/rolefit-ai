@@ -40,7 +40,9 @@ for provider, prompt, sanitizer, and review work.
 - `applications/` owns tracker persistence and routes. `schema.ts` validates the
   current record shape, `storage.ts` owns the serialized write queue,
   `reconcile.ts` applies sparse revision-checked mutations, and
-  `routeSupport.ts` holds shared revision/rollback path mechanics.
+  `routeSupport.ts` holds shared revision/rollback path mechanics and the
+  restore/newer-workspace route gate; `trackerVersion.ts` owns the file's
+  version and its migrations.
   `documentService.ts` owns the strict document file + tracker metadata
   transaction; the focused document, attachment, and tracker route modules own
   only their HTTP workflows. `commitService.ts` owns the atomic agent commit
@@ -155,17 +157,18 @@ for provider, prompt, sanitizer, and review work.
   monotonically. Preserve recoverable history/trash behavior.
 - Treat corrupt application JSON and malformed strict `.resume` content as
   visible fail-closed errors. Never erase, reseed, or guess over corrupt user
-  data. Safe tracker-read upgrades are narrow and explicit: fixed Fit Assessment
-  summary copy may derive from an otherwise valid verdict, a missing Fit result
-  status may read as `ASSESSED`, an exactly empty `appliedAt` may read as absent
-  without inventing a date, and a pre-list scalar `notApplyingReason` may read as a
-  one-item `notApplyingReasons` list. A record carrying both reason shapes is
-  invalid on read and write. These comparison-only normalizations never rewrite
-  the tracker or hide other differences. The exact retired
-  High/Medium/Low application-priority enum may be removed, and the retired
-  `interested` stage may be rewritten to a dated Skipped decision without sent
-  document metadata. These two upgrades rewrite atomically; every other sanitizer
-  difference remains fail-closed.
+  data. Tracker format changes go through `applications/trackerVersion.ts`
+  (D095): a file without `schemaVersion` is version 0, each version step has one
+  migration with a fixture, a migrated file is validated strictly and rewritten
+  once at the current version, and a legacy shape inside a current-version file
+  fails closed. A record carrying both skip-reason shapes is invalid. A tracker
+  or preferences file above the supported version raises `WorkspaceNewerError`
+  before its contents are read; routes answer `423 workspace-newer` (tracker
+  routes through `workspaceGateHandled`) and never write it. Every
+  tracker-dependent service reads the tracker under its lock before any file
+  I/O, which is what makes that refusal happen before a document folder is
+  touched; keep that order. The full contract is in
+  `apps/role-fit-ai/docs/engineering/workspace-backup.md#schema-versions-and-newer-files`.
 - Server changes require the server TypeScript gate and focused route/eval.
   Lifecycle/listener probes are explicit tests rather than auto-discovered
   offline evals because their loopback bind may require environment permission.

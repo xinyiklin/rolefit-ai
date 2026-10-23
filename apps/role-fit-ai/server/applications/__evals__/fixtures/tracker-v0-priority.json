@@ -1,0 +1,32 @@
+{
+  "savedAt": "2026-07-29T10:00:01.000Z",
+  "applications": [
+    {
+      "id": "legacy-priority",
+      "title": "Synthetic legacy-priority",
+      "company": "Example Co",
+      "role": "",
+      "roleDescription": "",
+      "source": "",
+      "jobUrl": "",
+      "jobDescription": "",
+      "rawJobDescription": "",
+      "status": "applied",
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "appliedAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "followupAt": "",
+      "location": "",
+      "jobType": "",
+      "workAuth": "",
+      "deadline": "",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryCurrency": "",
+      "interviewTips": "",
+      "notes": "",
+      "templateId": "",
+      "priority": "High"
+    }
+  ]
+}

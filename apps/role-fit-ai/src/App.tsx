@@ -169,6 +169,7 @@ import { Masthead } from "./sections/Masthead";
 import { ApplyAction } from "./sections/ApplyAction";
 import { useStudioRail } from "./hooks/useStudioRail";
 import { ActionStatus } from "./sections/ActionStatus";
+import { WorkspaceNewerNotice } from "./sections/WorkspaceNewerNotice";
 import { TaskProgress } from "./sections/AiWorkflowProgress";
 import { SessionsMenu } from "./sections/SessionsRail";
 import { DocumentOpenMenu } from "./sections/document/DocumentOpenMenu";
@@ -1092,6 +1093,7 @@ function App() {
     isLoading: isApplicationsLoading,
     hasLoadedApplications,
     error: applicationsError,
+    workspaceNewer: trackerNewer,
     pendingWrites: pendingApplicationWrites,
     createApplication,
     updateApplicationById,
@@ -2047,12 +2049,15 @@ function App() {
     coverLetterReady,
     isPreparing: applicationPreparationActive
   });
-  const trackerReadinessBlocker = !hasLoadedApplications
-    ? isApplicationsLoading
-      ? "Wait for Applications to finish loading."
-      : "Open Applications and choose Refresh before continuing."
-    : "";
-  const applyReady = hasLoadedApplications && preparationReadiness.canApply;
+  const trackerReadinessBlocker = trackerNewer
+    ? "Update RoleFit to save applications; they were saved by a newer version."
+    : !hasLoadedApplications
+      ? isApplicationsLoading
+        ? "Wait for Applications to finish loading."
+        : "Open Applications and choose Refresh before continuing."
+      : "";
+  const trackerWritable = hasLoadedApplications && !trackerNewer;
+  const applyReady = trackerWritable && preparationReadiness.canApply;
   const applyBlocker = trackerReadinessBlocker || preparationReadiness.primaryBlocker;
   function handlePolishPreparedResume() {
     if (
@@ -2428,7 +2433,7 @@ function App() {
     primaryPreparationAction.kind === "update-job" && isSkipping
   );
   const primaryActionReady = primaryPreparationAction.kind === "update-job"
-    ? hasLoadedApplications && jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
+    ? trackerWritable && jobPrepared && !jobPreparationActive && pendingApplicationWrites === 0
     : applyReady;
   const primaryActionBlocker = primaryPreparationAction.kind === "update-job"
     ? trackerReadinessBlocker
@@ -2878,8 +2883,11 @@ function App() {
 
   // ----- Render -----
 
+  const settingsNewer = workspacePreferencesStatus === "newer";
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell${trackerNewer || settingsNewer ? " has-workspace-notice" : ""}`}>
+      {trackerNewer || settingsNewer ? <WorkspaceNewerNotice tracker={trackerNewer} settings={settingsNewer} /> : null}
       {progressDockVisible ? (
         <div
           ref={dock.ref}

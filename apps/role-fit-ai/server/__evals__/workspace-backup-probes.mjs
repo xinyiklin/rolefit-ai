@@ -413,8 +413,10 @@ try {
 
   // Skip reasons travel as a list; a backup written before the list (one
   // scalar reason) still restores, and an unknown stored reason is refused.
-  const withSkipDecision = (reasonFields) => {
+  const withSkipDecision = (reasonFields, { unversioned = false } = {}) => {
     const tracker = JSON.parse(trackerFile.data);
+    // A backup from before reason lists predates tracker versions too (D095).
+    if (unversioned) delete tracker.schemaVersion;
     Object.assign(tracker.applications[0], {
       status: "not_applying",
       appliedAt: fixedDate.toISOString(),
@@ -436,7 +438,12 @@ try {
     "a re-export keeps every skip reason"
   );
   const legacySkipTarget = join(isolatedRoot, "legacy-skip-target");
-  await restoreWorkspaceBackup(legacySkipTarget, withSkipDecision({ notApplyingReason: "constraints" }), fixedDate);
+  await restoreWorkspaceBackup(legacySkipTarget, withSkipDecision({ notApplyingReason: "constraints" }, { unversioned: true }), fixedDate);
+  await assert.rejects(
+    () => restoreWorkspaceBackup(targetDir, withSkipDecision({ notApplyingReason: "constraints" }), fixedDate),
+    (error) => error instanceof WorkspaceBackupError && /tracker data is invalid/.test(error.message),
+    "a versioned tracker cannot carry the pre-list reason shape"
+  );
   assert.deepEqual(
     (await readApplications(legacySkipTarget))[0].notApplyingReasons,
     ["constraints"],

@@ -21,8 +21,8 @@ const prepareStyles = readFileSync(new URL("../../styles/prepare.css", import.me
 
 assert.match(
   app,
-  /const applyReady = hasLoadedApplications && preparationReadiness\.canApply/,
-  "Apply waits for the first authoritative tracker snapshot"
+  /const trackerWritable = hasLoadedApplications && !trackerNewer;\s*const applyReady = trackerWritable && preparationReadiness\.canApply/,
+  "Apply waits for the first authoritative tracker snapshot and never runs against a newer tracker"
 );
 assert.match(
   applications,
@@ -107,7 +107,7 @@ assert.doesNotMatch(
 );
 assert.match(
   app,
-  /const trackerReadinessBlocker = !hasLoadedApplications[\s\S]{0,220}?isApplicationsLoading[\s\S]{0,260}?choose Refresh/,
+  /const trackerReadinessBlocker = trackerNewer[\s\S]{0,160}?newer version[\s\S]{0,80}?!hasLoadedApplications[\s\S]{0,220}?isApplicationsLoading[\s\S]{0,260}?choose Refresh/,
   "terminal tracker-load failure offers a real recovery action instead of an endless wait"
 );
 assert.match(

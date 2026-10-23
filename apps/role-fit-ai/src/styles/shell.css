@@ -11,6 +11,22 @@
   height: 100dvh;
 }
 
+.app-shell.has-workspace-notice {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+/* A workspace file saved by a newer RoleFit: changes to it are refused. */
+.workspace-newer-notice {
+  margin: 0;
+  padding: var(--s2) var(--s4);
+  border-bottom: 1px solid var(--warm-line);
+  background: var(--warm-veil);
+  color: var(--ink);
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  text-align: center;
+}
+
 /* -------- Masthead -------- */
 
 /* Masthead: the head of the full-height studio rail, where the brand doubles as

@@ -9,6 +9,8 @@ import {
   WORKSPACE_BACKUP_FORMAT,
   WORKSPACE_BACKUP_TOO_LARGE_MESSAGE,
   WORKSPACE_BACKUP_SCHEMA_VERSION,
+  WORKSPACE_PREFERENCES_FILE_NAME,
+  WorkspaceNewerError,
   isManagedWorkspaceBackupPath,
   parseWorkspaceBackupEnvelope,
   workspaceBackupEncodingForPath,
@@ -130,6 +132,7 @@ async function managedWorkspacePaths(workspaceDir: string): Promise<string[]> {
   try {
     applications = await readApplications(workspaceDir);
   } catch (error) {
+    if (error instanceof WorkspaceNewerError) throw new WorkspaceBackupError(error.message, error.status);
     if (error instanceof ApplicationsStorageError) throw invalidManagedFile("applications.json");
     throw error;
   }
@@ -284,6 +287,11 @@ export async function createWorkspaceBackup(workspaceDir: string, now = new Date
     // resumes: omit `preferences` and continue rather than
     // failing the backup.
     const stored = await readStoredWorkspacePreferences(workspaceDir);
+    // Leaving newer preferences out would lose them on restore, so refuse.
+    if (stored.status === "newer") {
+      const error = new WorkspaceNewerError(WORKSPACE_PREFERENCES_FILE_NAME);
+      throw new WorkspaceBackupError(error.message, error.status);
+    }
     if (stored.status === "ok") {
       envelope.preferences = { settings: stored.value.settings, lastBaseResume: stored.value.lastBaseResume };
     }
@@ -342,7 +350,11 @@ async function writeStagedBackup(stageDir: string, envelope: WorkspaceBackupEnve
   if (envelope.files.some((file) => file.path === "applications.json")) {
     try {
       stagedApplications = await readApplications(stageDir);
-    } catch {
+    } catch (error) {
+      if (error instanceof WorkspaceNewerError) {
+        const newer = new WorkspaceNewerError("This backup");
+        throw new WorkspaceBackupError(newer.message, newer.status);
+      }
       throw new WorkspaceBackupError("The backup's application tracker data is invalid.");
     }
   }
@@ -385,6 +397,7 @@ export async function restoreWorkspaceBackup(
   try {
     envelope = parseWorkspaceBackupEnvelope(input);
   } catch (error) {
+    if (error instanceof WorkspaceNewerError) throw new WorkspaceBackupError(error.message, error.status);
     throw new WorkspaceBackupError(error instanceof Error ? error.message : "This workspace backup is invalid.");
   }
 

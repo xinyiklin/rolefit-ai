@@ -21,7 +21,7 @@ import {
   writeApplicationsSnapshot
 } from "./storage.ts";
 import {
-  restoreConflictHandled,
+  workspaceGateHandled,
   storageErrorMessage,
   trashApplicationFiles
 } from "./routeSupport.ts";
@@ -49,7 +49,7 @@ export async function handleListApplications(
       path: "workspace/applications.json"
     }, { ETag: etag });
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     sendJson(res, 500, {
       error: storageErrorMessage(error, "Application list failed.")
     });
@@ -118,7 +118,7 @@ export async function handleSaveApplications(
     }
     sendJson(res, 200, { applications: saved.applications, revision: saved.revision });
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     const status =
       error instanceof ApplicationsStorageError ? error.status : 400;
     sendJson(res, status, {
@@ -176,7 +176,7 @@ export async function handleDeleteApplication(
     }
     sendJson(res, 200, { applications });
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     const status =
       error instanceof ApplicationsStorageError ? error.status : 400;
     sendJson(res, status, {
@@ -204,7 +204,7 @@ export async function handleCommitApplication(
     const saved = await commitApplication(workspaceDir, body);
     sendJson(res, 201, saved);
   } catch (error) {
-    if (restoreConflictHandled(error, res)) return;
+    if (workspaceGateHandled(error, res)) return;
     if (error instanceof ApplicationCommitError) {
       sendJson(res, error.status, { error: error.message, issues: error.issues });
       return;
@@ -284,7 +284,7 @@ export async function handleLogApplicationEvent(
 // revision returns the current record, refusals keep their issues, and only
 // an unexpected failure is a 500.
 function sendRecordWriteError(error: unknown, res: ServerResponse, fallback: string): void {
-  if (restoreConflictHandled(error, res)) return;
+  if (workspaceGateHandled(error, res)) return;
   const tooLarge = error instanceof Error && error.message === "Request is too large.";
   const status = error instanceof ApplicationsStorageError
     ? error.status

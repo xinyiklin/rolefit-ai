@@ -141,7 +141,9 @@ try {
     "2026-07-20T10:00:00.000Z",
     "a later-skipped application keeps its application date"
   );
-  assert.equal(await readFile(filePath, "utf8"), before, "a compatibility read does not rewrite the file");
+  const upgraded = JSON.parse(await readFile(filePath, "utf8"));
+  assert.notEqual(JSON.stringify(upgraded), before, "the unversioned file is migrated once");
+  assert.deepEqual(upgraded.applications, JSON.parse(JSON.stringify(loaded)), "the migration stores the list shape");
 
   // Anything else the build cannot represent exactly still fails closed.
   const [base] = await canonicalRecords([skipped("strict", { notApplyingReasons: ["fit"] })]);

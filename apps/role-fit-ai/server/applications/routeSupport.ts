@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { ServerResponse } from "node:http";
 
 import { sendJson } from "../http.ts";
+import { WorkspaceNewerError } from "../../src/lib/workspaceBackupContract.ts";
 import { WorkspaceRestoreConflictError } from "../workspaceRestoreGate.ts";
 import { APPLICATION_ID_RE, ApplicationsStorageError } from "./schema.ts";
 import {
@@ -17,10 +18,16 @@ export function storageErrorMessage(error: unknown, fallback: string): string {
   return error instanceof ApplicationsStorageError ? error.message : fallback;
 }
 
-export function restoreConflictHandled(
+// A restore in progress or a tracker saved by a newer RoleFit: both stop the
+// request before any file I/O, and neither is a tracker conflict to rebase on.
+export function workspaceGateHandled(
   error: unknown,
   res: ServerResponse
 ): boolean {
+  if (error instanceof WorkspaceNewerError) {
+    sendJson(res, error.status, { error: error.message, code: error.code });
+    return true;
+  }
   if (!(error instanceof WorkspaceRestoreConflictError)) return false;
   sendJson(res, 409, { error: error.message });
   return true;

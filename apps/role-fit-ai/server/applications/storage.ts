@@ -14,12 +14,21 @@ import {
   sanitizeApplications
 } from "./schema.ts";
 import {
+  TRACKER_FILE_NAME,
+  TRACKER_SCHEMA_VERSION,
+  migrateTrackerApplications,
+  storedTrackerVersion
+} from "./trackerVersion.ts";
+import { WorkspaceNewerError } from "../../src/lib/workspaceBackupContract.ts";
+import {
   assertWorkspaceAccessAllowed,
   captureWorkspaceAccess
 } from "../workspaceRestoreGate.ts";
 
+const TRACKER_FILE_KEYS = new Set(["schemaVersion", "savedAt", "applications"]);
+
 export function applicationsFilePath(workspaceDir: string): string {
-  return join(workspaceDir, "applications.json");
+  return join(workspaceDir, TRACKER_FILE_NAME);
 }
 
 // Serialize every tracker read-modify-write cycle and any workspace-wide
@@ -108,138 +117,6 @@ function isMissingFile(error: unknown): boolean {
   );
 }
 
-const REMOVED_APPLICATION_PRIORITIES = new Set(["High", "Medium", "Low"]);
-
-// Priority was optional presentation metadata, so removing it must not strand a
-// canonical tracker written by an older build. Accept only the exact retired
-// enum, then rewrite the file immediately without the field. Any other unknown
-// or malformed value remains visible to the strict comparison and fails closed.
-function removeLegacyApplicationPriorityForComparison(applications: unknown[]): {
-  applications: unknown[];
-  removed: boolean;
-} {
-  let removed = false;
-  const normalized = applications.map((application) => {
-    if (!application || typeof application !== "object" || Array.isArray(application)) {
-      return application;
-    }
-    const raw = application as Record<string, unknown>;
-    const legacyPriority = raw.priority;
-    if (
-      !Object.hasOwn(raw, "priority") ||
-      typeof legacyPriority !== "string" ||
-      !REMOVED_APPLICATION_PRIORITIES.has(legacyPriority)
-    ) {
-      return application;
-    }
-    const { priority: _removedPriority, ...withoutPriority } = raw;
-    removed = true;
-    return withoutPriority;
-  });
-  return { applications: normalized, removed };
-}
-
-// Saved/interested was the retired pre-Apply record. Preserve those rows as
-// explicit Skipped decisions instead of deleting personal notes or making them
-// look submitted. The last tracker revision becomes the decision date, while
-// sent-document metadata is removed because no application was recorded.
-function upgradeLegacyInterestedApplications(applications: unknown[]): {
-  applications: unknown[];
-  upgraded: boolean;
-} {
-  let upgraded = false;
-  const normalized = applications.map((application) => {
-    if (!application || typeof application !== "object" || Array.isArray(application)) {
-      return application;
-    }
-    const raw = application as Record<string, unknown>;
-    if (raw.status !== "interested") return application;
-    const {
-      appliedAt: _appliedAt,
-      resumeUsed: _resumeUsed,
-      resumeArtifacts: _resumeArtifacts,
-      coverLetterArtifacts: _coverLetterArtifacts,
-      attachments: _attachments,
-      ...preserved
-    } = raw;
-    upgraded = true;
-    return {
-      ...preserved,
-      status: "not_applying",
-      notApplyingAt: raw.updatedAt
-    };
-  });
-  return { applications: normalized, upgraded };
-}
-
-// Normalize only lossless legacy representations for strict comparison. All
-// other differences still fail closed; compatibility reads do not rewrite data.
-function normalizeCompatibleApplicationFieldsForComparison(
-  applications: unknown[],
-  canonical: unknown[]
-): unknown[] {
-  return applications.map((application, index) => {
-    if (!application || typeof application !== "object" || Array.isArray(application)) {
-      return application;
-    }
-    let raw = application as Record<string, unknown>;
-    if (raw.appliedAt === "") {
-      const { appliedAt: _emptyDate, ...preserved } = raw;
-      raw = preserved;
-    }
-    if (Object.hasOwn(raw, "notApplyingReason") && !Object.hasOwn(raw, "notApplyingReasons")) {
-      const { notApplyingReason, ...preserved } = raw;
-      raw = { ...preserved, notApplyingReasons: [notApplyingReason] };
-    }
-    const fitAssessment = raw.fitAssessment;
-    const canonicalApplication = canonical[index];
-    if (
-      !fitAssessment ||
-      typeof fitAssessment !== "object" ||
-      Array.isArray(fitAssessment) ||
-      !canonicalApplication ||
-      typeof canonicalApplication !== "object" ||
-      Array.isArray(canonicalApplication)
-    ) {
-      return raw;
-    }
-    const result = (fitAssessment as Record<string, unknown>).result;
-    const canonicalFitAssessment = (canonicalApplication as Record<string, unknown>).fitAssessment;
-    if (
-      !result ||
-      typeof result !== "object" ||
-      Array.isArray(result) ||
-      !canonicalFitAssessment ||
-      typeof canonicalFitAssessment !== "object" ||
-      Array.isArray(canonicalFitAssessment)
-    ) {
-      return raw;
-    }
-    const canonicalResult = (canonicalFitAssessment as Record<string, unknown>).result;
-    if (!canonicalResult || typeof canonicalResult !== "object" || Array.isArray(canonicalResult)) {
-      return raw;
-    }
-    const summary = (canonicalResult as Record<string, unknown>).summary;
-    const rawSummary = (result as Record<string, unknown>).summary;
-    if (typeof summary !== "string" || typeof rawSummary !== "string" || !rawSummary.trim()) {
-      return raw;
-    }
-    return {
-      ...raw,
-      fitAssessment: {
-        ...(fitAssessment as Record<string, unknown>),
-        result: {
-          ...(result as Record<string, unknown>),
-          ...(!Object.hasOwn(result, "status") &&
-            (canonicalResult as Record<string, unknown>).status === "ASSESSED"
-            ? { status: "ASSESSED" }
-            : {})
-        }
-      }
-    };
-  });
-}
-
 export async function readApplications(workspaceDir: string) {
   return (await readApplicationsSnapshot(workspaceDir)).applications;
 }
@@ -270,12 +147,14 @@ export async function readApplicationsSnapshot(
   let parsed: ReturnType<typeof parseStoredApplications>;
   try {
     parsed = parseStoredApplications(text);
-    if (parsed.needsUpgrade) {
-      await writeApplications(workspaceDir, parsed.applications);
-      return await readApplicationsSnapshot(workspaceDir);
-    }
-  } catch {
+  } catch (error) {
+    if (error instanceof WorkspaceNewerError) throw error;
     throw new ApplicationsStorageError();
+  }
+  // A failed rewrite (a locked file, say) is not corrupt data: serve the
+  // migrated records and let the next tracker write stamp the current version.
+  if (parsed.needsUpgrade && await writeApplications(workspaceDir, parsed.applications).then(() => true, () => false)) {
+    return await readApplicationsSnapshot(workspaceDir);
   }
   // Keyed by the identity taken before the read: a change during the read gets
   // a new identity, so the next read validates the file again.
@@ -283,44 +162,44 @@ export async function readApplicationsSnapshot(
 }
 
 /**
- * Strictly parse stored tracker text. Throws unless every record is already
- * canonical, apart from the two lossless legacy upgrades, which `needsUpgrade`
- * reports so the caller can write them back.
+ * Strictly parse stored tracker text. Throws unless every record is canonical
+ * once migrated from the file's version; `needsUpgrade` reports a file below
+ * the current version so the caller can write it back. A newer file throws
+ * WorkspaceNewerError before any record is read.
  */
 export function parseStoredApplications(text: string): {
   applications: StoredApplications;
   needsUpgrade: boolean;
 } {
   const data: unknown = JSON.parse(text);
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new Error("Invalid applications file shape.");
+  }
+  const file = data as Record<string, unknown>;
+  const version = storedTrackerVersion(file);
   if (
-    !data ||
-    typeof data !== "object" ||
-    !Array.isArray((data as { applications?: unknown }).applications)
+    !Array.isArray(file.applications) ||
+    // Versioned files have exactly this envelope; unversioned ones were never checked.
+    (version > 0 && (
+      Object.keys(file).some((key) => !TRACKER_FILE_KEYS.has(key)) ||
+      (Object.hasOwn(file, "savedAt") && typeof file.savedAt !== "string")
+    ))
   ) {
     throw new Error("Invalid applications file shape.");
   }
-  const apps = (data as { applications: unknown[] }).applications;
-  const priorityUpgrade = removeLegacyApplicationPriorityForComparison(apps);
-  const interestedUpgrade = upgradeLegacyInterestedApplications(priorityUpgrade.applications);
-  const sane = sanitizeApplications(interestedUpgrade.applications);
-  const canonical = JSON.parse(JSON.stringify(sane)) as unknown[];
-  const comparable = normalizeCompatibleApplicationFieldsForComparison(
-    interestedUpgrade.applications,
-    canonical
-  );
+  const apps = file.applications;
+  const migrated = migrateTrackerApplications(apps, version);
+  const sane = sanitizeApplications(migrated);
   // Never silently erase an invalid on-disk record during the next write.
   if (
     apps.length > MAX_APPLICATIONS ||
     sane.length !== apps.length ||
     duplicateApplicationId(sane) ||
-    !isDeepStrictEqual(comparable, canonical)
+    !isDeepStrictEqual(migrated, JSON.parse(JSON.stringify(sane)))
   ) {
     throw new Error("Invalid application record.");
   }
-  return {
-    applications: sane,
-    needsUpgrade: priorityUpgrade.removed || interestedUpgrade.upgraded
-  };
+  return { applications: sane, needsUpgrade: version < TRACKER_SCHEMA_VERSION };
 }
 
 function isValidatedRecord(value: unknown): boolean {
@@ -372,7 +251,7 @@ export async function writeApplicationsSnapshot(
     );
   }
   const payload = JSON.stringify(
-    { savedAt: new Date().toISOString(), applications: sane },
+    { schemaVersion: TRACKER_SCHEMA_VERSION, savedAt: new Date().toISOString(), applications: sane },
     null,
     2
   );

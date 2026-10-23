@@ -23,6 +23,30 @@ export const MAX_WORKSPACE_BACKUP_JSON_BYTES = 384_000_000;
 export const WORKSPACE_BACKUP_TOO_LARGE_MESSAGE =
   `The workspace backup is larger than the supported ${MAX_WORKSPACE_BACKUP_BYTES / 1_000_000} MB limit.`;
 
+export const WORKSPACE_NEWER_CODE = "workspace-newer" as const;
+
+// A file stamped with a schema version above what this build supports. Such a
+// file is never parsed further and never written: an older build would drop
+// whatever the newer format added (D095).
+export class WorkspaceNewerError extends Error {
+  readonly status = 423;
+  readonly code = WORKSPACE_NEWER_CODE;
+  constructor(subject: string) {
+    super(`${subject} was saved by a newer version of RoleFit. Update RoleFit to use it; this version leaves it unchanged.`);
+    this.name = "WorkspaceNewerError";
+  }
+}
+
+/**
+ * A stored `schemaVersion` this build can read, or a thrown WorkspaceNewerError
+ * when it is newer. Anything that is not a positive integer is invalid (null).
+ */
+export function readableSchemaVersion(value: unknown, current: number, subject: string): number | null {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) return null;
+  if (value > current) throw new WorkspaceNewerError(subject);
+  return value;
+}
+
 export type WorkspaceBackupFile = {
   path: string;
   encoding: "utf8" | "base64";
@@ -98,7 +122,13 @@ export type StoredWorkspaceRestoreMarker = {
   restoredAt: string;
 };
 
+// Runs before the shape check, since a newer version may change the shape.
+function rejectNewerFormat(value: unknown, format: string, current: number, subject: string): void {
+  if (isRecord(value) && value.format === format) readableSchemaVersion(value.schemaVersion, current, subject);
+}
+
 export function parseStoredWorkspaceRestoreMarker(value: unknown): StoredWorkspaceRestoreMarker {
+  rejectNewerFormat(value, WORKSPACE_RESTORE_MARKER_FORMAT, WORKSPACE_RESTORE_MARKER_SCHEMA_VERSION, WORKSPACE_RESTORE_MARKER_FILE_NAME);
   if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "restoredAt"])) {
     throw new Error("The workspace restore marker is invalid.");
   }
@@ -117,6 +147,7 @@ export function parseStoredWorkspaceRestoreMarker(value: unknown): StoredWorkspa
 }
 
 export function parseStoredWorkspacePreferences(value: unknown): StoredWorkspacePreferences {
+  rejectNewerFormat(value, WORKSPACE_PREFERENCES_FORMAT, WORKSPACE_PREFERENCES_SCHEMA_VERSION, WORKSPACE_PREFERENCES_FILE_NAME);
   if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "updatedAt", "source", "settings", "lastBaseResume"])) {
     throw new Error("The stored workspace preferences are invalid.");
   }
@@ -175,6 +206,7 @@ export function parsePortableWorkspacePreferences(value: unknown): PortableWorks
 }
 
 export function parseWorkspaceBackupEnvelope(value: unknown): WorkspaceBackupEnvelope {
+  rejectNewerFormat(value, WORKSPACE_BACKUP_FORMAT, WORKSPACE_BACKUP_SCHEMA_VERSION, "This backup");
   if (!isRecord(value) || !hasExactKeys(value, ["format", "schemaVersion", "createdAt", "files"], ["preferences"])) {
     throw new Error("This is not a valid RoleFit workspace backup.");
   }

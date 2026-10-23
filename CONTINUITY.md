@@ -28,6 +28,10 @@ D-entries in `docs/decisions.md`.
   required changes are in
   `apps/role-fit-ai/docs/engineering/distribution-cloud-plan.md` (Browser
   extension distribution). Nothing is decided or changed.
+- 2026-10-23 [USER+CODE] The release that ships D095 must say: the tracker now
+  carries a format version; this build and later open a workspace saved by a
+  newer RoleFit with an update notice and leave it unchanged, while earlier
+  builds still report such files as unreadable. It changes no other format.
 
 ## Deferred backlog
 
@@ -98,6 +102,15 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-23
 
+- [USER+CODE+TOOL] **Workspace schema versioning** (D095): `applications.json`
+  carries `schemaVersion: 1`; unversioned trackers migrate once through
+  `server/applications/trackerVersion.ts` (one fixture per legacy shape); a
+  tracker or preferences file newer than the build answers `423
+  workspace-newer` on every route, backup, and restore, never written, with a
+  Drafting Desk notice. Verified: types, focused probes (each tracker route
+  leaves a newer workspace byte-identical), the RoleFit check, two independent
+  reviews and a follow-up review of the fixes. Unverified: the notice in a
+  browser (flag-first, not run) and a real downgrade between installed builds.
 - [USER+CODE+TOOL] **Agent tracker writes** (D094): atomic
   `POST /api/applications/commit` with field-path refusals, server-side
   `POST /api/applications/<id>/status` sharing the row menu's rule and

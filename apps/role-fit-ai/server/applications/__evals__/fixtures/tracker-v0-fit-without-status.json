@@ -1,0 +1,50 @@
+{
+  "savedAt": "2026-07-29T10:00:01.000Z",
+  "applications": [
+    {
+      "id": "legacy-fit-without-status",
+      "title": "Synthetic legacy-fit-without-status",
+      "company": "Example Co",
+      "role": "",
+      "roleDescription": "",
+      "source": "",
+      "jobUrl": "",
+      "jobDescription": "",
+      "rawJobDescription": "",
+      "status": "applied",
+      "createdAt": "2026-07-01T00:00:00.000Z",
+      "appliedAt": "2026-07-01T00:00:00.000Z",
+      "updatedAt": "2026-07-29T10:00:00.000Z",
+      "followupAt": "",
+      "location": "",
+      "jobType": "",
+      "workAuth": "",
+      "deadline": "",
+      "salaryMin": null,
+      "salaryMax": null,
+      "salaryCurrency": "",
+      "interviewTips": "",
+      "notes": "",
+      "fitAssessment": {
+        "result": {
+          "verdict": "REASONABLE",
+          "summary": "Synthetic legacy summary.",
+          "matches": [
+            {
+              "jobExcerpt": "Python",
+              "candidateSource": "RESUME",
+              "candidateExcerpt": "Python"
+            }
+          ],
+          "gaps": [
+            "Kubernetes"
+          ]
+        },
+        "resumeLabel": "Synthetic resume",
+        "assessedAt": "2026-07-01T00:00:00.000Z",
+        "promptVersion": "fit-assessment-direct-rubric-v3"
+      },
+      "templateId": ""
+    }
+  ]
+}

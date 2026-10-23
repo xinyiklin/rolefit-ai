@@ -932,6 +932,11 @@ The workspace contains:
   every browser attached to this OS-user workspace
 - Anything else you drop in there (left out of portable backups)
 
+The tracker and preferences files carry a schema version. A newer RoleFit
+upgrades older files once; an older RoleFit shows a notice and leaves a file
+saved by a newer version unchanged until you update
+([details](docs/engineering/workspace-backup.md#schema-versions-and-newer-files)).
+
 The source-development folder is gitignored except its README. Personal
 resumes, `.resume`/PDF files, and root-level resume artifacts are also
 gitignored as a privacy guard.

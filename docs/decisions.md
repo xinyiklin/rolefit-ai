@@ -555,7 +555,7 @@ later entry wins.
 - 2026-07-26 [USER+CODE] D052 ACTIVE: The data root is `workspace/`:
   `resumes/<variant>.resume` and `cover-letters/<variant>.cover`, each with its
   own `.trash/`; tracker, applications, and preferences stay at the root.
-- 2026-08-09..08-10 [USER+CODE+TOOL] D053 ACTIVE: Preferences live in owner-only
+- 2026-08-09..08-10 [USER+CODE+TOOL] D053 AMENDED by D095: Preferences live in owner-only
   `workspace-preferences.json` (localStorage is a fail-open cache); backup,
   preference, and restore-marker contracts are schema v1 only; 0.6.0 backups do
   not restore into 0.7.0+. 2026-10-19 [USER+CODE]: backups include saved
@@ -563,7 +563,8 @@ later entry wins.
   history is best-effort (newest first within the limits, invalid history left
   out); files kept from deleted applications (`applications/.trash/`) stay
   local until a real "Recently deleted" exists. Still schema v1, so these
-  backups need this build or newer.
+  backups need this build or newer. (D095: a higher version of these contracts
+  is a newer file that locks, not an invalid one.)
 - 2026-09-29..09-30 [USER+CODE] D054 ACTIVE: Preference writes require `baseRevision`
   (SHA-256 of the stored bytes); a mismatch returns `409 { stale, current }` and
   the tab rebases once. Contract:
@@ -578,11 +579,13 @@ later entry wins.
   all 351 pairs (candidate pairs replaced the all-pairs loop on 2026-10-09).
   2026-08-11 [CODE]: duplicates link by posting group or record a reviewed
   separation.
-- 2026-08-09 [USER+CODE+TOOL] D056 ACTIVE: Tracker reads fail closed on unknown fields,
+- 2026-08-09 [USER+CODE+TOOL] D056 AMENDED by D095: Tracker reads fail closed on unknown fields,
   retired shapes, duplicate ids, and malformed data; only a redundant derived
   Fit summary leaf is normalized for comparison; the tracker key `initialFit`
   stays a storage-boundary name. [USER+CODE] Legacy tracker-schema compatibility
-  was left to a one-user preview migration.
+  was left to a one-user preview migration. (D095: legacy shapes now migrate
+  once through numbered tracker versions; nothing is normalized only for
+  comparison.)
 - 2026-10-20 [USER+CODE+TOOL] D091 ACTIVE: **Submitted applications keep a dated
   stage history** (`stageHistory`): stage changes after submission, interviews
   with a kind and a derived round, employer responses, and follow-ups sent.
@@ -630,6 +633,29 @@ later entry wins.
   choice: the SDK pulls in unused HTTP-server packages), never touches the
   workspace (the tracker lock is in-process), and accepts only a loopback
   `ROLEFIT_URL`. Hand-editing `applications.json` is unsupported.
+- 2026-10-23 [USER+CODE+TOOL] D095 ACTIVE: **Workspace files are versioned;
+  newer builds migrate older files, older builds lock newer ones.**
+  `applications.json` carries `schemaVersion` (current 1; absent means the
+  legacy version 0); preferences, backup envelope and restore marker keep their
+  v1. Each version step has one migration with a fixture
+  (`server/applications/trackerVersion.ts`); a migrated tracker is validated
+  strictly and rewritten once, and a legacy shape inside a current file fails
+  closed. A file above the supported version is never parsed or written: its
+  routes answer `423 workspace-newer` with an update message, and the browser
+  shows one notice. The user chose (2026-10-23, all recommended options): a
+  newer tracker is locked, not shown leniently; locks are per file, so resume
+  and cover-letter variants stay editable; an older backup may restore over a
+  newer workspace, which moves intact to the safety directory; a banner plus
+  existing error surfaces, with Apply and Skip blocked through the tracker
+  readiness check. Defaults accepted with it: any new persisted setting bumps
+  the preferences version, which also bumps the backup envelope (its embedded
+  preferences carry no version); a lossy migration keeps the pre-migration bytes;
+  a tracker format change never only adds top-level keys, because 0.21 and
+  older ignore and drop them; `423`, not `409`, because a tracker `409` means a
+  stale snapshot to rebase on. The first versioned release changes no format:
+  0.20/0.21 read its files and drop only the version, which reads back as
+  version 0. Builds before it still report newer files as corrupt. Contract:
+  `apps/role-fit-ai/docs/engineering/workspace-backup.md#schema-versions-and-newer-files`.
 
 ### Extension
 
