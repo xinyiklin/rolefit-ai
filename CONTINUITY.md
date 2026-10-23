@@ -78,6 +78,16 @@ D-entries in `docs/decisions.md`.
 
 ## 2026-10-22
 
+- [USER+CODE+TOOL] **Companion restyle** (D093 amended): the desktop companion
+  mirrors the workspace tokens and OS theme in a fixed 760×480 unified shell
+  (hidden native title bar with theme-matched controls, icon-led nav, visually
+  hidden page titles, status lines in the content, the port copy field only in
+  Settings). `generate_icons.py` now makes every brand mark (desktop icons and
+  the browser, landing, and extension SVGs); the extension badge uses the
+  accent, and the landing companion shot was retaken. Verified: desktop checks,
+  release contract, Electron smoke, the RoleFit check, synthetic captures in
+  light and dark; independent reviews passed. Unverified: native window
+  controls rendering, macOS, forced colors.
 - [USER+CODE+TOOL] **Workspace redesign** (D093): calm native light/dark look
   replacing the green-paper visuals across RoleFit host CSS, plus Settings ›
   App › Appearance. The top bar is gone: a full-height rail headed by the
@@ -89,8 +99,7 @@ D-entries in `docs/decisions.md`.
   workspace in light and dark; the Chromium host audit now expects light pages
   and OS-following RoleFit chrome; independent reviews passed. Firefox/Safari and
   print UNCONFIRMED. Open with the user: white vs gray workspace plane,
-  stacked state labels. Next: the companion restyle (its own branch, with the
-  landing's companion shot), then the extension popup restyle.
+  stacked state labels. Next: the extension popup restyle.
 
 ## 2026-10-20
 
@@ -131,25 +140,6 @@ D-entries in `docs/decisions.md`.
   0.19.0 preview prepared (minor: tracker and preferences format; extension
   1.4.1 for the Ghosted popup label); notes
   `apps/role-fit-ai/docs/releases/0.19.0-beta.1.md`.
-
-## 2026-10-19
-
-- [USER+CODE+TOOL] **Workspace backup scope** (D053): a companion backup failed
-  on 14 July resume-history snapshots carrying the retired `letterSpacingPt`.
-  Backup now skips history that no longer validates, fits history newest-first
-  within the 5,000-file/256 MB limits, names an invalid live file, and includes
-  saved cover letters and their history; deleted-application files
-  (`applications/.trash/`) stay local. Still schema v1; older builds reject
-  these backups. Verified by probes, `npm test`, the RoleFit check, and a
-  byte-identical round trip of a real-workspace copy; two independent reviews,
-  no blockers. Unverified: the companion UI flow itself (no packaged run).
-  Restore likewise leaves out history that fails today's validators (integrity
-  stays strict), so later validator changes cannot strand a backup.
-  Follow-ups offered: skipped-history count in the companion (plus the
-  always-false `includesPreferences` flag), "Recently deleted" applications,
-  and a history retention cap.
-  0.18.0 preview prepared (minor: backup format); notes
-  `apps/role-fit-ai/docs/releases/0.18.0-beta.1.md`.
 
 ## 2026-10-18
 

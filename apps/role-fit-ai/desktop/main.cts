@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, ipcMain, safeStorage, session, shell, utilityProcess } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, nativeTheme, safeStorage, session, shell, utilityProcess } from "electron";
 import squirrelStartup from "electron-squirrel-startup";
 import { randomUUID } from "node:crypto";
 import type { Dirent } from "node:fs";
@@ -1228,6 +1228,17 @@ async function verifyUntrustedBridgeRejected(companionUrl: string): Promise<bool
   }
 }
 
+// The page head is the title bar: native window controls overlay its trailing
+// edge in --ink-muted on the --paper plane, matching the OS theme.
+function titleBarOverlay(): { color: string; symbolColor: string; height: number } {
+  const dark = nativeTheme.shouldUseDarkColors;
+  return {
+    color: dark ? "#121314" : "#f7f8fa",
+    symbolColor: dark ? "#bcbec2" : "#4a4d53",
+    height: 48
+  };
+}
+
 function createMainWindow(
   companionPath: string,
   companionUrl: string,
@@ -1244,16 +1255,19 @@ function createMainWindow(
     icon: app.isPackaged
       ? undefined
       : join(__dirname, "..", "..", "desktop", "assets", "icon.ico"),
-    width: 900,
-    height: 620,
-    minWidth: 900,
-    minHeight: 620,
-    maxWidth: 900,
-    maxHeight: 620,
+    width: 760,
+    height: 480,
+    minWidth: 760,
+    minHeight: 480,
+    maxWidth: 760,
+    maxHeight: 480,
     resizable: false,
     maximizable: false,
     show: !smokeMode,
-    backgroundColor: "#eef1ec",
+    // The sidebar's --chrome tone, so the first frame matches the OS theme.
+    backgroundColor: nativeTheme.shouldUseDarkColors ? "#18191c" : "#f1f2f5",
+    titleBarStyle: "hidden",
+    titleBarOverlay: titleBarOverlay(),
     autoHideMenuBar: process.platform !== "darwin",
     webPreferences: {
       preload: join(__dirname, "preload.cjs"),
@@ -1286,7 +1300,13 @@ function createMainWindow(
   window.once("ready-to-show", () => {
     if (!smokeMode) window.show();
   });
+  // macOS draws its own traffic lights; only Windows and Linux recolor controls.
+  const syncTitleBar = () => {
+    if (process.platform !== "darwin" && !window.isDestroyed()) window.setTitleBarOverlay(titleBarOverlay());
+  };
+  nativeTheme.on("updated", syncTitleBar);
   window.on("closed", () => {
+    nativeTheme.off("updated", syncTitleBar);
     if (mainWindow === window) mainWindow = null;
   });
   if (smokeMode) {
