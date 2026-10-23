@@ -145,7 +145,9 @@ scans or accepts a page-selected origin, and a port change needs no reload.
 ## Extension setup copy contract
 
 Desktop IPC API 13 exposes one bounded copy operation for the companion's
-**Browser extension** section. The renderer may send only one of the closed
+extension setup controls: the **Browser extension** section's folder and
+browser-address targets, and the **Extension port** row in Settings. The
+renderer may send only one of the closed
 targets `directory`, `chrome`, `edge`, `firefox`, or `port`; Electron main maps those
 targets to the already-materialized extension directory or the exact setup
 addresses `chrome://extensions`, `edge://extensions`, and
