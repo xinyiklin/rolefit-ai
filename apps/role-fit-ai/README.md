@@ -682,6 +682,12 @@ first, then register the server with your agent, for example in Claude Code:
 claude mcp add rolefit -- node /path/to/rolefit-ai/apps/role-fit-ai/mcp/server.ts
 ```
 
+Any MCP client that launches stdio servers works the same way; in Codex:
+
+```bash
+codex mcp add rolefit -- node /path/to/rolefit-ai/apps/role-fit-ai/mcp/server.ts
+```
+
 Set `ROLEFIT_URL` (default `http://127.0.0.1:5181`) when the companion uses
 another port; only loopback origins are accepted. Tools:
 

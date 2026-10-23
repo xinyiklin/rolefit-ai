@@ -57,6 +57,9 @@ const call = async (name, args) => (await rpc("tools/call", { name, arguments: a
     assert.equal(tool.inputSchema.type, "object");
     assert.ok(tool.description.length > 40);
   }
+  for (const name of ["commit_application", "add_application_answers", "log_application_event"]) {
+    assert.match(listed.find((tool) => tool.name === name).description, /read the record .* before retrying/, `${name} warns against blind retries`);
+  }
   const commitSchema = listed.find((tool) => tool.name === "commit_application").inputSchema;
   assert.deepEqual(commitSchema.properties.application.properties.status.enum, ["applied", "not_applying"]);
   assert.ok(!commitSchema.properties.application.properties.notApplyingReasons.items.enum.includes("constraints"), "retired skip reason is not offered");

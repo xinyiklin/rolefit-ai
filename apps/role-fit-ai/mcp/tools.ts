@@ -40,6 +40,10 @@ const SEARCH_LIMIT_MAX = 100;
 const REQUEST_TIMEOUT_MS = 60_000;
 const OFFERED_SKIP_REASONS = NOT_APPLYING_REASONS.filter((reason) => !LEGACY_NOT_APPLYING_REASONS.includes(reason));
 const timestamp = { type: "string", description: "Canonical ISO timestamp, e.g. 2026-10-23T14:05:00.000Z." };
+// These writes have no request id, so a lost reply must not become a blind retry.
+const CHECK_BEFORE_RETRY =
+  " A refusal saved nothing and can be corrected and resent. If the call times out or returns no reply, it may " +
+  "have saved: read the record (search_applications or get_application) before retrying, or it can be saved twice.";
 const answerList = (description: string) => ({
   type: "array",
   description: `${description} A plain {question, answer} pair is enough; savedAt defaults to now.`,
@@ -199,7 +203,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "document metadata, and stamps applicationId on full answer revisions. Every value you send is stored " +
         "exactly as sent or the whole commit is refused with `issues` naming each field; nothing is saved on a " +
         "refusal. Omit a field rather than sending null. Unlisted tracker fields (location, salaryMin, contacts, " +
-        "aiUsage, ...) are accepted under the same rule.",
+        "aiUsage, ...) are accepted under the same rule." + CHECK_BEFORE_RETRY,
       inputSchema: {
         type: "object",
         required: ["application"],
@@ -285,7 +289,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
       description:
         "Move a tracker record to a new stage, as the tracker row's stage menu would: the server applies the change " +
         "to the latest saved record and adds the stage-history entry. Moves the menu does not offer are refused " +
-        "with the allowed list. Setting the current stage again changes nothing.",
+        "with the allowed list. Setting the current stage again changes nothing, so a retry after a lost reply is safe.",
       inputSchema: {
         type: "object",
         required: ["id", "status"],
@@ -313,7 +317,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Add an interview, employer response, or follow-up sent to a submitted application's timeline, as the " +
         "tracker's Log buttons do. Logging a new interview on an Applied or Ghosted record also moves it to " +
         "Interviewing (statusChanged in the result). A record with no application date has no timeline. For a " +
-        "rejection or an offer, use update_application_status instead.",
+        "rejection or an offer, use update_application_status instead." + CHECK_BEFORE_RETRY,
       inputSchema: {
         type: "object",
         required: ["id", "type"],
@@ -345,7 +349,7 @@ export function createTools(baseUrl: string, fetchImpl: typeof fetch = fetch): T
         "Append answers to a saved tracker record, for questions answered after commit_application (a follow-up " +
         "form, a recruiter's questions). Saved answers are never changed; a corrected answer is a new entry. The " +
         "server stamps applicationId on full answer revisions. If any answer is invalid, nothing is saved and " +
-        "`issues` says why.",
+        "`issues` says why." + CHECK_BEFORE_RETRY,
       inputSchema: {
         type: "object",
         required: ["id", "answers"],
